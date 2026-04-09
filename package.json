@@ -11,7 +11,11 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:reset-migrations": "tsx db/reset-migrations.ts",
     "db:reset-public": "tsx db/reset-public-schema.ts",
-    "db:seed": "tsx db/seed.ts"
+    "db:seed": "tsx db/seed.ts",
+    "db:import-customers": "tsx db/import-legacy-sql.ts docs/legacy-app/import-customers-to-postgres.sql",
+    "db:import-suppliers": "tsx db/import-legacy-sql.ts docs/legacy-app/import-suppliers-to-postgres.sql",
+    "db:import-products": "tsx db/import-legacy-sql.ts docs/legacy-app/import-products-to-postgres.sql",
+    "db:import-suppliers-products": "tsx db/import-legacy-sql.ts docs/legacy-app/import-suppliers-to-postgres.sql docs/legacy-app/import-products-to-postgres.sql"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

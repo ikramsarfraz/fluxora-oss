@@ -52,3 +52,17 @@ export async function getCustomerById(customerId: number) {
 
   return result ?? null;
 }
+
+export async function getCustomers() {
+  const result = await db.query.customers.findMany({
+    with: {
+      addresses: true,
+      productPrices: true,
+    },
+  });
+
+  return result;
+}
+
+/** Row shape returned by `getCustomers()` / `GET /api/customers` (for client `import type` only). */
+export type CustomerListItem = Awaited<ReturnType<typeof getCustomers>>[number];
