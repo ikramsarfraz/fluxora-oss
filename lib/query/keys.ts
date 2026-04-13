@@ -11,6 +11,10 @@ export const queryKeys = {
     portfolio: (id: number) => ["customers", id, "portfolio"] as const,
     prices: (id: number) => ["customers", id, "prices"] as const,
   },
+  suppliers: {
+    all: ["suppliers"] as const,
+    detail: (id: number) => ["suppliers", id] as const,
+  },
   products: {
     all: ["products"] as const,
     detail: (id: number) => ["products", id] as const,

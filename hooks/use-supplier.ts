@@ -1,13 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getCustomer } from "@/lib/api/customers";
+import { getSupplier } from "@/lib/api/suppliers";
 import { queryKeys } from "@/lib/query/keys";
 
-export function useCustomer(id: number) {
+export function useSupplier(id: number) {
   return useQuery({
-    queryKey: queryKeys.customers.detail(id),
-    queryFn: () => getCustomer(id),
+    queryKey: queryKeys.suppliers.detail(id),
+    queryFn: () => getSupplier(id),
     enabled: !!id,
     staleTime: 1000 * 60 * 5,
   });

@@ -1,7 +1,5 @@
-import * as React from "react"
+import * as React from "react";
 
-import { SearchForm } from "@/components/search-form"
-import { VersionSwitcher } from "@/components/version-switcher"
 import {
   Sidebar,
   SidebarContent,
@@ -13,162 +11,165 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { usePathname } from "next/navigation";
 
 // This is sample data.
 const data = {
-  versions: ["1.0.1", "1.1.0-alpha", "2.0.0-beta1"],
   navMain: [
     {
-      title: "Getting Started",
+      title: "Overview",
       url: "#",
       items: [
         {
-          title: "Installation",
-          url: "#",
-        },
-        {
-          title: "Project Structure",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Build Your Application",
-      url: "#",
-      items: [
-        {
-          title: "Routing",
-          url: "#",
-        },
-        {
-          title: "Data Fetching",
-          url: "#",
+          title: "Dashboard",
+          url: "/",
           isActive: true,
         },
+      ],
+    },
+    {
+      title: "Sales",
+      url: "#",
+      items: [
         {
-          title: "Rendering",
-          url: "#",
+          title: "Orders",
+          url: "/orders",
+          isActive: false,
         },
         {
-          title: "Caching",
-          url: "#",
+          title: "Invoices",
+          url: "/invoice",
+          isActive: false,
         },
         {
-          title: "Styling",
-          url: "#",
-        },
-        {
-          title: "Optimizing",
-          url: "#",
-        },
-        {
-          title: "Configuring",
-          url: "#",
-        },
-        {
-          title: "Testing",
-          url: "#",
-        },
-        {
-          title: "Authentication",
-          url: "#",
-        },
-        {
-          title: "Deploying",
-          url: "#",
-        },
-        {
-          title: "Upgrading",
-          url: "#",
-        },
-        {
-          title: "Examples",
-          url: "#",
+          title: "Customers",
+          url: "/customers",
+          isActive: false,
         },
       ],
     },
     {
-      title: "API Reference",
+      title: "Inventory",
       url: "#",
       items: [
         {
-          title: "Components",
-          url: "#",
+          title: "Inventory",
+          url: "/inventory",
+          isActive: false,
         },
         {
-          title: "File Conventions",
-          url: "#",
+          title: "Lots",
+          url: "/lots",
+          isActive: false,
         },
         {
-          title: "Functions",
-          url: "#",
+          title: "Products",
+          url: "/products",
+          isActive: false,
         },
         {
-          title: "next.config.js Options",
-          url: "#",
-        },
-        {
-          title: "CLI",
-          url: "#",
-        },
-        {
-          title: "Edge Runtime",
-          url: "#",
+          title: "Units of measure",
+          url: "/units-of-measure",
+          isActive: false,
         },
       ],
     },
     {
-      title: "Architecture",
+      title: "Purchasing",
       url: "#",
       items: [
         {
-          title: "Accessibility",
-          url: "#",
+          title: "Supplier Invoices",
+          url: "/supplier-invoices",
+          isActive: false,
         },
         {
-          title: "Fast Refresh",
-          url: "#",
+          title: "Suppliers",
+          url: "/suppliers",
+          isActive: false,
+        },
+      ],
+    },
+    {
+      title: "Finances",
+      url: "#",
+      items: [
+        {
+          title: "Payments",
+          url: "/payments",
+          isActive: false,
         },
         {
-          title: "Next.js Compiler",
-          url: "#",
+          title: "Expenses",
+          url: "/expenses",
+          isActive: false,
         },
+      ],
+    },
+    {
+      title: "Reports",
+      url: "#",
+      items: [
         {
-          title: "Supported Browsers",
-          url: "#",
-        },
-        {
-          title: "Turbopack",
-          url: "#",
+          title: "Monthly Report",
+          url: "/monthly-report",
+          isActive: false,
         },
       ],
     },
   ],
-}
+};
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname() ?? "";
+  const isActive = (url: string) =>
+    pathname === url || (url !== "/" && pathname.startsWith(url));
+
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <VersionSwitcher
-          versions={data.versions}
-          defaultVersion={data.versions[0]}
-        />
-        <SearchForm />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link
+                href="/"
+                className="flex items-center gap-2"
+                aria-label="Home"
+                title="Home"
+              >
+                <img
+                  src="/prime-logo.png"
+                  alt="Acme Distribution LLC"
+                  className="h-8 w-auto"
+                />
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {data.navMain.map((item) => (
+        {data.navMain.map(item => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.map((item) => (
+                {item.items.map(item => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      isActive={item.isActive}
-                      render={<a href={item.url} />}
-                    >
-                      {item.title}
+                    <SidebarMenuButton isActive={isActive(item.url)} asChild>
+                      <Link
+                        href={item.url}
+                        className={cn(
+                          "text-sm",
+                          item.isActive
+                            ? "text-primary"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {item.title}
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -179,5 +180,5 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }
