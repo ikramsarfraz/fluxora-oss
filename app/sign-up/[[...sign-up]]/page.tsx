@@ -1,8 +1,8 @@
-import { SignUpForm } from "@/components/sign-up-form";
+import { SignUpForm } from "@/app/sign-up/[[...sign-up]]/components/sign-up-form";
 
 export default function SignUpPage() {
   return (
-    <div className="main" style={{ padding: "2rem" }}>
+    <div className="main min-h-screen flex flex-col items-center justify-center">
       <SignUpForm />
     </div>
   );

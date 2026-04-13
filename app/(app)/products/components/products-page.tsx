@@ -3,16 +3,16 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { useCustomers } from "@/hooks/use-customers";
+import { useProducts } from "@/hooks/use-products";
 import { Plus } from "lucide-react";
 
 import { columns } from "./columns";
 import { DataTable } from "./data-table";
 
-export default function Customers() {
-  const { data: customers, isLoading, error: loadError } = useCustomers();
+export default function Products() {
+  const { data: products, isLoading, error: loadError } = useProducts();
 
-  if (isLoading) return <div className="loading">Loading customers…</div>;
+  if (isLoading) return <div className="loading">Loading products…</div>;
   if (loadError)
     return (
       <div className="error">
@@ -23,19 +23,19 @@ export default function Customers() {
   return (
     <section
       className="flex flex-col gap-4"
-      aria-labelledby="customers-table-heading"
+      aria-labelledby="products-table-heading"
     >
       <div className="flex items-center justify-between gap-2">
-        <h1 id="customers-table-heading">Customers</h1>
+        <h1 id="products-table-heading">Products</h1>
         <Button asChild>
-          <Link href="/customers/new">
+          <Link href="/products/new">
             <Plus />
-            <span className="hidden lg:inline">Add Customer</span>
+            <span className="hidden lg:inline">Add Product</span>
           </Link>
         </Button>
       </div>
 
-      <DataTable columns={columns} data={customers ?? []} />
+      <DataTable columns={columns} data={products ?? []} />
     </section>
   );
 }

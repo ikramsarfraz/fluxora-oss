@@ -82,7 +82,7 @@ export function AppBreadcrumb() {
   const crumbs = buildCrumbs(pathname);
 
   return (
-    <Breadcrumb>
+    <Breadcrumb className="min-w-0 flex-1">
       <BreadcrumbList>
         {crumbs.map((crumb, i) => (
           <Fragment key={`${crumb.href}-${i}`}>
