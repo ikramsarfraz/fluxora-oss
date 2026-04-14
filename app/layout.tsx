@@ -35,7 +35,7 @@ export default function RootLayout({
         <AppErrorBoundary>
           <QueryProvider>{children}</QueryProvider>
         </AppErrorBoundary>
-        <Toaster />
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );

@@ -3,8 +3,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -32,8 +32,6 @@ import {
 export function ForgotPasswordForm() {
   const router = useRouter();
 
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordFormSchema),
     defaultValues: {
@@ -42,15 +40,15 @@ export function ForgotPasswordForm() {
   });
 
   async function onSubmit(data: ForgotPasswordFormValues) {
-    setSubmitError(null);
-    const { error: err } = await authClient.requestPasswordReset({
+    await authClient.requestPasswordReset({
       email: data.email,
       redirectTo: "/reset-password",
     });
-    if (err) {
-      setSubmitError(err.message ?? "Request password reset failed");
-      return;
-    }
+
+    toast.success(
+      `An email to reset your password has been sent to ${data.email}.`,
+    );
+
     router.push("/sign-in");
   }
 
@@ -88,11 +86,6 @@ export function ForgotPasswordForm() {
               )}
             />
             <Field className="gap-3">
-              {submitError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {submitError}
-                </p>
-              ) : null}
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting
                   ? "Requesting password reset…"

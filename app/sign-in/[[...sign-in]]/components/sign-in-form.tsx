@@ -28,6 +28,8 @@ import {
   signInFormSchema,
   type SignInFormValues,
 } from "@/app/sign-in/[[...sign-in]]/components/sign-in-form.schema";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export function SignInForm() {
   const router = useRouter();
@@ -71,6 +73,15 @@ export function SignInForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+          {submitError ? (
+            <Alert variant="destructive" className="max-w-md mb-4">
+              <AlertCircle />
+              <AlertTitle>Sign in failed</AlertTitle>
+              <AlertDescription>
+                Please check your email and password and try again.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="email"
@@ -120,11 +131,6 @@ export function SignInForm() {
               )}
             />
             <Field className="gap-3">
-              {submitError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {submitError}
-                </p>
-              ) : null}
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? "Signing in…" : "Login"}
               </Button>

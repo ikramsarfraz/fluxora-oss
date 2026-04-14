@@ -29,6 +29,8 @@ import {
   signUpFormSchema,
   type SignUpFormValues,
 } from "@/app/sign-up/[[...sign-up]]/components/sign-up-form.schema";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export function SignUpForm() {
   const router = useRouter();
@@ -65,7 +67,6 @@ export function SignUpForm() {
         role: "admin",
       });
     } catch (err) {
-      console.error(err);
       setSubmitError(
         err instanceof Error ? err.message : "Failed to create portal user",
       );
@@ -88,6 +89,16 @@ export function SignUpForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+          {submitError ? (
+            <Alert variant="destructive" className="max-w-md mb-4">
+              <AlertCircle />
+              <AlertTitle>Sign up failed</AlertTitle>
+              <AlertDescription>
+                We couldn&apos;t create your account. Please verify your name,
+                email, and password, and ensure both passwords match.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="name"
@@ -181,11 +192,6 @@ export function SignUpForm() {
             />
             <FieldGroup>
               <Field className="gap-3">
-                {submitError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {submitError}
-                  </p>
-                ) : null}
                 <Button
                   type="submit"
                   className="w-full"
