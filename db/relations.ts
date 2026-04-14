@@ -20,9 +20,14 @@ import {
   suppliers,
   unitsOfMeasure,
   portalUsers,
+  user,
 } from "./schema";
 
-export const portalUsersRelations = relations(portalUsers, ({ many }) => ({
+export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
+  authUser: one(user, {
+    fields: [portalUsers.authUserId],
+    references: [user.id],
+  }),
   salesOrdersCreated: many(salesOrders, {
     relationName: "sales_orders_created_by",
   }),

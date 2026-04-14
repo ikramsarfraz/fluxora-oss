@@ -2,6 +2,7 @@
 
 const P = {
   auth: "/api/auth",
+  portalUsers: "/api/portal-users",
   dashboard: "/api/dashboard",
   banking: "/api/banking",
   monthlyReport: "/api/monthly-report",
@@ -380,8 +381,16 @@ export type PriceChartProduct = {
   costs_by_supplier?: PriceChartProductCostBySupplier[];
   costs_from_invoices?: PriceChartCostFromInvoice[];
 };
-export type PriceChartCustomer = { id: number; name: string; fuel_surcharge_amount: string | null };
-export type PriceChartPrice = { customer_id: number; product_id: number; price_per_lb: string };
+export type PriceChartCustomer = {
+  id: number;
+  name: string;
+  fuel_surcharge_amount: string | null;
+};
+export type PriceChartPrice = {
+  customer_id: number;
+  product_id: number;
+  price_per_lb: string;
+};
 export type PriceChartData = {
   products: PriceChartProduct[];
   customers: PriceChartCustomer[];
@@ -402,6 +411,10 @@ export const endpoints = {
   auth: {
     me: () => `${P.auth}/me`,
   },
+  portalUsers: {
+    /** POST: ensure `portal_users` row for the current Better Auth session user. */
+    create: () => `${P.portalUsers}`,
+  },
   dashboard: {
     get: () => P.dashboard,
   },
@@ -413,7 +426,8 @@ export const endpoints = {
       update: (id: number) => `${P.banking}/accounts/${id}`,
       delete: (id: number) => `${P.banking}/accounts/${id}`,
       register: (id: number) => `${P.banking}/accounts/${id}/register`,
-      addTransaction: (id: number) => `${P.banking}/accounts/${id}/transactions`,
+      addTransaction: (id: number) =>
+        `${P.banking}/accounts/${id}/transactions`,
     },
     transactions: {
       update: (id: number) => `${P.banking}/transactions/${id}`,
@@ -421,7 +435,8 @@ export const endpoints = {
     },
   },
   monthlyReport: {
-    get: (year: number, month: number) => `${P.monthlyReport}?year=${year}&month=${month}`,
+    get: (year: number, month: number) =>
+      `${P.monthlyReport}?year=${year}&month=${month}`,
   },
   expenses: {
     list: () => P.expenses,
@@ -432,7 +447,8 @@ export const endpoints = {
   },
   priceChart: {
     get: () => P.priceChart,
-    setProductSupplierCost: (productId: number) => `${P.priceChart}/product-supplier-cost/${productId}`,
+    setProductSupplierCost: (productId: number) =>
+      `${P.priceChart}/product-supplier-cost/${productId}`,
     deleteProductSupplierCost: (productId: number, supplierId: number) =>
       `${P.priceChart}/product-supplier-cost/${productId}/${supplierId}`,
   },
@@ -462,7 +478,8 @@ export const endpoints = {
     delete: (id: number) => `${P.customers}/${id}`,
     prices: (id: number) => `${P.customers}/${id}/prices`,
     setPrice: (id: number) => `${P.customers}/${id}/prices`,
-    deletePrice: (customerId: number, productId: number) => `${P.customers}/${customerId}/prices/${productId}`,
+    deletePrice: (customerId: number, productId: number) =>
+      `${P.customers}/${customerId}/prices/${productId}`,
   },
   unitsOfMeasure: {
     list: () => P.unitsOfMeasure,
@@ -503,6 +520,7 @@ export const endpoints = {
     delete: (id: number) => `${P.salesOrders}/${id}`,
     lines: (orderId: number) => `${P.salesOrders}/${orderId}/lines`,
     addLine: (orderId: number) => `${P.salesOrders}/${orderId}/lines`,
-    updateLine: (orderId: number, lineId: number) => `${P.salesOrders}/${orderId}/lines/${lineId}`,
+    updateLine: (orderId: number, lineId: number) =>
+      `${P.salesOrders}/${orderId}/lines/${lineId}`,
   },
 };

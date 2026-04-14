@@ -23,14 +23,13 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 
-import { signInFormSchema, type SignInFormValues } from "./sign-in-form.schema";
+import {
+  signInFormSchema,
+  type SignInFormValues,
+} from "@/app/sign-in/[[...sign-in]]/components/sign-in-form.schema";
 
-export function SignInForm({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
+export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
@@ -100,13 +99,12 @@ export function SignInForm({
                 <Field data-invalid={fieldState.invalid}>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
-                    <a
-                      href="#"
+                    <Link
+                      href="/forgot-password"
                       className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                      onClick={e => e.preventDefault()}
                     >
                       Forgot your password?
-                    </a>
+                    </Link>
                   </div>
                   <Input
                     {...field}

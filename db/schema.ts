@@ -13,6 +13,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import { user } from "./auth-schema";
 
 export const userRoleEnum = pgEnum("user_role", [
   "admin",
@@ -72,20 +73,29 @@ export const creditTypeEnum = pgEnum("credit_type", [
   "other",
 ]);
 
-export const portalUsers = pgTable("portal_users", {
-  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
-  authUserId: varchar("auth_user_id", { length: 128 }).notNull().unique(),
-  fullName: varchar("full_name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  role: userRoleEnum("role").notNull().default("sales"),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const portalUsers = pgTable(
+  "portal_users",
+  {
+    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    authUserId: text("auth_user_id")
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: "cascade" }),
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull().unique(),
+    role: userRoleEnum("role").notNull().default("sales"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => ({
+    authUserIdIdx: index("portal_users_auth_user_id_idx").on(table.authUserId),
+  }),
+);
 
 export const customers = pgTable("customers", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
@@ -340,9 +350,12 @@ export const salesOrders = pgTable("sales_orders", {
   createdByUserId: integer("created_by_user_id")
     .notNull()
     .references(() => portalUsers.id, { onDelete: "restrict" }),
-  updatedByUserId: integer("updated_by_user_id").references(() => portalUsers.id, {
-    onDelete: "set null",
-  }),
+  updatedByUserId: integer("updated_by_user_id").references(
+    () => portalUsers.id,
+    {
+      onDelete: "set null",
+    },
+  ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

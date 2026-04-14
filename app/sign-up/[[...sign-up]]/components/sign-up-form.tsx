@@ -23,14 +23,14 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
+import { createPortalUser } from "@/lib/api/portal-users";
 
-import { signUpFormSchema, type SignUpFormValues } from "./sign-up-form.schema";
+import {
+  signUpFormSchema,
+  type SignUpFormValues,
+} from "@/app/sign-up/[[...sign-up]]/components/sign-up-form.schema";
 
-export function SignUpForm({
-  className,
-  ...props
-}: React.ComponentProps<typeof Card>) {
+export function SignUpForm() {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -46,15 +46,32 @@ export function SignUpForm({
 
   async function onSubmit(data: SignUpFormValues) {
     setSubmitError(null);
-    const { error: err } = await authClient.signUp.email({
+    const { data: signUpData, error: err } = await authClient.signUp.email({
       name: data.name,
       email: data.email,
       password: data.password,
     });
-    if (err) {
-      setSubmitError(err.message ?? "Sign up failed");
+
+    if (err || !signUpData?.user?.id) {
+      setSubmitError(err?.message || "Sign up failed");
       return;
     }
+
+    try {
+      await createPortalUser({
+        authUserId: signUpData.user.id,
+        fullName: data.name,
+        email: data.email,
+        role: "admin",
+      });
+    } catch (err) {
+      console.error(err);
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to create portal user",
+      );
+      return;
+    }
+
     router.push("/");
     router.refresh();
   }
@@ -62,7 +79,7 @@ export function SignUpForm({
   const { isSubmitting } = form.formState;
 
   return (
-    <Card className={cn("w-full max-w-md", className)} {...props}>
+    <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle>Create an account</CardTitle>
         <CardDescription>
