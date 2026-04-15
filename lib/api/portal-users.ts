@@ -25,4 +25,17 @@ export function createPortalUser(input: {
   });
 }
 
+export function getUsers() {
+  return api.get<PortalUserRecord[]>(endpoints.portalUsers.list());
+}
+
+/** Admin-only: email invite link; user sets password on `/invite/[token]`. */
+export function invitePortalUser(input: {
+  fullName: string;
+  email: string;
+  role: PortalUserRole;
+}) {
+  return api.post<{ success: boolean }>(endpoints.portalUsers.invite(), input);
+}
+
 export type { PortalUserRecord } from "@/services/portal-users";

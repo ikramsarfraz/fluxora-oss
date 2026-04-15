@@ -122,6 +122,17 @@ const data = {
         },
       ],
     },
+    {
+      title: "Admin",
+      url: "#",
+      items: [
+        {
+          title: "Users",
+          url: "/users",
+          isActive: false,
+        },
+      ],
+    },
   ],
 };
 

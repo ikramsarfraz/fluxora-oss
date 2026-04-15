@@ -27,7 +27,7 @@ import { authClient } from "@/lib/auth-client";
 import {
   resetPasswordFormSchema,
   type ResetPasswordFormValues,
-} from "@/app/reset-password/components/reset-password-form.schema";
+} from "@/app/(auth)/reset-password/components/reset-password-form.schema";
 
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -47,7 +47,9 @@ export function ResetPasswordForm() {
 
   async function onSubmit(data: ResetPasswordFormValues) {
     if (!token) {
-      setSubmitError("Missing reset token. Request a new link from forgot password.");
+      setSubmitError(
+        "Missing reset token. Request a new link from forgot password.",
+      );
       return;
     }
     setSubmitError(null);

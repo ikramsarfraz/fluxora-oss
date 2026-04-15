@@ -1,4 +1,4 @@
-import { ResetPasswordForm } from "@/app/reset-password/components/reset-password-form";
+import { ResetPasswordForm } from "@/app/(auth)/reset-password/components/reset-password-form";
 
 export default function ResetPasswordPage() {
   return (

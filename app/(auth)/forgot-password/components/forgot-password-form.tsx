@@ -27,7 +27,7 @@ import { authClient } from "@/lib/auth-client";
 import {
   forgotPasswordFormSchema,
   type ForgotPasswordFormValues,
-} from "@/app/forgot-password/components/forgot-password-form.schema";
+} from "@/app/(auth)/forgot-password/components/forgot-password-form.schema";
 
 export function ForgotPasswordForm() {
   const router = useRouter();

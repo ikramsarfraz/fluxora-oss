@@ -2,6 +2,7 @@
 
 const P = {
   auth: "/api/auth",
+  invitations: "/api/invitations",
   portalUsers: "/api/portal-users",
   dashboard: "/api/dashboard",
   banking: "/api/banking",
@@ -411,9 +412,17 @@ export const endpoints = {
   auth: {
     me: () => `${P.auth}/me`,
   },
+  invitations: {
+    preview: (token: string) =>
+      `${P.invitations}/${encodeURIComponent(token)}`,
+    accept: () => `${P.invitations}/accept`,
+  },
   portalUsers: {
+    list: () => `${P.portalUsers}`,
     /** POST: ensure `portal_users` row for the current Better Auth session user. */
     create: () => `${P.portalUsers}`,
+    /** POST: admin-only — send invite email (`/invite/:token` acceptance). */
+    invite: () => `${P.portalUsers}/invite`,
   },
   dashboard: {
     get: () => P.dashboard,

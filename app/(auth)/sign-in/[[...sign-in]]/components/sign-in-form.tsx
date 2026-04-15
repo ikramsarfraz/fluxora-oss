@@ -27,7 +27,7 @@ import { authClient } from "@/lib/auth-client";
 import {
   signInFormSchema,
   type SignInFormValues,
-} from "@/app/sign-in/[[...sign-in]]/components/sign-in-form.schema";
+} from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-in-form.schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 

@@ -4,7 +4,9 @@ export const queryKeys = {
   },
   /** ERP staff profile linked to Better Auth (`portal_users`). */
   users: {
-    portal: ["users", "portal"] as const,
+    all: ["users"] as const,
+    detail: (id: number) => ["users", id] as const,
+    auth: (authUserId: string) => ["users", "auth", authUserId] as const,
   },
   dashboard: {
     summary: ["dashboard"] as const,

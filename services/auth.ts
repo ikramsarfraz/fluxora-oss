@@ -1,4 +1,10 @@
 import { auth } from "@/lib/auth";
+import { randomUUID } from "crypto";
+import { addDays } from "date-fns";
+import { db } from "@/db";
+import { userInvitations } from "@/db/schema";
+import { resend, emailFrom } from "@/lib/email";
+import { InviteUserEmail } from "@/emails/invite-user";
 
 export async function signUp(input: {
   name: string;
@@ -14,6 +20,39 @@ export async function signUp(input: {
   });
 
   return data;
+}
+
+export async function inviteUser(input: {
+  email: string;
+  fullName: string;
+  role: "admin" | "sales" | "warehouse" | "accounting";
+  invitedByUserId: number;
+}) {
+  const token = randomUUID();
+  const expiresAt = addDays(new Date(), 7);
+
+  await db.insert(userInvitations).values({
+    email: input.email,
+    fullName: input.fullName,
+    role: input.role,
+    token,
+    invitedByUserId: input.invitedByUserId,
+    expiresAt,
+  });
+
+  const inviteUrl = `${process.env.BETTER_AUTH_URL}/invite/${token}`;
+
+  await resend.emails.send({
+    from: emailFrom,
+    to: input.email,
+    subject: "You were invited to Acme Distribution",
+    react: InviteUserEmail({
+      fullName: input.fullName,
+      inviteUrl,
+    }),
+  });
+
+  return { success: true };
 }
 
 /** Row shape returned by `signUp()` (for client `import type` only). */

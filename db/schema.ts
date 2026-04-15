@@ -22,6 +22,13 @@ export const userRoleEnum = pgEnum("user_role", [
   "accounting",
 ]);
 
+export const invitationStatusEnum = pgEnum("invitation_status", [
+  "pending",
+  "accepted",
+  "expired",
+  "revoked",
+]);
+
 export const orderStatusEnum = pgEnum("order_status", [
   "draft",
   "sales_order",
@@ -94,6 +101,30 @@ export const portalUsers = pgTable(
   },
   table => ({
     authUserIdIdx: index("portal_users_auth_user_id_idx").on(table.authUserId),
+  }),
+);
+
+export const userInvitations = pgTable(
+  "user_invitations",
+  {
+    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    role: userRoleEnum("role").notNull(),
+    token: text("token").notNull().unique(),
+    status: invitationStatusEnum("status").notNull().default("pending"),
+    invitedByUserId: integer("invited_by_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "restrict" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => ({
+    emailIdx: index("user_invitations_email_idx").on(table.email),
+    tokenIdx: index("user_invitations_token_idx").on(table.token),
   }),
 );
 

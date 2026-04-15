@@ -28,7 +28,7 @@ import { createPortalUser } from "@/lib/api/portal-users";
 import {
   signUpFormSchema,
   type SignUpFormValues,
-} from "@/app/sign-up/[[...sign-up]]/components/sign-up-form.schema";
+} from "@/app/(auth)/sign-up/[[...sign-up]]/components/sign-up-form.schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 

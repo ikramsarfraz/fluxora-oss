@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 
-import { createPortalUser } from "@/services/portal-users";
+import { createPortalUser, getUsers } from "@/services/portal-users";
+
+export async function GET() {
+  try {
+    const users = await getUsers();
+    return NextResponse.json(users);
+  } catch (err) {
+    console.error(err);
+    const message =
+      err instanceof Error ? err.message : "Failed to load users";
+    const status = message === "Unauthorized" ? 401 : 500;
+    return NextResponse.json({ detail: message }, { status });
+  }
+}
 
 export async function POST(request: Request) {
   const body = await request.json();
