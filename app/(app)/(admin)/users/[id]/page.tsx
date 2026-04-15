@@ -1,20 +1,68 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
+import { authClient } from "@/lib/auth-client";
+import {
+  updatePortalUser,
+  requestPortalUserPasswordReset,
+} from "@/lib/api/portal-users";
+import { queryKeys } from "@/lib/query/keys";
 import { PortalUserProfile } from "@/components/portal-user-profile";
 import { useUser } from "@/hooks/use-user";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const userId = id ? parseInt(id, 10) : NaN;
+  const queryClient = useQueryClient();
+
+  const [toggleOpen, setToggleOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+
+  const { data: session } = authClient.useSession();
 
   const {
     data: user,
     isLoading,
     error: loadError,
   } = useUser(userId);
+
+  const toggleActive = useMutation({
+    mutationFn: (nextActive: boolean) =>
+      updatePortalUser(userId, { is_active: nextActive }),
+    onSuccess: updated => {
+      queryClient.setQueryData(queryKeys.users.detail(userId), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      setToggleOpen(false);
+      toast.success(
+        updated.isActive ? "User activated" : "User deactivated",
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: () => requestPortalUserPasswordReset(userId),
+    onSuccess: () => {
+      setResetOpen(false);
+      toast.success("Password reset email sent.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   if (!Number.isInteger(userId) || userId < 1) {
     return (
@@ -42,11 +90,84 @@ export default function UserDetailPage() {
     return null;
   }
 
+  const isSelf =
+    session?.user?.id != null && user.authUserId === session.user.id;
+
   return (
-    <PortalUserProfile
-      user={user}
-      backLink={{ href: "/users", label: "← Users" }}
-      variant="admin"
-    />
+    <>
+      <PortalUserProfile
+        user={user}
+        backLink={{ href: "/users", label: "← Users" }}
+        variant="admin"
+        adminActions={{
+          isSelf,
+          onToggleActive: () => {
+            if (user.isActive && isSelf) {
+              return;
+            }
+            setToggleOpen(true);
+          },
+          onResetPassword: () => setResetOpen(true),
+          togglePending: toggleActive.isPending,
+          resetPending: resetPassword.isPending,
+        }}
+      />
+
+      <AlertDialog open={toggleOpen} onOpenChange={setToggleOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {user.isActive ? "Deactivate user?" : "Activate user?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {user.isActive
+                ? "They will not be able to sign in until an administrator activates this account again."
+                : "They will be able to sign in again with their usual credentials."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={toggleActive.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              onClick={() =>
+                toggleActive.mutate(!user.isActive)
+              }
+              disabled={toggleActive.isPending}
+            >
+              {toggleActive.isPending
+                ? "Saving…"
+                : user.isActive
+                  ? "Deactivate"
+                  : "Activate"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send password reset email?</AlertDialogTitle>
+            <AlertDialogDescription>
+              We will email a reset link to{" "}
+              <span className="font-medium text-foreground">{user.email}</span>
+              . They can choose a new password from that link.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resetPassword.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              onClick={() => resetPassword.mutate()}
+              disabled={resetPassword.isPending}
+            >
+              {resetPassword.isPending ? "Sending…" : "Send email"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

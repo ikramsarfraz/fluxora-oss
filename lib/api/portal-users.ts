@@ -36,6 +36,17 @@ export function getPortalUser(id: number) {
   return api.get<PortalUserDetail>(endpoints.portalUsers.one(id));
 }
 
+export function updatePortalUser(id: number, body: { is_active: boolean }) {
+  return api.patch<PortalUserDetail>(endpoints.portalUsers.one(id), body);
+}
+
+export function requestPortalUserPasswordReset(id: number) {
+  return api.post<{ success: boolean }>(
+    endpoints.portalUsers.resetPassword(id),
+    {},
+  );
+}
+
 /** Admin-only: email invite link; user sets password on `/invite/[token]`. */
 export function invitePortalUser(input: {
   fullName: string;

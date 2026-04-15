@@ -1,3 +1,4 @@
+import { isAPIError } from "better-auth/api";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -71,6 +72,14 @@ export async function getUserById(id: number) {
   return user;
 }
 
+/** Row shape returned by `createPortalUser()` (for client `import type` only). */
+export type PortalUserRecord = Awaited<ReturnType<typeof createPortalUser>>;
+
+/** Single user with Better Auth row (from `getUserById`). */
+export type PortalUserDetail = NonNullable<
+  Awaited<ReturnType<typeof getUserById>>
+>;
+
 /**
  * Gets a portal user by auth user id.
  */
@@ -84,10 +93,83 @@ export async function getUserByAuthUserId(authUserId: string) {
   return user;
 }
 
-/** Row shape returned by `createPortalUser()` (for client `import type` only). */
-export type PortalUserRecord = Awaited<ReturnType<typeof createPortalUser>>;
+/**
+ * Current session user must be an admin (`portal_users.role === "admin"`).
+ */
+export async function requireAdminPortalUser() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+  const current = await getUserByAuthUserId(session.user.id);
+  if (!current || current.role !== "admin") {
+    throw new Error("Forbidden");
+  }
+  return current;
+}
 
-/** Single user with Better Auth row (from `getUserById`). */
-export type PortalUserDetail = NonNullable<
-  Awaited<ReturnType<typeof getUserById>>
->;
+/**
+ * Sets `portal_users.is_active`. Admins cannot deactivate themselves.
+ */
+export async function setPortalUserActiveByAdmin(
+  targetUserId: number,
+  isActive: boolean,
+): Promise<PortalUserDetail> {
+  const current = await requireAdminPortalUser();
+  if (current.id === targetUserId && !isActive) {
+    throw new Error("You cannot deactivate your own account.");
+  }
+
+  const target = await getUserById(targetUserId);
+  if (!target) {
+    throw new Error("User not found");
+  }
+
+  await db
+    .update(portalUsers)
+    .set({
+      isActive,
+      updatedAt: new Date(),
+    })
+    .where(eq(portalUsers.id, targetUserId));
+
+  const updated = await getUserById(targetUserId);
+  if (!updated) {
+    throw new Error("Failed to load user after update");
+  }
+  return updated;
+}
+
+/**
+ * Sends Better Auth password-reset email to the user&apos;s sign-in address.
+ */
+export async function sendPasswordResetForUserByAdmin(
+  targetUserId: number,
+): Promise<{ success: true }> {
+  await requireAdminPortalUser();
+
+  const target = await getUserById(targetUserId);
+  if (!target) {
+    throw new Error("User not found");
+  }
+
+  const email = target.authUser?.email ?? target.email;
+
+  try {
+    await auth.api.requestPasswordReset({
+      body: {
+        email,
+        redirectTo: "/reset-password",
+      },
+    });
+  } catch (e) {
+    if (isAPIError(e)) {
+      throw new Error(e.message || "Failed to send password reset email.");
+    }
+    throw e;
+  }
+
+  return { success: true };
+}
