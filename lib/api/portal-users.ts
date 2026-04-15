@@ -1,6 +1,9 @@
 import { api } from "./client";
 import { endpoints } from "./endpoints";
-import type { PortalUserRecord } from "@/services/portal-users";
+import type {
+  PortalUserDetail,
+  PortalUserRecord,
+} from "@/services/portal-users";
 
 export type PortalUserRole = "admin" | "sales" | "warehouse" | "accounting";
 
@@ -29,6 +32,10 @@ export function getUsers() {
   return api.get<PortalUserRecord[]>(endpoints.portalUsers.list());
 }
 
+export function getPortalUser(id: number) {
+  return api.get<PortalUserDetail>(endpoints.portalUsers.one(id));
+}
+
 /** Admin-only: email invite link; user sets password on `/invite/[token]`. */
 export function invitePortalUser(input: {
   fullName: string;
@@ -38,4 +45,4 @@ export function invitePortalUser(input: {
   return api.post<{ success: boolean }>(endpoints.portalUsers.invite(), input);
 }
 
-export type { PortalUserRecord } from "@/services/portal-users";
+export type { PortalUserDetail, PortalUserRecord } from "@/services/portal-users";

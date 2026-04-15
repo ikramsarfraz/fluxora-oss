@@ -419,6 +419,7 @@ export const endpoints = {
   },
   portalUsers: {
     list: () => `${P.portalUsers}`,
+    one: (id: number) => `${P.portalUsers}/${id}`,
     /** POST: ensure `portal_users` row for the current Better Auth session user. */
     create: () => `${P.portalUsers}`,
     /** POST: admin-only — send invite email (`/invite/:token` acceptance). */

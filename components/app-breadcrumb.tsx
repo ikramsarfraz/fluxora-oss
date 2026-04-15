@@ -15,7 +15,9 @@ import {
 
 /** Known path segments -> short labels (sidebar-aligned where possible). */
 const SEGMENT_LABELS: Record<string, string> = {
+  account: "Account",
   customers: "Customers",
+  users: "Users",
   "price-chart": "Price list",
   expenses: "Expenses",
   suppliers: "Suppliers",
@@ -46,11 +48,13 @@ function labelForSegment(
     if (prevSegment === "customers") return `Customer ${segment}`;
     if (prevSegment === "orders") return `Order ${segment}`;
     if (prevSegment === "suppliers") return `Supplier ${segment}`;
+    if (prevSegment === "users") return `User ${segment}`;
     return `#${segment}`;
   }
   if (segment === "new") {
     if (prevSegment === "customers") return "New customer";
     if (prevSegment === "suppliers") return "New supplier";
+    if (prevSegment === "users") return "Invite user";
   }
   return SEGMENT_LABELS[segment] ?? humanizeSegment(segment);
 }

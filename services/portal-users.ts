@@ -86,3 +86,8 @@ export async function getUserByAuthUserId(authUserId: string) {
 
 /** Row shape returned by `createPortalUser()` (for client `import type` only). */
 export type PortalUserRecord = Awaited<ReturnType<typeof createPortalUser>>;
+
+/** Single user with Better Auth row (from `getUserById`). */
+export type PortalUserDetail = NonNullable<
+  Awaited<ReturnType<typeof getUserById>>
+>;

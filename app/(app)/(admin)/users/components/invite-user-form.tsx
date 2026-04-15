@@ -82,7 +82,7 @@ export function InviteUserForm() {
   }
 
   return (
-    <Card className="w-full max-w-xl border-0 bg-transparent p-0 shadow-none ring-0">
+    <Card className="w-full max-w-xl p-4">
       <CardHeader className="px-0 pt-0">
         <CardTitle id="add-user-heading" className="text-[1.1rem]">
           Invite user
@@ -95,7 +95,7 @@ export function InviteUserForm() {
       <CardContent className="px-0">
         <form id="form-add-user" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
-            <Alert variant="destructive" className="max-w-md mb-4">
+            <Alert variant="destructive" className="max-w-xl mb-4">
               <AlertCircle />
               <AlertTitle>Invite user failed</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
@@ -174,23 +174,21 @@ export function InviteUserForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-wrap items-center gap-2 border-0 bg-transparent px-0 pt-0">
-        <Field orientation="horizontal" className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => form.reset(defaultForm)}
-          >
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            form="form-add-user"
-            disabled={sendInvite.isPending}
-          >
-            {sendInvite.isPending ? "Sending…" : "Send invitation"}
-          </Button>
-        </Field>
+      <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-0 bg-transparent px-0 pt-0">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/users")}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="form-add-user"
+          disabled={sendInvite.isPending}
+        >
+          {sendInvite.isPending ? "Sending…" : "Send invitation"}
+        </Button>
       </CardFooter>
     </Card>
   );
