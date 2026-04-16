@@ -15,6 +15,37 @@ See [`docs/monorepo-notes.md`](docs/monorepo-notes.md) for more.
 
 ## Layout
 
-- `app/` — Next.js routes and `app/styles/erp.css` (legacy UI styles)
-- `components/` — kebab-case React components (shell, auth, shared UI)
-- `lib/` — API client, Better Auth, utilities
+```
+app/
+  (app)/            # Authenticated app shell (sidebar + breadcrumb)
+    (admin)/        # Admin-only routes (users, invite)
+    (dashboard)/    # Dashboard / overview
+    account/        # User account & profile
+    customers/      # Customer management
+    expenses/       # Expense tracking
+    inventory/      # Inventory items
+    invoice/        # New sales order entry
+    lots/           # Lot management
+    monthly-report/ # Monthly report
+    orders/         # Sales orders
+    payments/       # Payments
+    price-chart/    # Price list
+    products/       # Product catalogue
+    supplier-invoices/
+    suppliers/
+    units-of-measure/
+  (auth)/           # Unauthenticated pages (sign-in, sign-up, invite, reset)
+  api/              # Next.js route handlers (Better Auth + ERP resource APIs)
+
+components/         # Shared React components (app shell, auth, UI primitives)
+  ui/               # shadcn/ui components
+
+db/                 # Drizzle schema, migrations, relations, seed
+emails/             # React Email templates (verification, reset, invite)
+hooks/              # React Query hooks (use-users, use-user-invitations, …)
+lib/
+  api/              # Typed fetch client + per-resource API functions
+  query/            # React Query key registry
+  utils/            # Shared utilities
+services/           # Server-only business logic (portal-users, invitations, auth)
+```
