@@ -36,16 +36,16 @@ const data = {
       title: "Sales",
       url: "#",
       items: [
-        {
-          title: "Orders",
-          url: "/orders",
-          isActive: false,
-        },
-        {
-          title: "Invoices",
-          url: "/invoice",
-          isActive: false,
-        },
+        // {
+        //   title: "Orders",
+        //   url: "/orders",
+        //   isActive: false,
+        // },
+        // {
+        //   title: "Invoices",
+        //   url: "/invoice",
+        //   isActive: false,
+        // },
         {
           title: "Customers",
           url: "/customers",
@@ -57,37 +57,37 @@ const data = {
       title: "Inventory",
       url: "#",
       items: [
-        {
-          title: "Inventory",
-          url: "/inventory",
-          isActive: false,
-        },
-        {
-          title: "Lots",
-          url: "/lots",
-          isActive: false,
-        },
+        // {
+        //   title: "Inventory",
+        //   url: "/inventory",
+        //   isActive: false,
+        // },
+        // {
+        //   title: "Lots",
+        //   url: "/lots",
+        //   isActive: false,
+        // },
         {
           title: "Products",
           url: "/products",
           isActive: false,
         },
-        {
-          title: "Units of measure",
-          url: "/units-of-measure",
-          isActive: false,
-        },
+        // {
+        //   title: "Units of measure",
+        //   url: "/units-of-measure",
+        //   isActive: false,
+        // },
       ],
     },
     {
       title: "Purchasing",
       url: "#",
       items: [
-        {
-          title: "Supplier Invoices",
-          url: "/supplier-invoices",
-          isActive: false,
-        },
+        // {
+        //   title: "Supplier Invoices",
+        //   url: "/supplier-invoices",
+        //   isActive: false,
+        // },
         {
           title: "Suppliers",
           url: "/suppliers",
@@ -95,33 +95,33 @@ const data = {
         },
       ],
     },
-    {
-      title: "Finances",
-      url: "#",
-      items: [
-        {
-          title: "Payments",
-          url: "/payments",
-          isActive: false,
-        },
-        {
-          title: "Expenses",
-          url: "/expenses",
-          isActive: false,
-        },
-      ],
-    },
-    {
-      title: "Reports",
-      url: "#",
-      items: [
-        {
-          title: "Monthly Report",
-          url: "/monthly-report",
-          isActive: false,
-        },
-      ],
-    },
+    // {
+    //   title: "Finances",
+    //   url: "#",
+    //   items: [
+    //     {
+    //       title: "Payments",
+    //       url: "/payments",
+    //       isActive: false,
+    //     },
+    //     {
+    //       title: "Expenses",
+    //       url: "/expenses",
+    //       isActive: false,
+    //     },
+    //   ],
+    // },
+    // {
+    //   title: "Reports",
+    //   url: "#",
+    //   items: [
+    //     {
+    //       title: "Monthly Report",
+    //       url: "/monthly-report",
+    //       isActive: false,
+    //     },
+    //   ],
+    // },
     {
       title: "Admin",
       url: "#",

@@ -6,6 +6,7 @@ import * as authSchema from "@/db/auth-schema";
 import { VerifyEmail } from "@/emails/verify-email";
 import { emailFrom, resend } from "./email";
 import { ResetPasswordEmail } from "@/emails/reset-password";
+import { createPortalUser } from "@/services/portal-users";
 
 if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not set");
@@ -26,6 +27,25 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+  },
+
+  databaseHooks: {
+    user: {
+      create: {
+        /**
+         * After any new Better Auth user is created (email or OAuth), ensure a
+         * matching `portal_users` row exists. `createPortalUser` is idempotent
+         * so email sign-ups that call it explicitly are safe.
+         */
+        after: async user => {
+          await createPortalUser({
+            authUserId: user.id,
+            fullName: user.name,
+            email: user.email,
+          });
+        },
+      },
     },
   },
 

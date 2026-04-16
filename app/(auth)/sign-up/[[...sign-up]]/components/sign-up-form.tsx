@@ -24,7 +24,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { GoogleAuthButton } from "@/components/google-auth-button";
 import { authClient } from "@/lib/auth-client";
-import { createPortalUser } from "@/lib/api/portal-users";
 
 import {
   signUpFormSchema,
@@ -60,20 +59,6 @@ export function SignUpForm() {
 
     if (err || !signUpData?.user?.id) {
       setSubmitError(err?.message || "Sign up failed");
-      return;
-    }
-
-    try {
-      await createPortalUser({
-        authUserId: signUpData.user.id,
-        fullName: data.name,
-        email: data.email,
-        role: "admin",
-      });
-    } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Failed to create portal user",
-      );
       return;
     }
 

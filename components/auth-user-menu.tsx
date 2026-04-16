@@ -24,6 +24,7 @@ import type { User } from "better-auth";
 export function AuthUserMenu({ user }: { user: User }) {
   const router = useRouter();
 
+  console.log(user.image);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
