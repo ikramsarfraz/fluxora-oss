@@ -97,7 +97,6 @@ export default function UserDetailPage() {
     <>
       <PortalUserProfile
         user={user}
-        backLink={{ href: "/users", label: "← Users" }}
         variant="admin"
         adminActions={{
           isSelf,

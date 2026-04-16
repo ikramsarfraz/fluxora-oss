@@ -2,6 +2,7 @@ import { api } from "./client";
 import { endpoints } from "./endpoints";
 import type {
   PortalUserDetail,
+  PortalUserListItem,
   PortalUserRecord,
 } from "@/services/portal-users";
 
@@ -29,7 +30,7 @@ export function createPortalUser(input: {
 }
 
 export function getUsers() {
-  return api.get<PortalUserRecord[]>(endpoints.portalUsers.list());
+  return api.get<PortalUserListItem[]>(endpoints.portalUsers.list());
 }
 
 export function getPortalUser(id: number) {
@@ -56,4 +57,8 @@ export function invitePortalUser(input: {
   return api.post<{ success: boolean }>(endpoints.portalUsers.invite(), input);
 }
 
-export type { PortalUserDetail, PortalUserRecord } from "@/services/portal-users";
+export type {
+  PortalUserDetail,
+  PortalUserListItem,
+  PortalUserRecord,
+} from "@/services/portal-users";

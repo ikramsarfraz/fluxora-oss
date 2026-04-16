@@ -4,10 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { invitePortalUser } from "@/lib/api/portal-users";
+import { queryKeys } from "@/lib/query/keys";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -54,6 +55,7 @@ const defaultForm: InviteUserFormValues = {
 
 export function InviteUserForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<InviteUserFormValues>({
@@ -63,9 +65,13 @@ export function InviteUserForm() {
 
   const sendInvite = useMutation({
     mutationFn: invitePortalUser,
-    onSuccess: () => {
+    onSuccess: async () => {
       form.reset(defaultForm);
       setError(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.users.invitations,
+      });
       toast.success("Invitation sent");
       router.push("/users");
     },

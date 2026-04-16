@@ -22,6 +22,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { GoogleAuthButton } from "@/components/google-auth-button";
 import { authClient } from "@/lib/auth-client";
 
 import {
@@ -134,15 +135,11 @@ export function SignInForm() {
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? "Signing in…" : "Login"}
               </Button>
-              <Button
-                variant="outline"
-                type="button"
-                className="w-full"
-                disabled
-                title="Google sign-in is not configured yet"
-              >
-                Login with Google
-              </Button>
+              <GoogleAuthButton
+                callbackURL={callbackUrl}
+                label="Login with Google"
+                onError={setSubmitError}
+              />
               <FieldDescription className="text-center">
                 Don&apos;t have an account? <Link href="/sign-up">Sign up</Link>
               </FieldDescription>

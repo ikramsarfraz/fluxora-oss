@@ -32,8 +32,12 @@ function formatDateTime(value: string | Date | null | undefined): string {
 
 export type PortalUserProfileProps = {
   user: PortalUserDetail;
-  backLink?: { href: string; label: string };
   variant?: "self" | "admin";
+  /** Your account: password reset email (and Cancel to leave). */
+  selfActions?: {
+    onResetPassword: () => void;
+    resetPending: boolean;
+  };
   /** Admin user detail: activate/deactivate and password reset. */
   adminActions?: {
     isSelf: boolean;
@@ -46,22 +50,14 @@ export type PortalUserProfileProps = {
 
 export function PortalUserProfile({
   user,
-  backLink,
   variant = "admin",
+  selfActions,
   adminActions,
 }: PortalUserProfileProps) {
   const auth = user.authUser;
 
   return (
     <div className="flex flex-col gap-6">
-      {backLink ? (
-        <nav>
-          <Button variant="link" className="h-auto p-0" asChild>
-            <Link href={backLink.href}>{backLink.label}</Link>
-          </Button>
-        </nav>
-      ) : null}
-
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {user.fullName}
@@ -134,6 +130,24 @@ export function PortalUserProfile({
             <p>{formatDateTime(user.updatedAt)}</p>
           </div>
         </CardContent>
+        {variant === "self" && selfActions ? (
+          <CardFooter className="flex flex-wrap gap-2 border-t pt-6">
+            <Button type="button" variant="outline" asChild>
+              <Link href="/">Cancel</Link>
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="ml-auto"
+              disabled={selfActions.resetPending}
+              onClick={selfActions.onResetPassword}
+            >
+              {selfActions.resetPending
+                ? "Sending…"
+                : "Send password reset email"}
+            </Button>
+          </CardFooter>
+        ) : null}
         {variant === "admin" && adminActions ? (
           <CardFooter className="flex flex-wrap gap-2 border-t pt-6">
             <Button type="button" variant="outline" asChild>

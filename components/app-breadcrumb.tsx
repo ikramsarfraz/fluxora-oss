@@ -12,6 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { cn } from "@/lib/utils";
 
 /** Known path segments -> short labels (sidebar-aligned where possible). */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -85,15 +86,20 @@ export function AppBreadcrumb() {
   const pathname = usePathname() ?? "/";
   const crumbs = buildCrumbs(pathname);
 
+  /** On small screens, show only the parent + current (last two) when the trail is longer. */
+  const hideCrumbOnMobile = (i: number) =>
+    crumbs.length >= 2 && i < crumbs.length - 2;
+
+  const hideSeparatorAfterOnMobile = (i: number) =>
+    crumbs.length >= 2 && i < crumbs.length - 2;
+
   return (
     <Breadcrumb className="min-w-0 flex-1">
       <BreadcrumbList>
         {crumbs.map((crumb, i) => (
           <Fragment key={`${crumb.href}-${i}`}>
             <BreadcrumbItem
-              className={
-                i === 0 && crumbs.length > 1 ? "hidden md:inline-flex" : ""
-              }
+              className={cn(hideCrumbOnMobile(i) && "hidden md:inline-flex")}
             >
               {crumb.isCurrent ? (
                 <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
@@ -105,9 +111,9 @@ export function AppBreadcrumb() {
             </BreadcrumbItem>
             {i < crumbs.length - 1 ? (
               <BreadcrumbSeparator
-                className={
-                  i === 0 && crumbs.length > 1 ? "hidden md:flex" : undefined
-                }
+                className={cn(
+                  hideSeparatorAfterOnMobile(i) && "hidden md:flex",
+                )}
               />
             ) : null}
           </Fragment>

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { PortalUserProfile } from "@/components/portal-user-profile";
+import { AccountPortalProfile } from "@/app/(app)/account/account-portal-profile";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { getUserByAuthUserId } from "@/services/portal-users";
@@ -33,11 +33,5 @@ export default async function AccountPage() {
     );
   }
 
-  return (
-    <PortalUserProfile
-      user={portalUser}
-      backLink={{ href: "/", label: "← Dashboard" }}
-      variant="self"
-    />
-  );
+  return <AccountPortalProfile user={portalUser} />;
 }

@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import Users from "./components/users-page";
 import { queryKeys } from "@/lib/query/keys";
+import { listPendingInvitationsForAdmin } from "@/services/invitations";
 import { getUsers } from "@/services/portal-users";
 
 export default async function UsersPage() {
@@ -13,6 +14,10 @@ export default async function UsersPage() {
   await queryClient.prefetchQuery({
     queryKey: queryKeys.users.all,
     queryFn: () => getUsers(),
+  });
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.users.invitations,
+    queryFn: () => listPendingInvitationsForAdmin(),
   });
 
   return (

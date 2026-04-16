@@ -1,11 +1,12 @@
 import { isAPIError } from "better-auth/api";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 
 import { db } from "@/db";
 import { userInvitations } from "@/db/schema";
 import { signUp } from "@/services/auth";
 import {
   createPortalUser,
+  requireAdminPortalUser,
   type PortalUserRole,
 } from "@/services/portal-users";
 
@@ -97,3 +98,22 @@ export async function acceptInvitation(input: {
 
   return { success: true as const };
 }
+
+/** Pending, non-expired invitations (admin-only). */
+export async function listPendingInvitationsForAdmin() {
+  await requireAdminPortalUser();
+  return await db
+    .select()
+    .from(userInvitations)
+    .where(
+      and(
+        eq(userInvitations.status, "pending"),
+        gt(userInvitations.expiresAt, new Date()),
+      ),
+    )
+    .orderBy(desc(userInvitations.createdAt));
+}
+
+export type PendingInvitationListItem = Awaited<
+  ReturnType<typeof listPendingInvitationsForAdmin>
+>[number];

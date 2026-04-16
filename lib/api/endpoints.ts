@@ -3,6 +3,8 @@
 const P = {
   auth: "/api/auth",
   invitations: "/api/invitations",
+  /** Admin: pending `user_invitations` rows (non-expired). */
+  userInvitations: "/api/user-invitations",
   portalUsers: "/api/portal-users",
   dashboard: "/api/dashboard",
   banking: "/api/banking",
@@ -416,6 +418,9 @@ export const endpoints = {
     preview: (token: string) =>
       `${P.invitations}/${encodeURIComponent(token)}`,
     accept: () => `${P.invitations}/accept`,
+  },
+  userInvitations: {
+    list: () => `${P.userInvitations}`,
   },
   portalUsers: {
     list: () => `${P.portalUsers}`,

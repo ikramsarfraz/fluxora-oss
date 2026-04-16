@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
@@ -22,6 +22,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { GoogleAuthButton } from "@/components/google-auth-button";
 import { authClient } from "@/lib/auth-client";
 import { createPortalUser } from "@/lib/api/portal-users";
 
@@ -34,6 +35,9 @@ import { AlertCircle } from "lucide-react";
 
 export function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useForm<SignUpFormValues>({
@@ -199,15 +203,11 @@ export function SignUpForm() {
                 >
                   {isSubmitting ? "Creating…" : "Create Account"}
                 </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="w-full"
-                  disabled
-                  title="Google sign-up is not configured yet"
-                >
-                  Sign up with Google
-                </Button>
+                <GoogleAuthButton
+                  callbackURL={callbackUrl}
+                  label="Sign up with Google"
+                  onError={setSubmitError}
+                />
                 <FieldDescription className="px-6 text-center">
                   Already have an account? <Link href="/sign-in">Sign in</Link>
                 </FieldDescription>

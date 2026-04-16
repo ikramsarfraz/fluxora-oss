@@ -1,5 +1,5 @@
 import { isAPIError } from "better-auth/api";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { portalUsers } from "@/db/schema";
@@ -56,8 +56,14 @@ export async function getUsers() {
     throw new Error("Unauthorized");
   }
 
-  return await db.query.portalUsers.findMany();
+  return await db.query.portalUsers.findMany({
+    with: { authUser: true },
+    orderBy: [desc(portalUsers.createdAt)],
+  });
 }
+
+/** Row from `getUsers()` (includes Better Auth `authUser` for email verification). */
+export type PortalUserListItem = Awaited<ReturnType<typeof getUsers>>[number];
 
 /**
  * Gets a portal user by id.
