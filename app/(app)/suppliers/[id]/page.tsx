@@ -161,12 +161,12 @@ export default function SupplierProfile() {
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <label htmlFor="supplier-month" className="text-sm font-medium">Period:</label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <Select value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)}>
                 <SelectTrigger id="supplier-month" className="w-48">
                   <SelectValue placeholder="All time" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All time</SelectItem>
+                  <SelectItem value="__all__">All time</SelectItem>
                   {portfolio.months.map(m => (
                     <SelectItem key={m.month} value={m.month}>
                       {formatMonthLabel(m.month)}

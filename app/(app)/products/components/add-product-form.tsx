@@ -186,12 +186,12 @@ export function AddProductForm() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="add-stock-uom" className="text-sm font-medium">Stock UOM</label>
-              <Select value={form.stockUnitId} onValueChange={v => setForm(f => ({ ...f, stockUnitId: v }))}>
+              <Select value={form.stockUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, stockUnitId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger id="add-stock-uom">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {activeUoms.map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>
                       {formatUomOption(u)}
@@ -202,12 +202,12 @@ export function AddProductForm() {
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="add-purchase-uom" className="text-sm font-medium">Purchase UOM</label>
-              <Select value={form.purchaseUnitId} onValueChange={v => setForm(f => ({ ...f, purchaseUnitId: v }))}>
+              <Select value={form.purchaseUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, purchaseUnitId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger id="add-purchase-uom">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {activeUoms.map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>
                       {formatUomOption(u)}
@@ -218,12 +218,12 @@ export function AddProductForm() {
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="add-sales-uom" className="text-sm font-medium">Sales UOM</label>
-              <Select value={form.salesUnitId} onValueChange={v => setForm(f => ({ ...f, salesUnitId: v }))}>
+              <Select value={form.salesUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, salesUnitId: v === "__none__" ? "" : v }))}>
                 <SelectTrigger id="add-sales-uom">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {activeUoms.map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>
                       {formatUomOption(u)}
