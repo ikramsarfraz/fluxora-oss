@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { ArrowUpDown, MoreHorizontal, Check, X, Trash2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,19 +23,22 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ProductListItem } from "@/services/products";
-import { formatMoney } from "@/lib/utils/currency";
+import { Badge } from "@/components/ui/badge";
+import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
 
 type ColumnActions = {
-  onDelete: (product: ProductListItem) => void;
+  onEdit: (unit: UnitOfMeasureListItem) => void;
+  onDelete: (unit: UnitOfMeasureListItem) => void;
 };
 
 function ActionsCell({
-  product,
+  unit,
+  onEdit,
   onDelete,
 }: {
-  product: ProductListItem;
-  onDelete: (product: ProductListItem) => void;
+  unit: UnitOfMeasureListItem;
+  onEdit: (unit: UnitOfMeasureListItem) => void;
+  onDelete: (unit: UnitOfMeasureListItem) => void;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -51,8 +53,9 @@ function ActionsCell({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-          <DropdownMenuItem asChild>
-            <Link href={`/products/${product.id}`}>View product</Link>
+          <DropdownMenuItem onClick={() => onEdit(unit)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit unit
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -60,7 +63,7 @@ function ActionsCell({
             onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 />
-            Delete product
+            Delete unit
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -68,9 +71,9 @@ function ActionsCell({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product</AlertDialogTitle>
+            <AlertDialogTitle>Delete unit of measure</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{product.name}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{unit.name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -78,7 +81,7 @@ function ActionsCell({
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                onDelete(product);
+                onDelete(unit);
                 setShowDeleteDialog(false);
               }}
             >
@@ -91,27 +94,8 @@ function ActionsCell({
   );
 }
 
-export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem>[] {
+export function createColumns(actions: ColumnActions): ColumnDef<UnitOfMeasureListItem>[] {
   return [
-    {
-      accessorKey: "sku",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            SKU
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
-      cell: ({ row }) => (
-        <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-medium">
-          {row.getValue("sku")}
-        </code>
-      ),
-    },
     {
       accessorKey: "name",
       header: ({ column }) => {
@@ -126,35 +110,62 @@ export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem
         );
       },
       cell: ({ row }) => (
-        <Link
-          href={`/products/${row.original.id}`}
-          className="font-medium hover:underline"
-        >
-          {row.getValue("name")}
-        </Link>
+        <span className="font-medium">{row.getValue("name")}</span>
       ),
     },
     {
-      accessorKey: "species",
-      header: "Species",
+      accessorKey: "abbreviation",
+      header: "Abbreviation",
       cell: ({ row }) => {
-        const species = row.getValue("species") as string | null;
-        return species ? (
-          <span>{species}</span>
+        const abbr = row.getValue("abbreviation") as string | null;
+        return abbr ? (
+          <Badge variant="secondary">{abbr}</Badge>
         ) : (
           <span className="text-muted-foreground">-</span>
         );
       },
     },
     {
-      accessorKey: "defaultPricePerLb",
-      header: () => <div className="text-right">Price/lb</div>,
+      accessorKey: "sortOrder",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Sort Order
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => (
+        <span className="tabular-nums">{row.getValue("sortOrder")}</span>
+      ),
+    },
+    {
+      accessorKey: "isActive",
+      header: "Active",
       cell: ({ row }) => {
-        const price = row.getValue("defaultPricePerLb") as string | null;
-        if (!price) {
-          return <div className="text-right text-muted-foreground">-</div>;
-        }
-        return <div className="text-right tabular-nums font-medium">{formatMoney(price)}</div>;
+        const isActive = row.getValue("isActive") as boolean;
+        return isActive ? (
+          <Check className="h-4 w-4 text-green-600" />
+        ) : (
+          <X className="h-4 w-4 text-muted-foreground" />
+        );
+      },
+    },
+    {
+      accessorKey: "notes",
+      header: "Notes",
+      cell: ({ row }) => {
+        const notes = row.getValue("notes") as string | null;
+        return notes ? (
+          <span className="text-muted-foreground text-sm max-w-[200px] truncate block">
+            {notes}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
       },
     },
     {
@@ -162,7 +173,11 @@ export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem
       header: "Actions",
       cell: ({ row }) => (
         <div className="flex justify-center">
-          <ActionsCell product={row.original} onDelete={actions.onDelete} />
+          <ActionsCell
+            unit={row.original}
+            onEdit={actions.onEdit}
+            onDelete={actions.onDelete}
+          />
         </div>
       ),
       meta: {

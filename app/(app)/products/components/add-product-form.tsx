@@ -1,12 +1,26 @@
 "use client";
 
 import Link from "next/link";
-
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, endpoints, type Product, type UnitOfMeasure } from "@/lib/api";
 import { generateSku } from "./product-sku-utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const emptyForm = {
   sku: "",
@@ -22,6 +36,7 @@ function formatUomOption(u: UnitOfMeasure): string {
 }
 
 export function AddProductForm() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +76,7 @@ export function AddProductForm() {
       queryClient.refetchQueries({ queryKey: ["price-chart"] });
       setForm(emptyForm);
       setError(null);
+      router.push("/products");
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -96,147 +112,158 @@ export function AddProductForm() {
     createProduct.mutate(payload);
   };
 
-  function UomSelect({
-    label,
-    value,
-    onChange,
-    id,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    id: string;
-  }) {
-    return (
-      <label htmlFor={id} style={{ margin: 0 }}>
-        {label}
-        <select id={id} value={value} onChange={e => onChange(e.target.value)}>
-          <option value="">— None —</option>
-          {activeUoms.map(u => (
-            <option key={u.id} value={String(u.id)}>
-              {formatUomOption(u)}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
+  const categoryOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        (products ?? [])
+          .map(p => (p.species ?? "").trim())
+          .filter(s => s.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [products]);
 
   return (
-    <section className="card form-card" aria-labelledby="add-product-heading">
-      <h2
-        id="add-product-heading"
-        style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-      >
-        Add product
-      </h2>
-      <form onSubmit={handleCreate}>
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="product-sku">SKU *</label>
-            <input
-              id="product-sku"
-              value={form.sku}
-              onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
-              placeholder="e.g. BEEF-RIB-01"
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ marginTop: "0.35rem" }}
-              onClick={() => {
-                if (!form.name.trim() || !form.species.trim()) {
-                  setError(
-                    "Enter name and category before generating a SKU.",
-                  );
-                  return;
-                }
-                const sku = generateSku(form.name, form.species, products);
-                setForm(f => ({ ...f, sku }));
-                setError(null);
-              }}
-            >
-              Auto-generate SKU
-            </button>
+    <Card className="w-full max-w-xl">
+      <CardContent className="pt-6">
+        <form id="form-add-product" onSubmit={handleCreate} className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="product-sku" className="text-sm font-medium">SKU</label>
+              <div className="flex flex-col gap-2">
+                <Input
+                  id="product-sku"
+                  value={form.sku}
+                  onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
+                  placeholder="e.g. BEEF-RIB-01"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (!form.name.trim() || !form.species.trim()) {
+                      setError("Enter name and category before generating a SKU.");
+                      return;
+                    }
+                    const sku = generateSku(form.name, form.species, products);
+                    setForm(f => ({ ...f, sku }));
+                    setError(null);
+                  }}
+                >
+                  Auto-generate SKU
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="product-name" className="text-sm font-medium">Name *</label>
+              <Input
+                id="product-name"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. Beef Ribeye"
+                required
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label htmlFor="product-name">Name *</label>
-            <input
-              id="product-name"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Beef Ribeye"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="product-species">Category *</label>
-            <input
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="product-species" className="text-sm font-medium">Category *</label>
+            <Input
               id="product-species"
               value={form.species}
-              onChange={e =>
-                setForm(f => ({ ...f, species: e.target.value }))
-              }
-              placeholder="e.g. Chicken, Beef, Seafood…"
+              onChange={e => setForm(f => ({ ...f, species: e.target.value }))}
+              placeholder="e.g. Chicken, Beef, Seafood..."
               required
               list="product-category-suggestions"
             />
+            <datalist id="product-category-suggestions">
+              {categoryOptions.map(cat => (
+                <option key={cat} value={cat} />
+              ))}
+            </datalist>
           </div>
-        </div>
-        <datalist id="product-category-suggestions">
-          {Array.from(
-            new Set(
-              (products ?? [])
-                .map(p => (p.species ?? "").trim())
-                .filter(s => s.length > 0),
-            ),
-          )
-            .sort((a, b) => a.localeCompare(b))
-            .map(cat => (
-              <option key={cat} value={cat} />
-            ))}
-        </datalist>
-        <div className="form-row" style={{ marginTop: "0.75rem" }}>
-          <UomSelect
-            label="Stock UOM (inventory)"
-            id="add-stock-uom"
-            value={form.stockUnitId}
-            onChange={v => setForm(f => ({ ...f, stockUnitId: v }))}
-          />
-          <UomSelect
-            label="Purchase UOM"
-            id="add-purchase-uom"
-            value={form.purchaseUnitId}
-            onChange={v => setForm(f => ({ ...f, purchaseUnitId: v }))}
-          />
-          <UomSelect
-            label="Sales UOM"
-            id="add-sales-uom"
-            value={form.salesUnitId}
-            onChange={v => setForm(f => ({ ...f, salesUnitId: v }))}
-          />
-        </div>
-        <p
-          className="muted"
-          style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0" }}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="add-stock-uom" className="text-sm font-medium">Stock UOM</label>
+              <Select value={form.stockUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, stockUnitId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger id="add-stock-uom">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {activeUoms.map(u => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {formatUomOption(u)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="add-purchase-uom" className="text-sm font-medium">Purchase UOM</label>
+              <Select value={form.purchaseUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, purchaseUnitId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger id="add-purchase-uom">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {activeUoms.map(u => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {formatUomOption(u)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="add-sales-uom" className="text-sm font-medium">Sales UOM</label>
+              <Select value={form.salesUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, salesUnitId: v === "__none__" ? "" : v }))}>
+                <SelectTrigger id="add-sales-uom">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {activeUoms.map(u => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {formatUomOption(u)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Manage the unit list under{" "}
+            <Link href="/units-of-measure" className="text-primary underline underline-offset-4 hover:text-primary/80">
+              Units of measure
+            </Link>. Optional — helps match QuickBooks-style item setup.
+          </p>
+
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+        </form>
+      </CardContent>
+      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/products")}
         >
-          Manage the unit list under{" "}
-          <Link href="/units-of-measure">Units of measure</Link>. Optional —
-          helps match QuickBooks-style item setup.
-        </p>
-        {error && (
-          <div className="error" role="alert">
-            {error}
-          </div>
-        )}
-        <button
+          Cancel
+        </Button>
+        <Button
           type="submit"
-          className="btn primary"
+          form="form-add-product"
           disabled={createProduct.isPending}
         >
-          {createProduct.isPending ? "Adding…" : "Add product"}
-        </button>
-      </form>
-    </section>
+          {createProduct.isPending ? "Adding..." : "Add Product"}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }

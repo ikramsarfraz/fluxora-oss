@@ -15,126 +15,85 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Users,
+  Package,
+  Truck,
+  ShieldCheck,
+  Ruler,
+  type LucideIcon,
+} from "lucide-react";
 
-// This is sample data.
-const data = {
-  navMain: [
-    {
-      title: "Overview",
-      url: "#",
-      items: [
-        {
-          title: "Dashboard",
-          url: "/",
-          isActive: true,
-        },
-      ],
-    },
-    {
-      title: "Sales",
-      url: "#",
-      items: [
-        // {
-        //   title: "Orders",
-        //   url: "/orders",
-        //   isActive: false,
-        // },
-        // {
-        //   title: "Invoices",
-        //   url: "/invoice",
-        //   isActive: false,
-        // },
-        {
-          title: "Customers",
-          url: "/customers",
-          isActive: false,
-        },
-      ],
-    },
-    {
-      title: "Inventory",
-      url: "#",
-      items: [
-        // {
-        //   title: "Inventory",
-        //   url: "/inventory",
-        //   isActive: false,
-        // },
-        // {
-        //   title: "Lots",
-        //   url: "/lots",
-        //   isActive: false,
-        // },
-        {
-          title: "Products",
-          url: "/products",
-          isActive: false,
-        },
-        // {
-        //   title: "Units of measure",
-        //   url: "/units-of-measure",
-        //   isActive: false,
-        // },
-      ],
-    },
-    {
-      title: "Purchasing",
-      url: "#",
-      items: [
-        // {
-        //   title: "Supplier Invoices",
-        //   url: "/supplier-invoices",
-        //   isActive: false,
-        // },
-        {
-          title: "Suppliers",
-          url: "/suppliers",
-          isActive: false,
-        },
-      ],
-    },
-    // {
-    //   title: "Finances",
-    //   url: "#",
-    //   items: [
-    //     {
-    //       title: "Payments",
-    //       url: "/payments",
-    //       isActive: false,
-    //     },
-    //     {
-    //       title: "Expenses",
-    //       url: "/expenses",
-    //       isActive: false,
-    //     },
-    //   ],
-    // },
-    // {
-    //   title: "Reports",
-    //   url: "#",
-    //   items: [
-    //     {
-    //       title: "Monthly Report",
-    //       url: "/monthly-report",
-    //       isActive: false,
-    //     },
-    //   ],
-    // },
-    {
-      title: "Admin",
-      url: "#",
-      items: [
-        {
-          title: "Users",
-          url: "/users",
-          isActive: false,
-        },
-      ],
-    },
-  ],
+type NavItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
 };
+
+type NavGroup = {
+  title: string;
+  items: NavItem[];
+};
+
+const navMain: NavGroup[] = [
+  {
+    title: "Overview",
+    items: [
+      {
+        title: "Dashboard",
+        url: "/",
+        icon: LayoutDashboard,
+      },
+    ],
+  },
+  {
+    title: "Sales",
+    items: [
+      {
+        title: "Customers",
+        url: "/customers",
+        icon: Users,
+      },
+    ],
+  },
+  {
+    title: "Inventory",
+    items: [
+      {
+        title: "Products",
+        url: "/products",
+        icon: Package,
+      },
+      {
+        title: "Units of Measure",
+        url: "/units-of-measure",
+        icon: Ruler,
+      },
+    ],
+  },
+  {
+    title: "Purchasing",
+    items: [
+      {
+        title: "Suppliers",
+        url: "/suppliers",
+        icon: Truck,
+      },
+    ],
+  },
+  {
+    title: "Admin",
+    items: [
+      {
+        title: "Users",
+        url: "/users",
+        icon: ShieldCheck,
+      },
+    ],
+  },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname() ?? "";
@@ -164,28 +123,31 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {data.navMain.map(item => (
-          <SidebarGroup key={item.title}>
-            <SidebarGroupLabel>{item.title}</SidebarGroupLabel>
+        {navMain.map((group) => (
+          <SidebarGroup key={group.title}>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              {group.title}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {item.items.map(item => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton isActive={isActive(item.url)} asChild>
-                      <Link
-                        href={item.url}
-                        className={cn(
-                          "text-sm",
-                          item.isActive
-                            ? "text-primary"
-                            : "text-muted-foreground",
-                        )}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={active}
+                        asChild
+                        tooltip={item.title}
                       >
-                        {item.title}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                        <Link href={item.url}>
+                          <Icon className="size-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

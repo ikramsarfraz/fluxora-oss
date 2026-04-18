@@ -9,6 +9,10 @@ export function getSupplier(id: number) {
   return api.get<Supplier>(endpoints.suppliers.one(id));
 }
 
+export function deleteSupplier(id: number) {
+  return api.delete(endpoints.suppliers.delete(id));
+}
+
 // export function getCustomerPortfolio(id: number) {
 //   return api.get<CustomerPortfolio>(endpoints.customers.portfolio(id));
 // }

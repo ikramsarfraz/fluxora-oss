@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, DollarSign, Users, Package, Truck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,89 +12,103 @@ import {
 
 export function SectionCards() {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-linear-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4 dark:*:data-[slot=card]:bg-card">
+    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-sm *:data-[slot=card]:border lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Total Revenue</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <DollarSign className="size-4" />
+            Monthly Revenue
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            $1,250.00
+            $48,250
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <TrendingUp />
-              +12.5%
+            <Badge variant="outline" className="text-primary border-primary/30">
+              <TrendingUp className="size-3" />
+              +8.2%
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Trending up this month <TrendingUp className="size-4" />
+            Above target this month <TrendingUp className="size-4 text-primary" />
           </div>
           <div className="text-muted-foreground">
-            Visitors for the last 6 months
+            Compared to last month
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>New Customers</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <Users className="size-4" />
+            Active Customers
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            1,234
+            127
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <TrendingDown />
-              -20%
+            <Badge variant="outline" className="text-primary border-primary/30">
+              <TrendingUp className="size-3" />
+              +5
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <TrendingDown className="size-4" />
+            5 new accounts this month <TrendingUp className="size-4 text-primary" />
           </div>
           <div className="text-muted-foreground">
-            Acquisition needs attention
+            Customer base growing
           </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Active Accounts</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <Package className="size-4" />
+            Products in Stock
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            45,678
+            342
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <TrendingUp />
-              +12.5%
+            <Badge variant="outline" className="text-amber-600 border-amber-600/30">
+              <TrendingDown className="size-3" />
+              -12
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Strong user retention <TrendingUp className="size-4" />
+            Inventory levels healthy
           </div>
-          <div className="text-muted-foreground">Engagement exceed targets</div>
+          <div className="text-muted-foreground">
+            8 items need reorder soon
+          </div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
         <CardHeader>
-          <CardDescription>Growth Rate</CardDescription>
+          <CardDescription className="flex items-center gap-2">
+            <Truck className="size-4" />
+            Active Suppliers
+          </CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            4.5%
+            24
           </CardTitle>
           <CardAction>
-            <Badge variant="outline">
-              <TrendingUp />
-              +4.5%
+            <Badge variant="outline" className="text-primary border-primary/30">
+              <TrendingUp className="size-3" />
+              +2
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Steady performance increase <TrendingUp className="size-4" />
+            Supply chain stable <TrendingUp className="size-4 text-primary" />
           </div>
-          <div className="text-muted-foreground">Meets growth projections</div>
+          <div className="text-muted-foreground">All suppliers active</div>
         </CardFooter>
       </Card>
     </div>

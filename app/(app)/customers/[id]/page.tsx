@@ -18,6 +18,20 @@ import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { orderStatusLabel } from "@/lib/utils/status-labels";
 import { useCustomer } from "@/hooks/use-customer";
+import { DetailPageHeader } from "@/components/detail-page-header";
+import { DetailSection, DetailField, DetailGrid } from "@/components/detail-section";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /** Format "YYYY-MM" to "Month YYYY" e.g. "March 2025" */
 function formatMonthLabel(ym: string): string {
@@ -200,82 +214,60 @@ export default function CustomerProfile() {
   };
 
   if (!Number.isInteger(customerId)) {
-    return <div className="error">Invalid customer ID.</div>;
+    return <PageError message="Invalid customer ID." />;
   }
-  if (customerLoading || customerError) {
-    if (customerError)
-      return (
-        <div className="error">
-          Failed to load customer: {(customerError as Error).message}
-        </div>
-      );
-    return <div className="loading">Loading customer…</div>;
+  if (customerLoading) {
+    return <PageLoading message="Loading customer..." />;
+  }
+  if (customerError) {
+    return <PageError message={(customerError as Error).message} />;
   }
   if (!customer) return null;
 
+  const addressParts = [
+    customer.street,
+    [customer.city, customer.state, customer.zip].filter(Boolean).join(", "),
+  ].filter(Boolean);
+  const addressLine = addressParts.join(" · ");
+
   return (
-    <>
-      <nav style={{ marginBottom: "1rem" }}>
-        <Link href="/customers">← Customers</Link>
-      </nav>
-      <h1>{customer.name}</h1>
-      {(customer.street ||
-        customer.city ||
-        customer.state ||
-        customer.zip ||
-        customer.phone_number) && (
-        <p className="weight-label" style={{ marginBottom: "0.5rem" }}>
-          {[
-            customer.street,
-            [customer.city, customer.state, customer.zip]
-              .filter(Boolean)
-              .join(", "),
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-          {(customer.street ||
-            customer.city ||
-            customer.state ||
-            customer.zip) &&
-            customer.phone_number &&
-            " · "}
-          {customer.phone_number && <span>Phone: {customer.phone_number}</span>}
-        </p>
+    <div className="flex flex-col gap-6">
+      <DetailPageHeader
+        title={customer.name}
+        description="Set contract prices and view invoice history and profit."
+      />
+
+      {/* Contact Information */}
+      {(addressLine || customer.phone_number) && (
+        <DetailSection title="Contact Information" description="Customer address and contact details.">
+          <DetailGrid>
+            {addressLine && (
+              <DetailField label="Address">{addressLine}</DetailField>
+            )}
+            {customer.phone_number && (
+              <DetailField label="Phone">{customer.phone_number}</DetailField>
+            )}
+          </DetailGrid>
+        </DetailSection>
       )}
-      <p className="weight-label">
-        Customer profile — set contract prices and view invoice history and
-        profit.
-      </p>
 
       {/* Fuel surcharge (contract) */}
-      <section className="card form-card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>
-          Fuel surcharge (per order)
-        </h2>
-        <p className="weight-label" style={{ marginBottom: "0.5rem" }}>
-          Optional amount added to each order when &quot;Add fuel
-          surcharge&quot; is checked. Set in Price chart or here.
-        </p>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <input
+      <DetailSection
+        title="Fuel Surcharge"
+        description="Optional amount added to each order when fuel surcharge is enabled."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
             type="number"
             min={0}
             step="0.01"
             placeholder={customer.fuel_surcharge_amount ?? "0"}
             value={fuelSurcharge}
             onChange={e => setFuelSurcharge(e.target.value)}
-            style={{ width: "6rem" }}
+            className="w-24"
           />
-          <button
+          <Button
             type="button"
-            className="btn primary"
             onClick={() => {
               const v = fuelSurcharge.trim();
               updateCustomer.mutate({
@@ -285,45 +277,33 @@ export default function CustomerProfile() {
             }}
             disabled={updateCustomer.isPending}
           >
-            {updateCustomer.isPending ? "Saving…" : "Save"}
-          </button>
+            {updateCustomer.isPending ? "Saving..." : "Save"}
+          </Button>
           {customer.fuel_surcharge_amount != null &&
             customer.fuel_surcharge_amount !== "" && (
-              <span className="weight-label">
+              <Badge variant="secondary">
                 Current: {formatMoney(customer.fuel_surcharge_amount)} per order
-              </span>
+              </Badge>
             )}
         </div>
-      </section>
+      </DetailSection>
 
       {/* Invoice abbreviation / prefix for invoice numbers */}
-      <section className="card form-card" style={{ marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>
-          Invoice abbreviation (prefix)
-        </h2>
-        <p className="weight-label" style={{ marginBottom: "0.5rem" }}>
-          Optional short code to prepend to invoice numbers for this customer,
-          e.g. <strong>ABC</strong> → <code>ABC-INV-2026-00001</code>.
-        </p>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <input
+      <DetailSection
+        title="Invoice Prefix"
+        description="Optional short code to prepend to invoice numbers (e.g. ABC → ABC-INV-2026-00001)."
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
             type="text"
             maxLength={32}
             placeholder="e.g. ABC"
             value={invoicePrefix}
             onChange={e => setInvoicePrefix(e.target.value)}
-            style={{ width: "8rem", textTransform: "uppercase" }}
+            className="w-28 uppercase"
           />
-          <button
+          <Button
             type="button"
-            className="btn primary"
             onClick={() => {
               const v = invoicePrefix.trim();
               updateCustomer.mutate({
@@ -332,134 +312,111 @@ export default function CustomerProfile() {
             }}
             disabled={updateCustomer.isPending}
           >
-            {updateCustomer.isPending ? "Saving…" : "Save"}
-          </button>
+            {updateCustomer.isPending ? "Saving..." : "Save"}
+          </Button>
           {customer.invoice_prefix && (
-            <span className="weight-label">
-              Current sample: {customer.invoice_prefix.trim().toUpperCase()}
-              -INV-2026-00001
-            </span>
+            <Badge variant="secondary">
+              Sample: {customer.invoice_prefix.trim().toUpperCase()}-INV-2026-00001
+            </Badge>
           )}
         </div>
-      </section>
+      </DetailSection>
 
       {/* Portfolio summary — always show section */}
-      <section
-        className="card form-card"
-        aria-labelledby="portfolio-summary-heading"
-        style={{ marginBottom: "1rem" }}
+      <DetailSection
+        title="Portfolio Summary"
+        description="Revenue, cost, and profit overview."
       >
-        <h2
-          id="portfolio-summary-heading"
-          style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}
-        >
-          Portfolio summary
-        </h2>
-        {portfolioLoading && <p className="weight-label">Loading portfolio…</p>}
+        {portfolioLoading && <p className="text-sm text-muted-foreground">Loading portfolio...</p>}
         {portfolioError && (
-          <p className="error" role="alert">
+          <p className="text-sm text-destructive" role="alert">
             Could not load portfolio: {(portfolioError as Error).message}
           </p>
         )}
         {!portfolioLoading && !portfolioError && portfolio && (
-          <>
-            <div className="form-group" style={{ marginBottom: "0.75rem" }}>
-              <label htmlFor="portfolio-month">Month / Year</label>
-              <select
-                id="portfolio-month"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                style={{ minWidth: "180px" }}
-              >
-                <option value="">All time</option>
-                {(portfolio.months ?? []).map(m => (
-                  <option key={m.month} value={m.month}>
-                    {formatMonthLabel(m.month)}
-                  </option>
-                ))}
-              </select>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="portfolio-month" className="text-sm font-medium">Period:</label>
+              <Select value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)}>
+                <SelectTrigger id="portfolio-month" className="w-48">
+                  <SelectValue placeholder="All time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All time</SelectItem>
+                  {(portfolio.months ?? []).map(m => (
+                    <SelectItem key={m.month} value={m.month}>
+                      {formatMonthLabel(m.month)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {selectedMonth ? (
               (() => {
-                const monthData = portfolio.months.find(
-                  m => m.month === selectedMonth,
-                );
+                const monthData = portfolio.months.find(m => m.month === selectedMonth);
                 if (!monthData) return null;
                 return (
-                  <>
-                    <p style={{ marginBottom: "0.25rem" }}>
-                      <strong>
-                        Revenue ({formatMonthLabel(selectedMonth)}):
-                      </strong>{" "}
+                  <DetailGrid className="sm:grid-cols-4">
+                    <DetailField label={`Revenue (${formatMonthLabel(selectedMonth)})`}>
                       {formatMoney(monthData.total_revenue)}
-                    </p>
-                    <p style={{ marginBottom: "0.25rem" }}>
-                      <strong>Cost:</strong> {formatMoney(monthData.total_cost)}
-                    </p>
-                    <p style={{ marginBottom: 0 }}>
-                      <strong>Profit:</strong>{" "}
+                    </DetailField>
+                    <DetailField label="Cost">
+                      {formatMoney(monthData.total_cost)}
+                    </DetailField>
+                    <DetailField label="Profit">
                       {formatMoney(monthData.total_profit)}
-                    </p>
-                    <p style={{ marginBottom: 0 }}>
-                      <strong>Outstanding:</strong>{" "}
+                    </DetailField>
+                    <DetailField label="Outstanding">
                       {formatMoney(monthData.total_outstanding)}
-                    </p>
-                  </>
+                    </DetailField>
+                  </DetailGrid>
                 );
               })()
             ) : (
-              <>
-                <p style={{ marginBottom: "0.25rem" }}>
-                  <strong>Total revenue:</strong>{" "}
+              <DetailGrid className="sm:grid-cols-4">
+                <DetailField label="Total Revenue">
                   {formatMoney(portfolio.total_revenue)}
-                </p>
-                <p style={{ marginBottom: "0.25rem" }}>
-                  <strong>Total cost:</strong>{" "}
+                </DetailField>
+                <DetailField label="Total Cost">
                   {formatMoney(portfolio.total_cost)}
-                </p>
-                <p style={{ marginBottom: 0 }}>
-                  <strong>Total profit:</strong>{" "}
+                </DetailField>
+                <DetailField label="Total Profit">
                   {formatMoney(portfolio.total_profit)}
-                </p>
-                <p style={{ marginBottom: 0 }}>
-                  <strong>Total outstanding:</strong>{" "}
+                </DetailField>
+                <DetailField label="Total Outstanding">
                   {formatMoney(portfolio.total_outstanding)}
-                </p>
-              </>
+                </DetailField>
+              </DetailGrid>
             )}
-          </>
+          </div>
         )}
-      </section>
+      </DetailSection>
 
       {/* Set price form */}
-      <section className="card form-card" aria-labelledby="set-price-heading">
-        <h2
-          id="set-price-heading"
-          style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-        >
-          Set price for a product
-        </h2>
-        <form onSubmit={handleSetPrice}>
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="profile-product">Product</label>
-              <select
-                id="profile-product"
-                value={productId}
-                onChange={e => setProductId(e.target.value)}
-              >
-                <option value="">Select product…</option>
-                {(products ?? []).map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.sku} — {p.name} (default{" "}
-                    {formatMoney(p.default_price_per_lb)}/lb)
-                  </option>
-                ))}
-              </select>
+      <DetailSection
+        title="Set Product Price"
+        description="Define contract prices for specific products."
+      >
+        <form onSubmit={handleSetPrice} className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex flex-col gap-1.5 min-w-48 flex-1">
+              <label htmlFor="profile-product" className="text-sm font-medium">Product</label>
+              <Select value={productId} onValueChange={setProductId}>
+                <SelectTrigger id="profile-product">
+                  <SelectValue placeholder="Select product..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(products ?? []).map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.sku} — {p.name} (default {formatMoney(p.default_price_per_lb)}/lb)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="form-group">
-              <label htmlFor="profile-price">Price per lb ($)</label>
-              <input
+            <div className="flex flex-col gap-1.5 w-32">
+              <label htmlFor="profile-price" className="text-sm font-medium">Price per lb ($)</label>
+              <Input
                 id="profile-price"
                 type="text"
                 inputMode="decimal"
@@ -470,125 +427,91 @@ export default function CustomerProfile() {
             </div>
           </div>
           {error && (
-            <div className="error" role="alert">
+            <p className="text-sm text-destructive" role="alert">
               {error}
-            </div>
+            </p>
           )}
-          <button
-            type="submit"
-            className="btn primary"
-            disabled={setPrice.isPending}
-          >
-            {setPrice.isPending ? "Saving…" : "Set price"}
-          </button>
+          <div>
+            <Button type="submit" disabled={setPrice.isPending}>
+              {setPrice.isPending ? "Saving..." : "Set Price"}
+            </Button>
+          </div>
         </form>
-      </section>
+      </DetailSection>
 
       {/* Current prices */}
-      <section className="table-section" aria-labelledby="prices-table-heading">
-        <h2
-          id="prices-table-heading"
-          style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-        >
-          Contract prices
-        </h2>
+      <DetailSection
+        title="Contract Prices"
+        description="Current pricing agreements for this customer."
+      >
         {pricesLoading ? (
-          <div className="loading">Loading prices…</div>
+          <p className="text-sm text-muted-foreground">Loading prices...</p>
+        ) : (prices ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No contract prices set. Use the form above to set prices per product.
+          </p>
         ) : (
-          <>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product (SKU)</th>
-                    <th>Name</th>
-                    <th>Price/lb</th>
-                    <th>Actions</th>
+          <div className="overflow-x-auto rounded-md border">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Product (SKU)</th>
+                  <th className="px-4 py-3 text-left font-medium">Name</th>
+                  <th className="px-4 py-3 text-left font-medium">Price/lb</th>
+                  <th className="px-4 py-3 text-left font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {(prices ?? []).map(p => (
+                  <tr key={p.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 font-mono text-xs">{p.product_sku ?? p.product_id}</td>
+                    <td className="px-4 py-3">{p.product_name ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium">{formatMoney(p.price_per_lb)}/lb</td>
+                    <td className="px-4 py-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deletePrice.mutate(p.product_id)}
+                        disabled={deletePrice.isPending}
+                      >
+                        Remove
+                      </Button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {(prices ?? []).map(p => (
-                    <tr key={p.id}>
-                      <td>{p.product_sku ?? p.product_id}</td>
-                      <td>{p.product_name ?? "—"}</td>
-                      <td className="catch-weight">
-                        {formatMoney(p.price_per_lb)}/lb
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={() => deletePrice.mutate(p.product_id)}
-                          disabled={deletePrice.isPending}
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {(prices ?? []).length === 0 && (
-              <p className="empty-state">
-                No contract prices set. Use the form above to set prices per
-                product.
-              </p>
-            )}
-          </>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </section>
+      </DetailSection>
 
       {/* Monthly invoices — filtered by selected month */}
-      <section
-        className="table-section"
-        aria-labelledby="portfolio-months-heading"
+      <DetailSection
+        title="Invoices by Month"
+        description="Track invoice history and outstanding payments."
       >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: "0.75rem",
-            marginBottom: "0.75rem",
-          }}
-        >
-          <h2
-            id="portfolio-months-heading"
-            style={{ fontSize: "1.1rem", margin: 0 }}
-          >
-            Invoices by month
-          </h2>
-          {!portfolioLoading &&
-            !portfolioError &&
-            portfolio &&
-            portfolio.months.length > 0 && (
-              <div className="form-group" style={{ margin: 0 }}>
-                <label
-                  htmlFor="portfolio-month-invoices"
-                  style={{ marginRight: "0.35rem" }}
-                >
-                  Month:
-                </label>
-                <select
-                  id="portfolio-month-invoices"
-                  value={selectedMonth}
-                  onChange={e => setSelectedMonth(e.target.value)}
-                  style={{ minWidth: "180px" }}
-                >
-                  <option value="">All time</option>
-                  {portfolio.months.map(m => (
-                    <option key={m.month} value={m.month}>
-                      {formatMonthLabel(m.month)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-        </div>
-        {portfolioLoading && <p className="weight-label">Loading…</p>}
+        {!portfolioLoading && !portfolioError && portfolio && portfolio.months.length > 0 && (
+          <div className="mb-4 flex items-center gap-2">
+            <label htmlFor="portfolio-month-invoices" className="text-sm font-medium">Filter:</label>
+            <Select value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)}>
+              <SelectTrigger id="portfolio-month-invoices" className="w-48">
+                <SelectValue placeholder="All time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All time</SelectItem>
+                {portfolio.months.map(m => (
+                  <SelectItem key={m.month} value={m.month}>
+                    {formatMonthLabel(m.month)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {portfolioLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {portfolioError && (
-          <p className="error" role="alert">
+          <p className="text-sm text-destructive" role="alert">
             Could not load invoices.
           </p>
         )}
@@ -596,9 +519,8 @@ export default function CustomerProfile() {
           !portfolioError &&
           portfolio &&
           portfolio.months.length === 0 && (
-            <p className="empty-state">
-              No invoices yet for this customer. Invoices appear here once you
-              create a sales order and mark it as &quot;Invoice&quot;.
+            <p className="text-sm text-muted-foreground">
+              No invoices yet for this customer. Invoices appear here once you create a sales order.
             </p>
           )}
         {!portfolioLoading &&
@@ -611,61 +533,48 @@ export default function CustomerProfile() {
               : portfolio.months;
             return monthsToShow.map(
               (m: CustomerPortfolio["months"][number]) => (
-                <div key={m.month} style={{ marginBottom: "1rem" }}>
-                  <h3 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-                    {formatMonthLabel(m.month)}
-                  </h3>
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
+                <div key={m.month} className="mb-6">
+                  <h3 className="mb-3 text-base font-medium">{formatMonthLabel(m.month)}</h3>
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead className="border-b bg-muted/50">
                         <tr>
-                          <th>Invoice #</th>
-                          <th>Date</th>
-                          <th>Status</th>
-                          <th>Revenue</th>
-                          <th>Cost</th>
-                          <th>Profit</th>
-                          <th>Paid</th>
-                          <th>Outstanding</th>
-                          <th></th>
+                          <th className="px-3 py-2 text-left font-medium">Invoice #</th>
+                          <th className="px-3 py-2 text-left font-medium">Date</th>
+                          <th className="px-3 py-2 text-left font-medium">Status</th>
+                          <th className="px-3 py-2 text-left font-medium">Revenue</th>
+                          <th className="px-3 py-2 text-left font-medium">Cost</th>
+                          <th className="px-3 py-2 text-left font-medium">Profit</th>
+                          <th className="px-3 py-2 text-left font-medium">Paid</th>
+                          <th className="px-3 py-2 text-left font-medium">Outstanding</th>
+                          <th className="px-3 py-2 text-left font-medium"></th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y">
                         {m.invoices.map(
                           (
                             inv: CustomerPortfolio["months"][number]["invoices"][number],
                           ) => (
-                            <tr key={inv.order_id}>
-                              <td>
+                            <tr key={inv.order_id} className="hover:bg-muted/30">
+                              <td className="px-3 py-2 font-mono text-xs">
                                 {inv.order_number ?? `Order #${inv.order_id}`}
                               </td>
-                              <td>{formatDisplayDate(inv.order_date)}</td>
-                              <td>{orderStatusLabel(inv.status)}</td>
-                              <td>{formatMoney(inv.total_revenue)}</td>
-                              <td>{formatMoney(inv.total_cost)}</td>
-                              <td>{formatMoney(inv.total_profit)}</td>
-                              <td>{formatMoney(inv.amount_paid)}</td>
-                              <td>{formatMoney(inv.outstanding_amount)}</td>
-                              <td>
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "0.35rem",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      flexWrap: "wrap",
-                                      gap: "0.35rem",
-                                      alignItems: "center",
-                                    }}
-                                  >
+                              <td className="px-3 py-2">{formatDisplayDate(inv.order_date)}</td>
+                              <td className="px-3 py-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {orderStatusLabel(inv.status)}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-2">{formatMoney(inv.total_revenue)}</td>
+                              <td className="px-3 py-2">{formatMoney(inv.total_cost)}</td>
+                              <td className="px-3 py-2">{formatMoney(inv.total_profit)}</td>
+                              <td className="px-3 py-2">{formatMoney(inv.amount_paid)}</td>
+                              <td className="px-3 py-2 font-medium">{formatMoney(inv.outstanding_amount)}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex flex-wrap items-center gap-2">
                                     <select
-                                      value={
-                                        paymentEdit[inv.order_id]?.type ?? ""
-                                      }
+                                      value={paymentEdit[inv.order_id]?.type ?? ""}
                                       onChange={e => {
                                         const v = e.target.value;
                                         if (v === "full")
@@ -675,8 +584,7 @@ export default function CustomerProfile() {
                                               type: "full",
                                               amount: "",
                                               method: inv.payment_method ?? "",
-                                              checkNumber:
-                                                inv.check_number ?? "",
+                                              checkNumber: inv.check_number ?? "",
                                             },
                                           }));
                                         else if (v === "partial")
@@ -686,8 +594,7 @@ export default function CustomerProfile() {
                                               type: "partial",
                                               amount: inv.amount_paid || "",
                                               method: inv.payment_method ?? "",
-                                              checkNumber:
-                                                inv.check_number ?? "",
+                                              checkNumber: inv.check_number ?? "",
                                             },
                                           }));
                                         else
@@ -697,18 +604,17 @@ export default function CustomerProfile() {
                                             return next;
                                           });
                                       }}
-                                      style={{ minWidth: "8rem" }}
+                                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                                     >
-                                      <option value="">Payment…</option>
+                                      <option value="">Payment...</option>
                                       <option value="full">Full payment</option>
                                       <option value="partial">Partial</option>
                                     </select>
-                                    {paymentEdit[inv.order_id]?.type ===
-                                      "partial" && (
-                                      <input
+                                    {paymentEdit[inv.order_id]?.type === "partial" && (
+                                      <Input
                                         type="text"
                                         inputMode="decimal"
-                                        placeholder="Amount received ($)"
+                                        placeholder="Amount ($)"
                                         value={paymentEdit[inv.order_id].amount}
                                         onChange={e =>
                                           setPaymentEdit(prev => ({
@@ -719,19 +625,14 @@ export default function CustomerProfile() {
                                             },
                                           }))
                                         }
-                                        style={{ width: "7rem" }}
+                                        className="h-8 w-24 text-xs"
                                       />
                                     )}
-                                    {(paymentEdit[inv.order_id]?.type ===
-                                      "full" ||
-                                      paymentEdit[inv.order_id]?.type ===
-                                        "partial") && (
+                                    {(paymentEdit[inv.order_id]?.type === "full" ||
+                                      paymentEdit[inv.order_id]?.type === "partial") && (
                                       <>
                                         <select
-                                          value={
-                                            paymentEdit[inv.order_id]?.method ??
-                                            ""
-                                          }
+                                          value={paymentEdit[inv.order_id]?.method ?? ""}
                                           onChange={e =>
                                             setPaymentEdit(prev => ({
                                               ...prev,
@@ -741,26 +642,20 @@ export default function CustomerProfile() {
                                               },
                                             }))
                                           }
-                                          style={{ minWidth: "8rem" }}
+                                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                                           title="Payment method"
                                         >
-                                          <option value="">Method…</option>
+                                          <option value="">Method...</option>
                                           <option value="zelle">Zelle</option>
                                           <option value="cash">Cash</option>
                                           <option value="check">Check</option>
-                                          <option value="credit_card">
-                                            Credit card
-                                          </option>
+                                          <option value="credit_card">Credit card</option>
                                         </select>
-                                        {paymentEdit[inv.order_id]?.method ===
-                                          "check" && (
-                                          <input
+                                        {paymentEdit[inv.order_id]?.method === "check" && (
+                                          <Input
                                             type="text"
-                                            placeholder="Check number *"
-                                            value={
-                                              paymentEdit[inv.order_id]
-                                                .checkNumber
-                                            }
+                                            placeholder="Check #"
+                                            value={paymentEdit[inv.order_id].checkNumber}
                                             onChange={e =>
                                               setPaymentEdit(prev => ({
                                                 ...prev,
@@ -770,45 +665,35 @@ export default function CustomerProfile() {
                                                 },
                                               }))
                                             }
-                                            style={{ width: "8rem" }}
+                                            className="h-8 w-24 text-xs"
                                             required
                                           />
                                         )}
-                                        <button
+                                        <Button
                                           type="button"
-                                          className="btn btn-secondary"
+                                          variant="secondary"
+                                          size="sm"
                                           disabled={
                                             setPayment.isPending ||
-                                            (paymentEdit[inv.order_id]?.type ===
-                                              "partial" &&
-                                              !paymentEdit[
-                                                inv.order_id
-                                              ]?.amount.trim()) ||
-                                            (paymentEdit[inv.order_id]
-                                              ?.method === "check" &&
-                                              !paymentEdit[
-                                                inv.order_id
-                                              ]?.checkNumber.trim())
+                                            (paymentEdit[inv.order_id]?.type === "partial" &&
+                                              !paymentEdit[inv.order_id]?.amount.trim()) ||
+                                            (paymentEdit[inv.order_id]?.method === "check" &&
+                                              !paymentEdit[inv.order_id]?.checkNumber.trim())
                                           }
                                           onClick={() => {
-                                            const edit =
-                                              paymentEdit[inv.order_id];
+                                            const edit = paymentEdit[inv.order_id];
                                             if (!edit) return;
                                             const amount =
                                               edit.type === "full"
                                                 ? inv.total_revenue
                                                 : edit.amount.trim() || "0";
-                                            if (
-                                              edit.method === "check" &&
-                                              !edit.checkNumber.trim()
-                                            )
+                                            if (edit.method === "check" && !edit.checkNumber.trim())
                                               return;
                                             setPayment.mutate(
                                               {
                                                 orderId: inv.order_id,
                                                 amount_paid: amount,
-                                                payment_method:
-                                                  edit.method || undefined,
+                                                payment_method: edit.method || undefined,
                                                 check_number:
                                                   edit.method === "check"
                                                     ? edit.checkNumber.trim()
@@ -825,68 +710,42 @@ export default function CustomerProfile() {
                                             );
                                           }}
                                         >
-                                          {setPayment.isPending ? "…" : "Apply"}
-                                        </button>
+                                          {setPayment.isPending ? "..." : "Apply"}
+                                        </Button>
                                       </>
                                     )}
                                   </div>
-                                  <button
+                                  <Button
                                     type="button"
-                                    className={
-                                      parseFloat(
-                                        String(inv.outstanding_amount ?? 0),
-                                      ) > 0
-                                        ? "btn primary"
-                                        : "btn btn-secondary"
+                                    variant={
+                                      parseFloat(String(inv.outstanding_amount ?? 0)) > 0
+                                        ? "default"
+                                        : "outline"
                                     }
-                                    style={{ alignSelf: "flex-start" }}
-                                    title={
-                                      parseFloat(
-                                        String(inv.outstanding_amount ?? 0),
-                                      ) > 0
-                                        ? "Record payment or edit order"
-                                        : "View or edit order"
-                                    }
-                                    onClick={() =>
-                                      router.push(
-                                        `/orders/${inv.order_id}/edit`,
-                                      )
-                                    }
+                                    size="sm"
+                                    onClick={() => router.push(`/orders/${inv.order_id}/edit`)}
                                   >
-                                    {parseFloat(
-                                      String(inv.outstanding_amount ?? 0),
-                                    ) > 0
+                                    {parseFloat(String(inv.outstanding_amount ?? 0)) > 0
                                       ? "Pay"
                                       : "Edit order"}
-                                  </button>
+                                  </Button>
                                 </div>
                               </td>
                             </tr>
                           ),
                         )}
                       </tbody>
-                      <tfoot>
+                      <tfoot className="border-t bg-muted/30">
                         <tr>
-                          <td
-                            colSpan={3}
-                            style={{ textAlign: "right", fontWeight: 600 }}
-                          >
+                          <td colSpan={3} className="px-3 py-2 text-right font-semibold">
                             Month totals:
                           </td>
-                          <td style={{ fontWeight: 600 }}>
-                            {formatMoney(m.total_revenue)}
-                          </td>
-                          <td style={{ fontWeight: 600 }}>
-                            {formatMoney(m.total_cost)}
-                          </td>
-                          <td style={{ fontWeight: 600 }}>
-                            {formatMoney(m.total_profit)}
-                          </td>
-                          <td></td>
-                          <td style={{ fontWeight: 600 }}>
-                            {formatMoney(m.total_outstanding)}
-                          </td>
-                          <td></td>
+                          <td className="px-3 py-2 font-semibold">{formatMoney(m.total_revenue)}</td>
+                          <td className="px-3 py-2 font-semibold">{formatMoney(m.total_cost)}</td>
+                          <td className="px-3 py-2 font-semibold">{formatMoney(m.total_profit)}</td>
+                          <td className="px-3 py-2"></td>
+                          <td className="px-3 py-2 font-semibold">{formatMoney(m.total_outstanding)}</td>
+                          <td className="px-3 py-2"></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -895,7 +754,7 @@ export default function CustomerProfile() {
               ),
             );
           })()}
-      </section>
-    </>
+      </DetailSection>
+    </div>
   );
 }
