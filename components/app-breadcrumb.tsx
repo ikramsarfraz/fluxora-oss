@@ -56,6 +56,8 @@ function labelForSegment(
     if (prevSegment === "customers") return "New customer";
     if (prevSegment === "suppliers") return "New supplier";
     if (prevSegment === "users") return "Invite user";
+    if (prevSegment === "units-of-measure") return "New unit";
+    if (prevSegment === "products") return "New product";
   }
   return SEGMENT_LABELS[segment] ?? humanizeSegment(segment);
 }

@@ -22,6 +22,7 @@ import {
   Package,
   Truck,
   ShieldCheck,
+  Ruler,
   type LucideIcon,
 } from "lucide-react";
 
@@ -64,6 +65,11 @@ const navMain: NavGroup[] = [
         title: "Products",
         url: "/products",
         icon: Package,
+      },
+      {
+        title: "Units of Measure",
+        url: "/units-of-measure",
+        icon: Ruler,
       },
     ],
   },
