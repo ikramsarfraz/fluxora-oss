@@ -5,10 +5,8 @@ export default function NewUserPage() {
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
-        backHref="/users"
-        backLabel="Users"
         title="Invite User"
-        description="Send an invitation to add a new team member."
+        description="We will email them a link to set their password and activate their account."
       />
       <InviteUserForm />
     </div>

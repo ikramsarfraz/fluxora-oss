@@ -5,8 +5,6 @@ export default function NewCustomerPage() {
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
-        backHref="/customers"
-        backLabel="Customers"
         title="Add Customer"
         description="Create a new customer record for sales orders and pricing."
       />

@@ -143,8 +143,6 @@ export default function SupplierProfile() {
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
-        backHref="/suppliers"
-        backLabel="Suppliers"
         title={supplier.name}
         description="Track spending, payments, and invoice history for this supplier."
       />

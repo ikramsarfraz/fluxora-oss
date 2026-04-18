@@ -13,10 +13,7 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Field,
@@ -88,17 +85,8 @@ export function InviteUserForm() {
   }
 
   return (
-    <Card className="w-full max-w-xl p-4">
-      <CardHeader className="px-0 pt-0">
-        <CardTitle id="add-user-heading" className="text-[1.1rem]">
-          Invite user
-        </CardTitle>
-        <CardDescription>
-          We will email them a link to set their password and activate their
-          account. They are not added to the team list until they accept.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-0">
+    <Card className="w-full max-w-xl">
+      <CardContent className="pt-6">
         <form id="form-add-user" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
             <Alert variant="destructive" className="max-w-xl mb-4">
@@ -180,7 +168,7 @@ export function InviteUserForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-0 bg-transparent px-0 pt-0">
+      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
         <Button
           type="button"
           variant="outline"

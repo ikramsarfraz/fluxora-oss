@@ -203,8 +203,6 @@ export function ProductDetailPage({ productId }: { productId: number }) {
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
-        backHref="/products"
-        backLabel="Products"
         title={product.name}
         description="Default price/lb is a reference; set customer-specific prices in each customer profile."
         badge={<Badge variant="secondary" className="font-mono">{product.sku}</Badge>}

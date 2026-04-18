@@ -233,8 +233,6 @@ export default function CustomerProfile() {
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
-        backHref="/customers"
-        backLabel="Customers"
         title={customer.name}
         description="Set contract prices and view invoice history and profit."
       />

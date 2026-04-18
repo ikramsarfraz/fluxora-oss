@@ -238,23 +238,21 @@ export function AddCustomerForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-wrap items-center gap-2 border-t pt-6">
-        <Field orientation="horizontal" className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => createForm.reset()}
-          >
-            Reset
-          </Button>
-          <Button
-            type="submit"
-            form="form-add-customer"
-            disabled={createCustomer.isPending}
-          >
-            {createCustomer.isPending ? "Adding…" : "Add customer"}
-          </Button>
-        </Field>
+      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push("/customers")}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="form-add-customer"
+          disabled={createCustomer.isPending}
+        >
+          {createCustomer.isPending ? "Adding..." : "Add Customer"}
+        </Button>
       </CardFooter>
     </Card>
   );
