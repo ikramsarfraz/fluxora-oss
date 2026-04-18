@@ -25,17 +25,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CustomerListItem } from "@/services/customers";
+import { formatDisplayDate } from "@/lib/utils/date";
+import { formatPhone } from "@/lib/utils/phone";
 
 type ColumnActions = {
   onDelete: (customer: CustomerListItem) => void;
 };
-
-function formatDate(value: string | Date) {
-  const d = new Date(value);
-  return d.toLocaleDateString(undefined, {
-    dateStyle: "medium",
-  });
-}
 
 function ActionsCell({
   customer,
@@ -127,7 +122,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
       cell: ({ row }) => {
         const phone = row.getValue("phoneNumber") as string | null;
         return phone ? (
-          <span className="tabular-nums">{phone}</span>
+          <span className="tabular-nums">{formatPhone(phone)}</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         );
@@ -188,7 +183,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
       },
       cell: ({ row }) => (
         <span className="tabular-nums text-muted-foreground">
-          {formatDate(row.getValue("createdAt"))}
+          {formatDisplayDate(row.getValue("createdAt"))}
         </span>
       ),
     },

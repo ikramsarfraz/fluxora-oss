@@ -25,17 +25,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { SupplierListItem } from "@/services/suppliers";
+import { formatDisplayDate } from "@/lib/utils/date";
 
 type ColumnActions = {
   onDelete: (supplier: SupplierListItem) => void;
 };
-
-function formatDate(value: string | Date) {
-  const d = new Date(value);
-  return d.toLocaleDateString(undefined, {
-    dateStyle: "medium",
-  });
-}
 
 function ActionsCell({
   supplier,
@@ -148,7 +142,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<SupplierListIte
       },
       cell: ({ row }) => (
         <span className="tabular-nums text-muted-foreground">
-          {formatDate(row.getValue("createdAt"))}
+          {formatDisplayDate(row.getValue("createdAt"))}
         </span>
       ),
     },

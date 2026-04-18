@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { PendingInvitationListItem } from "@/services/invitations";
 import type { PortalUserListItem } from "@/services/portal-users";
+import { formatDisplayDate } from "@/lib/utils/date";
 
 export type UsersDirectoryRow =
   | { kind: "user"; row: PortalUserListItem }
@@ -36,14 +37,6 @@ type ColumnActions = {
   onDeleteUser: (user: PortalUserListItem) => void;
   onRevokeInvitation: (invitation: PendingInvitationListItem) => void;
 };
-
-function formatCreatedAt(value: string | Date) {
-  const d = new Date(value);
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
 
 function ActionsCell({
   row,

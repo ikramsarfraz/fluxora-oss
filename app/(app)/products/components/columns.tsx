@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ProductListItem } from "@/services/products";
+import { formatMoney } from "@/lib/utils/currency";
 
 type ColumnActions = {
   onDelete: (product: ProductListItem) => void;
@@ -153,11 +154,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem
         if (!price) {
           return <div className="text-right text-muted-foreground">-</div>;
         }
-        const formatted = new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency: "USD",
-        }).format(parseFloat(price));
-        return <div className="text-right tabular-nums font-medium">{formatted}</div>;
+        return <div className="text-right tabular-nums font-medium">{formatMoney(price)}</div>;
       },
     },
     {
