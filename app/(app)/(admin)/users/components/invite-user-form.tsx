@@ -10,11 +10,7 @@ import { useState } from "react";
 import { invitePortalUser } from "@/lib/api/portal-users";
 import { queryKeys } from "@/lib/query/keys";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Field,
   FieldError,

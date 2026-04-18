@@ -77,7 +77,9 @@ function ActionsCell({
             <AlertDialogHeader>
               <AlertDialogTitle>Revoke invitation</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to revoke the invitation for &quot;{inv.email}&quot;? They will no longer be able to accept this invitation.
+                Are you sure you want to revoke the invitation for &quot;
+                {inv.email}&quot;? They will no longer be able to accept this
+                invitation.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -129,7 +131,8 @@ function ActionsCell({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{user.fullName}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{user.fullName}&quot;? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -150,7 +153,9 @@ function ActionsCell({
   );
 }
 
-export function createColumns(actions: ColumnActions): ColumnDef<UsersDirectoryRow>[] {
+export function createColumns(
+  actions: ColumnActions,
+): ColumnDef<UsersDirectoryRow>[] {
   return [
     {
       id: "fullName",
@@ -207,8 +212,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<UsersDirectoryR
         if (row.original.kind === "invitation") {
           return (
             <div className="text-center text-muted-foreground">
-              <span className="sr-only">Not applicable</span>
-              —
+              <span className="sr-only">Not applicable</span>—
             </div>
           );
         }
@@ -246,7 +250,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<UsersDirectoryR
       },
       cell: ({ row }) => (
         <span className="tabular-nums text-muted-foreground">
-          {formatCreatedAt(row.original.row.createdAt)}
+          {formatDisplayDate(row.original.row.createdAt)}
         </span>
       ),
     },
