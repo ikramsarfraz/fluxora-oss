@@ -51,7 +51,7 @@ function ActionsCell({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="min-w-max">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onEdit(unit)}>
             <Pencil className="mr-2 h-4 w-4" />
@@ -170,16 +170,18 @@ export function createColumns(actions: ColumnActions): ColumnDef<UnitOfMeasureLi
     },
     {
       id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
+      header: "Actions",
       cell: ({ row }) => (
-        <ActionsCell
-          unit={row.original}
-          onEdit={actions.onEdit}
-          onDelete={actions.onDelete}
-        />
+        <div className="flex justify-center">
+          <ActionsCell
+            unit={row.original}
+            onEdit={actions.onEdit}
+            onDelete={actions.onDelete}
+          />
+        </div>
       ),
       meta: {
-        className: "w-12 sticky right-0 bg-background",
+        className: "w-[80px] text-center",
       },
     },
   ];

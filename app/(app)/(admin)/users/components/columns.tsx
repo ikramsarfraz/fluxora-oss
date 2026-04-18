@@ -67,7 +67,7 @@ function ActionsCell({
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="min-w-max">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem
               onClick={() => setShowDeleteDialog(true)}
@@ -115,7 +115,7 @@ function ActionsCell({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="min-w-max">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
             <Link href={`/users/${user.id}`}>View user</Link>
@@ -287,16 +287,18 @@ export function createColumns(actions: ColumnActions): ColumnDef<UsersDirectoryR
     },
     {
       id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
+      header: "Actions",
       cell: ({ row }) => (
-        <ActionsCell
-          row={row.original}
-          onDeleteUser={actions.onDeleteUser}
-          onRevokeInvitation={actions.onRevokeInvitation}
-        />
+        <div className="flex justify-center">
+          <ActionsCell
+            row={row.original}
+            onDeleteUser={actions.onDeleteUser}
+            onRevokeInvitation={actions.onRevokeInvitation}
+          />
+        </div>
       ),
       meta: {
-        className: "w-12 sticky right-0 bg-background",
+        className: "w-[80px] text-center",
       },
     },
   ];

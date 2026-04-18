@@ -55,7 +55,7 @@ function ActionsCell({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="min-w-max">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
             <Link href={`/customers/${customer.id}`}>View customer</Link>
@@ -194,12 +194,14 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
     },
     {
       id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
+      header: "Actions",
       cell: ({ row }) => (
-        <ActionsCell customer={row.original} onDelete={actions.onDelete} />
+        <div className="flex justify-center">
+          <ActionsCell customer={row.original} onDelete={actions.onDelete} />
+        </div>
       ),
       meta: {
-        className: "w-12 sticky right-0 bg-background",
+        className: "w-[80px] text-center",
       },
     },
   ];
