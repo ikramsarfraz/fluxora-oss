@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,68 +14,161 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ProductListItem } from "@/services/products";
-import Link from "next/link";
 
-// This type is used to define the shape of our data.
-// You can use a Zod schema here if you want.
+type ColumnActions = {
+  onDelete: (product: ProductListItem) => void;
+};
 
-export const columns: ColumnDef<ProductListItem>[] = [
-  {
-    accessorKey: "sku",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          SKU
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: "name",
-    header: "Name",
-  },
-  {
-    accessorKey: "defaultPricePerLb",
-    header: "Default Price per LB",
-  },
-  {
-    accessorKey: "species",
-    header: "Species",
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const product = row.original;
+function ActionsCell({
+  product,
+  onDelete,
+}: {
+  product: ProductListItem;
+  onDelete: (product: ProductListItem) => void;
+}) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() =>
-                navigator.clipboard.writeText(product.id.toString())
-              }
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0">
+            <span className="sr-only">Open menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          <DropdownMenuItem asChild>
+            <Link href={`/products/${product.id}`}>View product</Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setShowDeleteDialog(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete product
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{product.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                onDelete(product);
+                setShowDeleteDialog(false);
+              }}
             >
-              Copy product ID
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href={`/products/${product.id}`}>View product</Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem>[] {
+  return [
+    {
+      accessorKey: "sku",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            SKU
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => (
+        <code className="rounded bg-muted px-1.5 py-0.5 text-sm font-medium">
+          {row.getValue("sku")}
+        </code>
+      ),
     },
-  },
-];
+    {
+      accessorKey: "name",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => (
+        <Link
+          href={`/products/${row.original.id}`}
+          className="font-medium hover:underline"
+        >
+          {row.getValue("name")}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "species",
+      header: "Species",
+      cell: ({ row }) => {
+        const species = row.getValue("species") as string | null;
+        return species ? (
+          <span>{species}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
+      },
+    },
+    {
+      accessorKey: "defaultPricePerLb",
+      header: () => <div className="text-right">Price/lb</div>,
+      cell: ({ row }) => {
+        const price = row.getValue("defaultPricePerLb") as string | null;
+        if (!price) {
+          return <div className="text-right text-muted-foreground">-</div>;
+        }
+        const formatted = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(parseFloat(price));
+        return <div className="text-right tabular-nums font-medium">{formatted}</div>;
+      },
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => (
+        <ActionsCell product={row.original} onDelete={actions.onDelete} />
+      ),
+      meta: {
+        className: "w-12 sticky right-0 bg-background",
+      },
+    },
+  ];
+}

@@ -50,7 +50,11 @@ export async function getSupplierById(supplierId: number) {
 }
 
 export async function getSuppliers() {
-  const result = await db.query.suppliers.findMany();
+  const result = await db.query.suppliers.findMany({
+    with: {
+      productCosts: true,
+    },
+  });
 
   return result;
 }

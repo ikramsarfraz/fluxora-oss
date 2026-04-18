@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useUsers } from "@/hooks/use-users";
@@ -11,9 +11,12 @@ import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
+import { toast } from "sonner";
 
-import { columns, type UsersDirectoryRow } from "./columns";
+import { createColumns, type UsersDirectoryRow } from "./columns";
 import { DataTable } from "./data-table";
+import type { PortalUserListItem } from "@/services/portal-users";
+import type { PendingInvitationListItem } from "@/services/invitations";
 
 export default function Users() {
   const { data: users, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
@@ -23,6 +26,25 @@ export default function Users() {
     error: invitationsError,
     refetch: refetchInvitations,
   } = useUserInvitations();
+
+  const handleDeleteUser = useCallback((user: PortalUserListItem) => {
+    // TODO: Implement user deletion
+    toast.info(`Delete user "${user.fullName}" - not yet implemented`);
+  }, []);
+
+  const handleRevokeInvitation = useCallback((invitation: PendingInvitationListItem) => {
+    // TODO: Implement invitation revocation
+    toast.info(`Revoke invitation for "${invitation.email}" - not yet implemented`);
+  }, []);
+
+  const columns = useMemo(
+    () =>
+      createColumns({
+        onDeleteUser: handleDeleteUser,
+        onRevokeInvitation: handleRevokeInvitation,
+      }),
+    [handleDeleteUser, handleRevokeInvitation]
+  );
 
   const rows = useMemo<UsersDirectoryRow[]>(() => {
     const userRows: UsersDirectoryRow[] = (users ?? []).map(row => ({

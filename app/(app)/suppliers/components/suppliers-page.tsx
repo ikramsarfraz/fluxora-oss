@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Plus, Truck } from "lucide-react";
@@ -9,12 +10,25 @@ import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
 
-import { columns } from "./columns";
+import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 import { useSuppliers } from "@/hooks/use-suppliers";
+import { useDeleteSupplier } from "@/hooks/use-supplier-mutations";
+import type { SupplierListItem } from "@/services/suppliers";
 
 export default function Suppliers() {
   const { data: suppliers, isLoading, error: loadError, refetch } = useSuppliers();
+  const deleteSupplier = useDeleteSupplier();
+
+  const columns = useMemo(
+    () =>
+      createColumns({
+        onDelete: (supplier: SupplierListItem) => {
+          deleteSupplier.mutate(supplier.id);
+        },
+      }),
+    [deleteSupplier]
+  );
 
   if (isLoading) {
     return <PageLoading message="Loading suppliers..." />;

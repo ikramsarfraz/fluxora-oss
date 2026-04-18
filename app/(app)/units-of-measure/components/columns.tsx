@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal, Check, X } from "lucide-react";
+import { ArrowUpDown, MoreHorizontal, Check, X, Trash2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
 
@@ -19,6 +30,69 @@ type ColumnActions = {
   onEdit: (unit: UnitOfMeasureListItem) => void;
   onDelete: (unit: UnitOfMeasureListItem) => void;
 };
+
+function ActionsCell({
+  unit,
+  onEdit,
+  onDelete,
+}: {
+  unit: UnitOfMeasureListItem;
+  onEdit: (unit: UnitOfMeasureListItem) => void;
+  onDelete: (unit: UnitOfMeasureListItem) => void;
+}) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="h-8 w-8 p-0">
+            <span className="sr-only">Open menu</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => onEdit(unit)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit unit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setShowDeleteDialog(true)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete unit
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete unit of measure</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{unit.name}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                onDelete(unit);
+                setShowDeleteDialog(false);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
 
 export function createColumns(actions: ColumnActions): ColumnDef<UnitOfMeasureListItem>[] {
   return [
@@ -96,37 +170,16 @@ export function createColumns(actions: ColumnActions): ColumnDef<UnitOfMeasureLi
     },
     {
       id: "actions",
-      cell: ({ row }) => {
-        const unit = row.original;
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem
-                onClick={() => navigator.clipboard.writeText(unit.id.toString())}
-              >
-                Copy ID
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => actions.onEdit(unit)}>
-                Edit unit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => actions.onDelete(unit)}
-                className="text-destructive focus:text-destructive"
-              >
-                Delete unit
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => (
+        <ActionsCell
+          unit={row.original}
+          onEdit={actions.onEdit}
+          onDelete={actions.onDelete}
+        />
+      ),
+      meta: {
+        className: "w-12 sticky right-0 bg-background",
       },
     },
   ];

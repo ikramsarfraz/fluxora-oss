@@ -1,20 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useCustomers } from "@/hooks/use-customers";
+import { useDeleteCustomer } from "@/hooks/use-customer-mutations";
 import { Plus, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
 
-import { columns } from "./columns";
+import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
+import type { CustomerListItem } from "@/services/customers";
 
 export default function Customers() {
   const { data: customers, isLoading, error: loadError, refetch } = useCustomers();
+  const deleteCustomer = useDeleteCustomer();
+
+  const columns = useMemo(
+    () =>
+      createColumns({
+        onDelete: (customer: CustomerListItem) => {
+          deleteCustomer.mutate(customer.id);
+        },
+      }),
+    [deleteCustomer]
+  );
 
   if (isLoading) {
     return <PageLoading message="Loading customers..." />;

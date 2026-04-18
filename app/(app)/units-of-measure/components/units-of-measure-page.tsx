@@ -9,17 +9,6 @@ import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
@@ -32,28 +21,15 @@ export default function UnitsOfMeasure() {
   const deleteUnit = useDeleteUnitOfMeasure();
 
   const [editingUnit, setEditingUnit] = useState<UnitOfMeasureListItem | null>(null);
-  const [deletingUnit, setDeletingUnit] = useState<UnitOfMeasureListItem | null>(null);
 
   const columns = useMemo(
     () =>
       createColumns({
         onEdit: (unit) => setEditingUnit(unit),
-        onDelete: (unit) => setDeletingUnit(unit),
+        onDelete: (unit) => deleteUnit.mutate(unit.id),
       }),
-    []
+    [deleteUnit]
   );
-
-  const handleDelete = async () => {
-    if (!deletingUnit) return;
-
-    try {
-      await deleteUnit.mutateAsync(deletingUnit.id);
-      toast.success(`"${deletingUnit.name}" has been deleted.`);
-      setDeletingUnit(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete unit");
-    }
-  };
 
   if (isLoading) {
     return <PageLoading message="Loading units of measure..." />;
@@ -111,27 +87,6 @@ export default function UnitsOfMeasure() {
         }}
       />
 
-      <AlertDialog open={!!deletingUnit} onOpenChange={(open) => !open && setDeletingUnit(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete unit of measure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deletingUnit?.name}&quot;? Products using this
-              unit will have it cleared. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteUnit.isPending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleteUnit.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+      </>
   );
 }

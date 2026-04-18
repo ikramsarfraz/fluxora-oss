@@ -1,20 +1,34 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useProducts } from "@/hooks/use-products";
+import { useDeleteProduct } from "@/hooks/use-product-mutations";
 import { Plus, Package } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
 
-import { columns } from "./columns";
+import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
+import type { ProductListItem } from "@/services/products";
 
 export default function Products() {
   const { data: products, isLoading, error: loadError, refetch } = useProducts();
+  const deleteProduct = useDeleteProduct();
+
+  const columns = useMemo(
+    () =>
+      createColumns({
+        onDelete: (product: ProductListItem) => {
+          deleteProduct.mutate(product.id);
+        },
+      }),
+    [deleteProduct]
+  );
 
   if (isLoading) {
     return <PageLoading message="Loading products..." />;
