@@ -48,7 +48,7 @@ function ActionsCell({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-max">
+        <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
             <Link href={`/products/${product.id}`}>View product</Link>
