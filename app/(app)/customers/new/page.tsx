@@ -1,13 +1,16 @@
-import Link from "next/link";
-
 import { AddCustomerForm } from "../components/add-customer-form";
+import { DetailPageHeader } from "@/components/detail-page-header";
 
 export default function NewCustomerPage() {
   return (
     <div className="flex flex-col gap-6">
-      <section aria-labelledby="add-customer-heading">
-        <AddCustomerForm />
-      </section>
+      <DetailPageHeader
+        backHref="/customers"
+        backLabel="Customers"
+        title="Add Customer"
+        description="Create a new customer record for sales orders and pricing."
+      />
+      <AddCustomerForm />
     </div>
   );
 }

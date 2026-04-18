@@ -12,10 +12,7 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Field,
@@ -90,16 +87,8 @@ export function AddCustomerForm() {
   }
 
   return (
-    <Card className="w-full max-w-xl border-0 bg-transparent p-0 shadow-none ring-0">
-      <CardHeader className="px-0 pt-0">
-        <CardTitle id="add-customer-heading" className="text-[1.1rem]">
-          Add customer
-        </CardTitle>
-        <CardDescription>
-          Create a customer record for sales orders and pricing.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-0">
+    <Card className="w-full max-w-xl">
+      <CardContent className="pt-6">
         <form
           id="form-add-customer"
           onSubmit={createForm.handleSubmit(onSubmit)}
@@ -249,7 +238,7 @@ export function AddCustomerForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-wrap items-center gap-2 border-0 bg-transparent px-0 pt-0">
+      <CardFooter className="flex flex-wrap items-center gap-2 border-t pt-6">
         <Field orientation="horizontal" className="gap-2">
           <Button
             type="button"

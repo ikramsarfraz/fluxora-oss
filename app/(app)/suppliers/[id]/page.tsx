@@ -14,6 +14,19 @@ import {
 } from "@/lib/api";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { DetailPageHeader } from "@/components/detail-page-header";
+import { DetailSection, DetailField, DetailGrid } from "@/components/detail-section";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatMonthLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
@@ -101,32 +114,14 @@ export default function SupplierProfile() {
   }, [portfolio]);
 
   if (!Number.isInteger(supplierId)) {
-    return (
-      <div>
-        <h1>Supplier</h1>
-        <p className="error">Invalid supplier ID.</p>
-        <Link href="/suppliers" className="btn">
-          Back to Suppliers
-        </Link>
-      </div>
-    );
+    return <PageError message="Invalid supplier ID." />;
   }
 
   if (supplierLoading || !supplier) {
-    return <div className="loading">Loading supplier…</div>;
+    return <PageLoading message="Loading supplier..." />;
   }
   if (supplierError) {
-    return (
-      <div>
-        <h1>Supplier</h1>
-        <p className="error">
-          Failed to load: {(supplierError as Error).message}
-        </p>
-        <Link href="/suppliers" className="btn">
-          Back to Suppliers
-        </Link>
-      </div>
-    );
+    return <PageError message={(supplierError as Error).message} />;
   }
 
   const monthsToShow = selectedMonth
@@ -146,62 +141,58 @@ export default function SupplierProfile() {
     : (portfolio?.total_outstanding ?? "0");
 
   return (
-    <>
-      <h1>Supplier: {supplier.name}</h1>
+    <div className="flex flex-col gap-6">
+      <DetailPageHeader
+        backHref="/suppliers"
+        backLabel="Suppliers"
+        title={supplier.name}
+        description="Track spending, payments, and invoice history for this supplier."
+      />
 
-      <section className="card form-card" style={{ marginBottom: "1rem" }}>
-        <h2
-          id="supplier-portfolio-summary"
-          style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-        >
-          Spending & payments
-        </h2>
-        {portfolioLoading && <p className="weight-label">Loading…</p>}
+      <DetailSection
+        title="Spending & Payments"
+        description="Financial overview for this supplier."
+      >
+        {portfolioLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {portfolioError && (
-          <p className="error" role="alert">
+          <p className="text-sm text-destructive" role="alert">
             Could not load portfolio.
           </p>
         )}
         {!portfolioLoading && !portfolioError && portfolio && (
-          <>
-            <div className="form-group" style={{ marginBottom: "0.75rem" }}>
-              <label htmlFor="supplier-month">Month / Year</label>
-              <select
-                id="supplier-month"
-                value={selectedMonth}
-                onChange={e => setSelectedMonth(e.target.value)}
-                style={{ minWidth: "180px" }}
-              >
-                <option value="">All time</option>
-                {portfolio.months.map(m => (
-                  <option key={m.month} value={m.month}>
-                    {formatMonthLabel(m.month)}
-                  </option>
-                ))}
-              </select>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="supplier-month" className="text-sm font-medium">Period:</label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger id="supplier-month" className="w-48">
+                  <SelectValue placeholder="All time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All time</SelectItem>
+                  {portfolio.months.map(m => (
+                    <SelectItem key={m.month} value={m.month}>
+                      {formatMonthLabel(m.month)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <p style={{ fontWeight: 600, margin: 0 }}>
-              Total spent: {formatMoney(displaySpent)} · Paid:{" "}
-              {formatMoney(displayPaid)} · Outstanding:{" "}
-              {formatMoney(displayOutstanding)}
-            </p>
-          </>
+            <DetailGrid className="sm:grid-cols-3">
+              <DetailField label="Total Spent">{formatMoney(displaySpent)}</DetailField>
+              <DetailField label="Paid">{formatMoney(displayPaid)}</DetailField>
+              <DetailField label="Outstanding">{formatMoney(displayOutstanding)}</DetailField>
+            </DetailGrid>
+          </div>
         )}
-      </section>
+      </DetailSection>
 
-      <section
-        className="table-section"
-        aria-labelledby="supplier-invoices-heading"
+      <DetailSection
+        title="Invoices by Month"
+        description="Track invoice history and outstanding payments."
       >
-        <h2
-          id="supplier-invoices-heading"
-          style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-        >
-          Invoices by month
-        </h2>
-        {portfolioLoading && <p className="weight-label">Loading…</p>}
+        {portfolioLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
         {portfolioError && (
-          <p className="error" role="alert">
+          <p className="text-sm text-destructive" role="alert">
             Could not load invoices.
           </p>
         )}
@@ -209,7 +200,7 @@ export default function SupplierProfile() {
           !portfolioError &&
           portfolio &&
           portfolio.months.length === 0 && (
-            <p className="empty-state">
+            <p className="text-sm text-muted-foreground">
               No supplier invoices yet for this supplier.
             </p>
           )}
@@ -218,41 +209,32 @@ export default function SupplierProfile() {
           portfolio &&
           portfolio.months.length > 0 &&
           monthsToShow.map(m => (
-            <div key={m.month} style={{ marginBottom: "1rem" }}>
-              <h3 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-                {formatMonthLabel(m.month)}
-              </h3>
-              <div className="table-wrap">
-                <table>
-                  <thead>
+            <div key={m.month} className="mb-6">
+              <h3 className="mb-3 text-base font-medium">{formatMonthLabel(m.month)}</h3>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-muted/50">
                     <tr>
-                      <th>Invoice #</th>
-                      <th>Date</th>
-                      <th>Total</th>
-                      <th>Paid</th>
-                      <th>Outstanding</th>
-                      <th>Payment</th>
-                      <th>Payment method</th>
-                      <th></th>
+                      <th className="px-3 py-2 text-left font-medium">Invoice #</th>
+                      <th className="px-3 py-2 text-left font-medium">Date</th>
+                      <th className="px-3 py-2 text-left font-medium">Total</th>
+                      <th className="px-3 py-2 text-left font-medium">Paid</th>
+                      <th className="px-3 py-2 text-left font-medium">Outstanding</th>
+                      <th className="px-3 py-2 text-left font-medium">Payment</th>
+                      <th className="px-3 py-2 text-left font-medium">Method</th>
+                      <th className="px-3 py-2 text-left font-medium"></th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y">
                     {m.invoices.map(inv => (
-                      <tr key={inv.invoice_id}>
-                        <td>{inv.invoice_number}</td>
-                        <td>{formatDisplayDate(inv.invoice_date)}</td>
-                        <td>{formatMoney(inv.total_amount)}</td>
-                        <td>{formatMoney(inv.amount_paid)}</td>
-                        <td>{formatMoney(inv.outstanding)}</td>
-                        <td>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexWrap: "wrap",
-                              gap: "0.35rem",
-                              alignItems: "center",
-                            }}
-                          >
+                      <tr key={inv.invoice_id} className="hover:bg-muted/30">
+                        <td className="px-3 py-2 font-mono text-xs">{inv.invoice_number}</td>
+                        <td className="px-3 py-2">{formatDisplayDate(inv.invoice_date)}</td>
+                        <td className="px-3 py-2">{formatMoney(inv.total_amount)}</td>
+                        <td className="px-3 py-2">{formatMoney(inv.amount_paid)}</td>
+                        <td className="px-3 py-2 font-medium">{formatMoney(inv.outstanding)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <select
                               value={paymentEdit[inv.invoice_id]?.type ?? ""}
                               onChange={e => {
@@ -263,10 +245,7 @@ export default function SupplierProfile() {
                                     [inv.invoice_id]: {
                                       type: "full",
                                       amount: "",
-                                      method:
-                                        prev[inv.invoice_id]?.method ??
-                                        inv.payment_method ??
-                                        "",
+                                      method: prev[inv.invoice_id]?.method ?? inv.payment_method ?? "",
                                     },
                                   }));
                                 else if (v === "partial")
@@ -275,10 +254,7 @@ export default function SupplierProfile() {
                                     [inv.invoice_id]: {
                                       type: "partial",
                                       amount: inv.amount_paid || "",
-                                      method:
-                                        prev[inv.invoice_id]?.method ??
-                                        inv.payment_method ??
-                                        "",
+                                      method: prev[inv.invoice_id]?.method ?? inv.payment_method ?? "",
                                     },
                                   }));
                                 else
@@ -288,18 +264,17 @@ export default function SupplierProfile() {
                                     return next;
                                   });
                               }}
-                              style={{ minWidth: "8rem" }}
+                              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                             >
-                              <option value="">Payment…</option>
+                              <option value="">Payment...</option>
                               <option value="full">Full payment</option>
                               <option value="partial">Partial</option>
                             </select>
-                            {paymentEdit[inv.invoice_id]?.type ===
-                              "partial" && (
-                              <input
+                            {paymentEdit[inv.invoice_id]?.type === "partial" && (
+                              <Input
                                 type="text"
                                 inputMode="decimal"
-                                placeholder="Amount paid ($)"
+                                placeholder="Amount ($)"
                                 value={paymentEdit[inv.invoice_id].amount}
                                 onChange={e =>
                                   setPaymentEdit(prev => ({
@@ -310,22 +285,20 @@ export default function SupplierProfile() {
                                     },
                                   }))
                                 }
-                                style={{ width: "7rem" }}
+                                className="h-8 w-24 text-xs"
                               />
                             )}
                             {(paymentEdit[inv.invoice_id]?.type === "full" ||
                               paymentEdit[inv.invoice_id]?.type === "partial" ||
-                              (paymentEdit[inv.invoice_id]?.method !==
-                                undefined &&
-                                paymentEdit[inv.invoice_id]?.method !==
-                                  (inv.payment_method ?? ""))) && (
-                              <button
+                              (paymentEdit[inv.invoice_id]?.method !== undefined &&
+                                paymentEdit[inv.invoice_id]?.method !== (inv.payment_method ?? ""))) && (
+                              <Button
                                 type="button"
-                                className="btn btn-secondary"
+                                variant="secondary"
+                                size="sm"
                                 disabled={
                                   setPayment.isPending ||
-                                  (paymentEdit[inv.invoice_id]?.type ===
-                                    "partial" &&
+                                  (paymentEdit[inv.invoice_id]?.type === "partial" &&
                                     !paymentEdit[inv.invoice_id]?.amount.trim())
                                 }
                                 onClick={() => {
@@ -337,10 +310,7 @@ export default function SupplierProfile() {
                                       : edit.type === "partial"
                                         ? edit.amount.trim() || "0"
                                         : inv.amount_paid;
-                                  const method =
-                                    edit.method && edit.method !== ""
-                                      ? edit.method
-                                      : null;
+                                  const method = edit.method && edit.method !== "" ? edit.method : null;
                                   setPayment.mutate(
                                     {
                                       invoiceId: inv.invoice_id,
@@ -358,33 +328,26 @@ export default function SupplierProfile() {
                                   );
                                 }}
                               >
-                                {setPayment.isPending ? "…" : "Apply"}
-                              </button>
+                                {setPayment.isPending ? "..." : "Apply"}
+                              </Button>
                             )}
                           </div>
                         </td>
-                        <td>
+                        <td className="px-3 py-2">
                           <select
-                            value={
-                              paymentEdit[inv.invoice_id]?.method ??
-                              inv.payment_method ??
-                              ""
-                            }
+                            value={paymentEdit[inv.invoice_id]?.method ?? inv.payment_method ?? ""}
                             onChange={e => {
                               const v = e.target.value;
                               setPaymentEdit(prev => ({
                                 ...prev,
                                 [inv.invoice_id]: {
                                   type: prev[inv.invoice_id]?.type ?? "",
-                                  amount:
-                                    prev[inv.invoice_id]?.amount ??
-                                    inv.amount_paid ??
-                                    "",
+                                  amount: prev[inv.invoice_id]?.amount ?? inv.amount_paid ?? "",
                                   method: v,
                                 },
                               }));
                             }}
-                            style={{ minWidth: "8rem" }}
+                            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
                           >
                             {PAYMENT_METHODS.map(opt => (
                               <option key={opt.value || "_"} value={opt.value}>
@@ -393,34 +356,22 @@ export default function SupplierProfile() {
                             ))}
                           </select>
                         </td>
-                        <td>
-                          <Link
-                            href="/supplier-invoices"
-                            className="btn btn-secondary"
-                          >
-                            View invoices
-                          </Link>
+                        <td className="px-3 py-2">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href="/supplier-invoices">View</Link>
+                          </Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot>
+                  <tfoot className="border-t bg-muted/30">
                     <tr>
-                      <td
-                        colSpan={2}
-                        style={{ textAlign: "right", fontWeight: 600 }}
-                      >
+                      <td colSpan={2} className="px-3 py-2 text-right font-semibold">
                         Month totals:
                       </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {formatMoney(m.total_spent)}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {formatMoney(m.total_paid)}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>
-                        {formatMoney(m.total_outstanding)}
-                      </td>
+                      <td className="px-3 py-2 font-semibold">{formatMoney(m.total_spent)}</td>
+                      <td className="px-3 py-2 font-semibold">{formatMoney(m.total_paid)}</td>
+                      <td className="px-3 py-2 font-semibold">{formatMoney(m.total_outstanding)}</td>
                       <td colSpan={3}></td>
                     </tr>
                   </tfoot>
@@ -428,7 +379,7 @@ export default function SupplierProfile() {
               </div>
             </div>
           ))}
-      </section>
-    </>
+      </DetailSection>
+    </div>
   );
 }

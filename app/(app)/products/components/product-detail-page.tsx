@@ -10,6 +10,20 @@ import { useProduct } from "@/hooks/use-product";
 import { useProducts } from "@/hooks/use-products";
 import { queryKeys } from "@/lib/query/keys";
 import { formatMoney } from "@/lib/utils/currency";
+import { DetailPageHeader } from "@/components/detail-page-header";
+import { DetailSection, DetailField, DetailGrid } from "@/components/detail-section";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 
 import { generateSku } from "./product-sku-utils";
 
@@ -178,81 +192,67 @@ export function ProductDetailPage({ productId }: { productId: number }) {
     );
   }
 
-  if (isLoading) return <div className="loading">Loading product…</div>;
+  if (isLoading) return <PageLoading message="Loading product..." />;
   if (isError || !product)
     return (
-      <div className="error">
-        {loadError
-          ? `Failed to load: ${(loadError as Error).message}`
-          : "Product not found."}{" "}
-        <Link href="/products">Back to products</Link>
-      </div>
+      <PageError
+        message={loadError ? (loadError as Error).message : "Product not found."}
+      />
     );
 
   return (
-    <>
-      <section className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold">{product.name}</h1>
+    <div className="flex flex-col gap-6">
+      <DetailPageHeader
+        backHref="/products"
+        backLabel="Products"
+        title={product.name}
+        description="Default price/lb is a reference; set customer-specific prices in each customer profile."
+        badge={<Badge variant="secondary" className="font-mono">{product.sku}</Badge>}
+      />
 
-        <p className="weight-label text-muted-foreground">
-          Default price/lb is a reference; set customer-specific prices in each
-          customer profile.
-        </p>
-      </section>
-
-      <section
-        className="card form-card mt-4"
-        aria-labelledby="product-detail-heading"
+      {/* Product Overview */}
+      <DetailSection
+        title="Product Details"
+        description="Current product information and settings."
       >
-        <h2
-          id="product-detail-heading"
-          style={{ fontSize: "1.1rem", marginBottom: "0.75rem" }}
-        >
-          Edit product
-        </h2>
-        <dl className="mb-4 grid gap-1 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-muted-foreground">SKU</dt>
-            <dd className="font-mono">{product.sku}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Default price / lb</dt>
-            <dd className="catch-weight">
-              {formatMoney(product.default_price_per_lb)}/lb
-            </dd>
-          </div>
-          <div className="sm:col-span-2">
-            <dt className="text-muted-foreground">Units of measure</dt>
-            <dd style={{ fontSize: "0.8125rem" }}>
-              {productUomSummary(product)}
-            </dd>
-          </div>
-        </dl>
+        <DetailGrid>
+          <DetailField label="SKU">
+            <span className="font-mono text-sm">{product.sku}</span>
+          </DetailField>
+          <DetailField label="Default Price / lb">
+            {formatMoney(product.default_price_per_lb)}/lb
+          </DetailField>
+          <DetailField label="Category">{product.species || "—"}</DetailField>
+          <DetailField label="Units of Measure">
+            <span className="text-sm">{productUomSummary(product)}</span>
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
 
-        <form onSubmit={handleUpdate}>
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="edit-product-name">Name</label>
-              <input
+      {/* Edit Product */}
+      <DetailSection
+        title="Edit Product"
+        description="Update product name, category, and units of measure."
+      >
+
+        <form onSubmit={handleUpdate} className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-product-name" className="text-sm font-medium">Name</label>
+              <Input
                 id="edit-product-name"
                 value={editForm.name}
-                onChange={e =>
-                  setEditForm(f => ({ ...f, name: e.target.value }))
-                }
+                onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Name"
-                aria-label="Name"
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="edit-product-species">Category</label>
-              <input
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="edit-product-species" className="text-sm font-medium">Category</label>
+              <Input
                 id="edit-product-species"
                 value={editForm.species}
-                onChange={e =>
-                  setEditForm(f => ({ ...f, species: e.target.value }))
-                }
+                onChange={e => setEditForm(f => ({ ...f, species: e.target.value }))}
                 placeholder="e.g. Chicken, Beef"
-                aria-label="Category"
                 list="product-category-suggestions-detail"
               />
             </div>
@@ -270,7 +270,7 @@ export function ProductDetailPage({ productId }: { productId: number }) {
                 <option key={cat} value={cat} />
               ))}
           </datalist>
-          <div className="form-row" style={{ marginTop: "0.75rem" }}>
+          <div className="grid gap-4 sm:grid-cols-3">
             <UomSelect
               label="Stock UOM (inventory)"
               id="edit-stock-uom"
@@ -290,74 +290,55 @@ export function ProductDetailPage({ productId }: { productId: number }) {
               onChange={v => setEditForm(f => ({ ...f, salesUnitId: v }))}
             />
           </div>
-          <p
-            className="muted"
-            style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0" }}
-          >
+          <p className="text-sm text-muted-foreground">
             Manage units under{" "}
-            <Link href="/units-of-measure">Units of measure</Link>.
+            <Link href="/units-of-measure" className="text-primary underline underline-offset-4 hover:text-primary/80">
+              Units of measure
+            </Link>.
           </p>
           {error && (
-            <div
-              className="error"
-              role="alert"
-              style={{ marginTop: "0.75rem" }}
-            >
+            <p className="text-sm text-destructive" role="alert">
               {error}
-            </div>
+            </p>
           )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="submit"
-              className="btn primary"
-              disabled={updateProduct.isPending}
-            >
-              {updateProduct.isPending ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => router.push("/products")}
-            >
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" disabled={updateProduct.isPending}>
+              {updateProduct.isPending ? "Saving..." : "Save"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => router.push("/products")}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
-      </section>
+      </DetailSection>
 
-      <section className="mt-6" aria-labelledby="product-detail-danger">
-        <h2 id="product-detail-danger" className="sr-only">
-          Delete product
-        </h2>
+      {/* Danger Zone */}
+      <DetailSection
+        title="Danger Zone"
+        description="Irreversible actions for this product."
+        className="border-destructive/50"
+      >
         {deleteConfirm ? (
-          <span className="delete-confirm flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm">Delete this product?</span>
-            <button
+            <Button
               type="button"
-              className="btn primary"
+              variant="destructive"
               disabled={deleteProduct.isPending}
               onClick={() => deleteProduct.mutate(productId)}
             >
-              {deleteProduct.isPending ? "Deleting…" : "Confirm delete"}
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => setDeleteConfirm(false)}
-            >
+              {deleteProduct.isPending ? "Deleting..." : "Confirm Delete"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setDeleteConfirm(false)}>
               Cancel
-            </button>
-          </span>
+            </Button>
+          </div>
         ) : (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setDeleteConfirm(true)}
-          >
-            Delete product
-          </button>
+          <Button type="button" variant="outline" onClick={() => setDeleteConfirm(true)}>
+            Delete Product
+          </Button>
         )}
-      </section>
-    </>
+      </DetailSection>
+    </div>
   );
 }
