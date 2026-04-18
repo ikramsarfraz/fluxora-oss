@@ -3,44 +3,64 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Truck } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { EmptyState } from "@/components/empty-state";
 
 import { columns } from "./columns";
 import { DataTable } from "./data-table";
 import { useSuppliers } from "@/hooks/use-suppliers";
 
 export default function Suppliers() {
-  const { data: suppliers, isLoading, error: loadError } = useSuppliers();
+  const { data: suppliers, isLoading, error: loadError, refetch } = useSuppliers();
 
-  if (isLoading) return <div className="loading">Loading suppliers…</div>;
-  if (loadError)
+  if (isLoading) {
+    return <PageLoading message="Loading suppliers..." />;
+  }
+
+  if (loadError) {
     return (
-      <div className="error">
-        Failed to load: {(loadError as Error).message}
-      </div>
+      <PageError
+        message={(loadError as Error).message}
+        onRetry={() => refetch()}
+      />
     );
+  }
+
+  const hasSuppliers = suppliers && suppliers.length > 0;
 
   return (
-    <section
-      className="flex flex-col gap-4"
-      aria-labelledby="suppliers-table-heading"
-    >
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-2">
-          <h1 id="suppliers-table-heading">Suppliers</h1>
-          <Button variant="outline" asChild>
+    <section className="flex flex-col gap-6" aria-labelledby="suppliers-heading">
+      <PageHeader
+        title="Suppliers"
+        description="Add and manage suppliers for lots and supplier invoices."
+      >
+        <Button asChild>
+          <Link href="/suppliers/new">
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">Add Supplier</span>
+          </Link>
+        </Button>
+      </PageHeader>
+
+      {hasSuppliers ? (
+        <DataTable columns={columns} data={suppliers} />
+      ) : (
+        <EmptyState
+          icon={Truck}
+          title="No suppliers yet"
+          description="Get started by adding your first supplier to the system."
+        >
+          <Button asChild>
             <Link href="/suppliers/new">
-              <Plus />
-              <span className="hidden lg:inline">Add Supplier</span>
+              <Plus className="size-4" />
+              Add Supplier
             </Link>
           </Button>
-        </div>
-        <p className="text-muted-foreground text-sm">
-          Add and view suppliers for lots and supplier invoices.
-        </p>
-      </div>
-
-      <DataTable columns={columns} data={suppliers ?? []} />
+        </EmptyState>
+      )}
     </section>
   );
 }

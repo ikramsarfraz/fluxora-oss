@@ -6,17 +6,22 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { useUsers } from "@/hooks/use-users";
 import { useUserInvitations } from "@/hooks/use-user-invitations";
-import { Plus } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { EmptyState } from "@/components/empty-state";
 
 import { columns, type UsersDirectoryRow } from "./columns";
 import { DataTable } from "./data-table";
 
 export default function Users() {
-  const { data: users, isLoading: usersLoading, error: usersError } = useUsers();
+  const { data: users, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
   const {
     data: invitations,
     isLoading: invitationsLoading,
     error: invitationsError,
+    refetch: refetchInvitations,
   } = useUserInvitations();
 
   const rows = useMemo<UsersDirectoryRow[]>(() => {
@@ -35,45 +40,68 @@ export default function Users() {
     );
   }, [users, invitations]);
 
-  if (usersLoading || invitationsLoading)
-    return <div className="loading">Loading users…</div>;
-  if (usersError)
+  if (usersLoading || invitationsLoading) {
+    return <PageLoading message="Loading users..." />;
+  }
+
+  if (usersError) {
     return (
-      <div className="error">
-        Failed to load users: {(usersError as Error).message}
-      </div>
+      <PageError
+        message={(usersError as Error).message}
+        onRetry={() => refetchUsers()}
+      />
     );
-  if (invitationsError)
+  }
+
+  if (invitationsError) {
     return (
-      <div className="error">
-        Failed to load invitations: {(invitationsError as Error).message}
-      </div>
+      <PageError
+        message={(invitationsError as Error).message}
+        onRetry={() => refetchInvitations()}
+      />
     );
+  }
+
+  const hasUsers = rows.length > 0;
 
   return (
-    <section
-      className="flex flex-col gap-4"
-      aria-labelledby="users-table-heading"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h1 id="users-table-heading">Users</h1>
+    <section className="flex flex-col gap-6" aria-labelledby="users-heading">
+      <PageHeader
+        title="Users"
+        description="Manage team members and pending invitations."
+      >
         <Button asChild>
           <Link href="/users/new">
-            <Plus />
-            <span className="hidden lg:inline">Invite user</span>
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">Invite User</span>
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        getRowId={r =>
-          r.kind === "user"
-            ? `user-${r.row.id}`
-            : `invitation-${r.row.id}`
-        }
-      />
+      {hasUsers ? (
+        <DataTable
+          columns={columns}
+          data={rows}
+          getRowId={r =>
+            r.kind === "user"
+              ? `user-${r.row.id}`
+              : `invitation-${r.row.id}`
+          }
+        />
+      ) : (
+        <EmptyState
+          icon={ShieldCheck}
+          title="No users yet"
+          description="Invite team members to start collaborating on your distribution operations."
+        >
+          <Button asChild>
+            <Link href="/users/new">
+              <Plus className="size-4" />
+              Invite User
+            </Link>
+          </Button>
+        </EmptyState>
+      )}
     </section>
   );
 }

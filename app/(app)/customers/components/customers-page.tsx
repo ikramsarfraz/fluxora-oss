@@ -4,38 +4,63 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { useCustomers } from "@/hooks/use-customers";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { PageLoading } from "@/components/page-loading";
+import { PageError } from "@/components/page-error";
+import { EmptyState } from "@/components/empty-state";
 
 import { columns } from "./columns";
 import { DataTable } from "./data-table";
 
 export default function Customers() {
-  const { data: customers, isLoading, error: loadError } = useCustomers();
+  const { data: customers, isLoading, error: loadError, refetch } = useCustomers();
 
-  if (isLoading) return <div className="loading">Loading customers…</div>;
-  if (loadError)
+  if (isLoading) {
+    return <PageLoading message="Loading customers..." />;
+  }
+
+  if (loadError) {
     return (
-      <div className="error">
-        Failed to load: {(loadError as Error).message}
-      </div>
+      <PageError
+        message={(loadError as Error).message}
+        onRetry={() => refetch()}
+      />
     );
+  }
+
+  const hasCustomers = customers && customers.length > 0;
 
   return (
-    <section
-      className="flex flex-col gap-4"
-      aria-labelledby="customers-table-heading"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h1 id="customers-table-heading">Customers</h1>
+    <section className="flex flex-col gap-6" aria-labelledby="customers-heading">
+      <PageHeader
+        title="Customers"
+        description="Manage your customer accounts and contact information."
+      >
         <Button asChild>
           <Link href="/customers/new">
-            <Plus />
-            <span className="hidden lg:inline">Add Customer</span>
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">Add Customer</span>
           </Link>
         </Button>
-      </div>
+      </PageHeader>
 
-      <DataTable columns={columns} data={customers ?? []} />
+      {hasCustomers ? (
+        <DataTable columns={columns} data={customers} />
+      ) : (
+        <EmptyState
+          icon={Users}
+          title="No customers yet"
+          description="Get started by adding your first customer to the system."
+        >
+          <Button asChild>
+            <Link href="/customers/new">
+              <Plus className="size-4" />
+              Add Customer
+            </Link>
+          </Button>
+        </EmptyState>
+      )}
     </section>
   );
 }
