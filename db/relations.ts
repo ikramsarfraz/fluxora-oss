@@ -20,14 +20,46 @@ import {
   suppliers,
   unitsOfMeasure,
   portalUsers,
-  user,
+  categories,
+  tenants,
+  productCategories,
+  platformUsers,
+  userInvitations,
 } from "./schema";
+import { user } from "./auth-schema";
+
+export const platformUsersRelations = relations(platformUsers, ({ one }) => ({
+  authUser: one(user, {
+    fields: [platformUsers.authUserId],
+    references: [user.id],
+  }),
+}));
+
+export const tenantsRelations = relations(tenants, ({ many }) => ({
+  portalUsers: many(portalUsers),
+  products: many(products),
+  categories: many(categories),
+  customers: many(customers),
+  suppliers: many(suppliers),
+  supplierInvoices: many(supplierInvoices),
+  lots: many(lots),
+  salesOrders: many(salesOrders),
+  salesInvoices: many(salesInvoices),
+  payments: many(payments),
+  expenses: many(expenses),
+  userInvitations: many(userInvitations),
+}));
 
 export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [portalUsers.tenantId],
+    references: [tenants.id],
+  }),
   authUser: one(user, {
     fields: [portalUsers.authUserId],
     references: [user.id],
   }),
+  invitationsSent: many(userInvitations),
   salesOrdersCreated: many(salesOrders, {
     relationName: "sales_orders_created_by",
   }),
@@ -39,12 +71,15 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   paymentsCreated: many(payments),
   expensesCreated: many(expenses),
 }));
-
-export const customersRelations = relations(customers, ({ many }) => ({
+export const customersRelations = relations(customers, ({ many, one }) => ({
   addresses: many(customerAddresses),
   productPrices: many(customerProductPrices),
   salesOrders: many(salesOrders),
   salesInvoices: many(salesInvoices),
+  tenant: one(tenants, {
+    fields: [customers.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const customerAddressesRelations = relations(
@@ -67,6 +102,10 @@ export const unitsOfMeasureRelations = relations(
 );
 
 export const productsRelations = relations(products, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [products.tenantId],
+    references: [tenants.id],
+  }),
   stockUnit: one(unitsOfMeasure, {
     fields: [products.stockUnitId],
     references: [unitsOfMeasure.id],
@@ -82,6 +121,7 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     references: [unitsOfMeasure.id],
     relationName: "product_sales_unit",
   }),
+  productCategories: many(productCategories),
   customerPrices: many(customerProductPrices),
   supplierCosts: many(productSupplierCosts),
   supplierInvoiceLines: many(supplierInvoiceLines),
@@ -89,6 +129,28 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   salesOrderLines: many(salesOrderLines),
   salesInvoiceLines: many(salesInvoiceLines),
 }));
+
+export const categoriesRelations = relations(categories, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [categories.tenantId],
+    references: [tenants.id],
+  }),
+  productCategories: many(productCategories),
+}));
+
+export const productCategoriesRelations = relations(
+  productCategories,
+  ({ one }) => ({
+    product: one(products, {
+      fields: [productCategories.productId],
+      references: [products.id],
+    }),
+    category: one(categories, {
+      fields: [productCategories.categoryId],
+      references: [categories.id],
+    }),
+  }),
+);
 
 export const customerProductPricesRelations = relations(
   customerProductPrices,
@@ -104,10 +166,14 @@ export const customerProductPricesRelations = relations(
   }),
 );
 
-export const suppliersRelations = relations(suppliers, ({ many }) => ({
+export const suppliersRelations = relations(suppliers, ({ many, one }) => ({
   productCosts: many(productSupplierCosts),
   supplierInvoices: many(supplierInvoices),
   lots: many(lots),
+  tenant: one(tenants, {
+    fields: [suppliers.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const productSupplierCostsRelations = relations(
@@ -136,6 +202,10 @@ export const supplierInvoicesRelations = relations(
       references: [portalUsers.id],
     }),
     lines: many(supplierInvoiceLines),
+    tenant: one(tenants, {
+      fields: [supplierInvoices.tenantId],
+      references: [tenants.id],
+    }),
   }),
 );
 
@@ -161,6 +231,10 @@ export const lotsRelations = relations(lots, ({ one, many }) => ({
   }),
   lotReceipts: many(lotReceipts),
   inventoryItems: many(inventoryItems),
+  tenant: one(tenants, {
+    fields: [lots.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const lotReceiptsRelations = relations(lotReceipts, ({ one }) => ({
@@ -206,6 +280,10 @@ export const salesOrdersRelations = relations(salesOrders, ({ one, many }) => ({
   }),
   lines: many(salesOrderLines),
   invoices: many(salesInvoices),
+  tenant: one(tenants, {
+    fields: [salesOrders.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const salesOrderLinesRelations = relations(
@@ -254,6 +332,10 @@ export const salesInvoicesRelations = relations(
     }),
     lines: many(salesInvoiceLines),
     payments: many(payments),
+    tenant: one(tenants, {
+      fields: [salesInvoices.tenantId],
+      references: [tenants.id],
+    }),
   }),
 );
 
@@ -280,6 +362,10 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
     fields: [payments.createdByUserId],
     references: [portalUsers.id],
   }),
+  tenant: one(tenants, {
+    fields: [payments.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const expensesRelations = relations(expenses, ({ one }) => ({
@@ -287,4 +373,22 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
     fields: [expenses.createdByUserId],
     references: [portalUsers.id],
   }),
+  tenant: one(tenants, {
+    fields: [expenses.tenantId],
+    references: [tenants.id],
+  }),
 }));
+
+export const userInvitationsRelations = relations(
+  userInvitations,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [userInvitations.tenantId],
+      references: [tenants.id],
+    }),
+    invitedByUser: one(portalUsers, {
+      fields: [userInvitations.invitedByUserId],
+      references: [portalUsers.id],
+    }),
+  }),
+);

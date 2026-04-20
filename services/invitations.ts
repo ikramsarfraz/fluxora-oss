@@ -76,6 +76,7 @@ export async function acceptInvitation(input: {
       throw new Error("Sign up did not return a user id.");
     }
     await createPortalUser({
+      tenantId: invitation.tenantId,
       authUserId: signup.user.id,
       fullName: invitation.fullName,
       email: invitation.email,

@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { customerAddresses, customers } from "@/db/schema";
 
 export async function createCustomer(input: {
+  tenantId: number;
   name: string;
   phoneNumber?: string;
   fuelSurchargeAmount?: string;
@@ -19,6 +20,7 @@ export async function createCustomer(input: {
   const [customer] = await db
     .insert(customers)
     .values({
+      tenantId: input.tenantId,
       name: input.name,
       phoneNumber: input.phoneNumber,
       fuelSurchargeAmount: input.fuelSurchargeAmount,

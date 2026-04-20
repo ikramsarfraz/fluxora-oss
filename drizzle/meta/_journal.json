@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1775619267291,
-      "tag": "0000_slimy_earthquake",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1776129900986,
-      "tag": "0001_happy_sway",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1776277868082,
-      "tag": "0002_adorable_giant_girl",
+      "when": 1776702759577,
+      "tag": "0000_open_the_order",
       "breakpoints": true
     }
   ]

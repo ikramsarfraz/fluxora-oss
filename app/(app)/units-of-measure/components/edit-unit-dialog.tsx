@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,11 +15,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { useUpdateUnitOfMeasure } from "@/hooks/use-units-of-measure";
 import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+
+import {
+  editUnitFormSchema,
+  type EditUnitFormValues,
+} from "./edit-unit-dialog.schema";
+
+const emptyValues: EditUnitFormValues = {
+  name: "",
+  abbreviation: "",
+  notes: "",
+  sortOrder: "0",
+  isActive: true,
+};
 
 interface EditUnitDialogProps {
   unit: UnitOfMeasureListItem | null;
@@ -23,44 +45,43 @@ interface EditUnitDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditUnitDialog({ unit, open, onOpenChange }: EditUnitDialogProps) {
+export function EditUnitDialog({
+  unit,
+  open,
+  onOpenChange,
+}: EditUnitDialogProps) {
   const updateUnit = useUpdateUnitOfMeasure();
 
-  const [name, setName] = useState("");
-  const [abbreviation, setAbbreviation] = useState("");
-  const [notes, setNotes] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
-  const [isActive, setIsActive] = useState(true);
+  const form = useForm<EditUnitFormValues>({
+    resolver: zodResolver(editUnitFormSchema),
+    defaultValues: emptyValues,
+  });
+
+  const { reset } = form;
 
   useEffect(() => {
-    if (unit) {
-      setName(unit.name);
-      setAbbreviation(unit.abbreviation ?? "");
-      setNotes(unit.notes ?? "");
-      setSortOrder(String(unit.sortOrder));
-      setIsActive(unit.isActive);
-    }
-  }, [unit]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
     if (!unit) return;
+    reset({
+      name: unit.name,
+      abbreviation: unit.abbreviation ?? "",
+      notes: unit.notes ?? "",
+      sortOrder: String(unit.sortOrder),
+      isActive: unit.isActive,
+    });
+  }, [unit, reset]);
 
-    if (!name.trim()) {
-      toast.error("Name is required");
-      return;
-    }
+  async function onSubmit(data: EditUnitFormValues) {
+    if (!unit) return;
 
     try {
       await updateUnit.mutateAsync({
         id: unit.id,
         data: {
-          name: name.trim(),
-          abbreviation: abbreviation.trim() || null,
-          notes: notes.trim() || null,
-          sortOrder: parseInt(sortOrder, 10) || 0,
-          isActive,
+          name: data.name.trim(),
+          abbreviation: data.abbreviation.trim() || null,
+          notes: data.notes.trim() || null,
+          sortOrder: parseInt(data.sortOrder, 10) || 0,
+          isActive: data.isActive,
         },
       });
       toast.success("Unit of measure updated.");
@@ -68,65 +89,118 @@ export function EditUnitDialog({ unit, open, onOpenChange }: EditUnitDialogProps
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update unit");
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit Unit of Measure</DialogTitle>
+          <DialogTitle>Edit unit of measure</DialogTitle>
           <DialogDescription>
             Update the details for this unit of measure.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-name">Name *</Label>
-            <Input
-              id="edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Pallet"
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FieldGroup className="gap-4">
+            <Controller
+              name="name"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="edit-name">Name *</FieldLabel>
+                  <Input
+                    {...field}
+                    id="edit-name"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. Pallet"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-abbreviation">Abbreviation</Label>
-            <Input
-              id="edit-abbreviation"
-              value={abbreviation}
-              onChange={(e) => setAbbreviation(e.target.value)}
-              placeholder="e.g. plt"
-              maxLength={16}
+            <Controller
+              name="abbreviation"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="edit-abbreviation">Abbreviation</FieldLabel>
+                  <Input
+                    {...field}
+                    id="edit-abbreviation"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. plt"
+                    maxLength={16}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-sort-order">Sort Order</Label>
-            <Input
-              id="edit-sort-order"
-              type="number"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
+            <Controller
+              name="sortOrder"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="edit-sort-order">Sort order</FieldLabel>
+                  <Input
+                    {...field}
+                    id="edit-sort-order"
+                    type="number"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  <FieldDescription>
+                    Lower numbers appear first in dropdown lists.
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-notes">Notes</Label>
-            <Input
-              id="edit-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes"
+            <Controller
+              name="notes"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="edit-notes">Notes</FieldLabel>
+                  <Input
+                    {...field}
+                    id="edit-notes"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="Optional notes"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
             />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="edit-is-active"
-              checked={isActive}
-              onCheckedChange={(checked) => setIsActive(checked === true)}
+            <Controller
+              name="isActive"
+              control={form.control}
+              render={({ field }) => (
+                <Field
+                  orientation="horizontal"
+                  className="items-center gap-2 space-y-0"
+                >
+                  <Checkbox
+                    id="edit-is-active"
+                    checked={field.value}
+                    onCheckedChange={c => field.onChange(c === true)}
+                  />
+                  <FieldLabel
+                    htmlFor="edit-is-active"
+                    className="cursor-pointer font-normal"
+                  >
+                    Active
+                  </FieldLabel>
+                </Field>
+              )}
             />
-            <Label htmlFor="edit-is-active" className="font-normal">
-              Active
-            </Label>
-          </div>
+          </FieldGroup>
           <DialogFooter>
             <Button
               type="button"
@@ -136,7 +210,7 @@ export function EditUnitDialog({ unit, open, onOpenChange }: EditUnitDialogProps
               Cancel
             </Button>
             <Button type="submit" disabled={updateUnit.isPending}>
-              {updateUnit.isPending ? "Saving..." : "Save Changes"}
+              {updateUnit.isPending ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
         </form>

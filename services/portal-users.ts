@@ -6,7 +6,12 @@ import { portalUsers } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 
-export type PortalUserRole = "admin" | "sales" | "warehouse" | "accounting";
+export type PortalUserRole =
+  | "owner"
+  | "admin"
+  | "sales"
+  | "warehouse"
+  | "accounting";
 
 /** First self-serve signup gets admin; adjust if you add invites later. */
 const DEFAULT_SIGNUP_ROLE: PortalUserRole = "admin";
@@ -16,6 +21,7 @@ const DEFAULT_SIGNUP_ROLE: PortalUserRole = "admin";
  * Call after `authClient.signUp.email` succeeds so cookies are present.
  */
 export async function createPortalUser(input: {
+  tenantId: number;
   authUserId: string;
   fullName: string;
   email: string;
@@ -29,6 +35,7 @@ export async function createPortalUser(input: {
   const [row] = await db
     .insert(portalUsers)
     .values({
+      tenantId: input.tenantId,
       authUserId: input.authUserId,
       fullName: input.fullName,
       email: input.email,
@@ -100,7 +107,7 @@ export async function getUserByAuthUserId(authUserId: string) {
 }
 
 /**
- * Current session user must be an admin (`portal_users.role === "admin"`).
+ * Current session user must be an admin (`portal_users.role === "admin" || portal_users.role === "owner"`).
  */
 export async function requireAdminPortalUser() {
   const session = await auth.api.getSession({
@@ -110,7 +117,7 @@ export async function requireAdminPortalUser() {
     throw new Error("Unauthorized");
   }
   const current = await getUserByAuthUserId(session.user.id);
-  if (!current || current.role !== "admin") {
+  if (!current || (current.role !== "admin" && current.role !== "owner")) {
     throw new Error("Forbidden");
   }
   return current;

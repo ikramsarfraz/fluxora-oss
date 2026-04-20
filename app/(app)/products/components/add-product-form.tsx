@@ -3,17 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle } from "lucide-react";
 
 import { api, endpoints, type Product, type UnitOfMeasure } from "@/lib/api";
 import { generateSku } from "./product-sku-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   Select,
   SelectContent,
@@ -21,8 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-const emptyForm = {
+import {
+  addProductFormSchema,
+  type AddProductFormValues,
+} from "./add-product-form.schema";
+
+const defaultForm: AddProductFormValues = {
   sku: "",
   name: "",
   species: "",
@@ -38,8 +50,16 @@ function formatUomOption(u: UnitOfMeasure): string {
 export function AddProductForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  /** Keeps Select on "Other…" while the category text is still empty. */
+  const [speciesEntryMode, setSpeciesEntryMode] = useState<"list" | "custom">(
+    "list",
+  );
+
+  const form = useForm<AddProductFormValues>({
+    resolver: zodResolver(addProductFormSchema),
+    defaultValues: defaultForm,
+  });
 
   const { data: products } = useQuery({
     queryKey: ["products"],
@@ -74,26 +94,22 @@ export function AddProductForm() {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
       queryClient.refetchQueries({ queryKey: ["price-chart"] });
-      setForm(emptyForm);
-      setError(null);
+      form.reset(defaultForm);
+      setSpeciesEntryMode("list");
+      setMutationError(null);
       router.push("/products");
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setMutationError(e.message),
   });
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    let { sku, name, species } = form;
-    name = name.trim();
-    species = species.trim();
-    if (!name || !species) {
-      setError("Please enter name and category.");
-      return;
-    }
-    if (!sku.trim()) {
+  function onSubmit(data: AddProductFormValues) {
+    setMutationError(null);
+    let sku = data.sku.trim();
+    const name = data.name.trim();
+    const species = data.species.trim();
+    if (!sku) {
       sku = generateSku(name, species, products);
-      setForm(f => ({ ...f, sku }));
+      form.setValue("sku", sku);
     }
     const payload: {
       sku: string;
@@ -102,15 +118,15 @@ export function AddProductForm() {
       stock_unit_id?: number | null;
       purchase_unit_id?: number | null;
       sales_unit_id?: number | null;
-    } = { sku: sku.trim(), name, species };
-    if (form.stockUnitId)
-      payload.stock_unit_id = parseInt(form.stockUnitId, 10);
-    if (form.purchaseUnitId)
-      payload.purchase_unit_id = parseInt(form.purchaseUnitId, 10);
-    if (form.salesUnitId)
-      payload.sales_unit_id = parseInt(form.salesUnitId, 10);
+    } = { sku, name, species };
+    if (data.stockUnitId)
+      payload.stock_unit_id = parseInt(data.stockUnitId, 10);
+    if (data.purchaseUnitId)
+      payload.purchase_unit_id = parseInt(data.purchaseUnitId, 10);
+    if (data.salesUnitId)
+      payload.sales_unit_id = parseInt(data.salesUnitId, 10);
     createProduct.mutate(payload);
-  };
+  }
 
   const categoryOptions = useMemo(() => {
     return Array.from(
@@ -125,127 +141,294 @@ export function AddProductForm() {
   return (
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
-        <form id="form-add-product" onSubmit={handleCreate} className="flex flex-col gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="product-sku" className="text-sm font-medium">SKU</label>
-              <div className="flex flex-col gap-2">
-                <Input
-                  id="product-sku"
-                  value={form.sku}
-                  onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
-                  placeholder="e.g. BEEF-RIB-01"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (!form.name.trim() || !form.species.trim()) {
-                      setError("Enter name and category before generating a SKU.");
-                      return;
-                    }
-                    const sku = generateSku(form.name, form.species, products);
-                    setForm(f => ({ ...f, sku }));
-                    setError(null);
-                  }}
-                >
-                  Auto-generate SKU
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="product-name" className="text-sm font-medium">Name *</label>
-              <Input
-                id="product-name"
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. Beef Ribeye"
-                required
+        <form id="form-add-product" onSubmit={form.handleSubmit(onSubmit)}>
+          {mutationError ? (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle />
+              <AlertTitle>Add product failed</AlertTitle>
+              <AlertDescription>{mutationError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <FieldGroup>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Controller
+                name="sku"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-sku">SKU</FieldLabel>
+                    <div className="flex flex-col gap-2">
+                      <Input
+                        {...field}
+                        id="form-add-product-sku"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="e.g. BEEF-RIB-01"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const name = form.getValues("name").trim();
+                          const species = form.getValues("species").trim();
+                          if (!name || !species) {
+                            form.setError("sku", {
+                              type: "manual",
+                              message:
+                                "Enter name and category before generating a SKU.",
+                            });
+                            return;
+                          }
+                          form.clearErrors("sku");
+                          form.setValue(
+                            "sku",
+                            generateSku(name, species, products),
+                          );
+                        }}
+                      >
+                        Auto-generate SKU
+                      </Button>
+                    </div>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="name"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-name">
+                      Name *
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-product-name"
+                      aria-invalid={fieldState.invalid}
+                      placeholder="e.g. Beef Ribeye"
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
               />
             </div>
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="product-species" className="text-sm font-medium">Category *</label>
-            <Input
-              id="product-species"
-              value={form.species}
-              onChange={e => setForm(f => ({ ...f, species: e.target.value }))}
-              placeholder="e.g. Chicken, Beef, Seafood..."
-              required
-              list="product-category-suggestions"
+            <Controller
+              name="species"
+              control={form.control}
+              render={({ field, fieldState }) => {
+                const inList = categoryOptions.includes(field.value);
+                const selectValue =
+                  field.value === "" && speciesEntryMode === "custom"
+                    ? "__custom__"
+                    : field.value === ""
+                      ? "__none__"
+                      : inList
+                        ? field.value
+                        : "__custom__";
+                const showCustomCategoryInput =
+                  categoryOptions.length > 0 &&
+                  (!inList ||
+                    (speciesEntryMode === "custom" && field.value === ""));
+
+                return (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-species">
+                      Category *
+                    </FieldLabel>
+                    {categoryOptions.length === 0 ? (
+                      <Input
+                        {...field}
+                        id="form-add-product-species"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="e.g. Chicken, Beef, Seafood..."
+                      />
+                    ) : (
+                      <>
+                        <Select
+                          value={selectValue}
+                          onValueChange={v => {
+                            if (v === "__none__") {
+                              setSpeciesEntryMode("list");
+                              field.onChange("");
+                            } else if (v === "__custom__") {
+                              setSpeciesEntryMode("custom");
+                              field.onChange("");
+                            } else {
+                              setSpeciesEntryMode("list");
+                              field.onChange(v);
+                            }
+                          }}
+                        >
+                          <SelectTrigger
+                            id="form-add-product-species"
+                            aria-invalid={fieldState.invalid}
+                            className="w-full"
+                          >
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              Select category…
+                            </SelectItem>
+                            {categoryOptions.map(cat => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Other…</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {showCustomCategoryInput ? (
+                          <Input
+                            id="form-add-product-species-custom"
+                            aria-invalid={fieldState.invalid}
+                            placeholder="e.g. Chicken, Beef, Seafood..."
+                            value={field.value}
+                            onChange={e => {
+                              const v = e.target.value;
+                              field.onChange(v);
+                              if (categoryOptions.includes(v))
+                                setSpeciesEntryMode("list");
+                            }}
+                          />
+                        ) : null}
+                      </>
+                    )}
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                );
+              }}
             />
-            <datalist id="product-category-suggestions">
-              {categoryOptions.map(cat => (
-                <option key={cat} value={cat} />
-              ))}
-            </datalist>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="add-stock-uom" className="text-sm font-medium">Stock UOM</label>
-              <Select value={form.stockUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, stockUnitId: v === "__none__" ? "" : v }))}>
-                <SelectTrigger id="add-stock-uom">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {activeUoms.map(u => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {formatUomOption(u)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Controller
+                name="stockUnitId"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-stock-uom">
+                      Stock UOM
+                    </FieldLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={v =>
+                        field.onChange(v === "__none__" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger
+                        id="form-add-product-stock-uom"
+                        aria-invalid={fieldState.invalid}
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {activeUoms.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {formatUomOption(u)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="purchaseUnitId"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-purchase-uom">
+                      Purchase UOM
+                    </FieldLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={v =>
+                        field.onChange(v === "__none__" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger
+                        id="form-add-product-purchase-uom"
+                        aria-invalid={fieldState.invalid}
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {activeUoms.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {formatUomOption(u)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="salesUnitId"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-product-sales-uom">
+                      Sales UOM
+                    </FieldLabel>
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={v =>
+                        field.onChange(v === "__none__" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger
+                        id="form-add-product-sales-uom"
+                        aria-invalid={fieldState.invalid}
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {activeUoms.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {formatUomOption(u)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="add-purchase-uom" className="text-sm font-medium">Purchase UOM</label>
-              <Select value={form.purchaseUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, purchaseUnitId: v === "__none__" ? "" : v }))}>
-                <SelectTrigger id="add-purchase-uom">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {activeUoms.map(u => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {formatUomOption(u)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="add-sales-uom" className="text-sm font-medium">Sales UOM</label>
-              <Select value={form.salesUnitId || "__none__"} onValueChange={v => setForm(f => ({ ...f, salesUnitId: v === "__none__" ? "" : v }))}>
-                <SelectTrigger id="add-sales-uom">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {activeUoms.map(u => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {formatUomOption(u)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          <p className="text-sm text-muted-foreground">
-            Manage the unit list under{" "}
-            <Link href="/units-of-measure" className="text-primary underline underline-offset-4 hover:text-primary/80">
-              Units of measure
-            </Link>. Optional — helps match QuickBooks-style item setup.
-          </p>
-
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+            <FieldDescription>
+              Manage the unit list under{" "}
+              <Link
+                href="/units-of-measure"
+                className="text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                Units of measure
+              </Link>
+              . Optional — helps match QuickBooks-style item setup.
+            </FieldDescription>
+          </FieldGroup>
         </form>
       </CardContent>
       <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
@@ -261,7 +444,7 @@ export function AddProductForm() {
           form="form-add-product"
           disabled={createProduct.isPending}
         >
-          {createProduct.isPending ? "Adding..." : "Add Product"}
+          {createProduct.isPending ? "Adding…" : "Add product"}
         </Button>
       </CardFooter>
     </Card>
