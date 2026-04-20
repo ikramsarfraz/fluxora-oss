@@ -1,41 +1,52 @@
 import { relations } from "drizzle-orm";
+import { user } from "./auth-schema";
 import {
+  auditLogs,
+  categories,
   customerAddresses,
   customerProductPrices,
   customers,
   expenses,
+  files,
   inventoryItems,
   lotReceipts,
   lots,
   payments,
-  productSupplierCosts,
+  platformUsers,
+  portalUsers,
+  productCategories,
   products,
+  productSupplierCosts,
+  salesInvoiceFiles,
   salesInvoiceLines,
   salesInvoices,
   salesOrderLineAllocations,
   salesOrderLines,
   salesOrders,
+  supplierInvoiceAttachments,
   supplierInvoiceLines,
   supplierInvoices,
   suppliers,
-  unitsOfMeasure,
-  portalUsers,
-  categories,
+  tenantBranding,
   tenants,
-  productCategories,
-  platformUsers,
+  unitsOfMeasure,
   userInvitations,
 } from "./schema";
-import { user } from "./auth-schema";
 
-export const platformUsersRelations = relations(platformUsers, ({ one }) => ({
-  authUser: one(user, {
-    fields: [platformUsers.authUserId],
-    references: [user.id],
+export const platformUsersRelations = relations(
+  platformUsers,
+  ({ one, many }) => ({
+    authUser: one(user, {
+      fields: [platformUsers.authUserId],
+      references: [user.id],
+    }),
+    auditLogs: many(auditLogs, {
+      relationName: "audit_logs_actor_platform_user",
+    }),
   }),
-}));
+);
 
-export const tenantsRelations = relations(tenants, ({ many }) => ({
+export const tenantsRelations = relations(tenants, ({ many, one }) => ({
   portalUsers: many(portalUsers),
   products: many(products),
   categories: many(categories),
@@ -48,6 +59,12 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   payments: many(payments),
   expenses: many(expenses),
   userInvitations: many(userInvitations),
+  files: many(files),
+  branding: one(tenantBranding, {
+    fields: [tenants.id],
+    references: [tenantBranding.tenantId],
+  }),
+  auditLogs: many(auditLogs),
 }));
 
 export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
@@ -59,18 +76,94 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
     fields: [portalUsers.authUserId],
     references: [user.id],
   }),
-  invitationsSent: many(userInvitations),
   salesOrdersCreated: many(salesOrders, {
     relationName: "sales_orders_created_by",
   }),
   salesOrdersUpdated: many(salesOrders, {
     relationName: "sales_orders_updated_by",
   }),
-  supplierInvoicesCreated: many(supplierInvoices),
-  salesInvoicesCreated: many(salesInvoices),
+  customersCreated: many(customers, {
+    relationName: "customers_created_by",
+  }),
+  customersUpdated: many(customers, {
+    relationName: "customers_updated_by",
+  }),
+  customersArchived: many(customers, {
+    relationName: "customers_archived_by",
+  }),
+  suppliersCreated: many(suppliers, {
+    relationName: "suppliers_created_by",
+  }),
+  suppliersUpdated: many(suppliers, {
+    relationName: "suppliers_updated_by",
+  }),
+  suppliersArchived: many(suppliers, {
+    relationName: "suppliers_archived_by",
+  }),
+  productsCreated: many(products, {
+    relationName: "products_created_by",
+  }),
+  productsUpdated: many(products, {
+    relationName: "products_updated_by",
+  }),
+  productsArchived: many(products, {
+    relationName: "products_archived_by",
+  }),
+  categoriesCreated: many(categories, {
+    relationName: "categories_created_by",
+  }),
+  categoriesUpdated: many(categories, {
+    relationName: "categories_updated_by",
+  }),
+  categoriesArchived: many(categories, {
+    relationName: "categories_archived_by",
+  }),
+  supplierInvoicesCreated: many(supplierInvoices, {
+    relationName: "supplier_invoices_created_by",
+  }),
+  supplierInvoicesUpdated: many(supplierInvoices, {
+    relationName: "supplier_invoices_updated_by",
+  }),
+  salesInvoicesCreated: many(salesInvoices, {
+    relationName: "sales_invoices_created_by",
+  }),
+  salesInvoicesUpdated: many(salesInvoices, {
+    relationName: "sales_invoices_updated_by",
+  }),
   paymentsCreated: many(payments),
   expensesCreated: many(expenses),
+  uploadedFiles: many(files, {
+    relationName: "files_uploaded_by_user",
+  }),
+  archivedFiles: many(files, {
+    relationName: "files_archived_by_user",
+  }),
+  brandingCreated: many(tenantBranding, {
+    relationName: "tenant_branding_created_by",
+  }),
+  brandingUpdated: many(tenantBranding, {
+    relationName: "tenant_branding_updated_by",
+  }),
+  invitationsSent: many(userInvitations),
+  auditLogs: many(auditLogs, {
+    relationName: "audit_logs_actor_portal_user",
+  }),
 }));
+
+export const userInvitationsRelations = relations(
+  userInvitations,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [userInvitations.tenantId],
+      references: [tenants.id],
+    }),
+    invitedByUser: one(portalUsers, {
+      fields: [userInvitations.invitedByUserId],
+      references: [portalUsers.id],
+    }),
+  }),
+);
+
 export const customersRelations = relations(customers, ({ many, one }) => ({
   addresses: many(customerAddresses),
   productPrices: many(customerProductPrices),
@@ -79,6 +172,21 @@ export const customersRelations = relations(customers, ({ many, one }) => ({
   tenant: one(tenants, {
     fields: [customers.tenantId],
     references: [tenants.id],
+  }),
+  createdBy: one(portalUsers, {
+    fields: [customers.createdByUserId],
+    references: [portalUsers.id],
+    relationName: "customers_created_by",
+  }),
+  updatedBy: one(portalUsers, {
+    fields: [customers.updatedByUserId],
+    references: [portalUsers.id],
+    relationName: "customers_updated_by",
+  }),
+  archivedBy: one(portalUsers, {
+    fields: [customers.archivedByUserId],
+    references: [portalUsers.id],
+    relationName: "customers_archived_by",
   }),
 }));
 
@@ -105,6 +213,21 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [products.tenantId],
     references: [tenants.id],
+  }),
+  createdBy: one(portalUsers, {
+    fields: [products.createdByUserId],
+    references: [portalUsers.id],
+    relationName: "products_created_by",
+  }),
+  updatedBy: one(portalUsers, {
+    fields: [products.updatedByUserId],
+    references: [portalUsers.id],
+    relationName: "products_updated_by",
+  }),
+  archivedBy: one(portalUsers, {
+    fields: [products.archivedByUserId],
+    references: [portalUsers.id],
+    relationName: "products_archived_by",
   }),
   stockUnit: one(unitsOfMeasure, {
     fields: [products.stockUnitId],
@@ -134,6 +257,21 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [categories.tenantId],
     references: [tenants.id],
+  }),
+  createdBy: one(portalUsers, {
+    fields: [categories.createdByUserId],
+    references: [portalUsers.id],
+    relationName: "categories_created_by",
+  }),
+  updatedBy: one(portalUsers, {
+    fields: [categories.updatedByUserId],
+    references: [portalUsers.id],
+    relationName: "categories_updated_by",
+  }),
+  archivedBy: one(portalUsers, {
+    fields: [categories.archivedByUserId],
+    references: [portalUsers.id],
+    relationName: "categories_archived_by",
   }),
   productCategories: many(productCategories),
 }));
@@ -174,6 +312,21 @@ export const suppliersRelations = relations(suppliers, ({ many, one }) => ({
     fields: [suppliers.tenantId],
     references: [tenants.id],
   }),
+  createdBy: one(portalUsers, {
+    fields: [suppliers.createdByUserId],
+    references: [portalUsers.id],
+    relationName: "suppliers_created_by",
+  }),
+  updatedBy: one(portalUsers, {
+    fields: [suppliers.updatedByUserId],
+    references: [portalUsers.id],
+    relationName: "suppliers_updated_by",
+  }),
+  archivedBy: one(portalUsers, {
+    fields: [suppliers.archivedByUserId],
+    references: [portalUsers.id],
+    relationName: "suppliers_archived_by",
+  }),
 }));
 
 export const productSupplierCostsRelations = relations(
@@ -200,12 +353,19 @@ export const supplierInvoicesRelations = relations(
     createdBy: one(portalUsers, {
       fields: [supplierInvoices.createdByUserId],
       references: [portalUsers.id],
+      relationName: "supplier_invoices_created_by",
+    }),
+    updatedBy: one(portalUsers, {
+      fields: [supplierInvoices.updatedByUserId],
+      references: [portalUsers.id],
+      relationName: "supplier_invoices_updated_by",
     }),
     lines: many(supplierInvoiceLines),
     tenant: one(tenants, {
       fields: [supplierInvoices.tenantId],
       references: [tenants.id],
     }),
+    attachments: many(supplierInvoiceAttachments),
   }),
 );
 
@@ -329,6 +489,12 @@ export const salesInvoicesRelations = relations(
     createdBy: one(portalUsers, {
       fields: [salesInvoices.createdByUserId],
       references: [portalUsers.id],
+      relationName: "sales_invoices_created_by",
+    }),
+    updatedBy: one(portalUsers, {
+      fields: [salesInvoices.updatedByUserId],
+      references: [portalUsers.id],
+      relationName: "sales_invoices_updated_by",
     }),
     lines: many(salesInvoiceLines),
     payments: many(payments),
@@ -336,6 +502,7 @@ export const salesInvoicesRelations = relations(
       fields: [salesInvoices.tenantId],
       references: [tenants.id],
     }),
+    files: many(salesInvoiceFiles),
   }),
 );
 
@@ -379,16 +546,83 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
   }),
 }));
 
-export const userInvitationsRelations = relations(
-  userInvitations,
+export const tenantBrandingRelations = relations(tenantBranding, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tenantBranding.tenantId],
+    references: [tenants.id],
+  }),
+  createdBy: one(portalUsers, {
+    fields: [tenantBranding.createdByUserId],
+    references: [portalUsers.id],
+    relationName: "tenant_branding_created_by",
+  }),
+  updatedBy: one(portalUsers, {
+    fields: [tenantBranding.updatedByUserId],
+    references: [portalUsers.id],
+    relationName: "tenant_branding_updated_by",
+  }),
+}));
+
+export const filesRelations = relations(files, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [files.tenantId],
+    references: [tenants.id],
+  }),
+  uploadedByUser: one(portalUsers, {
+    fields: [files.uploadedByUserId],
+    references: [portalUsers.id],
+    relationName: "files_uploaded_by_user",
+  }),
+  archivedByUser: one(portalUsers, {
+    fields: [files.archivedByUserId],
+    references: [portalUsers.id],
+    relationName: "files_archived_by_user",
+  }),
+  supplierInvoiceAttachments: many(supplierInvoiceAttachments),
+  salesInvoiceFiles: many(salesInvoiceFiles),
+}));
+
+export const supplierInvoiceAttachmentsRelations = relations(
+  supplierInvoiceAttachments,
   ({ one }) => ({
-    tenant: one(tenants, {
-      fields: [userInvitations.tenantId],
-      references: [tenants.id],
+    supplierInvoice: one(supplierInvoices, {
+      fields: [supplierInvoiceAttachments.supplierInvoiceId],
+      references: [supplierInvoices.id],
     }),
-    invitedByUser: one(portalUsers, {
-      fields: [userInvitations.invitedByUserId],
-      references: [portalUsers.id],
+    file: one(files, {
+      fields: [supplierInvoiceAttachments.fileId],
+      references: [files.id],
     }),
   }),
 );
+
+export const salesInvoiceFilesRelations = relations(
+  salesInvoiceFiles,
+  ({ one }) => ({
+    salesInvoice: one(salesInvoices, {
+      fields: [salesInvoiceFiles.salesInvoiceId],
+      references: [salesInvoices.id],
+    }),
+    file: one(files, {
+      fields: [salesInvoiceFiles.fileId],
+      references: [files.id],
+    }),
+  }),
+);
+
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [auditLogs.tenantId],
+    references: [tenants.id],
+  }),
+  actorPortalUser: one(portalUsers, {
+    fields: [auditLogs.actorPortalUserId],
+    references: [portalUsers.id],
+    relationName: "audit_logs_actor_portal_user",
+  }),
+  actorPlatformUser: one(platformUsers, {
+    fields: [auditLogs.actorPlatformUserId],
+    references: [platformUsers.id],
+    relationName: "audit_logs_actor_platform_user",
+  }),
+}));

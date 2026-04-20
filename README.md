@@ -2,6 +2,23 @@
 
 Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack lives under [`docs/legacy-app/`](docs/legacy-app/).
 
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 16](https://nextjs.org) (App Router, React 19) |
+| Language | TypeScript 5 |
+| Styling | Tailwind CSS 4, shadcn/ui (Radix UI + Base UI primitives) |
+| Auth | [Better Auth](https://better-auth.com) — email/password + Google OAuth |
+| Database | [Neon](https://neon.tech) serverless Postgres |
+| ORM | [Drizzle ORM](https://orm.drizzle.team) + Drizzle Kit |
+| Data fetching | TanStack Query v5, TanStack Table v8 |
+| Forms | React Hook Form + Zod |
+| Email | [Resend](https://resend.com) + React Email |
+| Charts / PDF | Recharts, jsPDF + jspdf-autotable |
+| File storage | [Cloudflare R2](https://developers.cloudflare.com/r2/) |
+| Deployment | [Vercel](https://vercel.com) |
+
 ## Local dev
 
 1. **Backend** (from `docs/legacy-app/`): `./run-one-port.sh` or `uvicorn api.main:app --reload --host 127.0.0.1 --port 8005` so the API is on port **8005**.
