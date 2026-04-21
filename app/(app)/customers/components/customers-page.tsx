@@ -5,7 +5,6 @@ import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useCustomers } from "@/hooks/use-customers";
-import { useDeleteCustomer } from "@/hooks/use-customer-mutations";
 import { Plus, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
@@ -15,19 +14,30 @@ import { EmptyState } from "@/components/empty-state";
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 import type { CustomerListItem } from "@/services/customers";
+import { deleteCustomerAction } from "../customer.actions";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 
 export default function Customers() {
-  const { data: customers, isLoading, error: loadError, refetch } = useCustomers();
-  const deleteCustomer = useDeleteCustomer();
+  const queryClient = useQueryClient();
+  const {
+    data: customers,
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useCustomers();
 
   const columns = useMemo(
     () =>
       createColumns({
-        onDelete: (customer: CustomerListItem) => {
-          deleteCustomer.mutate(customer.id);
+        onDelete: async (customer: CustomerListItem) => {
+          await deleteCustomerAction(customer.id);
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.customers.all,
+          });
         },
       }),
-    [deleteCustomer]
+    [queryClient],
   );
 
   if (isLoading) {
@@ -46,7 +56,10 @@ export default function Customers() {
   const hasCustomers = customers && customers.length > 0;
 
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="customers-heading">
+    <section
+      className="flex flex-col gap-6"
+      aria-labelledby="customers-heading"
+    >
       <PageHeader
         title="Customers"
         description="Manage your customer accounts and contact information."

@@ -2,18 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
-import { api, endpoints, type Customer } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Field,
   FieldError,
@@ -21,82 +17,74 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  createCustomerInputSchema,
+  type CreateCustomerInput,
+} from "../customer.schemas";
+import { createCustomerAction } from "../customer.actions";
+import { US_STATES } from "@/lib/constants/us-states";
 
-const createCustomerSchema = z.object({
-  name: z
-    .string()
-    .transform(s => s.trim())
-    .pipe(z.string().min(1, "Please enter a customer name.")),
-  street: z.string(),
-  city: z.string(),
-  state: z.string(),
-  zip: z.string(),
-  phoneNumber: z.string(),
-});
-
-type CreateCustomerValues = z.infer<typeof createCustomerSchema>;
+const emptyAddress = {
+  addressType: "shipping" as const,
+  street: "",
+  city: "",
+  state: "",
+  zip: "",
+  isDefault: false,
+};
 
 export function AddCustomerForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
-  const createForm = useForm<CreateCustomerValues>({
-    resolver: zodResolver(createCustomerSchema),
+  const form = useForm<CreateCustomerInput>({
+    resolver: zodResolver(createCustomerInputSchema),
     defaultValues: {
       name: "",
-      street: "",
-      city: "",
-      state: "",
-      zip: "",
       phoneNumber: "",
+      fuelSurchargeAmount: "",
+      invoicePrefix: "",
+      addresses: [],
     },
   });
 
-  const createCustomer = useMutation({
-    mutationFn: (body: {
-      name: string;
-      street?: string;
-      city?: string;
-      state?: string;
-      zip?: string;
-      phone_number?: string;
-    }) => api.post<Customer>(endpoints.customers.create(), body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
-      queryClient.invalidateQueries({ queryKey: ["price-chart"] });
-      createForm.reset();
-      setError(null);
-      toast.success("Customer added");
-      router.push("/customers");
-    },
-    onError: (e: Error) => setError(e.message),
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "addresses",
   });
 
-  function onSubmit(data: CreateCustomerValues) {
+  async function onSubmit(data: CreateCustomerInput) {
     setError(null);
-    createCustomer.mutate({
-      name: data.name,
-      street: data.street.trim() || undefined,
-      city: data.city.trim() || undefined,
-      state: data.state.trim() || undefined,
-      zip: data.zip.trim() || undefined,
-      phone_number: data.phoneNumber.trim() || undefined,
-    });
+    try {
+      const customer = await createCustomerAction(data);
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      form.reset();
+      toast.success("Customer added");
+      router.push("/customers/" + customer.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to add customer");
+    }
   }
+
+  const isPending = form.formState.isSubmitting;
 
   return (
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
-        <form
-          id="form-add-customer"
-          onSubmit={createForm.handleSubmit(onSubmit)}
-        >
+        <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup>
+            {/* Customer name */}
             <Controller
               name="name"
-              control={createForm.control}
+              control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="form-add-customer-name">
@@ -104,6 +92,7 @@ export function AddCustomerForm() {
                   </FieldLabel>
                   <Input
                     {...field}
+                    value={field.value ?? ""}
                     id="form-add-customer-name"
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. Acme Meats Inc."
@@ -115,102 +104,11 @@ export function AddCustomerForm() {
                 </Field>
               )}
             />
-            <Controller
-              name="street"
-              control={createForm.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-street">
-                    Street
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="form-add-customer-street"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="Street address"
-                    autoComplete="street-address"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-            <div className="flex flex-wrap gap-4">
-              <Controller
-                name="city"
-                control={createForm.control}
-                render={({ field, fieldState }) => (
-                  <Field
-                    data-invalid={fieldState.invalid}
-                    className="min-w-40 max-w-50 flex-1"
-                  >
-                    <FieldLabel htmlFor="form-add-customer-city">
-                      City
-                    </FieldLabel>
-                    <Input
-                      {...field}
-                      id="form-add-customer-city"
-                      aria-invalid={fieldState.invalid}
-                      placeholder="City"
-                      autoComplete="address-level2"
-                    />
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="state"
-                control={createForm.control}
-                render={({ field, fieldState }) => (
-                  <Field
-                    data-invalid={fieldState.invalid}
-                    className="max-w-30"
-                  >
-                    <FieldLabel htmlFor="form-add-customer-state">
-                      State
-                    </FieldLabel>
-                    <Input
-                      {...field}
-                      id="form-add-customer-state"
-                      aria-invalid={fieldState.invalid}
-                      placeholder="State"
-                      autoComplete="address-level1"
-                    />
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="zip"
-                control={createForm.control}
-                render={({ field, fieldState }) => (
-                  <Field
-                    data-invalid={fieldState.invalid}
-                    className="max-w-25"
-                  >
-                    <FieldLabel htmlFor="form-add-customer-zip">ZIP</FieldLabel>
-                    <Input
-                      {...field}
-                      id="form-add-customer-zip"
-                      aria-invalid={fieldState.invalid}
-                      placeholder="ZIP"
-                      autoComplete="postal-code"
-                    />
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-            </div>
+
+            {/* Phone */}
             <Controller
               name="phoneNumber"
-              control={createForm.control}
+              control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="form-add-customer-phone">
@@ -218,6 +116,7 @@ export function AddCustomerForm() {
                   </FieldLabel>
                   <Input
                     {...field}
+                    value={field.value ?? ""}
                     id="form-add-customer-phone"
                     type="tel"
                     aria-invalid={fieldState.invalid}
@@ -230,6 +129,225 @@ export function AddCustomerForm() {
                 </Field>
               )}
             />
+
+            {/* Fuel surcharge */}
+            <Controller
+              name="fuelSurchargeAmount"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-customer-fuel">
+                    Fuel surcharge
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    id="form-add-customer-fuel"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. 0.05"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Addresses */}
+            {fields.length > 0 && (
+              <div className="flex flex-col gap-6">
+                {fields.map((addressField, index) => (
+                  <div
+                    key={addressField.id}
+                    className="rounded-md border p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Address {index + 1}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => remove(index)}
+                        aria-label={`Remove address ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {/* Address type */}
+                    <Controller
+                      name={`addresses.${index}.addressType`}
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel htmlFor={`addresses-${index}-type`}>
+                            Type
+                          </FieldLabel>
+                          <Select
+                            value={field.value ?? "shipping"}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger
+                              id={`addresses-${index}-type`}
+                              aria-invalid={fieldState.invalid}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="shipping">Shipping</SelectItem>
+                              <SelectItem value="billing">Billing</SelectItem>
+                              <SelectItem value="warehouse">
+                                Warehouse
+                              </SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {fieldState.invalid && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
+
+                    {/* Street */}
+                    <Controller
+                      name={`addresses.${index}.street`}
+                      control={form.control}
+                      render={({ field, fieldState }) => (
+                        <Field data-invalid={fieldState.invalid}>
+                          <FieldLabel htmlFor={`addresses-${index}-street`}>
+                            Street *
+                          </FieldLabel>
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            id={`addresses-${index}-street`}
+                            aria-invalid={fieldState.invalid}
+                            placeholder="Street address"
+                            autoComplete="street-address"
+                          />
+                          {fieldState.invalid && (
+                            <FieldError errors={[fieldState.error]} />
+                          )}
+                        </Field>
+                      )}
+                    />
+
+                    {/* City / State / ZIP */}
+                    <div className="flex flex-wrap gap-3">
+                      <Controller
+                        name={`addresses.${index}.city`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field
+                            data-invalid={fieldState.invalid}
+                            className="max-w-60 flex-1"
+                          >
+                            <FieldLabel htmlFor={`addresses-${index}-city`}>
+                              City *
+                            </FieldLabel>
+                            <Input
+                              {...field}
+                              value={field.value ?? ""}
+                              id={`addresses-${index}-city`}
+                              aria-invalid={fieldState.invalid}
+                              placeholder="City"
+                              autoComplete="address-level2"
+                            />
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
+                      />
+                      <Controller
+                        name={`addresses.${index}.state`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field
+                            data-invalid={fieldState.invalid}
+                            className="max-w-40"
+                          >
+                            <FieldLabel htmlFor={`addresses-${index}-state`}>
+                              State *
+                            </FieldLabel>
+                            <Select
+                              value={field.value ?? ""}
+                              onValueChange={field.onChange}
+                            >
+                              <SelectTrigger
+                                id={`addresses-${index}-state`}
+                                aria-invalid={fieldState.invalid}
+                              >
+                                <SelectValue placeholder="State" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {US_STATES.map(s => (
+                                  <SelectItem key={s.code} value={s.code}>
+                                    {s.code} — {s.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
+                      />
+                      <Controller
+                        name={`addresses.${index}.zip`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field
+                            data-invalid={fieldState.invalid}
+                            className="max-w-28"
+                          >
+                            <FieldLabel htmlFor={`addresses-${index}-zip`}>
+                              ZIP *
+                            </FieldLabel>
+                            <Input
+                              {...field}
+                              value={field.value ?? ""}
+                              id={`addresses-${index}-zip`}
+                              aria-invalid={fieldState.invalid}
+                              placeholder="12345"
+                              autoComplete="postal-code"
+                              maxLength={5}
+                            />
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() =>
+                append({
+                  ...emptyAddress,
+                  isDefault: fields.length === 0,
+                })
+              }
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add address
+            </Button>
+
             {error && (
               <div className="text-sm text-destructive" role="alert">
                 {error}
@@ -246,12 +364,8 @@ export function AddCustomerForm() {
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="form-add-customer"
-          disabled={createCustomer.isPending}
-        >
-          {createCustomer.isPending ? "Adding..." : "Add Customer"}
+        <Button type="submit" form="form-add-customer" disabled={isPending}>
+          {isPending ? "Adding..." : "Add Customer"}
         </Button>
       </CardFooter>
     </Card>

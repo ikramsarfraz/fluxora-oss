@@ -12,6 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useBreadcrumbLabels } from "@/components/breadcrumb-label-provider";
 import { cn } from "@/lib/utils";
 
 /** Known path segments -> short labels (sidebar-aligned where possible). */
@@ -87,6 +88,7 @@ function buildCrumbs(pathname: string): Crumb[] {
 export function AppBreadcrumb() {
   const pathname = usePathname() ?? "/";
   const crumbs = buildCrumbs(pathname);
+  const { labels } = useBreadcrumbLabels();
 
   /** On small screens, show only the parent + current (last two) when the trail is longer. */
   const hideCrumbOnMobile = (i: number) =>
@@ -104,10 +106,14 @@ export function AppBreadcrumb() {
               className={cn(hideCrumbOnMobile(i) && "hidden md:inline-flex")}
             >
               {crumb.isCurrent ? (
-                <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                <BreadcrumbPage>
+                  {labels[crumb.href] ?? crumb.label}
+                </BreadcrumbPage>
               ) : (
                 <BreadcrumbLink asChild>
-                  <Link href={crumb.href}>{crumb.label}</Link>
+                  <Link href={crumb.href}>
+                    {labels[crumb.href] ?? crumb.label}
+                  </Link>
                 </BreadcrumbLink>
               )}
             </BreadcrumbItem>

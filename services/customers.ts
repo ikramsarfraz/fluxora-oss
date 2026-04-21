@@ -1,26 +1,20 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { customerAddresses, customers } from "@/db/schema";
+import type { NewCustomer, NewCustomerAddress } from "@/db/types";
+import { getCurrentTenant } from "./tenants";
 
-export async function createCustomer(input: {
-  tenantId: number;
-  name: string;
-  phoneNumber?: string;
-  fuelSurchargeAmount?: string;
-  invoicePrefix?: string;
-  address?: {
-    addressType?: "billing" | "shipping" | "warehouse" | "other";
-    street: string;
-    city?: string;
-    state?: string;
-    zip?: string;
-    isDefault?: boolean;
-  };
-}) {
+export async function createCustomer(
+  input: Omit<NewCustomer, "tenantId"> & {
+    addresses?: Omit<NewCustomerAddress, "customerId">[];
+  },
+) {
+  const tenant = await getCurrentTenant();
+
   const [customer] = await db
     .insert(customers)
     .values({
-      tenantId: input.tenantId,
+      tenantId: tenant.id,
       name: input.name,
       phoneNumber: input.phoneNumber,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
@@ -28,22 +22,24 @@ export async function createCustomer(input: {
     })
     .returning();
 
-  if (input.address) {
-    await db.insert(customerAddresses).values({
-      customerId: customer.id,
-      addressType: input.address.addressType ?? "shipping",
-      street: input.address.street,
-      city: input.address.city,
-      state: input.address.state,
-      zip: input.address.zip,
-      isDefault: input.address.isDefault ?? true,
-    });
+  if (input.addresses?.length) {
+    await db.insert(customerAddresses).values(
+      input.addresses.map((addr, i) => ({
+        customerId: customer.id,
+        addressType: addr.addressType ?? "shipping",
+        street: addr.street,
+        city: addr.city,
+        state: addr.state,
+        zip: addr.zip,
+        isDefault: addr.isDefault ?? i === 0,
+      })),
+    );
   }
 
   return customer;
 }
 
-export async function getCustomerById(customerId: number) {
+export async function getCustomerById(customerId: string) {
   const result = await db.query.customers.findFirst({
     where: eq(customers.id, customerId),
     with: {
@@ -64,6 +60,10 @@ export async function getCustomers() {
   });
 
   return result;
+}
+
+export async function deleteCustomer(customerId: string) {
+  await db.delete(customers).where(eq(customers.id, customerId));
 }
 
 /** Row shape returned by `getCustomers()` / `GET /api/customers` (for client `import type` only). */

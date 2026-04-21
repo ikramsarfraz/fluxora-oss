@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { getCustomerById } from "@/services/customers";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(
   _req: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id: idParam } = await context.params;
-    const id = Number(idParam);
+    const { id } = await context.params;
 
-    if (Number.isNaN(id)) {
+    if (!UUID_RE.test(id)) {
       return NextResponse.json(
         { error: "Invalid customer id" },
         { status: 400 },

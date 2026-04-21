@@ -14,9 +14,9 @@ export const queryKeys = {
   },
   customers: {
     all: ["customers"] as const,
-    detail: (id: number) => ["customers", id] as const,
-    portfolio: (id: number) => ["customers", id, "portfolio"] as const,
-    prices: (id: number) => ["customers", id, "prices"] as const,
+    detail: (id: string) => ["customers", id] as const,
+    portfolio: (id: string) => ["customers", id, "portfolio"] as const,
+    prices: (id: string) => ["customers", id, "prices"] as const,
   },
   suppliers: {
     all: ["suppliers"] as const,
