@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Plus } from "lucide-react";
+import { toast } from "sonner";
 
 import { api, endpoints, type Product, type UnitOfMeasure } from "@/lib/api";
 import { generateSku } from "./product-sku-utils";
@@ -27,17 +28,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+} from "@/components/ui/combobox";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
   addProductFormSchema,
   type AddProductFormValues,
 } from "./add-product-form.schema";
+import { useProductCategories } from "@/hooks/use-product-categories";
+import type { ProductCategory } from "@/services/products";
+import {
+  createCategoryAction,
+  createProductAction,
+} from "@/app/(app)/products/product.actions";
+import { queryKeys } from "@/lib/query/keys";
 
 const defaultForm: AddProductFormValues = {
   sku: "",
   name: "",
-  species: "",
+  categoryIds: [],
   stockUnitId: "",
   purchaseUnitId: "",
   salesUnitId: "",
@@ -47,19 +77,97 @@ function formatUomOption(u: UnitOfMeasure): string {
   return u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name;
 }
 
+// ---------------------------------------------------------------------------
+// New-category dialog
+// ---------------------------------------------------------------------------
+function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleCreate() {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Name is required.");
+      return;
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const category = await createCategoryAction(trimmed);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.all,
+      });
+      onCreated(category.id);
+      toast.success(`Category "${category.name}" created.`);
+      setName("");
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create category.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          New category
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>New category</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 py-2">
+          <Input
+            id="new-category-name"
+            placeholder="e.g. Beef, Seafood, Poultry…"
+            value={name}
+            onChange={e => {
+              setName(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={e => e.key === "Enter" && handleCreate()}
+            autoFocus
+          />
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={handleCreate} disabled={pending}>
+            {pending ? "Creating…" : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main form
+// ---------------------------------------------------------------------------
 export function AddProductForm() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
-  /** Keeps Select on "Other…" while the category text is still empty. */
-  const [speciesEntryMode, setSpeciesEntryMode] = useState<"list" | "custom">(
-    "list",
-  );
 
   const form = useForm<AddProductFormValues>({
     resolver: zodResolver(addProductFormSchema),
     defaultValues: defaultForm,
   });
+
+  const { data: productCategories } = useProductCategories();
 
   const { data: products } = useQuery({
     queryKey: ["products"],
@@ -81,62 +189,38 @@ export function AddProductForm() {
     [unitsOfMeasure],
   );
 
-  const createProduct = useMutation({
-    mutationFn: (body: {
-      sku: string;
-      name: string;
-      species: string;
-      stock_unit_id?: number | null;
-      purchase_unit_id?: number | null;
-      sales_unit_id?: number | null;
-    }) => api.post<Product>(endpoints.products.create(), body),
-    onSuccess: () => {
+  async function onSubmit(data: AddProductFormValues) {
+    setMutationError(null);
+    try {
+      let sku = data.sku.trim();
+      if (!sku) {
+        const firstCat = productCategories?.find(
+          c => c.id === data.categoryIds[0],
+        );
+        sku = generateSku(data.name, firstCat?.name ?? "", products);
+        form.setValue("sku", sku);
+      }
+      await createProductAction({
+        sku,
+        name: data.name,
+        categoryIds: data.categoryIds,
+        stockUnitId: data.stockUnitId || null,
+        purchaseUnitId: data.purchaseUnitId || null,
+        salesUnitId: data.salesUnitId || null,
+      });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
-      queryClient.refetchQueries({ queryKey: ["price-chart"] });
       form.reset(defaultForm);
-      setSpeciesEntryMode("list");
       setMutationError(null);
       router.push("/products");
-    },
-    onError: (e: Error) => setMutationError(e.message),
-  });
-
-  function onSubmit(data: AddProductFormValues) {
-    setMutationError(null);
-    let sku = data.sku.trim();
-    const name = data.name.trim();
-    const species = data.species.trim();
-    if (!sku) {
-      sku = generateSku(name, species, products);
-      form.setValue("sku", sku);
+    } catch (e) {
+      setMutationError(
+        e instanceof Error ? e.message : "Failed to add product.",
+      );
     }
-    const payload: {
-      sku: string;
-      name: string;
-      species: string;
-      stock_unit_id?: number | null;
-      purchase_unit_id?: number | null;
-      sales_unit_id?: number | null;
-    } = { sku, name, species };
-    if (data.stockUnitId)
-      payload.stock_unit_id = parseInt(data.stockUnitId, 10);
-    if (data.purchaseUnitId)
-      payload.purchase_unit_id = parseInt(data.purchaseUnitId, 10);
-    if (data.salesUnitId)
-      payload.sales_unit_id = parseInt(data.salesUnitId, 10);
-    createProduct.mutate(payload);
   }
 
-  const categoryOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        (products ?? [])
-          .map(p => (p.species ?? "").trim())
-          .filter(s => s.length > 0),
-      ),
-    ).sort((a, b) => a.localeCompare(b));
-  }, [products]);
+  const isPending = form.formState.isSubmitting;
 
   return (
     <Card className="w-full max-w-xl">
@@ -170,19 +254,22 @@ export function AddProductForm() {
                         size="sm"
                         onClick={() => {
                           const name = form.getValues("name").trim();
-                          const species = form.getValues("species").trim();
-                          if (!name || !species) {
+                          const ids = form.getValues("categoryIds");
+                          const firstCat = productCategories?.find(
+                            c => c.id === ids[0],
+                          );
+                          if (!name || !firstCat) {
                             form.setError("sku", {
                               type: "manual",
                               message:
-                                "Enter name and category before generating a SKU.",
+                                "Enter name and select a category before generating a SKU.",
                             });
                             return;
                           }
                           form.clearErrors("sku");
                           form.setValue(
                             "sku",
-                            generateSku(name, species, products),
+                            generateSku(name, firstCat.name, products),
                           );
                         }}
                       >
@@ -217,88 +304,62 @@ export function AddProductForm() {
               />
             </div>
 
+            {/* Categories — multi-select combobox */}
             <Controller
-              name="species"
+              name="categoryIds"
               control={form.control}
               render={({ field, fieldState }) => {
-                const inList = categoryOptions.includes(field.value);
-                const selectValue =
-                  field.value === "" && speciesEntryMode === "custom"
-                    ? "__custom__"
-                    : field.value === ""
-                      ? "__none__"
-                      : inList
-                        ? field.value
-                        : "__custom__";
-                const showCustomCategoryInput =
-                  categoryOptions.length > 0 &&
-                  (!inList ||
-                    (speciesEntryMode === "custom" && field.value === ""));
+                const selectedCats = (productCategories ?? []).filter(c =>
+                  field.value.includes(c.id),
+                );
 
                 return (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="form-add-product-species">
-                      Category *
-                    </FieldLabel>
-                    {categoryOptions.length === 0 ? (
-                      <Input
-                        {...field}
-                        id="form-add-product-species"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="e.g. Chicken, Beef, Seafood..."
+                    <div className="flex items-center justify-between gap-2">
+                      <FieldLabel>Categories *</FieldLabel>
+                      <NewCategoryDialog
+                        onCreated={id => field.onChange([...field.value, id])}
                       />
-                    ) : (
-                      <>
-                        <Select
-                          value={selectValue}
-                          onValueChange={v => {
-                            if (v === "__none__") {
-                              setSpeciesEntryMode("list");
-                              field.onChange("");
-                            } else if (v === "__custom__") {
-                              setSpeciesEntryMode("custom");
-                              field.onChange("");
-                            } else {
-                              setSpeciesEntryMode("list");
-                              field.onChange(v);
-                            }
-                          }}
-                        >
-                          <SelectTrigger
-                            id="form-add-product-species"
-                            aria-invalid={fieldState.invalid}
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              Select category…
-                            </SelectItem>
-                            {categoryOptions.map(cat => (
-                              <SelectItem key={cat} value={cat}>
-                                {cat}
-                              </SelectItem>
-                            ))}
-                            <SelectItem value="__custom__">Other…</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {showCustomCategoryInput ? (
-                          <Input
-                            id="form-add-product-species-custom"
-                            aria-invalid={fieldState.invalid}
-                            placeholder="e.g. Chicken, Beef, Seafood..."
-                            value={field.value}
-                            onChange={e => {
-                              const v = e.target.value;
-                              field.onChange(v);
-                              if (categoryOptions.includes(v))
-                                setSpeciesEntryMode("list");
-                            }}
-                          />
-                        ) : null}
-                      </>
-                    )}
+                    </div>
+
+                    <Combobox
+                      multiple
+                      items={productCategories ?? []}
+                      value={selectedCats}
+                      onValueChange={(cats: ProductCategory[]) =>
+                        field.onChange(cats.map(c => c.id))
+                      }
+                    >
+                      <ComboboxTrigger
+                        render={
+                          <ComboboxChips>
+                            <ComboboxValue>
+                              {selectedCats.map(item => (
+                                <ComboboxChip key={item.id}>
+                                  {item.name}
+                                </ComboboxChip>
+                              ))}
+                            </ComboboxValue>
+                            <ComboboxChipsInput placeholder="Add category" />
+                          </ComboboxChips>
+                        }
+                      />
+                      <ComboboxContent>
+                        <ComboboxInput
+                          showTrigger={false}
+                          placeholder="Search categories…"
+                        />
+                        <ComboboxEmpty>No categories found.</ComboboxEmpty>
+                        <ComboboxList>
+                          {(item: ProductCategory) => (
+                            <ComboboxItem key={item.id} value={item}>
+                              {item.name}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+
                     {fieldState.invalid && (
                       <FieldError errors={[fieldState.error]} />
                     )}
@@ -439,12 +500,8 @@ export function AddProductForm() {
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
-          form="form-add-product"
-          disabled={createProduct.isPending}
-        >
-          {createProduct.isPending ? "Adding…" : "Add product"}
+        <Button type="submit" form="form-add-product" disabled={isPending}>
+          {isPending ? "Adding…" : "Add product"}
         </Button>
       </CardFooter>
     </Card>

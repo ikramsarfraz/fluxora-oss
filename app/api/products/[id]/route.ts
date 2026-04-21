@@ -7,14 +7,7 @@ export async function GET(
 ) {
   try {
     const { id: idParam } = await context.params;
-    const id = Number(idParam);
-
-    if (Number.isNaN(id)) {
-      return NextResponse.json(
-        { error: "Invalid product id" },
-        { status: 400 },
-      );
-    }
+    const id = idParam;
 
     const product = await getProductById(id);
 

@@ -1,4 +1,7 @@
 export const queryKeys = {
+  categories: {
+    all: ["categories"] as const,
+  },
   auth: {
     me: ["auth", "me"] as const,
   },

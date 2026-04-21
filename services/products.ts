@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { products } from "@/db/schema";
+import { categories, productCategories, products } from "@/db/schema";
+import { getCurrentTenant } from "./tenants";
 
 // export async function createCustomer(input: {
 //   name: string;
@@ -41,7 +42,7 @@ import { products } from "@/db/schema";
 //   return customer;
 // }
 
-export async function getProductById(productId: number) {
+export async function getProductById(productId: string) {
   const result = await db.query.products.findFirst({
     where: eq(products.id, productId),
   });
@@ -50,10 +51,89 @@ export async function getProductById(productId: number) {
 }
 
 export async function getProducts() {
-  const result = await db.query.products.findMany();
+  const tenant = await getCurrentTenant();
+  const result = await db.query.products.findMany({
+    where: eq(products.tenantId, tenant.id),
+    with: {
+      productCategories: {
+        with: { category: true },
+      },
+    },
+  });
 
-  return result;
+  return result ?? [];
+}
+
+export async function getProductCategories() {
+  const tenant = await getCurrentTenant();
+  const result = await db.query.categories.findMany({
+    where: eq(categories.tenantId, tenant.id),
+  });
+  return result ?? [];
+}
+
+export async function createCategory(name: string) {
+  const tenant = await getCurrentTenant();
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+  const [row] = await db
+    .insert(categories)
+    .values({ tenantId: tenant.id, name: name.trim(), slug })
+    .returning();
+
+  return row;
+}
+
+export async function createProduct(input: {
+  sku: string;
+  name: string;
+  categoryIds: string[];
+  stockUnitId?: string | null;
+  purchaseUnitId?: string | null;
+  salesUnitId?: string | null;
+}) {
+  const tenant = await getCurrentTenant();
+
+  if (input.categoryIds.length > 0) {
+    const validCategories = await db.query.categories.findMany({
+      where: inArray(categories.id, input.categoryIds),
+    });
+    const invalidIds = input.categoryIds.filter(
+      id => !validCategories.some(c => c.id === id && c.tenantId === tenant.id),
+    );
+    if (invalidIds.length > 0) {
+      throw new Error("One or more category IDs are invalid.");
+    }
+  }
+
+  const [product] = await db
+    .insert(products)
+    .values({
+      tenantId: tenant.id,
+      sku: input.sku.trim(),
+      name: input.name.trim(),
+      defaultPricePerLb: "0",
+    })
+    .returning();
+
+  if (input.categoryIds.length > 0) {
+    await db.insert(productCategories).values(
+      input.categoryIds.map(categoryId => ({
+        productId: product.id,
+        categoryId,
+      })),
+    );
+  }
+
+  return product;
 }
 
 /** Row shape returned by `getProducts()` / `GET /api/products` (for client `import type` only). */
 export type ProductListItem = Awaited<ReturnType<typeof getProducts>>[number];
+export type ProductCategory = Awaited<
+  ReturnType<typeof getProductCategories>
+>[number];

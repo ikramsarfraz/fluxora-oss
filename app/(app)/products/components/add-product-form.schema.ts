@@ -4,7 +4,7 @@ export const addProductFormSchema = z
   .object({
     sku: z.string(),
     name: z.string().trim(),
-    species: z.string().trim(),
+    categoryIds: z.array(z.string()).min(1, "Select at least one category."),
     stockUnitId: z.string(),
     purchaseUnitId: z.string(),
     salesUnitId: z.string(),
@@ -13,15 +13,8 @@ export const addProductFormSchema = z
     if (!data.name) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Please enter name and category.",
+        message: "Product name is required.",
         path: ["name"],
-      });
-    }
-    if (!data.species) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Please enter name and category.",
-        path: ["species"],
       });
     }
   });

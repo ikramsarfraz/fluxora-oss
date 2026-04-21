@@ -6,6 +6,7 @@ import { ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,7 +71,8 @@ function ActionsCell({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete product</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{product.name}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{product.name}&quot;? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -91,7 +93,9 @@ function ActionsCell({
   );
 }
 
-export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem>[] {
+export function createColumns(
+  actions: ColumnActions,
+): ColumnDef<ProductListItem>[] {
   return [
     {
       accessorKey: "sku",
@@ -135,12 +139,18 @@ export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem
       ),
     },
     {
-      accessorKey: "species",
-      header: "Species",
+      accessorKey: "Category",
+      header: "Categories",
       cell: ({ row }) => {
-        const species = row.getValue("species") as string | null;
-        return species ? (
-          <span>{species}</span>
+        const categories = row.original.productCategories;
+        return categories.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {categories.map(c => (
+              <Badge key={c.category.id} variant="secondary">
+                {c.category.name}
+              </Badge>
+            ))}
+          </div>
         ) : (
           <span className="text-muted-foreground">-</span>
         );
@@ -154,7 +164,11 @@ export function createColumns(actions: ColumnActions): ColumnDef<ProductListItem
         if (!price) {
           return <div className="text-right text-muted-foreground">-</div>;
         }
-        return <div className="text-right tabular-nums font-medium">{formatMoney(price)}</div>;
+        return (
+          <div className="text-right tabular-nums font-medium">
+            {formatMoney(price)}
+          </div>
+        );
       },
     },
     {

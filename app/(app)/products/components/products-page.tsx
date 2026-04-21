@@ -17,7 +17,12 @@ import { DataTable } from "./data-table";
 import type { ProductListItem } from "@/services/products";
 
 export default function Products() {
-  const { data: products, isLoading, error: loadError, refetch } = useProducts();
+  const {
+    data: products,
+    isLoading,
+    error: loadError,
+    refetch,
+  } = useProducts();
   const deleteProduct = useDeleteProduct();
 
   const columns = useMemo(
@@ -27,7 +32,7 @@ export default function Products() {
           deleteProduct.mutate(product.id);
         },
       }),
-    [deleteProduct]
+    [deleteProduct],
   );
 
   if (isLoading) {
