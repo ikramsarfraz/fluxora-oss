@@ -8,6 +8,13 @@
       "when": 1776790879079,
       "tag": "0000_heavy_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776809959978,
+      "tag": "0001_add_sales_order_notes",
+      "breakpoints": true
     }
   ]
 }

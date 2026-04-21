@@ -6,6 +6,7 @@ import {
   deleteSalesOrder,
   getSalesOrderById,
   getSalesOrders,
+  updateSalesOrderNotes,
 } from "@/services/orders";
 
 export async function getSalesOrdersAction() {
@@ -30,4 +31,10 @@ export async function allocateInventoryToSalesOrderLineAction(
   input: Parameters<typeof allocateInventoryToSalesOrderLine>[0],
 ) {
   return await allocateInventoryToSalesOrderLine(input);
+}
+
+export async function updateSalesOrderNotesAction(
+  input: Parameters<typeof updateSalesOrderNotes>[0],
+) {
+  return await updateSalesOrderNotes(input);
 }

@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import { getActivityForSalesOrder } from "@/services/audit";
 import { getSalesOrderById, getSalesOrders } from "@/services/orders";
 
 import { OrderDetailPage } from "../components/order-detail-page";
@@ -32,12 +33,20 @@ export default async function OrderDetailRoute({
     notFound();
   }
 
-  await queryClient
-    .prefetchQuery({
-      queryKey: queryKeys.salesOrders.all,
-      queryFn: getSalesOrders,
-    })
-    .catch(() => {});
+  await Promise.all([
+    queryClient
+      .prefetchQuery({
+        queryKey: queryKeys.salesOrders.all,
+        queryFn: getSalesOrders,
+      })
+      .catch(() => {}),
+    queryClient
+      .prefetchQuery({
+        queryKey: queryKeys.salesOrders.activity(id),
+        queryFn: () => getActivityForSalesOrder(id),
+      })
+      .catch(() => {}),
+  ]);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

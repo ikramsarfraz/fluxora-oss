@@ -868,6 +868,8 @@ export const salesOrders = pgTable(
     dueDate: date("due_date"),
     status: orderStatusEnum("status").notNull().default("sales_order"),
     addFuelSurcharge: boolean("add_fuel_surcharge").notNull().default(true),
+    customerNotes: text("customer_notes"),
+    internalNotes: text("internal_notes"),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),

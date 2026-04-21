@@ -6,6 +6,7 @@ import {
   deleteSalesOrderAction,
   getSalesOrderByIdAction,
   getSalesOrdersAction,
+  updateSalesOrderNotesAction,
 } from "@/actions/orders";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -44,6 +45,23 @@ export function useDeleteSalesOrder() {
   return useMutation({
     mutationFn: deleteSalesOrderAction,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
+    },
+  });
+}
+
+export function useUpdateSalesOrderNotes() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateSalesOrderNotesAction,
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.activity(variables.id),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
     },
   });

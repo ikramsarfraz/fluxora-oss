@@ -2,13 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { useDeleteSalesOrder, useSalesOrder } from "@/hooks/use-orders";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { formatMoney } from "@/lib/utils/currency";
-import { orderStatusLabel } from "@/lib/utils/status-labels";
-import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
   DetailField,
@@ -16,8 +13,6 @@ import {
 } from "@/components/detail-section";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,24 +22,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
-const STATUS_VARIANT: Record<
-  string,
-  "default" | "secondary" | "outline" | "destructive"
-> = {
-  sales_order: "outline",
-  confirmed: "secondary",
-  fulfilled: "default",
-  cancelled: "destructive",
-};
-
-const UNIT_TYPE_LABELS: Record<string, string> = {
-  catch_weight: "Catch weight",
-  fixed_case: "Fixed case",
-};
+import { OrderActivityTimeline } from "./order-activity-timeline";
+import { OrderFinancialSummary } from "./order-financial-summary";
+import { OrderFulfillmentSection } from "./order-fulfillment-section";
+import { OrderHeader } from "./order-header";
+import { OrderLinesTable } from "./order-lines-table";
+import { OrderNotesSection } from "./order-notes-section";
+import { OrderPipeline } from "./order-pipeline";
 
 export function OrderDetailPage({ orderId }: { orderId: string }) {
   const router = useRouter();
@@ -56,25 +43,22 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   } = useSalesOrder(orderId);
 
   const deleteOrder = useDeleteSalesOrder();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const title = order?.orderNumber ?? (order ? order.id.slice(0, 8) : "");
   useSetBreadcrumbLabel(`/orders/${orderId}`, title || undefined);
 
-  const lineTotal = useMemo(() => {
-    if (!order?.lines) return null;
-    let total = 0;
-    let hasPrice = false;
-    for (const line of order.lines) {
-      const price = line.pricePerLbOverride
-        ? parseFloat(line.pricePerLbOverride)
-        : NaN;
-      const weight = parseFloat(line.totalBilledWeightLbs ?? "0");
-      if (Number.isFinite(price) && Number.isFinite(weight) && weight > 0) {
-        total += price * weight;
-        hasPrice = true;
-      }
+  const invoiceSummary = useMemo(() => {
+    const invoices = order?.invoices ?? [];
+    const hasInvoice = invoices.length > 0;
+    let totalBalance = 0;
+    let totalAmount = 0;
+    for (const inv of invoices) {
+      totalBalance += parseFloat(inv.balanceDue ?? "0") || 0;
+      totalAmount += parseFloat(inv.totalAmount ?? "0") || 0;
     }
-    return hasPrice ? total : null;
+    const isPaid = hasInvoice && totalAmount > 0 && totalBalance <= 0;
+    return { hasInvoice, isPaid };
   }, [order]);
 
   if (isLoading) return <PageLoading message="Loading order..." />;
@@ -86,17 +70,22 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     );
 
   const lines = order.lines ?? [];
+  const { hasInvoice, isPaid } = invoiceSummary;
 
   return (
     <div className="flex flex-col gap-6">
-      <DetailPageHeader
-        title={title}
-        description="Sales order details, fulfillment status, and line items."
-        badge={
-          <Badge variant={STATUS_VARIANT[order.status] ?? "outline"}>
-            {orderStatusLabel(order.status)}
-          </Badge>
-        }
+      <OrderHeader
+        order={order}
+        hasInvoice={hasInvoice}
+        isPaid={isPaid}
+        actions={{
+          onDelete: hasInvoice ? undefined : () => setDeleteOpen(true),
+        }}
+      />
+      <OrderPipeline
+        status={order.status}
+        hasInvoice={hasInvoice}
+        isPaid={isPaid}
       />
 
       <DetailSection
@@ -146,144 +135,74 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         title="Line items"
         description={
           lines.length
-            ? `${lines.length} line item${lines.length === 1 ? "" : "s"}.`
+            ? `${lines.length} line item${lines.length === 1 ? "" : "s"}. Expand a row to see per-case weights and inventory allocations.`
             : "No line items on this order."
         }
       >
-        {lines.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="py-2 pr-4 text-left font-medium">Product</th>
-                  <th className="py-2 pr-4 text-left font-medium">Unit type</th>
-                  <th className="py-2 pr-4 text-right font-medium">
-                    Cases (fulfilled / expected)
-                  </th>
-                  <th className="py-2 pr-4 text-right font-medium">
-                    Billed weight (lbs)
-                  </th>
-                  <th className="py-2 pr-4 text-right font-medium">
-                    Price / lb
-                  </th>
-                  <th className="py-2 text-right font-medium">Line total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {lines.map(line => {
-                  const price = line.pricePerLbOverride
-                    ? parseFloat(line.pricePerLbOverride)
-                    : NaN;
-                  const weight = parseFloat(line.totalBilledWeightLbs ?? "0");
-                  const total =
-                    Number.isFinite(price) && Number.isFinite(weight)
-                      ? price * weight
-                      : null;
-                  return (
-                    <tr key={line.id}>
-                      <td className="py-2 pr-4">
-                        {line.product ? (
-                          <Link
-                            href={`/products/${line.product.id}`}
-                            className="hover:underline"
-                          >
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {line.product.sku}
-                            </span>{" "}
-                            <span>{line.product.name}</span>
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <Badge variant="outline" className="text-xs">
-                          {UNIT_TYPE_LABELS[line.unitType] ?? line.unitType}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        {line.fulfilledCases} / {line.expectedCases}
-                      </td>
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        {Number(line.totalBilledWeightLbs ?? 0).toFixed(2)}
-                      </td>
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        {Number.isFinite(price) ? (
-                          `${formatMoney(price)}/lb`
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right tabular-nums font-medium">
-                        {total != null ? (
-                          formatMoney(total)
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {lineTotal != null ? (
-                <tfoot>
-                  <tr className="border-t">
-                    <td
-                      colSpan={5}
-                      className="py-2 pr-4 text-right text-muted-foreground"
-                    >
-                      Subtotal
-                    </td>
-                    <td className="py-2 text-right tabular-nums font-semibold">
-                      {formatMoney(lineTotal)}
-                    </td>
-                  </tr>
-                </tfoot>
-              ) : null}
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No line items yet.</p>
-        )}
+        <OrderLinesTable lines={lines} />
       </DetailSection>
 
       <DetailSection
-        title="Danger Zone"
-        description="Irreversible actions for this order."
-        className="border-destructive/50"
+        title="Fulfillment"
+        description="Warehouse progress, captured weight, and box allocations."
       >
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline">
-              Delete order
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete sales order?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete <strong>{title}</strong> and
-                release any allocated inventory back to stock. This action
-                cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={deleteOrder.isPending}
-                onClick={() => {
-                  deleteOrder.mutate(orderId, {
-                    onSuccess: () => router.push("/orders"),
-                  });
-                }}
-              >
-                {deleteOrder.isPending ? "Deleting…" : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <OrderFulfillmentSection order={order} />
       </DetailSection>
+
+      <DetailSection
+        title="Financial summary"
+        description={
+          hasInvoice
+            ? "Invoiced totals, payments received, and outstanding balance."
+            : "Estimated totals based on current line items and customer settings."
+        }
+      >
+        <OrderFinancialSummary order={order} />
+      </DetailSection>
+
+      <DetailSection
+        title="Notes"
+        description="Customer-facing notes appear on the invoice. Internal notes stay private."
+      >
+        <OrderNotesSection
+          order={order}
+          disabled={order.status === "cancelled"}
+        />
+      </DetailSection>
+
+      <DetailSection
+        title="Activity"
+        description="Everything that has happened on this order, its line items, invoices, and payments."
+      >
+        <OrderActivityTimeline orderId={orderId} />
+      </DetailSection>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete sales order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{title}</strong> and release
+              any allocated inventory back to stock. This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteOrder.isPending}
+              onClick={() => {
+                deleteOrder.mutate(orderId, {
+                  onSuccess: () => router.push("/orders"),
+                });
+              }}
+            >
+              {deleteOrder.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

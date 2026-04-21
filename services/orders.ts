@@ -7,6 +7,7 @@ import {
   salesOrderLines,
   salesOrders,
 } from "@/db/schema";
+import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
 
 /** Short human-readable suffix. Prefix (if any) is applied downstream per-customer. */
@@ -37,16 +38,31 @@ export async function getSalesOrderById(id: string) {
     where: and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)),
     with: {
       customer: true,
+      createdBy: true,
+      updatedBy: true,
       lines: {
         with: {
           product: true,
-          allocations: true,
+          allocations: {
+            with: {
+              inventoryItem: true,
+            },
+          },
+        },
+      },
+      invoices: {
+        with: {
+          payments: true,
         },
       },
     },
   });
   return result ?? null;
 }
+
+export type SalesOrderDetail = NonNullable<
+  Awaited<ReturnType<typeof getSalesOrderById>>
+>;
 
 export async function deleteSalesOrder(id: string) {
   const tenant = await getCurrentTenant();
@@ -55,12 +71,36 @@ export async function deleteSalesOrder(id: string) {
     .where(and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)));
 }
 
+export async function updateSalesOrderNotes(input: {
+  id: string;
+  customerNotes?: string | null;
+  internalNotes?: string | null;
+}) {
+  const tenant = await getCurrentTenant();
+  const updates: Partial<typeof salesOrders.$inferInsert> = {};
+  if (input.customerNotes !== undefined) {
+    updates.customerNotes = input.customerNotes;
+  }
+  if (input.internalNotes !== undefined) {
+    updates.internalNotes = input.internalNotes;
+  }
+  if (Object.keys(updates).length === 0) return;
+  await db
+    .update(salesOrders)
+    .set(updates)
+    .where(
+      and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
+    );
+}
+
 export async function createSalesOrder(input: {
   customerId: string;
-  createdByUserId: string;
   orderDate: string;
   dueDate?: string;
   addFuelSurcharge?: boolean;
+  status?: "sales_order" | "confirmed";
+  customerNotes?: string;
+  internalNotes?: string;
   lines: Array<{
     productId: string;
     expectedCases: number;
@@ -69,6 +109,12 @@ export async function createSalesOrder(input: {
   }>;
 }) {
   const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+
   const [order] = await db
     .insert(salesOrders)
     .values({
@@ -77,9 +123,11 @@ export async function createSalesOrder(input: {
       orderDate: input.orderDate,
       dueDate: input.dueDate,
       addFuelSurcharge: input.addFuelSurcharge ?? true,
-      createdByUserId: input.createdByUserId,
-      updatedByUserId: input.createdByUserId,
-      status: "sales_order",
+      customerNotes: input.customerNotes,
+      internalNotes: input.internalNotes,
+      createdByUserId: currentUser.id,
+      updatedByUserId: currentUser.id,
+      status: input.status ?? "sales_order",
     })
     .returning();
 

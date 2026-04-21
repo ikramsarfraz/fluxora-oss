@@ -111,6 +111,24 @@ export async function getUserByAuthUserId(authUserId: string) {
 }
 
 /**
+ * Returns the portal user for the current session. Throws if unauthenticated
+ * or if the auth user has no matching `portal_users` row.
+ */
+export async function getCurrentPortalUser() {
+  const session = await auth.api.getSession({
+    headers: await headers(),
+  });
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+  const portalUser = await getUserByAuthUserId(session.user.id);
+  if (!portalUser) {
+    throw new Error("Portal user not found");
+  }
+  return portalUser;
+}
+
+/**
  * Current session user must be an admin (`portal_users.role === "admin" || portal_users.role === "owner"`).
  */
 export async function requireAdminPortalUser() {
