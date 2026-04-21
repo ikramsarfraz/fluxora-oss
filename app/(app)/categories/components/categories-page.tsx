@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { Plus, Ruler } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
@@ -12,30 +12,27 @@ import { EmptyState } from "@/components/empty-state";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
-import {
-  useUnitsOfMeasure,
-  useDeleteUnitOfMeasure,
-} from "@/hooks/use-units-of-measure";
+import { useCategories, useDeleteCategory } from "@/hooks/use-categories";
 
-export default function UnitsOfMeasure() {
+export default function Categories() {
   const {
-    data: units,
+    data: categories,
     isLoading,
     error: loadError,
     refetch,
-  } = useUnitsOfMeasure();
-  const deleteUnit = useDeleteUnitOfMeasure();
+  } = useCategories();
+  const deleteCategory = useDeleteCategory();
 
   const columns = useMemo(
     () =>
       createColumns({
-        onDelete: unit => deleteUnit.mutate(unit.id),
+        onDelete: category => deleteCategory.mutate(category.id),
       }),
-    [deleteUnit],
+    [deleteCategory],
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading units of measure..." />;
+    return <PageLoading message="Loading categories..." />;
   }
 
   if (loadError) {
@@ -47,40 +44,48 @@ export default function UnitsOfMeasure() {
     );
   }
 
-  const hasUnits = units && units.length > 0;
+  const hasCategories = categories && categories.length > 0;
 
   return (
     <>
       <section className="flex flex-col gap-6" aria-labelledby="uom-heading">
         <PageHeader
-          title="Units of Measure"
+          title="Categories"
           description="Define the units you use for inventory, purchasing, and sales (lb, case, each, etc.)."
         >
           <Button asChild>
-            <Link href="/units-of-measure/new">
+            <Link href="/categories/new">
               <Plus className="size-4" />
-              <span className="hidden sm:inline">Add Unit</span>
+              <span className="hidden sm:inline">Add Category</span>
             </Link>
           </Button>
         </PageHeader>
 
-        {hasUnits ? (
-          <DataTable columns={columns} data={units} />
+        {hasCategories ? (
+          <DataTable columns={columns} data={categories} />
         ) : (
           <EmptyState
-            icon={Ruler}
-            title="No units of measure yet"
-            description="Get started by adding your first unit of measure like 'lb', 'case', or 'each'."
+            icon={Package}
+            title="No categories yet"
+            description="Get started by adding your first category."
           >
             <Button asChild>
-              <Link href="/units-of-measure/new">
+              <Link href="/categories/new">
                 <Plus className="size-4" />
-                Add Unit
+                Add Category
               </Link>
             </Button>
           </EmptyState>
         )}
       </section>
+
+      {/* <EditUnitDialog
+        unit={editingUnit}
+        open={!!editingUnit}
+        onOpenChange={(open) => {
+          if (!open) setEditingUnit(null);
+        }}
+      /> */}
     </>
   );
 }

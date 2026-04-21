@@ -1,6 +1,7 @@
 export const queryKeys = {
   categories: {
     all: ["categories"] as const,
+    detail: (id: string) => ["categories", id] as const,
   },
   auth: {
     me: ["auth", "me"] as const,
@@ -27,11 +28,11 @@ export const queryKeys = {
   },
   products: {
     all: ["products"] as const,
-    detail: (id: number) => ["products", id] as const,
+    detail: (id: string) => ["products", id] as const,
   },
   unitsOfMeasure: {
     all: ["unitsOfMeasure"] as const,
-    detail: (id: number) => ["unitsOfMeasure", id] as const,
+    detail: (id: string) => ["unitsOfMeasure", id] as const,
   },
   salesOrders: {
     all: ["sales-orders"] as const,

@@ -123,6 +123,14 @@ export const auditActorTypeEnum = pgEnum("audit_actor_type", [
   "system",
 ]);
 
+export const productUnitPurposeEnum = pgEnum("product_unit_purpose", [
+  "stock",
+  "purchase",
+  "sales",
+  "pricing",
+  "display",
+]);
+
 // -------------------- Core multi-tenant/auth-adjacent --------------------
 
 export const tenants = pgTable(
@@ -525,14 +533,7 @@ export const products = pgTable(
       precision: 10,
       scale: 4,
     }).notNull(),
-    stockUnitId: uuid("stock_unit_id").references(() => unitsOfMeasure.id, {
-      onDelete: "set null",
-    }),
-    purchaseUnitId: uuid("purchase_unit_id").references(
-      () => unitsOfMeasure.id,
-      { onDelete: "set null" },
-    ),
-    salesUnitId: uuid("sales_unit_id").references(() => unitsOfMeasure.id, {
+    baseUnitId: uuid("base_unit_id").references(() => unitsOfMeasure.id, {
       onDelete: "set null",
     }),
     createdByUserId: uuid("created_by_user_id").references(
@@ -566,9 +567,7 @@ export const products = pgTable(
     uniqueIndex("products_tenant_sku_unique").on(table.tenantId, table.sku),
     index("products_tenant_id_idx").on(table.tenantId),
     index("products_name_idx").on(table.name),
-    index("products_stock_unit_id_idx").on(table.stockUnitId),
-    index("products_purchase_unit_id_idx").on(table.purchaseUnitId),
-    index("products_sales_unit_id_idx").on(table.salesUnitId),
+    index("products_base_unit_id_idx").on(table.baseUnitId),
     index("products_archived_at_idx").on(table.archivedAt),
   ],
 );
@@ -593,6 +592,51 @@ export const productCategories = pgTable(
     }),
     index("product_categories_product_id_idx").on(table.productId),
     index("product_categories_category_id_idx").on(table.categoryId),
+  ],
+);
+
+export const productUnits = pgTable(
+  "product_units",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+
+    unitId: uuid("unit_id")
+      .notNull()
+      .references(() => unitsOfMeasure.id, { onDelete: "restrict" }),
+
+    purpose: productUnitPurposeEnum("purpose").notNull(),
+
+    isDefault: boolean("is_default").notNull().default(false),
+
+    conversionToBase: numeric("conversion_to_base", {
+      precision: 12,
+      scale: 4,
+    }).notNull(),
+
+    allowsFractional: boolean("allows_fractional").notNull().default(true),
+
+    sortOrder: integer("sort_order").notNull().default(0),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("product_units_product_id_idx").on(table.productId),
+    index("product_units_unit_id_idx").on(table.unitId),
+    index("product_units_product_purpose_idx").on(
+      table.productId,
+      table.purpose,
+    ),
+    uniqueIndex("product_units_product_unit_purpose_unique").on(
+      table.productId,
+      table.unitId,
+      table.purpose,
+    ),
   ],
 );
 

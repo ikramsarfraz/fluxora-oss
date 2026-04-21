@@ -2,18 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useState } from "react";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { api, endpoints, type Product, type UnitOfMeasure } from "@/lib/api";
 import { generateSku } from "./product-sku-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -30,6 +30,9 @@ import {
 } from "@/components/ui/select";
 import {
   Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
   ComboboxContent,
   ComboboxEmpty,
   ComboboxInput,
@@ -37,11 +40,7 @@ import {
   ComboboxList,
   ComboboxTrigger,
   ComboboxValue,
-  ComboboxChip,
-  ComboboxChips,
-  ComboboxChipsInput,
 } from "@/components/ui/combobox";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -54,26 +53,51 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
   addProductFormSchema,
+  productUnitPurposeValues,
   type AddProductFormValues,
+  type ProductUnitFormValue,
 } from "./add-product-form.schema";
 import { useProductCategories } from "@/hooks/use-product-categories";
 import type { ProductCategory } from "@/services/products";
-import {
-  createCategoryAction,
-  createProductAction,
-} from "@/app/(app)/products/product.actions";
+import { createProductAction } from "@/actions/products";
+import { createCategoryAction } from "@/actions/categories";
 import { queryKeys } from "@/lib/query/keys";
+import { useProducts } from "@/hooks/use-products";
+import { useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
+import { UnitOfMeasureListItem } from "@/services/units-of-measure";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const PURPOSE_LABELS: Record<
+  (typeof productUnitPurposeValues)[number],
+  string
+> = {
+  stock: "Stock",
+  purchase: "Purchase",
+  sales: "Sales",
+  pricing: "Pricing",
+  display: "Display",
+};
+
+const defaultUnit: ProductUnitFormValue = {
+  unitId: "",
+  purpose: "stock",
+  conversionToBase: "1",
+  isDefault: true,
+  allowsFractional: true,
+};
 
 const defaultForm: AddProductFormValues = {
   sku: "",
   name: "",
   categoryIds: [],
-  stockUnitId: "",
-  purchaseUnitId: "",
-  salesUnitId: "",
+  baseUnitId: "",
+  units: [],
 };
 
-function formatUomOption(u: UnitOfMeasure): string {
+function formatUomOption(u: UnitOfMeasureListItem): string {
   return u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name;
 }
 
@@ -96,7 +120,7 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
     setPending(true);
     setError(null);
     try {
-      const category = await createCategoryAction(trimmed);
+      const category = await createCategoryAction({ name: trimmed });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.categories.all,
       });
@@ -167,27 +191,16 @@ export function AddProductForm() {
     defaultValues: defaultForm,
   });
 
+  const {
+    fields: unitFields,
+    append: appendUnit,
+    remove: removeUnit,
+  } = useFieldArray({ control: form.control, name: "units" });
+
   const { data: productCategories } = useProductCategories();
+  const { data: products } = useProducts();
 
-  const { data: products } = useQuery({
-    queryKey: ["products"],
-    queryFn: () => api.get<Product[]>(endpoints.products.list()),
-  });
-
-  const { data: unitsOfMeasure = [] } = useQuery({
-    queryKey: ["unitsOfMeasure"],
-    queryFn: () => api.get<UnitOfMeasure[]>(endpoints.unitsOfMeasure.list()),
-  });
-
-  const activeUoms = useMemo(
-    () =>
-      unitsOfMeasure
-        .filter(u => u.is_active)
-        .sort(
-          (a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name),
-        ),
-    [unitsOfMeasure],
-  );
+  const { data: unitsOfMeasure } = useUnitsOfMeasure();
 
   async function onSubmit(data: AddProductFormValues) {
     setMutationError(null);
@@ -204,14 +217,12 @@ export function AddProductForm() {
         sku,
         name: data.name,
         categoryIds: data.categoryIds,
-        stockUnitId: data.stockUnitId || null,
-        purchaseUnitId: data.purchaseUnitId || null,
-        salesUnitId: data.salesUnitId || null,
+        baseUnitId: data.baseUnitId || null,
+        units: data.units?.length ? data.units : undefined,
       });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
       form.reset(defaultForm);
-      setMutationError(null);
       router.push("/products");
     } catch (e) {
       setMutationError(
@@ -234,6 +245,7 @@ export function AddProductForm() {
             </Alert>
           ) : null}
           <FieldGroup>
+            {/* SKU + Name */}
             <div className="grid gap-4 sm:grid-cols-2">
               <Controller
                 name="sku"
@@ -304,7 +316,7 @@ export function AddProductForm() {
               />
             </div>
 
-            {/* Categories — multi-select combobox */}
+            {/* Categories */}
             <Controller
               name="categoryIds"
               control={form.control}
@@ -312,7 +324,6 @@ export function AddProductForm() {
                 const selectedCats = (productCategories ?? []).filter(c =>
                   field.value.includes(c.id),
                 );
-
                 return (
                   <Field data-invalid={fieldState.invalid}>
                     <div className="flex items-center justify-between gap-2">
@@ -321,7 +332,6 @@ export function AddProductForm() {
                         onCreated={id => field.onChange([...field.value, id])}
                       />
                     </div>
-
                     <Combobox
                       multiple
                       items={productCategories ?? []}
@@ -359,7 +369,6 @@ export function AddProductForm() {
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
-
                     {fieldState.invalid && (
                       <FieldError errors={[fieldState.error]} />
                     )}
@@ -368,115 +377,255 @@ export function AddProductForm() {
               }}
             />
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Controller
-                name="stockUnitId"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="form-add-product-stock-uom">
-                      Stock UOM
-                    </FieldLabel>
-                    <Select
-                      value={field.value || "__none__"}
-                      onValueChange={v =>
-                        field.onChange(v === "__none__" ? "" : v)
+            {/* Base unit */}
+            <Controller
+              name="baseUnitId"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-product-base-unit">
+                    Base unit
+                  </FieldLabel>
+                  <Combobox
+                    items={unitsOfMeasure ?? []}
+                    itemToStringValue={u => u.name}
+                    value={
+                      unitsOfMeasure?.find(u => u.id === field.value) ?? null
+                    }
+                    onValueChange={u => field.onChange(u?.id || "")}
+                  >
+                    <ComboboxTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="outline"
+                          aria-invalid={fieldState.invalid}
+                          className="w-full justify-between font-normal"
+                        >
+                          <ComboboxValue>
+                            {unitsOfMeasure?.find(u => u.id === field.value)
+                              ? formatUomOption(
+                                  unitsOfMeasure.find(
+                                    u => u.id === field.value,
+                                  )!,
+                                )
+                              : "None"}
+                          </ComboboxValue>
+                        </Button>
                       }
-                    >
-                      <SelectTrigger
-                        id="form-add-product-stock-uom"
-                        aria-invalid={fieldState.invalid}
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="None" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {activeUoms.map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>
+                    />
+                    <ComboboxContent>
+                      <ComboboxInput
+                        showTrigger={false}
+                        placeholder="Search units…"
+                      />
+                      <ComboboxEmpty>No units found.</ComboboxEmpty>
+                      <ComboboxList>
+                        {u => (
+                          <ComboboxItem key={u.id} value={u}>
                             {formatUomOption(u)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="purchaseUnitId"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="form-add-product-purchase-uom">
-                      Purchase UOM
-                    </FieldLabel>
-                    <Select
-                      value={field.value || "__none__"}
-                      onValueChange={v =>
-                        field.onChange(v === "__none__" ? "" : v)
-                      }
+                          </ComboboxItem>
+                        )}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                  <FieldDescription>
+                    The fundamental unit all conversions are relative to (e.g.
+                    lb, kg).
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Product units */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <FieldLabel>Units</FieldLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    appendUnit({
+                      ...defaultUnit,
+                      isDefault: unitFields.length === 0,
+                    })
+                  }
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add unit
+                </Button>
+              </div>
+
+              {unitFields.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {unitFields.map((uf, index) => (
+                    <div
+                      key={uf.id}
+                      className="rounded-md border p-4 flex flex-col gap-3"
                     >
-                      <SelectTrigger
-                        id="form-add-product-purchase-uom"
-                        aria-invalid={fieldState.invalid}
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="None" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {activeUoms.map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {formatUomOption(u)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-              <Controller
-                name="salesUnitId"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="form-add-product-sales-uom">
-                      Sales UOM
-                    </FieldLabel>
-                    <Select
-                      value={field.value || "__none__"}
-                      onValueChange={v =>
-                        field.onChange(v === "__none__" ? "" : v)
-                      }
-                    >
-                      <SelectTrigger
-                        id="form-add-product-sales-uom"
-                        aria-invalid={fieldState.invalid}
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="None" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {activeUoms.map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {formatUomOption(u)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Unit {index + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeUnit(index)}
+                          aria-label={`Remove unit ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {/* UOM */}
+                        <Controller
+                          name={`units.${index}.unitId`}
+                          control={form.control}
+                          render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                              <FieldLabel htmlFor={`units-${index}-unit`}>
+                                Unit *
+                              </FieldLabel>
+                              <Select
+                                value={field.value || "__none__"}
+                                onValueChange={v =>
+                                  field.onChange(v === "__none__" ? "" : v)
+                                }
+                              >
+                                <SelectTrigger
+                                  id={`units-${index}-unit`}
+                                  aria-invalid={fieldState.invalid}
+                                >
+                                  <SelectValue placeholder="Select…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">
+                                    Select…
+                                  </SelectItem>
+                                  {unitsOfMeasure?.map(u => (
+                                    <SelectItem key={u.id} value={String(u.id)}>
+                                      {formatUomOption(u)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {fieldState.invalid && (
+                                <FieldError errors={[fieldState.error]} />
+                              )}
+                            </Field>
+                          )}
+                        />
+
+                        {/* Purpose */}
+                        <Controller
+                          name={`units.${index}.purpose`}
+                          control={form.control}
+                          render={({ field, fieldState }) => (
+                            <Field data-invalid={fieldState.invalid}>
+                              <FieldLabel htmlFor={`units-${index}-purpose`}>
+                                Purpose *
+                              </FieldLabel>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <SelectTrigger
+                                  id={`units-${index}-purpose`}
+                                  aria-invalid={fieldState.invalid}
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {productUnitPurposeValues.map(p => (
+                                    <SelectItem key={p} value={p}>
+                                      {PURPOSE_LABELS[p]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {fieldState.invalid && (
+                                <FieldError errors={[fieldState.error]} />
+                              )}
+                            </Field>
+                          )}
+                        />
+                      </div>
+
+                      {/* Conversion to base */}
+                      <Controller
+                        name={`units.${index}.conversionToBase`}
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel htmlFor={`units-${index}-conversion`}>
+                              Conversion to base *
+                            </FieldLabel>
+                            <Input
+                              {...field}
+                              id={`units-${index}-conversion`}
+                              type="number"
+                              min="0.0001"
+                              step="any"
+                              aria-invalid={fieldState.invalid}
+                              placeholder="e.g. 1 or 0.453592"
+                            />
+                            <FieldDescription>
+                              How many base units equal 1 of this unit (e.g. 1
+                              lb = 1, 1 case = 40).
+                            </FieldDescription>
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
+                      />
+
+                      {/* Flags */}
+                      <div className="flex flex-wrap gap-4">
+                        <Controller
+                          name={`units.${index}.isDefault`}
+                          control={form.control}
+                          render={({ field }) => (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox
+                                checked={field.value ?? false}
+                                onCheckedChange={field.onChange}
+                              />
+                              Default unit
+                            </label>
+                          )}
+                        />
+                        <Controller
+                          name={`units.${index}.allowsFractional`}
+                          control={form.control}
+                          render={({ field }) => (
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox
+                                checked={field.value ?? true}
+                                onCheckedChange={field.onChange}
+                              />
+                              Allows fractional quantities
+                            </label>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {unitFields.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No units added yet. Units define how this product is
+                  purchased, stocked, and sold.
+                </p>
+              )}
             </div>
 
             <FieldDescription>
@@ -487,7 +636,7 @@ export function AddProductForm() {
               >
                 Units of measure
               </Link>
-              . Optional — helps match QuickBooks-style item setup.
+              .
             </FieldDescription>
           </FieldGroup>
         </form>

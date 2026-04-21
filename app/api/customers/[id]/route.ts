@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCustomerById } from "@/services/customers";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@/lib/utils/uuid";
 
 export async function GET(
   _req: Request,
@@ -11,7 +9,7 @@ export async function GET(
   try {
     const { id } = await context.params;
 
-    if (!UUID_RE.test(id)) {
+    if (!isUuid(id)) {
       return NextResponse.json(
         { error: "Invalid customer id" },
         { status: 400 },

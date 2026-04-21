@@ -1,5 +1,5 @@
 {
-  "id": "e928717f-941c-402b-a8d4-8f2c7b48ee94",
+  "id": "907fe359-85b1-45aa-8169-4508ea79c1e6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2343,6 +2343,185 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.product_units": {
+      "name": "product_units",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "product_unit_purpose",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "conversion_to_base": {
+          "name": "conversion_to_base",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allows_fractional": {
+          "name": "allows_fractional",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "product_units_product_id_idx": {
+          "name": "product_units_product_id_idx",
+          "columns": [
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "product_units_unit_id_idx": {
+          "name": "product_units_unit_id_idx",
+          "columns": [
+            {
+              "expression": "unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "product_units_product_purpose_idx": {
+          "name": "product_units_product_purpose_idx",
+          "columns": [
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "product_units_product_unit_purpose_unique": {
+          "name": "product_units_product_unit_purpose_unique",
+          "columns": [
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "purpose",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "product_units_product_id_products_id_fk": {
+          "name": "product_units_product_id_products_id_fk",
+          "tableFrom": "product_units",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_units_unit_id_units_of_measure_id_fk": {
+          "name": "product_units_unit_id_units_of_measure_id_fk",
+          "tableFrom": "product_units",
+          "tableTo": "units_of_measure",
+          "columnsFrom": [
+            "unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.products": {
       "name": "products",
       "schema": "",
@@ -2378,20 +2557,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "stock_unit_id": {
-          "name": "stock_unit_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "purchase_unit_id": {
-          "name": "purchase_unit_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sales_unit_id": {
-          "name": "sales_unit_id",
+        "base_unit_id": {
+          "name": "base_unit_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -2487,41 +2654,11 @@
           "method": "btree",
           "with": {}
         },
-        "products_stock_unit_id_idx": {
-          "name": "products_stock_unit_id_idx",
+        "products_base_unit_id_idx": {
+          "name": "products_base_unit_id_idx",
           "columns": [
             {
-              "expression": "stock_unit_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "products_purchase_unit_id_idx": {
-          "name": "products_purchase_unit_id_idx",
-          "columns": [
-            {
-              "expression": "purchase_unit_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "products_sales_unit_id_idx": {
-          "name": "products_sales_unit_id_idx",
-          "columns": [
-            {
-              "expression": "sales_unit_id",
+              "expression": "base_unit_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2562,38 +2699,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "products_stock_unit_id_units_of_measure_id_fk": {
-          "name": "products_stock_unit_id_units_of_measure_id_fk",
+        "products_base_unit_id_units_of_measure_id_fk": {
+          "name": "products_base_unit_id_units_of_measure_id_fk",
           "tableFrom": "products",
           "tableTo": "units_of_measure",
           "columnsFrom": [
-            "stock_unit_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "products_purchase_unit_id_units_of_measure_id_fk": {
-          "name": "products_purchase_unit_id_units_of_measure_id_fk",
-          "tableFrom": "products",
-          "tableTo": "units_of_measure",
-          "columnsFrom": [
-            "purchase_unit_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "products_sales_unit_id_units_of_measure_id_fk": {
-          "name": "products_sales_unit_id_units_of_measure_id_fk",
-          "tableFrom": "products",
-          "tableTo": "units_of_measure",
-          "columnsFrom": [
-            "sales_unit_id"
+            "base_unit_id"
           ],
           "columnsTo": [
             "id"
@@ -5282,6 +5393,17 @@
         "platform_admin",
         "support",
         "qa"
+      ]
+    },
+    "public.product_unit_purpose": {
+      "name": "product_unit_purpose",
+      "schema": "public",
+      "values": [
+        "stock",
+        "purchase",
+        "sales",
+        "pricing",
+        "display"
       ]
     },
     "public.user_role": {

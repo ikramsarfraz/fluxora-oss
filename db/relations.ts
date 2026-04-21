@@ -17,6 +17,7 @@ import {
   productCategories,
   products,
   productSupplierCosts,
+  productUnits,
   salesInvoiceFiles,
   salesInvoiceLines,
   salesInvoices,
@@ -200,15 +201,6 @@ export const customerAddressesRelations = relations(
   }),
 );
 
-export const unitsOfMeasureRelations = relations(
-  unitsOfMeasure,
-  ({ many }) => ({
-    stockProducts: many(products, { relationName: "product_stock_unit" }),
-    purchaseProducts: many(products, { relationName: "product_purchase_unit" }),
-    salesProducts: many(products, { relationName: "product_sales_unit" }),
-  }),
-);
-
 export const productsRelations = relations(products, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [products.tenantId],
@@ -229,28 +221,30 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     references: [portalUsers.id],
     relationName: "products_archived_by",
   }),
-  stockUnit: one(unitsOfMeasure, {
-    fields: [products.stockUnitId],
+  baseUnit: one(unitsOfMeasure, {
+    fields: [products.baseUnitId],
     references: [unitsOfMeasure.id],
-    relationName: "product_stock_unit",
-  }),
-  purchaseUnit: one(unitsOfMeasure, {
-    fields: [products.purchaseUnitId],
-    references: [unitsOfMeasure.id],
-    relationName: "product_purchase_unit",
-  }),
-  salesUnit: one(unitsOfMeasure, {
-    fields: [products.salesUnitId],
-    references: [unitsOfMeasure.id],
-    relationName: "product_sales_unit",
+    relationName: "product_base_unit",
   }),
   productCategories: many(productCategories),
+  productUnits: many(productUnits),
   customerPrices: many(customerProductPrices),
   supplierCosts: many(productSupplierCosts),
   supplierInvoiceLines: many(supplierInvoiceLines),
   inventoryItems: many(inventoryItems),
   salesOrderLines: many(salesOrderLines),
   salesInvoiceLines: many(salesInvoiceLines),
+}));
+
+export const productUnitsRelations = relations(productUnits, ({ one }) => ({
+  product: one(products, {
+    fields: [productUnits.productId],
+    references: [products.id],
+  }),
+  unit: one(unitsOfMeasure, {
+    fields: [productUnits.unitId],
+    references: [unitsOfMeasure.id],
+  }),
 }));
 
 export const categoriesRelations = relations(categories, ({ one, many }) => ({

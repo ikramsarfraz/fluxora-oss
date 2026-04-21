@@ -8,7 +8,7 @@ import {
 import {
   createCustomerInputSchema,
   type CreateCustomerInput,
-} from "./customer.schemas";
+} from "@/app/(app)/customers/customer.schemas";
 
 function emptyToNull(v: string | null | undefined): string | null {
   if (v == null || v.trim() === "") return null;

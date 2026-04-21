@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/empty-state";
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 import type { CustomerListItem } from "@/services/customers";
-import { deleteCustomerAction } from "../customer.actions";
+import { deleteCustomerAction } from "@/actions/customers";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 

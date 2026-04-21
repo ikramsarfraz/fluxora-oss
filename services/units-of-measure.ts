@@ -10,7 +10,7 @@ export async function getUnitsOfMeasure() {
   return result;
 }
 
-export async function getUnitOfMeasureById(id: number) {
+export async function getUnitOfMeasureById(id: string) {
   const result = await db.query.unitsOfMeasure.findFirst({
     where: eq(unitsOfMeasure.id, id),
   });
@@ -40,20 +40,22 @@ export async function createUnitOfMeasure(input: {
 }
 
 export async function updateUnitOfMeasure(
-  id: number,
+  id: string,
   input: {
     name?: string;
     abbreviation?: string | null;
     notes?: string | null;
     sortOrder?: number;
     isActive?: boolean;
-  }
+  },
 ) {
   const [unit] = await db
     .update(unitsOfMeasure)
     .set({
       ...(input.name !== undefined && { name: input.name }),
-      ...(input.abbreviation !== undefined && { abbreviation: input.abbreviation }),
+      ...(input.abbreviation !== undefined && {
+        abbreviation: input.abbreviation,
+      }),
       ...(input.notes !== undefined && { notes: input.notes }),
       ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
       ...(input.isActive !== undefined && { isActive: input.isActive }),
@@ -64,9 +66,11 @@ export async function updateUnitOfMeasure(
   return unit;
 }
 
-export async function deleteUnitOfMeasure(id: number) {
+export async function deleteUnitOfMeasure(id: string) {
   await db.delete(unitsOfMeasure).where(eq(unitsOfMeasure.id, id));
 }
 
 /** Row shape returned by `getUnitsOfMeasure()` (for client `import type` only). */
-export type UnitOfMeasureListItem = Awaited<ReturnType<typeof getUnitsOfMeasure>>[number];
+export type UnitOfMeasureListItem = Awaited<
+  ReturnType<typeof getUnitsOfMeasure>
+>[number];

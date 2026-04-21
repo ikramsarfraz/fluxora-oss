@@ -13,10 +13,8 @@ import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { Badge } from "@/components/ui/badge";
 import { formatPhone } from "@/lib/utils/phone";
+import { isUuid } from "@/lib/utils/uuid";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const ADDRESS_TYPE_LABEL: Record<string, string> = {
   shipping: "Shipping",
@@ -38,7 +36,7 @@ export default function CustomerProfile() {
 
   useSetBreadcrumbLabel(`/customers/${customerId}`, customer?.name);
 
-  if (!UUID_RE.test(customerId)) {
+  if (!isUuid(customerId)) {
     return <PageError message="Invalid customer ID." />;
   }
   if (customerLoading) {

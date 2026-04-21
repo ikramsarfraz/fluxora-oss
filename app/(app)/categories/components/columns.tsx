@@ -24,19 +24,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+import { Category } from "@/services/categories";
+import { formatDisplayDate } from "@/lib/utils/date";
 
 type ColumnActions = {
-  onDelete: (unit: UnitOfMeasureListItem) => void;
+  onDelete: (category: Category) => void;
 };
 
 function ActionsCell({
-  unit,
+  category,
   onDelete,
 }: {
-  unit: UnitOfMeasureListItem;
-  onDelete: (unit: UnitOfMeasureListItem) => void;
+  category: Category;
+  onDelete: (category: Category) => void;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -52,7 +52,7 @@ function ActionsCell({
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
-            <Link href={`/units-of-measure/${unit.id}`}>View unit</Link>
+            <Link href={`/categories/${category.id}`}>View category</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -60,7 +60,7 @@ function ActionsCell({
             onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 />
-            Delete unit
+            Delete category
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -68,9 +68,9 @@ function ActionsCell({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete unit of measure</AlertDialogTitle>
+            <AlertDialogTitle>Delete category</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{unit.name}&quot;? This
+              Are you sure you want to delete &quot;{category.name}&quot;? This
               action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -79,7 +79,7 @@ function ActionsCell({
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                onDelete(unit);
+                onDelete(category);
                 setShowDeleteDialog(false);
               }}
             >
@@ -92,9 +92,7 @@ function ActionsCell({
   );
 }
 
-export function createColumns(
-  actions: ColumnActions,
-): ColumnDef<UnitOfMeasureListItem>[] {
+export function createColumns(actions: ColumnActions): ColumnDef<Category>[] {
   return [
     {
       accessorKey: "name",
@@ -114,32 +112,26 @@ export function createColumns(
       ),
     },
     {
-      accessorKey: "abbreviation",
-      header: "Abbreviation",
+      accessorKey: "description",
+      header: "Description",
       cell: ({ row }) => {
-        const abbr = row.getValue("abbreviation") as string | null;
-        return abbr ? (
-          <Badge variant="secondary">{abbr}</Badge>
+        const description = row.getValue("description") as string | null;
+        return description ? (
+          <span className="text-muted-foreground text-sm max-w-[200px] truncate block">
+            {description}
+          </span>
         ) : (
           <span className="text-muted-foreground">-</span>
         );
       },
     },
     {
-      accessorKey: "sortOrder",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Sort Order
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
+      accessorKey: "createdAt",
+      header: "Created",
       cell: ({ row }) => (
-        <span className="tabular-nums">{row.getValue("sortOrder")}</span>
+        <span className="text-muted-foreground text-sm max-w-[200px] truncate block">
+          {formatDisplayDate(row.getValue("createdAt"))}
+        </span>
       ),
     },
     {
@@ -155,25 +147,11 @@ export function createColumns(
       },
     },
     {
-      accessorKey: "notes",
-      header: "Notes",
-      cell: ({ row }) => {
-        const notes = row.getValue("notes") as string | null;
-        return notes ? (
-          <span className="text-muted-foreground text-sm max-w-[200px] truncate block">
-            {notes}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        );
-      },
-    },
-    {
       id: "actions",
       header: "Actions",
       cell: ({ row }) => (
         <div className="flex justify-center">
-          <ActionsCell unit={row.original} onDelete={actions.onDelete} />
+          <ActionsCell category={row.original} onDelete={actions.onDelete} />
         </div>
       ),
       meta: {

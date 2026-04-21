@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Ruler,
   type LucideIcon,
+  ListChecks,
 } from "lucide-react";
 
 type NavItem = {
@@ -65,6 +66,11 @@ const navMain: NavGroup[] = [
         title: "Products",
         url: "/products",
         icon: Package,
+      },
+      {
+        title: "Categories",
+        url: "/categories",
+        icon: ListChecks,
       },
       {
         title: "Units of Measure",
@@ -123,14 +129,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {navMain.map((group) => (
+        {navMain.map(group => (
           <SidebarGroup key={group.title}>
             <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
               {group.title}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => {
+                {group.items.map(item => {
                   const Icon = item.icon;
                   const active = isActive(item.url);
                   return (

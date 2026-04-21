@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
-import { getProductCategoriesAction } from "@/app/(app)/products/product.actions";
+import { getProductCategoriesAction } from "@/actions/products";
 
 export function useProductCategories() {
   return useQuery({

@@ -28,7 +28,7 @@ import {
   createCustomerInputSchema,
   type CreateCustomerInput,
 } from "../customer.schemas";
-import { createCustomerAction } from "../customer.actions";
+import { createCustomerAction } from "@/actions/customers";
 import { US_STATES } from "@/lib/constants/us-states";
 
 const emptyAddress = {

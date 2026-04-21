@@ -1,50 +1,34 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { categories, productCategories, products } from "@/db/schema";
+import {
+  categories,
+  productCategories,
+  products,
+  productUnits,
+} from "@/db/schema";
 import { getCurrentTenant } from "./tenants";
 
-// export async function createCustomer(input: {
-//   name: string;
-//   phoneNumber?: string;
-//   fuelSurchargeAmount?: string;
-//   invoicePrefix?: string;
-//   address?: {
-//     addressType?: "billing" | "shipping" | "warehouse" | "other";
-//     street: string;
-//     city?: string;
-//     state?: string;
-//     zip?: string;
-//     isDefault?: boolean;
-//   };
-// }) {
-//   const [customer] = await db
-//     .insert(customers)
-//     .values({
-//       name: input.name,
-//       phoneNumber: input.phoneNumber,
-//       fuelSurchargeAmount: input.fuelSurchargeAmount,
-//       invoicePrefix: input.invoicePrefix,
-//     })
-//     .returning();
-
-//   if (input.address) {
-//     await db.insert(customerAddresses).values({
-//       customerId: customer.id,
-//       addressType: input.address.addressType ?? "shipping",
-//       street: input.address.street,
-//       city: input.address.city,
-//       state: input.address.state,
-//       zip: input.address.zip,
-//       isDefault: input.address.isDefault ?? true,
-//     });
-//   }
-
-//   return customer;
-// }
+type ProductUnitInput = {
+  unitId: string;
+  purpose: "stock" | "purchase" | "sales" | "pricing" | "display";
+  conversionToBase: string;
+  isDefault?: boolean;
+  allowsFractional?: boolean;
+  sortOrder?: number;
+};
 
 export async function getProductById(productId: string) {
   const result = await db.query.products.findFirst({
     where: eq(products.id, productId),
+    with: {
+      productCategories: {
+        with: { category: true },
+      },
+      productUnits: {
+        with: { unit: true },
+      },
+      baseUnit: true,
+    },
   });
 
   return result ?? null;
@@ -72,29 +56,12 @@ export async function getProductCategories() {
   return result ?? [];
 }
 
-export async function createCategory(name: string) {
-  const tenant = await getCurrentTenant();
-  const slug = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
-  const [row] = await db
-    .insert(categories)
-    .values({ tenantId: tenant.id, name: name.trim(), slug })
-    .returning();
-
-  return row;
-}
-
 export async function createProduct(input: {
   sku: string;
   name: string;
   categoryIds: string[];
-  stockUnitId?: string | null;
-  purchaseUnitId?: string | null;
-  salesUnitId?: string | null;
+  baseUnitId?: string | null;
+  units?: ProductUnitInput[];
 }) {
   const tenant = await getCurrentTenant();
 
@@ -117,6 +84,7 @@ export async function createProduct(input: {
       sku: input.sku.trim(),
       name: input.name.trim(),
       defaultPricePerLb: "0",
+      baseUnitId: input.baseUnitId ?? null,
     })
     .returning();
 
@@ -129,7 +97,28 @@ export async function createProduct(input: {
     );
   }
 
+  if (input.units && input.units.length > 0) {
+    await db.insert(productUnits).values(
+      input.units.map((u, i) => ({
+        productId: product.id,
+        unitId: u.unitId,
+        purpose: u.purpose,
+        conversionToBase: u.conversionToBase,
+        isDefault: u.isDefault ?? i === 0,
+        allowsFractional: u.allowsFractional ?? true,
+        sortOrder: u.sortOrder ?? i,
+      })),
+    );
+  }
+
   return product;
+}
+
+export async function deleteProduct(productId: string) {
+  const tenant = await getCurrentTenant();
+  await db
+    .delete(products)
+    .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));
 }
 
 /** Row shape returned by `getProducts()` / `GET /api/products` (for client `import type` only). */

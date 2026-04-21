@@ -12,6 +12,7 @@ CREATE TYPE "public"."line_unit_type" AS ENUM('catch_weight', 'fixed_case');--> 
 CREATE TYPE "public"."order_status" AS ENUM('sales_order', 'confirmed', 'fulfilled', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."payment_method" AS ENUM('cash', 'check', 'ach', 'zelle', 'credit_card');--> statement-breakpoint
 CREATE TYPE "public"."platform_role" AS ENUM('platform_admin', 'support', 'qa');--> statement-breakpoint
+CREATE TYPE "public"."product_unit_purpose" AS ENUM('stock', 'purchase', 'sales', 'pricing', 'display');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('owner', 'admin', 'sales', 'warehouse', 'accounting');--> statement-breakpoint
 CREATE TABLE "audit_logs" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -199,15 +200,25 @@ CREATE TABLE "product_supplier_costs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "product_units" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"product_id" uuid NOT NULL,
+	"unit_id" uuid NOT NULL,
+	"purpose" "product_unit_purpose" NOT NULL,
+	"is_default" boolean DEFAULT false NOT NULL,
+	"conversion_to_base" numeric(12, 4) NOT NULL,
+	"allows_fractional" boolean DEFAULT true NOT NULL,
+	"sort_order" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "products" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid NOT NULL,
 	"sku" varchar(64) NOT NULL,
 	"name" varchar(255) NOT NULL,
 	"default_price_per_lb" numeric(10, 4) NOT NULL,
-	"stock_unit_id" uuid,
-	"purchase_unit_id" uuid,
-	"sales_unit_id" uuid,
+	"base_unit_id" uuid,
 	"created_by_user_id" uuid,
 	"updated_by_user_id" uuid,
 	"archived_by_user_id" uuid,
@@ -480,10 +491,10 @@ ALTER TABLE "product_categories" ADD CONSTRAINT "product_categories_product_id_p
 ALTER TABLE "product_categories" ADD CONSTRAINT "product_categories_category_id_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."categories"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_supplier_costs" ADD CONSTRAINT "product_supplier_costs_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "product_supplier_costs" ADD CONSTRAINT "product_supplier_costs_supplier_id_suppliers_id_fk" FOREIGN KEY ("supplier_id") REFERENCES "public"."suppliers"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_units" ADD CONSTRAINT "product_units_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "product_units" ADD CONSTRAINT "product_units_unit_id_units_of_measure_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_stock_unit_id_units_of_measure_id_fk" FOREIGN KEY ("stock_unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_purchase_unit_id_units_of_measure_id_fk" FOREIGN KEY ("purchase_unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "products" ADD CONSTRAINT "products_sales_unit_id_units_of_measure_id_fk" FOREIGN KEY ("sales_unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "products" ADD CONSTRAINT "products_base_unit_id_units_of_measure_id_fk" FOREIGN KEY ("base_unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_created_by_user_id_portal_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_updated_by_user_id_portal_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_archived_by_user_id_portal_users_id_fk" FOREIGN KEY ("archived_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -566,12 +577,14 @@ CREATE INDEX "portal_users_role_idx" ON "portal_users" USING btree ("role");--> 
 CREATE INDEX "product_categories_product_id_idx" ON "product_categories" USING btree ("product_id");--> statement-breakpoint
 CREATE INDEX "product_categories_category_id_idx" ON "product_categories" USING btree ("category_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_product_supplier_cost" ON "product_supplier_costs" USING btree ("product_id","supplier_id");--> statement-breakpoint
+CREATE INDEX "product_units_product_id_idx" ON "product_units" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "product_units_unit_id_idx" ON "product_units" USING btree ("unit_id");--> statement-breakpoint
+CREATE INDEX "product_units_product_purpose_idx" ON "product_units" USING btree ("product_id","purpose");--> statement-breakpoint
+CREATE UNIQUE INDEX "product_units_product_unit_purpose_unique" ON "product_units" USING btree ("product_id","unit_id","purpose");--> statement-breakpoint
 CREATE UNIQUE INDEX "products_tenant_sku_unique" ON "products" USING btree ("tenant_id","sku");--> statement-breakpoint
 CREATE INDEX "products_tenant_id_idx" ON "products" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "products_name_idx" ON "products" USING btree ("name");--> statement-breakpoint
-CREATE INDEX "products_stock_unit_id_idx" ON "products" USING btree ("stock_unit_id");--> statement-breakpoint
-CREATE INDEX "products_purchase_unit_id_idx" ON "products" USING btree ("purchase_unit_id");--> statement-breakpoint
-CREATE INDEX "products_sales_unit_id_idx" ON "products" USING btree ("sales_unit_id");--> statement-breakpoint
+CREATE INDEX "products_base_unit_id_idx" ON "products" USING btree ("base_unit_id");--> statement-breakpoint
 CREATE INDEX "products_archived_at_idx" ON "products" USING btree ("archived_at");--> statement-breakpoint
 CREATE INDEX "sales_invoice_files_file_id_idx" ON "sales_invoice_files" USING btree ("file_id");--> statement-breakpoint
 CREATE INDEX "sales_invoice_files_sales_invoice_id_kind_idx" ON "sales_invoice_files" USING btree ("sales_invoice_id","kind");--> statement-breakpoint
