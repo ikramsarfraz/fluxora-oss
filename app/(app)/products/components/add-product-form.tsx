@@ -57,7 +57,7 @@ import {
   type AddProductFormValues,
   type ProductUnitFormValue,
 } from "./add-product-form.schema";
-import { useProductCategories } from "@/hooks/use-product-categories";
+import { useCategories } from "@/hooks/use-categories";
 import type { ProductCategory } from "@/services/products";
 import { createProductAction } from "@/actions/products";
 import { createCategoryAction } from "@/actions/categories";
@@ -197,7 +197,7 @@ export function AddProductForm() {
     remove: removeUnit,
   } = useFieldArray({ control: form.control, name: "units" });
 
-  const { data: productCategories } = useProductCategories();
+  const { data: productCategories } = useCategories();
   const { data: products } = useProducts();
 
   const { data: unitsOfMeasure } = useUnitsOfMeasure();

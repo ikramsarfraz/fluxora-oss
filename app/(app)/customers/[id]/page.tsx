@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 
-import { useCustomer } from "@/hooks/use-customer";
+import { useCustomer } from "@/hooks/use-customers";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,

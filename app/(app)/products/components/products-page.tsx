@@ -5,7 +5,7 @@ import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useProducts } from "@/hooks/use-products";
-import { useDeleteProduct } from "@/hooks/use-product-mutations";
+import { useDeleteProduct } from "@/hooks/use-products";
 import { Plus, Package } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";

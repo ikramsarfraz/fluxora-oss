@@ -5,7 +5,7 @@ import { useMemo, useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useUsers } from "@/hooks/use-users";
-import { useUserInvitations } from "@/hooks/use-user-invitations";
+import { useUserInvitations } from "@/hooks/use-users";
 import { Plus, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";

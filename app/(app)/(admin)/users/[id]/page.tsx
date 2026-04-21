@@ -12,7 +12,7 @@ import {
 } from "@/lib/api/portal-users";
 import { queryKeys } from "@/lib/query/keys";
 import { PortalUserProfile } from "@/components/portal-user-profile";
-import { useUser } from "@/hooks/use-user";
+import { useUser } from "@/hooks/use-users";
 import {
   AlertDialog,
   AlertDialogCancel,

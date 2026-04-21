@@ -2,8 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { useProduct } from "@/hooks/use-product";
-import { useDeleteProduct } from "@/hooks/use-product-mutations";
+import { useProduct, useDeleteProduct } from "@/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {

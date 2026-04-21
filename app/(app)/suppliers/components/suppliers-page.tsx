@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/empty-state";
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 import { useSuppliers } from "@/hooks/use-suppliers";
-import { useDeleteSupplier } from "@/hooks/use-supplier-mutations";
+import { useDeleteSupplier } from "@/hooks/use-suppliers";
 import type { SupplierListItem } from "@/services/suppliers";
 
 export default function Suppliers() {

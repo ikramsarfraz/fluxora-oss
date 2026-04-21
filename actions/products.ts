@@ -3,7 +3,6 @@
 import {
   createProduct,
   deleteProduct,
-  getProductCategories,
   getProductById,
   getProducts,
 } from "@/services/products";
@@ -14,10 +13,6 @@ export async function getProductsAction() {
 
 export async function getProductByIdAction(id: string) {
   return await getProductById(id);
-}
-
-export async function getProductCategoriesAction() {
-  return await getProductCategories();
 }
 
 export async function createProductAction(input: {
