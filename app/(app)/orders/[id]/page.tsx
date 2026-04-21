@@ -7,11 +7,11 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getSupplierById, getSuppliers } from "@/services/suppliers";
+import { getSalesOrderById, getSalesOrders } from "@/services/orders";
 
-import { SupplierDetailPage } from "../components/supplier-detail-page";
+import { OrderDetailPage } from "../components/order-detail-page";
 
-export default async function SupplierDetailRoute({
+export default async function OrderDetailRoute({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -23,24 +23,25 @@ export default async function SupplierDetailRoute({
 
   const queryClient = new QueryClient();
   try {
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.suppliers.detail(id),
-      queryFn: () => getSupplierById(id),
-    });
+    const order = await getSalesOrderById(id);
+    if (!order) {
+      notFound();
+    }
+    queryClient.setQueryData(queryKeys.salesOrders.detail(id), order);
   } catch {
     notFound();
   }
 
   await queryClient
     .prefetchQuery({
-      queryKey: queryKeys.suppliers.all,
-      queryFn: getSuppliers,
+      queryKey: queryKeys.salesOrders.all,
+      queryFn: getSalesOrders,
     })
     .catch(() => {});
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <SupplierDetailPage supplierId={id} />
+      <OrderDetailPage orderId={id} />
     </HydrationBoundary>
   );
 }

@@ -3,10 +3,14 @@ export function orderStatusLabel(status: string): string {
   switch (status) {
     case "sales_order":
       return "Sales order";
-    case "invoice":
-      return "Invoice";
+    case "confirmed":
+      return "Confirmed";
+    case "fulfilled":
+      return "Fulfilled";
     case "cancelled":
       return "Cancelled";
+    case "invoice":
+      return "Invoice";
     default:
       return status || "—";
   }

@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { userInvitations } from "@/db/schema";
 import { resend, emailFrom } from "@/lib/email";
 import { InviteUserEmail } from "@/emails/invite-user";
+import { getCurrentTenant } from "./tenants";
 
 export async function signUp(input: {
   name: string;
@@ -26,12 +27,14 @@ export async function inviteUser(input: {
   email: string;
   fullName: string;
   role: "admin" | "sales" | "warehouse" | "accounting";
-  invitedByUserId: number;
+  invitedByUserId: string;
 }) {
+  const tenant = await getCurrentTenant();
   const token = randomUUID();
   const expiresAt = addDays(new Date(), 7);
 
   await db.insert(userInvitations).values({
+    tenantId: tenant.id,
     email: input.email,
     fullName: input.fullName,
     role: input.role,

@@ -10,7 +10,7 @@ export const queryKeys = {
   users: {
     all: ["users"] as const,
     invitations: ["users", "invitations"] as const,
-    detail: (id: number) => ["users", id] as const,
+    detail: (id: string) => ["users", id] as const,
     auth: (authUserId: string) => ["users", "auth", authUserId] as const,
   },
   dashboard: {
@@ -24,7 +24,7 @@ export const queryKeys = {
   },
   suppliers: {
     all: ["suppliers"] as const,
-    detail: (id: number) => ["suppliers", id] as const,
+    detail: (id: string) => ["suppliers", id] as const,
   },
   products: {
     all: ["products"] as const,
@@ -36,7 +36,7 @@ export const queryKeys = {
   },
   salesOrders: {
     all: ["sales-orders"] as const,
-    detail: (id: number) => ["sales-orders", id] as const,
-    invoice: (id: number) => ["sales-orders", id, "invoice"] as const,
+    detail: (id: string) => ["sales-orders", id] as const,
+    invoice: (id: string) => ["sales-orders", id, "invoice"] as const,
   },
 } as const;

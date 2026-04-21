@@ -1,23 +1,30 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getPortalUser, getUsers } from "@/lib/api/portal-users";
-import { getPendingInvitations } from "@/lib/api/user-invitations";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getPendingInvitationsAction,
+  getUserByIdAction,
+  getUsersAction,
+  inviteUserAction,
+  sendUserPasswordResetAction,
+  setUserActiveAction,
+} from "@/actions/users";
 import { queryKeys } from "@/lib/query/keys";
+import { isUuid } from "@/lib/utils/uuid";
 
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users.all,
-    queryFn: getUsers,
+    queryFn: getUsersAction,
     staleTime: 1000 * 60 * 5,
   });
 }
 
-export function useUser(id: number) {
+export function useUser(id: string) {
   return useQuery({
     queryKey: queryKeys.users.detail(id),
-    queryFn: () => getPortalUser(id),
-    enabled: Number.isInteger(id) && id > 0,
+    queryFn: () => getUserByIdAction(id),
+    enabled: isUuid(id),
     staleTime: 1000 * 60 * 2,
   });
 }
@@ -25,7 +32,40 @@ export function useUser(id: number) {
 export function useUserInvitations() {
   return useQuery({
     queryKey: queryKeys.users.invitations,
-    queryFn: getPendingInvitations,
+    queryFn: getPendingInvitationsAction,
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useSetUserActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      setUserActiveAction(id, isActive),
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.id), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    },
+  });
+}
+
+export function useSendUserPasswordReset() {
+  return useMutation({
+    mutationFn: (id: string) => sendUserPasswordResetAction(id),
+  });
+}
+
+export function useInviteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: inviteUserAction,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.users.invitations,
+      });
+    },
   });
 }

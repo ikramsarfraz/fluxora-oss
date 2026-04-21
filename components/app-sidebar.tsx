@@ -25,6 +25,7 @@ import {
   Ruler,
   type LucideIcon,
   ListChecks,
+  ShoppingCart,
 } from "lucide-react";
 
 type NavItem = {
@@ -56,6 +57,11 @@ const navMain: NavGroup[] = [
         title: "Customers",
         url: "/customers",
         icon: Users,
+      },
+      {
+        title: "Orders",
+        url: "/orders",
+        icon: ShoppingCart,
       },
     ],
   },

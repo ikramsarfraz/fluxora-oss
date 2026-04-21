@@ -1,10 +1,13 @@
 import { isAPIError } from "better-auth/api";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql, and } from "drizzle-orm";
 
 import { db } from "@/db";
+import { user as authUserTable } from "@/db/auth-schema";
 import { portalUsers } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { inviteUser as inviteUserAuth } from "@/services/auth";
+import { getCurrentTenant } from "./tenants";
 
 export type PortalUserRole =
   | "owner"
@@ -21,7 +24,7 @@ const DEFAULT_SIGNUP_ROLE: PortalUserRole = "admin";
  * Call after `authClient.signUp.email` succeeds so cookies are present.
  */
 export async function createPortalUser(input: {
-  tenantId: number;
+  tenantId: string;
   authUserId: string;
   fullName: string;
   email: string;
@@ -75,9 +78,10 @@ export type PortalUserListItem = Awaited<ReturnType<typeof getUsers>>[number];
 /**
  * Gets a portal user by id.
  */
-export async function getUserById(id: number) {
+export async function getUserById(id: string) {
+  const tenant = await getCurrentTenant();
   const user = await db.query.portalUsers.findFirst({
-    where: eq(portalUsers.id, id),
+    where: and(eq(portalUsers.id, id), eq(portalUsers.tenantId, tenant.id)),
     with: {
       authUser: true,
     },
@@ -127,7 +131,7 @@ export async function requireAdminPortalUser() {
  * Sets `portal_users.is_active`. Admins cannot deactivate themselves.
  */
 export async function setPortalUserActiveByAdmin(
-  targetUserId: number,
+  targetUserId: string,
   isActive: boolean,
 ): Promise<PortalUserDetail> {
   const current = await requireAdminPortalUser();
@@ -159,7 +163,7 @@ export async function setPortalUserActiveByAdmin(
  * Sends Better Auth password-reset email to the user&apos;s sign-in address.
  */
 export async function sendPasswordResetForUserByAdmin(
-  targetUserId: number,
+  targetUserId: string,
 ): Promise<{ success: true }> {
   await requireAdminPortalUser();
 
@@ -183,6 +187,56 @@ export async function sendPasswordResetForUserByAdmin(
     }
     throw e;
   }
+
+  return { success: true };
+}
+
+/**
+ * Admin-only: send an invitation email. Rejects duplicates against both
+ * `portal_users` and Better Auth `user` tables (case-insensitive).
+ */
+export async function inviteUserByAdmin(input: {
+  email: string;
+  fullName: string;
+  role?: Exclude<PortalUserRole, "owner">;
+}): Promise<{ success: true }> {
+  const current = await requireAdminPortalUser();
+
+  const emailTrim = input.email.trim();
+  const fullNameTrim = input.fullName.trim();
+  if (!emailTrim || !fullNameTrim) {
+    throw new Error("Email and full name are required.");
+  }
+  const normalizedEmail = emailTrim.toLowerCase();
+
+  const [existingPortal] = await db
+    .select({ id: portalUsers.id })
+    .from(portalUsers)
+    .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+    .limit(1);
+  if (existingPortal) {
+    throw new Error(
+      "This email already belongs to a team member. They can sign in with their existing account.",
+    );
+  }
+
+  const [existingAuth] = await db
+    .select({ id: authUserTable.id })
+    .from(authUserTable)
+    .where(sql`lower(${authUserTable.email}) = ${normalizedEmail}`)
+    .limit(1);
+  if (existingAuth) {
+    throw new Error(
+      "An account with this email already exists. They should sign in instead of being invited.",
+    );
+  }
+
+  await inviteUserAuth({
+    email: emailTrim,
+    fullName: fullNameTrim,
+    role: input.role ?? "sales",
+    invitedByUserId: current.id,
+  });
 
   return { success: true };
 }

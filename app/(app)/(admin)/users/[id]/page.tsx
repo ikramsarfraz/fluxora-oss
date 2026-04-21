@@ -2,17 +2,15 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
-import {
-  updatePortalUser,
-  requestPortalUserPasswordReset,
-} from "@/lib/api/portal-users";
-import { queryKeys } from "@/lib/query/keys";
 import { PortalUserProfile } from "@/components/portal-user-profile";
-import { useUser } from "@/hooks/use-users";
+import {
+  useSendUserPasswordReset,
+  useSetUserActive,
+  useUser,
+} from "@/hooks/use-users";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -23,48 +21,26 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { isUuid } from "@/lib/utils/uuid";
+import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
-  const id = params.id;
-  const userId = id ? parseInt(id, 10) : NaN;
-  const queryClient = useQueryClient();
+  const userId = params.id;
 
   const [toggleOpen, setToggleOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
 
   const { data: session } = authClient.useSession();
 
-  const {
-    data: user,
-    isLoading,
-    error: loadError,
-  } = useUser(userId);
+  const { data: user, isLoading, error: loadError } = useUser(userId);
 
-  const toggleActive = useMutation({
-    mutationFn: (nextActive: boolean) =>
-      updatePortalUser(userId, { is_active: nextActive }),
-    onSuccess: updated => {
-      queryClient.setQueryData(queryKeys.users.detail(userId), updated);
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-      setToggleOpen(false);
-      toast.success(
-        updated.isActive ? "User activated" : "User deactivated",
-      );
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  const toggleActive = useSetUserActive();
+  const resetPassword = useSendUserPasswordReset();
 
-  const resetPassword = useMutation({
-    mutationFn: () => requestPortalUserPasswordReset(userId),
-    onSuccess: () => {
-      setResetOpen(false);
-      toast.success("Password reset email sent.");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  useSetBreadcrumbLabel(`/users/${userId}`, user?.fullName);
 
-  if (!Number.isInteger(userId) || userId < 1) {
+  if (!isUuid(userId)) {
     return (
       <div className="text-sm text-destructive" role="alert">
         Invalid user ID.
@@ -73,9 +49,7 @@ export default function UserDetailPage() {
   }
 
   if (isLoading) {
-    return (
-      <div className="text-muted-foreground">Loading user…</div>
-    );
+    return <div className="text-muted-foreground">Loading user…</div>;
   }
 
   if (loadError) {
@@ -130,7 +104,20 @@ export default function UserDetailPage() {
             </AlertDialogCancel>
             <Button
               onClick={() =>
-                toggleActive.mutate(!user.isActive)
+                toggleActive.mutate(
+                  { id: userId, isActive: !user.isActive },
+                  {
+                    onSuccess: updated => {
+                      setToggleOpen(false);
+                      toast.success(
+                        updated.isActive
+                          ? "User activated"
+                          : "User deactivated",
+                      );
+                    },
+                    onError: (e: Error) => toast.error(e.message),
+                  },
+                )
               }
               disabled={toggleActive.isPending}
             >
@@ -150,8 +137,8 @@ export default function UserDetailPage() {
             <AlertDialogTitle>Send password reset email?</AlertDialogTitle>
             <AlertDialogDescription>
               We will email a reset link to{" "}
-              <span className="font-medium text-foreground">{user.email}</span>
-              . They can choose a new password from that link.
+              <span className="font-medium text-foreground">{user.email}</span>.
+              They can choose a new password from that link.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -159,7 +146,15 @@ export default function UserDetailPage() {
               Cancel
             </AlertDialogCancel>
             <Button
-              onClick={() => resetPassword.mutate()}
+              onClick={() =>
+                resetPassword.mutate(userId, {
+                  onSuccess: () => {
+                    setResetOpen(false);
+                    toast.success("Password reset email sent.");
+                  },
+                  onError: (e: Error) => toast.error(e.message),
+                })
+              }
               disabled={resetPassword.isPending}
             >
               {resetPassword.isPending ? "Sending…" : "Send email"}

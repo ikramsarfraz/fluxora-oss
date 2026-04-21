@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customerProductPrices,
@@ -7,27 +7,72 @@ import {
   salesOrderLines,
   salesOrders,
 } from "@/db/schema";
+import { getCurrentTenant } from "./tenants";
 
-function makeOrderNumber(id: number) {
-  return `SO-${String(id).padStart(6, "0")}`;
+/** Short human-readable suffix. Prefix (if any) is applied downstream per-customer. */
+function makeOrderNumber(id: string) {
+  return `SO-${id.slice(0, 8).toUpperCase()}`;
+}
+
+export async function getSalesOrders() {
+  const tenant = await getCurrentTenant();
+  return await db.query.salesOrders.findMany({
+    where: eq(salesOrders.tenantId, tenant.id),
+    with: {
+      customer: true,
+      lines: true,
+    },
+    orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
+  });
+}
+
+/** Row shape returned by `getSalesOrders()` (for client `import type` only). */
+export type SalesOrderListItem = Awaited<
+  ReturnType<typeof getSalesOrders>
+>[number];
+
+export async function getSalesOrderById(id: string) {
+  const tenant = await getCurrentTenant();
+  const result = await db.query.salesOrders.findFirst({
+    where: and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)),
+    with: {
+      customer: true,
+      lines: {
+        with: {
+          product: true,
+          allocations: true,
+        },
+      },
+    },
+  });
+  return result ?? null;
+}
+
+export async function deleteSalesOrder(id: string) {
+  const tenant = await getCurrentTenant();
+  await db
+    .delete(salesOrders)
+    .where(and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)));
 }
 
 export async function createSalesOrder(input: {
-  customerId: number;
-  createdByUserId: number;
+  customerId: string;
+  createdByUserId: string;
   orderDate: string;
   dueDate?: string;
   addFuelSurcharge?: boolean;
   lines: Array<{
-    productId: number;
+    productId: string;
     expectedCases: number;
-    unitType?: "catch_weight" | "case" | "packet";
+    unitType?: "catch_weight" | "fixed_case";
     pricePerLbOverride?: string;
   }>;
 }) {
+  const tenant = await getCurrentTenant();
   const [order] = await db
     .insert(salesOrders)
     .values({
+      tenantId: tenant.id,
       customerId: input.customerId,
       orderDate: input.orderDate,
       dueDate: input.dueDate,
@@ -42,9 +87,7 @@ export async function createSalesOrder(input: {
 
   await db
     .update(salesOrders)
-    .set({
-      orderNumber,
-    })
+    .set({ orderNumber })
     .where(eq(salesOrders.id, order.id));
 
   for (const line of input.lines) {
@@ -79,16 +122,14 @@ export async function createSalesOrder(input: {
 
   return db.query.salesOrders.findFirst({
     where: eq(salesOrders.id, order.id),
-    with: {
-      lines: true,
-    },
+    with: { lines: true },
   });
 }
 
 export async function allocateInventoryToSalesOrderLine(input: {
-  salesOrderLineId: number;
+  salesOrderLineId: string;
   allocations: Array<{
-    inventoryItemId: number;
+    inventoryItemId: string;
     allocatedWeightLbs: string;
   }>;
 }) {
@@ -102,8 +143,6 @@ export async function allocateInventoryToSalesOrderLine(input: {
 
   return db.query.salesOrderLines.findFirst({
     where: eq(salesOrderLines.id, input.salesOrderLineId),
-    with: {
-      allocations: true,
-    },
+    with: { allocations: true },
   });
 }

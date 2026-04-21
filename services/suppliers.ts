@@ -1,62 +1,34 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers } from "@/db/schema";
+import { getCurrentTenant } from "./tenants";
 
-// export async function createCustomer(input: {
-//   name: string;
-//   phoneNumber?: string;
-//   fuelSurchargeAmount?: string;
-//   invoicePrefix?: string;
-//   address?: {
-//     addressType?: "billing" | "shipping" | "warehouse" | "other";
-//     street: string;
-//     city?: string;
-//     state?: string;
-//     zip?: string;
-//     isDefault?: boolean;
-//   };
-// }) {
-//   const [supplier] = await db
-//     .insert(suppliers)
-//     .values({
-//       name: input.name,
-//       phoneNumber: input.phoneNumber,
-//       fuelSurchargeAmount: input.fuelSurchargeAmount,
-//       invoicePrefix: input.invoicePrefix,
-//     })
-//     .returning();
-
-//   if (input.address) {
-//     await db.insert(supplierAddresses).values({
-//       supplierId: supplier.id,
-//       addressType: input.address.addressType ?? "shipping",
-//       street: input.address.street,
-//       city: input.address.city,
-//       state: input.address.state,
-//       zip: input.address.zip,
-//       isDefault: input.address.isDefault ?? true,
-//     });
-//   }
-
-//   return supplier;
-// }
-
-export async function getSupplierById(supplierId: number) {
+export async function getSupplierById(supplierId: string) {
+  const tenant = await getCurrentTenant();
   const result = await db.query.suppliers.findFirst({
-    where: eq(suppliers.id, supplierId),
+    where: and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenant.id)),
   });
 
   return result ?? null;
 }
 
 export async function getSuppliers() {
+  const tenant = await getCurrentTenant();
   const result = await db.query.suppliers.findMany({
     with: {
       productCosts: true,
     },
+    where: eq(suppliers.tenantId, tenant.id),
   });
 
   return result;
+}
+
+export async function deleteSupplier(id: string) {
+  const tenant = await getCurrentTenant();
+  await db
+    .delete(suppliers)
+    .where(and(eq(suppliers.id, id), eq(suppliers.tenantId, tenant.id)));
 }
 
 /** Row shape returned by `getSuppliers()` / list APIs (for client `import type` only). */
