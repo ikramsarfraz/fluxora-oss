@@ -14,6 +14,7 @@ import {
 } from "@/components/detail-section";
 import { PageError } from "@/components/page-error";
 import { PageLoading } from "@/components/page-loading";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,

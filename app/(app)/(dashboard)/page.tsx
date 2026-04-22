@@ -1,24 +1,34 @@
-"use client";
+import {
+  QueryClient,
+  dehydrate,
+  HydrationBoundary,
+} from "@tanstack/react-query";
 
-import { SectionCards } from "./components/section-cards";
-import { ChartAreaInteractive } from "./components/chart-area-interactive";
 import { PageHeader } from "@/components/page-header";
+import { queryKeys } from "@/lib/query/keys";
+import { getDashboardSummary } from "@/services/dashboard";
 
-export default function Home() {
+import { DashboardShell } from "./components/dashboard-shell";
+
+export default async function DashboardRoute() {
+  const queryClient = new QueryClient();
+
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.dashboard.summary,
+    queryFn: () => getDashboardSummary(),
+  });
+
   return (
     <div className="@container/main flex flex-1 flex-col gap-4">
       <div className="px-4 pt-2 lg:px-6">
         <PageHeader
           title="Dashboard"
-          description="Overview of your distribution operations and key metrics."
+          description="Overview of sales, purchasing, and inventory health."
         />
       </div>
-      <div className="flex flex-col gap-6">
-        <SectionCards />
-        <div className="px-4 lg:px-6">
-          <ChartAreaInteractive />
-        </div>
-      </div>
+      <HydrationBoundary state={dehydrate(queryClient)}>
+        <DashboardShell />
+      </HydrationBoundary>
     </div>
   );
 }

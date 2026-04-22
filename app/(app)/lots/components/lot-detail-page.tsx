@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useLot, useDeleteLot } from "@/hooks/use-lots";
@@ -112,7 +112,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
       item.fulfillments.map(fulfillment => fulfillment.salesOrder.id),
     ),
   );
-  const lotActionPreview = useMemo(() => {
+  const lotActionPreview = (() => {
     let adjustableCount = 0;
     let lockedCount = 0;
 
@@ -133,7 +133,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
     }
 
     return { adjustableCount, lockedCount };
-  }, [lot.inventoryItems]);
+  })();
   const canManageCorrections = canManageWarehouseCorrections(currentUser?.role);
   const lotActionDisabledReason = !canManageCorrections
     ? getWarehouseCorrectionDeniedReason()
