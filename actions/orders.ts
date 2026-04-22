@@ -3,6 +3,7 @@
 import {
   addInventoryAllocationToSalesOrderLine,
   allocateInventoryToSalesOrderLine,
+  cancelSalesOrder,
   createSalesOrder,
   deleteSalesOrder,
   getSalesOrderLineAllocationEditor,
@@ -73,6 +74,12 @@ export async function updateSalesOrderStatusAction(
   input: Parameters<typeof updateSalesOrderStatus>[0],
 ) {
   return await updateSalesOrderStatus(input);
+}
+
+export async function cancelSalesOrderAction(
+  input: Parameters<typeof cancelSalesOrder>[0],
+) {
+  return await cancelSalesOrder(input);
 }
 
 export async function updateSalesOrderAction(

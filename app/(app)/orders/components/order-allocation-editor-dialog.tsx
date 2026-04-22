@@ -23,6 +23,8 @@ import {
   useRemoveSalesOrderLineAllocation,
   useSalesOrderLineAllocationEditor,
 } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 const INVENTORY_STATUS_BADGE: Record<
   string,
@@ -58,6 +60,11 @@ export function OrderAllocationEditorDialog({
   );
   const addAllocation = useAddInventoryAllocationToSalesOrderLine();
   const removeAllocation = useRemoveSalesOrderLineAllocation();
+  const { data: currentUser } = useCurrentPortalUser();
+  const canManageAllocations = can(currentUser?.role, "fulfill_order");
+  const manageAllocationsDeniedReason = canManageAllocations
+    ? null
+    : getPermissionDeniedReason("fulfill_order");
 
   const data = allocationEditor.data;
   const isMutating = addAllocation.isPending || removeAllocation.isPending;
@@ -199,6 +206,16 @@ export function OrderAllocationEditorDialog({
               </Alert>
             ) : null}
 
+            {!canManageAllocations ? (
+              <Alert>
+                <ShieldAlert />
+                <AlertTitle>Allocation editing is restricted</AlertTitle>
+                <AlertDescription>
+                  {manageAllocationsDeniedReason}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-2">
               <section className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
@@ -248,7 +265,16 @@ export function OrderAllocationEditorDialog({
                             onClick={() =>
                               void onRemove(allocation.allocationId)
                             }
-                            disabled={!allocation.canRemove || isMutating}
+                            disabled={
+                              !allocation.canRemove ||
+                              isMutating ||
+                              !canManageAllocations
+                            }
+                            title={
+                              !canManageAllocations
+                                ? (manageAllocationsDeniedReason ?? undefined)
+                                : allocation.blockedReason ?? undefined
+                            }
                           >
                             Remove
                           </Button>
@@ -336,7 +362,17 @@ export function OrderAllocationEditorDialog({
                                   type="button"
                                   size="sm"
                                   onClick={() => void onAdd(item.id)}
-                                  disabled={!item.canAllocate || isMutating}
+                                  disabled={
+                                    !item.canAllocate ||
+                                    isMutating ||
+                                    !canManageAllocations
+                                  }
+                                  title={
+                                    !canManageAllocations
+                                      ? (manageAllocationsDeniedReason ??
+                                        undefined)
+                                      : item.blockedReason ?? undefined
+                                  }
                                 >
                                   Add
                                 </Button>

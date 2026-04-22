@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
+  useCancelSalesOrder,
   useDeleteSalesOrder,
   useGenerateInvoiceForSalesOrder,
   useSalesOrder,
@@ -49,9 +50,11 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const { data: currentUser } = useCurrentPortalUser();
 
   const deleteOrder = useDeleteSalesOrder();
+  const cancelOrder = useCancelSalesOrder();
   const generateInvoice = useGenerateInvoiceForSalesOrder();
   const updateOrderStatus = useUpdateSalesOrderStatus();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [fulfillmentDialogOpen, setFulfillmentDialogOpen] = useState(false);
 
@@ -134,6 +137,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           onEdit: actionState.canEdit
             ? () => router.push(`/orders/${order.id}/edit`)
             : undefined,
+          onCancel: () => setCancelOpen(true),
           onDelete: hasInvoice ? undefined : () => setDeleteOpen(true),
         }}
       />
@@ -220,6 +224,50 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               }}
             >
               {deleteOrder.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel sales order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark <strong>{title}</strong> as cancelled and release
+              any allocated inventory back to stock. Cancellation is recorded
+              in the activity timeline. The order is not deleted — its history
+              stays visible for audit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelOrder.isPending}>
+              Keep order
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={cancelOrder.isPending}
+              onClick={event => {
+                event.preventDefault();
+                cancelOrder.mutate(
+                  { id: order.id },
+                  {
+                    onSuccess: () => {
+                      toast.success("Order cancelled.");
+                      setCancelOpen(false);
+                    },
+                    onError: error => {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "Could not cancel order.",
+                      );
+                    },
+                  },
+                );
+              }}
+            >
+              {cancelOrder.isPending ? "Cancelling…" : "Cancel order"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

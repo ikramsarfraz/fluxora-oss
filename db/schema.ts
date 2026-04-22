@@ -110,6 +110,11 @@ export const fileStatusEnum = pgEnum("file_status", [
 
 export const fileStorageProviderEnum = pgEnum("file_storage_provider", ["r2"]);
 
+export const supplierInvoiceStatusEnum = pgEnum("supplier_invoice_status", [
+  "draft",
+  "completed",
+]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "insert",
   "update",
@@ -705,6 +710,8 @@ export const supplierInvoices = pgTable(
       .references(() => suppliers.id, { onDelete: "restrict" }),
     invoiceNumber: varchar("invoice_number", { length: 64 }).notNull(),
     invoiceDate: date("invoice_date").notNull(),
+    receiveDate: date("receive_date").notNull(),
+    status: supplierInvoiceStatusEnum("status").notNull().default("draft"),
     totalAmount: numeric("total_amount", { precision: 12, scale: 4 })
       .notNull()
       .default("0"),
@@ -725,6 +732,13 @@ export const supplierInvoices = pgTable(
         onDelete: "set null",
       },
     ),
+    completedByUserId: uuid("completed_by_user_id").references(
+      () => portalUsers.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -744,6 +758,7 @@ export const supplierInvoices = pgTable(
       table.tenantId,
       table.invoiceDate,
     ),
+    index("supplier_invoices_tenant_status_idx").on(table.tenantId, table.status),
   ],
 );
 

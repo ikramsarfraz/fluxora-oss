@@ -1566,6 +1566,8 @@ async function seedSupplierInvoices(
           supplierId: supplier.id,
           invoiceNumber,
           invoiceDate,
+          receiveDate: invoiceDate,
+          status: "completed",
           totalAmount: "0.0000",
           amountPaid: i === 0 ? "0.00" : "250.00",
           paymentMethod: i === 0 ? null : "check",

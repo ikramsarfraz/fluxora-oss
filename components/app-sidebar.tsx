@@ -105,6 +105,11 @@ const navMain: NavGroup[] = [
         url: "/suppliers",
         icon: Truck,
       },
+      {
+        title: "Supplier Invoices",
+        url: "/supplier-invoices",
+        icon: Receipt,
+      },
     ],
   },
   {

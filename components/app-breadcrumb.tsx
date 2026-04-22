@@ -59,6 +59,7 @@ function labelForSegment(
     if (prevSegment === "users") return "Invite user";
     if (prevSegment === "units-of-measure") return "New unit";
     if (prevSegment === "products") return "New product";
+    if (prevSegment === "supplier-invoices") return "New invoice";
   }
   return SEGMENT_LABELS[segment] ?? humanizeSegment(segment);
 }

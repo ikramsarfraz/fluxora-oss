@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  auditLogs,
   customerProductPrices,
   customers,
   inventoryItems,
@@ -704,6 +705,117 @@ export async function updateSalesOrderStatus(input: {
   return getSalesOrderById(input.id);
 }
 
+/**
+ * Cancel a sales order.
+ *
+ * Rules (enforced here, authoritative over any client-side gating):
+ * - Requires `edit_order` permission.
+ * - Tenant ownership is verified.
+ * - Blocks if the order is already cancelled.
+ * - Blocks if the order has any invoice (invoiced orders are financially locked).
+ * - Blocks if any line has fulfillment or short-ship activity. Cancel is for
+ *   orders that are still effectively open; once stock has moved out of the
+ *   warehouse the correct tool is fulfillment reversal / credit-memo, not cancel.
+ *
+ * Writes a `sales_orders` row to `audit_logs` with the status transition and
+ * optional reason so the activity timeline surfaces the cancellation.
+ */
+export async function cancelSalesOrder(input: {
+  id: string;
+  reason?: string | null;
+}) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+
+  requirePermission(currentUser.role, "edit_order");
+
+  const order = await db.query.salesOrders.findFirst({
+    where: and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
+    with: {
+      lines: {
+        columns: {
+          id: true,
+          fulfilledCases: true,
+          shortShippedAt: true,
+        },
+        with: {
+          fulfillments: {
+            columns: { id: true, reversedAt: true },
+          },
+        },
+      },
+      invoices: {
+        columns: { id: true },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Sales order not found.");
+  }
+
+  if (order.status === "cancelled") {
+    throw new Error("This order is already cancelled.");
+  }
+
+  if ((order.invoices?.length ?? 0) > 0) {
+    throw new Error("Orders lock after invoicing and cannot be cancelled.");
+  }
+
+  const hasFulfillmentActivity = (order.lines ?? []).some(line => {
+    if (line.fulfilledCases > 0) return true;
+    if (line.shortShippedAt != null) return true;
+    const activeFulfillments = (line.fulfillments ?? []).filter(
+      fulfillment => fulfillment.reversedAt == null,
+    );
+    return activeFulfillments.length > 0;
+  });
+
+  if (hasFulfillmentActivity) {
+    throw new Error(
+      "Cannot cancel an order once fulfillment or short-ship activity has started. Reverse fulfillment first, then cancel.",
+    );
+  }
+
+  const previousStatus = order.status;
+  const trimmedReason = input.reason?.trim() ? input.reason.trim() : null;
+  const now = new Date();
+
+  await db
+    .update(salesOrders)
+    .set({
+      status: "cancelled",
+      updatedByUserId: currentUser.id,
+      updatedAt: now,
+    })
+    .where(
+      and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
+    );
+
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "update",
+    entityTable: "sales_orders",
+    entityId: input.id,
+    entityLabel: order.orderNumber ?? null,
+    changedFieldsJson: JSON.stringify(["status"]),
+    beforeJson: JSON.stringify({ status: previousStatus }),
+    afterJson: JSON.stringify({ status: "cancelled" }),
+    contextJson: JSON.stringify({
+      action: "cancel_order",
+      reason: trimmedReason,
+    }),
+  });
+
+  return getSalesOrderById(input.id);
+}
+
 export async function updateSalesOrder(input: {
   id: string;
   customerId: string;
@@ -957,6 +1069,9 @@ export async function allocateInventoryToSalesOrderLine(input: {
     allocatedWeightLbs: string;
   }>;
 }) {
+  const currentUser = await getCurrentPortalUser();
+  requirePermission(currentUser.role, "fulfill_order");
+
   for (const allocation of input.allocations) {
     await db.insert(salesOrderLineAllocations).values({
       salesOrderLineId: input.salesOrderLineId,
@@ -1160,6 +1275,8 @@ export async function addInventoryAllocationToSalesOrderLine(input: {
     throw new Error("Forbidden");
   }
 
+  requirePermission(currentUser.role, "fulfill_order");
+
   const order = await db.query.salesOrders.findFirst({
     where: and(
       eq(salesOrders.id, input.salesOrderId),
@@ -1278,6 +1395,8 @@ export async function removeSalesOrderLineAllocation(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "fulfill_order");
 
   const order = await db.query.salesOrders.findFirst({
     where: and(

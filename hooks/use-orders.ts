@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addInventoryAllocationToSalesOrderLineAction,
+  cancelSalesOrderAction,
   createSalesOrderAction,
   deleteSalesOrderAction,
   generateInvoiceForSalesOrderAction,
@@ -99,6 +100,23 @@ export function useUpdateSalesOrderStatus() {
 
   return useMutation({
     mutationFn: updateSalesOrderStatusAction,
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.activity(variables.id),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
+    },
+  });
+}
+
+export function useCancelSalesOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: cancelSalesOrderAction,
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.salesOrders.detail(variables.id),

@@ -265,17 +265,21 @@ export function OrderHeader({
                 (actions.onCancel || actions.onDelete) && (
                   <DropdownMenuSeparator />
                 )}
-              {actions.onCancel &&
-                order.status !== "cancelled" &&
-                !actionState.hasInvoice && (
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onSelect={actions.onCancel}
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Cancel order
-                  </DropdownMenuItem>
-                )}
+              {actions.onCancel && order.status !== "cancelled" && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={actionState.canCancel ? actions.onCancel : undefined}
+                  disabled={!actionState.canCancel}
+                  title={
+                    !actionState.canCancel
+                      ? (actionState.cancelReason ?? undefined)
+                      : undefined
+                  }
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  Cancel order
+                </DropdownMenuItem>
+              )}
               {actions.onDelete && !actionState.hasInvoice && (
                 <DropdownMenuItem
                   variant="destructive"

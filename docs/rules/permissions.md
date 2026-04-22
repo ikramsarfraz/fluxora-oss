@@ -48,6 +48,27 @@ authority and fails with a `Forbidden: <reason>` error.
 | `generate_invoice` | `OrderHeader` primary "Generate invoice" button · "Generate invoice" in `OrderFinancialSummary` | `generateInvoiceForSalesOrder` in `services/invoicing.ts` |
 | `record_payment` | `OrderHeader` primary "Record payment" button · submit in `OrderPaymentEntryDialog` | `recordPaymentForSalesOrderInvoice` in `services/invoicing.ts` |
 
+### Reused permission mappings
+
+Some actions do not get their own dedicated permission; they reuse one of the
+permissions above. The behavior and enforcement points are listed here for
+completeness.
+
+| Action | Permission reused | Client (UI gate) | Server (service guard) |
+|---|---|---|---|
+| Manage allocations (add / remove inventory allocations on a line) | `fulfill_order` | `OrderAllocationEditorDialog` Add / Remove buttons · restriction alert | `allocateInventoryToSalesOrderLine`, `addInventoryAllocationToSalesOrderLine`, `removeSalesOrderLineAllocation` in `services/orders.ts` |
+| Cancel order | `edit_order` | `OrderHeader` "Cancel order" menu item · confirm dialog in `OrderDetailPage` | `cancelSalesOrder` in `services/orders.ts` (writes a `sales_orders` audit-log row with the status transition) |
+
+Rationale:
+
+- **Allocations → `fulfill_order`**: allocation is fulfillment prep. Anyone who
+  can record fulfillment also needs to shape the inventory that feeds it.
+  Introducing a separate `manage_allocations` permission was not justified —
+  the warehouse role is the natural owner of both actions.
+- **Cancel → `edit_order`**: cancellation is a destructive edit. Keeping it on
+  `edit_order` keeps the permission surface small and aligns roles that can
+  create / mutate an order with the role that can cancel it.
+
 ## Layering with workflow state
 
 The helper `getOrderActionAvailability(order, role)` returns one `canXxx` flag
@@ -67,16 +88,28 @@ still cannot generate an invoice until every line is closed.
 
 ## Known gaps
 
-- **Inventory allocation mutations** (`allocateInventoryToSalesOrderLine`,
-  `addInventoryAllocationToSalesOrderLine`, `removeSalesOrderLineAllocation` in
-  `services/orders.ts`) are not currently on the permission list. Consider
-  gating them under `fulfill_order` for defense-in-depth.
-- **Cancel order** is not a distinct permission; it is currently gated only by
-  workflow state. Consider adding a `cancel_order` permission if cancellation
-  should be role-scoped.
-- **Read access / row visibility** is not role-gated — any authenticated
-  portal user in the tenant can still read orders, invoices, and payments.
-  Only mutation actions are gated.
+- **Cancel is all-or-nothing once fulfillment starts.** `cancelSalesOrder`
+  refuses to cancel when any line has fulfilled cases, an active (non-reversed)
+  fulfillment, or a short-ship marker. Those orders must first be reversed via
+  the fulfillment reversal flow. An alternative design that auto-reverses and
+  cancels in one step is intentionally out of scope — reversal has its own
+  permission (`reverse_fulfillment`) and its own audit trail, and combining
+  them would hide the reversal in the cancel history.
+- **No undo / reopen flow.** Once an order is `cancelled` there is no
+  server-side path back to `sales_order` or `confirmed`. If a user cancels by
+  mistake, the remediation today is to create a new order. Adding reopen
+  would need its own permission decision and its own timeline entry.
+- **Read access / row visibility is not role-gated.** Any authenticated portal
+  user in the tenant can still read orders, invoices, payments, and allocation
+  editor data (`getSalesOrderLineAllocationEditor`). Only mutation actions are
+  gated. If sales / warehouse / accounting should have narrower read scopes,
+  that is a separate, larger change (list-level filters + detail guards) and
+  is intentionally out of scope for the current permission model.
+- **Allocation snapshot / reconciliation side-effects.** The permission check
+  fires on the public service entrypoints. Internal reconciliation helpers
+  called downstream (e.g. `reconcileSalesOrderLineAllocations`) assume the
+  caller has already been authorized. Keep this invariant if adding new
+  entrypoints.
 
 ## Changing the matrix
 

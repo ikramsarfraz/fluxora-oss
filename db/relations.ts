@@ -129,6 +129,9 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   supplierInvoicesUpdated: many(supplierInvoices, {
     relationName: "supplier_invoices_updated_by",
   }),
+  supplierInvoicesCompleted: many(supplierInvoices, {
+    relationName: "supplier_invoices_completed_by",
+  }),
   salesInvoicesCreated: many(salesInvoices, {
     relationName: "sales_invoices_created_by",
   }),
@@ -363,6 +366,11 @@ export const supplierInvoicesRelations = relations(
       fields: [supplierInvoices.updatedByUserId],
       references: [portalUsers.id],
       relationName: "supplier_invoices_updated_by",
+    }),
+    completedBy: one(portalUsers, {
+      fields: [supplierInvoices.completedByUserId],
+      references: [portalUsers.id],
+      relationName: "supplier_invoices_completed_by",
     }),
     lines: many(supplierInvoiceLines),
     tenant: one(tenants, {
