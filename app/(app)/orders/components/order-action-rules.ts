@@ -1,4 +1,10 @@
 import type { SalesOrderDetail } from "@/services/orders";
+import {
+  can,
+  getPermissionDeniedReason,
+  type OrderPermission,
+  type PortalUserRole,
+} from "@/lib/auth/permissions";
 
 import { getLineRemainingQuantity } from "./order-fulfillment-utils";
 
@@ -22,6 +28,12 @@ export interface OrderActionAvailability {
   confirmReason: string | null;
   canStartFulfillment: boolean;
   startFulfillmentReason: string | null;
+  canFulfill: boolean;
+  fulfillReason: string | null;
+  canShortShip: boolean;
+  shortShipReason: string | null;
+  canReverseFulfillment: boolean;
+  reverseFulfillmentReason: string | null;
   canGenerateInvoice: boolean;
   generateInvoiceReason: string | null;
   canRecordPayment: boolean;
@@ -29,8 +41,33 @@ export interface OrderActionAvailability {
   primaryActionKey: OrderPrimaryActionKey | null;
 }
 
+/**
+ * Layer a role permission on top of a workflow-state reason. Workflow state
+ * takes precedence in the message — if the state already blocks, we surface
+ * that reason first; otherwise fall back to the role reason when denied.
+ */
+function layerPermission(
+  workflowReason: string | null,
+  role: PortalUserRole | null | undefined,
+  permission: OrderPermission,
+): string | null {
+  if (workflowReason) return workflowReason;
+  if (role === undefined) return null;
+  if (!can(role, permission)) return getPermissionDeniedReason(permission);
+  return null;
+}
+
+/**
+ * Compute availability for all sales-order actions.
+ *
+ * When `role` is provided, role-based permissions are layered on top of the
+ * existing workflow rules — an action is allowed only when both the workflow
+ * state and the role allow it. When `role` is omitted (`undefined`), only
+ * workflow rules apply (useful for read-only previews / legacy callers).
+ */
 export function getOrderActionAvailability(
   order: SalesOrderDetail,
+  role?: PortalUserRole | null,
 ): OrderActionAvailability {
   const invoices = order.invoices ?? [];
   const hasInvoice = invoices.length > 0;
@@ -60,17 +97,18 @@ export function getOrderActionAvailability(
       (line.allocations?.length ?? 0) > 0,
   );
 
-  const editReason =
+  const editWorkflowReason =
     order.status === "cancelled"
       ? "Cancelled orders are locked."
       : hasInvoice
         ? "Orders lock after invoicing."
         : hasOperationalActivity
           ? "Editing locks once fulfillment or allocation work has started."
-        : null;
+          : null;
+  const editReason = layerPermission(editWorkflowReason, role, "edit_order");
   const canEdit = editReason == null;
 
-  const confirmReason =
+  const confirmWorkflowReason =
     order.status === "cancelled"
       ? "Cancelled orders cannot be confirmed."
       : hasInvoice
@@ -80,9 +118,14 @@ export function getOrderActionAvailability(
           : !hasLines
             ? "Add at least one line before confirming."
             : null;
+  const confirmReason = layerPermission(
+    confirmWorkflowReason,
+    role,
+    "confirm_order",
+  );
   const canConfirm = confirmReason == null;
 
-  const startFulfillmentReason =
+  const startFulfillmentWorkflowReason =
     order.status === "cancelled"
       ? "Cancelled orders cannot be fulfilled."
       : hasInvoice
@@ -94,9 +137,60 @@ export function getOrderActionAvailability(
             : !hasOpenLines
               ? "All lines are already closed."
               : null;
+  const startFulfillmentReason = layerPermission(
+    startFulfillmentWorkflowReason,
+    role,
+    "fulfill_order",
+  );
   const canStartFulfillment = startFulfillmentReason == null;
 
-  const generateInvoiceReason =
+  // Recording fulfillment is broader than starting: allowed whenever the
+  // order is not cancelled/invoiced and there is still open demand.
+  const fulfillWorkflowReason =
+    order.status === "cancelled"
+      ? "Cancelled orders cannot be fulfilled."
+      : hasInvoice
+        ? "Invoiced orders are closed for new fulfillment."
+        : !hasLines
+          ? "Add line items before recording fulfillment."
+          : !hasOpenLines
+            ? "All lines are already closed."
+            : null;
+  const fulfillReason = layerPermission(
+    fulfillWorkflowReason,
+    role,
+    "fulfill_order",
+  );
+  const canFulfill = fulfillReason == null;
+
+  const shortShipWorkflowReason =
+    order.status === "cancelled"
+      ? "Cancelled orders cannot be short shipped."
+      : hasInvoice
+        ? "Invoiced orders can no longer be short shipped."
+        : !hasLines
+          ? "Add line items before closing a line short."
+          : !hasOpenLines
+            ? "All lines are already closed."
+            : null;
+  const shortShipReason = layerPermission(
+    shortShipWorkflowReason,
+    role,
+    "short_ship_order",
+  );
+  const canShortShip = shortShipReason == null;
+
+  const reverseFulfillmentWorkflowReason = hasInvoice
+    ? "Reverse actions are locked after invoicing."
+    : null;
+  const reverseFulfillmentReason = layerPermission(
+    reverseFulfillmentWorkflowReason,
+    role,
+    "reverse_fulfillment",
+  );
+  const canReverseFulfillment = reverseFulfillmentReason == null;
+
+  const generateInvoiceWorkflowReason =
     order.status === "cancelled"
       ? "Cancelled orders cannot be invoiced."
       : hasInvoice
@@ -106,14 +200,23 @@ export function getOrderActionAvailability(
           : !readyToInvoice
             ? "All lines must be fulfilled or short shipped first."
             : null;
+  const generateInvoiceReason = layerPermission(
+    generateInvoiceWorkflowReason,
+    role,
+    "generate_invoice",
+  );
   const canGenerateInvoice = generateInvoiceReason == null;
 
-  const recordPaymentReason =
-    !hasInvoice
-      ? "Generate an invoice before recording payment."
-      : totalInvoiceBalance <= 0
-        ? "All invoice balances are already paid."
-        : null;
+  const recordPaymentWorkflowReason = !hasInvoice
+    ? "Generate an invoice before recording payment."
+    : totalInvoiceBalance <= 0
+      ? "All invoice balances are already paid."
+      : null;
+  const recordPaymentReason = layerPermission(
+    recordPaymentWorkflowReason,
+    role,
+    "record_payment",
+  );
   const canRecordPayment = recordPaymentReason == null;
 
   let primaryActionKey: OrderPrimaryActionKey | null = null;
@@ -143,6 +246,12 @@ export function getOrderActionAvailability(
     confirmReason,
     canStartFulfillment,
     startFulfillmentReason,
+    canFulfill,
+    fulfillReason,
+    canShortShip,
+    shortShipReason,
+    canReverseFulfillment,
+    reverseFulfillmentReason,
     canGenerateInvoice,
     generateInvoiceReason,
     canRecordPayment,

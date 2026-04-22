@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  getCurrentPortalUser,
   getUserById,
   getUsers,
   inviteUserByAdmin,
@@ -13,6 +14,24 @@ import { listPendingInvitationsForAdmin } from "@/services/invitations";
 export async function getUsersAction() {
   return await getUsers();
 }
+
+/**
+ * Returns a minimal, client-safe view of the signed-in portal user.
+ * Used by client components that need the user's role for permission gating.
+ */
+export async function getCurrentPortalUserAction() {
+  const user = await getCurrentPortalUser();
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    role: user.role as PortalUserRole,
+  };
+}
+
+export type CurrentPortalUser = Awaited<
+  ReturnType<typeof getCurrentPortalUserAction>
+>;
 
 export async function getUserByIdAction(id: string) {
   const user = await getUserById(id);

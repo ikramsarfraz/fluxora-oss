@@ -36,9 +36,11 @@ import {
   useMarkSalesOrderLineShortShipped,
   useRecordSalesOrderFulfillment,
 } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
 import type { SalesOrderDetail } from "@/services/orders";
 
+import { getOrderActionAvailability } from "./order-action-rules";
 import {
   getLineFulfillmentState,
   getLineRemainingQuantity,
@@ -269,6 +271,11 @@ export function OrderFulfillmentEntryDialog({
 }: OrderFulfillmentEntryDialogProps) {
   const createFulfillment = useRecordSalesOrderFulfillment();
   const markShortShipped = useMarkSalesOrderLineShortShipped();
+  const { data: currentUser } = useCurrentPortalUser();
+  const actionState = useMemo(
+    () => getOrderActionAvailability(order, currentUser?.role),
+    [order, currentUser?.role],
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const lineOptions = useMemo(() => buildLineOptions(order.lines ?? []), [order.lines]);
@@ -370,7 +377,12 @@ export function OrderFulfillmentEntryDialog({
   const isCatchWeight = selectedLine?.line.unitType === "catch_weight";
   const isSubmitting =
     createFulfillment.isPending || markShortShipped.isPending;
-  const canSubmit = lineOptions.length > 0 && !isSubmitting;
+  const canRecordFulfillment = actionState.canFulfill;
+  const recordFulfillmentReason = actionState.fulfillReason;
+  const canShortShip = actionState.canShortShip;
+  const shortShipReason = actionState.shortShipReason;
+  const canSubmit =
+    lineOptions.length > 0 && !isSubmitting && canRecordFulfillment;
 
   async function onSubmit(values: FulfillmentFormValues) {
     setSubmitError(null);
@@ -443,6 +455,12 @@ export function OrderFulfillmentEntryDialog({
             <AlertCircle />
             <AlertTitle>Could not record fulfillment</AlertTitle>
             <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        ) : !canRecordFulfillment && recordFulfillmentReason ? (
+          <Alert>
+            <AlertCircle />
+            <AlertTitle>Recording fulfillment is not available</AlertTitle>
+            <AlertDescription>{recordFulfillmentReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -727,7 +745,12 @@ export function OrderFulfillmentEntryDialog({
               type="button"
               variant="outline"
               onClick={() => void onShortShip()}
-              disabled={!canSubmit || selectedLine.remainingQuantity <= 0}
+              disabled={
+                isSubmitting ||
+                selectedLine.remainingQuantity <= 0 ||
+                !canShortShip
+              }
+              title={!canShortShip ? (shortShipReason ?? undefined) : undefined}
             >
               {markShortShipped.isPending
                 ? "Closing…"
@@ -745,6 +768,11 @@ export function OrderFulfillmentEntryDialog({
             type="submit"
             form="order-fulfillment-entry-form"
             disabled={!canSubmit}
+            title={
+              !canRecordFulfillment
+                ? (recordFulfillmentReason ?? undefined)
+                : undefined
+            }
           >
             {createFulfillment.isPending ? "Recording…" : "Record fulfillment"}
           </Button>

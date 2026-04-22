@@ -26,7 +26,9 @@ import { cn } from "@/lib/utils";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 import type { SalesOrderDetail } from "@/services/orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
+import { getOrderActionAvailability } from "./order-action-rules";
 import {
   formatFulfillmentTimestamp,
   getLineAllocationReconciliation,
@@ -208,14 +210,20 @@ export function OrderFulfillmentSection({
   const [selectedFulfillmentId, setSelectedFulfillmentId] = useState<string | null>(
     null,
   );
+  const { data: currentUser } = useCurrentPortalUser();
+  const actionState = useMemo(
+    () => getOrderActionAvailability(order, currentUser?.role),
+    [order, currentUser?.role],
+  );
   const lines = order.lines ?? [];
   const stats = useMemo(() => computeStats(lines), [lines]);
   const meta = STATUS_META[stats.status];
   const Icon = meta.icon;
   const updatedBy = order.updatedBy?.fullName ?? null;
-  const hasOpenLines = lines.some(line => getLineRemainingQuantity(line) > 0);
-  const canRecordFulfillment = order.status !== "cancelled" && hasOpenLines;
-  const canReverseFulfillment = (order.invoices?.length ?? 0) === 0;
+  const canRecordFulfillment = actionState.canFulfill;
+  const recordFulfillmentReason = actionState.fulfillReason;
+  const canReverseFulfillment = actionState.canReverseFulfillment;
+  const reverseFulfillmentReason = actionState.reverseFulfillmentReason;
   const fulfillmentEntries = useMemo(
     () =>
       [...(order.fulfillments ?? [])].sort(
@@ -262,6 +270,9 @@ export function OrderFulfillmentSection({
           type="button"
           onClick={() => setEntryOpen(true)}
           disabled={!canRecordFulfillment}
+          title={
+            !canRecordFulfillment ? (recordFulfillmentReason ?? undefined) : undefined
+          }
         >
           <PackagePlus className="h-4 w-4" />
           Record fulfillment
@@ -526,7 +537,8 @@ export function OrderFulfillmentSection({
           </h3>
           {!canReverseFulfillment ? (
             <span className="text-xs text-muted-foreground">
-              Reverse actions are locked after invoicing.
+              {reverseFulfillmentReason ??
+                "Reverse actions are locked after invoicing."}
             </span>
           ) : null}
         </div>
@@ -625,6 +637,11 @@ export function OrderFulfillmentSection({
                           size="sm"
                           onClick={() => setSelectedFulfillmentId(fulfillment.id)}
                           disabled={!canReverseFulfillment}
+                          title={
+                            !canReverseFulfillment
+                              ? (reverseFulfillmentReason ?? undefined)
+                              : undefined
+                          }
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                           Reverse

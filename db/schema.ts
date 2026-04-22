@@ -77,6 +77,11 @@ export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "fixed_case",
 ]);
 
+export const pricingUnitTypeEnum = pgEnum("pricing_unit_type", [
+  "per_lb",
+  "per_case",
+]);
+
 export const inventoryItemStatusEnum = pgEnum("inventory_item_status", [
   "in_stock",
   "allocated",
@@ -932,6 +937,15 @@ export const salesOrderLines = pgTable(
       "sales_unit_abbreviation_snapshot",
       { length: 16 },
     ),
+    pricingUnitTypeSnapshot: pricingUnitTypeEnum("pricing_unit_type_snapshot"),
+    pricePerUnitSnapshot: numeric("price_per_unit_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
+    pricingConversionSnapshot: numeric("pricing_conversion_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
     expectedCases: integer("expected_cases").notNull(),
     fulfilledCases: integer("fulfilled_cases").notNull().default(0),
     unitType: lineUnitTypeEnum("unit_type").notNull().default("catch_weight"),

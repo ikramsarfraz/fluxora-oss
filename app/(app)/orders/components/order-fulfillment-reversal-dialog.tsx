@@ -17,6 +17,8 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { useReverseSalesOrderFulfillment } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 import { formatFulfillmentTimestamp } from "./order-fulfillment-utils";
 
@@ -47,6 +49,11 @@ export function OrderFulfillmentReversalDialog({
   fulfillment,
 }: OrderFulfillmentReversalDialogProps) {
   const reverseFulfillment = useReverseSalesOrderFulfillment();
+  const { data: currentUser } = useCurrentPortalUser();
+  const canReverse = can(currentUser?.role, "reverse_fulfillment");
+  const reverseDeniedReason = canReverse
+    ? null
+    : getPermissionDeniedReason("reverse_fulfillment");
   const [reversalReason, setReversalReason] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -94,6 +101,12 @@ export function OrderFulfillmentReversalDialog({
             <AlertCircle />
             <AlertTitle>Could not reverse fulfillment</AlertTitle>
             <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        ) : reverseDeniedReason ? (
+          <Alert>
+            <AlertCircle />
+            <AlertTitle>Reverse is not available</AlertTitle>
+            <AlertDescription>{reverseDeniedReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -144,7 +157,10 @@ export function OrderFulfillmentReversalDialog({
             type="button"
             variant="destructive"
             onClick={() => void onReverse()}
-            disabled={!fulfillment || reverseFulfillment.isPending}
+            disabled={
+              !fulfillment || reverseFulfillment.isPending || !canReverse
+            }
+            title={reverseDeniedReason ?? undefined}
           >
             <RotateCcw className="h-4 w-4" />
             {reverseFulfillment.isPending ? "Reversing…" : "Reverse fulfillment"}

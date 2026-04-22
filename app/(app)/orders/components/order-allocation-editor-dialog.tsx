@@ -51,7 +51,11 @@ export function OrderAllocationEditorDialog({
   orderId,
   lineId,
 }: OrderAllocationEditorDialogProps) {
-  const allocationEditor = useSalesOrderLineAllocationEditor(orderId, lineId, open);
+  const allocationEditor = useSalesOrderLineAllocationEditor(
+    orderId,
+    lineId,
+    open,
+  );
   const addAllocation = useAddInventoryAllocationToSalesOrderLine();
   const removeAllocation = useRemoveSalesOrderLineAllocation();
 
@@ -166,7 +170,7 @@ export function OrderAllocationEditorDialog({
             </AlertDescription>
           </Alert>
         ) : data ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 -mx-4 no-scrollbar max-h-[50vh] overflow-y-auto px-4">
             <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 md:grid-cols-4">
               <SummaryStat label="Line" value={data.line.productLabel} />
               <SummaryStat
@@ -210,7 +214,10 @@ export function OrderAllocationEditorDialog({
                     {data.allocatedInventory.map(allocation => (
                       <InventoryCard
                         key={allocation.allocationId}
-                        title={allocation.inventoryItem?.barcodeId ?? "Inventory item"}
+                        title={
+                          allocation.inventoryItem?.barcodeId ??
+                          "Inventory item"
+                        }
                         subtitle={
                           allocation.inventoryItem?.lotNumber
                             ? `Lot ${allocation.inventoryItem.lotNumber}`
@@ -223,7 +230,9 @@ export function OrderAllocationEditorDialog({
                               0,
                           ).toFixed(2)} lbs`,
                           `${allocation.inventoryItem?.cases ?? 1} case${
-                            (allocation.inventoryItem?.cases ?? 1) === 1 ? "" : "s"
+                            (allocation.inventoryItem?.cases ?? 1) === 1
+                              ? ""
+                              : "s"
                           }`,
                           allocation.inventoryItem?.expirationDate
                             ? `Exp ${formatDisplayDate(allocation.inventoryItem.expirationDate)}`
@@ -236,7 +245,9 @@ export function OrderAllocationEditorDialog({
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => void onRemove(allocation.allocationId)}
+                            onClick={() =>
+                              void onRemove(allocation.allocationId)
+                            }
                             disabled={!allocation.canRemove || isMutating}
                           >
                             Remove
@@ -255,7 +266,9 @@ export function OrderAllocationEditorDialog({
 
               <section className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-medium">Available in-stock inventory</h3>
+                  <h3 className="text-sm font-medium">
+                    Available in-stock inventory
+                  </h3>
                   <span className="text-xs text-muted-foreground">
                     {data.availableInventory.length} candidate item
                     {data.availableInventory.length === 1 ? "" : "s"}
@@ -265,12 +278,17 @@ export function OrderAllocationEditorDialog({
                 {data.availableInventory.length > 0 ? (
                   <div className="space-y-4">
                     {availableByLot.map(group => (
-                      <div key={group.key} className="rounded-lg border bg-muted/10 p-3">
+                      <div
+                        key={group.key}
+                        className="rounded-lg border bg-muted/10 p-3"
+                      >
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium">
-                                {group.lotNumber ? `Lot ${group.lotNumber}` : "No lot"}
+                                {group.lotNumber
+                                  ? `Lot ${group.lotNumber}`
+                                  : "No lot"}
                               </span>
                               <LotStatusBadge
                                 expirationDate={group.expirationDate}
@@ -286,8 +304,10 @@ export function OrderAllocationEditorDialog({
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {group.itemCount} item{group.itemCount === 1 ? "" : "s"} ·{" "}
-                            {group.totalCases} case{group.totalCases === 1 ? "" : "s"} ·{" "}
+                            {group.itemCount} item
+                            {group.itemCount === 1 ? "" : "s"} ·{" "}
+                            {group.totalCases} case
+                            {group.totalCases === 1 ? "" : "s"} ·{" "}
                             {group.totalWeight.toFixed(2)} lbs
                           </span>
                         </div>
@@ -297,7 +317,11 @@ export function OrderAllocationEditorDialog({
                             <InventoryCard
                               key={item.id}
                               title={item.barcodeId}
-                              subtitle={item.lotNumber ? `Lot ${item.lotNumber}` : "No lot"}
+                              subtitle={
+                                item.lotNumber
+                                  ? `Lot ${item.lotNumber}`
+                                  : "No lot"
+                              }
                               meta={[
                                 `${Number(item.exactWeightLbs ?? 0).toFixed(2)} lbs`,
                                 `${item.cases ?? 1} case${(item.cases ?? 1) === 1 ? "" : "s"}`,
@@ -326,7 +350,8 @@ export function OrderAllocationEditorDialog({
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">
-                    No in-stock inventory is currently available for this product.
+                    No in-stock inventory is currently available for this
+                    product.
                   </div>
                 )}
               </section>
@@ -337,8 +362,8 @@ export function OrderAllocationEditorDialog({
                 <RefreshCcw />
                 <AlertTitle>Allocation gap is currently full</AlertTitle>
                 <AlertDescription>
-                  Remove or release an existing allocation before adding a replacement
-                  item to this line.
+                  Remove or release an existing allocation before adding a
+                  replacement item to this line.
                 </AlertDescription>
               </Alert>
             ) : null}
@@ -409,7 +434,9 @@ function InventoryCard({
             ))}
           </div>
           {note ? (
-            <div className="text-xs text-amber-700 dark:text-amber-300">{note}</div>
+            <div className="text-xs text-amber-700 dark:text-amber-300">
+              {note}
+            </div>
           ) : null}
         </div>
         <div>{action}</div>
@@ -446,11 +473,16 @@ function getExpirationStatus(
   expirationDate: string | Date | null | undefined,
 ): "ok" | "warning" | "expired" {
   if (!expirationDate) return "ok";
-  const date = expirationDate instanceof Date ? expirationDate : new Date(expirationDate);
+  const date =
+    expirationDate instanceof Date ? expirationDate : new Date(expirationDate);
   if (Number.isNaN(date.getTime())) return "ok";
 
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
   const exp = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   if (exp.getTime() < startOfToday.getTime()) return "expired";
 

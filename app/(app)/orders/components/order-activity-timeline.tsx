@@ -82,15 +82,16 @@ const SCOPE_STYLES: Record<
   },
 };
 
-function iconForAction(
-  item: ActivityTimelineItem,
-): typeof Activity {
-  if (item.action === "delete" || item.action === "file_deleted") return Trash2;
-  if (item.action === "soft_delete") return Archive;
-  if (item.action === "file_uploaded") return Upload;
+function renderActionIcon(item: ActivityTimelineItem) {
+  const className = "h-3.5 w-3.5";
+  if (item.action === "delete" || item.action === "file_deleted")
+    return <Trash2 className={className} />;
+  if (item.action === "soft_delete") return <Archive className={className} />;
+  if (item.action === "file_uploaded") return <Upload className={className} />;
   if (item.action === "insert" && item.scope === "allocation")
-    return PackagePlus;
-  return SCOPE_STYLES[item.scope]?.icon ?? Activity;
+    return <PackagePlus className={className} />;
+  const ScopeIcon = SCOPE_STYLES[item.scope]?.icon ?? Activity;
+  return <ScopeIcon className={className} />;
 }
 
 function formatDayHeading(iso: string): string {
@@ -264,7 +265,6 @@ export function OrderActivityTimeline({ orderId }: OrderActivityTimelineProps) {
 
 function ActivityRow({ item }: { item: ActivityTimelineItem }) {
   const style = SCOPE_STYLES[item.scope] ?? SCOPE_STYLES.other;
-  const Icon = iconForAction(item);
   const date = new Date(item.at);
   const actorName = item.actor.name ?? (item.actor.type === "system"
     ? "System"
@@ -278,7 +278,7 @@ function ActivityRow({ item }: { item: ActivityTimelineItem }) {
           style.dot,
         )}
       >
-        <Icon className="h-3.5 w-3.5" />
+        {renderActionIcon(item)}
       </span>
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">

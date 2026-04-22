@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/hooks/use-products";
 import { useSalesOrder, useUpdateSalesOrder } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";
@@ -46,11 +47,48 @@ function emptyDefaults(): NewOrderFormValues {
   };
 }
 
+type EditorProduct = { defaultPricePerLb?: string | null } | undefined;
+
+/**
+ * Resolves the $/lb value to show in the edit form. The line's stored
+ * `pricePerLbOverride` is the authoritative input and is never recomputed,
+ * so it takes precedence. For legacy rows we fall back to the pricing
+ * snapshot (reconstructing $/lb from case pricing) and finally to the
+ * product default.
+ */
+function resolvePricePerLbForEditor(
+  line: {
+    pricePerLbOverride: string | null;
+    pricingUnitTypeSnapshot: "per_lb" | "per_case" | null;
+    pricePerUnitSnapshot: string | null;
+    pricingConversionSnapshot: string | null;
+  },
+  product: EditorProduct,
+): string {
+  if (line.pricePerLbOverride) return line.pricePerLbOverride;
+
+  if (line.pricePerUnitSnapshot) {
+    const priceNum = parseFloat(line.pricePerUnitSnapshot);
+    if (Number.isFinite(priceNum)) {
+      if (line.pricingUnitTypeSnapshot === "per_case") {
+        const conv = parseFloat(line.pricingConversionSnapshot ?? "");
+        if (Number.isFinite(conv) && conv > 0) {
+          return (priceNum / conv).toFixed(4);
+        }
+      }
+      return priceNum.toFixed(4);
+    }
+  }
+
+  return product?.defaultPricePerLb ?? "";
+}
+
 export function OrderEditForm({ orderId }: { orderId: string }) {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const { data: order, isLoading, isError, error } = useSalesOrder(orderId);
   const { data: products } = useProducts();
+  const { data: currentUser } = useCurrentPortalUser();
   const updateOrder = useUpdateSalesOrder();
 
   const form = useForm<NewOrderFormValues>({
@@ -60,8 +98,9 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
   });
 
   const actionState = useMemo(
-    () => (order ? getOrderActionAvailability(order) : null),
-    [order],
+    () =>
+      order ? getOrderActionAvailability(order, currentUser?.role) : null,
+    [order, currentUser?.role],
   );
 
   useEffect(() => {
@@ -87,7 +126,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
             salesUnitId: line.salesUnitId ?? defaultSalesUnit?.unitId ?? "",
             unitType: line.unitType ?? inferLineUnitType(product),
             quantity: String(line.expectedCases),
-            pricePerLb: line.pricePerLbOverride ?? product?.defaultPricePerLb ?? "",
+            pricePerLb: resolvePricePerLbForEditor(line, product),
           };
         }) ?? [],
     });

@@ -6,6 +6,8 @@ import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 import { useRecordPaymentForSalesOrderInvoice } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -104,6 +106,11 @@ export function OrderPaymentEntryDialog({
   order,
 }: OrderPaymentEntryDialogProps) {
   const recordPayment = useRecordPaymentForSalesOrderInvoice();
+  const { data: currentUser } = useCurrentPortalUser();
+  const canRecord = can(currentUser?.role, "record_payment");
+  const recordDeniedReason = canRecord
+    ? null
+    : getPermissionDeniedReason("record_payment");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const openInvoices = useMemo(() => getOpenInvoices(order), [order]);
@@ -178,6 +185,12 @@ export function OrderPaymentEntryDialog({
             <AlertCircle />
             <AlertTitle>Could not record payment</AlertTitle>
             <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        ) : recordDeniedReason ? (
+          <Alert>
+            <AlertCircle />
+            <AlertTitle>Recording payment is not available</AlertTitle>
+            <AlertDescription>{recordDeniedReason}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -347,7 +360,12 @@ export function OrderPaymentEntryDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={recordPayment.isPending || openInvoices.length === 0}
+                disabled={
+                  recordPayment.isPending ||
+                  openInvoices.length === 0 ||
+                  !canRecord
+                }
+                title={recordDeniedReason ?? undefined}
               >
                 <Receipt className="h-4 w-4" />
                 {recordPayment.isPending ? "Recording…" : "Record payment"}

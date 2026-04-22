@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react";
-import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,20 +24,47 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CustomerListItem } from "@/services/customers";
+import { Badge } from "@/components/ui/badge";
+import type { LotListItem } from "@/services/lots";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { formatPhone } from "@/lib/utils/phone";
 
 type ColumnActions = {
-  onDelete: (customer: CustomerListItem) => void;
+  onDelete: (lot: LotListItem) => void;
 };
 
+function parseIsoDate(s: string): Date {
+  return new Date(s + "T12:00:00Z");
+}
+
+function ExpirationCell({ expirationDate }: { expirationDate: string }) {
+  const exp = parseIsoDate(expirationDate);
+  const now = new Date();
+  const daysLeft = Math.ceil(
+    (exp.getTime() - now.getTime()) / (24 * 60 * 60 * 1000),
+  );
+
+  let variant: "destructive" | "secondary" | "outline" = "outline";
+  let label = formatDisplayDate(expirationDate);
+  if (daysLeft < 0) {
+    variant = "destructive";
+    label = `Expired ${formatDisplayDate(expirationDate)}`;
+  } else if (daysLeft <= 7) {
+    variant = "secondary";
+    label = `Expires ${formatDisplayDate(expirationDate)}`;
+  }
+  return (
+    <Badge variant={variant} className="font-normal">
+      {label}
+    </Badge>
+  );
+}
+
 function ActionsCell({
-  customer,
+  lot,
   onDelete,
 }: {
-  customer: CustomerListItem;
-  onDelete: (customer: CustomerListItem) => void;
+  lot: LotListItem;
+  onDelete: (lot: LotListItem) => void;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -53,7 +80,7 @@ function ActionsCell({
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
-            <Link href={`/customers/${customer.id}`}>View customer</Link>
+            <Link href={`/lots/${lot.id}`}>View lot</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -61,7 +88,7 @@ function ActionsCell({
             onClick={() => setShowDeleteDialog(true)}
           >
             <Trash2 />
-            Delete customer
+            Delete lot
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -69,9 +96,11 @@ function ActionsCell({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete customer</AlertDialogTitle>
+            <AlertDialogTitle>Delete lot</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{customer.name}&quot;? This action cannot be undone.
+              Are you sure you want to delete lot &quot;{lot.lotNumber}&quot;?
+              This may fail if inventory or supplier invoices still reference
+              it. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -79,7 +108,7 @@ function ActionsCell({
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                onDelete(customer);
+                onDelete(lot);
                 setShowDeleteDialog(false);
               }}
             >
@@ -92,99 +121,72 @@ function ActionsCell({
   );
 }
 
-export function createColumns(actions: ColumnActions): ColumnDef<CustomerListItem>[] {
+export function createColumns(
+  actions: ColumnActions,
+): ColumnDef<LotListItem>[] {
   return [
     {
-      accessorKey: "name",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Name
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
+      accessorKey: "lotNumber",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Lot number
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => (
         <Link
-          href={`/customers/${row.original.id}`}
+          href={`/lots/${row.original.id}`}
           className="font-medium hover:underline"
         >
-          {row.getValue("name")}
+          {row.getValue("lotNumber")}
         </Link>
       ),
     },
     {
-      accessorKey: "phoneNumber",
-      header: "Phone",
+      id: "supplier",
+      header: "Supplier",
       cell: ({ row }) => {
-        const phone = row.getValue("phoneNumber") as string | null;
-        return phone ? (
-          <span className="tabular-nums">{formatPhone(phone)}</span>
+        const supplier = row.original.supplier;
+        return supplier ? (
+          <span>{supplier.name}</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         );
       },
     },
     {
-      id: "location",
-      header: "Location",
-      cell: ({ row }) => {
-        const address = row.original.addresses?.[0];
-        if (!address) {
-          return <span className="text-muted-foreground">-</span>;
-        }
-        const parts = [address.city, address.state].filter(Boolean);
-        return parts.length > 0 ? (
-          <span>{parts.join(", ")}</span>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        );
-      },
-    },
-    {
-      accessorKey: "invoicePrefix",
-      header: "Invoice Prefix",
-      cell: ({ row }) => {
-        const prefix = row.getValue("invoicePrefix") as string | null;
-        return prefix ? (
-          <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{prefix}</code>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        );
-      },
-    },
-    {
-      id: "products",
-      header: "Products",
-      cell: ({ row }) => {
-        const count = row.original.productPrices?.length ?? 0;
-        return (
-          <span className="tabular-nums text-muted-foreground">
-            {count} {count === 1 ? "product" : "products"}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: "createdAt",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Created
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
+      accessorKey: "receiveDate",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Received
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => (
-        <span className="tabular-nums text-muted-foreground">
-          {formatDisplayDate(row.getValue("createdAt"))}
+        <span className="text-muted-foreground text-sm tabular-nums">
+          {formatDisplayDate(row.getValue("receiveDate"))}
         </span>
+      ),
+    },
+    {
+      accessorKey: "expirationDate",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Expiration
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <ExpirationCell expirationDate={row.getValue("expirationDate")} />
       ),
     },
     {
@@ -192,7 +194,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
       header: "Actions",
       cell: ({ row }) => (
         <div className="flex justify-center">
-          <ActionsCell customer={row.original} onDelete={actions.onDelete} />
+          <ActionsCell lot={row.original} onDelete={actions.onDelete} />
         </div>
       ),
       meta: {

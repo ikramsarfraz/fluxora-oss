@@ -10,6 +10,7 @@ import {
   useSalesOrder,
   useUpdateSalesOrderStatus,
 } from "@/hooks/use-orders";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { DetailSection } from "@/components/detail-section";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
@@ -45,6 +46,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     isError,
     error: loadError,
   } = useSalesOrder(orderId);
+  const { data: currentUser } = useCurrentPortalUser();
 
   const deleteOrder = useDeleteSalesOrder();
   const generateInvoice = useGenerateInvoiceForSalesOrder();
@@ -64,32 +66,31 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       />
     );
 
-  const actionState = getOrderActionAvailability(order);
+  const actionState = getOrderActionAvailability(order, currentUser?.role);
   const lines = order.lines ?? [];
   const { hasInvoice, isPaid, readyToInvoice } = actionState;
 
-  const handleGenerateInvoice =
-    !hasInvoice && readyToInvoice
-      ? () => {
-          generateInvoice.mutate(
-            { salesOrderId: order.id },
-            {
-              onSuccess: invoice => {
-                toast.success(
-                  `Invoice ${invoice?.invoiceNumber ?? ""} generated.`,
-                );
-              },
-              onError: error => {
-                toast.error(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not generate invoice.",
-                );
-              },
+  const handleGenerateInvoice = actionState.canGenerateInvoice
+    ? () => {
+        generateInvoice.mutate(
+          { salesOrderId: order.id },
+          {
+            onSuccess: invoice => {
+              toast.success(
+                `Invoice ${invoice?.invoiceNumber ?? ""} generated.`,
+              );
             },
-          );
-        }
-      : undefined;
+            onError: error => {
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Could not generate invoice.",
+              );
+            },
+          },
+        );
+      }
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -179,7 +180,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               actionState.canRecordPayment ? () => setPaymentDialogOpen(true) : undefined
             }
             canGenerateInvoice={
-              !hasInvoice && readyToInvoice && !generateInvoice.isPending
+              actionState.canGenerateInvoice && !generateInvoice.isPending
             }
             readyToInvoice={readyToInvoice}
           />

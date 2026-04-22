@@ -1,4 +1,4 @@
-/** Human-readable labels for order/invoice status. */
+/** Human-readable labels for order/invoices status. */
 export function orderStatusLabel(status: string): string {
   switch (status) {
     case "sales_order":

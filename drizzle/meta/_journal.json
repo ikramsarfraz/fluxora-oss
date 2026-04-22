@@ -15,6 +15,13 @@
       "when": 1776870000000,
       "tag": "0001_sales_order_line_unit_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776870500000,
+      "tag": "0002_sales_order_line_pricing_snapshots",
+      "breakpoints": true
     }
   ]
 }

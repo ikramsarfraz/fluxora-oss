@@ -1,14 +1,14 @@
-import { AddLotForm } from "../components/add-lot-form";
 import { DetailPageHeader } from "@/components/detail-page-header";
+import AddLotForm from "../components/add-lot-form";
 
-export default function NewCustomerPage() {
+export default function AddLotPage() {
   return (
-    <div className="flex flex-col gap-6">
+    <section className="flex flex-col gap-6">
       <DetailPageHeader
-        title="Add Customer"
-        description="Create a new customer record for sales orders and pricing."
+        title="Add Lot"
+        description="Create a new lot for USDA traceability and inventory tracking."
       />
       <AddLotForm />
-    </div>
+    </section>
   );
 }

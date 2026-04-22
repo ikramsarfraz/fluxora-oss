@@ -6,6 +6,9 @@ export const queryKeys = {
   auth: {
     me: ["auth", "me"] as const,
   },
+  currentUser: {
+    portal: ["current-user", "portal"] as const,
+  },
   /** ERP staff profile linked to Better Auth (`portal_users`). */
   users: {
     all: ["users"] as const,
@@ -33,6 +36,14 @@ export const queryKeys = {
   unitsOfMeasure: {
     all: ["unitsOfMeasure"] as const,
     detail: (id: string) => ["unitsOfMeasure", id] as const,
+  },
+  lots: {
+    all: ["lots"] as const,
+    detail: (id: string) => ["lots", id] as const,
+  },
+  invoices: {
+    all: ["invoices"] as const,
+    detail: (id: string) => ["invoices", id] as const,
   },
   salesOrders: {
     all: ["sales-orders"] as const,

@@ -84,7 +84,9 @@ function getPrimaryAction(
         key: "record-payment",
         label: "Record payment",
         icon: Receipt,
-        onClick: actionState.canRecordPayment ? actions.onRecordPayment : undefined,
+        onClick: actionState.canRecordPayment
+          ? actions.onRecordPayment
+          : undefined,
         disabledReason: actionState.recordPaymentReason,
       };
     case "generate-invoice":
@@ -92,7 +94,9 @@ function getPrimaryAction(
         key: "generate-invoice",
         label: "Generate invoice",
         icon: FileText,
-        onClick: actionState.canGenerateInvoice ? actions.onGenerateInvoice : undefined,
+        onClick: actionState.canGenerateInvoice
+          ? actions.onGenerateInvoice
+          : undefined,
         disabledReason: actionState.generateInvoiceReason,
       };
     case "start-fulfillment":
@@ -194,15 +198,13 @@ export function OrderHeader({
             <>
               <span>·</span>
               <Link
-                href={`/invoice/${latestInvoice.id}`}
+                href={`/invoices/${latestInvoice.id}`}
                 className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
               >
                 <FileText className="h-3.5 w-3.5" />
                 {latestInvoice.invoiceNumber}
               </Link>
-              <span>
-                {latestInvoice.status.replaceAll("_", " ")}
-              </span>
+              <span>{latestInvoice.status.replaceAll("_", " ")}</span>
             </>
           )}
         </div>
@@ -215,7 +217,11 @@ export function OrderHeader({
               type="button"
               onClick={primary.onClick}
               disabled={!primary.onClick || pendingAction === primary.key}
-              title={!primary.onClick ? primary.disabledReason ?? undefined : undefined}
+              title={
+                !primary.onClick
+                  ? (primary.disabledReason ?? undefined)
+                  : undefined
+              }
             >
               <primary.icon className="mr-2 h-4 w-4" />
               {pendingAction === primary.key ? "Working…" : primary.label}
@@ -226,7 +232,11 @@ export function OrderHeader({
             variant="outline"
             onClick={actions.onEdit}
             disabled={!actions.onEdit || isLocked}
-            title={!actions.onEdit || isLocked ? actionState.editReason ?? undefined : undefined}
+            title={
+              !actions.onEdit || isLocked
+                ? (actionState.editReason ?? undefined)
+                : undefined
+            }
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit

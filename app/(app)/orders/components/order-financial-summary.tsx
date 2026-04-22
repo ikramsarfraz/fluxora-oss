@@ -160,7 +160,7 @@ export function OrderFinancialSummary({
           label="Invoice status"
           value={
             hasInvoice
-              ? latestInvoice?.status ?? "invoiced"
+              ? (latestInvoice?.status ?? "invoiced")
               : readyToInvoice
                 ? "ready_to_invoice"
                 : "not_invoiced"
@@ -194,7 +194,7 @@ export function OrderFinancialSummary({
             {invoices.map(inv => (
               <Link
                 key={inv.id}
-                href={`/invoice/${inv.id}`}
+                href={`/invoices/${inv.id}`}
                 className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono hover:bg-accent"
               >
                 <FileText className="h-3 w-3" />
@@ -218,7 +218,7 @@ export function OrderFinancialSummary({
               Dated {formatDisplayDate(latestInvoice.invoiceDate)}
             </span>
             <Link
-              href={`/invoice/${latestInvoice.id}`}
+              href={`/invoices/${latestInvoice.id}`}
               className="text-xs font-medium hover:underline"
             >
               Open invoice
@@ -231,8 +231,8 @@ export function OrderFinancialSummary({
         <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            Ready for invoicing. All order lines are closed, and billed weight is ready
-            to flow into the invoice.
+            Ready for invoicing. All order lines are closed, and billed weight
+            is ready to flow into the invoice.
           </span>
         </div>
       ) : null}
@@ -241,8 +241,8 @@ export function OrderFinancialSummary({
         <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            Line prices or weights are missing — estimate will be available
-            once lines are priced.
+            Line prices or weights are missing — estimate will be available once
+            lines are priced.
           </span>
         </div>
       )}
@@ -291,7 +291,11 @@ export function OrderFinancialSummary({
         />
         {totals.mode === "actual" && (
           <>
-            <SummaryRow label="Amount paid" value={-totals.amountPaid} hint="Applied across invoice payments" />
+            <SummaryRow
+              label="Amount paid"
+              value={-totals.amountPaid}
+              hint="Applied across invoice payments"
+            />
           </>
         )}
       </dl>

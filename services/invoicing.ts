@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   payments,
@@ -10,6 +10,7 @@ import {
 import { markInventoryItemsSold } from "./inventory-state";
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
+import { requirePermission } from "@/lib/auth/permissions";
 
 function makeInvoiceNumber(prefix: string | null | undefined, id: string) {
   const numericSuffix = parseInt(String(id).replaceAll("-", "").slice(-6), 16);
@@ -144,7 +145,7 @@ export async function createInvoiceFromSalesOrder(input: {
         fulfillment =>
           !fulfillment.reversedAt && Boolean(fulfillment.inventoryItemId),
       )
-      .map(fulfillment => fulfillment.inventoryItemId!)
+      .map(fulfillment => fulfillment.inventoryItemId!),
   );
 
   await markInventoryItemsSold(fulfilledInventoryItemIds);
@@ -171,6 +172,8 @@ export async function generateInvoiceForSalesOrder(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "generate_invoice");
 
   const order = await db.query.salesOrders.findFirst({
     where: and(
@@ -199,7 +202,9 @@ export async function generateInvoiceForSalesOrder(input: {
   }
 
   if ((order.invoices?.length ?? 0) > 0) {
-    throw new Error("An invoice has already been generated for this sales order.");
+    throw new Error(
+      "An invoice has already been generated for this sales order.",
+    );
   }
 
   const hasLines = (order.lines?.length ?? 0) > 0;
@@ -207,7 +212,8 @@ export async function generateInvoiceForSalesOrder(input: {
     hasLines &&
     (order.lines ?? []).every(
       line =>
-        line.shortShippedAt != null || line.fulfilledCases >= line.expectedCases,
+        line.shortShippedAt != null ||
+        line.fulfilledCases >= line.expectedCases,
     );
 
   if (!allLinesClosed) {
@@ -217,8 +223,7 @@ export async function generateInvoiceForSalesOrder(input: {
   }
 
   const invoiceDate =
-    input.invoiceDate ??
-    new Date().toISOString().slice(0, 10);
+    input.invoiceDate ?? new Date().toISOString().slice(0, 10);
 
   return createInvoiceFromSalesOrder({
     salesOrderId: order.id,
@@ -250,6 +255,22 @@ export async function getSalesInvoiceById(id: string) {
     },
   });
 }
+
+export async function getSalesInvoices() {
+  const tenant = await getCurrentTenant();
+  return db.query.salesInvoices.findMany({
+    where: eq(salesInvoices.tenantId, tenant.id),
+    with: {
+      customer: true,
+    },
+    orderBy: [desc(salesInvoices.invoiceDate)],
+  });
+}
+
+/** Row shape returned by `getSalesInvoices()` (for client `import type` only). */
+export type SalesInvoiceListItem = Awaited<
+  ReturnType<typeof getSalesInvoices>
+>[number];
 
 export async function recordPayment(input: {
   salesInvoiceId: string;
@@ -344,6 +365,8 @@ export async function recordPaymentForSalesOrderInvoice(input: {
     throw new Error("Forbidden");
   }
 
+  requirePermission(currentUser.role, "record_payment");
+
   const invoice = await db.query.salesInvoices.findFirst({
     where: and(
       eq(salesInvoices.id, input.salesInvoiceId),
@@ -410,7 +433,12 @@ export async function markAllocatedInventoryAsShipped(salesOrderId: string) {
       status: "fulfilled",
       updatedAt: new Date(),
     })
-    .where(and(eq(salesOrders.id, salesOrderId), eq(salesOrders.tenantId, tenant.id)));
+    .where(
+      and(
+        eq(salesOrders.id, salesOrderId),
+        eq(salesOrders.tenantId, tenant.id),
+      ),
+    );
 
   return { updatedCount: inventoryItemIds.length };
 }

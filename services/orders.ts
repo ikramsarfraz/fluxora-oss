@@ -20,6 +20,7 @@ import {
 } from "./inventory-state";
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
+import { requirePermission } from "@/lib/auth/permissions";
 
 /** Short human-readable suffix. Prefix (if any) is applied downstream per-customer. */
 function makeOrderNumber(id: string) {
@@ -159,29 +160,114 @@ type ValidSalesOrderUnit = Awaited<
   ReturnType<typeof validateSalesOrderLineSelections>
 >["validSalesUnits"][number];
 
+type PricingUnitType = "per_lb" | "per_case";
+
 type SalesOrderLineSnapshot = {
   salesUnitId: string;
   conversionToBaseSnapshot: string | null;
   baseUnitIdSnapshot: string | null;
   salesUnitNameSnapshot: string | null;
   salesUnitAbbreviationSnapshot: string | null;
+  pricingUnitTypeSnapshot: PricingUnitType;
+  pricePerUnitSnapshot: string | null;
+  pricingConversionSnapshot: string | null;
 };
+
+type ExistingSnapshotLine = {
+  productId: string;
+  salesUnitId: string | null;
+  unitType: "catch_weight" | "fixed_case";
+  pricePerLbOverride: string | null;
+  conversionToBaseSnapshot: string | null;
+  baseUnitIdSnapshot: string | null;
+  salesUnitNameSnapshot: string | null;
+  salesUnitAbbreviationSnapshot: string | null;
+  pricingUnitTypeSnapshot: PricingUnitType | null;
+  pricePerUnitSnapshot: string | null;
+  pricingConversionSnapshot: string | null;
+};
+
+/** Returns the effective $/lb price for a line (input override → contract → product default). */
+async function resolveLinePricePerLb(input: {
+  customerId: string;
+  productId: string;
+  providedOverride: string | null | undefined;
+  validProducts: ValidSalesOrderProduct[];
+}): Promise<string | null> {
+  const override = input.providedOverride?.toString().trim();
+  if (override) return override;
+
+  const contractPrice = await db.query.customerProductPrices.findFirst({
+    where: and(
+      eq(customerProductPrices.customerId, input.customerId),
+      eq(customerProductPrices.productId, input.productId),
+    ),
+  });
+  if (contractPrice) return contractPrice.pricePerLb;
+
+  const product = input.validProducts.find(p => p.id === input.productId);
+  return product?.defaultPricePerLb ?? null;
+}
+
+function computePricingSnapshot(
+  unitType: "catch_weight" | "fixed_case",
+  resolvedPricePerLb: string | null,
+  conversionToBase: string,
+): {
+  pricingUnitTypeSnapshot: PricingUnitType;
+  pricePerUnitSnapshot: string | null;
+  pricingConversionSnapshot: string | null;
+} {
+  const pricingUnitType: PricingUnitType =
+    unitType === "fixed_case" ? "per_case" : "per_lb";
+
+  if (resolvedPricePerLb == null || resolvedPricePerLb === "") {
+    return {
+      pricingUnitTypeSnapshot: pricingUnitType,
+      pricePerUnitSnapshot: null,
+      pricingConversionSnapshot:
+        pricingUnitType === "per_case" ? conversionToBase : null,
+    };
+  }
+
+  const priceNum = parseFloat(resolvedPricePerLb);
+  if (!Number.isFinite(priceNum)) {
+    return {
+      pricingUnitTypeSnapshot: pricingUnitType,
+      pricePerUnitSnapshot: null,
+      pricingConversionSnapshot:
+        pricingUnitType === "per_case" ? conversionToBase : null,
+    };
+  }
+
+  if (pricingUnitType === "per_case") {
+    const conv = parseFloat(conversionToBase);
+    const pricePerCase =
+      Number.isFinite(conv) && conv > 0 ? priceNum * conv : priceNum;
+    return {
+      pricingUnitTypeSnapshot: pricingUnitType,
+      pricePerUnitSnapshot: pricePerCase.toFixed(4),
+      pricingConversionSnapshot: conversionToBase,
+    };
+  }
+
+  return {
+    pricingUnitTypeSnapshot: pricingUnitType,
+    pricePerUnitSnapshot: priceNum.toFixed(4),
+    pricingConversionSnapshot: null,
+  };
+}
 
 function buildSalesOrderLineSnapshot(
   line: {
     productId: string;
     salesUnitId: string;
+    unitType: "catch_weight" | "fixed_case";
+    resolvedPricePerLb: string | null;
   },
   validProducts: ValidSalesOrderProduct[],
   validSalesUnits: ValidSalesOrderUnit[],
-  existingLine?: {
-    productId: string;
-    salesUnitId: string | null;
-    conversionToBaseSnapshot: string | null;
-    baseUnitIdSnapshot: string | null;
-    salesUnitNameSnapshot: string | null;
-    salesUnitAbbreviationSnapshot: string | null;
-  } | null,
+  existingLine?: ExistingSnapshotLine | null,
 ): SalesOrderLineSnapshot {
   const matchingProduct = validProducts.find(product => product.id === line.productId);
   const matchingSalesUnit = validSalesUnits.find(
@@ -193,30 +279,58 @@ function buildSalesOrderLineSnapshot(
     throw new Error("One or more sales units are invalid for the selected product.");
   }
 
-  const canReuseExistingSnapshot =
+  const canReuseUnitSnapshot =
     existingLine?.productId === line.productId &&
     existingLine.salesUnitId === line.salesUnitId;
+
+  // Pricing basis is stable only if product, sales unit, unit type, and the
+  // resolved $/lb input are all unchanged from the previously saved line.
+  const canReusePricingSnapshot =
+    canReuseUnitSnapshot &&
+    existingLine?.unitType === line.unitType &&
+    (existingLine?.pricePerLbOverride ?? null) ===
+      (line.resolvedPricePerLb ?? null) &&
+    existingLine?.pricingUnitTypeSnapshot != null;
+
+  const freshPricing = computePricingSnapshot(
+    line.unitType,
+    line.resolvedPricePerLb,
+    matchingSalesUnit.conversionToBase,
+  );
 
   return {
     salesUnitId: line.salesUnitId,
     conversionToBaseSnapshot:
-      canReuseExistingSnapshot && existingLine
+      canReuseUnitSnapshot && existingLine
         ? (existingLine.conversionToBaseSnapshot ??
           matchingSalesUnit.conversionToBase)
         : matchingSalesUnit.conversionToBase,
     baseUnitIdSnapshot:
-      canReuseExistingSnapshot && existingLine
+      canReuseUnitSnapshot && existingLine
         ? existingLine.baseUnitIdSnapshot ?? matchingProduct.baseUnitId
         : matchingProduct.baseUnitId,
     salesUnitNameSnapshot:
-      canReuseExistingSnapshot && existingLine
+      canReuseUnitSnapshot && existingLine
         ? existingLine.salesUnitNameSnapshot ?? matchingSalesUnit.unit.name
         : matchingSalesUnit.unit.name,
     salesUnitAbbreviationSnapshot:
-      canReuseExistingSnapshot && existingLine
+      canReuseUnitSnapshot && existingLine
         ? (existingLine.salesUnitAbbreviationSnapshot ??
           matchingSalesUnit.unit.abbreviation)
         : matchingSalesUnit.unit.abbreviation,
+    pricingUnitTypeSnapshot:
+      canReusePricingSnapshot && existingLine?.pricingUnitTypeSnapshot
+        ? existingLine.pricingUnitTypeSnapshot
+        : freshPricing.pricingUnitTypeSnapshot,
+    pricePerUnitSnapshot:
+      canReusePricingSnapshot && existingLine
+        ? existingLine.pricePerUnitSnapshot ?? freshPricing.pricePerUnitSnapshot
+        : freshPricing.pricePerUnitSnapshot,
+    pricingConversionSnapshot:
+      canReusePricingSnapshot && existingLine
+        ? existingLine.pricingConversionSnapshot ??
+          freshPricing.pricingConversionSnapshot
+        : freshPricing.pricingConversionSnapshot,
   };
 }
 
@@ -486,6 +600,14 @@ export type SalesOrderDetail = NonNullable<
 
 export async function deleteSalesOrder(id: string) {
   const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+
+  requirePermission(currentUser.role, "edit_order");
+
   await db
     .delete(salesOrders)
     .where(and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)));
@@ -497,6 +619,14 @@ export async function updateSalesOrderNotes(input: {
   internalNotes?: string | null;
 }) {
   const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+
+  requirePermission(currentUser.role, "edit_order");
+
   const updates: Partial<typeof salesOrders.$inferInsert> = {};
   if (input.customerNotes !== undefined) {
     updates.customerNotes = input.customerNotes;
@@ -523,6 +653,8 @@ export async function updateSalesOrderStatus(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "confirm_order");
 
   const order = await db.query.salesOrders.findFirst({
     where: and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
@@ -595,6 +727,8 @@ export async function updateSalesOrder(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "edit_order");
 
   const order = await db.query.salesOrders.findFirst({
     where: and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
@@ -701,36 +835,30 @@ export async function updateSalesOrder(input: {
   await db.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, input.id));
 
   for (const line of input.lines) {
-    let priceOverride = line.pricePerLbOverride?.trim() || undefined;
+    const resolvedPricePerLb = await resolveLinePricePerLb({
+      customerId: input.customerId,
+      productId: line.productId,
+      providedOverride: line.pricePerLbOverride,
+      validProducts,
+    });
 
-    if (!priceOverride) {
-      const contractPrice = await db.query.customerProductPrices.findFirst({
-        where: and(
-          eq(customerProductPrices.customerId, input.customerId),
-          eq(customerProductPrices.productId, line.productId),
-        ),
-      });
-
-      if (contractPrice) {
-        priceOverride = contractPrice.pricePerLb;
-      } else {
-        const product = validProducts.find(p => p.id === line.productId);
-        priceOverride = product?.defaultPricePerLb;
-      }
-    }
+    const unitType = line.unitType ?? "catch_weight";
+    const snapshot = buildSalesOrderLineSnapshot(
+      { ...line, unitType, resolvedPricePerLb },
+      validProducts,
+      validSalesUnits,
+      line.existingLineId
+        ? (existingLinesById.get(line.existingLineId) ?? null)
+        : null,
+    );
 
     await db.insert(salesOrderLines).values({
       salesOrderId: input.id,
       productId: line.productId,
-      ...buildSalesOrderLineSnapshot(
-        line,
-        validProducts,
-        validSalesUnits,
-        line.existingLineId ? existingLinesById.get(line.existingLineId) : null,
-      ),
+      ...snapshot,
       expectedCases: line.expectedCases,
-      unitType: line.unitType ?? "catch_weight",
-      pricePerLbOverride: priceOverride,
+      unitType,
+      pricePerLbOverride: resolvedPricePerLb ?? undefined,
     });
   }
 
@@ -759,6 +887,8 @@ export async function createSalesOrder(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "edit_order");
 
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
@@ -790,31 +920,27 @@ export async function createSalesOrder(input: {
     .where(eq(salesOrders.id, order.id));
 
   for (const line of input.lines) {
-    let priceOverride = line.pricePerLbOverride;
+    const resolvedPricePerLb = await resolveLinePricePerLb({
+      customerId: input.customerId,
+      productId: line.productId,
+      providedOverride: line.pricePerLbOverride,
+      validProducts,
+    });
 
-    if (!priceOverride) {
-      const contractPrice = await db.query.customerProductPrices.findFirst({
-        where: and(
-          eq(customerProductPrices.customerId, input.customerId),
-          eq(customerProductPrices.productId, line.productId),
-        ),
-      });
-
-      if (contractPrice) {
-        priceOverride = contractPrice.pricePerLb;
-      } else {
-        const product = validProducts.find(product => product.id === line.productId);
-        priceOverride = product?.defaultPricePerLb;
-      }
-    }
+    const unitType = line.unitType ?? "catch_weight";
+    const snapshot = buildSalesOrderLineSnapshot(
+      { ...line, unitType, resolvedPricePerLb },
+      validProducts,
+      validSalesUnits,
+    );
 
     await db.insert(salesOrderLines).values({
       salesOrderId: order.id,
       productId: line.productId,
-      ...buildSalesOrderLineSnapshot(line, validProducts, validSalesUnits),
+      ...snapshot,
       expectedCases: line.expectedCases,
-      unitType: line.unitType ?? "catch_weight",
-      pricePerLbOverride: priceOverride,
+      unitType,
+      pricePerLbOverride: resolvedPricePerLb ?? undefined,
     });
   }
 
@@ -1307,6 +1433,8 @@ export async function recordSalesOrderFulfillment(input: {
     throw new Error("Forbidden");
   }
 
+  requirePermission(currentUser.role, "fulfill_order");
+
   const order = await db.query.salesOrders.findFirst({
     where: and(
       eq(salesOrders.id, input.salesOrderId),
@@ -1502,6 +1630,8 @@ export async function markSalesOrderLineShortShipped(input: {
     throw new Error("Forbidden");
   }
 
+  requirePermission(currentUser.role, "short_ship_order");
+
   const order = await db.query.salesOrders.findFirst({
     where: and(
       eq(salesOrders.id, input.salesOrderId),
@@ -1591,6 +1721,8 @@ export async function reverseSalesOrderFulfillment(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  requirePermission(currentUser.role, "reverse_fulfillment");
 
   const order = await db.query.salesOrders.findFirst({
     where: and(

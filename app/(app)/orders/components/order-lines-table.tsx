@@ -80,12 +80,45 @@ const INVENTORY_STATUS_BADGE: Record<
   expired: "destructive",
 };
 
+function getLinePricingUnitType(line: Line): "per_lb" | "per_case" {
+  if (line.pricingUnitTypeSnapshot) return line.pricingUnitTypeSnapshot;
+  return line.unitType === "fixed_case" ? "per_case" : "per_lb";
+}
+
+/**
+ * Returns the price per pricing unit (per lb or per case) from the pricing
+ * snapshot. Falls back to `pricePerLbOverride` for legacy rows that predate
+ * the snapshot columns.
+ */
+function getLinePricePerUnit(line: Line): number {
+  if (line.pricePerUnitSnapshot) {
+    const parsed = parseFloat(line.pricePerUnitSnapshot);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  if (line.pricePerLbOverride) {
+    const parsed = parseFloat(line.pricePerLbOverride);
+    if (!Number.isFinite(parsed)) return NaN;
+    if (getLinePricingUnitType(line) === "per_case") {
+      const conv = parseFloat(
+        line.pricingConversionSnapshot ?? line.conversionToBaseSnapshot ?? "",
+      );
+      return Number.isFinite(conv) && conv > 0 ? parsed * conv : parsed;
+    }
+    return parsed;
+  }
+  return NaN;
+}
+
 function computeLineTotal(line: Line): number | null {
-  const price = line.pricePerLbOverride
-    ? parseFloat(line.pricePerLbOverride)
-    : NaN;
+  const price = getLinePricePerUnit(line);
+  if (!Number.isFinite(price)) return null;
+  if (getLinePricingUnitType(line) === "per_case") {
+    const cases = getLineFulfilledQuantity(line) || line.expectedCases;
+    if (!Number.isFinite(cases) || cases <= 0) return null;
+    return price * cases;
+  }
   const weight = getLineFulfilledWeight(line);
-  if (!Number.isFinite(price) || !Number.isFinite(weight)) return null;
+  if (!Number.isFinite(weight)) return null;
   return price * weight;
 }
 
@@ -183,9 +216,8 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
               caseWeights.length > 0 ||
               allocations.length > 0;
             const isOpen = expanded.has(line.id);
-            const price = line.pricePerLbOverride
-              ? parseFloat(line.pricePerLbOverride)
-              : NaN;
+            const price = getLinePricePerUnit(line);
+            const pricingUnitType = getLinePricingUnitType(line);
             const total = computeLineTotal(line);
             const fulfilled = getLineFulfilledQuantity(line);
             const expected = line.expectedCases;
@@ -206,6 +238,7 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
                 key={line.id}
                 line={line}
                 price={price}
+                pricingUnitType={pricingUnitType}
                 total={total}
                 caseWeights={caseWeights}
                 fulfillments={fulfillments}
@@ -242,6 +275,7 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
 interface LineRowGroupProps {
   line: Line;
   price: number;
+  pricingUnitType: "per_lb" | "per_case";
   total: number | null;
   caseWeights: number[];
   fulfillments: ReturnType<typeof getLineFulfillmentRecords>;
@@ -255,6 +289,7 @@ interface LineRowGroupProps {
 function LineRowGroup({
   line,
   price,
+  pricingUnitType,
   total,
   caseWeights,
   fulfillments,
@@ -331,7 +366,7 @@ function LineRowGroup({
         </TableCell>
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
-            line.unitType === "catch_weight"
+            pricingUnitType === "per_lb"
               ? `${formatMoney(price)}/lb`
               : `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
           ) : (
