@@ -93,6 +93,12 @@ export const inventoryItemStatusEnum = pgEnum("inventory_item_status", [
   "expired",
 ]);
 
+export const inventoryAdjustmentTypeEnum = pgEnum("inventory_adjustment_type", [
+  "status_change",
+  "correction",
+  "bulk_lot_action",
+]);
+
 export const fileCategoryEnum = pgEnum("file_category", [
   "tenant_branding",
   "supplier_invoice_attachment",
@@ -909,6 +915,49 @@ export const inventoryItems = pgTable(
   table => [
     index("ix_inventory_items_lot_id").on(table.lotId),
     index("ix_inventory_items_status").on(table.status),
+  ],
+);
+
+export const inventoryAdjustments = pgTable(
+  "inventory_adjustments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    inventoryItemId: uuid("inventory_item_id")
+      .notNull()
+      .references(() => inventoryItems.id, { onDelete: "cascade" }),
+    lotId: uuid("lot_id").references(() => lots.id, { onDelete: "set null" }),
+    adjustmentType: inventoryAdjustmentTypeEnum("adjustment_type")
+      .notNull()
+      .default("status_change"),
+    reason: varchar("reason", { length: 128 }).notNull(),
+    notes: text("notes"),
+    statusBefore: inventoryItemStatusEnum("status_before"),
+    statusAfter: inventoryItemStatusEnum("status_after"),
+    casesBefore: integer("cases_before"),
+    casesAfter: integer("cases_after"),
+    weightLbsBefore: numeric("weight_lbs_before", {
+      precision: 10,
+      scale: 4,
+    }),
+    weightLbsAfter: numeric("weight_lbs_after", {
+      precision: 10,
+      scale: 4,
+    }),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("inventory_adjustments_tenant_id_idx").on(table.tenantId),
+    index("inventory_adjustments_inventory_item_id_idx").on(table.inventoryItemId),
+    index("inventory_adjustments_lot_id_idx").on(table.lotId),
+    index("inventory_adjustments_created_at_idx").on(table.createdAt),
   ],
 );
 

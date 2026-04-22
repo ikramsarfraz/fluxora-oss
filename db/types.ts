@@ -16,6 +16,7 @@ import {
   userInvitations,
   tenantBranding,
   files,
+  inventoryAdjustments,
   unitsOfMeasure,
   categories,
   products,
@@ -127,6 +128,9 @@ export type NewLotReceipt = InferInsertModel<typeof lotReceipts>;
 
 export type InventoryItem = InferSelectModel<typeof inventoryItems>;
 export type NewInventoryItem = InferInsertModel<typeof inventoryItems>;
+
+export type InventoryAdjustment = InferSelectModel<typeof inventoryAdjustments>;
+export type NewInventoryAdjustment = InferInsertModel<typeof inventoryAdjustments>;
 
 // -------------------- Sales / finance --------------------
 

@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   Users,
   Package,
+  Boxes,
   Truck,
   ShieldCheck,
   Ruler,
@@ -83,6 +84,11 @@ const navMain: NavGroup[] = [
         title: "Products",
         url: "/products",
         icon: Package,
+      },
+      {
+        title: "Inventory",
+        url: "/inventory",
+        icon: Boxes,
       },
       {
         title: "Lots",

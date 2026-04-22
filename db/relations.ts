@@ -8,6 +8,7 @@ import {
   customers,
   expenses,
   files,
+  inventoryAdjustments,
   inventoryItems,
   lotReceipts,
   lots,
@@ -143,6 +144,9 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   expensesCreated: many(expenses),
   uploadedFiles: many(files, {
     relationName: "files_uploaded_by_user",
+  }),
+  inventoryAdjustments: many(inventoryAdjustments, {
+    relationName: "inventory_adjustments_created_by",
   }),
   archivedFiles: many(files, {
     relationName: "files_archived_by_user",
@@ -453,8 +457,32 @@ export const inventoryItemsRelations = relations(
       fields: [inventoryItems.lotId],
       references: [lots.id],
     }),
+    adjustments: many(inventoryAdjustments),
     allocations: many(salesOrderLineAllocations),
     fulfillments: many(salesOrderFulfillments),
+  }),
+);
+
+export const inventoryAdjustmentsRelations = relations(
+  inventoryAdjustments,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [inventoryAdjustments.tenantId],
+      references: [tenants.id],
+    }),
+    inventoryItem: one(inventoryItems, {
+      fields: [inventoryAdjustments.inventoryItemId],
+      references: [inventoryItems.id],
+    }),
+    lot: one(lots, {
+      fields: [inventoryAdjustments.lotId],
+      references: [lots.id],
+    }),
+    createdBy: one(portalUsers, {
+      fields: [inventoryAdjustments.createdByUserId],
+      references: [portalUsers.id],
+      relationName: "inventory_adjustments_created_by",
+    }),
   }),
 );
 

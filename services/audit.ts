@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
+  supplierInvoices,
   salesOrderLineAllocations,
   salesOrderFulfillments,
   salesOrderLines,
@@ -50,6 +51,11 @@ const ENTITY_SCOPE: Record<string, ActivityScope> = {
   sales_invoice_lines: "invoice",
   sales_invoice_files: "file",
   payments: "payment",
+  inventory_items: "other",
+  inventory_adjustments: "other",
+  supplier_invoices: "invoice",
+  supplier_invoice_payments: "payment",
+  supplier_invoice_attachments: "file",
 };
 
 function entityToScope(entityTable: string): ActivityScope {
@@ -61,9 +67,57 @@ function summarizeAudit(row: {
   entityTable: string;
   entityLabel: string | null;
   changedFieldsJson: string | null;
+  contextJson?: string | null;
 }): string {
   const label =
     row.entityLabel ?? prettyEntity(row.entityTable);
+  const context = safeParseObject(row.contextJson);
+  const contextAction = getContextString(context, "action");
+  const contextReason = getContextString(context, "reason");
+  const contextAmount = getContextString(context, "amount");
+  const contextMethod = getContextString(context, "paymentMethod");
+  const contextReference = getContextString(context, "reference");
+
+  if (row.entityTable === "supplier_invoices") {
+    if (contextAction === "complete_receipt") {
+      return `Completed and received ${label}`;
+    }
+    if (contextAction === "reverse_receipt") {
+      return contextReason
+        ? `Reversed receipt for ${label}: ${contextReason}`
+        : `Reversed receipt for ${label}`;
+    }
+  }
+
+  if (row.entityTable === "supplier_invoice_payments" && row.action === "insert") {
+    const amount = contextAmount ? ` ${contextAmount}` : "";
+    const method = contextMethod ? ` via ${contextMethod}` : "";
+    const reference = contextReference ? ` · Ref ${contextReference}` : "";
+    return `Recorded payment${amount}${method}${reference}`;
+  }
+
+  if (row.entityTable === "supplier_invoice_attachments") {
+    if (row.action === "file_uploaded") {
+      return `Uploaded attachment ${label}`;
+    }
+    if (row.action === "file_deleted") {
+      return `Removed attachment ${label}`;
+    }
+  }
+
+  if (row.entityTable === "inventory_items" && row.action === "update") {
+    if (contextAction === "inventory_adjustment") {
+      return contextReason
+        ? `Inventory adjusted for ${label}: ${contextReason.replace(/_/g, " ")}`
+        : `Inventory adjusted for ${label}`;
+    }
+    if (contextAction === "lot_bulk_adjustment") {
+      return contextReason
+        ? `Lot action updated ${label}: ${contextReason.replace(/_/g, " ")}`
+        : `Lot action updated ${label}`;
+    }
+  }
+
   switch (row.action) {
     case "insert":
       return `Created ${label}`;
@@ -111,6 +165,16 @@ function prettyEntity(table: string): string {
       return "invoice file";
     case "payments":
       return "payment";
+    case "inventory_items":
+      return "inventory item";
+    case "inventory_adjustments":
+      return "inventory adjustment";
+    case "supplier_invoices":
+      return "supplier invoice";
+    case "supplier_invoice_payments":
+      return "supplier invoice payment";
+    case "supplier_invoice_attachments":
+      return "supplier invoice attachment";
     default:
       return table.replace(/_/g, " ");
   }
@@ -127,6 +191,27 @@ function safeParseStringArray(input: string | null): string[] | null {
   } catch {
     return null;
   }
+}
+
+function safeParseObject(input: string | null | undefined): Record<string, unknown> | null {
+  if (!input) return null;
+  try {
+    const parsed = JSON.parse(input);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getContextString(
+  context: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  const value = context?.[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
 
 export async function getActivityForSalesOrder(
@@ -515,6 +600,288 @@ export async function getActivityForSalesOrder(
         changedFields: null,
       });
     }
+  }
+
+  const all = [...auditItems, ...derivedItems];
+  all.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return all;
+}
+
+export async function getActivityForSupplierInvoice(
+  supplierInvoiceId: string,
+): Promise<ActivityTimelineItem[]> {
+  const tenant = await getCurrentTenant();
+
+  const invoice = await db.query.supplierInvoices.findFirst({
+    where: and(
+      eq(supplierInvoices.id, supplierInvoiceId),
+      eq(supplierInvoices.tenantId, tenant.id),
+    ),
+    with: {
+      supplier: { columns: { name: true } },
+      createdBy: { columns: { id: true, fullName: true, email: true } },
+      updatedBy: { columns: { id: true, fullName: true, email: true } },
+      completedBy: { columns: { id: true, fullName: true, email: true } },
+      attachments: {
+        columns: {
+          supplierInvoiceId: true,
+          fileId: true,
+          createdAt: true,
+        },
+        with: {
+          file: {
+            columns: {
+              id: true,
+              originalFilename: true,
+              createdAt: true,
+            },
+            with: {
+              uploadedByUser: {
+                columns: { id: true, fullName: true, email: true },
+              },
+            },
+          },
+        },
+      },
+      payments: {
+        columns: {
+          id: true,
+          amount: true,
+          paymentMethod: true,
+          paymentDate: true,
+          reference: true,
+          createdAt: true,
+        },
+        with: {
+          createdBy: {
+            columns: { id: true, fullName: true, email: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!invoice) return [];
+
+  const paymentIds = (invoice.payments ?? []).map(payment => payment.id);
+  const attachmentIds = (invoice.attachments ?? []).map(
+    attachment => attachment.fileId,
+  );
+
+  const entityFilters = [
+    and(
+      eq(auditLogs.entityTable, "supplier_invoices"),
+      eq(auditLogs.entityId, supplierInvoiceId),
+    ),
+  ];
+
+  if (paymentIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "supplier_invoice_payments"),
+        inArray(auditLogs.entityId, paymentIds),
+      ),
+    );
+  }
+
+  if (attachmentIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "supplier_invoice_attachments"),
+        inArray(auditLogs.entityId, attachmentIds),
+      ),
+    );
+  }
+
+  const auditRows = await db.query.auditLogs.findMany({
+    where: and(eq(auditLogs.tenantId, tenant.id), or(...entityFilters)),
+    with: {
+      actorPortalUser: {
+        columns: { id: true, fullName: true, email: true },
+      },
+    },
+    orderBy: [desc(auditLogs.createdAt)],
+    limit: 200,
+  });
+
+  const auditItems: ActivityTimelineItem[] = auditRows.map(row => ({
+    id: row.id,
+    source: "audit",
+    scope: entityToScope(row.entityTable),
+    action: row.action,
+    summary: summarizeAudit(row),
+    at: row.createdAt.toISOString(),
+    actor: {
+      id: row.actorPortalUserId ?? row.actorPlatformUserId ?? null,
+      name: row.actorPortalUser?.fullName ?? null,
+      email: row.actorPortalUser?.email ?? null,
+      type: row.actorType,
+    },
+    entityTable: row.entityTable,
+    entityId: row.entityId,
+    entityLabel: row.entityLabel,
+    changedFields: safeParseStringArray(row.changedFieldsJson),
+  }));
+
+  const hasAuditEvent = (matcher: (row: typeof auditRows[number]) => boolean) =>
+    auditRows.some(matcher);
+  const hasSupplierInvoiceAudit = (
+    action: string,
+    contextAction?: string,
+  ) =>
+    hasAuditEvent(row => {
+      const context = safeParseObject(row.contextJson);
+      return (
+        row.entityTable === "supplier_invoices" &&
+        row.entityId === invoice.id &&
+        row.action === action &&
+        (contextAction === undefined ||
+          getContextString(context, "action") === contextAction)
+      );
+    });
+
+  const derivedItems: ActivityTimelineItem[] = [
+    ...(!hasSupplierInvoiceAudit("insert")
+      ? [
+          {
+            id: `derived:supplier-invoice-created:${invoice.id}`,
+            source: "derived" as const,
+            scope: "invoice" as const,
+            action: "insert",
+            summary: `Supplier invoice ${invoice.invoiceNumber} created`,
+            at: invoice.createdAt.toISOString(),
+            actor: {
+              id: invoice.createdBy?.id ?? null,
+              name: invoice.createdBy?.fullName ?? null,
+              email: invoice.createdBy?.email ?? null,
+              type: invoice.createdBy ? "portal_user" : "system",
+            },
+            entityTable: "supplier_invoices",
+            entityId: invoice.id,
+            entityLabel: invoice.invoiceNumber,
+            changedFields: null,
+          },
+        ]
+      : []),
+  ];
+
+  if (
+    invoice.updatedAt &&
+    invoice.updatedAt.getTime() - invoice.createdAt.getTime() > 1000 &&
+    !hasAuditEvent(row => {
+      const context = safeParseObject(row.contextJson);
+      return (
+        row.entityTable === "supplier_invoices" &&
+        row.entityId === invoice.id &&
+        row.action === "update" &&
+        !getContextString(context, "action")
+      );
+    })
+  ) {
+    derivedItems.push({
+      id: `derived:supplier-invoice-updated:${invoice.id}`,
+      source: "derived",
+      scope: "invoice",
+      action: "update",
+      summary: `Supplier invoice ${invoice.invoiceNumber} updated`,
+      at: invoice.updatedAt.toISOString(),
+      actor: {
+        id: invoice.updatedBy?.id ?? null,
+        name: invoice.updatedBy?.fullName ?? null,
+        email: invoice.updatedBy?.email ?? null,
+        type: invoice.updatedBy ? "portal_user" : "system",
+      },
+      entityTable: "supplier_invoices",
+      entityId: invoice.id,
+      entityLabel: invoice.invoiceNumber,
+      changedFields: null,
+    });
+  }
+
+  if (
+    invoice.completedAt &&
+    !hasSupplierInvoiceAudit("update", "complete_receipt")
+  ) {
+    derivedItems.push({
+      id: `derived:supplier-invoice-completed:${invoice.id}`,
+      source: "derived",
+      scope: "invoice",
+      action: "update",
+      summary: `Supplier invoice ${invoice.invoiceNumber} completed and received`,
+      at: invoice.completedAt.toISOString(),
+      actor: {
+        id: invoice.completedBy?.id ?? null,
+        name: invoice.completedBy?.fullName ?? null,
+        email: invoice.completedBy?.email ?? null,
+        type: invoice.completedBy ? "portal_user" : "system",
+      },
+      entityTable: "supplier_invoices",
+      entityId: invoice.id,
+      entityLabel: invoice.invoiceNumber,
+      changedFields: ["status"],
+    });
+  }
+
+  for (const payment of invoice.payments ?? []) {
+    if (
+      hasAuditEvent(
+        row =>
+          row.entityTable === "supplier_invoice_payments" &&
+          row.entityId === payment.id &&
+          row.action === "insert",
+      )
+    ) {
+      continue;
+    }
+    derivedItems.push({
+      id: `derived:supplier-invoice-payment:${payment.id}`,
+      source: "derived",
+      scope: "payment",
+      action: "insert",
+      summary: `Payment recorded: ${Number(payment.amount).toFixed(2)} via ${payment.paymentMethod.replace(/_/g, " ")}${payment.reference ? ` · Ref ${payment.reference}` : ""}`,
+      at: payment.createdAt.toISOString(),
+      actor: {
+        id: payment.createdBy?.id ?? null,
+        name: payment.createdBy?.fullName ?? null,
+        email: payment.createdBy?.email ?? null,
+        type: payment.createdBy ? "portal_user" : "system",
+      },
+      entityTable: "supplier_invoice_payments",
+      entityId: payment.id,
+      entityLabel: invoice.invoiceNumber,
+      changedFields: null,
+    });
+  }
+
+  for (const attachment of invoice.attachments ?? []) {
+    if (
+      hasAuditEvent(
+        row =>
+          row.entityTable === "supplier_invoice_attachments" &&
+          row.entityId === attachment.fileId &&
+          row.action === "file_uploaded",
+      )
+    ) {
+      continue;
+    }
+    derivedItems.push({
+      id: `derived:supplier-invoice-attachment:${attachment.fileId}`,
+      source: "derived",
+      scope: "file",
+      action: "file_uploaded",
+      summary: `Attachment uploaded: ${attachment.file.originalFilename ?? "file"}`,
+      at: attachment.createdAt.toISOString(),
+      actor: {
+        id: attachment.file.uploadedByUser?.id ?? null,
+        name: attachment.file.uploadedByUser?.fullName ?? null,
+        email: attachment.file.uploadedByUser?.email ?? null,
+        type: attachment.file.uploadedByUser ? "portal_user" : "system",
+      },
+      entityTable: "supplier_invoice_attachments",
+      entityId: attachment.fileId,
+      entityLabel: attachment.file.originalFilename,
+      changedFields: null,
+    });
   }
 
   const all = [...auditItems, ...derivedItems];

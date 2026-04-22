@@ -37,6 +37,10 @@ export const queryKeys = {
     all: ["unitsOfMeasure"] as const,
     detail: (id: string) => ["unitsOfMeasure", id] as const,
   },
+  inventory: {
+    all: ["inventory"] as const,
+    detail: (id: string) => ["inventory", id] as const,
+  },
   lots: {
     all: ["lots"] as const,
     detail: (id: string) => ["lots", id] as const,
@@ -48,6 +52,7 @@ export const queryKeys = {
   supplierInvoices: {
     all: ["supplier-invoices"] as const,
     detail: (id: string) => ["supplier-invoices", id] as const,
+    activity: (id: string) => ["supplier-invoices", id, "activity"] as const,
   },
   salesOrders: {
     all: ["sales-orders"] as const,

@@ -33,6 +33,10 @@ import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useProducts } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import {
+  computeDraftLineWeight,
+  serializeDraftCaseWeights,
+} from "@/lib/supplier-invoices/case-weights";
+import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
@@ -106,9 +110,13 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
       id: line.id,
       productId: line.productId,
       quantityCases: Number(line.quantityCases) || 0,
-      weightLbs: line.weightLbs || "0",
+      weightLbs:
+        line.unitType === "catch_weight"
+          ? computeDraftLineWeight(line).toFixed(4)
+          : line.weightLbs || "0",
       unitType: line.unitType,
       unitPrice: line.unitPrice || "0",
+      caseWeightsLbs: serializeDraftCaseWeights(line),
       lotNumberOverride: line.lotNumberOverride?.trim() || null,
       expirationDateOverride: line.expirationDateOverride?.trim() || null,
     }));
@@ -349,6 +357,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           <SupplierInvoiceLinesEditor
             control={form.control}
             register={form.register}
+            setValue={form.setValue}
             products={products ?? []}
             productsLoading={productsLoading}
             disabled={isPending}

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { PageError } from "@/components/page-error";
 import { PageLoading } from "@/components/page-loading";
 import { useSupplierInvoice } from "@/hooks/use-supplier-invoices";
+import { inferWeightDraftState } from "@/lib/supplier-invoices/case-weights";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
 import type { SupplierInvoiceFormValues } from "./supplier-invoice-form.schema";
@@ -26,6 +27,12 @@ export function SupplierInvoiceEditShell({
       paymentMethod: invoice.paymentMethod ?? null,
       notes: invoice.notes ?? "",
       lines: invoice.lines.map(line => ({
+        ...inferWeightDraftState({
+          unitType: line.unitType,
+          quantityCases: line.quantityCases ?? 0,
+          weightLbs: line.weightLbs ?? "0",
+          caseWeightsLbs: line.caseWeightsLbs ?? null,
+        }),
         id: line.id,
         productId: line.productId,
         unitType: line.unitType,
