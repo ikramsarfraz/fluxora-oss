@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local attachment storage (files table bytes when running without R2)
+/.uploads/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

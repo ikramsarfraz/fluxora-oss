@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
   CheckCircle2,
   FileText,
   Package,
@@ -58,11 +60,18 @@ import {
   useSupplierInvoice,
 } from "@/hooks/use-supplier-invoices";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
+import {
+  formatEditableWeight,
+  inferPersistedCaseWeightPattern,
+  parsePersistedCaseWeights,
+  summarizePersistedCaseWeights,
+} from "@/lib/supplier-invoices/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { computePaymentSummary } from "@/lib/supplier-invoices/payment-summary";
 
-import { SupplierInvoiceAttachmentsPlaceholder } from "./supplier-invoice-attachments-placeholder";
+import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
+import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -72,6 +81,21 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   zelle: "Zelle",
   credit_card: "Credit card",
 };
+
+function renderCaseWeightSummary(caseWeightsLbs: string | null): string | null {
+  return summarizePersistedCaseWeights(
+    parsePersistedCaseWeights(caseWeightsLbs),
+  );
+}
+
+function getCaseWeightPatternLabel(caseWeightsLbs: string | null): string | null {
+  const pattern = inferPersistedCaseWeightPattern(
+    parsePersistedCaseWeights(caseWeightsLbs),
+  );
+  if (pattern === "shared_default") return "Shared default + overrides";
+  if (pattern === "manual") return "Manual case weights";
+  return null;
+}
 
 function unitTypeLabel(type: "catch_weight" | "fixed_case") {
   return type === "catch_weight" ? "Catch weight" : "Fixed case";
@@ -93,6 +117,9 @@ export function SupplierInvoiceDetailPage({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<
+    Set<string>
+  >(new Set());
 
   useSetBreadcrumbLabel(
     `/supplier-invoices/${invoiceId}`,
@@ -186,6 +213,18 @@ export function SupplierInvoiceDetailPage({
       partial: "Partially paid",
       paid: "Paid",
     };
+
+  function toggleCaseWeightLine(lineId: string) {
+    setExpandedCaseWeightLines(prev => {
+      const next = new Set(prev);
+      if (next.has(lineId)) {
+        next.delete(lineId);
+      } else {
+        next.add(lineId);
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -335,43 +374,128 @@ export function SupplierInvoiceDetailPage({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  invoice.lines.map(line => (
-                    <TableRow key={line.id}>
-                      <TableCell>
-                        {line.product ? (
-                          <Link
-                            href={`/products/${line.product.id}`}
-                            className="hover:underline"
-                          >
-                            {line.product.name}
-                          </Link>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className="font-mono text-xs"
-                        >
-                          {line.product?.sku ?? "-"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{unitTypeLabel(line.unitType)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {line.quantityCases}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {Number(line.weightLbs).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatMoney(line.unitPrice)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatMoney(line.lineTotal)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  invoice.lines.map(line => {
+                    const caseWeights = parsePersistedCaseWeights(
+                      line.caseWeightsLbs,
+                    );
+                    const hasDetailedCaseWeights =
+                      line.unitType === "catch_weight" && caseWeights.length > 0;
+                    const isExpanded = expandedCaseWeightLines.has(line.id);
+                    const summary = renderCaseWeightSummary(line.caseWeightsLbs);
+                    const patternLabel = getCaseWeightPatternLabel(
+                      line.caseWeightsLbs,
+                    );
+
+                    return (
+                      <Fragment key={line.id}>
+                        <TableRow>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {hasDetailedCaseWeights ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => toggleCaseWeightLine(line.id)}
+                                  aria-label={
+                                    isExpanded
+                                      ? "Hide case weight breakdown"
+                                      : "Show case weight breakdown"
+                                  }
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="size-3.5" />
+                                  ) : (
+                                    <ChevronRight className="size-3.5" />
+                                  )}
+                                </Button>
+                              ) : null}
+                              {line.product ? (
+                                <Link
+                                  href={`/products/${line.product.id}`}
+                                  className="hover:underline"
+                                >
+                                  {line.product.name}
+                                </Link>
+                              ) : (
+                                "-"
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className="font-mono text-xs"
+                            >
+                              {line.product?.sku ?? "-"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col items-start gap-1">
+                              <span>{unitTypeLabel(line.unitType)}</span>
+                              {patternLabel ? (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {patternLabel}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {line.quantityCases}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            <div className="flex flex-col items-end">
+                              <span>{Number(line.weightLbs).toFixed(2)}</span>
+                              {summary ? (
+                                <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
+                                  {summary}
+                                </span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatMoney(line.unitPrice)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatMoney(line.lineTotal)}
+                          </TableCell>
+                        </TableRow>
+                        {hasDetailedCaseWeights && isExpanded ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="bg-muted/20 py-3">
+                              <div className="flex flex-col gap-3">
+                                <div className="flex flex-wrap items-center gap-2 text-sm">
+                                  <Badge variant="outline" className="text-xs">
+                                    {caseWeights.length} case
+                                    {caseWeights.length === 1 ? "" : "s"}
+                                  </Badge>
+                                  <span className="text-muted-foreground">
+                                    {Number(line.weightLbs).toFixed(2)} lb total
+                                  </span>
+                                </div>
+                                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                  {caseWeights.map((weight, caseIndex) => (
+                                    <div
+                                      key={`${line.id}-case-${caseIndex + 1}`}
+                                      className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
+                                    >
+                                      <span className="text-muted-foreground">
+                                        Case {caseIndex + 1}
+                                      </span>
+                                      <span className="font-medium tabular-nums">
+                                        {formatEditableWeight(weight)} lb
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -567,42 +691,20 @@ export function SupplierInvoiceDetailPage({
         </Card>
       )}
 
-      <SupplierInvoiceAttachmentsPlaceholder />
+      <SupplierInvoiceAttachmentsCard
+        supplierInvoiceId={invoiceId}
+        attachments={invoice.attachments}
+        canUpload={canEditByRole}
+        canRemove={canEditByRole}
+        uploadDisabledReason={editDisabledReason}
+        removeDisabledReason={editDisabledReason}
+      />
 
       <DetailSection
         title="Activity"
         description="Who touched this invoice and when."
       >
-        <DetailGrid>
-          <DetailField label="Created">
-            {new Date(invoice.createdAt).toLocaleString()}
-            {invoice.createdBy && (
-              <span className="text-muted-foreground ml-2 text-xs">
-                by {invoice.createdBy.fullName ?? invoice.createdBy.email}
-              </span>
-            )}
-          </DetailField>
-          <DetailField label="Last updated">
-            {new Date(invoice.updatedAt).toLocaleString()}
-            {invoice.updatedBy && (
-              <span className="text-muted-foreground ml-2 text-xs">
-                by {invoice.updatedBy.fullName ?? invoice.updatedBy.email}
-              </span>
-            )}
-          </DetailField>
-          {invoice.completedAt && (
-            <DetailField label="Completed">
-              {new Date(invoice.completedAt).toLocaleString()}
-              {invoice.completedBy && (
-                <span className="text-muted-foreground ml-2 text-xs">
-                  by{" "}
-                  {invoice.completedBy.fullName ??
-                    invoice.completedBy.email}
-                </span>
-              )}
-            </DetailField>
-          )}
-        </DetailGrid>
+        <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
       </DetailSection>
 
       {isDraft && (

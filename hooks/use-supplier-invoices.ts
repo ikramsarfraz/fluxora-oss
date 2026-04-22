@@ -9,8 +9,10 @@ import {
   getSupplierInvoiceByIdAction,
   getSupplierInvoicesAction,
   recordSupplierInvoicePaymentAction,
+  removeSupplierInvoiceAttachmentAction,
   reverseSupplierInvoiceAction,
   updateSupplierInvoiceAction,
+  uploadSupplierInvoiceAttachmentAction,
 } from "@/actions/supplier-invoices";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -64,6 +66,9 @@ export function useUpdateSupplierInvoice() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.detail(variables.id),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(variables.id),
+      });
     },
   });
 }
@@ -77,6 +82,9 @@ export function useCompleteSupplierInvoice() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.detail(variables.id),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(variables.id),
+      });
     },
   });
 }
@@ -89,6 +97,9 @@ export function useReverseSupplierInvoice() {
       invalidateAll(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(variables.id),
       });
     },
   });
@@ -105,6 +116,9 @@ export function useRecordSupplierInvoicePayment() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.detail(variables.supplierInvoiceId),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
+      });
     },
   });
 }
@@ -115,6 +129,45 @@ export function useDeleteSupplierInvoice() {
     mutationFn: deleteSupplierInvoiceAction,
     onSuccess: () => {
       invalidateAll(queryClient);
+    },
+  });
+}
+
+export function useUploadSupplierInvoiceAttachment(supplierInvoiceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.set("supplierInvoiceId", supplierInvoiceId);
+      formData.set("file", file);
+      return await uploadSupplierInvoiceAttachmentAction(formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.detail(supplierInvoiceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
+      });
+    },
+  });
+}
+
+export function useRemoveSupplierInvoiceAttachment(supplierInvoiceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileId: string) =>
+      removeSupplierInvoiceAttachmentAction({
+        supplierInvoiceId,
+        fileId,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.detail(supplierInvoiceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
+      });
     },
   });
 }

@@ -3,15 +3,24 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
+  files,
   inventoryItems,
   lotReceipts,
   lots,
+  supplierInvoiceAttachments,
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
 } from "@/db/schema";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  buildSupplierInvoiceObjectKey,
+  deleteFileBytes,
+  readFileBytes,
+  saveFileBytes,
+} from "@/lib/files/local-storage";
+import { parsePersistedCaseWeights } from "@/lib/supplier-invoices/case-weights";
 
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
@@ -35,6 +44,7 @@ export type SupplierInvoiceLineInput = {
   weightLbs: string;
   unitType: "catch_weight" | "fixed_case";
   unitPrice: string;
+  /** Persisted JSON array of per-case weights when detailed mode is used. */
   caseWeightsLbs?: string | null;
   /** Override for the auto-generated lot number on completion. */
   lotNumberOverride?: string | null;
@@ -81,6 +91,29 @@ function computeLineTotal(line: {
   }
   const cases = Number(line.quantityCases) || 0;
   return roundTo(cases * unitPrice, 4);
+}
+
+function normalizeSupplierInvoiceLine(
+  line: SupplierInvoiceLineInput,
+): SupplierInvoiceLineInput {
+  if (line.unitType !== "catch_weight") {
+    return {
+      ...line,
+      caseWeightsLbs: null,
+    };
+  }
+
+  const parsedCaseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
+  if (parsedCaseWeights.length === 0) {
+    return line;
+  }
+
+  const totalWeight = parsedCaseWeights.reduce((sum, weight) => sum + weight, 0);
+  return {
+    ...line,
+    weightLbs: roundTo(totalWeight, 4),
+    caseWeightsLbs: JSON.stringify(parsedCaseWeights),
+  };
 }
 
 function sumTotals(values: string[]): string {
@@ -189,7 +222,14 @@ export async function getSupplierInvoiceById(id: string) {
           },
         },
       },
-      attachments: true,
+      attachments: {
+        with: {
+          file: {
+            with: { uploadedByUser: true },
+          },
+        },
+        orderBy: [desc(supplierInvoiceAttachments.createdAt)],
+      },
       payments: {
         with: { createdBy: true },
         orderBy: [desc(supplierInvoicePayments.paymentDate)],
@@ -228,10 +268,13 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
     throw new Error("At least one invoice line is required.");
   }
 
-  const normalizedLines = input.lines.map(line => ({
-    ...line,
-    lineTotal: computeLineTotal(line),
-  }));
+  const normalizedLines = input.lines.map(line => {
+    const normalizedLine = normalizeSupplierInvoiceLine(line);
+    return {
+      ...normalizedLine,
+      lineTotal: computeLineTotal(normalizedLine),
+    };
+  });
   const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
 
   const invoiceId = await db.transaction(async tx => {
@@ -251,6 +294,25 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
         updatedByUserId: currentUser.id,
       })
       .returning();
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "insert",
+      entityTable: "supplier_invoices",
+      entityId: invoice.id,
+      entityLabel: invoice.invoiceNumber,
+      afterJson: JSON.stringify({
+        status: "draft",
+        totalAmount,
+      }),
+      contextJson: JSON.stringify({
+        supplierId: input.supplierId,
+        lines: normalizedLines.length,
+        createdAsComplete: Boolean(input.complete),
+      }),
+    });
 
     const insertedLines = await tx
       .insert(supplierInvoiceLines)
@@ -311,45 +373,74 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
     throw new Error("At least one invoice line is required.");
   }
 
-  const normalizedLines = input.lines.map(line => ({
-    ...line,
-    lineTotal: computeLineTotal(line),
-  }));
+  const normalizedLines = input.lines.map(line => {
+    const normalizedLine = normalizeSupplierInvoiceLine(line);
+    return {
+      ...normalizedLine,
+      lineTotal: computeLineTotal(normalizedLine),
+    };
+  });
   const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
 
-  await db
-    .update(supplierInvoices)
-    .set({
-      supplierId: input.supplierId,
-      invoiceNumber: input.invoiceNumber.trim(),
-      invoiceDate: input.invoiceDate,
-      receiveDate: input.receiveDate,
-      paymentMethod: input.paymentMethod ?? null,
-      notes: input.notes?.trim() ? input.notes.trim() : null,
-      totalAmount,
-      updatedByUserId: currentUser.id,
-    })
-    .where(eq(supplierInvoices.id, input.id));
+  await db.transaction(async tx => {
+    await tx
+      .update(supplierInvoices)
+      .set({
+        supplierId: input.supplierId,
+        invoiceNumber: input.invoiceNumber.trim(),
+        invoiceDate: input.invoiceDate,
+        receiveDate: input.receiveDate,
+        paymentMethod: input.paymentMethod ?? null,
+        notes: input.notes?.trim() ? input.notes.trim() : null,
+        totalAmount,
+        updatedByUserId: currentUser.id,
+      })
+      .where(eq(supplierInvoices.id, input.id));
 
-  // Simple reconciliation strategy: delete all existing lines then re-insert.
-  // Draft invoices have no lot_receipts or inventory_items yet, so cascade
-  // delete is safe. This keeps the v1 write path simple.
-  await db
-    .delete(supplierInvoiceLines)
-    .where(eq(supplierInvoiceLines.supplierInvoiceId, input.id));
+    // Simple reconciliation strategy: delete all existing lines then re-insert.
+    // Draft invoices have no lot_receipts or inventory_items yet, so cascade
+    // delete is safe. This keeps the v1 write path simple.
+    await tx
+      .delete(supplierInvoiceLines)
+      .where(eq(supplierInvoiceLines.supplierInvoiceId, input.id));
 
-  await db.insert(supplierInvoiceLines).values(
-    normalizedLines.map(line => ({
-      supplierInvoiceId: input.id,
-      productId: line.productId,
-      quantityCases: line.quantityCases,
-      weightLbs: line.weightLbs,
-      unitType: line.unitType,
-      unitPrice: line.unitPrice,
-      lineTotal: line.lineTotal,
-      caseWeightsLbs: line.caseWeightsLbs ?? null,
-    })),
-  );
+    await tx.insert(supplierInvoiceLines).values(
+      normalizedLines.map(line => ({
+        supplierInvoiceId: input.id,
+        productId: line.productId,
+        quantityCases: line.quantityCases,
+        weightLbs: line.weightLbs,
+        unitType: line.unitType,
+        unitPrice: line.unitPrice,
+        lineTotal: line.lineTotal,
+        caseWeightsLbs: line.caseWeightsLbs ?? null,
+      })),
+    );
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "update",
+      entityTable: "supplier_invoices",
+      entityId: input.id,
+      entityLabel: input.invoiceNumber.trim(),
+      changedFieldsJson: JSON.stringify([
+        "supplierId",
+        "invoiceNumber",
+        "invoiceDate",
+        "receiveDate",
+        "paymentMethod",
+        "notes",
+        "lines",
+        "totalAmount",
+      ]),
+      contextJson: JSON.stringify({
+        lines: normalizedLines.length,
+        totalAmount,
+      }),
+    });
+  });
 
   return (await getSupplierInvoiceById(input.id))!;
 }
@@ -527,6 +618,24 @@ async function postSupplierInvoiceInternal(args: {
       updatedByUserId: args.currentUserId,
     })
     .where(eq(supplierInvoices.id, args.invoiceId));
+
+  await tx.insert(auditLogs).values({
+    tenantId: args.tenantId,
+    actorType: "portal_user",
+    actorPortalUserId: args.currentUserId,
+    action: "update",
+    entityTable: "supplier_invoices",
+    entityId: args.invoiceId,
+    entityLabel: invoice.invoiceNumber,
+    changedFieldsJson: JSON.stringify(["status"]),
+    beforeJson: JSON.stringify({ status: "draft" }),
+    afterJson: JSON.stringify({ status: "completed" }),
+    contextJson: JSON.stringify({
+      action: "complete_receipt",
+      lotsCreated: invoice.lines.length,
+      inventoryItemsCreated: invoice.lines.length,
+    }),
+  });
 }
 
 /**
@@ -743,19 +852,288 @@ export async function recordSupplierInvoicePayment(
       );
     }
 
-    await tx.insert(supplierInvoicePayments).values({
+    const trimmedReference = input.reference?.trim() || null;
+    const [payment] = await tx.insert(supplierInvoicePayments).values({
       tenantId: tenant.id,
       supplierInvoiceId: input.supplierInvoiceId,
       paymentDate: input.paymentDate,
       amount: amount.toFixed(2),
       paymentMethod: input.paymentMethod,
-      reference: input.reference?.trim() || null,
+      reference: trimmedReference,
       notes: input.notes?.trim() || null,
       createdByUserId: currentUser.id,
+    }).returning({ id: supplierInvoicePayments.id });
+
+    const paymentSummaryMethod = input.paymentMethod.replace(/_/g, " ");
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "insert",
+      entityTable: "supplier_invoice_payments",
+      entityId: payment.id,
+      entityLabel: invoice.invoiceNumber,
+      contextJson: JSON.stringify({
+        amount: amount.toFixed(2),
+        paymentMethod: paymentSummaryMethod,
+        reference: trimmedReference,
+      }),
     });
   });
 
   return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
+}
+
+// -------------------- Attachments --------------------
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_ATTACHMENT_FILENAME_LENGTH = 255;
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "heic",
+  "csv",
+  "txt",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+]);
+
+function extensionFromFilename(filename: string): string | null {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0 || dot === filename.length - 1) return null;
+  const ext = filename.slice(dot + 1).toLowerCase();
+  if (!/^[a-z0-9]{1,16}$/.test(ext)) return null;
+  if (!ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) return null;
+  return ext;
+}
+
+/**
+ * Resolve a supplier invoice + ensure the current user can view it. Returns
+ * the invoice id on success, or throws. Used as a single gate for attachment
+ * reads/writes so each entry point does the same tenant + perm check.
+ */
+async function loadSupplierInvoiceForAttachment(
+  supplierInvoiceId: string,
+  permission: "view_supplier_invoice" | "edit_supplier_invoice",
+) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, permission);
+
+  const invoice = await db.query.supplierInvoices.findFirst({
+    where: and(
+      eq(supplierInvoices.id, supplierInvoiceId),
+      eq(supplierInvoices.tenantId, tenant.id),
+    ),
+    columns: { id: true, invoiceNumber: true },
+  });
+  if (!invoice) throw new Error("Supplier invoice not found.");
+  return { tenant, currentUser, invoice };
+}
+
+export type UploadSupplierInvoiceAttachmentInput = {
+  supplierInvoiceId: string;
+  originalFilename: string;
+  mimeType: string | null;
+  bytes: Buffer;
+};
+
+/**
+ * Persist supporting document bytes on disk and record the metadata + join
+ * row atomically. `edit_supplier_invoice` is required; the invoice itself
+ * may be draft or completed (supporting docs are useful in both states).
+ */
+export async function uploadSupplierInvoiceAttachment(
+  input: UploadSupplierInvoiceAttachmentInput,
+) {
+  const { tenant, currentUser, invoice } =
+    await loadSupplierInvoiceForAttachment(
+      input.supplierInvoiceId,
+      "edit_supplier_invoice",
+    );
+
+  if (!input.bytes || input.bytes.byteLength === 0) {
+    throw new Error("Uploaded file is empty.");
+  }
+  if (input.bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new Error(
+      `File is too large. Maximum is ${MAX_ATTACHMENT_BYTES / (1024 * 1024)} MB.`,
+    );
+  }
+  const originalFilename = input.originalFilename.trim();
+  if (!originalFilename) {
+    throw new Error("File must have a name.");
+  }
+  if (originalFilename.length > MAX_ATTACHMENT_FILENAME_LENGTH) {
+    throw new Error(
+      `Filename is too long. Maximum is ${MAX_ATTACHMENT_FILENAME_LENGTH} characters.`,
+    );
+  }
+  if (/[\u0000-\u001F\u007F]/.test(originalFilename)) {
+    throw new Error("Filename contains invalid control characters.");
+  }
+
+  const extension = extensionFromFilename(originalFilename);
+  if (!extension) {
+    throw new Error(
+      "Unsupported file type. Allowed: PDF, PNG, JPG, JPEG, WEBP, HEIC, CSV, TXT, DOC, DOCX, XLS, XLSX.",
+    );
+  }
+  const mimeType =
+    input.mimeType && input.mimeType.trim().length > 0
+      ? input.mimeType.trim().slice(0, 255)
+      : null;
+
+  return await db.transaction(async tx => {
+    const [fileRow] = await tx
+      .insert(files)
+      .values({
+        tenantId: tenant.id,
+        category: "supplier_invoice_attachment",
+        storageProvider: "r2",
+        status: "ready",
+        // Placeholder; patched below once we know the file id.
+        objectKey: `pending/${crypto.randomUUID()}`,
+        bucket: null,
+        originalFilename,
+        mimeType,
+        extension,
+        sizeBytes: input.bytes.byteLength,
+        uploadedByUserId: currentUser.id,
+      })
+      .returning();
+
+    const objectKey = buildSupplierInvoiceObjectKey({
+      tenantId: tenant.id,
+      supplierInvoiceId: invoice.id,
+      fileId: fileRow.id,
+      extension,
+    });
+
+    await tx
+      .update(files)
+      .set({ objectKey })
+      .where(eq(files.id, fileRow.id));
+
+    await tx.insert(supplierInvoiceAttachments).values({
+      supplierInvoiceId: invoice.id,
+      fileId: fileRow.id,
+    });
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "file_uploaded",
+      entityTable: "supplier_invoice_attachments",
+      entityId: fileRow.id,
+      entityLabel: originalFilename,
+      contextJson: JSON.stringify({
+        supplierInvoiceId: invoice.id,
+      }),
+    });
+
+    // Write bytes after DB commit would be ideal, but we need the file id
+    // first. Writing inside the transaction means a late failure leaves an
+    // orphan byte blob on disk that's unreferenced by any DB row -- safer
+    // than an orphan DB row pointing at missing bytes. Cleanup on failure:
+    try {
+      await saveFileBytes({ objectKey, bytes: input.bytes });
+    } catch (err) {
+      // Bubble up; the transaction will roll back and the bytes (if any
+      // partial write happened) become orphaned but unreferenced.
+      throw err;
+    }
+
+    return { fileId: fileRow.id };
+  });
+}
+
+export async function removeSupplierInvoiceAttachment(input: {
+  supplierInvoiceId: string;
+  fileId: string;
+}) {
+  const { tenant, currentUser, invoice } = await loadSupplierInvoiceForAttachment(
+    input.supplierInvoiceId,
+    "edit_supplier_invoice",
+  );
+
+  const attachment = await db.query.supplierInvoiceAttachments.findFirst({
+    where: and(
+      eq(supplierInvoiceAttachments.supplierInvoiceId, invoice.id),
+      eq(supplierInvoiceAttachments.fileId, input.fileId),
+    ),
+    with: { file: true },
+  });
+  if (!attachment) throw new Error("Attachment not found.");
+
+  const removedFilename = attachment.file.originalFilename ?? "attachment";
+
+  await db.transaction(async tx => {
+    await tx
+      .delete(supplierInvoiceAttachments)
+      .where(
+        and(
+          eq(supplierInvoiceAttachments.supplierInvoiceId, invoice.id),
+          eq(supplierInvoiceAttachments.fileId, input.fileId),
+        ),
+      );
+    await tx.delete(files).where(eq(files.id, input.fileId));
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "file_deleted",
+      entityTable: "supplier_invoice_attachments",
+      entityId: input.fileId,
+      entityLabel: removedFilename,
+      contextJson: JSON.stringify({
+        supplierInvoiceId: invoice.id,
+      }),
+    });
+  });
+
+  await deleteFileBytes(attachment.file.objectKey);
+}
+
+/**
+ * Load a supplier invoice attachment for download/streaming. Enforces
+ * `view_supplier_invoice` and confirms the file is actually linked to the
+ * given invoice + tenant, so `fileId` from a URL can't leak cross-tenant.
+ */
+export async function getSupplierInvoiceAttachmentDownload(args: {
+  supplierInvoiceId: string;
+  fileId: string;
+}) {
+  const { invoice } = await loadSupplierInvoiceForAttachment(
+    args.supplierInvoiceId,
+    "view_supplier_invoice",
+  );
+
+  const attachment = await db.query.supplierInvoiceAttachments.findFirst({
+    where: and(
+      eq(supplierInvoiceAttachments.supplierInvoiceId, invoice.id),
+      eq(supplierInvoiceAttachments.fileId, args.fileId),
+    ),
+    with: { file: true },
+  });
+  if (!attachment) throw new Error("Attachment not found.");
+
+  const bytes = await readFileBytes(attachment.file.objectKey);
+  return {
+    bytes,
+    mimeType: attachment.file.mimeType ?? "application/octet-stream",
+    originalFilename: attachment.file.originalFilename ?? "attachment",
+    sizeBytes: attachment.file.sizeBytes ?? bytes.byteLength,
+  };
 }
 
 // -------------------- Derived types for clients --------------------
@@ -766,3 +1144,5 @@ export type SupplierInvoiceListItem = Awaited<
 export type SupplierInvoiceDetail = NonNullable<
   Awaited<ReturnType<typeof getSupplierInvoiceById>>
 >;
+export type SupplierInvoiceAttachment =
+  SupplierInvoiceDetail["attachments"][number];
