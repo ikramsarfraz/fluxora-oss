@@ -1,13 +1,25 @@
 "use server";
 
 import {
+  addInventoryAllocationToSalesOrderLine,
   allocateInventoryToSalesOrderLine,
   createSalesOrder,
   deleteSalesOrder,
+  getSalesOrderLineAllocationEditor,
   getSalesOrderById,
   getSalesOrders,
+  markSalesOrderLineShortShipped,
+  removeSalesOrderLineAllocation,
+  recordSalesOrderFulfillment,
+  reverseSalesOrderFulfillment,
+  updateSalesOrderStatus,
+  updateSalesOrder,
   updateSalesOrderNotes,
 } from "@/services/orders";
+import {
+  generateInvoiceForSalesOrder,
+  recordPaymentForSalesOrderInvoice,
+} from "@/services/invoicing";
 
 export async function getSalesOrdersAction() {
   return await getSalesOrders();
@@ -33,8 +45,68 @@ export async function allocateInventoryToSalesOrderLineAction(
   return await allocateInventoryToSalesOrderLine(input);
 }
 
+export async function getSalesOrderLineAllocationEditorAction(
+  input: Parameters<typeof getSalesOrderLineAllocationEditor>[0],
+) {
+  return await getSalesOrderLineAllocationEditor(input);
+}
+
+export async function addInventoryAllocationToSalesOrderLineAction(
+  input: Parameters<typeof addInventoryAllocationToSalesOrderLine>[0],
+) {
+  return await addInventoryAllocationToSalesOrderLine(input);
+}
+
+export async function removeSalesOrderLineAllocationAction(
+  input: Parameters<typeof removeSalesOrderLineAllocation>[0],
+) {
+  return await removeSalesOrderLineAllocation(input);
+}
+
 export async function updateSalesOrderNotesAction(
   input: Parameters<typeof updateSalesOrderNotes>[0],
 ) {
   return await updateSalesOrderNotes(input);
+}
+
+export async function updateSalesOrderStatusAction(
+  input: Parameters<typeof updateSalesOrderStatus>[0],
+) {
+  return await updateSalesOrderStatus(input);
+}
+
+export async function updateSalesOrderAction(
+  input: Parameters<typeof updateSalesOrder>[0],
+) {
+  return await updateSalesOrder(input);
+}
+
+export async function recordSalesOrderFulfillmentAction(
+  input: Parameters<typeof recordSalesOrderFulfillment>[0],
+) {
+  return await recordSalesOrderFulfillment(input);
+}
+
+export async function markSalesOrderLineShortShippedAction(
+  input: Parameters<typeof markSalesOrderLineShortShipped>[0],
+) {
+  return await markSalesOrderLineShortShipped(input);
+}
+
+export async function reverseSalesOrderFulfillmentAction(
+  input: Parameters<typeof reverseSalesOrderFulfillment>[0],
+) {
+  return await reverseSalesOrderFulfillment(input);
+}
+
+export async function generateInvoiceForSalesOrderAction(
+  input: Parameters<typeof generateInvoiceForSalesOrder>[0],
+) {
+  return await generateInvoiceForSalesOrder(input);
+}
+
+export async function recordPaymentForSalesOrderInvoiceAction(
+  input: Parameters<typeof recordPaymentForSalesOrderInvoice>[0],
+) {
+  return await recordPaymentForSalesOrderInvoice(input);
 }

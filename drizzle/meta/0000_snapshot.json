@@ -1,5 +1,5 @@
 {
-  "id": "907fe359-85b1-45aa-8169-4508ea79c1e6",
+  "id": "08a92607-26c5-443c-9854-ef5a69b9f9cf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3327,6 +3327,262 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.sales_order_fulfillments": {
+      "name": "sales_order_fulfillments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "sales_order_id": {
+          "name": "sales_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sales_order_line_id": {
+          "name": "sales_order_line_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity_fulfilled": {
+          "name": "quantity_fulfilled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "weight_lbs": {
+          "name": "weight_lbs",
+          "type": "numeric(12, 4)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fulfilled_by_user_id": {
+          "name": "fulfilled_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fulfilled_at": {
+          "name": "fulfilled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inventory_item_id": {
+          "name": "inventory_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sales_order_fulfillments_sales_order_id_idx": {
+          "name": "sales_order_fulfillments_sales_order_id_idx",
+          "columns": [
+            {
+              "expression": "sales_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_sales_order_line_id_idx": {
+          "name": "sales_order_fulfillments_sales_order_line_id_idx",
+          "columns": [
+            {
+              "expression": "sales_order_line_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_fulfilled_at_idx": {
+          "name": "sales_order_fulfillments_fulfilled_at_idx",
+          "columns": [
+            {
+              "expression": "fulfilled_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_inventory_item_id_idx": {
+          "name": "sales_order_fulfillments_inventory_item_id_idx",
+          "columns": [
+            {
+              "expression": "inventory_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_lot_id_idx": {
+          "name": "sales_order_fulfillments_lot_id_idx",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_fulfilled_by_user_id_idx": {
+          "name": "sales_order_fulfillments_fulfilled_by_user_id_idx",
+          "columns": [
+            {
+              "expression": "fulfilled_by_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sales_order_fulfillments_sales_order_id_sales_orders_id_fk": {
+          "name": "sales_order_fulfillments_sales_order_id_sales_orders_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "sales_orders",
+          "columnsFrom": [
+            "sales_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sales_order_fulfillments_sales_order_line_id_sales_order_lines_id_fk": {
+          "name": "sales_order_fulfillments_sales_order_line_id_sales_order_lines_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "sales_order_lines",
+          "columnsFrom": [
+            "sales_order_line_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "sales_order_fulfillments_fulfilled_by_user_id_portal_users_id_fk": {
+          "name": "sales_order_fulfillments_fulfilled_by_user_id_portal_users_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "portal_users",
+          "columnsFrom": [
+            "fulfilled_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "sales_order_fulfillments_inventory_item_id_inventory_items_id_fk": {
+          "name": "sales_order_fulfillments_inventory_item_id_inventory_items_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "inventory_items",
+          "columnsFrom": [
+            "inventory_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "sales_order_fulfillments_lot_id_lots_id_fk": {
+          "name": "sales_order_fulfillments_lot_id_lots_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sales_order_fulfillments_quantity_positive": {
+          "name": "sales_order_fulfillments_quantity_positive",
+          "value": "\"sales_order_fulfillments\".\"quantity_fulfilled\" > 0"
+        },
+        "sales_order_fulfillments_weight_nonnegative": {
+          "name": "sales_order_fulfillments_weight_nonnegative",
+          "value": "\"sales_order_fulfillments\".\"weight_lbs\" is null or \"sales_order_fulfillments\".\"weight_lbs\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.sales_order_line_allocations": {
       "name": "sales_order_line_allocations",
       "schema": "",
@@ -3620,6 +3876,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "customer_notes": {
+          "name": "customer_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "internal_notes": {
+          "name": "internal_notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_by_user_id": {
           "name": "created_by_user_id",

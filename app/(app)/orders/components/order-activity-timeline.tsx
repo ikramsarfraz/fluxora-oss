@@ -236,6 +236,15 @@ export function OrderActivityTimeline({ orderId }: OrderActivityTimelineProps) {
         </div>
       )}
 
+      <div className="rounded-lg border border-dashed bg-muted/20 p-4">
+        <div className="mb-2 text-sm font-medium">Audit timeline</div>
+        <p className="text-sm text-muted-foreground">
+          This timeline already tracks order, line, fulfillment, invoice, and
+          payment events. Future backend support can add user mentions,
+          attachment events, and workflow-specific comments.
+        </p>
+      </div>
+
       {hasMore ? (
         <div>
           <Button

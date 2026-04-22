@@ -16,17 +16,26 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useCustomers } from "@/hooks/use-customers";
+import { useProducts } from "@/hooks/use-products";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
+import type { ProductListItem } from "@/services/products";
+
+import { calculateLineTotal } from "./new-order-line-utils";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 
 interface NewOrderSummaryCardProps {
   control: Control<NewOrderFormValues>;
+  showDiscountInput?: boolean;
 }
 
-export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
+export function NewOrderSummaryCard({
+  control,
+  showDiscountInput = true,
+}: NewOrderSummaryCardProps) {
   const { data: customers } = useCustomers();
+  const { data: products } = useProducts();
   const customerId = useWatch({ control, name: "customerId" });
   const lines = useWatch({ control, name: "lines" });
   const addFuelSurcharge = useWatch({ control, name: "addFuelSurcharge" });
@@ -37,25 +46,21 @@ export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
     [customers, customerId],
   );
 
+  const productsById = useMemo(() => {
+    const map = new Map<string, ProductListItem>();
+    for (const product of products ?? []) {
+      map.set(product.id, product);
+    }
+    return map;
+  }, [products]);
+
   const subtotal = useMemo(() => {
     let total = 0;
     for (const line of lines ?? []) {
-      const cases = Number(line.expectedCases);
-      const price = Number(line.pricePerLb);
-      const estLbs = Number(line.estLbsPerCase);
-      if (
-        Number.isFinite(cases) &&
-        Number.isFinite(price) &&
-        Number.isFinite(estLbs) &&
-        cases > 0 &&
-        price > 0 &&
-        estLbs > 0
-      ) {
-        total += cases * estLbs * price;
-      }
+      total += calculateLineTotal(line, productsById.get(line.productId)) ?? 0;
     }
     return total;
-  }, [lines]);
+  }, [lines, productsById]);
 
   const fuelSurcharge = useMemo(() => {
     if (!addFuelSurcharge) return 0;
@@ -70,10 +75,7 @@ export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
   }, [discountInput]);
 
   const hasEstimates = (lines ?? []).some(
-    l =>
-      Number(l.expectedCases) > 0 &&
-      Number(l.pricePerLb) > 0 &&
-      Number(l.estLbsPerCase) > 0,
+    l => (calculateLineTotal(l, productsById.get(l.productId)) ?? 0) > 0,
   );
 
   const total = Math.max(0, subtotal + fuelSurcharge - discount);
@@ -111,34 +113,36 @@ export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
           )}
         />
 
-        <Controller
-          control={control}
-          name="discountAmount"
-          render={({ field, fieldState }) => (
-            <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="new-order-discount">
-                Discount (optional)
-              </FieldLabel>
-              <Input
-                id="new-order-discount"
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={field.value ?? ""}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                aria-invalid={fieldState.invalid}
-              />
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
-                  {fieldState.error?.message}
-                </span>
-              ) : null}
-            </Field>
-          )}
-        />
+        {showDiscountInput ? (
+          <Controller
+            control={control}
+            name="discountAmount"
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="new-order-discount">
+                  Discount (optional)
+                </FieldLabel>
+                <Input
+                  id="new-order-discount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  aria-invalid={fieldState.invalid}
+                />
+                {fieldState.invalid ? (
+                  <span className="text-xs text-destructive">
+                    {fieldState.error?.message}
+                  </span>
+                ) : null}
+              </Field>
+            )}
+          />
+        ) : null}
 
         <Separator />
 
@@ -166,8 +170,8 @@ export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
         {!hasEstimates && (lines?.length ?? 0) > 0 ? (
           <p className="flex items-start gap-2 rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Fill in Est. lbs/case on each line to see an estimated total before
-            fulfillment.
+            Select a product and sales unit, then enter quantity and price to
+            see an estimated total before fulfillment.
           </p>
         ) : null}
       </CardContent>

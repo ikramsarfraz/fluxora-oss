@@ -52,20 +52,23 @@ import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerListItem } from "@/services/customers";
 import type { ProductListItem } from "@/services/products";
 
-import type {
-  LineUnitType,
-  NewOrderFormValues,
-} from "./new-order-form.schema";
+import type { NewOrderFormValues } from "./new-order-form.schema";
+import {
+  calculateLineTotal,
+  formatSalesUnitLabel,
+  formatSalesUnitShortLabel,
+  getDefaultSalesUnit,
+  getLinePriceLabel,
+  getSalesUnits,
+  getSelectedSalesUnit,
+  getUnitTypeDisplayLabel,
+  inferLineUnitType,
+} from "./new-order-line-utils";
 
 interface NewOrderLinesTableProps {
   control: Control<NewOrderFormValues>;
   setValue: UseFormSetValue<NewOrderFormValues>;
 }
-
-const UNIT_TYPE_LABELS: Record<LineUnitType, string> = {
-  catch_weight: "Catch weight",
-  fixed_case: "Fixed case",
-};
 
 function newLineDefaults(): NewOrderFormValues["lines"][number] {
   return {
@@ -74,10 +77,10 @@ function newLineDefaults(): NewOrderFormValues["lines"][number] {
         ? crypto.randomUUID()
         : `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     productId: "",
+    salesUnitId: "",
     unitType: "catch_weight",
-    expectedCases: "",
+    quantity: "",
     pricePerLb: "",
-    estLbsPerCase: "",
   };
 }
 
@@ -104,19 +107,21 @@ export function NewOrderLinesTable({
 
   const productsById = useMemo(() => {
     const map = new Map<string, ProductListItem>();
-    for (const p of products ?? []) map.set(p.id, p);
+    for (const product of products ?? []) {
+      map.set(product.id, product);
+    }
     return map;
   }, [products]);
 
   const takenProductIds = useMemo(
-    () => new Set((lines ?? []).map(l => l.productId).filter(Boolean)),
+    () => new Set((lines ?? []).map(line => line.productId).filter(Boolean)),
     [lines],
   );
 
   function resolvePricePerLb(productId: string): string {
     if (!productId) return "";
     const contract = customer?.productPrices?.find(
-      p => p.productId === productId,
+      price => price.productId === productId,
     );
     if (contract?.pricePerLb) return contract.pricePerLb;
     const product = productsById.get(productId);
@@ -124,11 +129,17 @@ export function NewOrderLinesTable({
   }
 
   function handleProductSelected(index: number, product: ProductListItem) {
+    const defaultSalesUnit = getDefaultSalesUnit(product);
     setValue(`lines.${index}.productId`, product.id, { shouldValidate: true });
-    const price = resolvePricePerLb(product.id);
-    if (price) {
-      setValue(`lines.${index}.pricePerLb`, price, { shouldValidate: true });
-    }
+    setValue(`lines.${index}.salesUnitId`, defaultSalesUnit?.id ?? "", {
+      shouldValidate: true,
+    });
+    setValue(`lines.${index}.unitType`, inferLineUnitType(product), {
+      shouldValidate: true,
+    });
+    setValue(`lines.${index}.pricePerLb`, resolvePricePerLb(product.id), {
+      shouldValidate: true,
+    });
   }
 
   return (
@@ -141,8 +152,9 @@ export function NewOrderLinesTable({
           </Badge>
         </CardTitle>
         <CardDescription>
-          Add products and expected cases. Prices auto-fill from the customer
-          contract (or the product default) and remain editable.
+          Add products, choose from each product&apos;s allowed sales units, and
+          enter the order quantity. Prices auto-fill from the customer contract
+          or product default and remain editable.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -150,12 +162,12 @@ export function NewOrderLinesTable({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="w-[32%] min-w-64">Product</TableHead>
-                <TableHead className="w-36">Unit</TableHead>
-                <TableHead className="w-28 text-right">Cases</TableHead>
-                <TableHead className="w-32 text-right">Est. lbs/case</TableHead>
-                <TableHead className="w-32 text-right">$ / lb</TableHead>
-                <TableHead className="w-32 text-right">Est. total</TableHead>
+                <TableHead className="w-[30%] min-w-64">Product</TableHead>
+                <TableHead className="w-44">Sales unit</TableHead>
+                <TableHead className="w-28 text-right">Quantity</TableHead>
+                <TableHead className="w-40">Unit type</TableHead>
+                <TableHead className="w-36 text-right">Price</TableHead>
+                <TableHead className="w-32 text-right">Line total</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
@@ -166,7 +178,7 @@ export function NewOrderLinesTable({
                     colSpan={7}
                     className="py-10 text-center text-sm text-muted-foreground"
                   >
-                    No products yet. Click "Add product" to get started.
+                    No products yet. Click &quot;Add product&quot; to get started.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -178,7 +190,9 @@ export function NewOrderLinesTable({
                     products={products ?? []}
                     productsById={productsById}
                     takenProductIds={takenProductIds}
-                    onProductSelected={p => handleProductSelected(index, p)}
+                    onProductSelected={product =>
+                      handleProductSelected(index, product)
+                    }
                     onRemove={() => remove(index)}
                   />
                 ))
@@ -200,7 +214,8 @@ export function NewOrderLinesTable({
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Scale className="h-3.5 w-3.5" />
-            Final case weights are captured during fulfillment.
+            Catch-weight products capture final billed weight during
+            fulfillment.
           </div>
         </div>
       </CardContent>
@@ -230,20 +245,13 @@ function LineRow({
   const row = useWatch({ control, name: `lines.${index}` });
 
   const product = row?.productId ? productsById.get(row.productId) : undefined;
-  const cases = Number(row?.expectedCases ?? "");
-  const price = Number(row?.pricePerLb ?? "");
-  const estLbs = Number(row?.estLbsPerCase ?? "");
-  const hasEstimate =
-    Number.isFinite(cases) &&
-    cases > 0 &&
-    Number.isFinite(price) &&
-    price > 0 &&
-    Number.isFinite(estLbs) &&
-    estLbs > 0;
-  const lineTotal = hasEstimate ? cases * estLbs * price : null;
+  const salesUnit = getSelectedSalesUnit(product, row?.salesUnitId);
+  const salesUnits = getSalesUnits(product);
+  const lineTotal = row ? calculateLineTotal(row, product) : null;
 
   const availableProducts = products.filter(
-    p => p.id === row?.productId || !takenProductIds.has(p.id),
+    productItem =>
+      productItem.id === row?.productId || !takenProductIds.has(productItem.id),
   );
 
   return (
@@ -256,12 +264,12 @@ function LineRow({
             <div className="flex flex-col gap-1">
               <Combobox
                 items={availableProducts}
-                itemToStringValue={(p: ProductListItem) =>
-                  `${p.sku} ${p.name}`
+                itemToStringValue={(productItem: ProductListItem) =>
+                  `${productItem.sku} ${productItem.name}`
                 }
                 value={product ?? null}
-                onValueChange={(p: ProductListItem | null) => {
-                  if (p) onProductSelected(p);
+                onValueChange={(productItem: ProductListItem | null) => {
+                  if (productItem) onProductSelected(productItem);
                 }}
               >
                 <ComboboxTrigger
@@ -296,17 +304,17 @@ function LineRow({
                   />
                   <ComboboxEmpty>No products found.</ComboboxEmpty>
                   <ComboboxList>
-                    {(p: ProductListItem) => (
-                      <ComboboxItem key={p.id} value={p}>
+                    {(productItem: ProductListItem) => (
+                      <ComboboxItem key={productItem.id} value={productItem}>
                         <div className="flex w-full items-center justify-between gap-3">
                           <div className="flex flex-col">
-                            <span>{p.name}</span>
+                            <span>{productItem.name}</span>
                             <span className="font-mono text-[11px] text-muted-foreground">
-                              {p.sku}
+                              {productItem.sku}
                             </span>
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {formatMoney(p.defaultPricePerLb)}/lb
+                            {formatMoney(productItem.defaultPricePerLb)}
                           </span>
                         </div>
                       </ComboboxItem>
@@ -317,6 +325,10 @@ function LineRow({
               {fieldState.invalid ? (
                 <span className="text-xs text-destructive">
                   {fieldState.error?.message}
+                </span>
+              ) : product && salesUnits.length === 0 ? (
+                <span className="text-[11px] text-amber-600">
+                  No sales units configured for this product.
                 </span>
               ) : product ? (
                 <span className="font-mono text-[11px] text-muted-foreground">
@@ -331,29 +343,34 @@ function LineRow({
       <TableCell className="py-3">
         <Controller
           control={control}
-          name={`lines.${index}.unitType`}
-          render={({ field }) => (
+          name={`lines.${index}.salesUnitId`}
+          render={({ field, fieldState }) => (
             <div className="flex flex-col gap-1">
               <Select
                 value={field.value}
-                onValueChange={(v: LineUnitType) => field.onChange(v)}
+                onValueChange={field.onChange}
+                disabled={!product || salesUnits.length === 0}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
+                  <SelectValue placeholder="Select unit…" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="catch_weight">
-                    {UNIT_TYPE_LABELS.catch_weight}
-                  </SelectItem>
-                  <SelectItem value="fixed_case">
-                    {UNIT_TYPE_LABELS.fixed_case}
-                  </SelectItem>
+                  {salesUnits.map(unit => (
+                    <SelectItem key={unit.id} value={unit.id}>
+                      {formatSalesUnitLabel(unit)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              {field.value === "catch_weight" ? (
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Info className="h-3 w-3" />
-                  Weight captured at fulfillment
+              {fieldState.invalid ? (
+                <span className="text-xs text-destructive">
+                  {fieldState.error?.message}
+                </span>
+              ) : salesUnit ? (
+                <span className="text-[11px] text-muted-foreground">
+                  {salesUnit.allowsFractional
+                    ? "Configured for fractional use"
+                    : "Whole quantities only"}
                 </span>
               ) : null}
             </div>
@@ -364,7 +381,7 @@ function LineRow({
       <TableCell className="py-3 text-right">
         <Controller
           control={control}
-          name={`lines.${index}.expectedCases`}
+          name={`lines.${index}.quantity`}
           render={({ field, fieldState }) => (
             <div className="flex flex-col items-end gap-1">
               <Input
@@ -387,30 +404,22 @@ function LineRow({
         />
       </TableCell>
 
-      <TableCell className="py-3 text-right">
-        <Controller
-          control={control}
-          name={`lines.${index}.estLbsPerCase`}
-          render={({ field, fieldState }) => (
-            <div className="flex flex-col items-end gap-1">
-              <Input
-                {...field}
-                type="number"
-                min="0"
-                step="0.01"
-                inputMode="decimal"
-                aria-invalid={fieldState.invalid}
-                placeholder="—"
-                className="text-right text-muted-foreground"
-              />
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
-                  {fieldState.error?.message}
-                </span>
-              ) : null}
-            </div>
-          )}
-        />
+      <TableCell className="py-3">
+        <div className="flex flex-col gap-1">
+          <Badge variant="outline" className="w-fit text-xs">
+            {getUnitTypeDisplayLabel(row?.unitType)}
+          </Badge>
+          {row?.unitType === "catch_weight" ? (
+            <span className="flex items-start gap-1 text-[11px] text-muted-foreground">
+              <Info className="mt-0.5 h-3 w-3 shrink-0" />
+              Final billed weight will be captured during fulfillment.
+            </span>
+          ) : salesUnit ? (
+            <span className="text-[11px] text-muted-foreground">
+              Sold by {formatSalesUnitShortLabel(salesUnit)}.
+            </span>
+          ) : null}
+        </div>
       </TableCell>
 
       <TableCell className="py-3 text-right">
@@ -433,7 +442,11 @@ function LineRow({
                 <span className="text-xs text-destructive">
                   {fieldState.error?.message}
                 </span>
-              ) : null}
+              ) : (
+                <span className="text-[11px] text-muted-foreground">
+                  {getLinePriceLabel(row?.unitType, salesUnit)}
+                </span>
+              )}
             </div>
           )}
         />

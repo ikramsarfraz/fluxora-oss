@@ -34,6 +34,7 @@ import {
   salesOrders,
   salesOrderLines,
   salesOrderLineAllocations,
+  salesOrderFulfillments,
   salesInvoices,
   salesInvoiceLines,
   salesInvoiceFiles,
@@ -137,6 +138,9 @@ export type NewSalesOrderLine = InferInsertModel<typeof salesOrderLines>;
 
 export type SalesOrderLineAllocation = InferSelectModel<typeof salesOrderLineAllocations>;
 export type NewSalesOrderLineAllocation = InferInsertModel<typeof salesOrderLineAllocations>;
+
+export type SalesOrderFulfillment = InferSelectModel<typeof salesOrderFulfillments>;
+export type NewSalesOrderFulfillment = InferInsertModel<typeof salesOrderFulfillments>;
 
 export type SalesInvoice = InferSelectModel<typeof salesInvoices>;
 export type NewSalesInvoice = InferInsertModel<typeof salesInvoices>;

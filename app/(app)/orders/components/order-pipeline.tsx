@@ -15,6 +15,7 @@ export interface OrderPipelineProps {
   status: string;
   hasInvoice: boolean;
   isPaid: boolean;
+  readyToInvoice?: boolean;
 }
 
 const STEPS: Array<{ id: OrderPipelineStep; label: string }> = [
@@ -29,10 +30,11 @@ export function getCurrentStep({
   status,
   hasInvoice,
   isPaid,
+  readyToInvoice,
 }: OrderPipelineProps): OrderPipelineStep {
   if (isPaid) return "paid";
   if (hasInvoice) return "invoiced";
-  if (status === "fulfilled") return "fulfilled";
+  if (readyToInvoice || status === "fulfilled") return "fulfilled";
   if (status === "confirmed") return "confirmed";
   return "draft";
 }
@@ -41,6 +43,7 @@ export function OrderPipeline({
   status,
   hasInvoice,
   isPaid,
+  readyToInvoice,
 }: OrderPipelineProps) {
   if (status === "cancelled") {
     return (
@@ -56,7 +59,7 @@ export function OrderPipeline({
     );
   }
 
-  const current = getCurrentStep({ status, hasInvoice, isPaid });
+  const current = getCurrentStep({ status, hasInvoice, isPaid, readyToInvoice });
   const currentIdx = STEPS.findIndex(s => s.id === current);
 
   return (

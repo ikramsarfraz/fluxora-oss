@@ -74,6 +74,11 @@ const navMain: NavGroup[] = [
         icon: Package,
       },
       {
+        title: "Lots",
+        url: "/lots",
+        icon: ListChecks,
+      },
+      {
         title: "Categories",
         url: "/categories",
         icon: ListChecks,

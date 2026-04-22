@@ -52,10 +52,10 @@ function defaultValues(): NewOrderFormValues {
             ? crypto.randomUUID()
             : `line-${Date.now()}`,
         productId: "",
+        salesUnitId: "",
         unitType: "catch_weight",
-        expectedCases: "",
+        quantity: "",
         pricePerLb: "",
-        estLbsPerCase: "",
       },
     ],
   };
@@ -73,8 +73,6 @@ export function NewOrderForm() {
     defaultValues: useMemo(defaultValues, []),
     mode: "onBlur",
   });
-
-  console.log("form.formState.errors", form.formState.errors);
 
   async function handleSubmit(mode: SubmitMode) {
     setSubmitError(null);
@@ -97,7 +95,7 @@ export function NewOrderForm() {
         internalNotes: values.internalNotes || undefined,
         lines: values.lines.map(l => ({
           productId: l.productId,
-          expectedCases: Number(l.expectedCases),
+          expectedCases: Number(l.quantity),
           unitType: l.unitType,
           pricePerLbOverride: l.pricePerLb || undefined,
         })),

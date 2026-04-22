@@ -19,8 +19,9 @@ const decimalString = (opts?: { allowEmpty?: boolean }) =>
 export const newOrderLineSchema = z.object({
   key: z.string(),
   productId: z.string().uuid({ message: "Select a product" }),
+  salesUnitId: z.string().uuid({ message: "Select a sales unit" }),
   unitType: z.enum(lineUnitTypeValues),
-  expectedCases: z
+  quantity: z
     .string()
     .min(1, "Required")
     .refine(v => {
@@ -31,7 +32,6 @@ export const newOrderLineSchema = z.object({
     .string()
     .min(1, "Required")
     .refine(v => Number.isFinite(Number(v)) && Number(v) >= 0, "Invalid price"),
-  estLbsPerCase: decimalString({ allowEmpty: true }),
 });
 
 export const newOrderFormSchema = z.object({

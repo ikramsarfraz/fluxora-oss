@@ -80,6 +80,9 @@ export const lineUnitTypeEnum = pgEnum("line_unit_type", [
 export const inventoryItemStatusEnum = pgEnum("inventory_item_status", [
   "in_stock",
   "allocated",
+  "picked",
+  "packed",
+  "shipped",
   "sold",
   "damaged",
   "expired",
@@ -925,6 +928,14 @@ export const salesOrderLines = pgTable(
       scale: 4,
     }),
     caseWeightsLbs: text("case_weights_lbs"),
+    shortShippedAt: timestamp("short_shipped_at", { withTimezone: true }),
+    shortShippedByUserId: uuid("short_shipped_by_user_id").references(
+      () => portalUsers.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    shortShipNotes: text("short_ship_notes"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -936,6 +947,10 @@ export const salesOrderLines = pgTable(
   table => [
     index("sales_order_lines_sales_order_id_idx").on(table.salesOrderId),
     index("sales_order_lines_product_id_idx").on(table.productId),
+    index("sales_order_lines_short_shipped_at_idx").on(table.shortShippedAt),
+    index("sales_order_lines_short_shipped_by_user_id_idx").on(
+      table.shortShippedByUserId,
+    ),
   ],
 );
 
@@ -961,6 +976,84 @@ export const salesOrderLineAllocations = pgTable(
     uniqueIndex("uq_sales_line_inventory_item").on(
       table.salesOrderLineId,
       table.inventoryItemId,
+    ),
+  ],
+);
+
+export const salesOrderFulfillments = pgTable(
+  "sales_order_fulfillments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    salesOrderId: uuid("sales_order_id")
+      .notNull()
+      .references(() => salesOrders.id, { onDelete: "cascade" }),
+    salesOrderLineId: uuid("sales_order_line_id")
+      .notNull()
+      .references(() => salesOrderLines.id, { onDelete: "cascade" }),
+    quantityFulfilled: integer("quantity_fulfilled").notNull().default(1),
+    weightLbs: numeric("weight_lbs", {
+      precision: 12,
+      scale: 4,
+    }),
+    fulfilledByUserId: uuid("fulfilled_by_user_id").references(
+      () => portalUsers.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    fulfilledAt: timestamp("fulfilled_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    notes: text("notes"),
+    inventoryItemId: uuid("inventory_item_id").references(
+      () => inventoryItems.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    lotId: uuid("lot_id").references(() => lots.id, {
+      onDelete: "set null",
+    }),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedByUserId: uuid("reversed_by_user_id").references(
+      () => portalUsers.id,
+      {
+        onDelete: "set null",
+      },
+    ),
+    reversalReason: text("reversal_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("sales_order_fulfillments_sales_order_id_idx").on(table.salesOrderId),
+    index("sales_order_fulfillments_sales_order_line_id_idx").on(
+      table.salesOrderLineId,
+    ),
+    index("sales_order_fulfillments_fulfilled_at_idx").on(table.fulfilledAt),
+    index("sales_order_fulfillments_inventory_item_id_idx").on(
+      table.inventoryItemId,
+    ),
+    index("sales_order_fulfillments_lot_id_idx").on(table.lotId),
+    index("sales_order_fulfillments_fulfilled_by_user_id_idx").on(
+      table.fulfilledByUserId,
+    ),
+    index("sales_order_fulfillments_reversed_at_idx").on(table.reversedAt),
+    index("sales_order_fulfillments_reversed_by_user_id_idx").on(
+      table.reversedByUserId,
+    ),
+    check(
+      "sales_order_fulfillments_quantity_positive",
+      sql`${table.quantityFulfilled} > 0`,
+    ),
+    check(
+      "sales_order_fulfillments_weight_nonnegative",
+      sql`${table.weightLbs} is null or ${table.weightLbs} >= 0`,
     ),
   ],
 );

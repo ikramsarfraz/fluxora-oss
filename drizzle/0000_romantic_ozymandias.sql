@@ -270,6 +270,23 @@ CREATE TABLE "sales_invoices" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "sales_order_fulfillments" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"sales_order_id" uuid NOT NULL,
+	"sales_order_line_id" uuid NOT NULL,
+	"quantity_fulfilled" integer DEFAULT 1 NOT NULL,
+	"weight_lbs" numeric(12, 4),
+	"fulfilled_by_user_id" uuid,
+	"fulfilled_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"notes" text,
+	"inventory_item_id" uuid,
+	"lot_id" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "sales_order_fulfillments_quantity_positive" CHECK ("sales_order_fulfillments"."quantity_fulfilled" > 0),
+	CONSTRAINT "sales_order_fulfillments_weight_nonnegative" CHECK ("sales_order_fulfillments"."weight_lbs" is null or "sales_order_fulfillments"."weight_lbs" >= 0)
+);
+--> statement-breakpoint
 CREATE TABLE "sales_order_line_allocations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"sales_order_line_id" uuid NOT NULL,
@@ -301,6 +318,8 @@ CREATE TABLE "sales_orders" (
 	"due_date" date,
 	"status" "order_status" DEFAULT 'sales_order' NOT NULL,
 	"add_fuel_surcharge" boolean DEFAULT true NOT NULL,
+	"customer_notes" text,
+	"internal_notes" text,
 	"created_by_user_id" uuid NOT NULL,
 	"updated_by_user_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -507,6 +526,11 @@ ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_sales_order_id_sales
 ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_created_by_user_id_portal_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_invoices" ADD CONSTRAINT "sales_invoices_updated_by_user_id_portal_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_sales_order_line_id_sales_order_lines_id_fk" FOREIGN KEY ("sales_order_line_id") REFERENCES "public"."sales_order_lines"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_fulfilled_by_user_id_portal_users_id_fk" FOREIGN KEY ("fulfilled_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_lot_id_lots_id_fk" FOREIGN KEY ("lot_id") REFERENCES "public"."lots"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_line_allocations" ADD CONSTRAINT "sales_order_line_allocations_sales_order_line_id_sales_order_lines_id_fk" FOREIGN KEY ("sales_order_line_id") REFERENCES "public"."sales_order_lines"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_line_allocations" ADD CONSTRAINT "sales_order_line_allocations_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_lines" ADD CONSTRAINT "sales_order_lines_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -596,6 +620,12 @@ CREATE INDEX "sales_invoices_sales_order_id_idx" ON "sales_invoices" USING btree
 CREATE UNIQUE INDEX "sales_invoices_tenant_invoice_number_unique" ON "sales_invoices" USING btree ("tenant_id","invoice_number");--> statement-breakpoint
 CREATE INDEX "sales_invoices_tenant_invoice_date_idx" ON "sales_invoices" USING btree ("tenant_id","invoice_date");--> statement-breakpoint
 CREATE INDEX "sales_invoices_tenant_status_due_date_idx" ON "sales_invoices" USING btree ("tenant_id","status","due_date");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_sales_order_id_idx" ON "sales_order_fulfillments" USING btree ("sales_order_id");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_sales_order_line_id_idx" ON "sales_order_fulfillments" USING btree ("sales_order_line_id");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_fulfilled_at_idx" ON "sales_order_fulfillments" USING btree ("fulfilled_at");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_inventory_item_id_idx" ON "sales_order_fulfillments" USING btree ("inventory_item_id");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_lot_id_idx" ON "sales_order_fulfillments" USING btree ("lot_id");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_fulfilled_by_user_id_idx" ON "sales_order_fulfillments" USING btree ("fulfilled_by_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_sales_line_inventory_item" ON "sales_order_line_allocations" USING btree ("sales_order_line_id","inventory_item_id");--> statement-breakpoint
 CREATE INDEX "sales_order_lines_sales_order_id_idx" ON "sales_order_lines" USING btree ("sales_order_id");--> statement-breakpoint
 CREATE INDEX "sales_order_lines_product_id_idx" ON "sales_order_lines" USING btree ("product_id");--> statement-breakpoint

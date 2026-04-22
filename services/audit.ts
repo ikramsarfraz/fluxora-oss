@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   auditLogs,
   salesOrderLineAllocations,
+  salesOrderFulfillments,
   salesOrderLines,
   salesOrders,
 } from "@/db/schema";
@@ -44,6 +45,7 @@ const ENTITY_SCOPE: Record<string, ActivityScope> = {
   sales_orders: "order",
   sales_order_lines: "line",
   sales_order_line_allocations: "allocation",
+  sales_order_fulfillments: "allocation",
   sales_invoices: "invoice",
   sales_invoice_lines: "invoice",
   sales_invoice_files: "file",
@@ -99,6 +101,8 @@ function prettyEntity(table: string): string {
       return "line item";
     case "sales_order_line_allocations":
       return "allocation";
+    case "sales_order_fulfillments":
+      return "fulfillment";
     case "sales_invoices":
       return "invoice";
     case "sales_invoice_lines":
@@ -140,11 +144,41 @@ export async function getActivityForSalesOrder(
           id: true,
           expectedCases: true,
           fulfilledCases: true,
+          shortShippedAt: true,
+          shortShipNotes: true,
           createdAt: true,
           updatedAt: true,
         },
         with: {
           product: { columns: { sku: true, name: true } },
+          shortShippedBy: {
+            columns: { id: true, fullName: true, email: true },
+          },
+          fulfillments: {
+            columns: {
+              id: true,
+              quantityFulfilled: true,
+              weightLbs: true,
+              fulfilledAt: true,
+              notes: true,
+              reversedAt: true,
+              reversalReason: true,
+            },
+            with: {
+              fulfilledBy: {
+                columns: { id: true, fullName: true, email: true },
+              },
+              reversedBy: {
+                columns: { id: true, fullName: true, email: true },
+              },
+              inventoryItem: {
+                columns: { barcodeId: true },
+              },
+              lot: {
+                columns: { lotNumber: true },
+              },
+            },
+          },
           allocations: {
             columns: {
               id: true,
@@ -191,6 +225,15 @@ export async function getActivityForSalesOrder(
             columns: { id: true },
           })
         ).map(a => a.id);
+  const fulfillmentIds =
+    lineIds.length === 0
+      ? []
+      : (
+          await db.query.salesOrderFulfillments.findMany({
+            where: inArray(salesOrderFulfillments.salesOrderLineId, lineIds),
+            columns: { id: true },
+          })
+        ).map(fulfillment => fulfillment.id);
   const invoiceIds = (order.invoices ?? []).map(i => i.id);
   const paymentIds = (order.invoices ?? []).flatMap(i =>
     (i.payments ?? []).map(p => p.id),
@@ -215,6 +258,14 @@ export async function getActivityForSalesOrder(
       and(
         eq(auditLogs.entityTable, "sales_order_line_allocations"),
         inArray(auditLogs.entityId, allocationIds),
+      ),
+    );
+  }
+  if (fulfillmentIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "sales_order_fulfillments"),
+        inArray(auditLogs.entityId, fulfillmentIds),
       ),
     );
   }
@@ -334,6 +385,83 @@ export async function getActivityForSalesOrder(
         entityId: alloc.id,
         entityLabel: null,
         changedFields: null,
+      });
+    }
+
+    for (const fulfillment of line.fulfillments ?? []) {
+      const parts = [`${fulfillment.quantityFulfilled} qty`];
+      if (fulfillment.weightLbs) {
+        parts.push(`${Number(fulfillment.weightLbs).toFixed(2)} lbs`);
+      }
+      if (fulfillment.inventoryItem?.barcodeId) {
+        parts.push(fulfillment.inventoryItem.barcodeId);
+      } else if (fulfillment.lot?.lotNumber) {
+        parts.push(`Lot ${fulfillment.lot.lotNumber}`);
+      }
+
+      derivedItems.push({
+        id: `derived:fulfillment:${fulfillment.id}`,
+        source: "derived",
+        scope: "allocation",
+        action: "insert",
+        summary: `Fulfilled ${productLabel}: ${parts.join(" · ")}`,
+        at: fulfillment.fulfilledAt.toISOString(),
+        actor: {
+          id: fulfillment.fulfilledBy?.id ?? null,
+          name: fulfillment.fulfilledBy?.fullName ?? null,
+          email: fulfillment.fulfilledBy?.email ?? null,
+          type: fulfillment.fulfilledBy ? "portal_user" : "system",
+        },
+        entityTable: "sales_order_fulfillments",
+        entityId: fulfillment.id,
+        entityLabel: productLabel,
+        changedFields: fulfillment.notes ? ["notes"] : null,
+      });
+
+      if (fulfillment.reversedAt) {
+        derivedItems.push({
+          id: `derived:fulfillment-reversed:${fulfillment.id}`,
+          source: "derived",
+          scope: "allocation",
+          action: "update",
+          summary: `Reversed fulfillment for ${productLabel}${fulfillment.reversalReason ? ` · ${fulfillment.reversalReason}` : ""}`,
+          at: fulfillment.reversedAt.toISOString(),
+          actor: {
+            id: fulfillment.reversedBy?.id ?? null,
+            name: fulfillment.reversedBy?.fullName ?? null,
+            email: fulfillment.reversedBy?.email ?? null,
+            type: fulfillment.reversedBy ? "portal_user" : "system",
+          },
+          entityTable: "sales_order_fulfillments",
+          entityId: fulfillment.id,
+          entityLabel: productLabel,
+          changedFields: fulfillment.reversalReason ? ["reversalReason"] : null,
+        });
+      }
+    }
+
+    if (line.shortShippedAt) {
+      const shortQuantity = Math.max(
+        0,
+        line.expectedCases - line.fulfilledCases,
+      );
+      derivedItems.push({
+        id: `derived:line-short-ship:${line.id}`,
+        source: "derived",
+        scope: "line",
+        action: "update",
+        summary: `${productLabel}: short shipped ${shortQuantity} case${shortQuantity === 1 ? "" : "s"}`,
+        at: line.shortShippedAt.toISOString(),
+        actor: {
+          id: line.shortShippedBy?.id ?? null,
+          name: line.shortShippedBy?.fullName ?? null,
+          email: line.shortShippedBy?.email ?? null,
+          type: line.shortShippedBy ? "portal_user" : "system",
+        },
+        entityTable: "sales_order_lines",
+        entityId: line.id,
+        entityLabel: productLabel,
+        changedFields: line.shortShipNotes ? ["shortShipNotes"] : null,
       });
     }
 

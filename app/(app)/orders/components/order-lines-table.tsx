@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Package } from "lucide-react";
+import { ChevronDown, ChevronRight, Package, Scale } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,27 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
+import { formatDisplayDate } from "@/lib/utils/date";
+import { getInventoryStatusLabel } from "@/lib/inventory-status";
 
 import type { SalesOrderDetail } from "@/services/orders";
+
+import {
+  formatFulfillmentTimestamp,
+  getLineAllocationReconciliation,
+  getLineAllFulfillmentRecords,
+  getLineCaseWeights,
+  getLineFulfillmentState,
+  getLineFulfilledQuantity,
+  getLineFulfilledWeight,
+  getLineFulfillmentRecords,
+  getLineRemainingQuantity,
+  getLineShortQuantity,
+  getLineTraceabilitySummary,
+  hasLineFulfillments,
+  isFulfillmentReversed,
+} from "./order-fulfillment-utils";
+import { OrderAllocationEditorDialog } from "./order-allocation-editor-dialog";
 
 type Line = SalesOrderDetail["lines"][number];
 
@@ -26,27 +45,32 @@ const UNIT_TYPE_LABELS: Record<string, string> = {
   fixed_case: "Fixed case",
 };
 
-function parseCaseWeights(raw: string | null | undefined): number[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map(v => {
-        const n = typeof v === "string" ? parseFloat(v) : Number(v);
-        return Number.isFinite(n) ? n : null;
-      })
-      .filter((n): n is number => n != null && n > 0);
-  } catch {
-    return [];
-  }
-}
+const LINE_STATUS_META = {
+  not_started: { label: "Not started", variant: "outline" as const },
+  partial: { label: "Partial", variant: "secondary" as const },
+  fulfilled: { label: "Fulfilled", variant: "default" as const },
+  short_shipped: { label: "Short shipped", variant: "outline" as const },
+};
+
+const INVENTORY_STATUS_BADGE: Record<
+  string,
+  "default" | "secondary" | "outline" | "destructive"
+> = {
+  in_stock: "outline",
+  allocated: "secondary",
+  picked: "secondary",
+  packed: "secondary",
+  shipped: "default",
+  sold: "default",
+  damaged: "destructive",
+  expired: "destructive",
+};
 
 function computeLineTotal(line: Line): number | null {
   const price = line.pricePerLbOverride
     ? parseFloat(line.pricePerLbOverride)
     : NaN;
-  const weight = parseFloat(line.totalBilledWeightLbs ?? "0");
+  const weight = getLineFulfilledWeight(line);
   if (!Number.isFinite(price) || !Number.isFinite(weight)) return null;
   return price * weight;
 }
@@ -62,7 +86,9 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
     () =>
       lines.filter(
         line =>
-          parseCaseWeights(line.caseWeightsLbs).length > 0 ||
+          line.unitType === "catch_weight" ||
+          getLineCaseWeights(line).length > 0 ||
+          hasLineFulfillments(line) ||
           (line.allocations?.length ?? 0) > 0,
       ),
     [lines],
@@ -134,23 +160,30 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
         </TableHeader>
         <TableBody>
           {lines.map(line => {
-            const caseWeights = parseCaseWeights(line.caseWeightsLbs);
+            const fulfillments = getLineAllFulfillmentRecords(line);
+            const caseWeights = getLineCaseWeights(line);
             const allocations = line.allocations ?? [];
             const canExpand =
-              caseWeights.length > 0 || allocations.length > 0;
+              line.unitType === "catch_weight" ||
+              fulfillments.length > 0 ||
+              caseWeights.length > 0 ||
+              allocations.length > 0;
             const isOpen = expanded.has(line.id);
             const price = line.pricePerLbOverride
               ? parseFloat(line.pricePerLbOverride)
               : NaN;
             const total = computeLineTotal(line);
-            const fulfilled = line.fulfilledCases;
+            const fulfilled = getLineFulfilledQuantity(line);
             const expected = line.expectedCases;
+            const lineStatus = getLineFulfillmentState(line);
             const fulfilledClass =
               expected === 0
                 ? "text-muted-foreground"
-                : fulfilled >= expected
+                : lineStatus === "fulfilled"
                   ? "text-emerald-600 dark:text-emerald-400"
-                  : fulfilled > 0
+                  : lineStatus === "short_shipped"
+                    ? "text-slate-700 dark:text-slate-300"
+                    : fulfilled > 0
                     ? "text-amber-600 dark:text-amber-400"
                     : "text-muted-foreground";
 
@@ -161,6 +194,7 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
                 price={price}
                 total={total}
                 caseWeights={caseWeights}
+                fulfillments={fulfillments}
                 allocations={allocations}
                 canExpand={canExpand}
                 isOpen={isOpen}
@@ -196,6 +230,7 @@ interface LineRowGroupProps {
   price: number;
   total: number | null;
   caseWeights: number[];
+  fulfillments: ReturnType<typeof getLineFulfillmentRecords>;
   allocations: NonNullable<Line["allocations"]>;
   canExpand: boolean;
   isOpen: boolean;
@@ -208,6 +243,7 @@ function LineRowGroup({
   price,
   total,
   caseWeights,
+  fulfillments,
   allocations,
   canExpand,
   isOpen,
@@ -258,15 +294,23 @@ function LineRowGroup({
           )}
         </TableCell>
         <TableCell>
-          <Badge variant="outline" className="text-xs">
-            {UNIT_TYPE_LABELS[line.unitType] ?? line.unitType}
-          </Badge>
+          <div className="flex flex-wrap gap-1">
+            <Badge variant="outline" className="text-xs">
+              {UNIT_TYPE_LABELS[line.unitType] ?? line.unitType}
+            </Badge>
+            <Badge
+              variant={LINE_STATUS_META[getLineFulfillmentState(line)].variant}
+              className="text-xs"
+            >
+              {LINE_STATUS_META[getLineFulfillmentState(line)].label}
+            </Badge>
+          </div>
         </TableCell>
         <TableCell className={cn("text-right tabular-nums", fulfilledClass)}>
-          {line.fulfilledCases} / {line.expectedCases}
+          {getLineFulfilledQuantity(line)} / {line.expectedCases}
         </TableCell>
         <TableCell className="text-right tabular-nums">
-          {Number(line.totalBilledWeightLbs ?? 0).toFixed(2)}
+          {getLineFulfilledWeight(line).toFixed(2)}
         </TableCell>
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
@@ -288,7 +332,9 @@ function LineRowGroup({
           <TableCell />
           <TableCell colSpan={6} className="py-4">
             <LineBreakdown
+              line={line}
               caseWeights={caseWeights}
+              fulfillments={fulfillments}
               allocations={allocations}
             />
           </TableCell>
@@ -299,10 +345,14 @@ function LineRowGroup({
 }
 
 function LineBreakdown({
+  line,
   caseWeights,
+  fulfillments,
   allocations,
 }: {
+  line: Line;
   caseWeights: number[];
+  fulfillments: ReturnType<typeof getLineFulfillmentRecords>;
   allocations: NonNullable<Line["allocations"]>;
 }) {
   const totalCaseWeight = caseWeights.reduce((s, w) => s + w, 0);
@@ -310,19 +360,217 @@ function LineBreakdown({
     (s, a) => s + (parseFloat(a.allocatedWeightLbs) || 0),
     0,
   );
+  const lineStatus = getLineFulfillmentState(line);
+  const remainingQuantity = getLineRemainingQuantity(line);
+  const shortQuantity = getLineShortQuantity(line);
+  const statusMeta = LINE_STATUS_META[lineStatus];
+  const reconciliation = getLineAllocationReconciliation(line);
+  const traceability = getLineTraceabilitySummary(line);
+  const [allocationEditorOpen, setAllocationEditorOpen] = useState(false);
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {caseWeights.length > 0 && (
-        <div>
-          <div className="mb-2 flex items-baseline justify-between gap-2">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Per-case weights ({caseWeights.length} cases)
+      <div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Badge variant={statusMeta.variant} className="text-xs">
+            {statusMeta.label}
+          </Badge>
+          <span className="text-xs text-muted-foreground">
+            Fulfilled {getLineFulfilledQuantity(line)} / {line.expectedCases}
+          </span>
+          {lineStatus === "short_shipped" ? (
+            <span className="text-xs text-muted-foreground">
+              Shorted {shortQuantity}
             </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Remaining {remainingQuantity}
+            </span>
+          )}
+        </div>
+        {lineStatus === "short_shipped" ? (
+          <div className="mb-3 rounded-md border border-dashed bg-background px-3 py-2 text-xs text-muted-foreground">
+            Closed short
+            {line.shortShippedAt
+              ? ` on ${formatFulfillmentTimestamp(line.shortShippedAt)}`
+              : ""}
+            {line.shortShippedBy?.fullName
+              ? ` by ${line.shortShippedBy.fullName}`
+              : ""}
+            {line.shortShipNotes ? ` · ${line.shortShipNotes}` : ""}
+          </div>
+        ) : null}
+        {!reconciliation.reconciled ? (
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+            {reconciliation.warnings.map(warning => (
+              <div key={warning}>{warning}</div>
+            ))}
+          </div>
+        ) : null}
+        <div className="mb-3 rounded-md border bg-background px-3 py-2">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Lot traceability
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span>
+              Allocated lots {traceability.allocatedLots.length}
+              {traceability.hasMultipleAllocatedLots ? " · multiple lots" : ""}
+            </span>
+            <span>
+              Fulfilled lots {traceability.fulfilledLots.length}
+              {traceability.hasMultipleFulfilledLots ? " · multiple lots" : ""}
+            </span>
+          </div>
+          {traceability.allocatedLots.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {traceability.allocatedLots.map(lot => (
+                <LotBadge
+                  key={`allocated-${lot.id}`}
+                  prefix="Allocated"
+                  lotNumber={lot.lotNumber}
+                  expirationDate={lot.expirationDate}
+                />
+              ))}
+            </div>
+          ) : null}
+          {traceability.fulfilledLots.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {traceability.fulfilledLots.map(lot => (
+                <LotBadge
+                  key={`fulfilled-${lot.id}`}
+                  prefix="Fulfilled"
+                  lotNumber={lot.lotNumber}
+                  expirationDate={lot.expirationDate}
+                />
+              ))}
+            </div>
+          ) : null}
+          {traceability.warnings.length > 0 ? (
+            <div className="mt-2 space-y-1 text-xs text-amber-700 dark:text-amber-300">
+              {traceability.warnings.map(warning => (
+                <div key={warning}>{warning}</div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Case-level breakdown
+          </span>
+          {caseWeights.length > 0 ? (
             <span className="text-xs tabular-nums text-muted-foreground">
               Total {totalCaseWeight.toFixed(2)} lbs
             </span>
-          </div>
+          ) : null}
+        </div>
+        {fulfillments.length > 0 ? (
+          <ul className="divide-y rounded-md border bg-background">
+            {fulfillments.map((fulfillment, index) => {
+              const inventoryLabel =
+                fulfillment.inventoryItem?.barcodeId ??
+                (fulfillment.lot?.lotNumber
+                  ? `Lot ${fulfillment.lot.lotNumber}`
+                  : null);
+              const lotLabel =
+                fulfillment.lot?.lotNumber ??
+                fulfillment.inventoryItem?.lot?.lotNumber ??
+                null;
+
+              return (
+                <li
+                  key={fulfillment.id}
+                  className={cn(
+                    "flex flex-col gap-2 px-3 py-2 text-sm",
+                    isFulfillmentReversed(fulfillment) &&
+                      "bg-muted/40 text-muted-foreground",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col">
+                      <span className="font-medium">
+                        Fulfillment {index + 1}
+                        {isFulfillmentReversed(fulfillment) ? (
+                          <Badge variant="outline" className="ml-2 text-[10px]">
+                            Reversed
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatFulfillmentTimestamp(fulfillment.fulfilledAt)}
+                        {fulfillment.fulfilledBy?.fullName
+                          ? ` · ${fulfillment.fulfilledBy.fullName}`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium tabular-nums">
+                        {fulfillment.quantityFulfilled} qty
+                      </div>
+                      <div className="text-xs tabular-nums text-muted-foreground">
+                        {fulfillment.weightLbs
+                          ? `${Number(fulfillment.weightLbs).toFixed(2)} lbs`
+                          : "No weight captured"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isFulfillmentReversed(fulfillment) ? (
+                    <div className="text-xs text-muted-foreground">
+                      Reversed
+                      {fulfillment.reversedAt
+                        ? ` on ${formatFulfillmentTimestamp(fulfillment.reversedAt)}`
+                        : ""}
+                      {fulfillment.reversedBy?.fullName
+                        ? ` by ${fulfillment.reversedBy.fullName}`
+                        : ""}
+                      {fulfillment.reversalReason
+                        ? ` · ${fulfillment.reversalReason}`
+                        : ""}
+                    </div>
+                  ) : null}
+
+                  {(inventoryLabel || lotLabel || fulfillment.notes) && (
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {inventoryLabel ? (
+                        <Badge variant="outline" className="text-[10px] font-mono">
+                          {inventoryLabel}
+                        </Badge>
+                      ) : null}
+                      {fulfillment.inventoryItem?.status ? (
+                        <Badge
+                          variant={
+                            INVENTORY_STATUS_BADGE[fulfillment.inventoryItem.status] ??
+                            "outline"
+                          }
+                          className="text-[10px]"
+                        >
+                          {getInventoryStatusLabel(fulfillment.inventoryItem.status)}
+                        </Badge>
+                      ) : null}
+                      {lotLabel && inventoryLabel !== `Lot ${lotLabel}` ? (
+                        <Badge variant="outline" className="text-[10px] font-mono">
+                          Lot {lotLabel}
+                        </Badge>
+                      ) : null}
+                      {fulfillment.inventoryItem?.lot?.expirationDate ||
+                      fulfillment.lot?.expirationDate ? (
+                        <LotBadge
+                          prefix="Exp"
+                          lotNumber={lotLabel}
+                          expirationDate={
+                            fulfillment.inventoryItem?.lot?.expirationDate ??
+                            fulfillment.lot?.expirationDate
+                          }
+                        />
+                      ) : null}
+                      {fulfillment.notes ? <span>{fulfillment.notes}</span> : null}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : caseWeights.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {caseWeights.map((w, i) => (
               <Badge
@@ -334,21 +582,44 @@ function LineBreakdown({
               </Badge>
             ))}
           </div>
-        </div>
-      )}
+        ) : line.unitType === "catch_weight" ? (
+          <div className="rounded-md border border-dashed bg-background px-3 py-2 text-sm text-muted-foreground">
+            <div className="mb-1 flex items-center gap-2 font-medium text-foreground">
+              <Scale className="h-4 w-4 text-muted-foreground" />
+              Catch-weight detail pending
+            </div>
+            Case-level weights will appear here once fulfillment captures the
+            billed weights for each case.
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed bg-background px-3 py-2 text-sm text-muted-foreground">
+            {lineStatus === "short_shipped"
+              ? "This line was closed short, so no additional case-level fulfillment was captured."
+              : "No case-level breakdown has been captured for this line yet."}
+          </div>
+        )}
+      </div>
 
       <div>
         <div className="mb-2 flex items-baseline justify-between gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Inventory allocations
-          </span>
-          {allocations.length > 0 && (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {allocations.length} box
-              {allocations.length === 1 ? "" : "es"} ·{" "}
-              {totalAllocated.toFixed(2)} lbs
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Inventory allocations
             </span>
-          )}
+            {allocations.length > 0 && (
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {reconciliation.allocatedQuantity} qty · {totalAllocated.toFixed(2)} lbs
+              </span>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAllocationEditorOpen(true)}
+          >
+            Manage allocations
+          </Button>
         </div>
         {allocations.length > 0 ? (
           <ul className="divide-y rounded-md border">
@@ -357,24 +628,100 @@ function LineBreakdown({
                 key={a.id}
                 className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center gap-2">
                   <Package className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="font-mono text-xs">
                     {a.inventoryItem?.barcodeId ?? "—"}
                   </span>
+                  {a.inventoryItem?.status ? (
+                    <Badge
+                      variant={
+                        INVENTORY_STATUS_BADGE[a.inventoryItem.status] ?? "outline"
+                      }
+                      className="text-[10px]"
+                    >
+                      {getInventoryStatusLabel(a.inventoryItem.status)}
+                    </Badge>
+                  ) : null}
+                  {a.inventoryItem?.lot?.lotNumber ? (
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      Lot {a.inventoryItem.lot.lotNumber}
+                    </Badge>
+                  ) : null}
+                  {a.inventoryItem?.lot?.expirationDate ? (
+                    <LotBadge
+                      prefix="Exp"
+                      lotNumber={a.inventoryItem.lot.lotNumber}
+                      expirationDate={a.inventoryItem.lot.expirationDate}
+                    />
+                  ) : null}
                 </span>
-                <span className="tabular-nums">
+                <span className="text-right tabular-nums">
                   {Number(a.allocatedWeightLbs ?? 0).toFixed(2)} lbs
+                  {a.inventoryItem?.lot?.receiveDate ? (
+                    <span className="block text-[11px] text-muted-foreground">
+                      Rec {formatDisplayDate(a.inventoryItem.lot.receiveDate)}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            No boxes allocated yet.
-          </p>
+          <div className="rounded-md border border-dashed bg-background px-3 py-2 text-sm text-muted-foreground">
+            No inventory allocated yet. Box-level allocation details will appear
+            here during fulfillment.
+          </div>
         )}
+        <OrderAllocationEditorDialog
+          open={allocationEditorOpen}
+          onOpenChange={setAllocationEditorOpen}
+          orderId={line.salesOrderId}
+          lineId={line.id}
+        />
       </div>
     </div>
   );
+}
+
+function LotBadge({
+  prefix,
+  lotNumber,
+  expirationDate,
+}: {
+  prefix: string;
+  lotNumber: string | null | undefined;
+  expirationDate: string | Date | null | undefined;
+}) {
+  const status = getExpirationStatus(expirationDate);
+  const label = lotNumber ? `${prefix} ${lotNumber}` : prefix;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-[10px] font-mono",
+        status === "expired" && "border-destructive/40 text-destructive",
+        status === "warning" &&
+          "border-amber-400/40 text-amber-700 dark:text-amber-300",
+      )}
+    >
+      {label}
+      {expirationDate ? ` · ${formatDisplayDate(expirationDate)}` : ""}
+    </Badge>
+  );
+}
+
+function getExpirationStatus(
+  expirationDate: string | Date | null | undefined,
+): "ok" | "warning" | "expired" {
+  if (!expirationDate) return "ok";
+  const date = expirationDate instanceof Date ? expirationDate : new Date(expirationDate);
+  if (Number.isNaN(date.getTime())) return "ok";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const exp = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (exp.getTime() < startOfToday.getTime()) return "expired";
+  const warning = new Date(startOfToday);
+  warning.setDate(warning.getDate() + 7);
+  return exp.getTime() <= warning.getTime() ? "warning" : "ok";
 }

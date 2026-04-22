@@ -42,6 +42,10 @@ export async function getProducts() {
       productCategories: {
         with: { category: true },
       },
+      productUnits: {
+        with: { unit: true },
+      },
+      baseUnit: true,
     },
   });
 

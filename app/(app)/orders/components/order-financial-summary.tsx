@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
-import { FileText, Info } from "lucide-react";
+import { type ComponentType, useMemo } from "react";
+import { CircleDollarSign, FileText, Info, Wallet } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { formatDisplayDate } from "@/lib/utils/date";
 
 import type { SalesOrderDetail } from "@/services/orders";
 
+import { getLineFulfilledWeight } from "./order-fulfillment-utils";
+
 type Invoice = SalesOrderDetail["invoices"][number];
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -19,14 +21,15 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   check: "Check",
   credit_card: "Credit card",
   ach: "ACH",
-  wire: "Wire",
-  other: "Other",
+  zelle: "Zelle",
 };
 
 interface OrderFinancialSummaryProps {
   order: SalesOrderDetail;
   onGenerateInvoice?: () => void;
   onRecordPayment?: () => void;
+  canGenerateInvoice?: boolean;
+  readyToInvoice?: boolean;
 }
 
 interface EstimateTotals {
@@ -58,7 +61,7 @@ function computeEstimate(order: SalesOrderDetail): EstimateTotals {
     const price = line.pricePerLbOverride
       ? parseFloat(line.pricePerLbOverride)
       : NaN;
-    const weight = parseFloat(line.totalBilledWeightLbs ?? "0");
+    const weight = getLineFulfilledWeight(line);
     if (Number.isFinite(price) && Number.isFinite(weight) && weight > 0) {
       subtotal += price * weight;
       hasPriceData = true;
@@ -111,6 +114,8 @@ export function OrderFinancialSummary({
   order,
   onGenerateInvoice,
   onRecordPayment,
+  canGenerateInvoice = false,
+  readyToInvoice = false,
 }: OrderFinancialSummaryProps) {
   const invoices = order.invoices ?? [];
   const hasInvoice = invoices.length > 0;
@@ -132,8 +137,51 @@ export function OrderFinancialSummary({
     [invoices],
   );
 
+  const paymentStatus = hasInvoice
+    ? totals.mode === "actual" && totals.balanceDue <= 0
+      ? "Paid"
+      : allPayments.length > 0
+        ? "Partial"
+        : "Unpaid"
+    : "Not invoiced";
+  const latestInvoice = invoices
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.invoiceDate ?? b.createdAt).getTime() -
+        new Date(a.invoiceDate ?? a.createdAt).getTime(),
+    )[0];
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <FinancialStatusCard
+          icon={FileText}
+          label="Invoice status"
+          value={
+            hasInvoice
+              ? latestInvoice?.status ?? "invoiced"
+              : readyToInvoice
+                ? "ready_to_invoice"
+                : "not_invoiced"
+          }
+        />
+        <FinancialStatusCard
+          icon={Wallet}
+          label="Payment status"
+          value={paymentStatus}
+        />
+        <FinancialStatusCard
+          icon={CircleDollarSign}
+          label="Balance due"
+          value={
+            totals.mode === "actual"
+              ? formatMoney(totals.balanceDue)
+              : "Awaiting invoice"
+          }
+        />
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge
           variant={totals.mode === "actual" ? "default" : "outline"}
@@ -146,7 +194,7 @@ export function OrderFinancialSummary({
             {invoices.map(inv => (
               <Link
                 key={inv.id}
-                href={`/invoices/${inv.id}`}
+                href={`/invoice/${inv.id}`}
                 className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono hover:bg-accent"
               >
                 <FileText className="h-3 w-3" />
@@ -156,6 +204,38 @@ export function OrderFinancialSummary({
           </div>
         )}
       </div>
+
+      {hasInvoice && latestInvoice ? (
+        <div className="rounded-md border bg-background px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="font-mono text-xs">
+              {latestInvoice.invoiceNumber}
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              {latestInvoice.status.replaceAll("_", " ")}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              Dated {formatDisplayDate(latestInvoice.invoiceDate)}
+            </span>
+            <Link
+              href={`/invoice/${latestInvoice.id}`}
+              className="text-xs font-medium hover:underline"
+            >
+              Open invoice
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {!hasInvoice && readyToInvoice ? (
+        <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Ready for invoicing. All order lines are closed, and billed weight is ready
+            to flow into the invoice.
+          </span>
+        </div>
+      ) : null}
 
       {totals.mode === "estimate" && !totals.hasPriceData && (
         <div className="flex items-start gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -168,6 +248,23 @@ export function OrderFinancialSummary({
       )}
 
       <dl className="flex flex-col gap-1.5 text-sm">
+        {totals.mode === "actual" && (
+          <>
+            <SummaryRow label="Total billed amount" value={totals.total} />
+            <SummaryRow label="Total paid amount" value={-totals.amountPaid} />
+            <SummaryRow
+              label="Balance due"
+              value={totals.balanceDue}
+              className={cn(
+                "font-semibold",
+                totals.balanceDue > 0
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-emerald-600 dark:text-emerald-400",
+              )}
+            />
+            <div className="my-1 border-t" />
+          </>
+        )}
         <SummaryRow label="Subtotal" value={totals.subtotal} />
         {totals.mode === "actual" && totals.discount > 0 && (
           <SummaryRow label="Discount" value={-totals.discount} />
@@ -194,18 +291,7 @@ export function OrderFinancialSummary({
         />
         {totals.mode === "actual" && (
           <>
-            <SummaryRow label="Amount paid" value={-totals.amountPaid} />
-            <div className="my-1 border-t" />
-            <SummaryRow
-              label="Balance due"
-              value={totals.balanceDue}
-              className={cn(
-                "font-semibold",
-                totals.balanceDue > 0
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-emerald-600 dark:text-emerald-400",
-              )}
-            />
+            <SummaryRow label="Amount paid" value={-totals.amountPaid} hint="Applied across invoice payments" />
           </>
         )}
       </dl>
@@ -243,7 +329,12 @@ export function OrderFinancialSummary({
 
       <div className="flex flex-wrap gap-2">
         {!hasInvoice && onGenerateInvoice && (
-          <Button type="button" size="sm" onClick={onGenerateInvoice}>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onGenerateInvoice}
+            disabled={!canGenerateInvoice}
+          >
             <FileText className="mr-2 h-4 w-4" />
             Generate invoice
           </Button>
@@ -257,6 +348,26 @@ export function OrderFinancialSummary({
             </Button>
           )}
       </div>
+    </div>
+  );
+}
+
+function FinancialStatusCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-background p-4">
+      <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <div className="text-sm font-medium">{value}</div>
     </div>
   );
 }

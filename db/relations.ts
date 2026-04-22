@@ -22,6 +22,7 @@ import {
   salesInvoiceLines,
   salesInvoices,
   salesOrderLineAllocations,
+  salesOrderFulfillments,
   salesOrderLines,
   salesOrders,
   supplierInvoiceAttachments,
@@ -82,6 +83,9 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   }),
   salesOrdersUpdated: many(salesOrders, {
     relationName: "sales_orders_updated_by",
+  }),
+  salesOrderLinesShortShipped: many(salesOrderLines, {
+    relationName: "sales_order_lines_short_shipped_by",
   }),
   customersCreated: many(customers, {
     relationName: "customers_created_by",
@@ -148,6 +152,12 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   invitationsSent: many(userInvitations),
   auditLogs: many(auditLogs, {
     relationName: "audit_logs_actor_portal_user",
+  }),
+  salesOrderFulfillments: many(salesOrderFulfillments, {
+    relationName: "sales_order_fulfillments_fulfilled_by",
+  }),
+  reversedSalesOrderFulfillments: many(salesOrderFulfillments, {
+    relationName: "sales_order_fulfillments_reversed_by",
   }),
 }));
 
@@ -385,6 +395,7 @@ export const lotsRelations = relations(lots, ({ one, many }) => ({
   }),
   lotReceipts: many(lotReceipts),
   inventoryItems: many(inventoryItems),
+  salesOrderFulfillments: many(salesOrderFulfillments),
   tenant: one(tenants, {
     fields: [lots.tenantId],
     references: [tenants.id],
@@ -414,6 +425,7 @@ export const inventoryItemsRelations = relations(
       references: [lots.id],
     }),
     allocations: many(salesOrderLineAllocations),
+    fulfillments: many(salesOrderFulfillments),
   }),
 );
 
@@ -433,6 +445,7 @@ export const salesOrdersRelations = relations(salesOrders, ({ one, many }) => ({
     relationName: "sales_orders_updated_by",
   }),
   lines: many(salesOrderLines),
+  fulfillments: many(salesOrderFulfillments),
   invoices: many(salesInvoices),
   tenant: one(tenants, {
     fields: [salesOrders.tenantId],
@@ -451,7 +464,13 @@ export const salesOrderLinesRelations = relations(
       fields: [salesOrderLines.productId],
       references: [products.id],
     }),
+    shortShippedBy: one(portalUsers, {
+      fields: [salesOrderLines.shortShippedByUserId],
+      references: [portalUsers.id],
+      relationName: "sales_order_lines_short_shipped_by",
+    }),
     allocations: many(salesOrderLineAllocations),
+    fulfillments: many(salesOrderFulfillments),
   }),
 );
 
@@ -465,6 +484,38 @@ export const salesOrderLineAllocationsRelations = relations(
     inventoryItem: one(inventoryItems, {
       fields: [salesOrderLineAllocations.inventoryItemId],
       references: [inventoryItems.id],
+    }),
+  }),
+);
+
+export const salesOrderFulfillmentsRelations = relations(
+  salesOrderFulfillments,
+  ({ one }) => ({
+    salesOrder: one(salesOrders, {
+      fields: [salesOrderFulfillments.salesOrderId],
+      references: [salesOrders.id],
+    }),
+    salesOrderLine: one(salesOrderLines, {
+      fields: [salesOrderFulfillments.salesOrderLineId],
+      references: [salesOrderLines.id],
+    }),
+    fulfilledBy: one(portalUsers, {
+      fields: [salesOrderFulfillments.fulfilledByUserId],
+      references: [portalUsers.id],
+      relationName: "sales_order_fulfillments_fulfilled_by",
+    }),
+    reversedBy: one(portalUsers, {
+      fields: [salesOrderFulfillments.reversedByUserId],
+      references: [portalUsers.id],
+      relationName: "sales_order_fulfillments_reversed_by",
+    }),
+    inventoryItem: one(inventoryItems, {
+      fields: [salesOrderFulfillments.inventoryItemId],
+      references: [inventoryItems.id],
+    }),
+    lot: one(lots, {
+      fields: [salesOrderFulfillments.lotId],
+      references: [lots.id],
     }),
   }),
 );
