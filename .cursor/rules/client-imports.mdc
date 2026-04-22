@@ -1,0 +1,51 @@
+---
+description: Client components must not import runtime values from services or db layers; use actions/hooks/lib instead.
+globs: **/*.tsx
+alwaysApply: false
+---
+
+# Client imports — stay out of `services/` and `db/`
+
+Client components (`"use client"` files) run in the browser bundle. Modules under `@/services/*` and `@/db/*` import `next/headers`, `cookies()`, `auth`, and the DB driver, which are not allowed in client code. If a client file imports a **runtime value** from those paths, Next.js will fail the build with:
+
+> You're importing a module that depends on "next/headers". This API is only available in Server Components…
+
+## The layered convention this codebase uses
+
+| Layer | Who may import from it? | Purpose |
+|---|---|---|
+| `@/services/*` | server components, server actions, API routes only | Reads session / tenant / DB |
+| `@/actions/*` (`"use server"`) | server **and** client components | Narrow bridge that wraps service calls |
+| `@/hooks/use-*` | client components | React Query wrappers around actions |
+| `@/lib/*` | anyone | Pure utilities with **zero** server imports |
+
+## Rules for client files (`"use client"` or `components/**/*.tsx`)
+
+- Runtime values must come from `@/hooks/*`, `@/actions/*`, `@/components/*`, or `@/lib/*`.
+- Types from `@/services/*` and `@/db/*` are fine, but **only** via `import type { ... }` — `import type` is erased at build time, so it never drags server modules into the client bundle.
+- If a pure helper is needed by both server and client (e.g. money math, label maps), put it in `@/lib/*` and re-export from the service if server callers want the same symbol.
+- If a server operation is needed from the client, expose it as an action in `@/actions/*` and consume it via a hook in `@/hooks/*`. Do **not** call the service directly.
+
+## Examples
+
+```tsx
+// ❌ BAD — value import of a server module
+import { computePaymentSummary, getSupplierInvoices } from "@/services/receiving";
+
+// ❌ BAD — plain import of a type (also pulls the module in older TS configs)
+import { SalesOrderDetail } from "@/services/orders";
+
+// ✅ GOOD — pure helper from lib
+import { computePaymentSummary } from "@/lib/supplier-invoices/payment-summary";
+
+// ✅ GOOD — type-only import, erased at build time
+import type { SalesOrderDetail } from "@/services/orders";
+
+// ✅ GOOD — server data through the action/hook bridge
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { getCurrentPortalUserAction } from "@/actions/users"; // when calling directly from a form submit, etc.
+```
+
+## When a value is pure, prefer `@/lib/*` over a server action
+
+Server actions incur a network roundtrip. Do not wrap pure math / formatters / constants in an action just to import them from the client — move them to `@/lib/*` and import directly from both sides.

@@ -8,6 +8,7 @@ import {
   FileText,
   Package,
   Pencil,
+  Receipt,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -49,16 +50,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   useCompleteSupplierInvoice,
   useDeleteSupplierInvoice,
   useReverseSupplierInvoice,
   useSupplierInvoice,
 } from "@/hooks/use-supplier-invoices";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { computePaymentSummary } from "@/lib/supplier-invoices/payment-summary";
 
 import { SupplierInvoiceAttachmentsPlaceholder } from "./supplier-invoice-attachments-placeholder";
+import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
@@ -79,12 +84,15 @@ export function SupplierInvoiceDetailPage({
 }) {
   const router = useRouter();
   const { data: invoice, isLoading, error } = useSupplierInvoice(invoiceId);
+  const { data: currentUser } = useCurrentPortalUser();
+  const role = currentUser?.role ?? null;
   const completeMutation = useCompleteSupplierInvoice();
   const deleteMutation = useDeleteSupplierInvoice();
   const reverseMutation = useReverseSupplierInvoice();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   useSetBreadcrumbLabel(
     `/supplier-invoices/${invoiceId}`,
@@ -123,13 +131,61 @@ export function SupplierInvoiceDetailPage({
   // Reversal is blocked if any inventory item has been touched downstream
   // (allocated, picked, packed, shipped, sold, damaged, expired).
   const blockedItems = allItems.filter(i => i.status !== "in_stock");
-  const canReverse = invoice.status === "completed" && blockedItems.length === 0;
+  const workflowAllowsReverse =
+    invoice.status === "completed" && blockedItems.length === 0;
+  const canReverseByRole = can(role, "reverse_supplier_receipt");
+  const canReverse = workflowAllowsReverse && canReverseByRole;
   const reverseDisabledReason =
     invoice.status !== "completed"
       ? undefined
       : blockedItems.length > 0
         ? `Cannot reverse: ${blockedItems.length} inventory item(s) are no longer in stock.`
-        : undefined;
+        : !canReverseByRole
+          ? getPermissionDeniedReason("reverse_supplier_receipt")
+          : undefined;
+
+  const paymentSummary = computePaymentSummary(invoice);
+  const numericBalanceDue = Number(paymentSummary.balanceDue) || 0;
+  const workflowAllowsPayment =
+    invoice.status === "completed" && numericBalanceDue > 0.005;
+  const canRecordPaymentByRole = can(role, "record_supplier_payment");
+  const canRecordPayment = workflowAllowsPayment && canRecordPaymentByRole;
+  const recordPaymentDisabledReason =
+    invoice.status !== "completed"
+      ? "Only completed invoices can be paid."
+      : numericBalanceDue <= 0.005
+        ? "No balance remaining on this invoice."
+        : !canRecordPaymentByRole
+          ? getPermissionDeniedReason("record_supplier_payment")
+          : undefined;
+
+  // Draft-only actions: edit, complete, delete.
+  const canEditByRole = can(role, "edit_supplier_invoice");
+  const canCompleteByRole = can(role, "complete_supplier_invoice");
+  const canDeleteByRole = can(role, "delete_supplier_invoice");
+  const editDisabledReason = !canEditByRole
+    ? getPermissionDeniedReason("edit_supplier_invoice")
+    : undefined;
+  const completeDisabledReason = !canCompleteByRole
+    ? getPermissionDeniedReason("complete_supplier_invoice")
+    : undefined;
+  const deleteDisabledReason = !canDeleteByRole
+    ? getPermissionDeniedReason("delete_supplier_invoice")
+    : undefined;
+  const paymentStatusVariant: Record<
+    typeof paymentSummary.paymentStatus,
+    "secondary" | "outline" | "default"
+  > = {
+    unpaid: "outline",
+    partial: "secondary",
+    paid: "default",
+  };
+  const paymentStatusLabel: Record<typeof paymentSummary.paymentStatus, string> =
+    {
+      unpaid: "Unpaid",
+      partial: "Partially paid",
+      paid: "Paid",
+    };
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,27 +200,48 @@ export function SupplierInvoiceDetailPage({
       >
         {isDraft ? (
           <>
-            <Button asChild variant="outline">
-              <Link href={`/supplier-invoices/${invoiceId}/edit`}>
+            {canEditByRole ? (
+              <Button asChild variant="outline">
+                <Link href={`/supplier-invoices/${invoiceId}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" disabled title={editDisabledReason}>
                 <Pencil className="size-4" />
                 Edit
-              </Link>
-            </Button>
-            <Button onClick={() => setCompleteOpen(true)}>
+              </Button>
+            )}
+            <Button
+              onClick={() => setCompleteOpen(true)}
+              disabled={!canCompleteByRole}
+              title={completeDisabledReason}
+            >
               <CheckCircle2 className="size-4" />
               Complete & receive
             </Button>
           </>
         ) : (
-          <Button
-            variant="outline"
-            onClick={() => setReverseOpen(true)}
-            disabled={!canReverse || reverseMutation.isPending}
-            title={reverseDisabledReason}
-          >
-            <Undo2 className="size-4" />
-            Reverse receipt
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setReverseOpen(true)}
+              disabled={!canReverse || reverseMutation.isPending}
+              title={reverseDisabledReason}
+            >
+              <Undo2 className="size-4" />
+              Reverse receipt
+            </Button>
+            <Button
+              onClick={() => setPaymentOpen(true)}
+              disabled={!canRecordPayment}
+              title={recordPaymentDisabledReason}
+            >
+              <Receipt className="size-4" />
+              Record payment
+            </Button>
+          </>
         )}
       </DetailPageHeader>
 
@@ -394,6 +471,102 @@ export function SupplierInvoiceDetailPage({
         </CardContent>
       </Card>
 
+      {invoice.status === "completed" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="size-4" />
+              Payments
+            </CardTitle>
+            <CardDescription>
+              Payments applied to this supplier invoice.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <DetailGrid>
+                <DetailField label="Total">
+                  <span className="tabular-nums">
+                    {formatMoney(paymentSummary.totalAmount)}
+                  </span>
+                </DetailField>
+                <DetailField label="Total paid">
+                  <span className="tabular-nums">
+                    {formatMoney(paymentSummary.totalPaid)}
+                  </span>
+                </DetailField>
+                <DetailField label="Balance due">
+                  <span className="tabular-nums">
+                    {formatMoney(paymentSummary.balanceDue)}
+                  </span>
+                </DetailField>
+                <DetailField label="Status">
+                  <Badge
+                    variant={
+                      paymentStatusVariant[paymentSummary.paymentStatus]
+                    }
+                    className="capitalize"
+                  >
+                    {paymentStatusLabel[paymentSummary.paymentStatus]}
+                  </Badge>
+                </DetailField>
+              </DetailGrid>
+              {invoice.payments.length === 0 ? (
+                <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+                  No payments recorded yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader className="bg-muted">
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Recorded by</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invoice.payments.map(payment => (
+                        <TableRow key={payment.id}>
+                          <TableCell>
+                            {formatDisplayDate(payment.paymentDate)}
+                          </TableCell>
+                          <TableCell>
+                            {PAYMENT_METHOD_LABELS[payment.paymentMethod] ??
+                              payment.paymentMethod}
+                          </TableCell>
+                          <TableCell>
+                            {payment.reference ? (
+                              <span className="font-mono text-xs">
+                                {payment.reference}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-muted-foreground text-xs">
+                              {payment.createdBy?.fullName ??
+                                payment.createdBy?.email ??
+                                "-"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatMoney(payment.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <SupplierInvoiceAttachmentsPlaceholder />
 
       <DetailSection
@@ -442,7 +615,8 @@ export function SupplierInvoiceDetailPage({
             type="button"
             variant="outline"
             onClick={() => setDeleteOpen(true)}
-            disabled={deleteMutation.isPending}
+            disabled={deleteMutation.isPending || !canDeleteByRole}
+            title={deleteDisabledReason}
           >
             <Trash2 className="size-4" />
             Delete draft
@@ -468,7 +642,7 @@ export function SupplierInvoiceDetailPage({
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={completeMutation.isPending}
+              disabled={completeMutation.isPending || !canCompleteByRole}
               onClick={event => {
                 event.preventDefault();
                 completeMutation.mutate(
@@ -513,7 +687,7 @@ export function SupplierInvoiceDetailPage({
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={deleteMutation.isPending}
+              disabled={deleteMutation.isPending || !canDeleteByRole}
               onClick={event => {
                 event.preventDefault();
                 deleteMutation.mutate(invoiceId, {
@@ -584,6 +758,15 @@ export function SupplierInvoiceDetailPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SupplierInvoicePaymentEntryDialog
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        supplierInvoiceId={invoice.id}
+        invoiceNumber={invoice.invoiceNumber}
+        balanceDue={paymentSummary.balanceDue}
+        defaultPaymentMethod={invoice.paymentMethod ?? undefined}
+      />
     </div>
   );
 }

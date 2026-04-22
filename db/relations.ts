@@ -27,6 +27,7 @@ import {
   salesOrders,
   supplierInvoiceAttachments,
   supplierInvoiceLines,
+  supplierInvoicePayments,
   supplierInvoices,
   suppliers,
   tenantBranding,
@@ -378,6 +379,26 @@ export const supplierInvoicesRelations = relations(
       references: [tenants.id],
     }),
     attachments: many(supplierInvoiceAttachments),
+    payments: many(supplierInvoicePayments),
+  }),
+);
+
+export const supplierInvoicePaymentsRelations = relations(
+  supplierInvoicePayments,
+  ({ one }) => ({
+    supplierInvoice: one(supplierInvoices, {
+      fields: [supplierInvoicePayments.supplierInvoiceId],
+      references: [supplierInvoices.id],
+    }),
+    tenant: one(tenants, {
+      fields: [supplierInvoicePayments.tenantId],
+      references: [tenants.id],
+    }),
+    createdBy: one(portalUsers, {
+      fields: [supplierInvoicePayments.createdByUserId],
+      references: [portalUsers.id],
+      relationName: "supplier_invoice_payments_created_by",
+    }),
   }),
 );
 

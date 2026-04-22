@@ -7,8 +7,11 @@ import {
   lotReceipts,
   lots,
   supplierInvoiceLines,
+  supplierInvoicePayments,
   supplierInvoices,
 } from "@/db/schema";
+
+import { requirePermission } from "@/lib/auth/permissions";
 
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
@@ -138,6 +141,11 @@ async function reserveLotNumber(args: {
 
 export async function getSupplierInvoices() {
   const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
   return db.query.supplierInvoices.findMany({
     where: eq(supplierInvoices.tenantId, tenant.id),
     with: {
@@ -152,6 +160,11 @@ export async function getSupplierInvoices() {
 
 export async function getSupplierInvoiceById(id: string) {
   const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
   const invoice = await db.query.supplierInvoices.findFirst({
     where: and(
       eq(supplierInvoices.id, id),
@@ -177,11 +190,26 @@ export async function getSupplierInvoiceById(id: string) {
         },
       },
       attachments: true,
+      payments: {
+        with: { createdBy: true },
+        orderBy: [desc(supplierInvoicePayments.paymentDate)],
+      },
     },
   });
 
   return invoice ?? null;
 }
+
+// Pure payment-math helpers live in `lib/` so they are safe to import from
+// client components without dragging `next/headers` along for the ride.
+// Re-export for server callers that already pull from this module.
+import { computePaymentSummary } from "@/lib/supplier-invoices/payment-summary";
+
+export {
+  computePaymentSummary,
+  type SupplierInvoicePaymentStatus,
+  type SupplierInvoicePaymentSummary,
+} from "@/lib/supplier-invoices/payment-summary";
 
 // -------------------- Mutations --------------------
 
@@ -190,6 +218,10 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+  if (input.complete) {
+    requirePermission(currentUser.role, "complete_supplier_invoice");
   }
 
   if (input.lines.length === 0) {
@@ -262,6 +294,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+  requirePermission(currentUser.role, "edit_supplier_invoice");
 
   const existing = await db.query.supplierInvoices.findFirst({
     where: and(
@@ -334,6 +367,7 @@ export async function completeSupplierInvoice(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+  requirePermission(currentUser.role, "complete_supplier_invoice");
 
   await db.transaction(async tx => {
     const existing = await tx.query.supplierInvoices.findFirst({
@@ -366,6 +400,7 @@ export async function deleteSupplierInvoice(id: string) {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+  requirePermission(currentUser.role, "delete_supplier_invoice");
 
   const existing = await db.query.supplierInvoices.findFirst({
     where: and(
@@ -516,6 +551,7 @@ export async function reverseSupplierInvoice(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+  requirePermission(currentUser.role, "reverse_supplier_receipt");
 
   await db.transaction(async tx => {
     // Load the invoice + all downstream rows inside the tx so the safety
@@ -638,6 +674,88 @@ export async function reverseSupplierInvoice(input: {
   });
 
   return (await getSupplierInvoiceById(input.id))!;
+}
+
+// -------------------- Payments --------------------
+
+export type RecordSupplierInvoicePaymentInput = {
+  supplierInvoiceId: string;
+  amount: string;
+  paymentDate: string;
+  paymentMethod: "cash" | "check" | "ach" | "zelle" | "credit_card";
+  reference?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Apply a payment to a supplier invoice. Runs inside a single transaction so
+ * the existing-payments re-sum and the insert observe a consistent balance;
+ * this closes the race where two concurrent payments could each pass a
+ * stale overpayment check.
+ *
+ * Rules:
+ *   - tenant must match
+ *   - invoice must be status "completed" (drafts cannot be paid)
+ *   - amount must parse as a positive number
+ *   - amount must not exceed the current balance due (with a 1¢ tolerance
+ *     for floating-point rounding)
+ */
+export async function recordSupplierInvoicePayment(
+  input: RecordSupplierInvoicePaymentInput,
+) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Payment amount must be greater than 0.");
+  }
+
+  await db.transaction(async tx => {
+    const invoice = await tx.query.supplierInvoices.findFirst({
+      where: and(
+        eq(supplierInvoices.id, input.supplierInvoiceId),
+        eq(supplierInvoices.tenantId, tenant.id),
+      ),
+      with: {
+        payments: {
+          columns: { amount: true },
+        },
+      },
+    });
+    if (!invoice) throw new Error("Supplier invoice not found.");
+    if (invoice.status !== "completed") {
+      throw new Error(
+        "Payments can only be recorded on completed supplier invoices.",
+      );
+    }
+
+    const summary = computePaymentSummary(invoice);
+    const balanceDue = Number(summary.balanceDue);
+    // Allow a 1¢ tolerance so exact-match payments don't trip FP equality.
+    if (amount - balanceDue > 0.01) {
+      throw new Error(
+        `Payment exceeds balance due. Balance due is $${summary.balanceDue}.`,
+      );
+    }
+
+    await tx.insert(supplierInvoicePayments).values({
+      tenantId: tenant.id,
+      supplierInvoiceId: input.supplierInvoiceId,
+      paymentDate: input.paymentDate,
+      amount: amount.toFixed(2),
+      paymentMethod: input.paymentMethod,
+      reference: input.reference?.trim() || null,
+      notes: input.notes?.trim() || null,
+      createdByUserId: currentUser.id,
+    });
+  });
+
+  return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
 }
 
 // -------------------- Derived types for clients --------------------

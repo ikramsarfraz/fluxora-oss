@@ -8,6 +8,7 @@ import {
   deleteSupplierInvoiceAction,
   getSupplierInvoiceByIdAction,
   getSupplierInvoicesAction,
+  recordSupplierInvoicePaymentAction,
   reverseSupplierInvoiceAction,
   updateSupplierInvoiceAction,
 } from "@/actions/supplier-invoices";
@@ -88,6 +89,21 @@ export function useReverseSupplierInvoice() {
       invalidateAll(queryClient);
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.detail(variables.id),
+      });
+    },
+  });
+}
+
+export function useRecordSupplierInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: recordSupplierInvoicePaymentAction,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.all,
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.detail(variables.supplierInvoiceId),
       });
     },
   });

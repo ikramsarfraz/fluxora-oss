@@ -31,6 +31,8 @@ import type { SupplierInvoiceListItem } from "@/services/receiving";
 
 type ColumnActions = {
   onDelete: (invoice: SupplierInvoiceListItem) => void;
+  canDelete: boolean;
+  deleteDisabledReason?: string;
 };
 
 function StatusBadge({ status }: { status: "draft" | "completed" }) {
@@ -51,12 +53,22 @@ function StatusBadge({ status }: { status: "draft" | "completed" }) {
 function ActionsCell({
   invoice,
   onDelete,
+  canDelete,
+  deleteDisabledReason,
 }: {
   invoice: SupplierInvoiceListItem;
   onDelete: (invoice: SupplierInvoiceListItem) => void;
+  canDelete: boolean;
+  deleteDisabledReason?: string;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const isDraft = invoice.status === "draft";
+  const deleteEnabled = isDraft && canDelete;
+  const deleteTitle = !isDraft
+    ? "Completed invoices cannot be deleted."
+    : !canDelete
+      ? deleteDisabledReason
+      : undefined;
 
   return (
     <>
@@ -83,11 +95,9 @@ function ActionsCell({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             variant="destructive"
-            disabled={!isDraft}
+            disabled={!deleteEnabled}
             onClick={() => setShowDeleteDialog(true)}
-            title={
-              isDraft ? undefined : "Completed invoices cannot be deleted."
-            }
+            title={deleteTitle}
           >
             <Trash2 />
             Delete
@@ -222,6 +232,8 @@ export function createColumns(
           <ActionsCell
             invoice={row.original}
             onDelete={actions.onDelete}
+            canDelete={actions.canDelete}
+            deleteDisabledReason={actions.deleteDisabledReason}
           />
         </div>
       ),

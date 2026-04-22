@@ -794,6 +794,44 @@ export const supplierInvoiceLines = pgTable(
   ],
 );
 
+export const supplierInvoicePayments = pgTable(
+  "supplier_invoice_payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "cascade" }),
+    paymentDate: date("payment_date").notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    paymentMethod: paymentMethodEnum("payment_method").notNull(),
+    reference: varchar("reference", { length: 128 }),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("supplier_invoice_payments_tenant_id_idx").on(table.tenantId),
+    index("supplier_invoice_payments_supplier_invoice_id_idx").on(
+      table.supplierInvoiceId,
+    ),
+    index("supplier_invoice_payments_tenant_payment_date_idx").on(
+      table.tenantId,
+      table.paymentDate,
+    ),
+    check(
+      "supplier_invoice_payments_amount_positive",
+      sql`${table.amount} > 0`,
+    ),
+  ],
+);
+
 export const lots = pgTable(
   "lots",
   {

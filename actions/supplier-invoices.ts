@@ -6,6 +6,7 @@ import {
   deleteSupplierInvoice,
   getSupplierInvoiceById,
   getSupplierInvoices,
+  recordSupplierInvoicePayment,
   reverseSupplierInvoice,
   updateSupplierInvoice,
 } from "@/services/receiving";
@@ -40,6 +41,12 @@ export async function reverseSupplierInvoiceAction(
   input: Parameters<typeof reverseSupplierInvoice>[0],
 ) {
   return await reverseSupplierInvoice(input);
+}
+
+export async function recordSupplierInvoicePaymentAction(
+  input: Parameters<typeof recordSupplierInvoicePayment>[0],
+) {
+  return await recordSupplierInvoicePayment(input);
 }
 
 export async function deleteSupplierInvoiceAction(id: string) {

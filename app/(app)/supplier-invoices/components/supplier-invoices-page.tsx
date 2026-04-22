@@ -10,10 +10,12 @@ import { EmptyState } from "@/components/empty-state";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   useDeleteSupplierInvoice,
   useSupplierInvoices,
 } from "@/hooks/use-supplier-invoices";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
@@ -21,10 +23,22 @@ import { DataTable } from "./data-table";
 export default function SupplierInvoicesPage() {
   const { data, isLoading, error, refetch } = useSupplierInvoices();
   const deleteInvoice = useDeleteSupplierInvoice();
+  const { data: currentUser } = useCurrentPortalUser();
+  const role = currentUser?.role ?? null;
+  const canCreate = can(role, "edit_supplier_invoice");
+  const canDelete = can(role, "delete_supplier_invoice");
+  const createDeniedReason = canCreate
+    ? undefined
+    : getPermissionDeniedReason("edit_supplier_invoice");
+  const deleteDeniedReason = canDelete
+    ? undefined
+    : getPermissionDeniedReason("delete_supplier_invoice");
 
   const columns = useMemo(
     () =>
       createColumns({
+        canDelete,
+        deleteDisabledReason: deleteDeniedReason,
         onDelete: invoice => {
           deleteInvoice.mutate(invoice.id, {
             onSuccess: () =>
@@ -40,7 +54,7 @@ export default function SupplierInvoicesPage() {
           });
         },
       }),
-    [deleteInvoice],
+    [deleteInvoice, canDelete, deleteDeniedReason],
   );
 
   if (isLoading) {
@@ -68,12 +82,19 @@ export default function SupplierInvoicesPage() {
         title="Supplier invoices"
         description="Record incoming shipments. Completing an invoice automatically creates lots and inventory for traceability."
       >
-        <Button asChild>
-          <Link href="/supplier-invoices/new">
+        {canCreate ? (
+          <Button asChild>
+            <Link href="/supplier-invoices/new">
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">New invoice</span>
+            </Link>
+          </Button>
+        ) : (
+          <Button disabled title={createDeniedReason}>
             <Plus className="size-4" />
             <span className="hidden sm:inline">New invoice</span>
-          </Link>
-        </Button>
+          </Button>
+        )}
       </PageHeader>
 
       {hasInvoices ? (
@@ -84,12 +105,19 @@ export default function SupplierInvoicesPage() {
           title="No supplier invoices yet"
           description="Record your first supplier invoice to begin tracking inbound inventory."
         >
-          <Button asChild>
-            <Link href="/supplier-invoices/new">
+          {canCreate ? (
+            <Button asChild>
+              <Link href="/supplier-invoices/new">
+                <Plus className="size-4" />
+                New invoice
+              </Link>
+            </Button>
+          ) : (
+            <Button disabled title={createDeniedReason}>
               <Plus className="size-4" />
               New invoice
-            </Link>
-          </Button>
+            </Button>
+          )}
         </EmptyState>
       )}
     </section>

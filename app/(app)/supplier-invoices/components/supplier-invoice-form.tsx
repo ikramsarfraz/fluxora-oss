@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useProducts } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import {
@@ -36,6 +37,7 @@ import {
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
 } from "@/hooks/use-supplier-invoices";
+import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 import { SupplierInvoiceAttachmentsPlaceholder } from "./supplier-invoice-attachments-placeholder";
 import {
@@ -78,6 +80,16 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const createMutation = useCreateSupplierInvoice();
   const updateMutation = useUpdateSupplierInvoice();
   const completeMutation = useCompleteSupplierInvoice();
+  const { data: currentUser } = useCurrentPortalUser();
+  const role = currentUser?.role ?? null;
+  const canEdit = can(role, "edit_supplier_invoice");
+  const canComplete = can(role, "complete_supplier_invoice");
+  const editDeniedReason = canEdit
+    ? undefined
+    : getPermissionDeniedReason("edit_supplier_invoice");
+  const completeDeniedReason = canComplete
+    ? undefined
+    : getPermissionDeniedReason("complete_supplier_invoice");
 
   const form = useForm<SupplierInvoiceFormValues>({
     resolver: zodResolver(supplierInvoiceFormSchema),
@@ -363,7 +375,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         <Button
           type="submit"
           variant="secondary"
-          disabled={isPending}
+          disabled={isPending || !canEdit}
+          title={editDeniedReason}
         >
           {isPending
             ? "Saving..."
@@ -373,7 +386,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         </Button>
         <Button
           type="button"
-          disabled={isPending}
+          disabled={isPending || !canEdit || !canComplete}
+          title={editDeniedReason ?? completeDeniedReason}
           onClick={form.handleSubmit(values => submit(values, true))}
         >
           {isPending ? "Posting..." : "Complete & receive"}

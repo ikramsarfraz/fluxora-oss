@@ -30,10 +30,14 @@ import {
   Receipt,
 } from "lucide-react";
 
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { can, type Permission } from "@/lib/auth/permissions";
+
 type NavItem = {
   title: string;
   url: string;
   icon: LucideIcon;
+  permission?: Permission;
 };
 
 type NavGroup = {
@@ -109,6 +113,7 @@ const navMain: NavGroup[] = [
         title: "Supplier Invoices",
         url: "/supplier-invoices",
         icon: Receipt,
+        permission: "view_supplier_invoice",
       },
     ],
   },
@@ -128,6 +133,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname() ?? "";
   const isActive = (url: string) =>
     pathname === url || (url !== "/" && pathname.startsWith(url));
+
+  const { data: currentUser } = useCurrentPortalUser();
+  const role = currentUser?.role ?? null;
+
+  const visibleGroups = navMain
+    .map(group => ({
+      ...group,
+      items: group.items.filter(
+        item => !item.permission || can(role, item.permission),
+      ),
+    }))
+    .filter(group => group.items.length > 0);
 
   return (
     <Sidebar {...props}>
@@ -152,7 +169,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {navMain.map(group => (
+        {visibleGroups.map(group => (
           <SidebarGroup key={group.title}>
             <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
               {group.title}
