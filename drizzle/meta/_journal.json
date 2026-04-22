@@ -5,29 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1776816520409,
-      "tag": "0000_romantic_ozymandias",
+      "when": 1776869173650,
+      "tag": "0000_flat_pepper_potts",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1776891600000,
-      "tag": "0001_add_short_ship_markers",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1776895200000,
-      "tag": "0002_add_fulfillment_reversals",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1776981600000,
-      "tag": "0003_expand_inventory_item_states",
+      "when": 1776870000000,
+      "tag": "0001_sales_order_line_unit_snapshots",
       "breakpoints": true
     }
   ]

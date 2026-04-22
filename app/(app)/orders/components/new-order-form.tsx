@@ -95,6 +95,7 @@ export function NewOrderForm() {
         internalNotes: values.internalNotes || undefined,
         lines: values.lines.map(l => ({
           productId: l.productId,
+          salesUnitId: l.salesUnitId,
           expectedCases: Number(l.quantity),
           unitType: l.unitType,
           pricePerLbOverride: l.pricePerLb || undefined,

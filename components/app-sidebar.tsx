@@ -26,6 +26,7 @@ import {
   type LucideIcon,
   ListChecks,
   ShoppingCart,
+  Layers,
 } from "lucide-react";
 
 type NavItem = {
@@ -76,7 +77,7 @@ const navMain: NavGroup[] = [
       {
         title: "Lots",
         url: "/lots",
-        icon: ListChecks,
+        icon: Layers,
       },
       {
         title: "Categories",

@@ -18,6 +18,7 @@ const decimalString = (opts?: { allowEmpty?: boolean }) =>
 
 export const newOrderLineSchema = z.object({
   key: z.string(),
+  existingLineId: z.string().uuid().optional(),
   productId: z.string().uuid({ message: "Select a product" }),
   salesUnitId: z.string().uuid({ message: "Select a sales unit" }),
   unitType: z.enum(lineUnitTypeValues),

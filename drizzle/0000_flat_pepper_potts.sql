@@ -5,7 +5,7 @@ CREATE TYPE "public"."credit_type" AS ENUM('fixed', 'percentage');--> statement-
 CREATE TYPE "public"."file_category" AS ENUM('tenant_branding', 'supplier_invoice_attachment', 'sales_invoice_pdf', 'sales_invoice_attachment', 'other');--> statement-breakpoint
 CREATE TYPE "public"."file_status" AS ENUM('uploading', 'ready', 'failed', 'deleted');--> statement-breakpoint
 CREATE TYPE "public"."file_storage_provider" AS ENUM('r2');--> statement-breakpoint
-CREATE TYPE "public"."inventory_item_status" AS ENUM('in_stock', 'allocated', 'sold', 'damaged', 'expired');--> statement-breakpoint
+CREATE TYPE "public"."inventory_item_status" AS ENUM('in_stock', 'allocated', 'picked', 'packed', 'shipped', 'sold', 'damaged', 'expired');--> statement-breakpoint
 CREATE TYPE "public"."invitation_status" AS ENUM('pending', 'accepted', 'expired', 'revoked');--> statement-breakpoint
 CREATE TYPE "public"."invoice_status" AS ENUM('draft', 'sent', 'partially_paid', 'paid', 'void');--> statement-breakpoint
 CREATE TYPE "public"."line_unit_type" AS ENUM('catch_weight', 'fixed_case');--> statement-breakpoint
@@ -281,6 +281,9 @@ CREATE TABLE "sales_order_fulfillments" (
 	"notes" text,
 	"inventory_item_id" uuid,
 	"lot_id" uuid,
+	"reversed_at" timestamp with time zone,
+	"reversed_by_user_id" uuid,
+	"reversal_reason" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "sales_order_fulfillments_quantity_positive" CHECK ("sales_order_fulfillments"."quantity_fulfilled" > 0),
@@ -299,12 +302,16 @@ CREATE TABLE "sales_order_lines" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"sales_order_id" uuid NOT NULL,
 	"product_id" uuid NOT NULL,
+	"sales_unit_id" uuid,
 	"expected_cases" integer NOT NULL,
 	"fulfilled_cases" integer DEFAULT 0 NOT NULL,
 	"unit_type" "line_unit_type" DEFAULT 'catch_weight' NOT NULL,
 	"total_billed_weight_lbs" numeric(12, 4) DEFAULT '0' NOT NULL,
 	"price_per_lb_override" numeric(10, 4),
 	"case_weights_lbs" text,
+	"short_shipped_at" timestamp with time zone,
+	"short_shipped_by_user_id" uuid,
+	"short_ship_notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -531,10 +538,13 @@ ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_
 ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_fulfilled_by_user_id_portal_users_id_fk" FOREIGN KEY ("fulfilled_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_lot_id_lots_id_fk" FOREIGN KEY ("lot_id") REFERENCES "public"."lots"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_fulfillments" ADD CONSTRAINT "sales_order_fulfillments_reversed_by_user_id_portal_users_id_fk" FOREIGN KEY ("reversed_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_line_allocations" ADD CONSTRAINT "sales_order_line_allocations_sales_order_line_id_sales_order_lines_id_fk" FOREIGN KEY ("sales_order_line_id") REFERENCES "public"."sales_order_lines"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_line_allocations" ADD CONSTRAINT "sales_order_line_allocations_inventory_item_id_inventory_items_id_fk" FOREIGN KEY ("inventory_item_id") REFERENCES "public"."inventory_items"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_lines" ADD CONSTRAINT "sales_order_lines_sales_order_id_sales_orders_id_fk" FOREIGN KEY ("sales_order_id") REFERENCES "public"."sales_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_order_lines" ADD CONSTRAINT "sales_order_lines_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_lines" ADD CONSTRAINT "sales_order_lines_sales_unit_id_units_of_measure_id_fk" FOREIGN KEY ("sales_unit_id") REFERENCES "public"."units_of_measure"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sales_order_lines" ADD CONSTRAINT "sales_order_lines_short_shipped_by_user_id_portal_users_id_fk" FOREIGN KEY ("short_shipped_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_orders" ADD CONSTRAINT "sales_orders_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_orders" ADD CONSTRAINT "sales_orders_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sales_orders" ADD CONSTRAINT "sales_orders_created_by_user_id_portal_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."portal_users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -626,9 +636,14 @@ CREATE INDEX "sales_order_fulfillments_fulfilled_at_idx" ON "sales_order_fulfill
 CREATE INDEX "sales_order_fulfillments_inventory_item_id_idx" ON "sales_order_fulfillments" USING btree ("inventory_item_id");--> statement-breakpoint
 CREATE INDEX "sales_order_fulfillments_lot_id_idx" ON "sales_order_fulfillments" USING btree ("lot_id");--> statement-breakpoint
 CREATE INDEX "sales_order_fulfillments_fulfilled_by_user_id_idx" ON "sales_order_fulfillments" USING btree ("fulfilled_by_user_id");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_reversed_at_idx" ON "sales_order_fulfillments" USING btree ("reversed_at");--> statement-breakpoint
+CREATE INDEX "sales_order_fulfillments_reversed_by_user_id_idx" ON "sales_order_fulfillments" USING btree ("reversed_by_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_sales_line_inventory_item" ON "sales_order_line_allocations" USING btree ("sales_order_line_id","inventory_item_id");--> statement-breakpoint
 CREATE INDEX "sales_order_lines_sales_order_id_idx" ON "sales_order_lines" USING btree ("sales_order_id");--> statement-breakpoint
 CREATE INDEX "sales_order_lines_product_id_idx" ON "sales_order_lines" USING btree ("product_id");--> statement-breakpoint
+CREATE INDEX "sales_order_lines_sales_unit_id_idx" ON "sales_order_lines" USING btree ("sales_unit_id");--> statement-breakpoint
+CREATE INDEX "sales_order_lines_short_shipped_at_idx" ON "sales_order_lines" USING btree ("short_shipped_at");--> statement-breakpoint
+CREATE INDEX "sales_order_lines_short_shipped_by_user_id_idx" ON "sales_order_lines" USING btree ("short_shipped_by_user_id");--> statement-breakpoint
 CREATE INDEX "sales_orders_tenant_id_idx" ON "sales_orders" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "sales_orders_customer_id_idx" ON "sales_orders" USING btree ("customer_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "sales_orders_tenant_order_number_unique" ON "sales_orders" USING btree ("tenant_id","order_number");--> statement-breakpoint

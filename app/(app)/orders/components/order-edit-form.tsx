@@ -82,8 +82,9 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
           const defaultSalesUnit = getDefaultSalesUnit(product);
           return {
             key: line.id,
+            existingLineId: line.id,
             productId: line.productId,
-            salesUnitId: defaultSalesUnit?.id ?? "",
+            salesUnitId: line.salesUnitId ?? defaultSalesUnit?.unitId ?? "",
             unitType: line.unitType ?? inferLineUnitType(product),
             quantity: String(line.expectedCases),
             pricePerLb: line.pricePerLbOverride ?? product?.defaultPricePerLb ?? "",
@@ -112,7 +113,9 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
         customerNotes: values.customerNotes || null,
         internalNotes: values.internalNotes || null,
         lines: values.lines.map(line => ({
+          existingLineId: line.existingLineId,
           productId: line.productId,
+          salesUnitId: line.salesUnitId,
           expectedCases: Number(line.quantity),
           unitType: line.unitType,
           pricePerLbOverride: line.pricePerLb || null,

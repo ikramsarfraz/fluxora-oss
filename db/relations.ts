@@ -464,6 +464,14 @@ export const salesOrderLinesRelations = relations(
       fields: [salesOrderLines.productId],
       references: [products.id],
     }),
+    salesUnit: one(unitsOfMeasure, {
+      fields: [salesOrderLines.salesUnitId],
+      references: [unitsOfMeasure.id],
+    }),
+    baseUnitSnapshot: one(unitsOfMeasure, {
+      fields: [salesOrderLines.baseUnitIdSnapshot],
+      references: [unitsOfMeasure.id],
+    }),
     shortShippedBy: one(portalUsers, {
       fields: [salesOrderLines.shortShippedByUserId],
       references: [portalUsers.id],

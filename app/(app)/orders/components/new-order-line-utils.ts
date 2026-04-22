@@ -46,7 +46,7 @@ export function getSelectedSalesUnit(
   salesUnitId: string | undefined,
 ): ProductSalesUnit | null {
   if (!product || !salesUnitId) return null;
-  return getSalesUnits(product).find(unit => unit.id === salesUnitId) ?? null;
+  return getSalesUnits(product).find(unit => unit.unitId === salesUnitId) ?? null;
 }
 
 export function formatSalesUnitLabel(unit?: ProductSalesUnit | null): string {

@@ -1,5 +1,5 @@
 {
-  "id": "08a92607-26c5-443c-9854-ef5a69b9f9cf",
+  "id": "81563085-81a5-4b3a-8a3a-4c8d68a37224",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -3394,6 +3394,24 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reversed_at": {
+          "name": "reversed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversed_by_user_id": {
+          "name": "reversed_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversal_reason": {
+          "name": "reversal_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3499,6 +3517,36 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sales_order_fulfillments_reversed_at_idx": {
+          "name": "sales_order_fulfillments_reversed_at_idx",
+          "columns": [
+            {
+              "expression": "reversed_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_fulfillments_reversed_by_user_id_idx": {
+          "name": "sales_order_fulfillments_reversed_by_user_id_idx",
+          "columns": [
+            {
+              "expression": "reversed_by_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3560,6 +3608,19 @@
           "tableTo": "lots",
           "columnsFrom": [
             "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "sales_order_fulfillments_reversed_by_user_id_portal_users_id_fk": {
+          "name": "sales_order_fulfillments_reversed_by_user_id_portal_users_id_fk",
+          "tableFrom": "sales_order_fulfillments",
+          "tableTo": "portal_users",
+          "columnsFrom": [
+            "reversed_by_user_id"
           ],
           "columnsTo": [
             "id"
@@ -3700,6 +3761,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "sales_unit_id": {
+          "name": "sales_unit_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "expected_cases": {
           "name": "expected_cases",
           "type": "integer",
@@ -3736,6 +3803,24 @@
         },
         "case_weights_lbs": {
           "name": "case_weights_lbs",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "short_shipped_at": {
+          "name": "short_shipped_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "short_shipped_by_user_id": {
+          "name": "short_shipped_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "short_ship_notes": {
+          "name": "short_ship_notes",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -3785,6 +3870,51 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "sales_order_lines_sales_unit_id_idx": {
+          "name": "sales_order_lines_sales_unit_id_idx",
+          "columns": [
+            {
+              "expression": "sales_unit_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_lines_short_shipped_at_idx": {
+          "name": "sales_order_lines_short_shipped_at_idx",
+          "columns": [
+            {
+              "expression": "short_shipped_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sales_order_lines_short_shipped_by_user_id_idx": {
+          "name": "sales_order_lines_short_shipped_by_user_id_idx",
+          "columns": [
+            {
+              "expression": "short_shipped_by_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3812,6 +3942,32 @@
             "id"
           ],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "sales_order_lines_sales_unit_id_units_of_measure_id_fk": {
+          "name": "sales_order_lines_sales_unit_id_units_of_measure_id_fk",
+          "tableFrom": "sales_order_lines",
+          "tableTo": "units_of_measure",
+          "columnsFrom": [
+            "sales_unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "sales_order_lines_short_shipped_by_user_id_portal_users_id_fk": {
+          "name": "sales_order_lines_short_shipped_by_user_id_portal_users_id_fk",
+          "tableFrom": "sales_order_lines",
+          "tableTo": "portal_users",
+          "columnsFrom": [
+            "short_shipped_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -5599,6 +5755,9 @@
       "values": [
         "in_stock",
         "allocated",
+        "picked",
+        "packed",
+        "shipped",
         "sold",
         "damaged",
         "expired"

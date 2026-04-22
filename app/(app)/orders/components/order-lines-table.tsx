@@ -45,6 +45,20 @@ const UNIT_TYPE_LABELS: Record<string, string> = {
   fixed_case: "Fixed case",
 };
 
+function formatPersistedSalesUnit(
+  line: Pick<
+    Line,
+    | "salesUnit"
+    | "salesUnitNameSnapshot"
+    | "salesUnitAbbreviationSnapshot"
+  >,
+) {
+  if (line.salesUnitAbbreviationSnapshot) return line.salesUnitAbbreviationSnapshot;
+  if (line.salesUnitNameSnapshot) return line.salesUnitNameSnapshot;
+  if (!line.salesUnit) return "No sales unit";
+  return line.salesUnit.abbreviation || line.salesUnit.name;
+}
+
 const LINE_STATUS_META = {
   not_started: { label: "Not started", variant: "outline" as const },
   partial: { label: "Partial", variant: "secondary" as const },
@@ -151,10 +165,10 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
           <TableRow>
             <TableHead className="w-8" />
             <TableHead>Product</TableHead>
-            <TableHead>Unit type</TableHead>
+            <TableHead>Sales unit</TableHead>
             <TableHead className="text-right">Cases</TableHead>
             <TableHead className="text-right">Weight (lbs)</TableHead>
-            <TableHead className="text-right">Price / lb</TableHead>
+            <TableHead className="text-right">Price basis</TableHead>
             <TableHead className="text-right">Line total</TableHead>
           </TableRow>
         </TableHeader>
@@ -295,6 +309,9 @@ function LineRowGroup({
         </TableCell>
         <TableCell>
           <div className="flex flex-wrap gap-1">
+            <Badge variant="secondary" className="text-xs">
+              {formatPersistedSalesUnit(line)}
+            </Badge>
             <Badge variant="outline" className="text-xs">
               {UNIT_TYPE_LABELS[line.unitType] ?? line.unitType}
             </Badge>
@@ -314,7 +331,9 @@ function LineRowGroup({
         </TableCell>
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
-            `${formatMoney(price)}/lb`
+            line.unitType === "catch_weight"
+              ? `${formatMoney(price)}/lb`
+              : `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -372,6 +391,9 @@ function LineBreakdown({
     <div className="grid gap-4 md:grid-cols-2">
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="text-xs">
+            {formatPersistedSalesUnit(line)}
+          </Badge>
           <Badge variant={statusMeta.variant} className="text-xs">
             {statusMeta.label}
           </Badge>

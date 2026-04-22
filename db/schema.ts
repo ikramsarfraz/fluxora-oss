@@ -914,6 +914,24 @@ export const salesOrderLines = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "restrict" }),
+    salesUnitId: uuid("sales_unit_id").references(() => unitsOfMeasure.id, {
+      onDelete: "restrict",
+    }),
+    conversionToBaseSnapshot: numeric("conversion_to_base_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
+    baseUnitIdSnapshot: uuid("base_unit_id_snapshot").references(
+      () => unitsOfMeasure.id,
+      {
+        onDelete: "restrict",
+      },
+    ),
+    salesUnitNameSnapshot: varchar("sales_unit_name_snapshot", { length: 128 }),
+    salesUnitAbbreviationSnapshot: varchar(
+      "sales_unit_abbreviation_snapshot",
+      { length: 16 },
+    ),
     expectedCases: integer("expected_cases").notNull(),
     fulfilledCases: integer("fulfilled_cases").notNull().default(0),
     unitType: lineUnitTypeEnum("unit_type").notNull().default("catch_weight"),
@@ -947,6 +965,10 @@ export const salesOrderLines = pgTable(
   table => [
     index("sales_order_lines_sales_order_id_idx").on(table.salesOrderId),
     index("sales_order_lines_product_id_idx").on(table.productId),
+    index("sales_order_lines_sales_unit_id_idx").on(table.salesUnitId),
+    index("sales_order_lines_base_unit_snapshot_id_idx").on(
+      table.baseUnitIdSnapshot,
+    ),
     index("sales_order_lines_short_shipped_at_idx").on(table.shortShippedAt),
     index("sales_order_lines_short_shipped_by_user_id_idx").on(
       table.shortShippedByUserId,

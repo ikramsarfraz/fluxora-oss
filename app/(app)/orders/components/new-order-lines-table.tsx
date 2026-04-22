@@ -131,7 +131,7 @@ export function NewOrderLinesTable({
   function handleProductSelected(index: number, product: ProductListItem) {
     const defaultSalesUnit = getDefaultSalesUnit(product);
     setValue(`lines.${index}.productId`, product.id, { shouldValidate: true });
-    setValue(`lines.${index}.salesUnitId`, defaultSalesUnit?.id ?? "", {
+    setValue(`lines.${index}.salesUnitId`, defaultSalesUnit?.unitId ?? "", {
       shouldValidate: true,
     });
     setValue(`lines.${index}.unitType`, inferLineUnitType(product), {
@@ -356,7 +356,7 @@ function LineRow({
                 </SelectTrigger>
                 <SelectContent>
                   {salesUnits.map(unit => (
-                    <SelectItem key={unit.id} value={unit.id}>
+                    <SelectItem key={unit.id} value={unit.unitId}>
                       {formatSalesUnitLabel(unit)}
                     </SelectItem>
                   ))}

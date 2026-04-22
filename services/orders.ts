@@ -6,6 +6,7 @@ import {
   inventoryItems,
   lots,
   products,
+  productUnits,
   salesOrderLineAllocations,
   salesOrderFulfillments,
   salesOrderLines,
@@ -81,6 +82,142 @@ function getLotLifecycleStatus(
   const warningThreshold = new Date(startOfToday);
   warningThreshold.setDate(warningThreshold.getDate() + 7);
   return expiration.getTime() <= warningThreshold.getTime() ? "warning" : "ok";
+}
+
+async function validateSalesOrderLineSelections(input: {
+  tenantId: string;
+  customerId: string;
+  lines: Array<{
+    productId: string;
+    salesUnitId: string;
+    pricePerLbOverride?: string | null | undefined;
+  }>;
+}) {
+  const productIds = [...new Set(input.lines.map(line => line.productId))];
+  const salesUnitIds = [...new Set(input.lines.map(line => line.salesUnitId))];
+
+  const validProducts = await db.query.products.findMany({
+    where: and(
+      inArray(products.id, productIds),
+      eq(products.tenantId, input.tenantId),
+    ),
+    columns: {
+      id: true,
+      defaultPricePerLb: true,
+      baseUnitId: true,
+    },
+  });
+
+  const invalidProductIds = productIds.filter(
+    productId => !validProducts.some(product => product.id === productId),
+  );
+  if (invalidProductIds.length > 0) {
+    throw new Error("One or more products are invalid.");
+  }
+
+  const validSalesUnits = await db.query.productUnits.findMany({
+    where: and(
+      inArray(productUnits.productId, productIds),
+      inArray(productUnits.unitId, salesUnitIds),
+      eq(productUnits.purpose, "sales"),
+    ),
+    columns: {
+      productId: true,
+      unitId: true,
+      isDefault: true,
+      conversionToBase: true,
+    },
+    with: {
+      unit: {
+        columns: {
+          id: true,
+          name: true,
+          abbreviation: true,
+        },
+      },
+    },
+  });
+
+  for (const line of input.lines) {
+    const matchingSalesUnit = validSalesUnits.find(
+      unit =>
+        unit.productId === line.productId && unit.unitId === line.salesUnitId,
+    );
+    if (!matchingSalesUnit) {
+      throw new Error("One or more sales units are invalid for the selected product.");
+    }
+  }
+
+  return { validProducts, validSalesUnits };
+}
+
+type ValidSalesOrderProduct = Awaited<
+  ReturnType<typeof validateSalesOrderLineSelections>
+>["validProducts"][number];
+
+type ValidSalesOrderUnit = Awaited<
+  ReturnType<typeof validateSalesOrderLineSelections>
+>["validSalesUnits"][number];
+
+type SalesOrderLineSnapshot = {
+  salesUnitId: string;
+  conversionToBaseSnapshot: string | null;
+  baseUnitIdSnapshot: string | null;
+  salesUnitNameSnapshot: string | null;
+  salesUnitAbbreviationSnapshot: string | null;
+};
+
+function buildSalesOrderLineSnapshot(
+  line: {
+    productId: string;
+    salesUnitId: string;
+  },
+  validProducts: ValidSalesOrderProduct[],
+  validSalesUnits: ValidSalesOrderUnit[],
+  existingLine?: {
+    productId: string;
+    salesUnitId: string | null;
+    conversionToBaseSnapshot: string | null;
+    baseUnitIdSnapshot: string | null;
+    salesUnitNameSnapshot: string | null;
+    salesUnitAbbreviationSnapshot: string | null;
+  } | null,
+): SalesOrderLineSnapshot {
+  const matchingProduct = validProducts.find(product => product.id === line.productId);
+  const matchingSalesUnit = validSalesUnits.find(
+    unit =>
+      unit.productId === line.productId && unit.unitId === line.salesUnitId,
+  );
+
+  if (!matchingProduct || !matchingSalesUnit) {
+    throw new Error("One or more sales units are invalid for the selected product.");
+  }
+
+  const canReuseExistingSnapshot =
+    existingLine?.productId === line.productId &&
+    existingLine.salesUnitId === line.salesUnitId;
+
+  return {
+    salesUnitId: line.salesUnitId,
+    conversionToBaseSnapshot:
+      canReuseExistingSnapshot && existingLine
+        ? (existingLine.conversionToBaseSnapshot ??
+          matchingSalesUnit.conversionToBase)
+        : matchingSalesUnit.conversionToBase,
+    baseUnitIdSnapshot:
+      canReuseExistingSnapshot && existingLine
+        ? existingLine.baseUnitIdSnapshot ?? matchingProduct.baseUnitId
+        : matchingProduct.baseUnitId,
+    salesUnitNameSnapshot:
+      canReuseExistingSnapshot && existingLine
+        ? existingLine.salesUnitNameSnapshot ?? matchingSalesUnit.unit.name
+        : matchingSalesUnit.unit.name,
+    salesUnitAbbreviationSnapshot:
+      canReuseExistingSnapshot && existingLine
+        ? (existingLine.salesUnitAbbreviationSnapshot ??
+          matchingSalesUnit.unit.abbreviation)
+        : matchingSalesUnit.unit.abbreviation,
+  };
 }
 
 async function reconcileSalesOrderLineAllocations(lineId: string) {
@@ -270,7 +407,11 @@ export async function getSalesOrders() {
     where: eq(salesOrders.tenantId, tenant.id),
     with: {
       customer: true,
-      lines: true,
+      lines: {
+        with: {
+          salesUnit: true,
+        },
+      },
     },
     orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
   });
@@ -292,6 +433,7 @@ export async function getSalesOrderById(id: string) {
       lines: {
         with: {
           product: true,
+          salesUnit: true,
           shortShippedBy: true,
           fulfillments: {
             with: {
@@ -439,7 +581,9 @@ export async function updateSalesOrder(input: {
   customerNotes?: string | null;
   internalNotes?: string | null;
   lines: Array<{
+    existingLineId?: string;
     productId: string;
+    salesUnitId: string;
     expectedCases: number;
     unitType?: "catch_weight" | "fixed_case";
     pricePerLbOverride?: string | null;
@@ -507,6 +651,22 @@ export async function updateSalesOrder(input: {
     throw new Error("Add at least one line item before saving.");
   }
 
+  const providedExistingLineIds = input.lines
+    .map(line => line.existingLineId)
+    .filter((value): value is string => Boolean(value));
+  if (new Set(providedExistingLineIds).size !== providedExistingLineIds.length) {
+    throw new Error("Duplicate order lines were submitted.");
+  }
+
+  const existingLinesById = new Map(
+    (order.lines ?? []).map(line => [line.id, line]),
+  );
+  for (const existingLineId of providedExistingLineIds) {
+    if (!existingLinesById.has(existingLineId)) {
+      throw new Error("One or more order lines could not be matched.");
+    }
+  }
+
   const customer = await db.query.customers.findFirst({
     where: and(eq(customers.id, input.customerId), eq(customers.tenantId, tenant.id)),
     columns: {
@@ -518,21 +678,11 @@ export async function updateSalesOrder(input: {
     throw new Error("Customer not found.");
   }
 
-  const productIds = [...new Set(input.lines.map(line => line.productId))];
-  const validProducts = await db.query.products.findMany({
-    where: and(inArray(products.id, productIds), eq(products.tenantId, tenant.id)),
-    columns: {
-      id: true,
-      defaultPricePerLb: true,
-    },
+  const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
+    tenantId: tenant.id,
+    customerId: input.customerId,
+    lines: input.lines,
   });
-
-  const invalidProductIds = productIds.filter(
-    productId => !validProducts.some(product => product.id === productId),
-  );
-  if (invalidProductIds.length > 0) {
-    throw new Error("One or more products are invalid.");
-  }
 
   await db
     .update(salesOrders)
@@ -572,6 +722,12 @@ export async function updateSalesOrder(input: {
     await db.insert(salesOrderLines).values({
       salesOrderId: input.id,
       productId: line.productId,
+      ...buildSalesOrderLineSnapshot(
+        line,
+        validProducts,
+        validSalesUnits,
+        line.existingLineId ? existingLinesById.get(line.existingLineId) : null,
+      ),
       expectedCases: line.expectedCases,
       unitType: line.unitType ?? "catch_weight",
       pricePerLbOverride: priceOverride,
@@ -591,6 +747,7 @@ export async function createSalesOrder(input: {
   internalNotes?: string;
   lines: Array<{
     productId: string;
+    salesUnitId: string;
     expectedCases: number;
     unitType?: "catch_weight" | "fixed_case";
     pricePerLbOverride?: string;
@@ -602,6 +759,12 @@ export async function createSalesOrder(input: {
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
+
+  const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
+    tenantId: tenant.id,
+    customerId: input.customerId,
+    lines: input.lines,
+  });
 
   const [order] = await db
     .insert(salesOrders)
@@ -640,9 +803,7 @@ export async function createSalesOrder(input: {
       if (contractPrice) {
         priceOverride = contractPrice.pricePerLb;
       } else {
-        const product = await db.query.products.findFirst({
-          where: eq(products.id, line.productId),
-        });
+        const product = validProducts.find(product => product.id === line.productId);
         priceOverride = product?.defaultPricePerLb;
       }
     }
@@ -650,6 +811,7 @@ export async function createSalesOrder(input: {
     await db.insert(salesOrderLines).values({
       salesOrderId: order.id,
       productId: line.productId,
+      ...buildSalesOrderLineSnapshot(line, validProducts, validSalesUnits),
       expectedCases: line.expectedCases,
       unitType: line.unitType ?? "catch_weight",
       pricePerLbOverride: priceOverride,
