@@ -4,6 +4,7 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomerById,
+  getCustomers,
 } from "@/services/customers";
 import {
   createCustomerInputSchema,
@@ -13,6 +14,10 @@ import {
 function emptyToNull(v: string | null | undefined): string | null {
   if (v == null || v.trim() === "") return null;
   return v.trim();
+}
+
+export async function getCustomersAction() {
+  return await getCustomers();
 }
 
 export async function getCustomerAction(customerId: string) {
