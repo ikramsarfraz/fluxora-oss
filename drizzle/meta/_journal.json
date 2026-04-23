@@ -50,6 +50,20 @@
       "when": 1776872500000,
       "tag": "0006_suppliers_net_days",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776950400000,
+      "tag": "0007_inventory_cost_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777036800000,
+      "tag": "0008_sales_invoice_cogs",
+      "breakpoints": true
     }
   ]
 }

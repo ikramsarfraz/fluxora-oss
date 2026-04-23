@@ -605,6 +605,8 @@ async function postSupplierInvoiceInternal(args: {
       barcodeId: generateBarcode(),
       exactWeightLbs: line.weightLbs,
       cases: Math.max(1, line.quantityCases || 1),
+      costPerUnitSnapshot: line.unitPrice,
+      costUnitTypeSnapshot: line.unitType,
       status: "in_stock",
     });
   }

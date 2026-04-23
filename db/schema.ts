@@ -908,6 +908,13 @@ export const inventoryItems = pgTable(
       scale: 4,
     }).notNull(),
     cases: integer("cases").notNull().default(1),
+    costPerUnitSnapshot: numeric("cost_per_unit_snapshot", {
+      precision: 12,
+      scale: 6,
+    }).notNull(),
+    costUnitTypeSnapshot: lineUnitTypeEnum("cost_unit_type_snapshot")
+      .notNull()
+      .default("catch_weight"),
     status: inventoryItemStatusEnum("status").notNull().default("in_stock"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -1154,6 +1161,17 @@ export const salesOrderFulfillments = pgTable(
         onDelete: "set null",
       },
     ),
+    costPerUnitSnapshot: numeric("cost_per_unit_snapshot", {
+      precision: 12,
+      scale: 6,
+    }),
+    costUnitTypeSnapshot: lineUnitTypeEnum("cost_unit_type_snapshot"),
+    costAmountSnapshot: numeric("cost_amount_snapshot", {
+      precision: 12,
+      scale: 4,
+    })
+      .notNull()
+      .default("0"),
     lotId: uuid("lot_id").references(() => lots.id, {
       onDelete: "set null",
     }),
@@ -1299,6 +1317,12 @@ export const salesInvoiceLines = pgTable(
       .default("0"),
     unitPrice: numeric("unit_price", { precision: 10, scale: 4 }).notNull(),
     lineTotal: numeric("line_total", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    cogsAmountSnapshot: numeric("cogs_amount_snapshot", {
+      precision: 12,
+      scale: 4,
+    })
       .notNull()
       .default("0"),
     createdAt: timestamp("created_at", { withTimezone: true })

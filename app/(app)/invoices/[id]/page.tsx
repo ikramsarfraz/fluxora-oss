@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { getSalesInvoiceById } from "@/services/invoicing";
@@ -23,6 +25,13 @@ export default async function InvoiceDetailPage({
   }
 
   const payments = invoice.payments ?? [];
+  const totalRevenue = Number(invoice.totalAmount ?? 0);
+  const totalCogs = (invoice.lines ?? []).reduce(
+    (sum, line) => sum + (Number(line.cogsAmountSnapshot ?? 0) || 0),
+    0,
+  );
+  const grossProfit = totalRevenue - totalCogs;
+  const marginPercent = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,6 +41,12 @@ export default async function InvoiceDetailPage({
             {invoice.invoiceNumber}
           </h1>
           <Badge variant="outline">{invoice.status.replaceAll("_", " ")}</Badge>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/api/invoices/${invoice.id}/pdf`}>
+              <Download className="size-4" />
+              Download PDF
+            </Link>
+          </Button>
           {invoice.salesOrder ? (
             <Link
               href={`/orders/${invoice.salesOrder.id}`}
@@ -55,6 +70,16 @@ export default async function InvoiceDetailPage({
         <SummaryCard label="Balance due" value={formatMoney(invoice.balanceDue)} />
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <SummaryCard label="COGS" value={formatMoney(totalCogs)} />
+        <SummaryCard label="Gross profit" value={formatMoney(grossProfit)} />
+        <SummaryCard
+          label="Margin"
+          value={`${marginPercent.toFixed(1)}%`}
+          helper="Revenue minus receipt-cost COGS."
+        />
+      </div>
+
       <div className="rounded-lg border bg-background">
         <div className="border-b px-4 py-3 text-sm font-medium">Invoice lines</div>
         <div className="divide-y">
@@ -68,6 +93,13 @@ export default async function InvoiceDetailPage({
                 <span className="text-xs text-muted-foreground">
                   {line.product?.sku ?? "—"} · {line.quantityCases} cases ·{" "}
                   {Number(line.billedWeightLbs ?? 0).toFixed(2)} lbs
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  COGS {formatMoney(line.cogsAmountSnapshot)} · Gross profit{" "}
+                  {formatMoney(
+                    (Number(line.lineTotal ?? 0) || 0) -
+                      (Number(line.cogsAmountSnapshot ?? 0) || 0),
+                  )}
                 </span>
               </div>
               <span className="tabular-nums">{formatMoney(line.lineTotal)}</span>
@@ -107,13 +139,22 @@ export default async function InvoiceDetailPage({
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+}) {
   return (
     <div className="rounded-lg border bg-background p-4">
       <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div className="text-base font-semibold">{value}</div>
+      {helper ? <div className="mt-1 text-xs text-muted-foreground">{helper}</div> : null}
     </div>
   );
 }

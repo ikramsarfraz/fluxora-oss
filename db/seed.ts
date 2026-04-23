@@ -1504,6 +1504,13 @@ async function seedLotsAndInventory(
           ? randomDecimal(30, 70, 4)
           : randomDecimal(8, 25, 4);
     const cases = product.sku.startsWith("OTH-") ? randomBetween(1, 4) : 1;
+    const costUnitTypeSnapshot = product.sku.startsWith("OTH-")
+      ? "fixed_case"
+      : "catch_weight";
+    const costPerUnitSnapshot =
+      costUnitTypeSnapshot === "fixed_case"
+        ? randomDecimal(18, 42, 6)
+        : randomDecimal(2, 8, 6);
 
     await db
       .insert(inventoryItems)
@@ -1513,6 +1520,8 @@ async function seedLotsAndInventory(
         barcodeId,
         exactWeightLbs: weight,
         cases,
+        costPerUnitSnapshot,
+        costUnitTypeSnapshot,
         status: "in_stock",
       })
       .onConflictDoNothing();

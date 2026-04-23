@@ -18,6 +18,14 @@ function makeInvoiceNumber(prefix: string | null | undefined, id: string) {
   return prefix ? `${prefix}-${base}` : base;
 }
 
+function roundMoney4(value: number) {
+  return value.toFixed(4);
+}
+
+function roundMoney2(value: number) {
+  return value.toFixed(2);
+}
+
 export async function createInvoiceFromSalesOrder(input: {
   salesOrderId: string;
   createdByUserId: string;
@@ -42,6 +50,7 @@ export async function createInvoiceFromSalesOrder(input: {
           product: true,
           fulfillments: {
             columns: {
+              costAmountSnapshot: true,
               inventoryItemId: true,
               reversedAt: true,
             },
@@ -62,6 +71,7 @@ export async function createInvoiceFromSalesOrder(input: {
     billedWeightLbs: string;
     unitPrice: string;
     lineTotal: string;
+    cogsAmountSnapshot: string;
   }> = [];
 
   for (const line of order.lines) {
@@ -72,14 +82,22 @@ export async function createInvoiceFromSalesOrder(input: {
     );
 
     const lineTotal = billedWeight * unitPrice;
+    const cogsAmount = (line.fulfillments ?? [])
+      .filter(fulfillment => !fulfillment.reversedAt)
+      .reduce(
+        (sum, fulfillment) =>
+          sum + (Number(fulfillment.costAmountSnapshot ?? "0") || 0),
+        0,
+      );
     subtotal += lineTotal;
 
     invoiceLinesPayload.push({
       productId: line.productId,
       quantityCases: line.fulfilledCases || line.expectedCases,
       billedWeightLbs: billedWeight.toFixed(4),
-      unitPrice: unitPrice.toFixed(4),
-      lineTotal: lineTotal.toFixed(2),
+      unitPrice: roundMoney4(unitPrice),
+      lineTotal: roundMoney2(lineTotal),
+      cogsAmountSnapshot: roundMoney4(cogsAmount),
     });
   }
 
@@ -136,6 +154,7 @@ export async function createInvoiceFromSalesOrder(input: {
       billedWeightLbs: line.billedWeightLbs,
       unitPrice: line.unitPrice,
       lineTotal: line.lineTotal,
+      cogsAmountSnapshot: line.cogsAmountSnapshot,
     });
   }
 
@@ -255,6 +274,10 @@ export async function getSalesInvoiceById(id: string) {
     },
   });
 }
+
+export type SalesInvoiceDetail = NonNullable<
+  Awaited<ReturnType<typeof getSalesInvoiceById>>
+>;
 
 export async function getSalesInvoices() {
   const tenant = await getCurrentTenant();

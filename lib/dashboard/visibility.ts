@@ -21,6 +21,9 @@ export type DashboardSection = (typeof DASHBOARD_SECTIONS)[number];
 export const DASHBOARD_METRIC_CARDS = [
   "sales7d",
   "sales30d",
+  "cogs30d",
+  "grossProfit30d",
+  "grossMargin30d",
   "purchases30d",
   "unpaidCustomerBalance",
   "unpaidSupplierBalance",
@@ -49,6 +52,9 @@ const ROLE_VISIBILITY: Record<PortalUserRole, Visibility> = {
     cards: new Set([
       "sales7d",
       "sales30d",
+      "cogs30d",
+      "grossProfit30d",
+      "grossMargin30d",
       "unpaidCustomerBalance",
       "inventoryValue",
       "expiringLots",
@@ -68,6 +74,9 @@ const ROLE_VISIBILITY: Record<PortalUserRole, Visibility> = {
     sections: new Set(["sales", "arAging", "purchasing", "apAging"]),
     cards: new Set([
       "sales30d",
+      "cogs30d",
+      "grossProfit30d",
+      "grossMargin30d",
       "purchases30d",
       "unpaidCustomerBalance",
       "unpaidSupplierBalance",

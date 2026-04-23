@@ -33,6 +33,9 @@ const ACTIVE_INVENTORY_STATUSES = [
 export type DashboardMetrics = {
   sales7d: string;
   sales30d: string;
+  cogs30d: string;
+  grossProfit30d: string;
+  grossMargin30d: string;
   purchases30d: string;
   unpaidCustomerBalance: string;
   unpaidSupplierBalance: string;
@@ -57,7 +60,10 @@ export type SalesFulfillmentBreakdown = {
 export type TopCustomerRow = {
   customerId: string;
   name: string;
-  total: string;
+  revenue: string;
+  cogs: string;
+  grossProfit: string;
+  marginPercent: string;
   invoiceCount: number;
 };
 
@@ -66,7 +72,10 @@ export type TopProductRow = {
   name: string;
   sku: string;
   quantityCases: number;
-  total: string;
+  revenue: string;
+  cogs: string;
+  grossProfit: string;
+  marginPercent: string;
 };
 
 export type RecentSupplierInvoiceRow = {
@@ -184,6 +193,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     unpaidSupplierRows,
     recentSupplierRows,
     spendBySupplierRows,
+    cogs30dRow,
     topCustomersRows,
     topProductsRows,
     salesOrderStatusRows,
@@ -326,35 +336,63 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       )
       .limit(5),
 
-    // 7. Top customers, last 90d, non-void sales invoices, top 5.
+    // 7. Total COGS, last 30d, from frozen invoice-line snapshots.
+    db
+      .select({
+        total: sql<string>`coalesce(sum(${salesInvoiceLines.cogsAmountSnapshot}), 0)`,
+      })
+      .from(salesInvoiceLines)
+      .innerJoin(
+        salesInvoices,
+        eq(salesInvoices.id, salesInvoiceLines.salesInvoiceId),
+      )
+      .where(
+        and(
+          eq(salesInvoices.tenantId, tenantId),
+          sql`${salesInvoices.status} <> 'void'`,
+          gte(salesInvoices.invoiceDate, thirtyDaysAgo),
+        ),
+      ),
+
+    // 8. Top customers by gross profit, last 30d, non-void sales invoices.
     db
       .select({
         customerId: salesInvoices.customerId,
         name: customers.name,
-        total: sql<string>`coalesce(sum(${salesInvoices.totalAmount}), 0)`,
-        invoiceCount: sql<number>`count(${salesInvoices.id})::int`,
+        revenue: sql<string>`coalesce(sum(${salesInvoiceLines.lineTotal}), 0)`,
+        cogs: sql<string>`coalesce(sum(${salesInvoiceLines.cogsAmountSnapshot}), 0)`,
+        invoiceCount: sql<number>`count(distinct ${salesInvoices.id})::int`,
       })
-      .from(salesInvoices)
+      .from(salesInvoiceLines)
+      .innerJoin(
+        salesInvoices,
+        eq(salesInvoices.id, salesInvoiceLines.salesInvoiceId),
+      )
       .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
       .where(
         and(
           eq(salesInvoices.tenantId, tenantId),
           sql`${salesInvoices.status} <> 'void'`,
-          gte(salesInvoices.invoiceDate, ninetyDaysAgo),
+          gte(salesInvoices.invoiceDate, thirtyDaysAgo),
         ),
       )
       .groupBy(salesInvoices.customerId, customers.name)
-      .orderBy(desc(sql`coalesce(sum(${salesInvoices.totalAmount}), 0)`))
+      .orderBy(
+        desc(
+          sql`coalesce(sum(${salesInvoiceLines.lineTotal} - ${salesInvoiceLines.cogsAmountSnapshot}), 0)`,
+        ),
+      )
       .limit(5),
 
-    // 8. Top-selling products, last 90d, non-void sales invoices, top 5.
+    // 9. Top products by gross profit, last 30d, non-void sales invoices.
     db
       .select({
         productId: salesInvoiceLines.productId,
         name: products.name,
         sku: products.sku,
         quantityCases: sql<number>`coalesce(sum(${salesInvoiceLines.quantityCases}), 0)::int`,
-        total: sql<string>`coalesce(sum(${salesInvoiceLines.lineTotal}), 0)`,
+        revenue: sql<string>`coalesce(sum(${salesInvoiceLines.lineTotal}), 0)`,
+        cogs: sql<string>`coalesce(sum(${salesInvoiceLines.cogsAmountSnapshot}), 0)`,
       })
       .from(salesInvoiceLines)
       .innerJoin(
@@ -366,14 +404,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
         and(
           eq(salesInvoices.tenantId, tenantId),
           sql`${salesInvoices.status} <> 'void'`,
-          gte(salesInvoices.invoiceDate, ninetyDaysAgo),
+          gte(salesInvoices.invoiceDate, thirtyDaysAgo),
         ),
       )
       .groupBy(salesInvoiceLines.productId, products.name, products.sku)
-      .orderBy(desc(sql`coalesce(sum(${salesInvoiceLines.lineTotal}), 0)`))
+      .orderBy(
+        desc(
+          sql`coalesce(sum(${salesInvoiceLines.lineTotal} - ${salesInvoiceLines.cogsAmountSnapshot}), 0)`,
+        ),
+      )
       .limit(5),
 
-    // 9. Sales-order status counts (all time).
+    // 10. Sales-order status counts (all time).
     db
       .select({
         status: salesOrders.status,
@@ -383,7 +425,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .where(eq(salesOrders.tenantId, tenantId))
       .groupBy(salesOrders.status),
 
-    // 10. Distinct orders with any short-shipped line.
+    // 11. Distinct orders with any short-shipped line.
     db
       .select({
         count: sql<number>`count(distinct ${salesOrderLines.salesOrderId})::int`,
@@ -397,7 +439,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
         ),
       ),
 
-    // 11. Inventory by status (counts + cases) — tenant-scoped via lots.
+    // 12. Inventory by status (counts + cases) — tenant-scoped via lots.
     db
       .select({
         status: inventoryItems.status,
@@ -409,7 +451,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .where(eq(lots.tenantId, tenantId))
       .groupBy(inventoryItems.status),
 
-    // 12. Expiring-soon lots (expiration within next 7d, with active inventory).
+    // 13. Expiring-soon lots (expiration within next 7d, with active inventory).
     db
       .select({
         id: lots.id,
@@ -440,7 +482,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .orderBy(lots.expirationDate)
       .limit(10),
 
-    // 13. Expired lots still holding active inventory.
+    // 14. Expired lots still holding active inventory.
     db
       .select({
         id: lots.id,
@@ -470,7 +512,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .orderBy(desc(lots.expirationDate))
       .limit(10),
 
-    // 14. Top stocked products (active inventory only).
+    // 15. Top stocked products (active inventory only).
     db
       .select({
         productId: inventoryItems.productId,
@@ -492,28 +534,19 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .orderBy(desc(sql`count(*)`))
       .limit(5),
 
-    // 15. Approximate inventory value: for each lot compute an average
-    // unit_price from its supplier_invoice_line receipts, then multiply by
-    // the active inventory quantities (cases for fixed_case, lbs for
-    // catch_weight) and sum. Single CTE keeps this to one round-trip.
+    // 16. Inventory value from receipt-time cost snapshots stored on each
+    // inventory item. This keeps historical value stable even if supplier
+    // invoice pricing or product cost config changes later.
     db.execute<{ value: string | null }>(sql`
-      WITH lot_unit_prices AS (
-        SELECT lr.lot_id,
-          (array_agg(sil.unit_type::text ORDER BY sil.created_at DESC))[1] AS unit_type,
-          AVG(sil.unit_price::numeric) AS avg_unit_price
-        FROM lot_receipts lr
-        JOIN supplier_invoice_lines sil ON sil.id = lr.supplier_invoice_line_id
-        GROUP BY lr.lot_id
-      )
       SELECT COALESCE(SUM(
         CASE
-          WHEN lup.unit_type = 'fixed_case' THEN ii.cases::numeric * lup.avg_unit_price
-          ELSE ii.exact_weight_lbs::numeric * lup.avg_unit_price
+          WHEN ii.cost_unit_type_snapshot = 'fixed_case'
+            THEN ii.cases::numeric * ii.cost_per_unit_snapshot::numeric
+          ELSE ii.exact_weight_lbs::numeric * ii.cost_per_unit_snapshot::numeric
         END
       ), 0) AS value
       FROM inventory_items ii
       JOIN lots l ON l.id = ii.lot_id
-      LEFT JOIN lot_unit_prices lup ON lup.lot_id = l.id
       WHERE l.tenant_id = ${tenantId}
         AND ii.status IN ('in_stock', 'allocated', 'picked', 'packed')
     `),
@@ -544,6 +577,10 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       bucket.count += 1;
     }
   }
+  const cogs30d = Number(cogs30dRow[0]?.total ?? 0) || 0;
+  const grossProfit30d = sales30dTotal - cogs30d;
+  const grossMargin30d =
+    sales30dTotal > 0 ? (grossProfit30d / sales30dTotal) * 100 : 0;
 
   const overTime: SalesOverTimePoint[] = [...salesDayBuckets.entries()].map(
     ([date, bucket]) => ({
@@ -659,7 +696,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const topCustomers: TopCustomerRow[] = topCustomersRows.map(row => ({
     customerId: row.customerId,
     name: row.name,
-    total: toMoney(row.total ?? 0),
+    revenue: toMoney(row.revenue ?? 0),
+    cogs: toMoney(row.cogs ?? 0),
+    grossProfit: toMoney(
+      (Number(row.revenue ?? 0) || 0) - (Number(row.cogs ?? 0) || 0),
+    ),
+    marginPercent: (
+      (Number(row.revenue ?? 0) || 0) > 0
+        ? (((Number(row.revenue ?? 0) || 0) - (Number(row.cogs ?? 0) || 0)) /
+            (Number(row.revenue ?? 0) || 0)) *
+          100
+        : 0
+    ).toFixed(1),
     invoiceCount: Number(row.invoiceCount ?? 0) || 0,
   }));
 
@@ -668,7 +716,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     name: row.name,
     sku: row.sku,
     quantityCases: Number(row.quantityCases ?? 0) || 0,
-    total: toMoney(row.total ?? 0),
+    revenue: toMoney(row.revenue ?? 0),
+    cogs: toMoney(row.cogs ?? 0),
+    grossProfit: toMoney(
+      (Number(row.revenue ?? 0) || 0) - (Number(row.cogs ?? 0) || 0),
+    ),
+    marginPercent: (
+      (Number(row.revenue ?? 0) || 0) > 0
+        ? (((Number(row.revenue ?? 0) || 0) - (Number(row.cogs ?? 0) || 0)) /
+            (Number(row.revenue ?? 0) || 0)) *
+          100
+        : 0
+    ).toFixed(1),
   }));
 
   const spendBySupplier: SpendBySupplierRow[] = spendBySupplierRows.map(
@@ -694,6 +753,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     metrics: {
       sales7d: toMoney(sales7dTotal),
       sales30d: toMoney(sales30dTotal),
+      cogs30d: toMoney(cogs30d),
+      grossProfit30d: toMoney(grossProfit30d),
+      grossMargin30d: grossMargin30d.toFixed(1),
       purchases30d,
       unpaidCustomerBalance,
       unpaidSupplierBalance: toMoney(unpaidSupplierBalance),

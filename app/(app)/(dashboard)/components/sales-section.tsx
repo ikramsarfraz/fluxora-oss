@@ -250,19 +250,21 @@ function TopCustomersCard({ rows }: { rows: TopCustomerRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Top customers</CardTitle>
-        <CardDescription>By invoiced revenue, last 90 days.</CardDescription>
+        <CardTitle>Top customers by profit</CardTitle>
+        <CardDescription>Gross profit on non-void invoices, last 30 days.</CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
-          <EmptyCellText>No invoices in the last 90 days.</EmptyCellText>
+          <EmptyCellText>No invoices in the last 30 days.</EmptyCellText>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Customer</TableHead>
                 <TableHead className="text-right">Invoices</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Revenue</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
+                <TableHead className="text-right">Margin</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -280,7 +282,13 @@ function TopCustomersCard({ rows }: { rows: TopCustomerRow[] }) {
                     {row.invoiceCount}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {formatMoney(row.total)}
+                    {formatMoney(row.revenue)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {formatMoney(row.grossProfit)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.marginPercent}%
                   </TableCell>
                 </TableRow>
               ))}
@@ -296,19 +304,21 @@ function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Top-selling products</CardTitle>
-        <CardDescription>By invoiced revenue, last 90 days.</CardDescription>
+        <CardTitle>Top products by profit</CardTitle>
+        <CardDescription>Gross profit on non-void invoices, last 30 days.</CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
-          <EmptyCellText>No invoiced lines in the last 90 days.</EmptyCellText>
+          <EmptyCellText>No invoiced lines in the last 30 days.</EmptyCellText>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead className="text-right">Cases</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Revenue</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
+                <TableHead className="text-right">Margin</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -329,7 +339,13 @@ function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
                     {row.quantityCases}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {formatMoney(row.total)}
+                    {formatMoney(row.revenue)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {formatMoney(row.grossProfit)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.marginPercent}%
                   </TableCell>
                 </TableRow>
               ))}

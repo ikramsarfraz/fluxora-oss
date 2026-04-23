@@ -7,6 +7,7 @@ import {
   Clock,
   DollarSign,
   Package,
+  Receipt,
   ReceiptText,
   TrendingUp,
   Wallet,
@@ -94,9 +95,42 @@ export function MetricCards({
       node: (
         <MetricCard
           icon={Calendar}
-          label="Sales (last 30d)"
+          label="Revenue (last 30d)"
           value={formatMoney(metrics.sales30d)}
           helper="Non-void invoices, by invoice date."
+        />
+      ),
+    },
+    {
+      key: "cogs30d",
+      node: (
+        <MetricCard
+          icon={Receipt}
+          label="COGS (last 30d)"
+          value={formatMoney(metrics.cogs30d)}
+          helper="Frozen invoice-line cost snapshots."
+        />
+      ),
+    },
+    {
+      key: "grossProfit30d",
+      node: (
+        <MetricCard
+          icon={TrendingUp}
+          label="Gross profit (30d)"
+          value={formatMoney(metrics.grossProfit30d)}
+          helper="Revenue less COGS on non-void invoices."
+        />
+      ),
+    },
+    {
+      key: "grossMargin30d",
+      node: (
+        <MetricCard
+          icon={TrendingUp}
+          label="Gross margin (30d)"
+          value={`${metrics.grossMargin30d}%`}
+          helper="Gross profit divided by revenue."
         />
       ),
     },

@@ -47,6 +47,150 @@ function getInventoryItemCases(
   return Math.max(1, inventoryItem?.cases ?? 1);
 }
 
+function toFixedCostAmount(value: number) {
+  return value.toFixed(4);
+}
+
+async function resolveFulfillmentCostSnapshot(args: {
+  salesOrderLineId: string;
+  productId: string;
+  quantityFulfilled: number;
+  weightLbs: number | null;
+  inventoryItemId?: string | null;
+  lotId?: string | null;
+}) {
+  const loadDistinctSnapshots = async (
+    inventorySelection: Array<{
+      costPerUnitSnapshot: string;
+      costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+    }>,
+  ) => {
+    const distinct = new Map<
+      string,
+      {
+        costPerUnitSnapshot: string;
+        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+      }
+    >();
+
+    for (const item of inventorySelection) {
+      const key = `${item.costUnitTypeSnapshot}:${item.costPerUnitSnapshot}`;
+      if (!distinct.has(key)) {
+        distinct.set(key, item);
+      }
+    }
+
+    if (distinct.size === 0) {
+      throw new Error(
+        "No inventory cost snapshot is available for this fulfillment.",
+      );
+    }
+
+    if (distinct.size > 1) {
+      throw new Error(
+        "Fulfillment spans inventory with different receipt costs. Select a specific inventory item to capture stable COGS.",
+      );
+    }
+
+    return [...distinct.values()][0];
+  };
+
+  let snapshot:
+    | {
+        costPerUnitSnapshot: string;
+        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+      }
+    | undefined;
+
+  if (args.inventoryItemId) {
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, args.inventoryItemId),
+      columns: {
+        costPerUnitSnapshot: true,
+        costUnitTypeSnapshot: true,
+      },
+    });
+
+    if (!inventoryItem?.costPerUnitSnapshot || !inventoryItem.costUnitTypeSnapshot) {
+      throw new Error(
+        "The selected inventory item is missing its receipt cost snapshot.",
+      );
+    }
+
+    snapshot = {
+      costPerUnitSnapshot: inventoryItem.costPerUnitSnapshot,
+      costUnitTypeSnapshot: inventoryItem.costUnitTypeSnapshot,
+    };
+  } else if (args.lotId) {
+    const lotInventory = await db.query.inventoryItems.findMany({
+      where: and(
+        eq(inventoryItems.productId, args.productId),
+        eq(inventoryItems.lotId, args.lotId),
+      ),
+      columns: {
+        costPerUnitSnapshot: true,
+        costUnitTypeSnapshot: true,
+      },
+    });
+
+    snapshot = await loadDistinctSnapshots(
+      lotInventory.filter(
+        item => item.costPerUnitSnapshot != null && item.costUnitTypeSnapshot != null,
+      ) as Array<{
+        costPerUnitSnapshot: string;
+        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+      }>,
+    );
+  } else {
+    const allocations = await db.query.salesOrderLineAllocations.findMany({
+      where: eq(salesOrderLineAllocations.salesOrderLineId, args.salesOrderLineId),
+      with: {
+        inventoryItem: {
+          columns: {
+            costPerUnitSnapshot: true,
+            costUnitTypeSnapshot: true,
+          },
+        },
+      },
+    });
+
+    snapshot = await loadDistinctSnapshots(
+      allocations
+        .map(allocation => allocation.inventoryItem)
+        .filter(
+          item =>
+            item?.costPerUnitSnapshot != null &&
+            item?.costUnitTypeSnapshot != null,
+        ) as Array<{
+          costPerUnitSnapshot: string;
+          costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+        }>,
+    );
+  }
+
+  const costPerUnit = Number(snapshot.costPerUnitSnapshot ?? "0");
+  if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+    throw new Error("Invalid inventory cost snapshot on the selected fulfillment.");
+  }
+
+  const costAmount =
+    snapshot.costUnitTypeSnapshot === "fixed_case"
+      ? args.quantityFulfilled * costPerUnit
+      : (args.weightLbs ?? 0) * costPerUnit;
+
+  if (snapshot.costUnitTypeSnapshot === "catch_weight" && args.weightLbs == null) {
+    throw new Error(
+      "Catch-weight fulfillment requires billed weight so outbound cost can be captured accurately.",
+    );
+  }
+
+  return {
+    costPerUnitSnapshot: snapshot.costPerUnitSnapshot,
+    costUnitTypeSnapshot: snapshot.costUnitTypeSnapshot,
+    costAmountSnapshot: toFixedCostAmount(costAmount),
+  };
+}
+
 function getAllocationWeightForFulfillmentLink(fulfillment: {
   weightLbs?: string | null;
   inventoryItem?: {
@@ -1714,6 +1858,14 @@ export async function recordSalesOrderFulfillment(input: {
       fulfilledAt,
       notes: input.notes ?? null,
       inventoryItemId: input.inventoryItemId ?? null,
+      ...(await resolveFulfillmentCostSnapshot({
+        salesOrderLineId: input.salesOrderLineId,
+        productId: matchingLine.productId,
+        quantityFulfilled,
+        weightLbs: weight,
+        inventoryItemId: input.inventoryItemId ?? null,
+        lotId: input.lotId ?? null,
+      })),
       lotId: input.lotId ?? null,
     })
     .returning();

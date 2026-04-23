@@ -15,7 +15,7 @@ Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack live
 | Data fetching | TanStack Query v5, TanStack Table v8 |
 | Forms | React Hook Form + Zod |
 | Email | [Resend](https://resend.com) + React Email |
-| Charts / PDF | Recharts, jsPDF + jspdf-autotable |
+| Charts / PDF | Recharts, @react-pdf/renderer |
 | File storage | [Cloudflare R2](https://developers.cloudflare.com/r2/) |
 | Deployment | [Vercel](https://vercel.com) |
 
