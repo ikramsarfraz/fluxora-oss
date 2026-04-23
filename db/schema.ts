@@ -104,6 +104,7 @@ export const fileCategoryEnum = pgEnum("file_category", [
   "supplier_invoice_attachment",
   "sales_invoice_pdf",
   "sales_invoice_attachment",
+  "sales_order_attachment",
   "other",
 ]);
 
@@ -1414,6 +1415,28 @@ export const supplierInvoiceAttachments = pgTable(
       columns: [table.supplierInvoiceId, table.fileId],
     }),
     index("supplier_invoice_attachments_file_id_idx").on(table.fileId),
+  ],
+);
+
+export const salesOrderAttachments = pgTable(
+  "sales_order_attachments",
+  {
+    salesOrderId: uuid("sales_order_id")
+      .notNull()
+      .references(() => salesOrders.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    primaryKey({
+      name: "sales_order_attachments_pkey",
+      columns: [table.salesOrderId, table.fileId],
+    }),
+    index("sales_order_attachments_file_id_idx").on(table.fileId),
   ],
 );
 

@@ -12,9 +12,11 @@ import {
   getSalesOrdersAction,
   markSalesOrderLineShortShippedAction,
   removeSalesOrderLineAllocationAction,
+  removeSalesOrderAttachmentAction,
   recordPaymentForSalesOrderInvoiceAction,
   recordSalesOrderFulfillmentAction,
   reverseSalesOrderFulfillmentAction,
+  uploadSalesOrderAttachmentAction,
   updateSalesOrderStatusAction,
   updateSalesOrderAction,
   updateSalesOrderNotesAction,
@@ -256,6 +258,36 @@ export function useGenerateInvoiceForSalesOrder() {
         queryKey: queryKeys.salesOrders.activity(variables.salesOrderId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
+    },
+  });
+}
+
+export function useUploadSalesOrderAttachment(salesOrderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("salesOrderId", salesOrderId);
+      form.append("file", file);
+      return uploadSalesOrderAttachmentAction(form);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.detail(salesOrderId),
+      });
+    },
+  });
+}
+
+export function useRemoveSalesOrderAttachment(salesOrderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileId: string) =>
+      removeSalesOrderAttachmentAction({ salesOrderId, fileId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.salesOrders.detail(salesOrderId),
+      });
     },
   });
 }

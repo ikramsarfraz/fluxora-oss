@@ -16,10 +16,10 @@ import {
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildSupplierInvoiceObjectKey,
-  deleteFileBytes,
-  readFileBytes,
-  saveFileBytes,
-} from "@/lib/files/local-storage";
+  deleteFile,
+  downloadFile,
+  uploadFile,
+} from "@/lib/uploads/r2";
 import { parsePersistedCaseWeights } from "@/lib/supplier-invoices/case-weights";
 
 import { getCurrentPortalUser } from "./portal-users";
@@ -1048,7 +1048,7 @@ export async function uploadSupplierInvoiceAttachment(
     // orphan byte blob on disk that's unreferenced by any DB row -- safer
     // than an orphan DB row pointing at missing bytes. Cleanup on failure:
     try {
-      await saveFileBytes({ objectKey, bytes: input.bytes });
+      await uploadFile({ objectKey, body: input.bytes, contentType: mimeType ?? "application/octet-stream", contentLength: input.bytes.byteLength });
     } catch (err) {
       // Bubble up; the transaction will roll back and the bytes (if any
       // partial write happened) become orphaned but unreferenced.
@@ -1103,7 +1103,7 @@ export async function removeSupplierInvoiceAttachment(input: {
     });
   });
 
-  await deleteFileBytes(attachment.file.objectKey);
+  await deleteFile(attachment.file.objectKey);
 }
 
 /**
@@ -1129,7 +1129,7 @@ export async function getSupplierInvoiceAttachmentDownload(args: {
   });
   if (!attachment) throw new Error("Attachment not found.");
 
-  const bytes = await readFileBytes(attachment.file.objectKey);
+  const bytes = await downloadFile(attachment.file.objectKey);
   return {
     bytes,
     mimeType: attachment.file.mimeType ?? "application/octet-stream",

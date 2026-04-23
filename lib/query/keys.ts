@@ -72,4 +72,8 @@ export const queryKeys = {
     all: ["expenses"] as const,
     detail: (id: string) => ["expenses", id] as const,
   },
+  tenant: {
+    branding: ["tenant", "branding"] as const,
+    logoUrl: ["tenant", "branding", "logo-url"] as const,
+  },
 } as const;

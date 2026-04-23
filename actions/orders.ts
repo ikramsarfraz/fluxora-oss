@@ -9,10 +9,13 @@ import {
   getSalesOrderLineAllocationEditor,
   getSalesOrderById,
   getSalesOrders,
+  getSalesOrderAttachmentDownload,
   markSalesOrderLineShortShipped,
   removeSalesOrderLineAllocation,
+  removeSalesOrderAttachment,
   recordSalesOrderFulfillment,
   reverseSalesOrderFulfillment,
+  uploadSalesOrderAttachment,
   updateSalesOrderStatus,
   updateSalesOrder,
   updateSalesOrderNotes,
@@ -116,4 +119,38 @@ export async function recordPaymentForSalesOrderInvoiceAction(
   input: Parameters<typeof recordPaymentForSalesOrderInvoice>[0],
 ) {
   return await recordPaymentForSalesOrderInvoice(input);
+}
+
+export async function uploadSalesOrderAttachmentAction(
+  formData: FormData,
+): Promise<{ fileId: string }> {
+  const salesOrderId = formData.get("salesOrderId");
+  const file = formData.get("file");
+  if (typeof salesOrderId !== "string" || !salesOrderId) {
+    throw new Error("Missing salesOrderId.");
+  }
+  if (!(file instanceof File)) {
+    throw new Error("Missing file.");
+  }
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return uploadSalesOrderAttachment({
+    salesOrderId,
+    originalFilename: file.name,
+    mimeType: file.type || null,
+    bytes,
+  });
+}
+
+export async function removeSalesOrderAttachmentAction(input: {
+  salesOrderId: string;
+  fileId: string;
+}) {
+  return removeSalesOrderAttachment(input);
+}
+
+export async function getSalesOrderAttachmentDownloadAction(args: {
+  salesOrderId: string;
+  fileId: string;
+}) {
+  return getSalesOrderAttachmentDownload(args);
 }

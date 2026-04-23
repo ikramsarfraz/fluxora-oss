@@ -1,18 +1,28 @@
+import crypto from "node:crypto";
+
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
   customerProductPrices,
   customers,
+  files,
   inventoryItems,
   lots,
   products,
   productUnits,
+  salesOrderAttachments,
   salesOrderLineAllocations,
   salesOrderFulfillments,
   salesOrderLines,
   salesOrders,
 } from "@/db/schema";
+import {
+  buildSalesOrderObjectKey,
+  deleteFile,
+  downloadFile,
+  uploadFile,
+} from "@/lib/uploads/r2";
 import {
   markInventoryItemAllocated,
   markInventoryItemsAllocated,
@@ -733,6 +743,16 @@ export async function getSalesOrderById(id: string) {
         with: {
           payments: true,
         },
+      },
+      attachments: {
+        with: {
+          file: {
+            with: {
+              uploadedByUser: true,
+            },
+          },
+        },
+        orderBy: (a, { asc }) => [asc(a.createdAt)],
       },
     },
   });
@@ -2080,4 +2100,212 @@ export async function reverseSalesOrderFulfillment(input: {
       salesOrder: true,
     },
   });
+}
+
+// -------------------- Attachments --------------------
+
+const MAX_ORDER_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_ORDER_ATTACHMENT_FILENAME_LENGTH = 255;
+const ALLOWED_ORDER_ATTACHMENT_EXTENSIONS = new Set([
+  "pdf", "png", "jpg", "jpeg", "webp", "heic",
+  "csv", "txt", "doc", "docx", "xls", "xlsx",
+]);
+
+function orderAttachmentExtension(filename: string): string | null {
+  const dot = filename.lastIndexOf(".");
+  if (dot < 0 || dot === filename.length - 1) return null;
+  const ext = filename.slice(dot + 1).toLowerCase();
+  if (!/^[a-z0-9]{1,16}$/.test(ext)) return null;
+  if (!ALLOWED_ORDER_ATTACHMENT_EXTENSIONS.has(ext)) return null;
+  return ext;
+}
+
+
+async function loadSalesOrderForAttachment(salesOrderId: string) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  const order = await db.query.salesOrders.findFirst({
+    where: and(
+      eq(salesOrders.id, salesOrderId),
+      eq(salesOrders.tenantId, tenant.id),
+    ),
+    columns: { id: true, orderNumber: true },
+  });
+  if (!order) throw new Error("Sales order not found.");
+  return { tenant, currentUser, order };
+}
+
+export type UploadSalesOrderAttachmentInput = {
+  salesOrderId: string;
+  originalFilename: string;
+  mimeType: string | null;
+  bytes: Buffer;
+};
+
+export async function uploadSalesOrderAttachment(
+  input: UploadSalesOrderAttachmentInput,
+) {
+  const { tenant, currentUser, order } = await loadSalesOrderForAttachment(
+    input.salesOrderId,
+  );
+
+  if (!input.bytes || input.bytes.byteLength === 0) {
+    throw new Error("Uploaded file is empty.");
+  }
+  if (input.bytes.byteLength > MAX_ORDER_ATTACHMENT_BYTES) {
+    throw new Error(
+      `File is too large. Maximum is ${MAX_ORDER_ATTACHMENT_BYTES / (1024 * 1024)} MB.`,
+    );
+  }
+
+  const originalFilename = input.originalFilename.trim();
+  if (!originalFilename) throw new Error("File must have a name.");
+  if (originalFilename.length > MAX_ORDER_ATTACHMENT_FILENAME_LENGTH) {
+    throw new Error("Filename is too long.");
+  }
+  if (/[\u0000-\u001F\u007F]/.test(originalFilename)) {
+    throw new Error("Filename contains invalid characters.");
+  }
+
+  const extension = orderAttachmentExtension(originalFilename);
+  if (!extension) {
+    throw new Error(
+      "Unsupported file type. Allowed: PDF, PNG, JPG, JPEG, WEBP, HEIC, CSV, TXT, DOC, DOCX, XLS, XLSX.",
+    );
+  }
+
+  const mimeType =
+    input.mimeType?.trim().slice(0, 255) || null;
+
+  const checksum = crypto
+    .createHash("sha256")
+    .update(input.bytes)
+    .digest("hex");
+
+  return await db.transaction(async tx => {
+    const [fileRow] = await tx
+      .insert(files)
+      .values({
+        tenantId: tenant.id,
+        category: "sales_order_attachment",
+        storageProvider: "r2",
+        status: "ready",
+        objectKey: `pending/${crypto.randomUUID()}`,
+        bucket: process.env.R2_BUCKET_NAME ?? "erp-r2",
+        originalFilename,
+        mimeType,
+        extension,
+        sizeBytes: input.bytes.byteLength,
+        checksumSha256: checksum,
+        uploadedByUserId: currentUser.id,
+      })
+      .returning();
+
+    const objectKey = buildSalesOrderObjectKey({
+      tenantId: tenant.id,
+      salesOrderId: order.id,
+      fileId: fileRow.id,
+      extension,
+    });
+
+    await tx
+      .update(files)
+      .set({ objectKey })
+      .where(eq(files.id, fileRow.id));
+
+    await tx.insert(salesOrderAttachments).values({
+      salesOrderId: order.id,
+      fileId: fileRow.id,
+    });
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "file_uploaded",
+      entityTable: "sales_order_attachments",
+      entityId: fileRow.id,
+      entityLabel: originalFilename,
+      contextJson: JSON.stringify({ salesOrderId: order.id }),
+    });
+
+    await uploadFile({
+      objectKey,
+      body: input.bytes,
+      contentType: mimeType ?? "application/octet-stream",
+      contentLength: input.bytes.byteLength,
+    });
+
+    return { fileId: fileRow.id };
+  });
+}
+
+export async function removeSalesOrderAttachment(input: {
+  salesOrderId: string;
+  fileId: string;
+}) {
+  const { tenant, currentUser, order } = await loadSalesOrderForAttachment(
+    input.salesOrderId,
+  );
+
+  const attachment = await db.query.salesOrderAttachments.findFirst({
+    where: and(
+      eq(salesOrderAttachments.salesOrderId, order.id),
+      eq(salesOrderAttachments.fileId, input.fileId),
+    ),
+    with: { file: true },
+  });
+  if (!attachment) throw new Error("Attachment not found.");
+
+  const removedFilename =
+    attachment.file.originalFilename ?? "attachment";
+
+  await db.transaction(async tx => {
+    await tx
+      .delete(salesOrderAttachments)
+      .where(
+        and(
+          eq(salesOrderAttachments.salesOrderId, order.id),
+          eq(salesOrderAttachments.fileId, input.fileId),
+        ),
+      );
+    await tx.delete(files).where(eq(files.id, input.fileId));
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "file_deleted",
+      entityTable: "sales_order_attachments",
+      entityId: input.fileId,
+      entityLabel: removedFilename,
+      contextJson: JSON.stringify({ salesOrderId: order.id }),
+    });
+  });
+
+  await deleteFile(attachment.file.objectKey);
+}
+
+export async function getSalesOrderAttachmentDownload(args: {
+  salesOrderId: string;
+  fileId: string;
+}) {
+  const { order } = await loadSalesOrderForAttachment(args.salesOrderId);
+
+  const attachment = await db.query.salesOrderAttachments.findFirst({
+    where: and(
+      eq(salesOrderAttachments.salesOrderId, order.id),
+      eq(salesOrderAttachments.fileId, args.fileId),
+    ),
+    with: { file: true },
+  });
+  if (!attachment) throw new Error("Attachment not found.");
+
+  const bytes = await downloadFile(attachment.file.objectKey);
+  return {
+    bytes,
+    mimeType: attachment.file.mimeType ?? "application/octet-stream",
+    originalFilename: attachment.file.originalFilename ?? "attachment",
+    sizeBytes: attachment.file.sizeBytes ?? bytes.byteLength,
+  };
 }

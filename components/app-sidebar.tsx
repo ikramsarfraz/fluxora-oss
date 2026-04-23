@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useTenantLogoUrl } from "@/hooks/use-tenant-branding";
 import { can, type Permission } from "@/lib/auth/permissions";
 
 type NavItem = {
@@ -159,6 +160,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const { data: currentUser } = useCurrentPortalUser();
   const role = currentUser?.role ?? null;
+  const { data: tenantLogoUrl } = useTenantLogoUrl();
 
   const visibleGroups = navMain
     .map(group => ({
@@ -181,10 +183,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 aria-label="Home"
                 title="Home"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/prime-logo.png"
-                  alt="Acme Distribution LLC"
-                  className="h-8 w-auto"
+                  src={tenantLogoUrl ?? "/prime-logo.png"}
+                  alt="Company logo"
+                  className="h-8 w-auto object-contain"
                 />
               </Link>
             </SidebarMenuButton>

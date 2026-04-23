@@ -26,6 +26,7 @@ import {
   salesOrderFulfillments,
   salesOrderLines,
   salesOrders,
+  salesOrderAttachments,
   supplierInvoiceAttachments,
   supplierInvoiceLines,
   supplierInvoicePayments,
@@ -504,6 +505,7 @@ export const salesOrdersRelations = relations(salesOrders, ({ one, many }) => ({
   lines: many(salesOrderLines),
   fulfillments: many(salesOrderFulfillments),
   invoices: many(salesInvoices),
+  attachments: many(salesOrderAttachments),
   tenant: one(tenants, {
     fields: [salesOrders.tenantId],
     references: [tenants.id],
@@ -689,8 +691,23 @@ export const filesRelations = relations(files, ({ one, many }) => ({
     relationName: "files_archived_by_user",
   }),
   supplierInvoiceAttachments: many(supplierInvoiceAttachments),
+  salesOrderAttachments: many(salesOrderAttachments),
   salesInvoiceFiles: many(salesInvoiceFiles),
 }));
+
+export const salesOrderAttachmentsRelations = relations(
+  salesOrderAttachments,
+  ({ one }) => ({
+    salesOrder: one(salesOrders, {
+      fields: [salesOrderAttachments.salesOrderId],
+      references: [salesOrders.id],
+    }),
+    file: one(files, {
+      fields: [salesOrderAttachments.fileId],
+      references: [files.id],
+    }),
+  }),
+);
 
 export const supplierInvoiceAttachmentsRelations = relations(
   supplierInvoiceAttachments,
