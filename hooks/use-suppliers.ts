@@ -2,9 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createSupplierAction,
   deleteSupplierAction,
   getSupplierByIdAction,
   getSuppliersAction,
+  updateSupplierAction,
 } from "@/actions/suppliers";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -33,6 +35,41 @@ export function useDeleteSupplier() {
     mutationFn: deleteSupplierAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
+    },
+  });
+}
+
+export function useCreateSupplier() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createSupplierAction,
+    onSuccess: result => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
+      if (result?.id) {
+        queryClient.setQueryData(
+          queryKeys.suppliers.detail(result.id),
+          result,
+        );
+      }
+    },
+  });
+}
+
+export function useUpdateSupplier() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateSupplierAction,
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.detail(variables.id),
+      });
+      // AP aging depends on supplier payment terms.
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.apAging,
+      });
     },
   });
 }

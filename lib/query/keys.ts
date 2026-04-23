@@ -18,6 +18,8 @@ export const queryKeys = {
   },
   dashboard: {
     summary: ["dashboard"] as const,
+    arAging: ["dashboard", "ar-aging"] as const,
+    apAging: ["dashboard", "ap-aging"] as const,
   },
   customers: {
     all: ["customers"] as const,

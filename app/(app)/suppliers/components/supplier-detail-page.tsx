@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 
 import { useSupplier, useDeleteSupplier } from "@/hooks/use-suppliers";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -26,8 +28,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
+import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-dialog";
+
+function formatPaymentTerms(netDays: number | null | undefined): string {
+  if (netDays == null) return "Net-0 (not set)";
+  if (netDays === 0) return "Net-0 (due on invoice date)";
+  return `Net-${netDays} (${netDays} day${netDays === 1 ? "" : "s"})`;
+}
+
 export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
   const router = useRouter();
+  const [editTermsOpen, setEditTermsOpen] = useState(false);
   const {
     data: supplier,
     isLoading,
@@ -75,6 +86,38 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           ) : null}
         </DetailGrid>
       </DetailSection>
+
+      <DetailSection
+        title="Payment terms"
+        description="Used to compute due dates for this supplier's invoices in AP aging."
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <DetailGrid>
+            <DetailField label="Terms">
+              <span className="tabular-nums">
+                {formatPaymentTerms(supplier.netDays)}
+              </span>
+            </DetailField>
+          </DetailGrid>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditTermsOpen(true)}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit payment terms
+          </Button>
+        </div>
+      </DetailSection>
+
+      <SupplierEditPaymentTermsDialog
+        supplierId={supplierId}
+        supplierName={supplier.name}
+        currentNetDays={supplier.netDays}
+        open={editTermsOpen}
+        onOpenChange={setEditTermsOpen}
+      />
 
       <DetailSection
         title="Danger Zone"

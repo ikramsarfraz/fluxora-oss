@@ -128,6 +128,24 @@ export function createColumns(actions: ColumnActions): ColumnDef<SupplierListIte
       },
     },
     {
+      id: "paymentTerms",
+      accessorKey: "netDays",
+      header: "Payment terms",
+      cell: ({ row }) => {
+        const netDays = row.original.netDays;
+        if (netDays == null) {
+          return (
+            <span className="text-muted-foreground">Net-0 (not set)</span>
+          );
+        }
+        return (
+          <span className="tabular-nums text-muted-foreground">
+            Net-{netDays}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: "createdAt",
       header: ({ column }) => {
         return (

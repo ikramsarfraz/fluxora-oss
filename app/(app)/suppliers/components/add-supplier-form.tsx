@@ -6,18 +6,13 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { api, endpoints, type Supplier } from "@/lib/api";
-import { queryKeys } from "@/lib/query/keys";
+import { useCreateSupplier } from "@/hooks/use-suppliers";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -29,36 +24,50 @@ const createSupplierSchema = z.object({
     .string()
     .transform(s => s.trim())
     .pipe(z.string().min(1, "Please enter a supplier name.")),
+  netDays: z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform(v => {
+      if (v === "" || v === null || v === undefined) return null;
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? Math.trunc(n) : null;
+    })
+    .pipe(
+      z
+        .number()
+        .int("Payment terms must be a whole number.")
+        .min(0, "Payment terms cannot be negative.")
+        .max(365, "Payment terms cannot exceed 365 days.")
+        .nullable(),
+    ),
 });
 
-type CreateSupplierValues = z.infer<typeof createSupplierSchema>;
+type CreateSupplierValues = z.input<typeof createSupplierSchema>;
+type CreateSupplierParsed = z.output<typeof createSupplierSchema>;
 
 export function AddSupplierForm() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
-  const form = useForm<CreateSupplierValues>({
+  const form = useForm<CreateSupplierValues, unknown, CreateSupplierParsed>({
     resolver: zodResolver(createSupplierSchema),
-    defaultValues: { name: "" },
+    defaultValues: { name: "", netDays: "" },
   });
 
-  const createSupplier = useMutation({
-    mutationFn: (body: { name: string }) =>
-      api.post<Supplier>(endpoints.suppliers.create(), body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
-      form.reset();
-      setError(null);
-      toast.success("Supplier added");
-      router.push("/suppliers");
-    },
-    onError: (e: Error) => setError(e.message),
-  });
+  const createSupplier = useCreateSupplier();
 
-  function onSubmit(data: CreateSupplierValues) {
+  function onSubmit(data: CreateSupplierParsed) {
     setError(null);
-    createSupplier.mutate({ name: data.name });
+    createSupplier.mutate(
+      { name: data.name, netDays: data.netDays },
+      {
+        onSuccess: () => {
+          form.reset();
+          toast.success("Supplier added");
+          router.push("/suppliers");
+        },
+        onError: (e: Error) => setError(e.message),
+      },
+    );
   }
 
   return (
@@ -87,6 +96,41 @@ export function AddSupplierForm() {
                 </Field>
               )}
             />
+
+            <Controller
+              name="netDays"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-supplier-net-days">
+                    Payment terms (net days)
+                  </FieldLabel>
+                  <Input
+                    id="form-add-supplier-net-days"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={365}
+                    step={1}
+                    placeholder="e.g. 30"
+                    value={field.value ?? ""}
+                    onChange={e => field.onChange(e.target.value)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                    aria-invalid={fieldState.invalid}
+                  />
+                  <FieldDescription>
+                    Days from invoice date until payment is due. Leave blank
+                    for Net-0 (due on invoice date). Common values: 0, 7, 15, 30.
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
             {error && (
               <div className="text-sm text-destructive" role="alert">
                 {error}

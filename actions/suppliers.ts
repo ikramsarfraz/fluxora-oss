@@ -1,9 +1,13 @@
 "use server";
 
 import {
+  createSupplier,
+  deleteSupplier,
   getSupplierById,
   getSuppliers,
-  deleteSupplier,
+  updateSupplier,
+  type CreateSupplierInput,
+  type UpdateSupplierInput,
 } from "@/services/suppliers";
 
 export async function getSuppliersAction() {
@@ -16,4 +20,12 @@ export async function getSupplierByIdAction(id: string) {
 
 export async function deleteSupplierAction(id: string) {
   return await deleteSupplier(id);
+}
+
+export async function createSupplierAction(input: CreateSupplierInput) {
+  return await createSupplier(input);
+}
+
+export async function updateSupplierAction(input: UpdateSupplierInput) {
+  return await updateSupplier(input);
 }

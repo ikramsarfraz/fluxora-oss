@@ -458,6 +458,11 @@ export const suppliers = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "restrict" }),
     name: varchar("name", { length: 255 }).notNull(),
+    /**
+     * Payment terms in days (net N). `null` means no terms are configured;
+     * AP aging falls back to Net-0 (invoice date) in that case.
+     */
+    netDays: integer("net_days"),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {

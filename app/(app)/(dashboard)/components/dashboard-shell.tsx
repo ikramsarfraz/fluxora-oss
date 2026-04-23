@@ -6,6 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
 
+import { ApAgingSection } from "./ap-aging-section";
+import { ArAgingSection } from "./ar-aging-section";
 import { InventorySection } from "./inventory-section";
 import { MetricCards } from "./metric-cards";
 import { PurchasingSection } from "./purchasing-section";
@@ -53,7 +55,9 @@ export function DashboardShell() {
     <div className="flex flex-col gap-8 pb-10">
       <MetricCards metrics={data.metrics} />
       <SalesSection sales={data.sales} />
+      <ArAgingSection />
       <PurchasingSection purchasing={data.purchasing} />
+      <ApAgingSection />
       <InventorySection inventory={data.inventory} />
     </div>
   );
