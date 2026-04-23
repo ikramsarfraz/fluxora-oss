@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment, type ReactNode } from "react";
 import {
   AlertTriangle,
   Calendar,
@@ -18,8 +19,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { DashboardMetrics } from "@/services/dashboard";
+import type { PortalUserRole } from "@/lib/auth/permissions";
+import {
+  isMetricVisible,
+  type DashboardMetricCard,
+} from "@/lib/dashboard/visibility";
 import { formatMoney } from "@/lib/utils/currency";
+import type { DashboardMetrics } from "@/services/dashboard";
 
 type MetricCardProps = {
   icon: LucideIcon;
@@ -61,63 +67,117 @@ function MetricCard({
   );
 }
 
-export function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
-  const expiringTone =
-    metrics.expiringLotsCount > 0 ? "warning" : "default";
+export function MetricCards({
+  metrics,
+  role,
+}: {
+  metrics: DashboardMetrics;
+  role: PortalUserRole;
+}) {
+  const expiringTone = metrics.expiringLotsCount > 0 ? "warning" : "default";
   const expiredTone = metrics.expiredLotsCount > 0 ? "danger" : "default";
+
+  const cards: Array<{ key: DashboardMetricCard; node: ReactNode }> = [
+    {
+      key: "sales7d",
+      node: (
+        <MetricCard
+          icon={TrendingUp}
+          label="Sales (last 7d)"
+          value={formatMoney(metrics.sales7d)}
+          helper="Non-void invoices, by invoice date."
+        />
+      ),
+    },
+    {
+      key: "sales30d",
+      node: (
+        <MetricCard
+          icon={Calendar}
+          label="Sales (last 30d)"
+          value={formatMoney(metrics.sales30d)}
+          helper="Non-void invoices, by invoice date."
+        />
+      ),
+    },
+    {
+      key: "purchases30d",
+      node: (
+        <MetricCard
+          icon={ReceiptText}
+          label="Purchases (last 30d)"
+          value={formatMoney(metrics.purchases30d)}
+          helper="Completed supplier invoices, by receive date."
+        />
+      ),
+    },
+    {
+      key: "unpaidCustomerBalance",
+      node: (
+        <MetricCard
+          icon={Wallet}
+          label="Unpaid customer balances"
+          value={formatMoney(metrics.unpaidCustomerBalance)}
+          helper="Open balance on non-void invoices."
+        />
+      ),
+    },
+    {
+      key: "unpaidSupplierBalance",
+      node: (
+        <MetricCard
+          icon={DollarSign}
+          label="Unpaid supplier balances"
+          value={formatMoney(metrics.unpaidSupplierBalance)}
+          helper="Balance due on completed supplier invoices."
+        />
+      ),
+    },
+    {
+      key: "inventoryValue",
+      node: (
+        <MetricCard
+          icon={Package}
+          label="Inventory value"
+          value={formatMoney(metrics.inventoryValue)}
+          helper="Active inventory valued at receipt price."
+        />
+      ),
+    },
+    {
+      key: "expiringLots",
+      node: (
+        <MetricCard
+          icon={Clock}
+          label="Expiring soon (7d)"
+          value={metrics.expiringLotsCount.toLocaleString()}
+          helper="Lots with active inventory expiring within 7 days."
+          tone={expiringTone}
+        />
+      ),
+    },
+    {
+      key: "expiredLots",
+      node: (
+        <MetricCard
+          icon={AlertTriangle}
+          label="Expired lots"
+          value={metrics.expiredLotsCount.toLocaleString()}
+          helper="Expired lots still holding active inventory."
+          tone={expiredTone}
+        />
+      ),
+    },
+  ];
+
+  const visible = cards.filter(card => isMetricVisible(role, card.key));
+  if (visible.length === 0) return null;
 
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-sm *:data-[slot=card]:border lg:px-6 @xl/main:grid-cols-2 @3xl/main:grid-cols-3 @5xl/main:grid-cols-4">
-      <MetricCard
-        icon={TrendingUp}
-        label="Sales (last 7d)"
-        value={formatMoney(metrics.sales7d)}
-        helper="Non-void invoices, by invoice date."
-      />
-      <MetricCard
-        icon={Calendar}
-        label="Sales (last 30d)"
-        value={formatMoney(metrics.sales30d)}
-        helper="Non-void invoices, by invoice date."
-      />
-      <MetricCard
-        icon={ReceiptText}
-        label="Purchases (last 30d)"
-        value={formatMoney(metrics.purchases30d)}
-        helper="Completed supplier invoices, by receive date."
-      />
-      <MetricCard
-        icon={Wallet}
-        label="Unpaid customer balances"
-        value={formatMoney(metrics.unpaidCustomerBalance)}
-        helper="Open balance on non-void invoices."
-      />
-      <MetricCard
-        icon={DollarSign}
-        label="Unpaid supplier balances"
-        value={formatMoney(metrics.unpaidSupplierBalance)}
-        helper="Balance due on completed supplier invoices."
-      />
-      <MetricCard
-        icon={Package}
-        label="Inventory value"
-        value={formatMoney(metrics.inventoryValue)}
-        helper="Active inventory valued at receipt price."
-      />
-      <MetricCard
-        icon={Clock}
-        label="Expiring soon (7d)"
-        value={metrics.expiringLotsCount.toLocaleString()}
-        helper="Lots with active inventory expiring within 7 days."
-        tone={expiringTone}
-      />
-      <MetricCard
-        icon={AlertTriangle}
-        label="Expired lots"
-        value={metrics.expiredLotsCount.toLocaleString()}
-        helper="Expired lots still holding active inventory."
-        tone={expiredTone}
-      />
+      {visible.map(card => (
+        <Fragment key={card.key}>{card.node}</Fragment>
+      ))}
     </div>
   );
 }

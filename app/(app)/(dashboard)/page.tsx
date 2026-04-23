@@ -5,29 +5,44 @@ import {
 } from "@tanstack/react-query";
 
 import { PageHeader } from "@/components/page-header";
+import type { PortalUserRole } from "@/lib/auth/permissions";
+import { isSectionVisible } from "@/lib/dashboard/visibility";
 import { queryKeys } from "@/lib/query/keys";
 import { getApAging, getArAging } from "@/services/aging";
 import { getDashboardSummary } from "@/services/dashboard";
+import { getCurrentPortalUser } from "@/services/portal-users";
 
 import { DashboardShell } from "./components/dashboard-shell";
 
 export default async function DashboardRoute() {
+  const portalUser = await getCurrentPortalUser();
+  const role = portalUser.role as PortalUserRole;
+
   const queryClient = new QueryClient();
 
-  await Promise.all([
+  const prefetches: Array<Promise<unknown>> = [
     queryClient.prefetchQuery({
       queryKey: queryKeys.dashboard.summary,
       queryFn: () => getDashboardSummary(),
     }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.dashboard.arAging,
-      queryFn: () => getArAging(),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.dashboard.apAging,
-      queryFn: () => getApAging(),
-    }),
-  ]);
+  ];
+  if (isSectionVisible(role, "arAging")) {
+    prefetches.push(
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.dashboard.arAging,
+        queryFn: () => getArAging(),
+      }),
+    );
+  }
+  if (isSectionVisible(role, "apAging")) {
+    prefetches.push(
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.dashboard.apAging,
+        queryFn: () => getApAging(),
+      }),
+    );
+  }
+  await Promise.all(prefetches);
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4">
@@ -38,7 +53,7 @@ export default async function DashboardRoute() {
         />
       </div>
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <DashboardShell />
+        <DashboardShell role={role} />
       </HydrationBoundary>
     </div>
   );

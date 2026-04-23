@@ -5,6 +5,8 @@ import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
+import type { PortalUserRole } from "@/lib/auth/permissions";
+import { isSectionVisible } from "@/lib/dashboard/visibility";
 
 import { ApAgingSection } from "./ap-aging-section";
 import { ArAgingSection } from "./ar-aging-section";
@@ -13,7 +15,7 @@ import { MetricCards } from "./metric-cards";
 import { PurchasingSection } from "./purchasing-section";
 import { SalesSection } from "./sales-section";
 
-export function DashboardShell() {
+export function DashboardShell({ role }: { role: PortalUserRole }) {
   const { data, isPending, isError, error } = useDashboardSummary();
 
   if (isPending) {
@@ -53,12 +55,18 @@ export function DashboardShell() {
 
   return (
     <div className="flex flex-col gap-8 pb-10">
-      <MetricCards metrics={data.metrics} />
-      <SalesSection sales={data.sales} />
-      <ArAgingSection />
-      <PurchasingSection purchasing={data.purchasing} />
-      <ApAgingSection />
-      <InventorySection inventory={data.inventory} />
+      <MetricCards metrics={data.metrics} role={role} />
+      {isSectionVisible(role, "sales") ? (
+        <SalesSection sales={data.sales} />
+      ) : null}
+      {isSectionVisible(role, "arAging") ? <ArAgingSection /> : null}
+      {isSectionVisible(role, "purchasing") ? (
+        <PurchasingSection purchasing={data.purchasing} />
+      ) : null}
+      {isSectionVisible(role, "apAging") ? <ApAgingSection /> : null}
+      {isSectionVisible(role, "inventory") ? (
+        <InventorySection inventory={data.inventory} />
+      ) : null}
     </div>
   );
 }
