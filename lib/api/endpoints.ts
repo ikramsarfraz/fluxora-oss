@@ -415,8 +415,7 @@ export const endpoints = {
     me: () => `${P.auth}/me`,
   },
   invitations: {
-    preview: (token: string) =>
-      `${P.invitations}/${encodeURIComponent(token)}`,
+    preview: (token: string) => `${P.invitations}/${encodeURIComponent(token)}`,
     accept: () => `${P.invitations}/accept`,
   },
   userInvitations: {
