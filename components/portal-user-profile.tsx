@@ -38,11 +38,13 @@ export type PortalUserProfileProps = {
     onResetPassword: () => void;
     resetPending: boolean;
   };
-  /** Admin user detail: activate/deactivate and password reset. */
+  /** Admin user detail: activate/deactivate, password reset, role change. */
   adminActions?: {
     isSelf: boolean;
     onToggleActive: () => void;
     onResetPassword: () => void;
+    /** When provided, renders a "Change role" button. Omit for the self view. */
+    onChangeRole?: () => void;
     togglePending: boolean;
     resetPending: boolean;
   };
@@ -153,6 +155,16 @@ export function PortalUserProfile({
             <Button type="button" variant="outline" asChild>
               <Link href={`/users`}>Cancel</Link>
             </Button>
+            {adminActions.onChangeRole ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-auto"
+                onClick={adminActions.onChangeRole}
+              >
+                Change role
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant={user.isActive ? "outline" : "destructive"}
@@ -166,7 +178,7 @@ export function PortalUserProfile({
                   : undefined
               }
               onClick={adminActions.onToggleActive}
-              className="ml-auto"
+              className={adminActions.onChangeRole ? "" : "ml-auto"}
             >
               {adminActions.togglePending
                 ? "Saving…"

@@ -7,6 +7,7 @@ import {
   inviteUserByAdmin,
   sendPasswordResetForUserByAdmin,
   setPortalUserActiveByAdmin,
+  setPortalUserRoleByAdmin,
   type PortalUserRole,
 } from "@/services/portal-users";
 import { listPendingInvitationsForAdmin } from "@/services/invitations";
@@ -44,6 +45,10 @@ export async function getPendingInvitationsAction() {
 
 export async function setUserActiveAction(id: string, isActive: boolean) {
   return await setPortalUserActiveByAdmin(id, isActive);
+}
+
+export async function setUserRoleAction(id: string, role: PortalUserRole) {
+  return await setPortalUserRoleByAdmin(id, role);
 }
 
 export async function sendUserPasswordResetAction(id: string) {

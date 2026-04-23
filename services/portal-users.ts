@@ -178,6 +178,49 @@ export async function setPortalUserActiveByAdmin(
 }
 
 /**
+ * Sets `portal_users.role` for a target user. Non-owner admins cannot assign
+ * or revoke the `owner` role, and admins cannot change their own role.
+ */
+export async function setPortalUserRoleByAdmin(
+  targetUserId: string,
+  role: PortalUserRole,
+): Promise<PortalUserDetail> {
+  const current = await requireAdminPortalUser();
+
+  if (current.id === targetUserId) {
+    throw new Error("You cannot change your own role.");
+  }
+
+  const target = await getUserById(targetUserId);
+  if (!target) {
+    throw new Error("User not found");
+  }
+
+  if (current.role !== "owner") {
+    if (role === "owner") {
+      throw new Error("Only an owner can grant the owner role.");
+    }
+    if (target.role === "owner") {
+      throw new Error("Only an owner can change an owner's role.");
+    }
+  }
+
+  await db
+    .update(portalUsers)
+    .set({
+      role,
+      updatedAt: new Date(),
+    })
+    .where(eq(portalUsers.id, targetUserId));
+
+  const updated = await getUserById(targetUserId);
+  if (!updated) {
+    throw new Error("Failed to load user after update");
+  }
+  return updated;
+}
+
+/**
  * Sends Better Auth password-reset email to the user&apos;s sign-in address.
  */
 export async function sendPasswordResetForUserByAdmin(

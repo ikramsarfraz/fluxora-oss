@@ -141,3 +141,56 @@ export function requirePermission(
     throw new Error(`Forbidden: ${getPermissionDeniedReason(permission)}`);
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* UI-facing metadata for the role / permission matrix                         */
+/* -------------------------------------------------------------------------- */
+
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  edit_order: "Edit sales orders",
+  confirm_order: "Confirm sales orders",
+  fulfill_order: "Record fulfillment",
+  short_ship_order: "Close lines short",
+  reverse_fulfillment: "Reverse fulfillment",
+  generate_invoice: "Generate invoices",
+  record_payment: "Record customer payments",
+  view_supplier_invoice: "View supplier invoices",
+  edit_supplier_invoice: "Edit draft supplier invoices",
+  complete_supplier_invoice: "Complete supplier receipts",
+  reverse_supplier_receipt: "Reverse supplier receipts",
+  record_supplier_payment: "Record supplier payments",
+  delete_supplier_invoice: "Delete draft supplier invoices",
+};
+
+export const ROLE_DESCRIPTIONS: Record<PortalUserRole, string> = {
+  owner: "Full access to every area of the ERP.",
+  admin: "Full access to every area of the ERP.",
+  sales:
+    "Sells to customers: quote, create, and confirm sales orders.",
+  warehouse:
+    "Runs the warehouse: fulfillment, short-ships, and receiving.",
+  accounting:
+    "Handles the books: invoicing, payments, and supplier invoices.",
+};
+
+export const ROLE_ORDER: readonly PortalUserRole[] = [
+  "owner",
+  "admin",
+  "sales",
+  "warehouse",
+  "accounting",
+];
+
+/** All permissions in display order. */
+export const ALL_PERMISSIONS: readonly Permission[] = [
+  ...ORDER_PERMISSIONS,
+  ...SUPPLIER_PERMISSIONS,
+];
+
+/** Returns the full permission list for a role, or `[]` if role is unknown. */
+export function permissionsForRole(
+  role: PortalUserRole | null | undefined,
+): readonly Permission[] {
+  if (!role) return [];
+  return ROLE_PERMISSIONS[role] ?? [];
+}

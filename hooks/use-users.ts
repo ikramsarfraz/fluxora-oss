@@ -8,7 +8,9 @@ import {
   inviteUserAction,
   sendUserPasswordResetAction,
   setUserActiveAction,
+  setUserRoleAction,
 } from "@/actions/users";
+import type { PortalUserRole } from "@/services/portal-users";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 
@@ -43,6 +45,19 @@ export function useSetUserActive() {
   return useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
       setUserActiveAction(id, isActive),
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(queryKeys.users.detail(variables.id), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    },
+  });
+}
+
+export function useSetUserRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: PortalUserRole }) =>
+      setUserRoleAction(id, role),
     onSuccess: (updated, variables) => {
       queryClient.setQueryData(queryKeys.users.detail(variables.id), updated);
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });

@@ -15,8 +15,11 @@ import { toast } from "sonner";
 
 import { createColumns, type UsersDirectoryRow } from "./columns";
 import { DataTable } from "./data-table";
+import { RolesPermissionsCard } from "./roles-permissions-card";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import type { PortalUserListItem } from "@/services/portal-users";
 import type { PendingInvitationListItem } from "@/services/invitations";
+import type { PortalUserRole } from "@/lib/auth/permissions";
 
 export default function Users() {
   const { data: users, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
@@ -26,6 +29,7 @@ export default function Users() {
     error: invitationsError,
     refetch: refetchInvitations,
   } = useUserInvitations();
+  const { data: currentUser } = useCurrentPortalUser();
 
   const handleDeleteUser = useCallback((user: PortalUserListItem) => {
     // TODO: Implement user deletion
@@ -124,6 +128,10 @@ export default function Users() {
           </Button>
         </EmptyState>
       )}
+
+      <RolesPermissionsCard
+        highlightRole={(currentUser?.role as PortalUserRole) ?? null}
+      />
     </section>
   );
 }

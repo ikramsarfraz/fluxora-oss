@@ -11,6 +11,7 @@ import {
   useSetUserActive,
   useUser,
 } from "@/hooks/use-users";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -22,7 +23,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
+import type { PortalUserRole } from "@/lib/auth/permissions";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
+
+import { RolesPermissionsCard } from "../components/roles-permissions-card";
+import { UserRoleDialog } from "../components/user-role-dialog";
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
@@ -30,10 +35,12 @@ export default function UserDetailPage() {
 
   const [toggleOpen, setToggleOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const [roleOpen, setRoleOpen] = useState(false);
 
   const { data: session } = authClient.useSession();
 
   const { data: user, isLoading, error: loadError } = useUser(userId);
+  const { data: currentUser } = useCurrentPortalUser();
 
   const toggleActive = useSetUserActive();
   const resetPassword = useSendUserPasswordReset();
@@ -81,10 +88,15 @@ export default function UserDetailPage() {
             setToggleOpen(true);
           },
           onResetPassword: () => setResetOpen(true),
+          onChangeRole: isSelf ? undefined : () => setRoleOpen(true),
           togglePending: toggleActive.isPending,
           resetPending: resetPassword.isPending,
         }}
       />
+
+      <div className="mt-6">
+        <RolesPermissionsCard highlightRole={user.role as PortalUserRole} />
+      </div>
 
       <AlertDialog open={toggleOpen} onOpenChange={setToggleOpen}>
         <AlertDialogContent>
@@ -162,6 +174,13 @@ export default function UserDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UserRoleDialog
+        user={user}
+        open={roleOpen}
+        onOpenChange={setRoleOpen}
+        currentRole={(currentUser?.role as PortalUserRole) ?? null}
+      />
     </>
   );
 }

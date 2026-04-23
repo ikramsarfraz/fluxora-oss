@@ -64,4 +64,12 @@ export const queryKeys = {
     allocationEditor: (orderId: string, lineId: string) =>
       ["sales-orders", orderId, "allocation-editor", lineId] as const,
   },
+  payments: {
+    all: ["payments"] as const,
+    detail: (id: string) => ["payments", id] as const,
+  },
+  expenses: {
+    all: ["expenses"] as const,
+    detail: (id: string) => ["expenses", id] as const,
+  },
 } as const;

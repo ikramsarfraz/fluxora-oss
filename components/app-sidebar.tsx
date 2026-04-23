@@ -29,6 +29,8 @@ import {
   ShoppingCart,
   Layers,
   Receipt,
+  Wallet,
+  CreditCard,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
@@ -120,6 +122,21 @@ const navMain: NavGroup[] = [
         url: "/supplier-invoices",
         icon: Receipt,
         permission: "view_supplier_invoice",
+      },
+    ],
+  },
+  {
+    title: "Financials",
+    items: [
+      {
+        title: "Payments",
+        url: "/payments",
+        icon: Wallet,
+      },
+      {
+        title: "Expenses",
+        url: "/expenses",
+        icon: CreditCard,
       },
     ],
   },
