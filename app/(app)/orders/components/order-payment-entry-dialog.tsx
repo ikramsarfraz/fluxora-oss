@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
@@ -105,6 +105,32 @@ export function OrderPaymentEntryDialog({
   onOpenChange,
   order,
 }: OrderPaymentEntryDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Record payment</DialogTitle>
+          <DialogDescription>
+            Apply a payment to an open invoice from this sales order. Paid
+            amount, balance due, and payment status will refresh automatically.
+          </DialogDescription>
+        </DialogHeader>
+
+        {open ? (
+          <PaymentBody order={order} onClose={() => onOpenChange(false)} />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PaymentBody({
+  order,
+  onClose,
+}: {
+  order: SalesOrderDetail;
+  onClose: () => void;
+}) {
   const recordPayment = useRecordPaymentForSalesOrderInvoice();
   const { data: currentUser } = useCurrentPortalUser();
   const canRecord = can(currentUser?.role, "record_payment");
@@ -122,20 +148,12 @@ export function OrderPaymentEntryDialog({
   const {
     control,
     handleSubmit,
-    reset,
     register,
     setValue,
     formState: { errors },
   } = useForm<PaymentFormValues>({
     defaultValues: makeDefaultValues(order),
   });
-
-  useEffect(() => {
-    if (open) {
-      reset(makeDefaultValues(order));
-      setSubmitError(null);
-    }
-  }, [open, order, reset]);
 
   const selectedInvoiceId = useWatch({ control, name: "salesInvoiceId" });
   const paymentMethod = useWatch({ control, name: "paymentMethod" });
@@ -160,7 +178,7 @@ export function OrderPaymentEntryDialog({
         notes: values.notes.trim() || undefined,
       });
       toast.success("Payment recorded.");
-      onOpenChange(false);
+      onClose();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not record payment.";
@@ -170,210 +188,195 @@ export function OrderPaymentEntryDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Record payment</DialogTitle>
-          <DialogDescription>
-            Apply a payment to an open invoice from this sales order. Paid
-            amount, balance due, and payment status will refresh automatically.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {submitError ? (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Could not record payment</AlertTitle>
+          <AlertDescription>{submitError}</AlertDescription>
+        </Alert>
+      ) : recordDeniedReason ? (
+        <Alert>
+          <AlertCircle />
+          <AlertTitle>Recording payment is not available</AlertTitle>
+          <AlertDescription>{recordDeniedReason}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        {submitError ? (
-          <Alert variant="destructive">
-            <AlertCircle />
-            <AlertTitle>Could not record payment</AlertTitle>
-            <AlertDescription>{submitError}</AlertDescription>
-          </Alert>
-        ) : recordDeniedReason ? (
-          <Alert>
-            <AlertCircle />
-            <AlertTitle>Recording payment is not available</AlertTitle>
-            <AlertDescription>{recordDeniedReason}</AlertDescription>
-          </Alert>
-        ) : null}
+      {openInvoices.length === 0 ? (
+        <Alert>
+          <Receipt />
+          <AlertTitle>No open invoices</AlertTitle>
+          <AlertDescription>
+            This order does not have an invoice with a remaining balance due.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={event => void handleSubmit(onSubmit)(event)}
+        >
+          <Field>
+            <FieldLabel htmlFor="payment-sales-invoice">Invoice</FieldLabel>
+            <Controller
+              control={control}
+              name="salesInvoiceId"
+              rules={{ required: "Select an invoice." }}
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={value => {
+                    field.onChange(value);
+                    const invoice = invoiceLookup.get(value);
+                    if (invoice) {
+                      setValue(
+                        "amount",
+                        (parseFloat(invoice.balanceDue ?? "0") || 0).toFixed(2),
+                        { shouldDirty: true, shouldValidate: true },
+                      );
+                    }
+                  }}
+                >
+                  <SelectTrigger id="payment-sales-invoice">
+                    <SelectValue placeholder="Select invoice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openInvoices.map(invoice => (
+                      <SelectItem key={invoice.id} value={invoice.id}>
+                        {invoice.invoiceNumber} · Due{" "}
+                        {formatMoney(invoice.numericBalanceDue)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <FieldError errors={[errors.salesInvoiceId]} />
+            {selectedInvoice ? (
+              <FieldDescription>
+                {selectedInvoice.status.replaceAll("_", " ")} · Dated{" "}
+                {formatDisplayDate(selectedInvoice.invoiceDate)} · Balance due{" "}
+                {formatMoney(selectedBalanceDue)}
+              </FieldDescription>
+            ) : null}
+          </Field>
 
-        {openInvoices.length === 0 ? (
-          <Alert>
-            <Receipt />
-            <AlertTitle>No open invoices</AlertTitle>
-            <AlertDescription>
-              This order does not have an invoice with a remaining balance due.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={event => void handleSubmit(onSubmit)(event)}
-          >
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="payment-sales-invoice">Invoice</FieldLabel>
+              <FieldLabel htmlFor="payment-date">Payment date</FieldLabel>
+              <Input
+                id="payment-date"
+                type="date"
+                {...register("paymentDate", {
+                  required: "Enter a payment date.",
+                })}
+              />
+              <FieldError errors={[errors.paymentDate]} />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="payment-amount">Amount</FieldLabel>
+              <Input
+                id="payment-amount"
+                inputMode="decimal"
+                placeholder="0.00"
+                {...register("amount", {
+                  required: "Enter a payment amount.",
+                  validate: value => {
+                    const amount = Number(value);
+                    if (!Number.isFinite(amount) || amount <= 0) {
+                      return "Payment amount must be greater than 0.";
+                    }
+                    if (!selectedInvoice) return "Select an invoice.";
+                    if (amount - selectedBalanceDue > 0.01) {
+                      return `Amount cannot exceed ${formatMoney(selectedBalanceDue)}.`;
+                    }
+                    return true;
+                  },
+                })}
+              />
+              <FieldError errors={[errors.amount]} />
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="payment-method">Payment method</FieldLabel>
               <Controller
                 control={control}
-                name="salesInvoiceId"
-                rules={{ required: "Select an invoice." }}
+                name="paymentMethod"
+                rules={{ required: "Select a payment method." }}
                 render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={value => {
-                      field.onChange(value);
-                      const invoice = invoiceLookup.get(value);
-                      if (invoice) {
-                        setValue(
-                          "amount",
-                          (parseFloat(invoice.balanceDue ?? "0") || 0).toFixed(2),
-                          { shouldDirty: true, shouldValidate: true },
-                        );
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="payment-sales-invoice">
-                      <SelectValue placeholder="Select invoice" />
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="payment-method">
+                      <SelectValue placeholder="Select method" />
                     </SelectTrigger>
                     <SelectContent>
-                      {openInvoices.map(invoice => (
-                        <SelectItem key={invoice.id} value={invoice.id}>
-                          {invoice.invoiceNumber} · Due {formatMoney(invoice.numericBalanceDue)}
+                      {PAYMENT_METHOD_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 )}
               />
-              <FieldError errors={[errors.salesInvoiceId]} />
-              {selectedInvoice ? (
-                <FieldDescription>
-                  {selectedInvoice.status.replaceAll("_", " ")} · Dated{" "}
-                  {formatDisplayDate(selectedInvoice.invoiceDate)} · Balance due{" "}
-                  {formatMoney(selectedBalanceDue)}
-                </FieldDescription>
-              ) : null}
+              <FieldError errors={[errors.paymentMethod]} />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="payment-date">Payment date</FieldLabel>
-                <Input
-                  id="payment-date"
-                  type="date"
-                  {...register("paymentDate", {
-                    required: "Enter a payment date.",
-                  })}
-                />
-                <FieldError errors={[errors.paymentDate]} />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="payment-amount">Amount</FieldLabel>
-                <Input
-                  id="payment-amount"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  {...register("amount", {
-                    required: "Enter a payment amount.",
-                    validate: value => {
-                      const amount = Number(value);
-                      if (!Number.isFinite(amount) || amount <= 0) {
-                        return "Payment amount must be greater than 0.";
-                      }
-                      if (!selectedInvoice) return "Select an invoice.";
-                      if (amount - selectedBalanceDue > 0.01) {
-                        return `Amount cannot exceed ${formatMoney(selectedBalanceDue)}.`;
-                      }
-                      return true;
-                    },
-                  })}
-                />
-                <FieldError errors={[errors.amount]} />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="payment-method">Payment method</FieldLabel>
-                <Controller
-                  control={control}
-                  name="paymentMethod"
-                  rules={{ required: "Select a payment method." }}
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger id="payment-method">
-                        <SelectValue placeholder="Select method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_METHOD_OPTIONS.map(option => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <FieldError errors={[errors.paymentMethod]} />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="payment-reference">
-                  {paymentMethod === "check" ? "Reference number" : "Reference number"}
-                </FieldLabel>
-                <Input
-                  id="payment-reference"
-                  placeholder="Optional reference"
-                  {...register("referenceNumber")}
-                />
-              </Field>
-            </div>
-
             <Field>
-              <FieldLabel htmlFor="payment-check-number">
-                Check number
+              <FieldLabel htmlFor="payment-reference">
+                {paymentMethod === "check" ? "Reference number" : "Reference number"}
               </FieldLabel>
               <Input
-                id="payment-check-number"
-                placeholder="Optional check number"
-                {...register("checkNumber")}
-              />
-              <FieldDescription>
-                Useful for check or bank-referenced payments.
-              </FieldDescription>
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="payment-notes">Notes</FieldLabel>
-              <Textarea
-                id="payment-notes"
-                rows={3}
-                placeholder="Optional note about remittance, customer communication, or applied detail…"
-                {...register("notes")}
+                id="payment-reference"
+                placeholder="Optional reference"
+                {...register("referenceNumber")}
               />
             </Field>
+          </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  recordPayment.isPending ||
-                  openInvoices.length === 0 ||
-                  !canRecord
-                }
-                title={recordDeniedReason ?? undefined}
-              >
-                <Receipt className="h-4 w-4" />
-                {recordPayment.isPending ? "Recording…" : "Record payment"}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+          <Field>
+            <FieldLabel htmlFor="payment-check-number">Check number</FieldLabel>
+            <Input
+              id="payment-check-number"
+              placeholder="Optional check number"
+              {...register("checkNumber")}
+            />
+            <FieldDescription>
+              Useful for check or bank-referenced payments.
+            </FieldDescription>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="payment-notes">Notes</FieldLabel>
+            <Textarea
+              id="payment-notes"
+              rows={3}
+              placeholder="Optional note about remittance, customer communication, or applied detail…"
+              {...register("notes")}
+            />
+          </Field>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                recordPayment.isPending ||
+                openInvoices.length === 0 ||
+                !canRecord
+              }
+              title={recordDeniedReason ?? undefined}
+            >
+              <Receipt className="h-4 w-4" />
+              {recordPayment.isPending ? "Recording…" : "Record payment"}
+            </Button>
+          </DialogFooter>
+        </form>
+      )}
+    </>
   );
 }

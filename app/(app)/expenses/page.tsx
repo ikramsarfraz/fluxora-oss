@@ -152,7 +152,7 @@ export default function Expenses() {
       monthOptions,
       supplierOptions,
     };
-  }, [invoices, expenses, dateFilterMode, selectedMonth, fromDate, toDate, selectedSupplierId]);
+  }, [invoices, expenses, suppliers, dateFilterMode, selectedMonth, fromDate, toDate, selectedSupplierId]);
 
   const isLoading = tab === "supplier" ? invoicesLoading : invoicesLoading || expensesLoading;
   const error = tab === "supplier" ? invoicesError : invoicesError ?? expensesError;
@@ -164,7 +164,7 @@ export default function Expenses() {
     <div className="expenses-page">
       <header className="expenses-hero">
         <h1 className="expenses-title">Expenses</h1>
-        <p className="expenses-tagline">Supplier invoices and other expenses. Track what you've spent and what's outstanding.</p>
+        <p className="expenses-tagline">Supplier invoices and other expenses. Track what you&apos;ve spent and what&apos;s outstanding.</p>
       </header>
 
       <section className="expenses-summary" aria-label="Summary">

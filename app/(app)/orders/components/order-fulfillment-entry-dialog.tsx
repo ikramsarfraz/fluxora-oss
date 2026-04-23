@@ -269,6 +269,35 @@ export function OrderFulfillmentEntryDialog({
   onOpenChange,
   order,
 }: OrderFulfillmentEntryDialogProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Record fulfillment</DialogTitle>
+          <DialogDescription>
+            Capture fulfilled quantity, billed weight, and optional lot or box
+            linkage for this order.
+          </DialogDescription>
+        </DialogHeader>
+
+        {open ? (
+          <FulfillmentEntryBody
+            order={order}
+            onClose={() => onOpenChange(false)}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FulfillmentEntryBody({
+  order,
+  onClose,
+}: {
+  order: SalesOrderDetail;
+  onClose: () => void;
+}) {
   const createFulfillment = useRecordSalesOrderFulfillment();
   const markShortShipped = useMarkSalesOrderLineShortShipped();
   const { data: currentUser } = useCurrentPortalUser();
@@ -325,12 +354,6 @@ export function OrderFulfillmentEntryDialog({
     () => lotOptions.find(option => option.id === selectedLotId),
     [lotOptions, selectedLotId],
   );
-
-  useEffect(() => {
-    if (!open) return;
-    setSubmitError(null);
-    form.reset(makeDefaultValues(defaultLineId));
-  }, [defaultLineId, form, open]);
 
   useEffect(() => {
     if (!selectedLine) return;
@@ -405,8 +428,7 @@ export function OrderFulfillmentEntryDialog({
       });
 
       toast.success("Fulfillment recorded.");
-      onOpenChange(false);
-      form.reset(makeDefaultValues(defaultLineId));
+      onClose();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not record fulfillment.";
@@ -429,8 +451,7 @@ export function OrderFulfillmentEntryDialog({
         notes: form.getValues("notes").trim() || undefined,
       });
       toast.success("Line marked short shipped.");
-      onOpenChange(false);
-      form.reset(makeDefaultValues(defaultLineId));
+      onClose();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not short ship line.";
@@ -440,17 +461,8 @@ export function OrderFulfillmentEntryDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Record fulfillment</DialogTitle>
-          <DialogDescription>
-            Capture fulfilled quantity, billed weight, and optional lot or box
-            linkage for this order.
-          </DialogDescription>
-        </DialogHeader>
-
-        {submitError ? (
+    <>
+      {submitError ? (
           <Alert variant="destructive">
             <AlertCircle />
             <AlertTitle>Could not record fulfillment</AlertTitle>
@@ -739,45 +751,40 @@ export function OrderFulfillmentEntryDialog({
           </form>
         )}
 
-        <DialogFooter>
-          {selectedLine ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => void onShortShip()}
-              disabled={
-                isSubmitting ||
-                selectedLine.remainingQuantity <= 0 ||
-                !canShortShip
-              }
-              title={!canShortShip ? (shortShipReason ?? undefined) : undefined}
-            >
-              {markShortShipped.isPending
-                ? "Closing…"
-                : `Short ship ${selectedLine.remainingQuantity}`}
-            </Button>
-          ) : null}
+      <DialogFooter>
+        {selectedLine ? (
           <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="order-fulfillment-entry-form"
-            disabled={!canSubmit}
-            title={
-              !canRecordFulfillment
-                ? (recordFulfillmentReason ?? undefined)
-                : undefined
+            onClick={() => void onShortShip()}
+            disabled={
+              isSubmitting ||
+              selectedLine.remainingQuantity <= 0 ||
+              !canShortShip
             }
+            title={!canShortShip ? (shortShipReason ?? undefined) : undefined}
           >
-            {createFulfillment.isPending ? "Recording…" : "Record fulfillment"}
+            {markShortShipped.isPending
+              ? "Closing…"
+              : `Short ship ${selectedLine.remainingQuantity}`}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        ) : null}
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="order-fulfillment-entry-form"
+          disabled={!canSubmit}
+          title={
+            !canRecordFulfillment
+              ? (recordFulfillmentReason ?? undefined)
+              : undefined
+          }
+        >
+          {createFulfillment.isPending ? "Recording…" : "Record fulfillment"}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

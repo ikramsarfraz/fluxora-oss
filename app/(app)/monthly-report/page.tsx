@@ -56,29 +56,43 @@ export default function MonthlyReport() {
 
   const yearOptions = Array.from({ length: 11 }, (_, i) => now.getFullYear() - 5 + i);
 
-  // Clear preview when month/year change; revoke blob URL on unmount or when clearing
-  useEffect(() => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-  }, [year, month]);
+  // Revoke the blob URL when it changes or the component unmounts.
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
+  // Switching month/year invalidates the current preview (it was generated
+  // for a different report). Clear it via the event handlers rather than a
+  // syncing effect to avoid cascading renders.
+  const clearPreview = () => {
+    setPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  const handleMonthChange = (next: number) => {
+    if (next === month) return;
+    clearPreview();
+    setMonth(next);
+  };
+  const handleYearChange = (next: number) => {
+    if (next === year) return;
+    clearPreview();
+    setYear(next);
+  };
+
   const openPreview = () => {
     if (!report) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(getMonthlyReportPdfBlobUrl(report));
+    setPreviewUrl(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return getMonthlyReportPdfBlobUrl(report);
+    });
   };
   const closePreview = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
+    clearPreview();
   };
 
   return (
@@ -96,7 +110,7 @@ export default function MonthlyReport() {
             <select
               id="report-month"
               value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
+              onChange={(e) => handleMonthChange(Number(e.target.value))}
             >
               {MONTHS.map((name, i) => (
                 <option key={name} value={i + 1}>
@@ -110,7 +124,7 @@ export default function MonthlyReport() {
             <select
               id="report-year"
               value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              onChange={(e) => handleYearChange(Number(e.target.value))}
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>

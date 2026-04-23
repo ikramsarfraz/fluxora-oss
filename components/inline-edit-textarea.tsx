@@ -33,10 +33,6 @@ export function InlineEditTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!editing) setDraft(value ?? "");
-  }, [value, editing]);
-
-  useEffect(() => {
     if (editing) {
       textareaRef.current?.focus();
       const len = textareaRef.current?.value.length ?? 0;

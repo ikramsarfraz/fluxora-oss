@@ -208,7 +208,14 @@ function LineRow({
   const weightEntryMode = line?.weightEntryMode ?? "total_weight";
   const quantityCases = getPositiveInteger(line?.quantityCases);
   const sku = products.find(p => p.id === productId)?.sku ?? "—";
-  const [expanded, setExpanded] = useState(weightEntryMode !== "total_weight");
+  // `userExpanded` only controls whether the detailed-entry panel is open
+  // when the user has manually toggled it while in `total_weight` mode. The
+  // effective expansion is derived below so that switching unit type or
+  // weight-entry mode never needs to sync into state inside an effect.
+  const [userExpanded, setUserExpanded] = useState(false);
+  const expanded =
+    unitType === "catch_weight" &&
+    (weightEntryMode !== "total_weight" || userExpanded);
 
   useEffect(() => {
     if (unitType !== "catch_weight") {
@@ -225,12 +232,6 @@ function LineRow({
       if ((line?.caseWeightEntries?.length ?? 0) > 0) {
         setValue(`lines.${index}.caseWeightEntries`, [], { shouldDirty: true });
       }
-      setExpanded(false);
-      return;
-    }
-
-    if (weightEntryMode !== "total_weight") {
-      setExpanded(true);
     }
   }, [
     index,
@@ -334,9 +335,6 @@ function LineRow({
   function handleWeightModeChange(nextMode: SupplierInvoiceWeightEntryMode) {
     setValue(`lines.${index}.weightEntryMode`, nextMode, { shouldDirty: true });
     seedDetailedMode(nextMode);
-    if (nextMode !== "total_weight") {
-      setExpanded(true);
-    }
   }
 
   function handleApplyDefaultToRemaining() {
@@ -446,7 +444,7 @@ function LineRow({
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs"
-                onClick={() => setExpanded(open => !open)}
+                onClick={() => setUserExpanded(open => !open)}
                 disabled={disabled}
               >
                 {expanded ? (
