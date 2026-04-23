@@ -7,6 +7,7 @@ import { VerifyEmail } from "@/emails/verify-email";
 import { emailFrom, resend } from "./email";
 import { ResetPasswordEmail } from "@/emails/reset-password";
 import { createPortalUser } from "@/services/portal-users";
+import { getCurrentTenant } from "@/services/tenants";
 
 if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not set");
@@ -39,7 +40,9 @@ export const auth = betterAuth({
          * so email sign-ups that call it explicitly are safe.
          */
         after: async user => {
+          const tenant = await getCurrentTenant();
           await createPortalUser({
+            tenantId: tenant.id,
             authUserId: user.id,
             fullName: user.name,
             email: user.email,

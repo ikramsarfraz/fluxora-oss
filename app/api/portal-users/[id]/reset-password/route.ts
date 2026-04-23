@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { sendPasswordResetForUserByAdmin } from "@/services/portal-users";
+import { isUuid } from "@/lib/utils/uuid";
 
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const numericId = parseInt(id, 10);
-  if (!Number.isInteger(numericId) || numericId < 1) {
+  if (!isUuid(id)) {
     return NextResponse.json({ detail: "Invalid user id" }, { status: 400 });
   }
-
   try {
-    await sendPasswordResetForUserByAdmin(numericId);
+    await sendPasswordResetForUserByAdmin(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error(err);

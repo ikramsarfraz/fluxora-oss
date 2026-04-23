@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import { getUserById, setPortalUserActiveByAdmin } from "@/services/portal-users";
+import {
+  getUserById,
+  setPortalUserActiveByAdmin,
+} from "@/services/portal-users";
+import { isUuid } from "@/lib/utils/uuid";
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const numericId = parseInt(id, 10);
-  if (!Number.isInteger(numericId) || numericId < 1) {
+  if (!isUuid(id)) {
     return NextResponse.json({ detail: "Invalid user id" }, { status: 400 });
   }
 
@@ -21,7 +24,7 @@ export async function GET(
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await getUserById(numericId);
+  const user = await getUserById(id);
   if (!user) {
     return NextResponse.json({ detail: "User not found" }, { status: 404 });
   }
@@ -49,7 +52,7 @@ export async function PATCH(
   }
 
   try {
-    const updated = await setPortalUserActiveByAdmin(numericId, is_active);
+    const updated = await setPortalUserActiveByAdmin(id, is_active);
     return NextResponse.json(updated);
   } catch (err) {
     console.error(err);

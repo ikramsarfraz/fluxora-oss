@@ -6,6 +6,7 @@ import { userInvitations } from "@/db/schema";
 import { resend, emailFrom } from "@/lib/email";
 import { InviteUserEmail } from "@/emails/invite-user";
 import { getCurrentTenant } from "./tenants";
+import { PortalUserRole } from "./portal-users";
 
 export async function signUp(input: {
   name: string;
@@ -26,7 +27,7 @@ export async function signUp(input: {
 export async function inviteUser(input: {
   email: string;
   fullName: string;
-  role: "admin" | "sales" | "warehouse" | "accounting";
+  role: PortalUserRole;
   invitedByUserId: string;
 }) {
   const tenant = await getCurrentTenant();

@@ -740,30 +740,28 @@ export async function getActivityForSupplierInvoice(
       );
     });
 
-  const derivedItems: ActivityTimelineItem[] = [
-    ...(!hasSupplierInvoiceAudit("insert")
-      ? [
-          {
-            id: `derived:supplier-invoice-created:${invoice.id}`,
-            source: "derived" as const,
-            scope: "invoice" as const,
-            action: "insert",
-            summary: `Supplier invoice ${invoice.invoiceNumber} created`,
-            at: invoice.createdAt.toISOString(),
-            actor: {
-              id: invoice.createdBy?.id ?? null,
-              name: invoice.createdBy?.fullName ?? null,
-              email: invoice.createdBy?.email ?? null,
-              type: invoice.createdBy ? "portal_user" : "system",
-            },
-            entityTable: "supplier_invoices",
-            entityId: invoice.id,
-            entityLabel: invoice.invoiceNumber,
-            changedFields: null,
-          },
-        ]
-      : []),
-  ];
+  const derivedItems: ActivityTimelineItem[] = [];
+
+  if (!hasSupplierInvoiceAudit("insert")) {
+    derivedItems.push({
+      id: `derived:supplier-invoice-created:${invoice.id}`,
+      source: "derived",
+      scope: "invoice",
+      action: "insert",
+      summary: `Supplier invoice ${invoice.invoiceNumber} created`,
+      at: invoice.createdAt.toISOString(),
+      actor: {
+        id: invoice.createdBy?.id ?? null,
+        name: invoice.createdBy?.fullName ?? null,
+        email: invoice.createdBy?.email ?? null,
+        type: invoice.createdBy ? "portal_user" : "system",
+      },
+      entityTable: "supplier_invoices",
+      entityId: invoice.id,
+      entityLabel: invoice.invoiceNumber,
+      changedFields: null,
+    });
+  }
 
   if (
     invoice.updatedAt &&

@@ -24,10 +24,7 @@ import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";
 import { NewOrderSummaryCard } from "./new-order-summary-card";
-import {
-  getDefaultSalesUnit,
-  inferLineUnitType,
-} from "./new-order-line-utils";
+import { getDefaultSalesUnit, inferLineUnitType } from "./new-order-line-utils";
 import {
   newOrderFormSchema,
   type NewOrderFormValues,
@@ -98,15 +95,16 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
   });
 
   const actionState = useMemo(
-    () =>
-      order ? getOrderActionAvailability(order, currentUser?.role) : null,
+    () => (order ? getOrderActionAvailability(order, currentUser?.role) : null),
     [order, currentUser?.role],
   );
 
   useEffect(() => {
     if (!order || !products) return;
 
-    const productsById = new Map(products.map(product => [product.id, product]));
+    const productsById = new Map(
+      products.map(product => [product.id, product]),
+    );
     form.reset({
       customerId: order.customerId,
       orderDate: order.orderDate,
@@ -200,7 +198,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
           <Lock />
           <AlertTitle>Editing is locked</AlertTitle>
           <AlertDescription>
-            {actionState.editReason ??
+            {actionState?.editReason ??
               "This order can no longer be edited. Use the fulfillment and financial workflow on the detail page instead."}
           </AlertDescription>
         </Alert>
@@ -310,7 +308,10 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
         </div>
 
         <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <NewOrderSummaryCard control={form.control} showDiscountInput={false} />
+          <NewOrderSummaryCard
+            control={form.control}
+            showDiscountInput={false}
+          />
         </div>
       </div>
     </form>

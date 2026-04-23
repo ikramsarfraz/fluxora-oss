@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupplierById } from "@/services/suppliers";
+import { isUuid } from "@/lib/utils/uuid";
 
 export async function GET(
   _req: Request,
@@ -7,16 +8,14 @@ export async function GET(
 ) {
   try {
     const { id: idParam } = await context.params;
-    const id = Number(idParam);
-
-    if (Number.isNaN(id)) {
+    if (!isUuid(idParam)) {
       return NextResponse.json(
         { error: "Invalid supplier id" },
         { status: 400 },
       );
     }
 
-    const supplier = await getSupplierById(id);
+    const supplier = await getSupplierById(idParam);
 
     if (!supplier) {
       return NextResponse.json(
