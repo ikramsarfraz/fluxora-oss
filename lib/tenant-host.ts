@@ -51,9 +51,14 @@ export function isReservedTenantSlug(slug: string) {
 }
 
 export function getRootDomain() {
-  const rootDomain = process.env.ROOT_DOMAIN?.trim().toLowerCase();
-  if (!rootDomain) {
+  const raw = process.env.ROOT_DOMAIN?.trim().toLowerCase();
+  if (!raw) {
     throw new Error("ROOT_DOMAIN is not set.");
+  }
+  // Strip any accidental protocol prefix (e.g. "https://uat.app.example.com" → "uat.app.example.com")
+  const rootDomain = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  if (!rootDomain) {
+    throw new Error("ROOT_DOMAIN resolved to an empty string after stripping protocol.");
   }
   return rootDomain;
 }
