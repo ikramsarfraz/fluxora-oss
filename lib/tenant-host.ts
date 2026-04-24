@@ -118,8 +118,9 @@ export function getRequestTenantHostContextFromHeaders(
   const host = requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host") ?? "";
   const { hostname, port } = splitHostAndPort(host);
   const rootDomain = getRootDomain();
+  const xTenantSlugHeader = requestHeaders.get("x-tenant-slug");
   const tenantSlug =
-    requestHeaders.get("x-tenant-slug") ??
+    xTenantSlugHeader ??
     parseTenantSlugFromHostname(hostname, rootDomain);
   const protocol = getProtocolFromHeaders(requestHeaders);
 
@@ -129,6 +130,25 @@ export function getRequestTenantHostContextFromHeaders(
       hostname === `www.${rootDomain}` ||
       hostname === "localhost" ||
       hostname === "127.0.0.1");
+
+  // DEBUG — remove after UAT diagnosis
+  console.log("[tenant-host] resolution", {
+    rawHost: host,
+    hostname,
+    port,
+    rootDomain,
+    protocol,
+    xTenantSlugHeader,
+    parsedSlugFromHostname: parseTenantSlugFromHostname(hostname, rootDomain),
+    tenantSlug,
+    isRootHost,
+    relevantHeaders: {
+      host: requestHeaders.get("host"),
+      "x-forwarded-host": requestHeaders.get("x-forwarded-host"),
+      "x-forwarded-proto": requestHeaders.get("x-forwarded-proto"),
+      "x-tenant-slug": requestHeaders.get("x-tenant-slug"),
+    },
+  });
 
   return {
     host,

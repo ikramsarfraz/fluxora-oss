@@ -6,6 +6,20 @@ import { getCurrentRequestTenant } from "@/services/tenants";
 
 export default async function SignInPage() {
   const tenantRequest = await getCurrentRequestTenant();
+
+  // DEBUG — remove after UAT diagnosis
+  console.log("[sign-in page] tenantRequest", {
+    host: tenantRequest.host,
+    hostname: tenantRequest.hostname,
+    port: tenantRequest.port,
+    protocol: tenantRequest.protocol,
+    rootDomain: tenantRequest.rootDomain,
+    tenantSlug: tenantRequest.tenantSlug,
+    isRootHost: tenantRequest.isRootHost,
+    tenantId: tenantRequest.tenant?.id ?? null,
+    tenantName: tenantRequest.tenant?.name ?? null,
+  });
+
   const rootSignUpUrl = buildRootAppUrl({
     pathname: "/signup",
     context: tenantRequest,
