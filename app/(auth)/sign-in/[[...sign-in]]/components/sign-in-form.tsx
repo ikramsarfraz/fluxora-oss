@@ -60,6 +60,11 @@ type SignInFormProps = {
     name: string;
     slug: string;
   } | null;
+  inactiveTenant: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   tenantSlug: string | null;
   isRootHost: boolean;
   isPlatformAdminHost: boolean;
@@ -95,6 +100,7 @@ function buildTenantPreview(args: {
 
 export function SignInForm({
   tenant,
+  inactiveTenant,
   tenantSlug,
   isRootHost,
   isPlatformAdminHost,
@@ -286,20 +292,34 @@ export function SignInForm({
             </div>
             <div className="space-y-2">
               <CardTitle className="text-3xl tracking-tight text-slate-950">
-                Tenant not found
+                {inactiveTenant ? "Tenant access is inactive" : "Tenant not found"}
               </CardTitle>
               <CardDescription className="text-base leading-7 text-slate-500">
-                We couldn&apos;t find an active tenant for{" "}
-                <span className="font-mono text-slate-900">{tenantSlug}</span>.
-                Double-check the subdomain or create a new tenant from the main
-                sign-up page.
+                {inactiveTenant ? (
+                  <>
+                    <span className="font-medium text-slate-900">
+                      {inactiveTenant.name}
+                    </span>{" "}
+                    is currently deactivated, so tenant users cannot access this workspace.
+                    Contact Pelzer Solutions or your internal platform admin if you believe this
+                    tenant should be reactivated.
+                  </>
+                ) : (
+                  <>
+                    We couldn&apos;t find an active tenant for{" "}
+                    <span className="font-mono text-slate-900">{tenantSlug}</span>.
+                    Double-check the subdomain or create a new tenant from the main sign-up page.
+                  </>
+                )}
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button asChild className="h-11 w-full">
-              <Link href={rootSignUpUrl}>Create a tenant</Link>
-            </Button>
+            {!inactiveTenant ? (
+              <Button asChild className="h-11 w-full">
+                <Link href={rootSignUpUrl}>Create a tenant</Link>
+              </Button>
+            ) : null}
             <Button asChild variant="outline" className="h-11 w-full">
               <a href={supportHref}>Contact support</a>
             </Button>

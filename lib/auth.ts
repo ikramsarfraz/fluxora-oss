@@ -29,6 +29,28 @@ const googleAuthEnabled = Boolean(
 const rootDomain = getRootDomain();
 const crossSubdomainCookiesEnabled =
   rootDomain !== "localhost" && rootDomain !== "127.0.0.1";
+const betterAuthUrl = new URL(process.env.BETTER_AUTH_URL);
+const betterAuthPort = betterAuthUrl.port || null;
+
+function buildTrustedOrigins() {
+  const origins = [
+    `https://*.${rootDomain}`,
+    `http://*.${rootDomain}`,
+    "https://*.localtest.me",
+    "http://*.localtest.me",
+  ];
+
+  if (betterAuthPort) {
+    origins.push(
+      `https://*.${rootDomain}:${betterAuthPort}`,
+      `http://*.${rootDomain}:${betterAuthPort}`,
+      `https://*.localtest.me:${betterAuthPort}`,
+      `http://*.localtest.me:${betterAuthPort}`,
+    );
+  }
+
+  return origins;
+}
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -47,12 +69,7 @@ export const auth = betterAuth({
    * Additional origins can also be added at deploy time via the
    * BETTER_AUTH_TRUSTED_ORIGINS env var (comma-separated).
    */
-  trustedOrigins: [
-    `https://*.${rootDomain}`,
-    `http://*.${rootDomain}`,
-    "https://*.localtest.me",
-    "http://*.localtest.me",
-  ],
+  trustedOrigins: buildTrustedOrigins(),
   advanced: {
     crossSubDomainCookies: crossSubdomainCookiesEnabled
       ? {

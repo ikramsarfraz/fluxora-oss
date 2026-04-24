@@ -27,15 +27,27 @@ export async function getTenantBySlug(slug: string) {
   );
 }
 
+export async function getTenantBySlugAnyStatus(slug: string) {
+  return (
+    (await db.query.tenants.findFirst({
+      where: eq(tenants.slug, slug),
+      with: { branding: true },
+    })) ?? null
+  );
+}
+
 export async function getCurrentRequestTenant() {
   const hostContext = await getRequestTenantHostContext();
-  const tenant = hostContext.tenantSlug
-    ? await getTenantBySlug(hostContext.tenantSlug)
+  const matchedTenant = hostContext.tenantSlug
+    ? await getTenantBySlugAnyStatus(hostContext.tenantSlug)
     : null;
+  const tenant = matchedTenant?.isActive ? matchedTenant : null;
+  const inactiveTenant = matchedTenant && !matchedTenant.isActive ? matchedTenant : null;
 
   return {
     ...hostContext,
     tenant,
+    inactiveTenant,
   };
 }
 

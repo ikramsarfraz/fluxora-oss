@@ -14,6 +14,40 @@ import {
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getPlatformAdminTenantDetail } from "@/services/platform-admin";
+import { TenantStatusForm } from "./tenant-status-form";
+
+function formatActivitySummary(item: {
+  action: string;
+  contextJson: string | null;
+  entityLabel: string | null;
+}) {
+  const label = item.entityLabel ?? "tenant";
+
+  if (!item.contextJson) {
+    return `${item.action} ${label}`;
+  }
+
+  try {
+    const context = JSON.parse(item.contextJson) as {
+      action?: string;
+      reason?: string | null;
+    };
+
+    if (context.action === "activate_tenant") {
+      return `Activated ${label}`;
+    }
+
+    if (context.action === "deactivate_tenant") {
+      return context.reason?.trim()
+        ? `Deactivated ${label}: ${context.reason.trim()}`
+        : `Deactivated ${label}`;
+    }
+  } catch {
+    return `${item.action} ${label}`;
+  }
+
+  return `${item.action} ${label}`;
+}
 
 export default async function PlatformAdminTenantDetailPage({
   params,
@@ -32,7 +66,7 @@ export default async function PlatformAdminTenantDetailPage({
     notFound();
   }
 
-  const { tenant, users, stats } = detail;
+  const { tenant, users, stats, activity } = detail;
 
   return (
     <div className="space-y-6">
@@ -50,9 +84,12 @@ export default async function PlatformAdminTenantDetailPage({
             <span>Created {formatDisplayDate(tenant.createdAt)}</span>
           </div>
         </div>
-        <Badge variant={tenant.isActive ? "secondary" : "outline"}>
-          {tenant.isActive ? "Active" : "Inactive"}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge variant={tenant.isActive ? "secondary" : "outline"}>
+            {tenant.isActive ? "Active" : "Inactive"}
+          </Badge>
+          <TenantStatusForm tenantId={tenant.id} isActive={tenant.isActive} />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -75,6 +112,27 @@ export default async function PlatformAdminTenantDetailPage({
           </CardHeader>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Status</CardTitle>
+          <CardDescription>
+            Tenant app access is permitted only while this tenant is active.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Current status:{" "}
+            <span className="font-medium text-slate-900">
+              {tenant.isActive ? "Active" : "Inactive"}
+            </span>
+          </p>
+          <p>
+            Inactive tenants cannot sign in on their tenant host, and existing tenant-app requests
+            fail server-side tenant resolution.
+          </p>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -106,6 +164,51 @@ export default async function PlatformAdminTenantDetailPage({
                   <TableCell>{formatDisplayDate(user.createdAt)}</TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity</CardTitle>
+          <CardDescription>
+            Recent platform-admin activation and deactivation events for this tenant.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Event</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>When</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {activity.length > 0 ? (
+                activity.map(item => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {formatActivitySummary(item)}
+                    </TableCell>
+                    <TableCell>
+                      {item.actorPlatformUser?.authUser.name ?? "System"}
+                    </TableCell>
+                    <TableCell className="capitalize">
+                      {item.actorPlatformUser?.role?.replaceAll("_", " ") ?? "system"}
+                    </TableCell>
+                    <TableCell>{formatDisplayDate(item.createdAt)}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    No tenant platform-admin activity has been recorded yet.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

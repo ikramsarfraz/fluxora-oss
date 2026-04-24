@@ -33,6 +33,11 @@ export default async function SignInPage() {
           name: tenantRequest.tenant.name,
           slug: tenantRequest.tenant.slug,
         } : null}
+        inactiveTenant={tenantRequest.inactiveTenant ? {
+          id: tenantRequest.inactiveTenant.id,
+          name: tenantRequest.inactiveTenant.name,
+          slug: tenantRequest.inactiveTenant.slug,
+        } : null}
         tenantSlug={tenantRequest.tenantSlug}
         isRootHost={tenantRequest.isRootHost}
         isPlatformAdminHost={tenantRequest.isPlatformAdminHost}

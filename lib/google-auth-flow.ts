@@ -9,6 +9,11 @@ export type GoogleAuthFlowPayload = {
   tenantSlug?: string | null;
   tenantName?: string | null;
   signupType?: GoogleAuthSignupType | null;
+  requestHost?: string | null;
+  requestHostname?: string | null;
+  requestPort?: string | null;
+  requestProtocol?: "http" | "https" | null;
+  requestRootDomain?: string | null;
   exp: number;
 };
 

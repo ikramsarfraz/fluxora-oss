@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { portalUsers, platformUsers, tenants } from "@/db/schema";
+import { auditLogs, portalUsers, platformUsers, tenants } from "@/db/schema";
 import { requirePlatformUser } from "./platform-users";
 
 function countAll(table: typeof tenants | typeof portalUsers) {
@@ -122,6 +122,22 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
 
   const totalUsers = totalUsersRow?.count ?? 0;
   const activeUsers = activeUsersRow?.count ?? 0;
+  const activity = await db.query.auditLogs.findMany({
+    where: and(
+      eq(auditLogs.tenantId, tenantId),
+      eq(auditLogs.entityTable, "tenants"),
+      eq(auditLogs.entityId, tenantId),
+    ),
+    with: {
+      actorPlatformUser: {
+        with: {
+          authUser: true,
+        },
+      },
+    },
+    orderBy: [desc(auditLogs.createdAt)],
+    limit: 10,
+  });
 
   return {
     tenant,
@@ -131,6 +147,7 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
       activeUsers,
       inactiveUsers: Math.max(totalUsers - activeUsers, 0),
     },
+    activity,
   };
 }
 
@@ -143,4 +160,63 @@ export async function listPlatformAdminUsers() {
     },
     orderBy: [desc(platformUsers.createdAt)],
   });
+}
+
+export async function setTenantActiveByPlatformAdmin(
+  tenantId: string,
+  isActive: boolean,
+  reason?: string | null,
+) {
+  const platformUser = await requirePlatformUser();
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+  });
+
+  if (!tenant) {
+    throw new Error("Tenant not found");
+  }
+
+  if (tenant.isActive === isActive) {
+    return tenant;
+  }
+
+  const now = new Date();
+  const normalizedReason = reason?.trim() ? reason.trim() : null;
+
+  const [updatedTenant] = await db.transaction(async tx => {
+    const [updated] = await tx
+      .update(tenants)
+      .set({
+        isActive,
+        updatedAt: now,
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to update tenant");
+    }
+
+    await tx.insert(auditLogs).values({
+      tenantId: updated.id,
+      actorType: "platform_user",
+      actorPlatformUserId: platformUser.id,
+      action: "update",
+      entityTable: "tenants",
+      entityId: updated.id,
+      entityLabel: updated.name,
+      changedFieldsJson: JSON.stringify(["isActive"]),
+      beforeJson: JSON.stringify({ isActive: tenant.isActive }),
+      afterJson: JSON.stringify({ isActive: updated.isActive }),
+      contextJson: JSON.stringify({
+        action: updated.isActive ? "activate_tenant" : "deactivate_tenant",
+        reason: normalizedReason,
+      }),
+    });
+
+    return [updated] as const;
+  });
+
+  return updatedTenant;
 }

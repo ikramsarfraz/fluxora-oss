@@ -20,6 +20,7 @@ import {
   buildRootAppUrl,
   buildTenantAppUrl,
   getRequestTenantHostContextFromHeaders,
+  type RequestTenantHostContext,
   isReservedTenantSlug,
   slugifyTenantName,
 } from "@/lib/tenant-host";
@@ -43,6 +44,33 @@ function buildTenantReturnUrl(args: {
     searchParams: parsed.searchParams,
     context: args.context,
   });
+}
+
+function getGoogleFlowRequestContext(args: {
+  flow: ReturnType<typeof parseGoogleAuthFlowToken>;
+  fallbackContext: RequestTenantHostContext;
+}): RequestTenantHostContext {
+  if (
+    !args.flow.requestHost ||
+    !args.flow.requestHostname ||
+    !args.flow.requestProtocol ||
+    !args.flow.requestRootDomain
+  ) {
+    return args.fallbackContext;
+  }
+
+  return {
+    host: args.flow.requestHost,
+    hostname: args.flow.requestHostname,
+    port: args.flow.requestPort ?? null,
+    protocol: args.flow.requestProtocol,
+    rootDomain: args.flow.requestRootDomain,
+    hostType: args.flow.tenantSlug ? "tenant" : "root",
+    tenantSlug: args.flow.tenantSlug ?? null,
+    isRootHost: !args.flow.tenantSlug,
+    isTenantHost: Boolean(args.flow.tenantSlug),
+    isPlatformAdminHost: false,
+  };
 }
 
 type GoogleStartPayload = {
@@ -256,6 +284,11 @@ export async function prepareGoogleAuthStart(
     tenantSlug: input.tenantSlug ? slugifyTenantName(input.tenantSlug) : null,
     tenantName: input.tenantName?.trim() || null,
     signupType: input.signupType ?? null,
+    requestHost: requestContext.host,
+    requestHostname: requestContext.hostname,
+    requestPort: requestContext.port,
+    requestProtocol: requestContext.protocol,
+    requestRootDomain: requestContext.rootDomain,
   });
 
   const callbackURL = buildRootAppUrl({
@@ -348,7 +381,10 @@ export async function getGoogleTenantChooserData(input: {
   authUserId: string;
 }) {
   const flow = parseGoogleAuthFlowToken(input.flowToken);
-  const requestContext = getRequestTenantHostContextFromHeaders(await headers());
+  const requestContext = getGoogleFlowRequestContext({
+    flow,
+    fallbackContext: getRequestTenantHostContextFromHeaders(await headers()),
+  });
   const memberships = await listActiveTenantMembershipsForAuthUser(input.authUserId);
 
   return {
@@ -379,7 +415,10 @@ export async function finalizeGoogleAuthFlow(input: {
   sessionId: string;
 }) {
   const flow = parseGoogleAuthFlowToken(input.flowToken);
-  const requestContext = getRequestTenantHostContextFromHeaders(await headers());
+  const requestContext = getGoogleFlowRequestContext({
+    flow,
+    fallbackContext: getRequestTenantHostContextFromHeaders(await headers()),
+  });
   const memberships = await listActiveTenantMembershipsForAuthUser(input.authUserId);
   const activeMemberships = memberships.filter(membership => membership.tenant?.isActive);
 
@@ -507,7 +546,10 @@ export async function completeGoogleTenantSelection(input: {
   sessionId: string;
 }) {
   const flow = parseGoogleAuthFlowToken(input.flowToken);
-  const requestContext = getRequestTenantHostContextFromHeaders(await headers());
+  const requestContext = getGoogleFlowRequestContext({
+    flow,
+    fallbackContext: getRequestTenantHostContextFromHeaders(await headers()),
+  });
   const tenant = await getTenantBySlug(input.tenantSlug);
 
   if (!tenant) {

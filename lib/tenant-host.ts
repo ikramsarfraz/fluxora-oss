@@ -67,7 +67,9 @@ export function getRootDomain() {
   // Strip any accidental protocol prefix (e.g. "https://uat.app.example.com" → "uat.app.example.com")
   const rootDomain = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "");
   if (!rootDomain) {
-    throw new Error("ROOT_DOMAIN resolved to an empty string after stripping protocol.");
+    throw new Error(
+      "ROOT_DOMAIN resolved to an empty string after stripping protocol.",
+    );
   }
   return rootDomain;
 }
@@ -83,7 +85,10 @@ export function parseTenantSlugFromHostname(
     return null;
   }
 
-  if (normalizedHost === normalizedRoot || normalizedHost === `www.${normalizedRoot}`) {
+  if (
+    normalizedHost === normalizedRoot ||
+    normalizedHost === `www.${normalizedRoot}`
+  ) {
     return null;
   }
 
@@ -105,7 +110,7 @@ export function parseTenantSlugFromHostname(
     return null;
   }
 
-  const slug = normalizedHost.slice(0, -1 * (`.${normalizedRoot}`.length));
+  const slug = normalizedHost.slice(0, -1 * `.${normalizedRoot}`.length);
   return slug || null;
 }
 
@@ -113,16 +118,23 @@ export function isPlatformAdminHostname(
   hostname: string,
   rootDomain = getRootDomain(),
 ) {
-  return normalizeHostname(hostname) === `${PLATFORM_ADMIN_SLUG}.${normalizeHostname(rootDomain)}`;
+  return (
+    normalizeHostname(hostname) ===
+    `${PLATFORM_ADMIN_SLUG}.${normalizeHostname(rootDomain)}`
+  );
 }
 
 export function getProtocolFromHeaders(headersLike: Headers) {
-  const forwardedProto = headersLike.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedProto = headersLike
+    .get("x-forwarded-proto")
+    ?.split(",")[0]
+    ?.trim();
   if (forwardedProto === "http" || forwardedProto === "https") {
     return forwardedProto;
   }
 
-  const rawHost = headersLike.get("host") ?? headersLike.get("x-forwarded-host") ?? "";
+  const rawHost =
+    headersLike.get("host") ?? headersLike.get("x-forwarded-host") ?? "";
   const { hostname } = splitHostAndPort(rawHost);
 
   if (
@@ -140,18 +152,21 @@ export function getProtocolFromHeaders(headersLike: Headers) {
 export function getRequestTenantHostContextFromHeaders(
   requestHeaders: Headers,
 ): RequestTenantHostContext {
-  const host = requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host") ?? "";
+  const host =
+    requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host") ?? "";
   const { hostname, port } = splitHostAndPort(host);
   const rootDomain = getRootDomain();
   const xTenantSlugHeader = requestHeaders.get("x-tenant-slug");
   const isPlatformAdminHost = isPlatformAdminHostname(hostname, rootDomain);
-  const tenantSlug =
-    isPlatformAdminHost
-      ? null
-      : (xTenantSlugHeader ?? parseTenantSlugFromHostname(hostname, rootDomain));
+  const tenantSlug = isPlatformAdminHost
+    ? null
+    : (xTenantSlugHeader ?? parseTenantSlugFromHostname(hostname, rootDomain));
   const protocol = getProtocolFromHeaders(requestHeaders);
-  const hostType =
-    isPlatformAdminHost ? "platform-admin" : tenantSlug ? "tenant" : "root";
+  const hostType = isPlatformAdminHost
+    ? "platform-admin"
+    : tenantSlug
+      ? "tenant"
+      : "root";
 
   const isRootHost =
     hostType === "root" &&
@@ -160,27 +175,6 @@ export function getRequestTenantHostContextFromHeaders(
       hostname === "localhost" ||
       hostname === "127.0.0.1");
   const isTenantHost = hostType === "tenant";
-
-  // DEBUG — remove after UAT diagnosis
-  console.log("[tenant-host] resolution", {
-    rawHost: host,
-    hostname,
-    port,
-    rootDomain,
-    protocol,
-    hostType,
-    xTenantSlugHeader,
-    isPlatformAdminHost,
-    parsedSlugFromHostname: parseTenantSlugFromHostname(hostname, rootDomain),
-    tenantSlug,
-    isRootHost,
-    relevantHeaders: {
-      host: requestHeaders.get("host"),
-      "x-forwarded-host": requestHeaders.get("x-forwarded-host"),
-      "x-forwarded-proto": requestHeaders.get("x-forwarded-proto"),
-      "x-tenant-slug": requestHeaders.get("x-tenant-slug"),
-    },
-  });
 
   return {
     host,
@@ -200,10 +194,7 @@ export async function getRequestTenantHostContext() {
   return getRequestTenantHostContextFromHeaders(await headers());
 }
 
-function buildHostForTenant(
-  slug: string,
-  context: RequestTenantHostContext,
-) {
+function buildHostForTenant(slug: string, context: RequestTenantHostContext) {
   const normalizedSlug = slugifyTenantName(slug);
 
   const localBaseHost =
@@ -214,7 +205,8 @@ function buildHostForTenant(
 
   if (localBaseHost) {
     const localRoot =
-      context.hostname === "localhost" || context.hostname.endsWith(".localhost")
+      context.hostname === "localhost" ||
+      context.hostname.endsWith(".localhost")
         ? "localhost"
         : "127.0.0.1";
     return `${normalizedSlug}.${localRoot}${context.port ? `:${context.port}` : ""}`;
@@ -229,7 +221,9 @@ export function buildTenantAppUrl(args: {
   searchParams?: URLSearchParams | Record<string, string | null | undefined>;
   context: RequestTenantHostContext;
 }) {
-  const url = new URL(`${args.context.protocol}://${buildHostForTenant(args.slug, args.context)}`);
+  const url = new URL(
+    `${args.context.protocol}://${buildHostForTenant(args.slug, args.context)}`,
+  );
   url.pathname = args.pathname;
 
   if (args.searchParams instanceof URLSearchParams) {
