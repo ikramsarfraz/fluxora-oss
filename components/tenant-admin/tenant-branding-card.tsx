@@ -26,7 +26,6 @@ export function TenantBrandingCard() {
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-6">
-          {/* Logo preview */}
           <div className="flex h-16 w-32 shrink-0 items-center justify-center rounded-md border bg-muted/30">
             {isLoading ? (
               <div className="h-8 w-20 animate-pulse rounded bg-muted" />

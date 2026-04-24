@@ -60,19 +60,10 @@ export async function createPortalUser(input: {
  * Gets all portal users.
  */
 export async function getUsers() {
-  // Only get users if current user is an admin
-  // use session storage to get the current user
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-  if (!session?.user) {
-    throw new Error("Unauthorized");
-  }
-
-  const tenant = await getCurrentTenant();
+  const current = await requireAdminPortalUser();
 
   return await db.query.portalUsers.findMany({
-    where: eq(portalUsers.tenantId, tenant.id),
+    where: eq(portalUsers.tenantId, current.tenantId),
     with: { authUser: true },
     orderBy: [desc(portalUsers.createdAt)],
   });
@@ -85,9 +76,9 @@ export type PortalUserListItem = Awaited<ReturnType<typeof getUsers>>[number];
  * Gets a portal user by id.
  */
 export async function getUserById(id: string) {
-  const tenant = await getCurrentTenant();
+  const current = await requireAdminPortalUser();
   const user = await db.query.portalUsers.findFirst({
-    where: and(eq(portalUsers.id, id), eq(portalUsers.tenantId, tenant.id)),
+    where: and(eq(portalUsers.id, id), eq(portalUsers.tenantId, current.tenantId)),
     with: {
       authUser: true,
     },

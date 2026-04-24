@@ -31,6 +31,8 @@ import {
   Receipt,
   Wallet,
   CreditCard,
+  Palette,
+  Shield,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
@@ -148,6 +150,16 @@ const navMain: NavGroup[] = [
         title: "Users",
         url: "/users",
         icon: ShieldCheck,
+      },
+      {
+        title: "Roles & Permissions",
+        url: "/admin/roles",
+        icon: Shield,
+      },
+      {
+        title: "Branding",
+        url: "/admin/branding",
+        icon: Palette,
       },
     ],
   },

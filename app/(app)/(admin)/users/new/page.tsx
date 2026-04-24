@@ -1,7 +1,10 @@
 import { InviteUserForm } from "../components/invite-user-form";
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { requireAdminPortalUser } from "@/services/portal-users";
 
-export default function NewUserPage() {
+export default async function NewUserPage() {
+  await requireAdminPortalUser();
+
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader

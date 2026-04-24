@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { TenantBrandingCard } from "@/app/(app)/account/tenant-branding-card";
 import { PortalUserProfile } from "@/components/portal-user-profile";
 import { authClient } from "@/lib/auth-client";
 import type { PortalUserDetail } from "@/services/portal-users";
@@ -26,8 +25,6 @@ export function AccountPortalProfile({ user }: { user: PortalUserDetail }) {
     }
   }
 
-  const canManageBranding = user.role === "owner" || user.role === "admin";
-
   return (
     <div className="flex flex-col gap-6">
       <PortalUserProfile
@@ -35,7 +32,6 @@ export function AccountPortalProfile({ user }: { user: PortalUserDetail }) {
         variant="self"
         selfActions={{ onResetPassword, resetPending }}
       />
-      {canManageBranding && <TenantBrandingCard />}
     </div>
   );
 }

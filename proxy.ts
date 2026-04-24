@@ -25,6 +25,14 @@ function isRootOnlyPath(pathname: string) {
   return pathname === "/" || pathname.startsWith("/features") || pathname.startsWith("/pricing");
 }
 
+function isTenantAdminPath(pathname: string) {
+  return (
+    pathname === "/admin" ||
+    pathname === "/admin/roles" ||
+    pathname === "/admin/branding"
+  );
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestHeaders = new Headers(request.headers);
@@ -123,7 +131,27 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  if (pathname === "/admin") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/roles";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname === "/admin/roles" || pathname === "/admin/branding") {
+    const rewrittenUrl = request.nextUrl.clone();
+    rewrittenUrl.pathname =
+      pathname === "/admin/roles"
+        ? "/tenant-admin/roles"
+        : "/tenant-admin/branding";
+    return NextResponse.rewrite(rewrittenUrl, {
+      request: {
+        headers: requestHeaders,
+      },
+    });
+  }
+
+  if (pathname.startsWith("/admin/") && !isTenantAdminPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

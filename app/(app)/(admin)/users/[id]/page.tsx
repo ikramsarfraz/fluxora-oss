@@ -26,7 +26,6 @@ import { isUuid } from "@/lib/utils/uuid";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
-import { RolesPermissionsCard } from "../components/roles-permissions-card";
 import { UserRoleDialog } from "../components/user-role-dialog";
 
 export default function UserDetailPage() {
@@ -93,11 +92,6 @@ export default function UserDetailPage() {
           resetPending: resetPassword.isPending,
         }}
       />
-
-      <div className="mt-6">
-        <RolesPermissionsCard highlightRole={user.role as PortalUserRole} />
-      </div>
-
       <AlertDialog open={toggleOpen} onOpenChange={setToggleOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
