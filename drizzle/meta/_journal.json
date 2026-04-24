@@ -71,6 +71,20 @@
       "when": 1777123200000,
       "tag": "0009_sales_order_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777209600000,
+      "tag": "0010_auth_session_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777296000000,
+      "tag": "0011_tenant_auth_terms",
+      "breakpoints": true
     }
   ]
 }

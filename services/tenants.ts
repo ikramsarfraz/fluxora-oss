@@ -4,25 +4,66 @@ import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
-import { files, tenantBranding, tenants } from "@/db/schema";
+import { files, portalUsers, tenantBranding, tenants } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { getRequestTenantHostContext } from "@/lib/tenant-host";
 import {
   buildTenantLogoObjectKey,
   deleteFile,
   uploadFile,
 } from "@/lib/uploads/r2";
-import {
-  getUserByAuthUserId,
-  requireAdminPortalUser,
-} from "./portal-users";
+import { requireAdminPortalUser } from "./portal-users";
 
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
 
+export async function getTenantBySlug(slug: string) {
+  return (
+    (await db.query.tenants.findFirst({
+      where: and(eq(tenants.slug, slug), eq(tenants.isActive, true)),
+      with: { branding: true },
+    })) ?? null
+  );
+}
+
+export async function getCurrentRequestTenant() {
+  const hostContext = await getRequestTenantHostContext();
+  const tenant = hostContext.tenantSlug
+    ? await getTenantBySlug(hostContext.tenantSlug)
+    : null;
+
+  return {
+    ...hostContext,
+    tenant,
+  };
+}
+
+export type CurrentRequestTenant = Awaited<
+  ReturnType<typeof getCurrentRequestTenant>
+>;
+
+export async function getTenantMembershipByAuthUserId(args: {
+  authUserId: string;
+  tenantId: string;
+}) {
+  return (
+    (await db.query.portalUsers.findFirst({
+      where: and(
+        eq(portalUsers.authUserId, args.authUserId),
+        eq(portalUsers.tenantId, args.tenantId),
+        eq(portalUsers.isActive, true),
+      ),
+      with: {
+        authUser: true,
+      },
+    })) ?? null
+  );
+}
+
 /**
- * Returns the tenant that belongs to the currently signed-in portal user.
- * Throws if there is no active session or the user has no tenant row.
+ * Returns the tenant for the current request host and validates that
+ * the signed-in user belongs to it.
  */
 export async function getCurrentTenant() {
   const session = await auth.api.getSession({
@@ -32,13 +73,32 @@ export async function getCurrentTenant() {
     throw new Error("Unauthorized");
   }
 
-  const portalUser = await getUserByAuthUserId(session.user.id);
+  const requestTenant = await getCurrentRequestTenant();
+  const sessionTenantId =
+    typeof session.session.tenantId === "string"
+      ? session.session.tenantId
+      : null;
+
+  if (!requestTenant.tenant) {
+    throw new Error("Tenant subdomain required");
+  }
+
+  const tenantId = requestTenant.tenant.id;
+
+  if (sessionTenantId && requestTenant.tenant.id !== sessionTenantId) {
+    throw new Error("Tenant session mismatch");
+  }
+
+  const portalUser = await getTenantMembershipByAuthUserId({
+    authUserId: session.user.id,
+    tenantId,
+  });
   if (!portalUser) {
-    throw new Error("Portal user not found");
+    throw new Error("Portal user not found for this tenant");
   }
 
   const tenant = await db.query.tenants.findFirst({
-    where: eq(tenants.id, portalUser.tenantId),
+    where: and(eq(tenants.id, portalUser.tenantId), eq(tenants.isActive, true)),
     with: { branding: true },
   });
 

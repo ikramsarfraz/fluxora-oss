@@ -40,6 +40,8 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
   "revoked",
 ]);
 
+export const tenantTypeEnum = pgEnum("tenant_type", ["solo", "business"]);
+
 export const addressTypeEnum = pgEnum("address_type", [
   "billing",
   "shipping",
@@ -159,6 +161,7 @@ export const tenants = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 128 }).notNull(),
+    tenantType: tenantTypeEnum("tenant_type").notNull().default("business"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

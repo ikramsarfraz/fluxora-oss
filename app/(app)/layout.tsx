@@ -12,6 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { getCurrentTenant } from "@/services/tenants";
 
 export default async function AppGroupLayout({
   children,
@@ -23,7 +24,13 @@ export default async function AppGroupLayout({
   });
 
   if (!session?.user) {
-    redirect("/sign-in");
+    redirect("/login");
+  }
+
+  try {
+    await getCurrentTenant();
+  } catch {
+    redirect("/login");
   }
 
   return (

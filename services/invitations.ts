@@ -1,7 +1,8 @@
 import { isAPIError } from "better-auth/api";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 
 import { db } from "@/db";
+import { user as authUser } from "@/db/auth-schema";
 import { userInvitations } from "@/db/schema";
 import { signUp } from "@/services/auth";
 import {
@@ -67,17 +68,40 @@ export async function acceptInvitation(input: {
   }
 
   try {
-    const signup = await signUp({
-      name: invitation.fullName,
-      email: invitation.email,
-      password: input.password,
-    });
-    if (!signup?.user?.id) {
+    let authUserId: string | null = null;
+
+    try {
+      const signup = await signUp({
+        name: invitation.fullName,
+        email: invitation.email,
+        password: input.password,
+      });
+      authUserId = signup?.user?.id ?? null;
+    } catch (e) {
+      if (!isAPIError(e)) {
+        throw e;
+      }
+
+      const [existingAuthUser] = await db
+        .select()
+        .from(authUser)
+        .where(sql`lower(${authUser.email}) = ${invitation.email.toLowerCase()}`)
+        .limit(1);
+
+      if (!existingAuthUser) {
+        throw new Error(e.message || "Could not create account.");
+      }
+
+      authUserId = existingAuthUser.id;
+    }
+
+    if (!authUserId) {
       throw new Error("Sign up did not return a user id.");
     }
+
     await createPortalUser({
       tenantId: invitation.tenantId,
-      authUserId: signup.user.id,
+      authUserId,
       fullName: invitation.fullName,
       email: invitation.email,
       role: invitation.role,

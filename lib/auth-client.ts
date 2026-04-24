@@ -1,6 +1,9 @@
 import { createAuthClient } from "better-auth/react";
 
-/** Same origin as the app in dev, e.g. http://localhost:3000 — see .env.local.example */
+/**
+ * Use same-origin auth endpoints so tenant subdomains post back to their own
+ * host while Better Auth still uses the configured root-domain callback URL.
+ */
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL ?? "",
+  baseURL: "",
 });

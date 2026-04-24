@@ -7,7 +7,7 @@ import { portalUsers } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { inviteUser as inviteUserAuth } from "@/services/auth";
-import { getCurrentTenant } from "./tenants";
+import { getCurrentRequestTenant, getCurrentTenant } from "./tenants";
 
 export type PortalUserRole =
   | "owner"
@@ -31,7 +31,10 @@ export async function createPortalUser(input: {
   role?: PortalUserRole;
 }) {
   const existing = await db.query.portalUsers.findFirst({
-    where: eq(portalUsers.authUserId, input.authUserId),
+    where: and(
+      eq(portalUsers.authUserId, input.authUserId),
+      eq(portalUsers.tenantId, input.tenantId),
+    ),
   });
   if (existing) return existing;
 
@@ -66,7 +69,10 @@ export async function getUsers() {
     throw new Error("Unauthorized");
   }
 
+  const tenant = await getCurrentTenant();
+
   return await db.query.portalUsers.findMany({
+    where: eq(portalUsers.tenantId, tenant.id),
     with: { authUser: true },
     orderBy: [desc(portalUsers.createdAt)],
   });
@@ -100,9 +106,17 @@ export type PortalUserDetail = NonNullable<
 /**
  * Gets a portal user by auth user id.
  */
-export async function getUserByAuthUserId(authUserId: string) {
+export async function getUserByAuthUserId(authUserId: string, tenantId?: string) {
+  const resolvedTenantId =
+    tenantId ?? (await getCurrentRequestTenant()).tenant?.id ?? null;
+
   const user = await db.query.portalUsers.findFirst({
-    where: eq(portalUsers.authUserId, authUserId),
+    where: resolvedTenantId
+      ? and(
+          eq(portalUsers.authUserId, authUserId),
+          eq(portalUsers.tenantId, resolvedTenantId),
+        )
+      : eq(portalUsers.authUserId, authUserId),
     with: {
       authUser: true,
     },
@@ -121,7 +135,8 @@ export async function getCurrentPortalUser() {
   if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
-  const portalUser = await getUserByAuthUserId(session.user.id);
+  const tenant = await getCurrentTenant();
+  const portalUser = await getUserByAuthUserId(session.user.id, tenant.id);
   if (!portalUser) {
     throw new Error("Portal user not found");
   }
@@ -138,7 +153,8 @@ export async function requireAdminPortalUser() {
   if (!session?.user?.id) {
     throw new Error("Unauthorized");
   }
-  const current = await getUserByAuthUserId(session.user.id);
+  const tenant = await getCurrentTenant();
+  const current = await getUserByAuthUserId(session.user.id, tenant.id);
   if (!current || (current.role !== "admin" && current.role !== "owner")) {
     throw new Error("Forbidden");
   }
