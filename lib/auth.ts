@@ -40,29 +40,20 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   /**
    * Allow any subdomain of ROOT_DOMAIN to make auth requests.
-   * Required for multi-tenant subdomain routing: tenant.app.com posts
-   * to Better Auth whose baseURL is app.com.
-   * The function receives the raw Request and must return the list of
-   * origins that should be trusted for that request.
+   * Better Auth's matchesOriginPattern supports glob wildcards, so
+   * "https://*.domain.com" covers all tenant subdomains without
+   * needing to enumerate them. localtest.me is always included for
+   * local development convenience.
+   *
+   * Additional origins can also be added at deploy time via the
+   * BETTER_AUTH_TRUSTED_ORIGINS env var (comma-separated).
    */
-  trustedOrigins: (request?: Request) => {
-    const always = [process.env.BETTER_AUTH_URL ?? ""];
-    const requestOrigin = request?.headers?.get("origin") ?? "";
-    if (!requestOrigin) return always;
-    try {
-      const { hostname } = new URL(requestOrigin);
-      const trusted =
-        hostname === rootDomain ||
-        hostname.endsWith(`.${rootDomain}`) ||
-        hostname === "localhost" ||
-        hostname === "127.0.0.1" ||
-        hostname.endsWith(".localhost") ||
-        hostname.endsWith(".localtest.me");
-      return trusted ? [...always, requestOrigin] : always;
-    } catch {
-      return always;
-    }
-  },
+  trustedOrigins: [
+    `https://*.${rootDomain}`,
+    `http://*.${rootDomain}`,
+    "https://*.localtest.me",
+    "http://*.localtest.me",
+  ],
   advanced: {
     crossSubDomainCookies: crossSubdomainCookiesEnabled
       ? {
