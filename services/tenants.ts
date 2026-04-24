@@ -74,10 +74,13 @@ export async function getCurrentTenant() {
   }
 
   const requestTenant = await getCurrentRequestTenant();
+  // Better Auth additionalFields don't automatically extend the inferred
+  // session type — cast to access tenantId at runtime.
+  const rawSession = session.session as typeof session.session & {
+    tenantId?: string | null;
+  };
   const sessionTenantId =
-    typeof session.session.tenantId === "string"
-      ? session.session.tenantId
-      : null;
+    typeof rawSession.tenantId === "string" ? rawSession.tenantId : null;
 
   if (!requestTenant.tenant) {
     throw new Error("Tenant subdomain required");
