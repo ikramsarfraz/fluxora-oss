@@ -9,7 +9,7 @@ Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack live
 | Framework | [Next.js 16](https://nextjs.org) (App Router, React 19) |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS 4, shadcn/ui (Radix UI + Base UI primitives) |
-| Auth | [Better Auth](https://better-auth.com) — email/password + tenant subdomain auth |
+| Auth | [Better Auth](https://better-auth.com) — root, tenant, and platform-admin host auth |
 | Database | [Neon](https://neon.tech) serverless Postgres |
 | ORM | [Drizzle ORM](https://orm.drizzle.team) + Drizzle Kit |
 | Data fetching | TanStack Query v5, TanStack Table v8 |
@@ -50,46 +50,74 @@ Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack live
 6. **Optional legacy backend**
    If you still need the old backend/API for specific routes, run it from `docs/legacy-app/` with `./run-one-port.sh` or `uvicorn api.main:app --reload --host 127.0.0.1 --port 8005`
 
-### Tenant subdomains locally
+### Host routing locally
 
-Local tenant auth uses subdomains on `localhost`, so you can test without changing the `tenants` table name or introducing a separate workspace model.
+The app now resolves three host types:
+- `root`: marketing and shared auth on the base/root domain
+- `tenant`: customer ERP workspaces on tenant subdomains
+- `platform-admin`: internal Pelzer Solutions admin surface on the reserved `admin` host
+
+The `admin` slug is reserved. It is not a customer tenant and cannot be created in `tenants.slug`.
+
+For local development you can use either:
+- `ROOT_DOMAIN=localtest.me` with `admin.localtest.me:3000`
+- `ROOT_DOMAIN=app.localtest.me` with `admin.app.localtest.me:3000`
+
+Examples below use `localtest.me` because it maps wildcard subdomains to `127.0.0.1` without editing `/etc/hosts`.
 
 Examples:
-- root marketing: [http://localhost:3000/](http://localhost:3000/)
-- central login: [http://localhost:3000/login](http://localhost:3000/login)
-- root signup: [http://localhost:3000/signup](http://localhost:3000/signup)
-- solo tenant login: [http://solo.localhost:3000/login](http://solo.localhost:3000/login)
-- business tenant login: [http://company.localhost:3000/login](http://company.localhost:3000/login)
-- tenant dashboard: [http://company.localhost:3000/](http://company.localhost:3000/)
+- root marketing: [http://localtest.me:3000/](http://localtest.me:3000/)
+- central login: [http://localtest.me:3000/login](http://localtest.me:3000/login)
+- root signup: [http://localtest.me:3000/signup](http://localtest.me:3000/signup)
+- platform admin login: [http://admin.localtest.me:3000/login](http://admin.localtest.me:3000/login)
+- platform admin dashboard: [http://admin.localtest.me:3000/admin](http://admin.localtest.me:3000/admin)
+- solo tenant login: [http://solo.localtest.me:3000/login](http://solo.localtest.me:3000/login)
+- business tenant login: [http://company.localtest.me:3000/login](http://company.localtest.me:3000/login)
+- tenant dashboard: [http://company.localtest.me:3000/](http://company.localtest.me:3000/)
 
 Behavior:
-- `localhost:3000/` = marketing homepage
-- `localhost:3000/features` and `localhost:3000/pricing` = public marketing routes
-- `localhost:3000/login` = central login
+- `localtest.me:3000/` = marketing homepage
+- `localtest.me:3000/features` and `localtest.me:3000/pricing` = public marketing routes
+- `localtest.me:3000/login` = central login
   Enter an email first and the app finds the tenant or lets the user choose among multiple tenants.
-- `localhost:3000/signup` = first-time signup
+- `localtest.me:3000/signup` = first-time signup
   Business and solo tenants are created from the root domain, then the user is redirected to the tenant subdomain login.
-- `tenant.localhost:3000/login` = tenant login
+- `admin.localtest.me:3000/login` = internal platform admin login
+  Sign-in succeeds only for active `platform_users`, and tenant resolution is blocked for the reserved `admin` host.
+- `admin.localtest.me:3000/admin` = internal platform admin surface
+- `tenant.localtest.me:3000/login` = tenant login
   The tenant is derived from the request host and sign-in only succeeds if the user belongs to that tenant.
-- `tenant.localhost:3000/` = tenant dashboard
+- `tenant.localtest.me:3000/` = tenant dashboard
   The proxy rewrites tenant root requests to the dashboard route internally.
-- `tenant.localhost:3000/signup` = redirected back to `localhost:3000/signup`
-- root-domain access to ERP routes like `localhost:3000/orders` is blocked and redirected back to the marketing home page
+- `tenant.localtest.me:3000/signup` = redirected back to `localtest.me:3000/signup`
+- tenant-host access to `/admin` is blocked
+- root-host access to `/admin` is blocked
+- root-domain access to ERP routes like `localtest.me:3000/orders` is blocked and redirected back to the marketing home page
 - unauthenticated tenant app requests are redirected to the tenant's `/login`
 - authenticated users who hit tenant `/login` are redirected back to tenant `/`
+- unauthenticated platform admin requests are redirected to the admin host `/login`
 
 Examples:
-- `solofounder.localhost:3000`
-- `company.localhost:3000`
+- `solofounder.localtest.me:3000`
+- `company.localtest.me:3000`
+- `admin.localtest.me:3000`
 
-Most modern browsers resolve `*.localhost` automatically, so you usually do **not** need to edit `/etc/hosts` for local subdomain testing.
+Most modern browsers resolve `*.localhost` automatically, and `*.localtest.me` resolves publicly to `127.0.0.1`, so you usually do **not** need to edit `/etc/hosts` for local subdomain testing.
+
+### UAT hosts
+
+- root/shared auth: `uat.app.pelzersolutions.com`
+- tenant workspace: `<tenant>.uat.app.pelzersolutions.com`
+- platform admin: `admin.uat.app.pelzersolutions.com`
+
+`admin.uat.app.pelzersolutions.com` is reserved for internal platform admins. It must never resolve as a customer tenant slug.
 
 ### Notes
 
 - Both solo/freelancer accounts and business/team accounts are stored as `tenants`.
 - Solo signup creates `tenantType=solo`.
 - Business signup creates `tenantType=business`.
-- Reserved tenant slugs such as `www` and `localhost` are blocked.
+- Reserved tenant slugs such as `admin`, `www`, and `localhost` are blocked.
 
 If `NEXT_PUBLIC_API_URL` is unset, the app calls `/api` on the same origin; `next.config.ts` rewrites that to `ERP_API_ORIGIN` (default `http://127.0.0.1:8000`). Route handlers under `app/api/auth/*` are served by Next.js (Better Auth) and are not proxied to FastAPI.
 

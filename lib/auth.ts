@@ -5,14 +5,13 @@ import { APIError } from "@better-auth/core/error";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import * as authSchema from "@/db/auth-schema";
-import { portalUsers, tenants } from "@/db/schema";
+import { platformUsers, portalUsers, tenants } from "@/db/schema";
 import { VerifyEmail } from "@/emails/verify-email";
 import { emailFrom, resend } from "./email";
-import { getRootDomain } from "./tenant-host";
+import { getRequestTenantHostContextFromHeaders, getRootDomain } from "./tenant-host";
 import { ResetPasswordEmail } from "@/emails/reset-password";
 import { createPortalUser } from "@/services/portal-users";
 import { getCurrentTenant } from "@/services/tenants";
-import { parseTenantSlugFromHostname } from "./tenant-host";
 
 if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not set");
@@ -116,14 +115,36 @@ export const auth = betterAuth({
 
           const requestHeaders = ctx.request?.headers ?? ctx.headers;
           const requestUrl = ctx.request?.url ? new URL(ctx.request.url) : null;
-          const host = requestHeaders?.get("host") ?? requestHeaders?.get("x-forwarded-host");
-          const hostname = host?.split(",")[0]?.trim()?.split(":")[0]?.toLowerCase() ?? "";
-          const tenantSlug =
-            requestHeaders?.get("x-tenant-slug") ??
-            (hostname ? parseTenantSlugFromHostname(hostname) : null);
+          const hostContext = requestHeaders
+            ? getRequestTenantHostContextFromHeaders(requestHeaders)
+            : null;
+          const tenantSlug = hostContext?.tenantSlug ?? null;
 
           const isSocialCallback =
             requestUrl?.pathname?.startsWith("/api/auth/callback/") ?? false;
+
+          if (hostContext?.isPlatformAdminHost) {
+            const platformUser = await db.query.platformUsers.findFirst({
+              where: and(
+                eq(platformUsers.authUserId, session.userId),
+                eq(platformUsers.isActive, true),
+              ),
+            });
+
+            if (!platformUser) {
+              throw APIError.from("FORBIDDEN", {
+                code: "PLATFORM_USER_REQUIRED",
+                message: "Your account does not have platform admin access.",
+              });
+            }
+
+            return {
+              data: {
+                ...session,
+                tenantId: null,
+              },
+            };
+          }
 
           if (!tenantSlug) {
             if (isSocialCallback) {

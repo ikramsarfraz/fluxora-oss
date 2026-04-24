@@ -35,6 +35,7 @@ export default async function SignInPage() {
         } : null}
         tenantSlug={tenantRequest.tenantSlug}
         isRootHost={tenantRequest.isRootHost}
+        isPlatformAdminHost={tenantRequest.isPlatformAdminHost}
         rootDomain={tenantRequest.rootDomain}
         protocol={tenantRequest.protocol}
         port={tenantRequest.port}

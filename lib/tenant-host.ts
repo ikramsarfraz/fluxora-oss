@@ -6,11 +6,20 @@ export type RequestTenantHostContext = {
   port: string | null;
   protocol: "http" | "https";
   rootDomain: string;
+  hostType: "root" | "tenant" | "platform-admin";
   tenantSlug: string | null;
   isRootHost: boolean;
+  isTenantHost: boolean;
+  isPlatformAdminHost: boolean;
 };
 
-const RESERVED_TENANT_SLUGS = new Set(["www", "localhost"]);
+export const PLATFORM_ADMIN_SLUG = "admin";
+
+const RESERVED_TENANT_SLUGS = new Set([
+  PLATFORM_ADMIN_SLUG,
+  "www",
+  "localhost",
+]);
 
 function normalizeHostname(host: string) {
   return host.trim().toLowerCase();
@@ -70,6 +79,10 @@ export function parseTenantSlugFromHostname(
   const normalizedHost = normalizeHostname(hostname);
   const normalizedRoot = normalizeHostname(rootDomain);
 
+  if (normalizedHost === `${PLATFORM_ADMIN_SLUG}.${normalizedRoot}`) {
+    return null;
+  }
+
   if (normalizedHost === normalizedRoot || normalizedHost === `www.${normalizedRoot}`) {
     return null;
   }
@@ -94,6 +107,13 @@ export function parseTenantSlugFromHostname(
 
   const slug = normalizedHost.slice(0, -1 * (`.${normalizedRoot}`.length));
   return slug || null;
+}
+
+export function isPlatformAdminHostname(
+  hostname: string,
+  rootDomain = getRootDomain(),
+) {
+  return normalizeHostname(hostname) === `${PLATFORM_ADMIN_SLUG}.${normalizeHostname(rootDomain)}`;
 }
 
 export function getProtocolFromHeaders(headersLike: Headers) {
@@ -124,17 +144,22 @@ export function getRequestTenantHostContextFromHeaders(
   const { hostname, port } = splitHostAndPort(host);
   const rootDomain = getRootDomain();
   const xTenantSlugHeader = requestHeaders.get("x-tenant-slug");
+  const isPlatformAdminHost = isPlatformAdminHostname(hostname, rootDomain);
   const tenantSlug =
-    xTenantSlugHeader ??
-    parseTenantSlugFromHostname(hostname, rootDomain);
+    isPlatformAdminHost
+      ? null
+      : (xTenantSlugHeader ?? parseTenantSlugFromHostname(hostname, rootDomain));
   const protocol = getProtocolFromHeaders(requestHeaders);
+  const hostType =
+    isPlatformAdminHost ? "platform-admin" : tenantSlug ? "tenant" : "root";
 
   const isRootHost =
-    tenantSlug == null &&
+    hostType === "root" &&
     (hostname === rootDomain ||
       hostname === `www.${rootDomain}` ||
       hostname === "localhost" ||
       hostname === "127.0.0.1");
+  const isTenantHost = hostType === "tenant";
 
   // DEBUG — remove after UAT diagnosis
   console.log("[tenant-host] resolution", {
@@ -143,7 +168,9 @@ export function getRequestTenantHostContextFromHeaders(
     port,
     rootDomain,
     protocol,
+    hostType,
     xTenantSlugHeader,
+    isPlatformAdminHost,
     parsedSlugFromHostname: parseTenantSlugFromHostname(hostname, rootDomain),
     tenantSlug,
     isRootHost,
@@ -161,8 +188,11 @@ export function getRequestTenantHostContextFromHeaders(
     port,
     protocol,
     rootDomain,
+    hostType,
     tenantSlug,
     isRootHost,
+    isTenantHost,
+    isPlatformAdminHost,
   };
 }
 
@@ -200,6 +230,31 @@ export function buildTenantAppUrl(args: {
   context: RequestTenantHostContext;
 }) {
   const url = new URL(`${args.context.protocol}://${buildHostForTenant(args.slug, args.context)}`);
+  url.pathname = args.pathname;
+
+  if (args.searchParams instanceof URLSearchParams) {
+    url.search = args.searchParams.toString();
+  } else if (args.searchParams) {
+    for (const [key, value] of Object.entries(args.searchParams)) {
+      if (value != null && value !== "") {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+
+  return url.toString();
+}
+
+export function buildPlatformAdminAppUrl(args: {
+  pathname: string;
+  searchParams?: URLSearchParams | Record<string, string | null | undefined>;
+  context: RequestTenantHostContext;
+}) {
+  const host = `${PLATFORM_ADMIN_SLUG}.${args.context.rootDomain}${
+    args.context.port ? `:${args.context.port}` : ""
+  }`;
+
+  const url = new URL(`${args.context.protocol}://${host}`);
   url.pathname = args.pathname;
 
   if (args.searchParams instanceof URLSearchParams) {

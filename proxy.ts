@@ -28,13 +28,51 @@ export function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   const hostContext = getRequestTenantHostContextFromHeaders(request.headers);
   const tenantSlug = hostContext.tenantSlug;
-  const isTenantHost = tenantSlug != null;
+  const isTenantHost = hostContext.isTenantHost;
+  const isPlatformAdminHost = hostContext.isPlatformAdminHost;
   const sessionCookie = getSessionCookie(request);
 
   if (tenantSlug) {
     requestHeaders.set("x-tenant-slug", tenantSlug);
   } else {
     requestHeaders.delete("x-tenant-slug");
+  }
+
+  if (isPlatformAdminHost) {
+    if (pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if ((pathname === "/login" || pathname === "/sign-in") && sessionCookie) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+
+    if (isSharedAuthPath(pathname) || pathname === "/admin" || pathname.startsWith("/admin/")) {
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
+
+    if (pathname.startsWith("/api")) {
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
+
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    url.search = "";
+    return NextResponse.redirect(url);
   }
 
   if (!isTenantHost) {
@@ -77,6 +115,13 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname === "/features" || pathname === "/pricing") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

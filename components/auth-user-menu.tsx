@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
-import { BadgeCheck, Bell, CreditCard, LogOut } from "lucide-react";
+import { BadgeCheck, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -21,10 +21,15 @@ import { getAvatarColor } from "@/lib/utils/get-avatar-color";
 import { getInitials } from "@/lib/utils/get-initials";
 import type { User } from "better-auth";
 
-export function AuthUserMenu({ user }: { user: User }) {
+export function AuthUserMenu({
+  user,
+  accountHref = "/account",
+}: {
+  user: User;
+  accountHref?: string;
+}) {
   const router = useRouter();
 
-  console.log(user.image);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -63,19 +68,11 @@ export function AuthUserMenu({ user }: { user: User }) {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild>
-            <Link href="/account">
+            <Link href={accountHref}>
               <BadgeCheck />
               Account
             </Link>
           </DropdownMenuItem>
-          {/* <DropdownMenuItem>
-            <CreditCard />
-            Billing
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Bell />
-            Notifications
-          </DropdownMenuItem> */}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem

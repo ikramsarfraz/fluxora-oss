@@ -62,6 +62,7 @@ type SignInFormProps = {
   } | null;
   tenantSlug: string | null;
   isRootHost: boolean;
+  isPlatformAdminHost: boolean;
   rootDomain: string;
   protocol: "http" | "https";
   port: string | null;
@@ -96,6 +97,7 @@ export function SignInForm({
   tenant,
   tenantSlug,
   isRootHost,
+  isPlatformAdminHost,
   rootDomain,
   protocol,
   port,
@@ -222,21 +224,29 @@ export function SignInForm({
   const marketingPanel = (
     <AuthMarketingPanel
       eyebrow={
-        isRootHost ? "All-in-one ERP for growing teams" : "Secure tenant access"
+        isPlatformAdminHost
+          ? "Internal Pelzer Solutions access"
+          : isRootHost
+            ? "All-in-one ERP for growing teams"
+            : "Secure tenant access"
       }
       title={
         <>
-          Run your business.
+          {isPlatformAdminHost ? "Operate the platform." : "Run your business."}
           <br />
           <span className="text-blue-600">
-            {isRootHost
+            {isPlatformAdminHost
+              ? "Internal admin sign-in."
+              : isRootHost
               ? "Find the right workspace."
               : "Sign in with confidence."}
           </span>
         </>
       }
       description={
-        isRootHost
+        isPlatformAdminHost
+          ? "Use your internal platform account to review tenants, platform users, and subscriptions from the reserved admin host."
+          : isRootHost
           ? "PrimeERP helps teams manage finance, sales, receiving, inventory, and operations from one tenant-isolated platform."
           : "Access your tenant workspace with the same secure flow used across orders, receiving, invoicing, and payments."
       }
@@ -316,16 +326,31 @@ export function SignInForm({
               </div>
             ) : (
               <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-                <Users className="size-4" />
-                Central login
+                {isPlatformAdminHost ? (
+                  <>
+                    <ShieldCheck className="size-4" />
+                    Platform admin
+                  </>
+                ) : (
+                  <>
+                    <Users className="size-4" />
+                    Central login
+                  </>
+                )}
               </div>
             )}
             <div className="space-y-2">
               <CardTitle className="text-3xl tracking-tight text-slate-950">
-                {isRootHost ? "Welcome back" : "Sign in to your workspace"}
+                {isPlatformAdminHost
+                  ? "Sign in to platform admin"
+                  : isRootHost
+                    ? "Welcome back"
+                    : "Sign in to your workspace"}
               </CardTitle>
               <CardDescription className="text-base leading-7 text-slate-500">
-                {isRootHost
+                {isPlatformAdminHost
+                  ? "Only active platform users can access this internal surface."
+                  : isRootHost
                   ? "Enter your email and we'll route you to the right tenant sign-in page."
                   : "Use your email and password to access your tenant workspace."}
               </CardDescription>
@@ -403,7 +428,7 @@ export function SignInForm({
               </div>
             </div>
 
-            {isRootHost ? (
+            {isRootHost && !isPlatformAdminHost ? (
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="tenant-discovery-email">
