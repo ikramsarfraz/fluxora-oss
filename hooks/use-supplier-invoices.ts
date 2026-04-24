@@ -8,6 +8,7 @@ import {
   deleteSupplierInvoiceAction,
   getSupplierInvoiceByIdAction,
   getSupplierInvoicesAction,
+  getSupplierInvoicesPageAction,
   recordSupplierInvoicePaymentAction,
   removeSupplierInvoiceAttachmentAction,
   reverseSupplierInvoiceAction,
@@ -16,11 +17,21 @@ import {
 } from "@/actions/supplier-invoices";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { SupplierInvoiceListParams } from "@/services/receiving";
 
 export function useSupplierInvoices() {
   return useQuery({
     queryKey: queryKeys.supplierInvoices.all,
     queryFn: () => getSupplierInvoicesAction(),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSupplierInvoicesPage(params: SupplierInvoiceListParams) {
+  return useQuery({
+    queryKey: queryKeys.supplierInvoices.list(params),
+    queryFn: () => getSupplierInvoicesPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 5,
   });
 }

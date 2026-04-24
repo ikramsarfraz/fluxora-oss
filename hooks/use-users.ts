@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getPendingInvitationsAction,
   getUserByIdAction,
+  getUsersDirectoryPageAction,
   getUsersAction,
   inviteUserAction,
   sendUserPasswordResetAction,
@@ -11,6 +12,7 @@ import {
   setUserRoleAction,
 } from "@/actions/users";
 import type { PortalUserRole } from "@/services/portal-users";
+import type { UsersDirectoryListParams } from "@/services/portal-users";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 
@@ -19,6 +21,15 @@ export function useUsers() {
     queryKey: queryKeys.users.all,
     queryFn: getUsersAction,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useUsersDirectoryPage(params: UsersDirectoryListParams) {
+  return useQuery({
+    queryKey: queryKeys.users.list(params),
+    queryFn: () => getUsersDirectoryPageAction(params),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 2,
   });
 }
 

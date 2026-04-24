@@ -5,14 +5,25 @@ import {
   deleteProductAction,
   getProductByIdAction,
   getProductsAction,
+  getProductsPageAction,
 } from "@/actions/products";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { ProductListParams } from "@/services/products";
 
 export function useProducts() {
   return useQuery({
     queryKey: queryKeys.products.all,
     queryFn: getProductsAction,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useProductsPage(params: ProductListParams) {
+  return useQuery({
+    queryKey: queryKeys.products.list(params),
+    queryFn: () => getProductsPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 5,
   });
 }

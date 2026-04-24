@@ -7,21 +7,33 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   useDeleteSupplierInvoice,
-  useSupplierInvoices,
+  useSupplierInvoicesPage,
 } from "@/hooks/use-supplier-invoices";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
+import type { SupplierInvoiceListSort } from "@/services/receiving";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 
 export default function SupplierInvoicesPage() {
-  const { data, isLoading, error, refetch } = useSupplierInvoices();
+  const pagination = useUrlPaginationState<SupplierInvoiceListSort>({
+    defaultSort: "invoiceDate",
+    defaultDirection: "desc",
+  });
+  const { data, isLoading, isFetching, error, refetch } = useSupplierInvoicesPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
   const deleteInvoice = useDeleteSupplierInvoice();
   const { data: currentUser } = useCurrentPortalUser();
   const role = currentUser?.role ?? null;
@@ -58,7 +70,7 @@ export default function SupplierInvoicesPage() {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading supplier invoices..." />;
+    return <ListPageSkeleton tableColumns={6} />;
   }
 
   if (error) {
@@ -70,8 +82,9 @@ export default function SupplierInvoicesPage() {
     );
   }
 
-  const invoices = data ?? [];
-  const hasInvoices = invoices.length > 0;
+  const invoices = data?.data ?? [];
+  const hasInvoices =
+    (data?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section
@@ -98,7 +111,28 @@ export default function SupplierInvoicesPage() {
       </PageHeader>
 
       {hasInvoices ? (
-        <DataTable columns={columns} data={invoices} />
+        <DataTable
+          columns={columns}
+          data={invoices}
+          searchPlaceholder="Search supplier invoices..."
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={data?.page ?? pagination.page}
+          pageSize={data?.pageSize ?? pagination.pageSize}
+          total={data?.total ?? 0}
+          pageCount={data?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(
+              nextSort as SupplierInvoiceListSort,
+              nextDirection,
+            );
+          }}
+          isFetching={isFetching}
+        />
       ) : (
         <EmptyState
           icon={FileText}

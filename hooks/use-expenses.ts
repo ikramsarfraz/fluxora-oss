@@ -7,15 +7,26 @@ import {
   deleteExpenseAction,
   getExpenseByIdAction,
   getExpensesAction,
+  getExpensesPageAction,
   updateExpenseAction,
 } from "@/actions/expenses";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { ExpenseListParams } from "@/services/expenses";
 
 export function useExpenses() {
   return useQuery({
     queryKey: queryKeys.expenses.all,
     queryFn: getExpensesAction,
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useExpensesPage(params: ExpenseListParams) {
+  return useQuery({
+    queryKey: queryKeys.expenses.list(params),
+    queryFn: () => getExpensesPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60,
   });
 }

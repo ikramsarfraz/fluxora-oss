@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
@@ -32,6 +32,14 @@ import {
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 /** Short human-readable suffix. Prefix (if any) is applied downstream per-customer. */
 function makeOrderNumber(id: string) {
@@ -683,6 +691,87 @@ export async function getSalesOrders() {
       },
     },
     orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
+  });
+}
+
+export type SalesOrderListSort =
+  | "orderNumber"
+  | "orderDate"
+  | "status"
+  | "createdAt";
+
+export type SalesOrderListParams = PaginatedQueryInput<SalesOrderListSort>;
+
+export async function getSalesOrdersPage(input?: SalesOrderListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "orderDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(salesOrders.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      salesOrders.orderNumber,
+      customers.name,
+    ]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(distinct ${salesOrders.id})::int` })
+    .from(salesOrders)
+    .leftJoin(customers, eq(customers.id, salesOrders.customerId))
+    .where(where);
+  const orderIds = await db
+    .select({ id: salesOrders.id })
+    .from(salesOrders)
+    .leftJoin(customers, eq(customers.id, salesOrders.customerId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          orderNumber: salesOrders.orderNumber,
+          orderDate: salesOrders.orderDate,
+          status: salesOrders.status,
+          createdAt: salesOrders.createdAt,
+        },
+      }),
+      desc(salesOrders.createdAt),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+
+  const ids = orderIds.map(row => row.id);
+  if (ids.length === 0) {
+    return createPaginatedResult({
+      data: [],
+      page: query.page,
+      pageSize: query.pageSize,
+      total: count ?? 0,
+    });
+  }
+
+  const rows = await db.query.salesOrders.findMany({
+    where: inArray(salesOrders.id, ids),
+    with: {
+      customer: true,
+      lines: {
+        with: {
+          salesUnit: true,
+        },
+      },
+    },
+  });
+
+  const rowMap = new Map(rows.map(row => [row.id, row]));
+  return createPaginatedResult({
+    data: ids
+      .map(id => rowMap.get(id))
+      .filter((row): row is (typeof rows)[number] => Boolean(row)),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
   });
 }
 

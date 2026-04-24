@@ -4,26 +4,39 @@ import { useMemo } from "react";
 
 import { Receipt } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
+import type { SalesInvoiceListSort } from "@/services/invoicing";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
-import { useSalesInvoices } from "@/hooks/use-invoices";
+import { useSalesInvoicesPage } from "@/hooks/use-invoices";
 
 export default function Invoices() {
+  const pagination = useUrlPaginationState<SalesInvoiceListSort>({
+    defaultSort: "invoiceDate",
+    defaultDirection: "desc",
+  });
   const {
     data: invoices,
     isLoading,
+    isFetching,
     error: loadError,
     refetch,
-  } = useSalesInvoices();
+  } = useSalesInvoicesPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
 
   const columns = useMemo(() => createColumns(), []);
 
   if (isLoading) {
-    return <PageLoading message="Loading invoices..." />;
+    return <ListPageSkeleton tableColumns={6} />;
   }
 
   if (loadError) {
@@ -35,7 +48,8 @@ export default function Invoices() {
     );
   }
 
-  const hasInvoices = invoices && invoices.length > 0;
+  const hasInvoices =
+    (invoices?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section className="flex flex-col gap-6" aria-labelledby="invoices-heading">
@@ -45,7 +59,25 @@ export default function Invoices() {
       />
 
       {hasInvoices ? (
-        <DataTable columns={columns} data={invoices} />
+        <DataTable
+          columns={columns}
+          data={invoices?.data ?? []}
+          searchPlaceholder="Search invoices..."
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={invoices?.page ?? pagination.page}
+          pageSize={invoices?.pageSize ?? pagination.pageSize}
+          total={invoices?.total ?? 0}
+          pageCount={invoices?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(nextSort as SalesInvoiceListSort, nextDirection);
+          }}
+          isFetching={isFetching}
+        />
       ) : (
         <EmptyState
           icon={Receipt}

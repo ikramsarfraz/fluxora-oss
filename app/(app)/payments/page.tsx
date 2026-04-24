@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   HydrationBoundary,
   QueryClient,
@@ -19,7 +20,9 @@ export default async function PaymentsRoute() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <PaymentsPage />
+      <Suspense>
+        <PaymentsPage />
+      </Suspense>
     </HydrationBoundary>
   );
 }

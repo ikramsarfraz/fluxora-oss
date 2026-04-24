@@ -13,7 +13,7 @@ import {
 } from "@/hooks/use-orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { DetailSection } from "@/components/detail-section";
-import { PageLoading } from "@/components/page-loading";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import {
   AlertDialog,
@@ -61,7 +61,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const title = order?.orderNumber ?? (order ? order.id.slice(0, 8) : "");
   useSetBreadcrumbLabel(`/orders/${orderId}`, title || undefined);
 
-  if (isLoading) return <PageLoading message="Loading order..." />;
+  if (isLoading) return <DetailPageSkeleton includeTable />;
   if (isError || !order)
     return (
       <PageError

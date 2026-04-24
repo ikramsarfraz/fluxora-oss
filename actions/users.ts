@@ -2,6 +2,7 @@
 
 import {
   getCurrentPortalUser,
+  getUsersDirectoryPage,
   getUserById,
   getUsers,
   inviteUserByAdmin,
@@ -14,6 +15,12 @@ import { listPendingInvitationsForAdmin } from "@/services/invitations";
 
 export async function getUsersAction() {
   return await getUsers();
+}
+
+export async function getUsersDirectoryPageAction(
+  input?: Parameters<typeof getUsersDirectoryPage>[0],
+) {
+  return await getUsersDirectoryPage(input);
 }
 
 /**

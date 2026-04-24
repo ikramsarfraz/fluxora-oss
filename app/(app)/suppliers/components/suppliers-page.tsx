@@ -6,18 +6,28 @@ import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Truck } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
-import { useSuppliers } from "@/hooks/use-suppliers";
-import { useDeleteSupplier } from "@/hooks/use-suppliers";
-import type { SupplierListItem } from "@/services/suppliers";
+import { useDeleteSupplier, useSuppliersPage } from "@/hooks/use-suppliers";
+import type { SupplierListItem, SupplierListSort } from "@/services/suppliers";
 
 export default function Suppliers() {
-  const { data: suppliers, isLoading, error: loadError, refetch } = useSuppliers();
+  const pagination = useUrlPaginationState<SupplierListSort>({
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+  });
+  const { data: suppliers, isLoading, isFetching, error: loadError, refetch } = useSuppliersPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
   const deleteSupplier = useDeleteSupplier();
 
   const columns = useMemo(
@@ -31,7 +41,7 @@ export default function Suppliers() {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading suppliers..." />;
+    return <ListPageSkeleton tableColumns={5} />;
   }
 
   if (loadError) {
@@ -43,7 +53,8 @@ export default function Suppliers() {
     );
   }
 
-  const hasSuppliers = suppliers && suppliers.length > 0;
+  const hasSuppliers =
+    (suppliers?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section className="flex flex-col gap-6" aria-labelledby="suppliers-heading">
@@ -60,7 +71,25 @@ export default function Suppliers() {
       </PageHeader>
 
       {hasSuppliers ? (
-        <DataTable columns={columns} data={suppliers} />
+        <DataTable
+          columns={columns}
+          data={suppliers?.data ?? []}
+          searchPlaceholder="Search suppliers..."
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={suppliers?.page ?? pagination.page}
+          pageSize={suppliers?.pageSize ?? pagination.pageSize}
+          total={suppliers?.total ?? 0}
+          pageCount={suppliers?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(nextSort as SupplierListSort, nextDirection);
+          }}
+          isFetching={isFetching}
+        />
       ) : (
         <EmptyState
           icon={Truck}

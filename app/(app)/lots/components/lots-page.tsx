@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowUpDown, Layers, Plus } from "lucide-react";
+import {
+  getCoreRowModel,
+  getPaginationRowModel,
+  type PaginationState,
+  useReactTable,
+} from "@tanstack/react-table";
 
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { EmptyState } from "@/components/empty-state";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
@@ -101,8 +108,12 @@ export default function Lots() {
   const [lotStatusFilter, setLotStatusFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("expiration");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
 
-  const lots = data ?? [];
+  const lots = useMemo(() => data ?? [], [data]);
 
   const supplierOptions = useMemo(
     () =>
@@ -247,6 +258,17 @@ export default function Lots() {
       ).length,
     };
   }, [filteredLots]);
+
+  const paginationColumns = useMemo(() => [], []);
+  const paginatedTable = useReactTable({
+    data: sortedLots,
+    columns: paginationColumns,
+    state: { pagination },
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+  const visibleLots = paginatedTable.getRowModel().rows.map(row => row.original);
 
   function handleSort(nextKey: SortKey) {
     if (nextKey === sortKey) {
@@ -518,8 +540,8 @@ export default function Lots() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedLots.length > 0 ? (
-                  sortedLots.map(lot => {
+                {visibleLots.length > 0 ? (
+                  visibleLots.map(lot => {
                     const product = getLotPrimaryProduct(lot);
                     const totals = getLotTotals(lot);
                     const sourceInvoice = getLotSourceInvoices(lot)[0] ?? null;
@@ -592,6 +614,9 @@ export default function Lots() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="mt-4">
+            <DataTablePagination table={paginatedTable} />
           </div>
         </CardContent>
       </Card>

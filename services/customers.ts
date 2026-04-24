@@ -1,8 +1,16 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customerAddresses, customers } from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
 import { getCurrentTenant } from "./tenants";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 export async function createCustomer(
   input: Omit<NewCustomer, "tenantId"> & {
@@ -51,8 +59,13 @@ export async function getCustomerById(customerId: string) {
   return result ?? null;
 }
 
+export type CustomerListSort = "name" | "createdAt";
+export type CustomerListParams = PaginatedQueryInput<CustomerListSort>;
+
 export async function getCustomers() {
+  const tenant = await getCurrentTenant();
   const result = await db.query.customers.findMany({
+    where: eq(customers.tenantId, tenant.id),
     with: {
       addresses: true,
       productPrices: true,
@@ -60,6 +73,51 @@ export async function getCustomers() {
   });
 
   return result;
+}
+
+export async function getCustomersPage(input?: CustomerListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(customers.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      customers.name,
+      customers.phoneNumber,
+      customers.invoicePrefix,
+    ]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(customers)
+    .where(where);
+  const result = await db.query.customers.findMany({
+    where,
+    with: {
+      addresses: true,
+      productPrices: true,
+    },
+    orderBy: resolveOrderBy({
+      sort: query.sort,
+      direction: query.direction,
+      expressions: {
+        name: customers.name,
+        createdAt: customers.createdAt,
+      },
+    }),
+    limit: query.pageSize,
+    offset: getPaginationOffset(query.page, query.pageSize),
+  });
+
+  return createPaginatedResult({
+    data: result ?? [],
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
 }
 
 export async function deleteCustomer(customerId: string) {

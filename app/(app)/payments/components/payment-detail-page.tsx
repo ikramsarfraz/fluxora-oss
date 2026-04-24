@@ -11,8 +11,8 @@ import {
   DetailGrid,
   DetailSection,
 } from "@/components/detail-section";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { usePayment } from "@/hooks/use-payments";
 import { formatMoney } from "@/lib/utils/currency";
@@ -51,7 +51,7 @@ export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading payment..." />;
+    return <DetailPageSkeleton sections={2} />;
   }
 
   if (error) {

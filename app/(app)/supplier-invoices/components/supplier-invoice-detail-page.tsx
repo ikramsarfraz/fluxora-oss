@@ -42,8 +42,8 @@ import {
   DetailGrid,
   DetailSection,
 } from "@/components/detail-section";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
 import {
   Table,
   TableBody,
@@ -126,7 +126,7 @@ export function SupplierInvoiceDetailPage({
     invoice?.invoiceNumber,
   );
 
-  if (isLoading) return <PageLoading message="Loading supplier invoice..." />;
+  if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
     return (
       <PageError

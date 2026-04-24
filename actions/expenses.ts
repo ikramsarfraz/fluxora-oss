@@ -5,6 +5,7 @@ import {
   deleteExpense,
   getExpenseById,
   getExpenses,
+  getExpensesPage,
   updateExpense,
   type CreateExpenseInput,
   type UpdateExpenseInput,
@@ -12,6 +13,12 @@ import {
 
 export async function getExpensesAction() {
   return await getExpenses();
+}
+
+export async function getExpensesPageAction(
+  input?: Parameters<typeof getExpensesPage>[0],
+) {
+  return await getExpensesPage(input);
 }
 
 export async function getExpenseByIdAction(id: string) {

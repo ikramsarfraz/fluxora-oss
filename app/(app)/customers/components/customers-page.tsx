@@ -4,28 +4,40 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useCustomers } from "@/hooks/use-customers";
+import { useCustomersPage } from "@/hooks/use-customers";
 import { Plus, Users } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
-import type { CustomerListItem } from "@/services/customers";
+import type { CustomerListItem, CustomerListSort } from "@/services/customers";
 import { deleteCustomerAction } from "@/actions/customers";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 
 export default function Customers() {
+  const pagination = useUrlPaginationState<CustomerListSort>({
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+  });
   const queryClient = useQueryClient();
   const {
     data: customers,
     isLoading,
+    isFetching,
     error: loadError,
     refetch,
-  } = useCustomers();
+  } = useCustomersPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
 
   const columns = useMemo(
     () =>
@@ -41,7 +53,7 @@ export default function Customers() {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading customers..." />;
+    return <ListPageSkeleton tableColumns={5} />;
   }
 
   if (loadError) {
@@ -53,7 +65,8 @@ export default function Customers() {
     );
   }
 
-  const hasCustomers = customers && customers.length > 0;
+  const hasCustomers =
+    (customers?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section
@@ -73,7 +86,25 @@ export default function Customers() {
       </PageHeader>
 
       {hasCustomers ? (
-        <DataTable columns={columns} data={customers} />
+        <DataTable
+          columns={columns}
+          data={customers?.data ?? []}
+          searchPlaceholder="Search customers..."
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={customers?.page ?? pagination.page}
+          pageSize={customers?.pageSize ?? pagination.pageSize}
+          total={customers?.total ?? 0}
+          pageCount={customers?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(nextSort as CustomerListSort, nextDirection);
+          }}
+          isFetching={isFetching}
+        />
       ) : (
         <EmptyState
           icon={Users}

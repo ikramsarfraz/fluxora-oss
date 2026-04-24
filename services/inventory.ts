@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -6,6 +6,8 @@ import {
   inventoryAdjustments,
   inventoryItems,
   lots,
+  products,
+  suppliers,
 } from "@/db/schema";
 import type { PortalUserRole } from "./portal-users";
 
@@ -19,6 +21,14 @@ import {
   INVENTORY_ADJUSTMENT_REASON_OPTIONS,
   type InventoryAdjustmentReason,
 } from "@/lib/warehouse/adjustments";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 function canAdjustInventory(role: PortalUserRole | null | undefined) {
   return role === "owner" || role === "admin" || role === "warehouse";
@@ -169,6 +179,242 @@ export async function getInventoryItems() {
     },
     orderBy: [desc(inventoryItems.updatedAt), desc(inventoryItems.createdAt)],
   });
+}
+
+export type InventoryListSort =
+  | "barcode"
+  | "product"
+  | "lot"
+  | "cases"
+  | "weight"
+  | "status"
+  | "expiration"
+  | "receive"
+  | "supplier";
+
+export type InventoryListFilters = {
+  productId?: string;
+  status?: InventoryLifecycleState | "all";
+  lotId?: string;
+  expiration?: "all" | "fresh" | "expiring_soon" | "expired";
+};
+
+export type InventoryListParams = PaginatedQueryInput<
+  InventoryListSort,
+  InventoryListFilters
+>;
+
+function getInventoryExpirationFilterSql(
+  expiration: InventoryListFilters["expiration"],
+) {
+  if (!expiration || expiration === "all") {
+    return undefined;
+  }
+
+  if (expiration === "expired") {
+    return sql`${lots.expirationDate} < current_date`;
+  }
+
+  if (expiration === "expiring_soon") {
+    return sql`${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '7 days'`;
+  }
+
+  return sql`${lots.expirationDate} > current_date + interval '7 days'`;
+}
+
+function buildInventoryWhere(args: {
+  tenantId: string;
+  search: string;
+  filters: InventoryListFilters;
+}) {
+  return and(
+    eq(lots.tenantId, args.tenantId),
+    buildTextSearchCondition(args.search, [
+      inventoryItems.barcodeId,
+      inventoryItems.id,
+      products.name,
+      products.sku,
+      lots.lotNumber,
+      suppliers.name,
+    ]),
+    args.filters.productId && args.filters.productId !== "all"
+      ? eq(inventoryItems.productId, args.filters.productId)
+      : undefined,
+    args.filters.status && args.filters.status !== "all"
+      ? eq(inventoryItems.status, args.filters.status)
+      : undefined,
+    args.filters.lotId && args.filters.lotId !== "all"
+      ? eq(inventoryItems.lotId, args.filters.lotId)
+      : undefined,
+    getInventoryExpirationFilterSql(args.filters.expiration),
+  );
+}
+
+export async function getInventoryItemsPage(input?: InventoryListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "expiration",
+    defaultDirection: "asc",
+    defaultFilters: {
+      productId: "all",
+      status: "all",
+      lotId: "all",
+      expiration: "all",
+    },
+  });
+  const where = buildInventoryWhere({
+    tenantId: tenant.id,
+    search: query.search,
+    filters: query.filters,
+  });
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(distinct ${inventoryItems.id})::int` })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(where);
+
+  const [summaryRow] = await db
+    .select({
+      totalItems: sql<number>`count(distinct ${inventoryItems.id})::int`,
+      totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
+      totalWeight: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '7 days' then 1 else 0 end), 0)::int`,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(where);
+
+  const itemIds = await db
+    .select({ id: inventoryItems.id })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          barcode: inventoryItems.barcodeId,
+          product: products.name,
+          lot: lots.lotNumber,
+          cases: inventoryItems.cases,
+          weight: inventoryItems.exactWeightLbs,
+          status: inventoryItems.status,
+          expiration: lots.expirationDate,
+          receive: lots.receiveDate,
+          supplier: suppliers.name,
+        },
+      }),
+      desc(inventoryItems.createdAt),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+
+  const ids = itemIds.map(row => row.id);
+  const rows =
+    ids.length === 0
+      ? []
+      : await db.query.inventoryItems.findMany({
+          where: inArray(inventoryItems.id, ids),
+          with: {
+            product: {
+              columns: {
+                id: true,
+                sku: true,
+                name: true,
+              },
+            },
+            lot: {
+              columns: {
+                id: true,
+                lotNumber: true,
+                receiveDate: true,
+                expirationDate: true,
+              },
+              with: {
+                supplier: {
+                  columns: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                lotReceipts: {
+                  columns: {
+                    id: true,
+                    supplierInvoiceLineId: true,
+                  },
+                  with: {
+                    supplierInvoiceLine: {
+                      columns: {
+                        id: true,
+                      },
+                      with: {
+                        supplierInvoice: {
+                          columns: {
+                            id: true,
+                            invoiceNumber: true,
+                            invoiceDate: true,
+                            receiveDate: true,
+                            status: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+  const rowMap = new Map(rows.map(row => [row.id, row]));
+  const productOptions = await db
+    .selectDistinct({
+      id: products.id,
+      name: products.name,
+    })
+    .from(inventoryItems)
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .where(eq(lots.tenantId, tenant.id))
+    .orderBy(products.name);
+  const lotOptions = await db
+    .selectDistinct({
+      id: lots.id,
+      lotNumber: lots.lotNumber,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .where(eq(lots.tenantId, tenant.id))
+    .orderBy(lots.lotNumber);
+
+  return {
+    ...createPaginatedResult({
+      data: ids
+        .map(id => rowMap.get(id))
+        .filter((row): row is (typeof rows)[number] => Boolean(row)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total: count ?? 0,
+    }),
+    summary: {
+      totalItems: summaryRow?.totalItems ?? 0,
+      totalCases: summaryRow?.totalCases ?? 0,
+      totalWeight: summaryRow?.totalWeight ?? "0",
+      expiringCount: summaryRow?.expiringCount ?? 0,
+    },
+    filterOptions: {
+      products: productOptions,
+      lots: lotOptions,
+    },
+  };
 }
 
 export async function getInventoryItemById(inventoryItemId: string) {

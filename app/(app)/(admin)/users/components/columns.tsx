@@ -25,17 +25,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import type { PendingInvitationListItem } from "@/services/invitations";
-import type { PortalUserListItem } from "@/services/portal-users";
+import type { UsersDirectoryListItem } from "@/services/portal-users";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-export type UsersDirectoryRow =
-  | { kind: "user"; row: PortalUserListItem }
-  | { kind: "invitation"; row: PendingInvitationListItem };
+export type UsersDirectoryRow = UsersDirectoryListItem;
 
 type ColumnActions = {
-  onDeleteUser: (user: PortalUserListItem) => void;
-  onRevokeInvitation: (invitation: PendingInvitationListItem) => void;
+  onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onRevokeInvitation: (
+    invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
+  ) => void;
 };
 
 function ActionsCell({
@@ -44,8 +43,10 @@ function ActionsCell({
   onRevokeInvitation,
 }: {
   row: UsersDirectoryRow;
-  onDeleteUser: (user: PortalUserListItem) => void;
-  onRevokeInvitation: (invitation: PendingInvitationListItem) => void;
+  onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onRevokeInvitation: (
+    invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
+  ) => void;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 

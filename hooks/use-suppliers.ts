@@ -6,15 +6,26 @@ import {
   deleteSupplierAction,
   getSupplierByIdAction,
   getSuppliersAction,
+  getSuppliersPageAction,
   updateSupplierAction,
 } from "@/actions/suppliers";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { SupplierListParams } from "@/services/suppliers";
 
 export function useSuppliers() {
   return useQuery({
     queryKey: queryKeys.suppliers.all,
     queryFn: getSuppliersAction,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSuppliersPage(params: SupplierListParams) {
+  return useQuery({
+    queryKey: queryKeys.suppliers.list(params),
+    queryFn: () => getSuppliersPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 5,
   });
 }

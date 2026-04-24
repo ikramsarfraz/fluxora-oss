@@ -1,7 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { expenses } from "@/db/schema";
+import { expenses, portalUsers } from "@/db/schema";
 import {
   canManageExpenses,
   type ExpensePaymentMethod,
@@ -9,6 +9,14 @@ import {
 
 import { getCurrentPortalUser, type PortalUserRole } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 /* -------------------------------------------------------------------------- */
 /* Re-exports of client-safe metadata (for convenience in server code).       */
@@ -51,6 +59,80 @@ export async function getExpenses() {
     where: eq(expenses.tenantId, tenant.id),
     with: { createdBy: true },
     orderBy: [desc(expenses.expenseDate), desc(expenses.createdAt)],
+  });
+}
+
+export type ExpenseListSort =
+  | "expenseDate"
+  | "category"
+  | "amount"
+  | "createdAt";
+
+export type ExpenseListParams = PaginatedQueryInput<ExpenseListSort>;
+
+export async function getExpensesPage(input?: ExpenseListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "expenseDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(expenses.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      expenses.category,
+      expenses.note,
+      portalUsers.fullName,
+    ]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(distinct ${expenses.id})::int` })
+    .from(expenses)
+    .leftJoin(portalUsers, eq(portalUsers.id, expenses.createdByUserId))
+    .where(where);
+  const expenseIds = await db
+    .select({ id: expenses.id })
+    .from(expenses)
+    .leftJoin(portalUsers, eq(portalUsers.id, expenses.createdByUserId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          expenseDate: expenses.expenseDate,
+          category: expenses.category,
+          amount: expenses.amount,
+          createdAt: expenses.createdAt,
+        },
+      }),
+      desc(expenses.createdAt),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+  const ids = expenseIds.map(row => row.id);
+  if (ids.length === 0) {
+    return createPaginatedResult({
+      data: [],
+      page: query.page,
+      pageSize: query.pageSize,
+      total: count ?? 0,
+    });
+  }
+
+  const rows = await db.query.expenses.findMany({
+    where: inArray(expenses.id, ids),
+    with: { createdBy: true },
+  });
+
+  const rowMap = new Map(rows.map(row => [row.id, row]));
+  return createPaginatedResult({
+    data: ids
+      .map(id => rowMap.get(id))
+      .filter((row): row is (typeof rows)[number] => Boolean(row)),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
   });
 }
 

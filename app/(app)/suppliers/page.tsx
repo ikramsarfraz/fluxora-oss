@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Suppliers from "./components/suppliers-page";
 import {
   QueryClient,
@@ -17,7 +18,9 @@ export default async function SuppliersPage() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suppliers />
+      <Suspense>
+        <Suppliers />
+      </Suspense>
     </HydrationBoundary>
   );
 }

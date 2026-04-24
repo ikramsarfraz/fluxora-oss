@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   QueryClient,
   dehydrate,
@@ -27,7 +28,9 @@ export default async function SupplierInvoicesRoute() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <SupplierInvoicesPage />
+      <Suspense>
+        <SupplierInvoicesPage />
+      </Suspense>
     </HydrationBoundary>
   );
 }

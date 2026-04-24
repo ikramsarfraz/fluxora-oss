@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   HydrationBoundary,
   QueryClient,
@@ -19,7 +20,9 @@ export default async function ExpensesRoute() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ExpensesPage />
+      <Suspense>
+        <ExpensesPage />
+      </Suspense>
     </HydrationBoundary>
   );
 }

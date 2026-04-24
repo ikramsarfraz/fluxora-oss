@@ -9,6 +9,7 @@ import {
   getSalesOrderLineAllocationEditor,
   getSalesOrderById,
   getSalesOrders,
+  getSalesOrdersPage,
   getSalesOrderAttachmentDownload,
   markSalesOrderLineShortShipped,
   removeSalesOrderLineAllocation,
@@ -27,6 +28,12 @@ import {
 
 export async function getSalesOrdersAction() {
   return await getSalesOrders();
+}
+
+export async function getSalesOrdersPageAction(
+  input?: Parameters<typeof getSalesOrdersPage>[0],
+) {
+  return await getSalesOrdersPage(input);
 }
 
 export async function getSalesOrderByIdAction(id: string) {

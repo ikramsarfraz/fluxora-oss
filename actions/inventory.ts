@@ -5,10 +5,17 @@ import {
   bulkAdjustLotInventory,
   getInventoryItemById,
   getInventoryItems,
+  getInventoryItemsPage,
 } from "@/services/inventory";
 
 export async function getInventoryItemsAction() {
   return await getInventoryItems();
+}
+
+export async function getInventoryItemsPageAction(
+  input?: Parameters<typeof getInventoryItemsPage>[0],
+) {
+  return await getInventoryItemsPage(input);
 }
 
 export async function getInventoryItemByIdAction(id: string) {

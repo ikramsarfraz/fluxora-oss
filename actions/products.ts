@@ -5,10 +5,16 @@ import {
   deleteProduct,
   getProductById,
   getProducts,
+  getProductsPage,
+  type ProductListParams,
 } from "@/services/products";
 
 export async function getProductsAction() {
   return await getProducts();
+}
+
+export async function getProductsPageAction(input?: ProductListParams) {
+  return await getProductsPage(input);
 }
 
 export async function getProductByIdAction(id: string) {

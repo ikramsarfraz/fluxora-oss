@@ -24,8 +24,8 @@ import {
   DetailGrid,
   DetailSection,
 } from "@/components/detail-section";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
@@ -67,7 +67,7 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading expense..." />;
+    return <DetailPageSkeleton sections={2} />;
   }
 
   if (error) {

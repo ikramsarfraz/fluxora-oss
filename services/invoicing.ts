@@ -1,6 +1,7 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  customers,
   payments,
   salesInvoiceLines,
   salesInvoices,
@@ -11,6 +12,14 @@ import { markInventoryItemsSold } from "./inventory-state";
 import { getCurrentPortalUser } from "./portal-users";
 import { getCurrentTenant } from "./tenants";
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 function makeInvoiceNumber(prefix: string | null | undefined, id: string) {
   const numericSuffix = parseInt(String(id).replaceAll("-", "").slice(-6), 16);
@@ -287,6 +296,84 @@ export async function getSalesInvoices() {
       customer: true,
     },
     orderBy: [desc(salesInvoices.invoiceDate)],
+  });
+}
+
+export type SalesInvoiceListSort =
+  | "invoiceNumber"
+  | "invoiceDate"
+  | "status"
+  | "totalAmount"
+  | "balanceDue";
+
+export type SalesInvoiceListParams = PaginatedQueryInput<SalesInvoiceListSort>;
+
+export async function getSalesInvoicesPage(input?: SalesInvoiceListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "invoiceDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(salesInvoices.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      salesInvoices.invoiceNumber,
+      salesInvoices.status,
+      customers.name,
+    ]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(distinct ${salesInvoices.id})::int` })
+    .from(salesInvoices)
+    .leftJoin(customers, eq(customers.id, salesInvoices.customerId))
+    .where(where);
+  const invoiceIds = await db
+    .select({ id: salesInvoices.id })
+    .from(salesInvoices)
+    .leftJoin(customers, eq(customers.id, salesInvoices.customerId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          invoiceNumber: salesInvoices.invoiceNumber,
+          invoiceDate: salesInvoices.invoiceDate,
+          status: salesInvoices.status,
+          totalAmount: salesInvoices.totalAmount,
+          balanceDue: salesInvoices.balanceDue,
+        },
+      }),
+      desc(salesInvoices.createdAt),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+  const ids = invoiceIds.map(row => row.id);
+  if (ids.length === 0) {
+    return createPaginatedResult({
+      data: [],
+      page: query.page,
+      pageSize: query.pageSize,
+      total: count ?? 0,
+    });
+  }
+
+  const rows = await db.query.salesInvoices.findMany({
+    where: inArray(salesInvoices.id, ids),
+    with: {
+      customer: true,
+    },
+  });
+
+  const rowMap = new Map(rows.map(row => [row.id, row]));
+  return createPaginatedResult({
+    data: ids
+      .map(id => rowMap.get(id))
+      .filter((row): row is (typeof rows)[number] => Boolean(row)),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
   });
 }
 

@@ -5,6 +5,8 @@ import {
   deleteSupplier,
   getSupplierById,
   getSuppliers,
+  getSuppliersPage,
+  type SupplierListParams,
   updateSupplier,
   type CreateSupplierInput,
   type UpdateSupplierInput,
@@ -12,6 +14,10 @@ import {
 
 export async function getSuppliersAction() {
   return await getSuppliers();
+}
+
+export async function getSuppliersPageAction(input?: SupplierListParams) {
+  return await getSuppliersPage(input);
 }
 
 export async function getSupplierByIdAction(id: string) {

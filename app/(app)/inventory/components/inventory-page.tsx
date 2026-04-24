@@ -1,20 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowUpDown, PackageSearch } from "lucide-react";
+import {
+  getCoreRowModel,
+  getPaginationRowModel,
+  type PaginationState,
+  useReactTable,
+} from "@tanstack/react-table";
 
+import { DataTablePagination } from "@/components/data-table-pagination";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ExpirationStateBadge, InventoryStatusBadge } from "@/components/warehouse/warehouse-badges";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -31,28 +38,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useInventoryItems } from "@/hooks/use-inventory";
+import {
+  ExpirationStateBadge,
+  InventoryStatusBadge,
+} from "@/components/warehouse/warehouse-badges";
+import { useInventoryItemsPage } from "@/hooks/use-inventory";
+import type { SortDirection } from "@/lib/pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
   formatWeightLbs,
   getExpirationState,
   getInventoryStatusLabel,
-  sumNumericStrings,
 } from "@/lib/warehouse/insights";
-import type { InventoryListItem } from "@/services/inventory";
+import type {
+  InventoryListFilters,
+  InventoryListSort,
+  InventoryListItem,
+} from "@/services/inventory";
 
-type SortKey =
-  | "barcode"
-  | "product"
-  | "lot"
-  | "cases"
-  | "weight"
-  | "status"
-  | "expiration"
-  | "receive"
-  | "supplier";
-
-type SortDirection = "asc" | "desc";
+const DEFAULT_INVENTORY_FILTERS: Required<InventoryListFilters> = {
+  productId: "all",
+  status: "all",
+  lotId: "all",
+  expiration: "all",
+};
 
 function getSourceInvoice(item: InventoryListItem) {
   return item.lot.lotReceipts[0]?.supplierInvoiceLine?.supplierInvoice ?? null;
@@ -66,10 +75,10 @@ function SortHeader({
   onSort,
 }: {
   label: string;
-  sortKey: SortKey;
-  activeSortKey: SortKey;
+  sortKey: InventoryListSort;
+  activeSortKey: InventoryListSort;
   activeDirection: SortDirection;
-  onSort: (sortKey: SortKey) => void;
+  onSort: (sortKey: InventoryListSort) => void;
 }) {
   const isActive = activeSortKey === sortKey;
   return (
@@ -90,126 +99,63 @@ function SortHeader({
 }
 
 export function InventoryPage() {
-  const { data, isLoading, error, refetch } = useInventoryItems();
-  const [search, setSearch] = useState("");
-  const [productFilter, setProductFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [lotFilter, setLotFilter] = useState("all");
-  const [expirationFilter, setExpirationFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("expiration");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-
-  const items = data ?? [];
-
-  const productOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          items.map(item => [item.product.id, item.product]),
-        ).values(),
-      ).sort((a, b) => a.name.localeCompare(b.name)),
-    [items],
+  const pagination = useUrlPaginationState<
+    InventoryListSort,
+    Required<InventoryListFilters>
+  >({
+    defaultSort: "expiration",
+    defaultDirection: "asc",
+    defaultFilters: DEFAULT_INVENTORY_FILTERS,
+  });
+  const { data, isLoading, isFetching, error, refetch } = useInventoryItemsPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+    filters: pagination.filters,
+  });
+  const paginationState = useMemo<PaginationState>(
+    () => ({
+      pageIndex: (data?.page ?? 1) - 1,
+      pageSize: data?.pageSize ?? 10,
+    }),
+    [data],
   );
+  const paginatedTable = useReactTable({
+    data: data?.data ?? [],
+    columns: [],
+    state: { pagination: paginationState },
+    onPaginationChange: updater => {
+      const next =
+        typeof updater === "function" ? updater(paginationState) : updater;
+      if (next.pageSize !== pagination.pageSize) {
+        pagination.setPageSize(next.pageSize);
+        return;
+      }
+      pagination.setPage(next.pageIndex + 1);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    rowCount: data?.total ?? 0,
+    pageCount: data?.pageCount ?? 1,
+  });
 
-  const lotOptions = useMemo(
-    () =>
-      Array.from(new Map(items.map(item => [item.lot.id, item.lot])).values()).sort(
-        (a, b) => a.lotNumber.localeCompare(b.lotNumber),
-      ),
-    [items],
-  );
-
-  const filteredItems = useMemo(() => {
-    const searchValue = search.trim().toLowerCase();
-
-    return items.filter(item => {
-      const expirationState = getExpirationState(item.lot.expirationDate);
-      const sourceInvoice = getSourceInvoice(item);
-      const matchesSearch =
-        searchValue.length === 0 ||
-        [
-          item.barcodeId,
-          item.id,
-          item.product.name,
-          item.product.sku,
-          item.lot.lotNumber,
-          item.lot.supplier?.name,
-          sourceInvoice?.invoiceNumber,
-        ]
-          .filter(Boolean)
-          .some(value => value!.toLowerCase().includes(searchValue));
-
-      return (
-        matchesSearch &&
-        (productFilter === "all" || item.product.id === productFilter) &&
-        (statusFilter === "all" || item.status === statusFilter) &&
-        (lotFilter === "all" || item.lot.id === lotFilter) &&
-        (expirationFilter === "all" || expirationState === expirationFilter)
+  function handleSort(nextKey: InventoryListSort) {
+    if (nextKey === pagination.sort) {
+      pagination.setSort(
+        nextKey,
+        pagination.direction === "asc" ? "desc" : "asc",
       );
-    });
-  }, [items, search, productFilter, statusFilter, lotFilter, expirationFilter]);
-
-  const sortedItems = useMemo(() => {
-    const list = [...filteredItems];
-    list.sort((a, b) => {
-      const expirationA = getExpirationState(a.lot.expirationDate);
-      const expirationB = getExpirationState(b.lot.expirationDate);
-
-      const value =
-        sortKey === "barcode"
-          ? a.barcodeId.localeCompare(b.barcodeId)
-          : sortKey === "product"
-            ? a.product.name.localeCompare(b.product.name)
-            : sortKey === "lot"
-              ? a.lot.lotNumber.localeCompare(b.lot.lotNumber)
-              : sortKey === "cases"
-                ? a.cases - b.cases
-                : sortKey === "weight"
-                  ? Number(a.exactWeightLbs) - Number(b.exactWeightLbs)
-                  : sortKey === "status"
-                    ? getInventoryStatusLabel(a.status).localeCompare(
-                        getInventoryStatusLabel(b.status),
-                      )
-                    : sortKey === "receive"
-                      ? a.lot.receiveDate.localeCompare(b.lot.receiveDate)
-                      : sortKey === "supplier"
-                        ? (a.lot.supplier?.name ?? "").localeCompare(
-                            b.lot.supplier?.name ?? "",
-                          )
-                        : expirationA.localeCompare(expirationB) ||
-                          a.lot.expirationDate.localeCompare(b.lot.expirationDate);
-
-      return sortDirection === "asc" ? value : value * -1;
-    });
-
-    return list;
-  }, [filteredItems, sortDirection, sortKey]);
-
-  const summary = useMemo(() => {
-    return {
-      totalItems: filteredItems.length,
-      totalCases: filteredItems.reduce((sum, item) => sum + item.cases, 0),
-      totalWeight: sumNumericStrings(
-        filteredItems.map(item => item.exactWeightLbs),
-      ),
-      expiringCount: filteredItems.filter(
-        item => getExpirationState(item.lot.expirationDate) === "expiring_soon",
-      ).length,
-    };
-  }, [filteredItems]);
-
-  function handleSort(nextKey: SortKey) {
-    if (nextKey === sortKey) {
-      setSortDirection(current => (current === "asc" ? "desc" : "asc"));
       return;
     }
 
-    setSortKey(nextKey);
-    setSortDirection(nextKey === "expiration" ? "asc" : "desc");
+    pagination.setSort(nextKey, nextKey === "expiration" ? "asc" : "desc");
   }
 
   if (isLoading) {
-    return <PageLoading message="Loading inventory..." />;
+    return <ListPageSkeleton metricCards={4} tableColumns={10} />;
   }
 
   if (error) {
@@ -218,7 +164,19 @@ export function InventoryPage() {
     );
   }
 
-  if (items.length === 0) {
+  const hasActiveFilter = Object.entries(pagination.filters).some(
+    ([key, value]) =>
+      value !==
+      DEFAULT_INVENTORY_FILTERS[
+        key as keyof typeof DEFAULT_INVENTORY_FILTERS
+      ],
+  );
+
+  if (
+    (data?.total ?? 0) === 0 &&
+    !pagination.searchInput.trim() &&
+    !hasActiveFilter
+  ) {
     return (
       <section className="flex flex-col gap-6" aria-labelledby="inventory-heading">
         <PageHeader
@@ -249,7 +207,7 @@ export function InventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {summary.totalItems}
+            {data?.summary.totalItems ?? 0}
           </CardContent>
         </Card>
         <Card>
@@ -259,7 +217,7 @@ export function InventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {summary.totalCases}
+            {data?.summary.totalCases ?? 0}
           </CardContent>
         </Card>
         <Card>
@@ -269,7 +227,7 @@ export function InventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {summary.totalWeight.toFixed(2)} lb
+            {Number(data?.summary.totalWeight ?? 0).toFixed(2)} lb
           </CardContent>
         </Card>
         <Card>
@@ -279,7 +237,7 @@ export function InventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {summary.expiringCount}
+            {data?.summary.expiringCount ?? 0}
           </CardContent>
         </Card>
       </div>
@@ -289,25 +247,38 @@ export function InventoryPage() {
           <CardTitle className="text-lg">Stock inspection</CardTitle>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <Input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
+              value={pagination.searchInput}
+              onChange={event => pagination.setSearch(event.target.value)}
               placeholder="Search barcode, product, SKU, lot, supplier..."
               className="xl:col-span-2"
             />
-            <Select value={productFilter} onValueChange={setProductFilter}>
+            <Select
+              value={pagination.filters.productId ?? "all"}
+              onValueChange={value => {
+                pagination.setFilter("productId", value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Product" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All products</SelectItem>
-                {productOptions.map(product => (
+                {(data?.filterOptions.products ?? []).map(product => (
                   <SelectItem key={product.id} value={product.id}>
                     {product.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select
+              value={pagination.filters.status ?? "all"}
+              onValueChange={value => {
+                pagination.setFilter(
+                  "status",
+                  value as Required<InventoryListFilters>["status"],
+                );
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -329,13 +300,18 @@ export function InventoryPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={lotFilter} onValueChange={setLotFilter}>
+            <Select
+              value={pagination.filters.lotId ?? "all"}
+              onValueChange={value => {
+                pagination.setFilter("lotId", value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Lot" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All lots</SelectItem>
-                {lotOptions.map(lot => (
+                {(data?.filterOptions.lots ?? []).map(lot => (
                   <SelectItem key={lot.id} value={lot.id}>
                     {lot.lotNumber}
                   </SelectItem>
@@ -348,9 +324,11 @@ export function InventoryPage() {
               <button
                 key={value}
                 type="button"
-                onClick={() => setExpirationFilter(value)}
+                onClick={() => {
+                  pagination.setFilter("expiration", value);
+                }}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  expirationFilter === value
+                  (pagination.filters.expiration ?? "all") === value
                     ? "border-foreground bg-foreground text-background"
                     : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
                 }`}
@@ -365,7 +343,12 @@ export function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-md border">
+          <div className="relative overflow-x-auto rounded-md border">
+            {isFetching ? (
+              <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-muted">
+                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary/50" />
+              </div>
+            ) : null}
             <Table>
               <TableHeader className="bg-muted">
                 <TableRow>
@@ -373,8 +356,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Barcode / ID"
                       sortKey="barcode"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -382,8 +365,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Product"
                       sortKey="product"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -392,8 +375,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Lot"
                       sortKey="lot"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -401,8 +384,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Cases"
                       sortKey="cases"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -410,8 +393,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Weight lbs"
                       sortKey="weight"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -419,8 +402,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Status"
                       sortKey="status"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -428,8 +411,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Expiration"
                       sortKey="expiration"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -437,8 +420,8 @@ export function InventoryPage() {
                     <SortHeader
                       label="Received"
                       sortKey="receive"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
@@ -446,16 +429,16 @@ export function InventoryPage() {
                     <SortHeader
                       label="Supplier"
                       sortKey="supplier"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
+                      activeSortKey={pagination.sort}
+                      activeDirection={pagination.direction}
                       onSort={handleSort}
                     />
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {sortedItems.length > 0 ? (
-                  sortedItems.map(item => {
+              <TableBody className={isFetching ? "opacity-60 transition-opacity" : undefined}>
+                {(data?.data.length ?? 0) > 0 ? (
+                  (data?.data ?? []).map(item => {
                     const expirationState = getExpirationState(
                       item.lot.expirationDate,
                     );
@@ -534,6 +517,12 @@ export function InventoryPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="mt-4">
+            <DataTablePagination
+              table={paginatedTable}
+              totalRows={data?.total ?? 0}
+            />
           </div>
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -7,6 +7,14 @@ import {
   productUnits,
 } from "@/db/schema";
 import { getCurrentTenant } from "./tenants";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 type ProductUnitInput = {
   unitId: string;
@@ -34,6 +42,14 @@ export async function getProductById(productId: string) {
   return result ?? null;
 }
 
+export type ProductListSort =
+  | "sku"
+  | "name"
+  | "defaultPricePerLb"
+  | "createdAt";
+
+export type ProductListParams = PaginatedQueryInput<ProductListSort>;
+
 export async function getProducts() {
   const tenant = await getCurrentTenant();
   const result = await db.query.products.findMany({
@@ -50,6 +66,54 @@ export async function getProducts() {
   });
 
   return result ?? [];
+}
+
+export async function getProductsPage(input?: ProductListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(products.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [products.sku, products.name]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(products)
+    .where(where);
+  const result = await db.query.products.findMany({
+    where,
+    with: {
+      productCategories: {
+        with: { category: true },
+      },
+      productUnits: {
+        with: { unit: true },
+      },
+      baseUnit: true,
+    },
+    orderBy: resolveOrderBy({
+      sort: query.sort,
+      direction: query.direction,
+      expressions: {
+        sku: products.sku,
+        name: products.name,
+        defaultPricePerLb: products.defaultPricePerLb,
+        createdAt: products.createdAt,
+      },
+    }),
+    limit: query.pageSize,
+    offset: getPaginationOffset(query.page, query.pageSize),
+  });
+
+  return createPaginatedResult({
+    data: result ?? [],
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
 }
 
 export async function getProductCategories() {

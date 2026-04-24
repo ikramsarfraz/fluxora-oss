@@ -6,14 +6,25 @@ import {
   createCustomerAction,
   deleteCustomerAction,
   getCustomersAction,
+  getCustomersPageAction,
 } from "@/actions/customers";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { CustomerListParams } from "@/services/customers";
 
 export function useCustomers() {
   return useQuery({
     queryKey: queryKeys.customers.all,
     queryFn: getCustomersAction,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useCustomersPage(params: CustomerListParams) {
+  return useQuery({
+    queryKey: queryKeys.customers.list(params),
+    queryFn: () => getCustomersPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 5,
   });
 }

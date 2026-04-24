@@ -6,6 +6,7 @@ import {
   deleteSupplierInvoice,
   getSupplierInvoiceById,
   getSupplierInvoices,
+  getSupplierInvoicesPage,
   recordSupplierInvoicePayment,
   removeSupplierInvoiceAttachment,
   reverseSupplierInvoice,
@@ -15,6 +16,12 @@ import {
 
 export async function getSupplierInvoicesAction() {
   return await getSupplierInvoices();
+}
+
+export async function getSupplierInvoicesPageAction(
+  input?: Parameters<typeof getSupplierInvoicesPage>[0],
+) {
+  return await getSupplierInvoicesPage(input);
 }
 
 export async function getSupplierInvoiceByIdAction(id: string) {

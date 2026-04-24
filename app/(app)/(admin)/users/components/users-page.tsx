@@ -4,34 +4,43 @@ import Link from "next/link";
 import { useMemo, useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
-import { useUsers } from "@/hooks/use-users";
-import { useUserInvitations } from "@/hooks/use-users";
 import { Plus, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { EmptyState } from "@/components/empty-state";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
 import { toast } from "sonner";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 
 import { createColumns, type UsersDirectoryRow } from "./columns";
 import { DataTable } from "./data-table";
-import type { PortalUserListItem } from "@/services/portal-users";
-import type { PendingInvitationListItem } from "@/services/invitations";
+import { useUsersDirectoryPage } from "@/hooks/use-users";
+import type { UsersDirectoryListSort } from "@/services/portal-users";
 
 export default function Users() {
-  const { data: users, isLoading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
+  const pagination = useUrlPaginationState<UsersDirectoryListSort>({
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+  });
   const {
-    data: invitations,
-    isLoading: invitationsLoading,
-    error: invitationsError,
-    refetch: refetchInvitations,
-  } = useUserInvitations();
-  const handleDeleteUser = useCallback((user: PortalUserListItem) => {
+    data,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useUsersDirectoryPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
+  const handleDeleteUser = useCallback((user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => {
     // TODO: Implement user deletion
     toast.info(`Delete user "${user.fullName}" - not yet implemented`);
   }, []);
 
-  const handleRevokeInvitation = useCallback((invitation: PendingInvitationListItem) => {
+  const handleRevokeInvitation = useCallback((invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
     // TODO: Implement invitation revocation
     toast.info(`Revoke invitation for "${invitation.email}" - not yet implemented`);
   }, []);
@@ -45,45 +54,23 @@ export default function Users() {
     [handleDeleteUser, handleRevokeInvitation]
   );
 
-  const rows = useMemo<UsersDirectoryRow[]>(() => {
-    const userRows: UsersDirectoryRow[] = (users ?? []).map(row => ({
-      kind: "user" as const,
-      row,
-    }));
-    const inviteRows: UsersDirectoryRow[] = (invitations ?? []).map(row => ({
-      kind: "invitation" as const,
-      row,
-    }));
-    return [...userRows, ...inviteRows].sort(
-      (a, b) =>
-        new Date(b.row.createdAt).getTime() -
-        new Date(a.row.createdAt).getTime(),
-    );
-  }, [users, invitations]);
+  const rows = useMemo<UsersDirectoryRow[]>(() => data?.data ?? [], [data]);
 
-  if (usersLoading || invitationsLoading) {
-    return <PageLoading message="Loading users..." />;
+  if (isLoading) {
+    return <ListPageSkeleton tableColumns={5} />;
   }
 
-  if (usersError) {
+  if (error) {
     return (
       <PageError
-        message={(usersError as Error).message}
-        onRetry={() => refetchUsers()}
+        message={(error as Error).message}
+        onRetry={() => refetch()}
       />
     );
   }
 
-  if (invitationsError) {
-    return (
-      <PageError
-        message={(invitationsError as Error).message}
-        onRetry={() => refetchInvitations()}
-      />
-    );
-  }
-
-  const hasUsers = rows.length > 0;
+  const hasUsers =
+    (data?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section className="flex flex-col gap-6" aria-labelledby="users-heading">
@@ -103,11 +90,29 @@ export default function Users() {
         <DataTable
           columns={columns}
           data={rows}
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={data?.page ?? pagination.page}
+          pageSize={data?.pageSize ?? pagination.pageSize}
+          total={data?.total ?? 0}
+          pageCount={data?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(
+              nextSort as UsersDirectoryListSort,
+              nextDirection,
+            );
+          }}
+          searchPlaceholder="Search users and invitations..."
           getRowId={r =>
             r.kind === "user"
               ? `user-${r.row.id}`
               : `invitation-${r.row.id}`
           }
+          isFetching={isFetching}
         />
       ) : (
         <EmptyState

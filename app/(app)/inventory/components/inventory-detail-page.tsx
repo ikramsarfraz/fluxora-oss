@@ -12,8 +12,8 @@ import {
   DetailGrid,
   DetailSection,
 } from "@/components/detail-section";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -67,7 +67,7 @@ export function InventoryDetailPage({
   useSetBreadcrumbLabel(`/inventory/${inventoryItemId}`, item?.barcodeId);
 
   if (isLoading) {
-    return <PageLoading message="Loading inventory item..." />;
+    return <DetailPageSkeleton includeTable />;
   }
 
   if (isError || !item) {

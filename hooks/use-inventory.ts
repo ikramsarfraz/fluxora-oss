@@ -7,14 +7,25 @@ import {
   bulkAdjustLotInventoryAction,
   getInventoryItemByIdAction,
   getInventoryItemsAction,
+  getInventoryItemsPageAction,
 } from "@/actions/inventory";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { InventoryListParams } from "@/services/inventory";
 
 export function useInventoryItems() {
   return useQuery({
     queryKey: queryKeys.inventory.all,
     queryFn: getInventoryItemsAction,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useInventoryItemsPage(params: InventoryListParams) {
+  return useQuery({
+    queryKey: queryKeys.inventory.list(params),
+    queryFn: () => getInventoryItemsPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 5,
   });
 }

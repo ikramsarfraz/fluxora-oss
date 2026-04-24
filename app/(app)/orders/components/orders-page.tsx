@@ -8,20 +8,32 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
-import { useDeleteSalesOrder, useSalesOrders } from "@/hooks/use-orders";
-import type { SalesOrderListItem } from "@/services/orders";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { useDeleteSalesOrder, useSalesOrdersPage } from "@/hooks/use-orders";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
+import type { SalesOrderListItem, SalesOrderListSort } from "@/services/orders";
 
 import { createColumns } from "./columns";
 import { DataTable } from "./data-table";
 
 export default function Orders() {
+  const pagination = useUrlPaginationState<SalesOrderListSort>({
+    defaultSort: "orderDate",
+    defaultDirection: "desc",
+  });
   const {
     data: orders,
     isLoading,
+    isFetching,
     error: loadError,
     refetch,
-  } = useSalesOrders();
+  } = useSalesOrdersPage({
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    search: pagination.search,
+    sort: pagination.sort,
+    direction: pagination.direction,
+  });
   const deleteOrder = useDeleteSalesOrder();
 
   const columns = useMemo(
@@ -35,7 +47,7 @@ export default function Orders() {
   );
 
   if (isLoading) {
-    return <PageLoading message="Loading orders..." />;
+    return <ListPageSkeleton tableColumns={6} />;
   }
 
   if (loadError) {
@@ -47,7 +59,8 @@ export default function Orders() {
     );
   }
 
-  const hasOrders = orders && orders.length > 0;
+  const hasOrders =
+    (orders?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
 
   return (
     <section className="flex flex-col gap-6" aria-labelledby="orders-heading">
@@ -64,7 +77,25 @@ export default function Orders() {
       </PageHeader>
 
       {hasOrders ? (
-        <DataTable columns={columns} data={orders} />
+        <DataTable
+          columns={columns}
+          data={orders?.data ?? []}
+          searchPlaceholder="Search orders..."
+          searchValue={pagination.searchInput}
+          onSearchChange={pagination.setSearch}
+          page={orders?.page ?? pagination.page}
+          pageSize={orders?.pageSize ?? pagination.pageSize}
+          total={orders?.total ?? 0}
+          pageCount={orders?.pageCount ?? 1}
+          sort={pagination.sort}
+          direction={pagination.direction}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          onSortChange={(nextSort, nextDirection) => {
+            pagination.setSort(nextSort as SalesOrderListSort, nextDirection);
+          }}
+          isFetching={isFetching}
+        />
       ) : (
         <EmptyState
           icon={ShoppingCart}

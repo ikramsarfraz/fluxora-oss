@@ -6,6 +6,13 @@ import { user as authUserTable } from "@/db/auth-schema";
 import { portalUsers } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import {
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  type PaginatedQueryInput,
+  type SortDirection,
+} from "@/lib/pagination";
 import { inviteUser as inviteUserAuth } from "@/services/auth";
 import { getCurrentRequestTenant, getCurrentTenant } from "./tenants";
 
@@ -66,6 +73,197 @@ export async function getUsers() {
     where: eq(portalUsers.tenantId, current.tenantId),
     with: { authUser: true },
     orderBy: [desc(portalUsers.createdAt)],
+  });
+}
+
+export type UsersDirectoryListSort =
+  | "fullName"
+  | "email"
+  | "role"
+  | "createdAt"
+  | "isActive";
+
+export type UsersDirectoryListParams =
+  PaginatedQueryInput<UsersDirectoryListSort>;
+
+type UsersDirectoryDbRow = {
+  kind: "user" | "invitation";
+  id: string;
+  fullName: string;
+  email: string;
+  role: PortalUserRole;
+  createdAt: Date;
+  isActive: boolean;
+  emailVerified: boolean | null;
+};
+
+export type UsersDirectoryListItem =
+  | {
+      kind: "user";
+      row: {
+        id: string;
+        fullName: string;
+        email: string;
+        role: PortalUserRole;
+        createdAt: Date;
+        isActive: boolean;
+        authUser: {
+          emailVerified: boolean;
+        } | null;
+      };
+    }
+  | {
+      kind: "invitation";
+      row: {
+        id: string;
+        fullName: string;
+        email: string;
+        role: PortalUserRole;
+        createdAt: Date;
+      };
+    };
+
+function getUsersDirectorySortSql(
+  sort: UsersDirectoryListSort,
+  direction: SortDirection,
+) {
+  const dir = direction === "asc" ? sql.raw("asc") : sql.raw("desc");
+
+  switch (sort) {
+    case "fullName":
+      return sql`full_name ${dir}, created_at desc`;
+    case "email":
+      return sql`email ${dir}, created_at desc`;
+    case "role":
+      return sql`role ${dir}, created_at desc`;
+    case "isActive":
+      return sql`is_active ${dir}, created_at desc`;
+    case "createdAt":
+    default:
+      return sql`created_at ${dir}`;
+  }
+}
+
+export async function getUsersDirectoryPage(input?: UsersDirectoryListParams) {
+  const current = await requireAdminPortalUser();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const hasSearch = query.search.length > 0;
+  const pattern = `%${query.search.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
+  const searchUserClause = hasSearch
+    ? sql`
+        and (
+          lower(pu.full_name) like ${pattern} escape '\\'
+          or lower(pu.email) like ${pattern} escape '\\'
+          or lower(pu.role::text) like ${pattern} escape '\\'
+        )
+      `
+    : sql``;
+  const searchInvitationClause = hasSearch
+    ? sql`
+        and (
+          lower(ui.full_name) like ${pattern} escape '\\'
+          or lower(ui.email) like ${pattern} escape '\\'
+          or lower(ui.role::text) like ${pattern} escape '\\'
+        )
+      `
+    : sql``;
+  const directoryCte = sql`
+    with directory as (
+      select
+        'user'::text as kind,
+        pu.id,
+        pu.full_name,
+        pu.email,
+        pu.role::text as role,
+        pu.created_at,
+        pu.is_active,
+        au.email_verified
+      from portal_users pu
+      left join "user" au on au.id = pu.auth_user_id
+      where pu.tenant_id = ${current.tenantId}
+      ${searchUserClause}
+
+      union all
+
+      select
+        'invitation'::text as kind,
+        ui.id,
+        ui.full_name,
+        ui.email,
+        ui.role::text as role,
+        ui.created_at,
+        true as is_active,
+        null::boolean as email_verified
+      from user_invitations ui
+      where ui.tenant_id = ${current.tenantId}
+        and ui.status = 'pending'
+        and ui.expires_at > now()
+      ${searchInvitationClause}
+    )
+  `;
+
+  const totalResult = await db.execute<{ count: number }>(sql`
+    ${directoryCte}
+    select count(*)::int as count
+    from directory
+  `);
+  const total = totalResult.rows[0]?.count ?? 0;
+
+  const rowsResult = await db.execute<UsersDirectoryDbRow>(sql`
+    ${directoryCte}
+    select
+      kind,
+      id,
+      full_name as "fullName",
+      email,
+      role,
+      created_at as "createdAt",
+      is_active as "isActive",
+      email_verified as "emailVerified"
+    from directory
+    order by ${getUsersDirectorySortSql(query.sort, query.direction)}
+    limit ${query.pageSize}
+    offset ${getPaginationOffset(query.page, query.pageSize)}
+  `);
+
+  const data = rowsResult.rows.map(row =>
+    row.kind === "user"
+      ? {
+          kind: "user" as const,
+          row: {
+            id: row.id,
+            fullName: row.fullName,
+            email: row.email,
+            role: row.role,
+            createdAt: row.createdAt,
+            isActive: row.isActive,
+            authUser:
+              row.emailVerified == null
+                ? null
+                : { emailVerified: row.emailVerified },
+          },
+        }
+      : {
+          kind: "invitation" as const,
+          row: {
+            id: row.id,
+            fullName: row.fullName,
+            email: row.email,
+            role: row.role,
+            createdAt: row.createdAt,
+          },
+        },
+  );
+
+  return createPaginatedResult({
+    data,
+    page: query.page,
+    pageSize: query.pageSize,
+    total,
   });
 }
 

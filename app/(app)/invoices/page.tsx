@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Invoices from "./components/invoices-page";
 import {
   QueryClient,
@@ -17,7 +18,9 @@ export default async function InvoicesPage() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Invoices />
+      <Suspense>
+        <Invoices />
+      </Suspense>
     </HydrationBoundary>
   );
 }

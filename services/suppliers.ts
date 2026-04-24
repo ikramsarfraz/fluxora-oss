@@ -1,7 +1,15 @@
-import { eq, and } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers } from "@/db/schema";
 import { getCurrentTenant } from "./tenants";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 
 export async function getSupplierById(supplierId: string) {
   const tenant = await getCurrentTenant();
@@ -11,6 +19,9 @@ export async function getSupplierById(supplierId: string) {
 
   return result ?? null;
 }
+
+export type SupplierListSort = "name" | "netDays" | "createdAt";
+export type SupplierListParams = PaginatedQueryInput<SupplierListSort>;
 
 export async function getSuppliers() {
   const tenant = await getCurrentTenant();
@@ -22,6 +33,47 @@ export async function getSuppliers() {
   });
 
   return result;
+}
+
+export async function getSuppliersPage(input?: SupplierListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "createdAt",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(suppliers.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [suppliers.name]),
+  );
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(suppliers)
+    .where(where);
+  const result = await db.query.suppliers.findMany({
+    with: {
+      productCosts: true,
+    },
+    where,
+    orderBy: resolveOrderBy({
+      sort: query.sort,
+      direction: query.direction,
+      expressions: {
+        name: suppliers.name,
+        netDays: suppliers.netDays,
+        createdAt: suppliers.createdAt,
+      },
+    }),
+    limit: query.pageSize,
+    offset: getPaginationOffset(query.page, query.pageSize),
+  });
+
+  return createPaginatedResult({
+    data: result ?? [],
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
 }
 
 export async function deleteSupplier(id: string) {

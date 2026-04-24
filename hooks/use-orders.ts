@@ -10,6 +10,7 @@ import {
   getSalesOrderLineAllocationEditorAction,
   getSalesOrderByIdAction,
   getSalesOrdersAction,
+  getSalesOrdersPageAction,
   markSalesOrderLineShortShippedAction,
   removeSalesOrderLineAllocationAction,
   removeSalesOrderAttachmentAction,
@@ -23,11 +24,21 @@ import {
 } from "@/actions/orders";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import type { SalesOrderListParams } from "@/services/orders";
 
 export function useSalesOrders() {
   return useQuery({
     queryKey: queryKeys.salesOrders.all,
     queryFn: getSalesOrdersAction,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useSalesOrdersPage(params: SalesOrderListParams) {
+  return useQuery({
+    queryKey: queryKeys.salesOrders.list(params),
+    queryFn: () => getSalesOrdersPageAction(params),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60 * 2,
   });
 }

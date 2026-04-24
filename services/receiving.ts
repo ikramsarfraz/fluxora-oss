@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -7,6 +7,7 @@ import {
   inventoryItems,
   lotReceipts,
   lots,
+  suppliers,
   supplierInvoiceAttachments,
   supplierInvoiceLines,
   supplierInvoicePayments,
@@ -14,6 +15,14 @@ import {
 } from "@/db/schema";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 import {
   buildSupplierInvoiceObjectKey,
   deleteFile,
@@ -188,6 +197,98 @@ export async function getSupplierInvoices() {
       },
     },
     orderBy: [desc(supplierInvoices.invoiceDate), desc(supplierInvoices.createdAt)],
+  });
+}
+
+export type SupplierInvoiceListSort =
+  | "invoiceNumber"
+  | "invoiceDate"
+  | "receiveDate"
+  | "totalAmount"
+  | "status";
+
+export type SupplierInvoiceListParams =
+  PaginatedQueryInput<SupplierInvoiceListSort>;
+
+export async function getSupplierInvoicesPage(
+  input?: SupplierInvoiceListParams,
+) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
+
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "invoiceDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+  const where = and(
+    eq(supplierInvoices.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      supplierInvoices.invoiceNumber,
+      supplierInvoices.status,
+      suppliers.name,
+    ]),
+  );
+  const [{ count }] = await db
+    .select({
+      count: sql<number>`count(distinct ${supplierInvoices.id})::int`,
+    })
+    .from(supplierInvoices)
+    .leftJoin(suppliers, eq(suppliers.id, supplierInvoices.supplierId))
+    .where(where);
+  const invoiceIds = await db
+    .select({ id: supplierInvoices.id })
+    .from(supplierInvoices)
+    .leftJoin(suppliers, eq(suppliers.id, supplierInvoices.supplierId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          invoiceNumber: supplierInvoices.invoiceNumber,
+          invoiceDate: supplierInvoices.invoiceDate,
+          receiveDate: supplierInvoices.receiveDate,
+          totalAmount: supplierInvoices.totalAmount,
+          status: supplierInvoices.status,
+        },
+      }),
+      desc(supplierInvoices.createdAt),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+  const ids = invoiceIds.map(row => row.id);
+  if (ids.length === 0) {
+    return createPaginatedResult({
+      data: [],
+      page: query.page,
+      pageSize: query.pageSize,
+      total: count ?? 0,
+    });
+  }
+
+  const rows = await db.query.supplierInvoices.findMany({
+    where: inArray(supplierInvoices.id, ids),
+    with: {
+      supplier: { columns: { id: true, name: true } },
+      lines: {
+        columns: { id: true, lineTotal: true },
+      },
+    },
+  });
+
+  const rowMap = new Map(rows.map(row => [row.id, row]));
+  return createPaginatedResult({
+    data: ids
+      .map(id => rowMap.get(id))
+      .filter((row): row is (typeof rows)[number] => Boolean(row)),
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
   });
 }
 

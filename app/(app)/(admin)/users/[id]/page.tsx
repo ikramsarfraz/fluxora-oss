@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { isUuid } from "@/lib/utils/uuid";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
@@ -55,7 +56,7 @@ export default function UserDetailPage() {
   }
 
   if (isLoading) {
-    return <div className="text-muted-foreground">Loading user…</div>;
+    return <DetailPageSkeleton sections={2} />;
   }
 
   if (loadError) {
