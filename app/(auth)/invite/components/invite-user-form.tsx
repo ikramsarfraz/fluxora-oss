@@ -3,14 +3,16 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import {
   acceptInvitationRequest,
   fetchInvitationPreview,
+  InvitationActionError,
 } from "@/lib/api/invitations";
+import type { InvitationPreviewFailureReason } from "@/services/invitations";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +30,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
   inviteAcceptFormSchema,
@@ -38,7 +41,37 @@ function roleLabel(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
 }
 
-export function InviteUserForm() {
+type InviteUserFormProps = {
+  sessionEmail?: string | null;
+};
+
+const PREVIEW_FAILURE_COPY: Record<
+  InvitationPreviewFailureReason,
+  { title: string; body: string }
+> = {
+  not_found: {
+    title: "Link not found",
+    body: "The invitation link is invalid. Ask an administrator to send a new one.",
+  },
+  expired: {
+    title: "Invite expired",
+    body: "This link has passed its expiry. Ask an administrator to resend the invitation from Users.",
+  },
+  revoked: {
+    title: "Invite revoked",
+    body: "This invitation is no longer active. Ask for a new invite if you still need access.",
+  },
+  already_accepted: {
+    title: "Already used",
+    body: "This invitation was already accepted. Sign in to the workspace to continue.",
+  },
+  invalid: {
+    title: "Invite unavailable",
+    body: "This invitation cannot be used. Ask an administrator to send a new one.",
+  },
+};
+
+export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -82,6 +115,18 @@ export function InviteUserForm() {
       router.push("/invite/success");
       router.refresh();
     } catch (e) {
+      if (e instanceof InvitationActionError) {
+        if (e.code === "ALREADY_ACCEPTED" || e.code === "EXPIRED_OR_INVALID") {
+          setSubmitError(
+            e.message || "This invitation can no longer be accepted.",
+          );
+          return;
+        }
+        if (e.code === "REVOKED") {
+          setSubmitError("This invitation was revoked.");
+          return;
+        }
+      }
       setSubmitError(
         e instanceof Error ? e.message : "Could not accept invitation",
       );
@@ -141,34 +186,79 @@ export function InviteUserForm() {
     );
   }
 
-  if (invitationQuery.isError || !invitationQuery.data) {
+  if (invitationQuery.isError) {
     return (
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Link invalid or expired</CardTitle>
+          <CardTitle>Could not load invite</CardTitle>
           <CardDescription>
-            This invitation may have been used, revoked, or expired. Ask an
-            administrator for a new invite.
+            Check your network and try again, or open the link from your
+            email.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <FieldDescription className="text-center">
-            <Link href="/sign-in">Back to sign in</Link>
-          </FieldDescription>
-        </CardContent>
+        <FieldDescription className="px-6 pb-6 text-center">
+          <Link href="/sign-in">Back to sign in</Link>
+        </FieldDescription>
       </Card>
     );
   }
 
   const preview = invitationQuery.data;
+  if (!preview) {
+    return null;
+  }
+
+  if (!preview.ok) {
+    const copy = PREVIEW_FAILURE_COPY[preview.code];
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>{copy.title}</CardTitle>
+          <CardDescription>{copy.body}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild className="w-full">
+            <Link href="/sign-in">Back to sign in</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const inviteEmail = preview.email.trim().toLowerCase();
+  const sessionMismatch = Boolean(
+    sessionEmail && sessionEmail !== inviteEmail,
+  );
+
+  if (sessionMismatch) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Wrong account</CardTitle>
+          <CardDescription>
+            You are signed in as <span className="font-medium">{sessionEmail}</span>{" "}
+            but this invite is for{" "}
+            <span className="font-medium">{preview.email}</span>. Sign out and
+            use the right account, or open this link in a private window.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Button asChild className="w-full" variant="secondary">
+            <Link href="/sign-in">Sign out and continue</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle>Accept invitation</CardTitle>
         <CardDescription>
-          Set a password for your account. You can sign in after verifying your
-          email if required.
+          Set a password for your account. If you already have a Prime
+          account for this email, we verify your existing password, then add
+          you to this workspace.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -179,6 +269,12 @@ export function InviteUserForm() {
             <Badge variant="outline">{roleLabel(preview.role)}</Badge>
           </div>
         </div>
+        {submitError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Could not accept</AlertTitle>
+            <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        ) : null}
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
           <FieldGroup>
             <Controller
@@ -195,7 +291,8 @@ export function InviteUserForm() {
                     aria-invalid={fieldState.invalid}
                   />
                   <FieldDescription>
-                    Must be at least 8 characters long.
+                    New accounts: choose at least 8 characters. Existing
+                    users: your current sign-in password.
                   </FieldDescription>
                   {fieldState.invalid ? (
                     <FieldError errors={[fieldState.error]} />
@@ -225,13 +322,10 @@ export function InviteUserForm() {
               )}
             />
             <Field className="gap-3">
-              {submitError ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {submitError}
-                </p>
-              ) : null}
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Creating account…" : "Create account"}
+                {isSubmitting
+                  ? "Joining workspace…"
+                  : "Join workspace / create account"}
               </Button>
             </Field>
             <FieldDescription className="text-center">

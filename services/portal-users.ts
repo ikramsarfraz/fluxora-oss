@@ -2,8 +2,7 @@ import { isAPIError } from "better-auth/api";
 import { desc, eq, sql, and } from "drizzle-orm";
 
 import { db } from "@/db";
-import { user as authUserTable } from "@/db/auth-schema";
-import { portalUsers } from "@/db/schema";
+import { portalUsers, userInvitations } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import {
@@ -95,6 +94,7 @@ type UsersDirectoryDbRow = {
   createdAt: Date;
   isActive: boolean;
   emailVerified: boolean | null;
+  inviteExpiresAt: Date | null;
 };
 
 export type UsersDirectoryListItem =
@@ -120,6 +120,9 @@ export type UsersDirectoryListItem =
         email: string;
         role: PortalUserRole;
         createdAt: Date;
+        /** Present for invitations; `null` when the row is a user. */
+        inviteExpiresAt: Date;
+        inviteIsExpired: boolean;
       };
     };
 
@@ -181,7 +184,8 @@ export async function getUsersDirectoryPage(input?: UsersDirectoryListParams) {
         pu.role::text as role,
         pu.created_at,
         pu.is_active,
-        au.email_verified
+        au.email_verified,
+        null::timestamptz as invite_expires_at
       from portal_users pu
       left join "user" au on au.id = pu.auth_user_id
       where pu.tenant_id = ${current.tenantId}
@@ -197,11 +201,11 @@ export async function getUsersDirectoryPage(input?: UsersDirectoryListParams) {
         ui.role::text as role,
         ui.created_at,
         true as is_active,
-        null::boolean as email_verified
+        null::boolean as email_verified,
+        ui.expires_at
       from user_invitations ui
       where ui.tenant_id = ${current.tenantId}
         and ui.status = 'pending'
-        and ui.expires_at > now()
       ${searchInvitationClause}
     )
   `;
@@ -223,41 +227,49 @@ export async function getUsersDirectoryPage(input?: UsersDirectoryListParams) {
       role,
       created_at as "createdAt",
       is_active as "isActive",
-      email_verified as "emailVerified"
+      email_verified as "emailVerified",
+      invite_expires_at as "inviteExpiresAt"
     from directory
     order by ${getUsersDirectorySortSql(query.sort, query.direction)}
     limit ${query.pageSize}
     offset ${getPaginationOffset(query.page, query.pageSize)}
   `);
 
-  const data = rowsResult.rows.map(row =>
-    row.kind === "user"
-      ? {
-          kind: "user" as const,
-          row: {
-            id: row.id,
-            fullName: row.fullName,
-            email: row.email,
-            role: row.role,
-            createdAt: row.createdAt,
-            isActive: row.isActive,
-            authUser:
-              row.emailVerified == null
-                ? null
-                : { emailVerified: row.emailVerified },
-          },
-        }
-      : {
-          kind: "invitation" as const,
-          row: {
-            id: row.id,
-            fullName: row.fullName,
-            email: row.email,
-            role: row.role,
-            createdAt: row.createdAt,
-          },
+  const data = rowsResult.rows.map(row => {
+    if (row.kind === "user") {
+      return {
+        kind: "user" as const,
+        row: {
+          id: row.id,
+          fullName: row.fullName,
+          email: row.email,
+          role: row.role,
+          createdAt: row.createdAt,
+          isActive: row.isActive,
+          authUser:
+            row.emailVerified == null
+              ? null
+              : { emailVerified: row.emailVerified },
         },
-  );
+      };
+    }
+    const ex = row.inviteExpiresAt;
+    if (!ex) {
+      throw new Error("Invitation row missing invite expiry.");
+    }
+    return {
+      kind: "invitation" as const,
+      row: {
+        id: row.id,
+        fullName: row.fullName,
+        email: row.email,
+        role: row.role,
+        createdAt: row.createdAt,
+        inviteExpiresAt: ex,
+        inviteIsExpired: ex < new Date(),
+      },
+    };
+  });
 
   return createPaginatedResult({
     data,
@@ -458,8 +470,9 @@ export async function sendPasswordResetForUserByAdmin(
 }
 
 /**
- * Admin-only: send an invitation email. Rejects duplicates against both
- * `portal_users` and Better Auth `user` tables (case-insensitive).
+ * Admin-only: send an invitation email. Rejects active members in this tenant,
+ * duplicate pending invites for the same email, and allows existing global
+ * auth users who are not yet on this tenant (they verify on accept).
  */
 export async function inviteUserByAdmin(input: {
   email: string;
@@ -478,22 +491,29 @@ export async function inviteUserByAdmin(input: {
   const [existingPortal] = await db
     .select({ id: portalUsers.id })
     .from(portalUsers)
-    .where(sql`lower(${portalUsers.email}) = ${normalizedEmail}`)
+    .where(
+      and(
+        eq(portalUsers.tenantId, current.tenantId),
+        sql`lower(${portalUsers.email}) = ${normalizedEmail}`,
+      ),
+    )
     .limit(1);
   if (existingPortal) {
     throw new Error(
-      "This email already belongs to a team member. They can sign in with their existing account.",
+      "This email already belongs to a team member in this workspace.",
     );
   }
 
-  const [existingAuth] = await db
-    .select({ id: authUserTable.id })
-    .from(authUserTable)
-    .where(sql`lower(${authUserTable.email}) = ${normalizedEmail}`)
-    .limit(1);
-  if (existingAuth) {
+  const pendingInvite = await db.query.userInvitations.findFirst({
+    where: and(
+      eq(userInvitations.tenantId, current.tenantId),
+      eq(userInvitations.status, "pending"),
+      sql`lower(${userInvitations.email}) = ${normalizedEmail}`,
+    ),
+  });
+  if (pendingInvite) {
     throw new Error(
-      "An account with this email already exists. They should sign in instead of being invited.",
+      "An invitation is already pending for this email. Resend or revoke it from the Users list.",
     );
   }
 

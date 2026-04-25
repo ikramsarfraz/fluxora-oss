@@ -11,7 +11,11 @@ import {
   setPortalUserRoleByAdmin,
   type PortalUserRole,
 } from "@/services/portal-users";
-import { listPendingInvitationsForAdmin } from "@/services/invitations";
+import {
+  listPendingInvitationsForAdmin,
+  resendUserInvitationByAdmin,
+  revokeUserInvitationByAdmin,
+} from "@/services/invitations";
 
 export async function getUsersAction() {
   return await getUsers();
@@ -68,4 +72,12 @@ export async function inviteUserAction(input: {
   role?: Exclude<PortalUserRole, "owner">;
 }) {
   return await inviteUserByAdmin(input);
+}
+
+export async function resendUserInvitationAction(invitationId: string) {
+  return await resendUserInvitationByAdmin({ invitationId });
+}
+
+export async function revokeUserInvitationAction(invitationId: string) {
+  return await revokeUserInvitationByAdmin({ invitationId });
 }

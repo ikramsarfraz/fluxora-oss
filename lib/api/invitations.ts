@@ -1,20 +1,79 @@
-import { api } from "./client";
-import { endpoints } from "./endpoints";
+import type { InvitationPreviewFailureReason } from "@/services/invitations";
 import type { PortalUserRole } from "@/services/portal-users";
+import { endpoints } from "./endpoints";
 
-export type InvitationPreviewDto = {
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
+export type InvitationPreviewSuccess = {
+  ok: true;
   fullName: string;
   email: string;
   role: PortalUserRole;
 };
 
-export function fetchInvitationPreview(token: string) {
-  return api.get<InvitationPreviewDto>(endpoints.invitations.preview(token));
+export type InvitationPreviewError = {
+  ok: false;
+  code: InvitationPreviewFailureReason;
+  detail: string;
+};
+
+export type InvitationPreviewResult =
+  | InvitationPreviewSuccess
+  | InvitationPreviewError;
+
+export async function fetchInvitationPreview(
+  token: string,
+): Promise<InvitationPreviewResult> {
+  const path = `${BASE}${endpoints.invitations.preview(token)}`;
+  const res = await fetch(path, { credentials: "include" });
+  const data = (await res.json()) as
+    | { fullName: string; email: string; role: PortalUserRole }
+    | { detail: string; code: InvitationPreviewFailureReason };
+
+  if (!res.ok) {
+    const failure = data as { detail: string; code: InvitationPreviewFailureReason };
+    return {
+      ok: false,
+      code: failure.code,
+      detail: failure.detail,
+    };
+  }
+
+  const ok = data as { fullName: string; email: string; role: PortalUserRole };
+  return { ok: true, ...ok };
 }
 
-export function acceptInvitationRequest(body: {
+export class InvitationActionError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export async function acceptInvitationRequest(body: {
   token: string;
   password: string;
-}) {
-  return api.post<{ success: boolean }>(endpoints.invitations.accept(), body);
+}): Promise<{ success: true }> {
+  const path = `${BASE}${endpoints.invitations.accept()}`;
+  const res = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    detail?: string;
+    code?: string;
+  };
+  if (!res.ok) {
+    throw new InvitationActionError(
+      typeof data.detail === "string" ? data.detail : res.statusText,
+      typeof data.code === "string" ? data.code : "REJECTED",
+      res.status,
+    );
+  }
+  return { success: true };
 }

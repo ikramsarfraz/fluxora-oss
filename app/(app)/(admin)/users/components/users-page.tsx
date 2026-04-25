@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Plus, ShieldCheck } from "lucide-react";
@@ -14,10 +14,17 @@ import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 
 import { createColumns, type UsersDirectoryRow } from "./columns";
 import { DataTable } from "./data-table";
-import { useUsersDirectoryPage } from "@/hooks/use-users";
+import {
+  useResendUserInvitation,
+  useRevokeUserInvitation,
+  useUsersDirectoryPage,
+} from "@/hooks/use-users";
 import type { UsersDirectoryListSort } from "@/services/portal-users";
 
 export default function Users() {
+  const [resendInvitationId, setResendInvitationId] = useState<string | null>(
+    null,
+  );
   const pagination = useUrlPaginationState<UsersDirectoryListSort>({
     defaultSort: "createdAt",
     defaultDirection: "desc",
@@ -35,29 +42,65 @@ export default function Users() {
     sort: pagination.sort,
     direction: pagination.direction,
   });
+  const resendMutation = useResendUserInvitation();
+  const revokeMutation = useRevokeUserInvitation();
+
   const handleDeleteUser = useCallback((user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => {
     // TODO: Implement user deletion
     toast.info(`Delete user "${user.fullName}" - not yet implemented`);
   }, []);
 
-  const handleRevokeInvitation = useCallback((invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
-    // TODO: Implement invitation revocation
-    toast.info(`Revoke invitation for "${invitation.email}" - not yet implemented`);
-  }, []);
+  const handleResendInvitation = useCallback(
+    async (invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
+      setResendInvitationId(invitation.id);
+      try {
+        await resendMutation.mutateAsync(invitation.id);
+        toast.success("Invitation email sent.");
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : "Could not resend the invitation.",
+        );
+      } finally {
+        setResendInvitationId(null);
+      }
+    },
+    [resendMutation],
+  );
+
+  const handleRevokeInvitation = useCallback(
+    async (invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
+      try {
+        await revokeMutation.mutateAsync(invitation.id);
+        toast.success("Invitation revoked.");
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : "Could not revoke the invitation.",
+        );
+      }
+    },
+    [revokeMutation],
+  );
 
   const columns = useMemo(
     () =>
       createColumns({
         onDeleteUser: handleDeleteUser,
+        onResendInvitation: handleResendInvitation,
         onRevokeInvitation: handleRevokeInvitation,
+        resendInvitationId,
       }),
-    [handleDeleteUser, handleRevokeInvitation]
+    [
+      handleDeleteUser,
+      handleResendInvitation,
+      handleRevokeInvitation,
+      resendInvitationId,
+    ],
   );
 
   const rows = useMemo<UsersDirectoryRow[]>(() => data?.data ?? [], [data]);
 
   if (isLoading) {
-    return <ListPageSkeleton tableColumns={5} />;
+    return <ListPageSkeleton tableColumns={7} />;
   }
 
   if (error) {

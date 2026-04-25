@@ -7,6 +7,8 @@ import {
   getUsersDirectoryPageAction,
   getUsersAction,
   inviteUserAction,
+  resendUserInvitationAction,
+  revokeUserInvitationAction,
   sendUserPasswordResetAction,
   setUserActiveAction,
   setUserRoleAction,
@@ -105,6 +107,35 @@ export function useInviteUser() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.users.invitations,
       });
+      await queryClient.invalidateQueries({ queryKey: ["users", "list"] });
+    },
+  });
+}
+
+export function useResendUserInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) => resendUserInvitationAction(invitationId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.users.invitations,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["users", "list"] });
+    },
+  });
+}
+
+export function useRevokeUserInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) => revokeUserInvitationAction(invitationId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.users.invitations,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["users", "list"] });
     },
   });
 }

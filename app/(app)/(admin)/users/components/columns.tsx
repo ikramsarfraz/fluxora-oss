@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, Check, MoreHorizontal, X, Trash2 } from "lucide-react";
+import {
+  ArrowUpDown,
+  Check,
+  Mail,
+  MoreHorizontal,
+  X,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -32,21 +39,31 @@ export type UsersDirectoryRow = UsersDirectoryListItem;
 
 type ColumnActions = {
   onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onResendInvitation: (
+    invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
+  ) => void;
   onRevokeInvitation: (
     invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
   ) => void;
+  resendInvitationId: string | null;
 };
 
 function ActionsCell({
   row,
   onDeleteUser,
+  onResendInvitation,
   onRevokeInvitation,
+  resendInvitationId,
 }: {
   row: UsersDirectoryRow;
   onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onResendInvitation: (
+    invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
+  ) => void;
   onRevokeInvitation: (
     invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
   ) => void;
+  resendInvitationId: string | null;
 }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -63,6 +80,13 @@ function ActionsCell({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem
+              onClick={() => onResendInvitation(inv)}
+              disabled={resendInvitationId === inv.id}
+            >
+              <Mail />
+              Resend email
+            </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
               onClick={() => setShowDeleteDialog(true)}
@@ -256,13 +280,41 @@ export function createColumns(
       ),
     },
     {
+      id: "inviteExpiresAt",
+      accessorFn: r =>
+        r.kind === "invitation"
+          ? new Date(r.row.inviteExpiresAt).getTime()
+          : null,
+      header: "Pending until",
+      cell: ({ row }) => {
+        if (row.original.kind === "user") {
+          return (
+            <span className="text-muted-foreground">
+              <span className="sr-only">Not applicable</span>—
+            </span>
+          );
+        }
+        const ex = row.original.row.inviteExpiresAt;
+        return (
+          <span className="tabular-nums text-muted-foreground">
+            {formatDisplayDate(ex)}
+          </span>
+        );
+      },
+    },
+    {
       id: "isActive",
-      header: () => <div className="text-center">Active</div>,
+      header: () => <div className="text-center">Status</div>,
       cell: ({ row }) => {
         if (row.original.kind === "invitation") {
+          const expired = row.original.row.inviteIsExpired;
           return (
             <div className="flex justify-center">
-              <Badge variant="secondary">Pending invite</Badge>
+              {expired ? (
+                <Badge variant="destructive">Invite expired</Badge>
+              ) : (
+                <Badge variant="secondary">Pending invite</Badge>
+              )}
             </div>
           );
         }
@@ -291,7 +343,9 @@ export function createColumns(
           <ActionsCell
             row={row.original}
             onDeleteUser={actions.onDeleteUser}
+            onResendInvitation={actions.onResendInvitation}
             onRevokeInvitation={actions.onRevokeInvitation}
+            resendInvitationId={actions.resendInvitationId}
           />
         </div>
       ),

@@ -1323,6 +1323,35 @@ export async function signUpSoloTenantAccount(input: {
   }
 }
 
+/**
+ * Sends the tenant invite email. Link uses the current tenant host (subdomain),
+ * not generic BETTER_AUTH_URL, so open-in-browser stays on the correct workspace.
+ */
+export async function sendUserInvitationEmail(input: {
+  email: string;
+  fullName: string;
+  token: string;
+}) {
+  const requestHeaders = await headers();
+  const context = getRequestTenantHostContextFromHeaders(requestHeaders);
+  const tenant = await getCurrentTenant();
+  const inviteUrl = buildTenantAppUrl({
+    slug: tenant.slug,
+    pathname: `/invite/${input.token}`,
+    context,
+  });
+
+  await resend.emails.send({
+    from: emailFrom,
+    to: input.email,
+    subject: "You were invited to Acme Distribution",
+    react: InviteUserEmail({
+      fullName: input.fullName,
+      inviteUrl,
+    }),
+  });
+}
+
 export async function inviteUser(input: {
   email: string;
   fullName: string;
@@ -1343,16 +1372,10 @@ export async function inviteUser(input: {
     expiresAt,
   });
 
-  const inviteUrl = `${process.env.BETTER_AUTH_URL}/invite/${token}`;
-
-  await resend.emails.send({
-    from: emailFrom,
-    to: input.email,
-    subject: "You were invited to Acme Distribution",
-    react: InviteUserEmail({
-      fullName: input.fullName,
-      inviteUrl,
-    }),
+  await sendUserInvitationEmail({
+    email: input.email,
+    fullName: input.fullName,
+    token,
   });
 
   return { success: true };
