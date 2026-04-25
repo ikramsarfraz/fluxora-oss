@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Building2,
+  ChevronsUpDown,
   CreditCard,
   LayoutDashboard,
   LifeBuoy,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
+import type { AccessibleDestination } from "@/services/auth";
 
 import {
   Sidebar,
@@ -23,6 +25,14 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type NavItem = {
   title: string;
@@ -58,7 +68,11 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function PlatformAdminSidebar() {
+export function PlatformAdminSidebar({
+  destinations = [],
+}: {
+  destinations?: AccessibleDestination[];
+}) {
   const pathname = usePathname() ?? "";
 
   const isActive = (url: string) =>
@@ -69,17 +83,60 @@ export function PlatformAdminSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/admin" className="flex items-center gap-2" aria-label="Platform admin home">
-                <div className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white">
-                  <ShieldCheck className="size-4" />
-                </div>
-                <div className="grid text-left">
-                  <span className="text-sm font-semibold">Pelzer Solutions</span>
-                  <span className="text-xs text-muted-foreground">Platform Admin</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton size="lg">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+                    <ShieldCheck className="size-4" />
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Pelzer Solutions</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      Platform Admin
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-64" align="start">
+                <DropdownMenuLabel>Switch destination</DropdownMenuLabel>
+                {destinations
+                  .filter(destination => destination.type === "platform_admin")
+                  .map(destination => (
+                    <DropdownMenuItem key={destination.id} asChild>
+                      <a href={destination.targetUrl}>
+                        <ShieldCheck className="size-4" />
+                        <div className="grid">
+                          <span>Platform Admin</span>
+                          <span className="text-xs text-muted-foreground">
+                            {destination.role.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                      </a>
+                    </DropdownMenuItem>
+                  ))}
+                {destinations.some(destination => destination.type === "tenant") ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    {destinations
+                      .filter(destination => destination.type === "tenant")
+                      .map(destination => (
+                        <DropdownMenuItem key={destination.id} asChild>
+                          <a href={destination.targetUrl}>
+                            <Building2 className="size-4" />
+                            <div className="grid">
+                              <span>{destination.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {destination.slug} · {destination.role}
+                              </span>
+                            </div>
+                          </a>
+                        </DropdownMenuItem>
+                      ))}
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

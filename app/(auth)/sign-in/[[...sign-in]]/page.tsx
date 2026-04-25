@@ -1,16 +1,40 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { SignInForm } from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-in-form";
 import { isGoogleAuthEnabled } from "@/lib/google-auth-flow";
-import { buildRootAppUrl } from "@/lib/tenant-host";
+import { buildRootAppUrl, buildTenantAppUrl } from "@/lib/tenant-host";
+import { resolveExistingSessionLoginDestination } from "@/services/auth";
 import { getCurrentRequestTenant } from "@/services/tenants";
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const { callbackUrl } = await searchParams;
+  const existingSessionDestination = await resolveExistingSessionLoginDestination({
+    callbackUrl,
+  });
+
+  if (existingSessionDestination) {
+    redirect(existingSessionDestination);
+  }
+
   const tenantRequest = await getCurrentRequestTenant();
 
   const rootSignUpUrl = buildRootAppUrl({
     pathname: "/signup",
     context: tenantRequest,
   });
+  const tenantSignUpUrl =
+    tenantRequest.tenant || tenantRequest.inactiveTenant
+      ? buildTenantAppUrl({
+          slug:
+            tenantRequest.tenant?.slug ?? tenantRequest.inactiveTenant?.slug ?? "",
+          pathname: "/signup",
+          context: tenantRequest,
+        })
+      : rootSignUpUrl;
 
   return (
     <Suspense>
@@ -40,6 +64,7 @@ export default async function SignInPage() {
         protocol={tenantRequest.protocol}
         port={tenantRequest.port}
         rootSignUpUrl={rootSignUpUrl}
+        signUpUrl={tenantSignUpUrl}
         googleEnabled={isGoogleAuthEnabled()}
       />
     </Suspense>

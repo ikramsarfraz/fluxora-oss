@@ -40,6 +40,12 @@ export const invitationStatusEnum = pgEnum("invitation_status", [
   "revoked",
 ]);
 
+export const tenantJoinRequestStatusEnum = pgEnum("tenant_join_request_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
 export const tenantTypeEnum = pgEnum("tenant_type", ["solo", "business"]);
 
 export const addressTypeEnum = pgEnum("address_type", [
@@ -295,6 +301,49 @@ export const userInvitations = pgTable(
     index("user_invitations_tenant_id_idx").on(table.tenantId),
     index("user_invitations_email_idx").on(table.email),
     index("user_invitations_token_idx").on(table.token),
+  ],
+);
+
+export const tenantJoinRequests = pgTable(
+  "tenant_join_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    authUserId: text("auth_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    email: varchar("email", { length: 255 }).notNull(),
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    requestedRole: userRoleEnum("requested_role").notNull().default("sales"),
+    status: tenantJoinRequestStatusEnum("status").notNull().default("pending"),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedByUserId: uuid("reviewed_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("tenant_join_requests_tenant_id_idx").on(table.tenantId),
+    index("tenant_join_requests_status_idx").on(table.status),
+    index("tenant_join_requests_requested_at_idx").on(table.requestedAt),
+    index("tenant_join_requests_auth_user_id_idx").on(table.authUserId),
+    index("tenant_join_requests_reviewed_by_user_id_idx").on(
+      table.reviewedByUserId,
+    ),
+    index("tenant_join_requests_email_idx").on(table.email),
   ],
 );
 

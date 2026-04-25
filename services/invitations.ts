@@ -142,3 +142,37 @@ export async function listPendingInvitationsForAdmin() {
 export type PendingInvitationListItem = Awaited<
   ReturnType<typeof listPendingInvitationsForAdmin>
 >[number];
+
+export async function getTenantHostInvitationRedirect(input: {
+  tenantSlug: string;
+  token: string;
+}) {
+  const invitation = await db.query.userInvitations.findFirst({
+    where: eq(userInvitations.token, input.token),
+    with: {
+      tenant: true,
+    },
+  });
+
+  if (!invitation) {
+    return { ok: false as const, reason: "not_found" as const };
+  }
+
+  if (invitation.tenant.slug !== input.tenantSlug) {
+    return { ok: false as const, reason: "tenant_mismatch" as const };
+  }
+
+  if (!invitation.tenant.isActive) {
+    return { ok: false as const, reason: "tenant_inactive" as const };
+  }
+
+  if (invitation.status !== "pending") {
+    return { ok: false as const, reason: "used" as const };
+  }
+
+  if (invitation.expiresAt < new Date()) {
+    return { ok: false as const, reason: "expired" as const };
+  }
+
+  return { ok: true as const, token: invitation.token };
+}

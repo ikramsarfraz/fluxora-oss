@@ -14,6 +14,7 @@ import {
   platformUsers,
   portalUsers,
   userInvitations,
+  tenantJoinRequests,
   tenantBranding,
   files,
   inventoryAdjustments,
@@ -74,6 +75,9 @@ export type NewPortalUser = InferInsertModel<typeof portalUsers>;
 
 export type UserInvitation = InferSelectModel<typeof userInvitations>;
 export type NewUserInvitation = InferInsertModel<typeof userInvitations>;
+
+export type TenantJoinRequest = InferSelectModel<typeof tenantJoinRequests>;
+export type NewTenantJoinRequest = InferInsertModel<typeof tenantJoinRequests>;
 
 // -------------------- Reference / config --------------------
 

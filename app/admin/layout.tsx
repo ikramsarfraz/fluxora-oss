@@ -12,6 +12,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
 import { buildRootAppUrl, getRequestTenantHostContext } from "@/lib/tenant-host";
+import { getAccessibleDestinationsForAuthUser } from "@/services/auth";
 import { requirePlatformUser } from "@/services/platform-users";
 
 export default async function PlatformAdminLayout({
@@ -56,11 +57,12 @@ export default async function PlatformAdminLayout({
       </main>
     );
   }
+  const destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
 
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <PlatformAdminSidebar />
+        <PlatformAdminSidebar destinations={destinations} />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />

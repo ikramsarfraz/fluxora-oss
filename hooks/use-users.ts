@@ -11,6 +11,11 @@ import {
   setUserActiveAction,
   setUserRoleAction,
 } from "@/actions/users";
+import {
+  createTenantJoinRequestAction,
+  getPendingTenantJoinRequestsAction,
+  reviewTenantJoinRequestAction,
+} from "@/actions/tenant-join-requests";
 import type { PortalUserRole } from "@/services/portal-users";
 import type { UsersDirectoryListParams } from "@/services/portal-users";
 import { queryKeys } from "@/lib/query/keys";
@@ -47,6 +52,14 @@ export function useUserInvitations() {
     queryKey: queryKeys.users.invitations,
     queryFn: getPendingInvitationsAction,
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function usePendingTenantJoinRequests() {
+  return useQuery({
+    queryKey: queryKeys.users.joinRequests,
+    queryFn: getPendingTenantJoinRequestsAction,
+    staleTime: 1000 * 60,
   });
 }
 
@@ -92,6 +105,27 @@ export function useInviteUser() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.users.invitations,
       });
+    },
+  });
+}
+
+export function useCreateTenantJoinRequest() {
+  return useMutation({
+    mutationFn: createTenantJoinRequestAction,
+  });
+}
+
+export function useReviewTenantJoinRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: reviewTenantJoinRequestAction,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.users.joinRequests,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      await queryClient.invalidateQueries({ queryKey: ["users", "list"] });
     },
   });
 }

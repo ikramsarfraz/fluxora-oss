@@ -7,7 +7,6 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   AlertCircle,
-  ArrowRight,
   Building2,
   LifeBuoy,
   LockKeyhole,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { Google } from "@/components/icons/google";
 
-import { discoverTenantsForEmailAction, prepareGoogleAuthStartAction } from "@/actions/auth";
+import { prepareGoogleAuthStartAction } from "@/actions/auth";
 import {
   AuthMarketingPanel,
   AuthSplitShell,
@@ -26,7 +25,6 @@ import {
   type SignInFormValues,
 } from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-in-form.schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -52,7 +50,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { authClient } from "@/lib/auth-client";
-import type { TenantDiscoveryItem } from "@/services/auth";
 
 type SignInFormProps = {
   tenant: {
@@ -72,6 +69,7 @@ type SignInFormProps = {
   protocol: "http" | "https";
   port: string | null;
   rootSignUpUrl: string;
+  signUpUrl: string;
   googleEnabled: boolean;
 };
 
@@ -108,20 +106,33 @@ export function SignInForm({
   protocol,
   port,
   rootSignUpUrl,
+  signUpUrl,
   googleEnabled,
 }: SignInFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = useMemo(() => {
+    const raw = searchParams.get("callbackUrl");
+    if (raw != null && raw !== "") {
+      if (!isRootHost && !isPlatformAdminHost && raw === "/") {
+        return "/dashboard";
+      }
+      return raw;
+    }
+    if (isRootHost) {
+      return "/";
+    }
+    if (isPlatformAdminHost) {
+      return "/admin";
+    }
+    return "/dashboard";
+  }, [isPlatformAdminHost, isRootHost, searchParams]);
   const emailParam = searchParams.get("email") || "";
   const created = searchParams.get("created") === "1";
 
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [discoveryEmail, setDiscoveryEmail] = useState(emailParam);
   const [rememberMe, setRememberMe] = useState(true);
-  const [isDiscovering, setIsDiscovering] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [tenantMatches, setTenantMatches] = useState<TenantDiscoveryItem[]>([]);
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInFormSchema),
@@ -145,60 +156,26 @@ export function SignInForm({
 
   async function onSubmit(data: SignInFormValues) {
     setSubmitError(null);
+    const postSignInUrl =
+      isRootHost && !isPlatformAdminHost
+        ? `/select-destination?${new URLSearchParams({
+            returnTo: callbackUrl,
+          }).toString()}`
+        : callbackUrl;
     const { error: err } = await authClient.signIn.email({
       email: data.email,
       password: data.password,
-      callbackURL: callbackUrl,
+      callbackURL: postSignInUrl,
     });
     if (err) {
       setSubmitError(err.message ?? "Sign in failed");
       return;
     }
-    router.push(callbackUrl);
+    router.push(postSignInUrl);
     router.refresh();
   }
 
   const { isSubmitting } = form.formState;
-
-  async function onDiscoverTenant() {
-    setSubmitError(null);
-    setTenantMatches([]);
-
-    if (!discoveryEmail.trim()) {
-      setSubmitError("Please enter your email.");
-      return;
-    }
-
-    setIsDiscovering(true);
-    try {
-      const discovered = await discoverTenantsForEmailAction({
-        email: discoveryEmail,
-        callbackUrl,
-      });
-
-      if (discovered.length === 0) {
-        setSubmitError(
-          "We couldn't find a tenant for that email. Create a new account or check the address and try again.",
-        );
-        return;
-      }
-
-      if (discovered.length === 1) {
-        window.location.assign(discovered[0].loginUrl);
-        return;
-      }
-
-      setTenantMatches(discovered);
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error
-          ? error.message
-          : "Tenant lookup failed. Please try again.",
-      );
-    } finally {
-      setIsDiscovering(false);
-    }
-  }
 
   async function handleGoogleSignIn() {
     setSubmitError(null);
@@ -282,8 +259,8 @@ export function SignInForm({
       <AuthSplitShell
         side={marketingPanel}
         topLabel="Need an account?"
-        topHref={rootSignUpUrl}
-        topAction="Sign up"
+        topHref={signUpUrl}
+        topAction={inactiveTenant ? "Create tenant" : "Invite only"}
       >
         <Card className="w-full max-w-[520px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
           <CardHeader className="space-y-3 pb-6 text-center">
@@ -334,8 +311,8 @@ export function SignInForm({
       <AuthSplitShell
         side={marketingPanel}
         topLabel="Don't have an account?"
-        topHref={rootSignUpUrl}
-        topAction="Sign up"
+        topHref={signUpUrl}
+        topAction={isRootHost ? "Sign up" : "Invite only"}
       >
         <Card className="w-full max-w-[520px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
           <CardHeader className="space-y-4 pb-5 text-center">
@@ -371,7 +348,7 @@ export function SignInForm({
                 {isPlatformAdminHost
                   ? "Only active platform users can access this internal surface."
                   : isRootHost
-                  ? "Enter your email and we'll route you to the right tenant sign-in page."
+                  ? "Sign in once, then choose the tenant workspace or platform admin destination you want to enter."
                   : "Use your email and password to access your tenant workspace."}
               </CardDescription>
             </div>
@@ -401,7 +378,7 @@ export function SignInForm({
               <Alert variant="destructive" className="text-left">
                 <AlertCircle className="size-4" />
                 <AlertTitle>
-                  {isRootHost ? "Tenant lookup failed" : "Sign in failed"}
+                  Sign in failed
                 </AlertTitle>
                 <AlertDescription>{submitError}</AlertDescription>
               </Alert>
@@ -448,162 +425,98 @@ export function SignInForm({
               </div>
             </div>
 
-            {isRootHost && !isPlatformAdminHost ? (
+            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
               <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="tenant-discovery-email">
-                    Work email
-                  </FieldLabel>
-                  <Input
-                    id="tenant-discovery-email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@company.com"
-                    value={discoveryEmail}
-                    onChange={event => {
-                      setDiscoveryEmail(event.target.value);
-                      setSubmitError(null);
-                    }}
-                  />
-                  <FieldDescription>
-                    If you belong to more than one tenant, you&apos;ll choose
-                    one next.
-                  </FieldDescription>
-                </Field>
-                <Button
-                  type="button"
-                  className="h-11 w-full gap-2"
-                  disabled={isDiscovering}
-                  onClick={onDiscoverTenant}
-                >
-                  {isDiscovering ? "Finding your workspace…" : "Continue"}
-                  <ArrowRight className="size-4" />
-                </Button>
-                {tenantMatches.length > 0 ? (
-                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        Choose your tenant
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        We found multiple tenants for this email.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {tenantMatches.map(match => (
-                        <Button
-                          key={match.tenantId}
-                          type="button"
-                          variant="outline"
-                          className="h-auto w-full justify-between rounded-xl px-4 py-3"
-                          onClick={() => window.location.assign(match.loginUrl)}
-                        >
-                          <div className="text-left">
-                            <p className="font-medium text-slate-900">
-                              {match.tenantName}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {match.tenantSlug}.{rootDomain}
-                            </p>
-                          </div>
-                          <Badge variant="secondary" className="capitalize">
-                            {match.role}
-                          </Badge>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </FieldGroup>
-            ) : (
-              <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-                <FieldGroup>
-                  <Controller
-                    name="email"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="sign-in-email">
-                          Email address
-                        </FieldLabel>
-                        <Input
-                          {...field}
-                          id="sign-in-email"
-                          type="email"
-                          placeholder="you@company.com"
-                          autoComplete="email"
-                          aria-invalid={fieldState.invalid}
-                        />
-                        {fieldState.invalid ? (
-                          <FieldError errors={[fieldState.error]} />
-                        ) : null}
-                      </Field>
-                    )}
-                  />
-                  <Controller
-                    name="password"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <div className="flex items-center">
-                          <FieldLabel htmlFor="sign-in-password">
-                            Password
-                          </FieldLabel>
-                          <Link
-                            href="/forgot-password"
-                            className="ml-auto text-sm font-medium text-blue-600 transition hover:text-blue-700"
-                          >
-                            Forgot password?
-                          </Link>
-                        </div>
-                        <Input
-                          {...field}
-                          id="sign-in-password"
-                          type="password"
-                          autoComplete="current-password"
-                          placeholder="Enter your password"
-                          aria-invalid={fieldState.invalid}
-                        />
-                        {fieldState.invalid ? (
-                          <FieldError errors={[fieldState.error]} />
-                        ) : null}
-                      </Field>
-                    )}
-                  />
-                  <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-                    <label
-                      htmlFor="remember-me"
-                      className="flex items-center gap-3 text-sm text-slate-600"
-                    >
-                      <Checkbox
-                        id="remember-me"
-                        checked={rememberMe}
-                        onCheckedChange={checked =>
-                          setRememberMe(Boolean(checked))
-                        }
+                <Controller
+                  name="email"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="sign-in-email">
+                        Email address
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="sign-in-email"
+                        type="email"
+                        placeholder="you@company.com"
+                        autoComplete="email"
+                        aria-invalid={fieldState.invalid}
                       />
-                      Keep me signed in on this device
-                    </label>
-                  </div>
-                  <Button
-                    type="submit"
-                    className="h-11 w-full"
-                    disabled={isSubmitting}
+                      {isRootHost ? (
+                        <FieldDescription>
+                          If your account has more than one destination, you&apos;ll choose it after sign-in.
+                        </FieldDescription>
+                      ) : null}
+                      {fieldState.invalid ? (
+                        <FieldError errors={[fieldState.error]} />
+                      ) : null}
+                    </Field>
+                  )}
+                />
+                <Controller
+                  name="password"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <div className="flex items-center">
+                        <FieldLabel htmlFor="sign-in-password">
+                          Password
+                        </FieldLabel>
+                        <Link
+                          href="/forgot-password"
+                          className="ml-auto text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                        >
+                          Forgot password?
+                        </Link>
+                      </div>
+                      <Input
+                        {...field}
+                        id="sign-in-password"
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      {fieldState.invalid ? (
+                        <FieldError errors={[fieldState.error]} />
+                      ) : null}
+                    </Field>
+                  )}
+                />
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                  <label
+                    htmlFor="remember-me"
+                    className="flex items-center gap-3 text-sm text-slate-600"
                   >
-                    {isSubmitting ? "Signing in…" : "Sign in"}
-                  </Button>
-                </FieldGroup>
-              </form>
-            )}
+                    <Checkbox
+                      id="remember-me"
+                      checked={rememberMe}
+                      onCheckedChange={checked =>
+                        setRememberMe(Boolean(checked))
+                      }
+                    />
+                    Keep me signed in on this device
+                  </label>
+                </div>
+                <Button
+                  type="submit"
+                  className="h-11 w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Signing in…" : "Sign in"}
+                </Button>
+              </FieldGroup>
+            </form>
 
             <div className="space-y-3 pt-2 text-center">
               <p className="text-sm text-slate-500">
-                Need a tenant?{" "}
+                {isRootHost ? "Need a tenant? " : "Need access? "}
                 <Link
-                  href={rootSignUpUrl}
+                  href={signUpUrl}
                   className="font-medium text-blue-600 transition hover:text-blue-700"
                 >
-                  Create one
+                  {isRootHost ? "Create one" : "Ask your admin"}
                 </Link>
               </p>
               <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
@@ -623,10 +536,10 @@ export function SignInForm({
                 </a>
                 <span className="text-slate-300">•</span>
                 <Link
-                  href={rootSignUpUrl}
+                  href={signUpUrl}
                   className="transition hover:text-slate-700"
                 >
-                  Sign up
+                  {isRootHost ? "Sign up" : "Invite only"}
                 </Link>
               </div>
             </div>

@@ -76,7 +76,7 @@ export default function Users() {
     <section className="flex flex-col gap-6" aria-labelledby="users-heading">
       <PageHeader
         title="Users"
-        description="Manage team members and pending invitations."
+        description="Manage team members and invitations."
       >
         <Button asChild>
           <Link href="/users/new">
@@ -85,7 +85,6 @@ export default function Users() {
           </Link>
         </Button>
       </PageHeader>
-
       {hasUsers ? (
         <DataTable
           columns={columns}

@@ -10,8 +10,7 @@ import { VerifyEmail } from "@/emails/verify-email";
 import { emailFrom, resend } from "./email";
 import { getRequestTenantHostContextFromHeaders, getRootDomain } from "./tenant-host";
 import { ResetPasswordEmail } from "@/emails/reset-password";
-import { createPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { claimApprovedTenantJoinRequestForSession } from "@/services/tenant-join-requests-core";
 
 if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not set");
@@ -97,48 +96,16 @@ export const auth = betterAuth({
     : {},
 
   databaseHooks: {
-    user: {
-      create: {
-        /**
-         * After any new Better Auth user is created (email or OAuth), ensure a
-         * matching `portal_users` row exists. `createPortalUser` is idempotent
-         * so email sign-ups that call it explicitly are safe.
-         */
-        after: async user => {
-          // During email sign-up there is no session yet — getCurrentTenant()
-          // would throw. The portal user is created explicitly by the calling
-          // code (e.g. acceptInvitation). This hook only runs for OAuth
-          // sign-ins or other paths where a session is already established.
-          let tenantId: string;
-          try {
-            const tenant = await getCurrentTenant();
-            tenantId = tenant.id;
-          } catch {
-            return;
-          }
-          await createPortalUser({
-            tenantId,
-            authUserId: user.id,
-            fullName: user.name,
-            email: user.email,
-          });
-        },
-      },
-    },
     session: {
       create: {
         before: async (session, ctx) => {
           if (!ctx) return;
 
           const requestHeaders = ctx.request?.headers ?? ctx.headers;
-          const requestUrl = ctx.request?.url ? new URL(ctx.request.url) : null;
           const hostContext = requestHeaders
             ? getRequestTenantHostContextFromHeaders(requestHeaders)
             : null;
           const tenantSlug = hostContext?.tenantSlug ?? null;
-
-          const isSocialCallback =
-            requestUrl?.pathname?.startsWith("/api/auth/callback/") ?? false;
 
           if (hostContext?.isPlatformAdminHost) {
             const platformUser = await db.query.platformUsers.findFirst({
@@ -164,19 +131,12 @@ export const auth = betterAuth({
           }
 
           if (!tenantSlug) {
-            if (isSocialCallback) {
-              return {
-                data: {
-                  ...session,
-                  tenantId: null,
-                },
-              };
-            }
-
-            throw APIError.from("FORBIDDEN", {
-              code: "TENANT_REQUIRED",
-              message: "A tenant subdomain is required to sign in.",
-            });
+            return {
+              data: {
+                ...session,
+                tenantId: null,
+              },
+            };
           }
 
           const tenant = await db.query.tenants.findFirst({
@@ -199,6 +159,33 @@ export const auth = betterAuth({
           });
 
           if (!membership) {
+            const [authUserRecord] = await db
+              .select({
+                email: authSchema.user.email,
+                name: authSchema.user.name,
+              })
+              .from(authSchema.user)
+              .where(eq(authSchema.user.id, session.userId))
+              .limit(1);
+
+            const claimedMembership = authUserRecord
+              ? await claimApprovedTenantJoinRequestForSession({
+                  tenantId: tenant.id,
+                  authUserId: session.userId,
+                  email: authUserRecord.email,
+                  fallbackFullName: authUserRecord.name,
+                })
+              : null;
+
+            if (claimedMembership) {
+              return {
+                data: {
+                  ...session,
+                  tenantId: tenant.id,
+                },
+              };
+            }
+
             throw APIError.from("FORBIDDEN", {
               code: "TENANT_MEMBERSHIP_REQUIRED",
               message: "Your account does not belong to this tenant.",

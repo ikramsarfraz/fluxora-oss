@@ -69,11 +69,18 @@ type SignUpFormProps = {
     name: string;
     slug: string;
   } | null;
+  inactiveTenant: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
   isRootHost: boolean;
   rootDomain: string;
   protocol: "http" | "https";
   port: string | null;
   rootLoginUrl: string;
+  tenantLoginUrl: string;
+  inviteToken: string | null;
   googleEnabled: boolean;
 };
 
@@ -199,11 +206,14 @@ function getPasswordChecks(password: string) {
 
 export function SignUpForm({
   tenant,
+  inactiveTenant,
   isRootHost,
   rootDomain,
   protocol,
   port,
   rootLoginUrl,
+  tenantLoginUrl,
+  inviteToken,
   googleEnabled,
 }: SignUpFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -434,6 +444,101 @@ export function SignUpForm({
       steps={Array.from(SIGN_UP_STEPS)}
     />
   );
+
+  if (!isRootHost && (tenant || inactiveTenant)) {
+    const requestTenant = tenant ?? inactiveTenant;
+    const requestsBlocked = Boolean(inactiveTenant && !tenant);
+
+    return (
+      <TooltipProvider>
+        <AuthSplitShell
+          side={
+            <AuthStepperPanel
+              currentStep={0}
+              steps={[
+                {
+                  id: "invite-only",
+                  title: requestsBlocked ? "Tenant inactive" : "Invite only",
+                  description: requestsBlocked
+                    ? "This workspace is inactive, so new access requests are blocked."
+                    : "Ask your admin for an invitation link.",
+                },
+              ]}
+            />
+          }
+          topLabel="Already have an account?"
+          topHref={tenantLoginUrl}
+          topAction="Sign in"
+        >
+          <Card className="w-full max-w-[560px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+            <CardHeader className="space-y-3 pb-5">
+              <p className="text-sm font-medium text-slate-500">
+                {requestsBlocked ? "Workspace unavailable" : "Invite-only access"}
+              </p>
+              <CardTitle className="text-3xl tracking-tight text-slate-950">
+                {requestsBlocked
+                  ? `${requestTenant?.name ?? "This tenant"} is inactive`
+                  : "Ask your admin for an invite"}
+              </CardTitle>
+              <CardDescription className="text-base leading-7 text-slate-500">
+                {requestsBlocked
+                  ? "New access requests are disabled while this tenant is inactive."
+                  : "This tenant workspace is invite-only. Public sign-ups and self-service access requests are disabled by default."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <Alert className="border-amber-200 bg-amber-50 text-left">
+                <Building2 className="size-4 text-amber-600" />
+                <AlertTitle>{requestTenant?.name}</AlertTitle>
+                <AlertDescription>
+                  Workspace URL:{" "}
+                  {buildTenantPreview({
+                    slug: requestTenant?.slug ?? "",
+                    protocol,
+                    rootDomain,
+                    port,
+                  })}
+                </AlertDescription>
+              </Alert>
+
+              {requestsBlocked ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-600">
+                    Ask your internal administrator to reactivate this tenant
+                    before requesting access.
+                  </div>
+                  <Button asChild className="h-11 w-full" variant="outline">
+                    <Link href={tenantLoginUrl}>Back to tenant sign in</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {inviteToken ? (
+                    <Alert variant="destructive" className="text-left">
+                      <AlertCircle className="size-4" />
+                      <AlertTitle>Invite link invalid</AlertTitle>
+                      <AlertDescription>
+                        This invite link is invalid, expired, already used, or
+                        does not belong to this tenant.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-600">
+                    Ask your admin for an invite.
+                  </div>
+                  <div className="space-y-3">
+                    <Button asChild className="h-11 w-full" variant="outline">
+                      <Link href={tenantLoginUrl}>Back to tenant sign in</Link>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </AuthSplitShell>
+      </TooltipProvider>
+    );
+  }
 
   if (success) {
     return (

@@ -1,9 +1,6 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
-import {
-  buildRootAppUrl,
-  getRequestTenantHostContextFromHeaders,
-} from "@/lib/tenant-host";
+import { getRequestTenantHostContextFromHeaders } from "@/lib/tenant-host";
 
 function isSharedAuthPath(pathname: string) {
   return (
@@ -13,6 +10,7 @@ function isSharedAuthPath(pathname: string) {
     pathname.startsWith("/sign-up") ||
     pathname.startsWith("/google/complete") ||
     pathname.startsWith("/google/select-tenant") ||
+    pathname.startsWith("/select-destination") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/invite") ||
@@ -113,15 +111,6 @@ export function proxy(request: NextRequest) {
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
-  }
-
-  if (pathname === "/signup" || pathname === "/sign-up") {
-    return NextResponse.redirect(
-      buildRootAppUrl({
-        pathname: "/signup",
-        context: hostContext,
-      }),
-    );
   }
 
   if (pathname === "/features" || pathname === "/pricing") {

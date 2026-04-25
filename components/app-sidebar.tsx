@@ -17,6 +17,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Building2,
+  ChevronsUpDown,
   LayoutDashboard,
   Users,
   Package,
@@ -39,6 +41,15 @@ import {
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useTenantLogoUrl } from "@/hooks/use-tenant-branding";
 import { can, type Permission } from "@/lib/auth/permissions";
+import type { AccessibleDestination } from "@/services/auth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type NavItem = {
   title: string;
@@ -178,9 +189,16 @@ const navMain: NavGroup[] = [
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   tenantName?: string;
+  tenantSlug?: string;
+  destinations?: AccessibleDestination[];
 };
 
-export function AppSidebar({ tenantName, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  tenantName,
+  tenantSlug,
+  destinations = [],
+  ...props
+}: AppSidebarProps) {
   const pathname = usePathname() ?? "";
   const isActive = (url: string) =>
     pathname === url || (url !== "/" && pathname.startsWith(url));
@@ -203,27 +221,80 @@ export function AppSidebar({ tenantName, ...props }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link
-                href="/"
-                className="flex items-center gap-2"
-                aria-label="Home"
-                title="Home"
-              >
-                {tenantLogoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={tenantLogoUrl}
-                    alt={`${tenantName ?? "Company"} logo`}
-                    className="h-8 w-auto object-contain"
-                  />
-                ) : (
-                  <span className="truncate text-base font-semibold">
-                    {tenantName ?? "Acme Distribution"}
-                  </span>
-                )}
-              </Link>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton size="lg">
+                  <div className="flex size-8 items-center justify-center rounded-lg border bg-background">
+                    {tenantLogoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tenantLogoUrl}
+                        alt={`${tenantName ?? "Company"} logo`}
+                        className="max-h-7 max-w-7 object-contain"
+                      />
+                    ) : (
+                      <Building2 className="size-4" />
+                    )}
+                  </div>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">
+                      {tenantName ?? "Workspace"}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {tenantSlug ? `${tenantSlug} workspace` : "Company workspace"}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-64" align="start">
+                <DropdownMenuLabel>Switch workspace</DropdownMenuLabel>
+                {destinations
+                  .filter(destination => destination.type === "tenant")
+                  .map(destination => (
+                    <DropdownMenuItem key={destination.id} asChild>
+                      <a href={destination.targetUrl}>
+                        <Building2 className="size-4" />
+                        <div className="grid">
+                          <span>{destination.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {destination.slug} · {destination.role}
+                          </span>
+                        </div>
+                      </a>
+                    </DropdownMenuItem>
+                  ))}
+                {destinations.some(
+                  destination => destination.type === "platform_admin",
+                ) ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    {destinations
+                      .filter(destination => destination.type === "platform_admin")
+                      .map(destination => (
+                        <DropdownMenuItem key={destination.id} asChild>
+                          <a href={destination.targetUrl}>
+                            <Shield className="size-4" />
+                            <div className="grid">
+                              <span>Platform Admin</span>
+                              <span className="text-xs text-muted-foreground">
+                                {destination.role.replaceAll("_", " ")}
+                              </span>
+                            </div>
+                          </a>
+                        </DropdownMenuItem>
+                      ))}
+                  </>
+                ) : null}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/signup">
+                    <Building2 className="size-4" />
+                    Create new workspace
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

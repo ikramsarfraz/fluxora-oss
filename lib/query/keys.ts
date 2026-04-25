@@ -14,6 +14,7 @@ export const queryKeys = {
     all: ["users"] as const,
     list: (params: unknown) => ["users", "list", params] as const,
     invitations: ["users", "invitations"] as const,
+    joinRequests: ["users", "join-requests"] as const,
     detail: (id: string) => ["users", id] as const,
     auth: (authUserId: string) => ["users", "auth", authUserId] as const,
   },

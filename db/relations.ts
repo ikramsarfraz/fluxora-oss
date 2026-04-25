@@ -36,6 +36,7 @@ import {
   supplierInvoices,
   suppliers,
   tenantBranding,
+  tenantJoinRequests,
   tenants,
   unitsOfMeasure,
   userInvitations,
@@ -72,6 +73,7 @@ export const tenantsRelations = relations(tenants, ({ many, one }) => ({
   expenses: many(expenses),
   supportTickets: many(supportTickets),
   userInvitations: many(userInvitations),
+  tenantJoinRequests: many(tenantJoinRequests),
   files: many(files),
   supportTicketAttachments: many(supportTicketAttachments),
   branding: one(tenantBranding, {
@@ -172,6 +174,9 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
     relationName: "tenant_branding_updated_by",
   }),
   invitationsSent: many(userInvitations),
+  reviewedTenantJoinRequests: many(tenantJoinRequests, {
+    relationName: "tenant_join_requests_reviewed_by_user",
+  }),
   auditLogs: many(auditLogs, {
     relationName: "audit_logs_actor_portal_user",
   }),
@@ -193,6 +198,25 @@ export const userInvitationsRelations = relations(
     invitedByUser: one(portalUsers, {
       fields: [userInvitations.invitedByUserId],
       references: [portalUsers.id],
+    }),
+  }),
+);
+
+export const tenantJoinRequestsRelations = relations(
+  tenantJoinRequests,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [tenantJoinRequests.tenantId],
+      references: [tenants.id],
+    }),
+    authUser: one(user, {
+      fields: [tenantJoinRequests.authUserId],
+      references: [user.id],
+    }),
+    reviewedByUser: one(portalUsers, {
+      fields: [tenantJoinRequests.reviewedByUserId],
+      references: [portalUsers.id],
+      relationName: "tenant_join_requests_reviewed_by_user",
     }),
   }),
 );

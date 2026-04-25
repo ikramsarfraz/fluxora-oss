@@ -141,7 +141,8 @@ export function getProtocolFromHeaders(headersLike: Headers) {
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
     hostname.endsWith(".localhost") ||
-    hostname.endsWith(".127.0.0.1")
+    hostname.endsWith(".127.0.0.1") ||
+    hostname.endsWith(".localtest.me")
   ) {
     return "http";
   }
@@ -210,6 +211,15 @@ function buildHostForTenant(slug: string, context: RequestTenantHostContext) {
         ? "localhost"
         : "127.0.0.1";
     return `${normalizedSlug}.${localRoot}${context.port ? `:${context.port}` : ""}`;
+  }
+
+  // e.g. tenant at acme.app.localtest.me when the browser is on app.localtest.me
+  if (
+    context.hostname.endsWith(".localtest.me") &&
+    !context.isPlatformAdminHost &&
+    (context.isRootHost || !context.tenantSlug)
+  ) {
+    return `${normalizedSlug}.${context.hostname}${context.port ? `:${context.port}` : ""}`;
   }
 
   return `${normalizedSlug}.${context.rootDomain}${context.port ? `:${context.port}` : ""}`;

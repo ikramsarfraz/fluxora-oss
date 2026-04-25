@@ -43,8 +43,6 @@ Platform admins manage support from `admin.<ROOT_DOMAIN>/admin/support`. The pla
 
    Optional:
    - `DATABASE_URL_UNPOOLED`
-   - `ERP_API_ORIGIN`
-   - `NEXT_PUBLIC_API_URL`
    - `NEXT_PUBLIC_SUPPORT_EMAIL`
 
 4. **Run migrations**
@@ -52,9 +50,6 @@ Platform admins manage support from `admin.<ROOT_DOMAIN>/admin/support`. The pla
 
 5. **Run the app**
    Run `npm run dev`
-
-6. **Optional legacy backend**
-   If you still need the old backend/API for specific routes, run it from `docs/legacy-app/` with `./run-one-port.sh` or `uvicorn api.main:app --reload --host 127.0.0.1 --port 8005`
 
 ### Host routing locally
 
@@ -129,8 +124,6 @@ Most modern browsers resolve `*.localhost` automatically, and `*.localtest.me` r
 - Solo signup creates `tenantType=solo`.
 - Business signup creates `tenantType=business`.
 - Reserved tenant slugs such as `admin`, `www`, and `localhost` are blocked.
-
-If `NEXT_PUBLIC_API_URL` is unset, the app calls `/api` on the same origin; `next.config.ts` rewrites that to `ERP_API_ORIGIN` (default `http://127.0.0.1:8000`). Route handlers under `app/api/auth/*` are served by Next.js (Better Auth) and are not proxied to FastAPI.
 
 See [`docs/monorepo-notes.md`](docs/monorepo-notes.md) for more.
 
