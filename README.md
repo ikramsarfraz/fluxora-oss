@@ -1,23 +1,23 @@
 # Acme Distribution ERP
 
-Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack lives under [`docs/legacy-app/`](docs/legacy-app/).
+Acme Distribution ERP is a multi-tenant operations platform for food and wholesale distribution teams. It helps tenants manage customers, suppliers, products, lots, inventory, sales orders, invoices, payments, expenses, and user access from one workspace-scoped application. The app supports tenant subdomains, role-aware workflows, warehouse traceability, supplier receiving, sales order fulfillment, invoice generation, tenant branding, and file uploads backed by Cloudflare R2.
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Framework | [Next.js 16](https://nextjs.org) (App Router, React 19) |
-| Language | TypeScript 5 |
-| Styling | Tailwind CSS 4, shadcn/ui (Radix UI + Base UI primitives) |
-| Auth | [Better Auth](https://better-auth.com) — root, tenant, and platform-admin host auth |
-| Database | [Neon](https://neon.tech) serverless Postgres |
-| ORM | [Drizzle ORM](https://orm.drizzle.team) + Drizzle Kit |
-| Data fetching | TanStack Query v5, TanStack Table v8 |
-| Forms | React Hook Form + Zod |
-| Email | [Resend](https://resend.com) + React Email |
-| Charts / PDF | Recharts, @react-pdf/renderer |
-| File storage | [Cloudflare R2](https://developers.cloudflare.com/r2/) |
-| Deployment | [Vercel](https://vercel.com) |
+| Layer         | Technology                                                                          |
+| ------------- | ----------------------------------------------------------------------------------- |
+| Framework     | [Next.js 16](https://nextjs.org) (App Router, React 19)                             |
+| Language      | TypeScript 5                                                                        |
+| Styling       | Tailwind CSS 4, shadcn/ui (Radix UI + Base UI primitives)                           |
+| Auth          | [Better Auth](https://better-auth.com) — root, tenant, and platform-admin host auth |
+| Database      | [Neon](https://neon.tech) serverless Postgres                                       |
+| ORM           | [Drizzle ORM](https://orm.drizzle.team) + Drizzle Kit                               |
+| Data fetching | TanStack Query v5, TanStack Table v8                                                |
+| Forms         | React Hook Form + Zod                                                               |
+| Email         | [Resend](https://resend.com) + React Email                                          |
+| Charts / PDF  | Recharts, @react-pdf/renderer                                                       |
+| File storage  | [Cloudflare R2](https://developers.cloudflare.com/r2/)                              |
+| Deployment    | [Vercel](https://vercel.com)                                                        |
 
 ## Local dev
 
@@ -53,6 +53,7 @@ Next.js (App Router) UI at the repo root; the previous FastAPI + Vite stack live
 ### Host routing locally
 
 The app now resolves three host types:
+
 - `root`: marketing and shared auth on the base/root domain
 - `tenant`: customer ERP workspaces on tenant subdomains
 - `platform-admin`: internal Pelzer Solutions admin surface on the reserved `admin` host
@@ -60,12 +61,14 @@ The app now resolves three host types:
 The `admin` slug is reserved. It is not a customer tenant and cannot be created in `tenants.slug`.
 
 For local development you can use either:
+
 - `ROOT_DOMAIN=localtest.me` with `admin.localtest.me:3000`
 - `ROOT_DOMAIN=app.localtest.me` with `admin.app.localtest.me:3000`
 
 Examples below use `localtest.me` because it maps wildcard subdomains to `127.0.0.1` without editing `/etc/hosts`.
 
 Examples:
+
 - root marketing: [http://localtest.me:3000/](http://localtest.me:3000/)
 - central login: [http://localtest.me:3000/login](http://localtest.me:3000/login)
 - root signup: [http://localtest.me:3000/signup](http://localtest.me:3000/signup)
@@ -76,6 +79,7 @@ Examples:
 - tenant dashboard: [http://company.localtest.me:3000/](http://company.localtest.me:3000/)
 
 Behavior:
+
 - `localtest.me:3000/` = marketing homepage
 - `localtest.me:3000/features` and `localtest.me:3000/pricing` = public marketing routes
 - `localtest.me:3000/login` = central login
@@ -98,6 +102,7 @@ Behavior:
 - unauthenticated platform admin requests are redirected to the admin host `/login`
 
 Examples:
+
 - `solofounder.localtest.me:3000`
 - `company.localtest.me:3000`
 - `admin.localtest.me:3000`
