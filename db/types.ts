@@ -41,6 +41,9 @@ import {
   salesInvoiceFiles,
   payments,
   expenses,
+  supportTicketAttachments,
+  supportTicketUpdates,
+  supportTickets,
   auditLogs,
 } from "./schema";
 
@@ -160,6 +163,21 @@ export type NewPayment = InferInsertModel<typeof payments>;
 
 export type Expense = InferSelectModel<typeof expenses>;
 export type NewExpense = InferInsertModel<typeof expenses>;
+
+export type SupportTicket = InferSelectModel<typeof supportTickets>;
+export type NewSupportTicket = InferInsertModel<typeof supportTickets>;
+
+export type SupportTicketUpdate = InferSelectModel<typeof supportTicketUpdates>;
+export type NewSupportTicketUpdate = InferInsertModel<
+  typeof supportTicketUpdates
+>;
+
+export type SupportTicketAttachment = InferSelectModel<
+  typeof supportTicketAttachments
+>;
+export type NewSupportTicketAttachment = InferInsertModel<
+  typeof supportTicketAttachments
+>;
 
 // -------------------- Audit --------------------
 

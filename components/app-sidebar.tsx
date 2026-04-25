@@ -31,6 +31,7 @@ import {
   Receipt,
   Wallet,
   CreditCard,
+  LifeBuoy,
   Palette,
   Shield,
 } from "lucide-react";
@@ -140,6 +141,16 @@ const navMain: NavGroup[] = [
         title: "Expenses",
         url: "/expenses",
         icon: CreditCard,
+      },
+    ],
+  },
+  {
+    title: "Support",
+    items: [
+      {
+        title: "Report an Issue",
+        url: "/support",
+        icon: LifeBuoy,
       },
     ],
   },

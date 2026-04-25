@@ -27,6 +27,9 @@ import {
   salesOrderLines,
   salesOrders,
   salesOrderAttachments,
+  supportTicketAttachments,
+  supportTicketUpdates,
+  supportTickets,
   supplierInvoiceAttachments,
   supplierInvoiceLines,
   supplierInvoicePayments,
@@ -48,6 +51,10 @@ export const platformUsersRelations = relations(
     auditLogs: many(auditLogs, {
       relationName: "audit_logs_actor_platform_user",
     }),
+    assignedSupportTickets: many(supportTickets),
+    supportTicketUpdates: many(supportTicketUpdates, {
+      relationName: "support_ticket_updates_author_platform_user",
+    }),
   }),
 );
 
@@ -63,8 +70,10 @@ export const tenantsRelations = relations(tenants, ({ many, one }) => ({
   salesInvoices: many(salesInvoices),
   payments: many(payments),
   expenses: many(expenses),
+  supportTickets: many(supportTickets),
   userInvitations: many(userInvitations),
   files: many(files),
+  supportTicketAttachments: many(supportTicketAttachments),
   branding: one(tenantBranding, {
     fields: [tenants.id],
     references: [tenantBranding.tenantId],
@@ -143,6 +152,10 @@ export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({
   }),
   paymentsCreated: many(payments),
   expensesCreated: many(expenses),
+  supportTicketsSubmitted: many(supportTickets),
+  supportTicketUpdates: many(supportTicketUpdates, {
+    relationName: "support_ticket_updates_author_portal_user",
+  }),
   uploadedFiles: many(files, {
     relationName: "files_uploaded_by_user",
   }),
@@ -658,6 +671,65 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
   }),
 }));
 
+export const supportTicketsRelations = relations(
+  supportTickets,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [supportTickets.tenantId],
+      references: [tenants.id],
+    }),
+    portalUser: one(portalUsers, {
+      fields: [supportTickets.portalUserId],
+      references: [portalUsers.id],
+    }),
+    assignedPlatformUser: one(platformUsers, {
+      fields: [supportTickets.assignedPlatformUserId],
+      references: [platformUsers.id],
+    }),
+    updates: many(supportTicketUpdates),
+    attachments: many(supportTicketAttachments),
+  }),
+);
+
+export const supportTicketUpdatesRelations = relations(
+  supportTicketUpdates,
+  ({ one, many }) => ({
+    ticket: one(supportTickets, {
+      fields: [supportTicketUpdates.ticketId],
+      references: [supportTickets.id],
+    }),
+    authorPlatformUser: one(platformUsers, {
+      fields: [supportTicketUpdates.authorPlatformUserId],
+      references: [platformUsers.id],
+      relationName: "support_ticket_updates_author_platform_user",
+    }),
+    authorPortalUser: one(portalUsers, {
+      fields: [supportTicketUpdates.authorPortalUserId],
+      references: [portalUsers.id],
+      relationName: "support_ticket_updates_author_portal_user",
+    }),
+    attachments: many(supportTicketAttachments),
+  }),
+);
+
+export const supportTicketAttachmentsRelations = relations(
+  supportTicketAttachments,
+  ({ one }) => ({
+    ticket: one(supportTickets, {
+      fields: [supportTicketAttachments.ticketId],
+      references: [supportTickets.id],
+    }),
+    update: one(supportTicketUpdates, {
+      fields: [supportTicketAttachments.updateId],
+      references: [supportTicketUpdates.id],
+    }),
+    file: one(files, {
+      fields: [supportTicketAttachments.fileId],
+      references: [files.id],
+    }),
+  }),
+);
+
 export const tenantBrandingRelations = relations(tenantBranding, ({ one }) => ({
   tenant: one(tenants, {
     fields: [tenantBranding.tenantId],
@@ -692,6 +764,7 @@ export const filesRelations = relations(files, ({ one, many }) => ({
   }),
   supplierInvoiceAttachments: many(supplierInvoiceAttachments),
   salesOrderAttachments: many(salesOrderAttachments),
+  supportTicketAttachments: many(supportTicketAttachments),
   salesInvoiceFiles: many(salesInvoiceFiles),
 }));
 

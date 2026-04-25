@@ -85,6 +85,27 @@
       "when": 1777296000000,
       "tag": "0011_tenant_auth_terms",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777382400000,
+      "tag": "0012_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777468800000,
+      "tag": "0013_support_ticket_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777555200000,
+      "tag": "0014_support_ticket_attachments",
+      "breakpoints": true
     }
   ]
 }

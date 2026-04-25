@@ -104,6 +104,7 @@ export const inventoryAdjustmentTypeEnum = pgEnum("inventory_adjustment_type", [
 export const fileCategoryEnum = pgEnum("file_category", [
   "tenant_branding",
   "supplier_invoice_attachment",
+  "support_ticket_attachment",
   "sales_invoice_pdf",
   "sales_invoice_attachment",
   "sales_order_attachment",
@@ -144,6 +145,35 @@ export const auditActorTypeEnum = pgEnum("audit_actor_type", [
   "platform_user",
   "system",
 ]);
+
+export const supportTicketIssueTypeEnum = pgEnum("support_ticket_issue_type", [
+  "bug",
+  "question",
+  "feature_request",
+  "workflow_issue",
+]);
+
+export const supportTicketPriorityEnum = pgEnum("support_ticket_priority", [
+  "low",
+  "medium",
+  "high",
+]);
+
+export const supportTicketStatusEnum = pgEnum("support_ticket_status", [
+  "open",
+  "in_progress",
+  "resolved",
+]);
+
+export const supportTicketUpdateAuthorTypeEnum = pgEnum(
+  "support_ticket_update_author_type",
+  ["platform_user", "portal_user"],
+);
+
+export const supportTicketUpdateVisibilityEnum = pgEnum(
+  "support_ticket_update_visibility",
+  ["internal", "tenant_visible"],
+);
 
 export const productUnitPurposeEnum = pgEnum("product_unit_purpose", [
   "stock",
@@ -1394,6 +1424,117 @@ export const expenses = pgTable(
   table => [
     index("expenses_tenant_id_idx").on(table.tenantId),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
+  ],
+);
+
+export const supportTickets = pgTable(
+  "support_tickets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    portalUserId: uuid("portal_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    issueType: supportTicketIssueTypeEnum("issue_type").notNull(),
+    priority: supportTicketPriorityEnum("priority").notNull().default("medium"),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    pageUrl: text("page_url"),
+    status: supportTicketStatusEnum("status").notNull().default("open"),
+    assignedPlatformUserId: uuid("assigned_platform_user_id").references(
+      () => platformUsers.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("support_tickets_tenant_id_idx").on(table.tenantId),
+    index("support_tickets_portal_user_id_idx").on(table.portalUserId),
+    index("support_tickets_status_idx").on(table.status),
+    index("support_tickets_priority_idx").on(table.priority),
+    index("support_tickets_issue_type_idx").on(table.issueType),
+    index("support_tickets_assigned_platform_user_id_idx").on(
+      table.assignedPlatformUserId,
+    ),
+    index("support_tickets_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const supportTicketUpdates = pgTable(
+  "support_ticket_updates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    authorType: supportTicketUpdateAuthorTypeEnum("author_type").notNull(),
+    authorPlatformUserId: uuid("author_platform_user_id").references(
+      () => platformUsers.id,
+      { onDelete: "set null" },
+    ),
+    authorPortalUserId: uuid("author_portal_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    message: text("message").notNull(),
+    visibility: supportTicketUpdateVisibilityEnum("visibility")
+      .notNull()
+      .default("internal"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("support_ticket_updates_ticket_id_idx").on(table.ticketId),
+    index("support_ticket_updates_author_platform_user_id_idx").on(
+      table.authorPlatformUserId,
+    ),
+    index("support_ticket_updates_author_portal_user_id_idx").on(
+      table.authorPortalUserId,
+    ),
+    index("support_ticket_updates_visibility_idx").on(table.visibility),
+    index("support_ticket_updates_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const supportTicketAttachments = pgTable(
+  "support_ticket_attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ticketId: uuid("ticket_id")
+      .notNull()
+      .references(() => supportTickets.id, { onDelete: "cascade" }),
+    updateId: uuid("update_id").references(() => supportTicketUpdates.id, {
+      onDelete: "cascade",
+    }),
+    uploadedByType: supportTicketUpdateAuthorTypeEnum("uploaded_by_type")
+      .notNull(),
+    uploadedById: uuid("uploaded_by_id").notNull(),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("support_ticket_attachments_ticket_id_idx").on(table.ticketId),
+    index("support_ticket_attachments_update_id_idx").on(table.updateId),
+    index("support_ticket_attachments_file_id_idx").on(table.fileId),
+    index("support_ticket_attachments_uploaded_by_idx").on(
+      table.uploadedByType,
+      table.uploadedById,
+    ),
   ],
 );
 

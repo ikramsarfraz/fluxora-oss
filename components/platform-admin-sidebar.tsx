@@ -6,6 +6,7 @@ import {
   Building2,
   CreditCard,
   LayoutDashboard,
+  LifeBuoy,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -44,6 +45,11 @@ const navItems: NavItem[] = [
     title: "Platform Users",
     url: "/admin/platform-users",
     icon: ShieldCheck,
+  },
+  {
+    title: "Support",
+    url: "/admin/support",
+    icon: LifeBuoy,
   },
   {
     title: "Subscriptions",
