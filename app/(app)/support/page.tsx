@@ -58,8 +58,9 @@ export default async function SupportPage() {
                 <TableHead>Issue type</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Attachments</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead>Updated</TableHead>
+                <TableHead>Last updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -85,13 +86,14 @@ export default async function SupportPage() {
                         {supportTicketStatusLabel(ticket.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell>{ticket.attachments.length}</TableCell>
                     <TableCell>{formatDisplayDate(ticket.createdAt)}</TableCell>
                     <TableCell>{formatDisplayDate(ticket.updatedAt)}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={7} className="text-muted-foreground">
                     You have not submitted any support tickets yet.
                   </TableCell>
                 </TableRow>

@@ -181,6 +181,9 @@ export async function listTenantSupportTickets() {
 
   return db.query.supportTickets.findMany({
     where: eq(supportTickets.tenantId, tenant.id),
+    with: {
+      attachments: true,
+    },
     orderBy: [desc(supportTickets.createdAt)],
   });
 }
@@ -195,6 +198,11 @@ export async function getTenantSupportTicketById(id: string) {
         attachments: {
           with: { file: true },
           orderBy: [desc(supportTicketAttachments.createdAt)],
+        },
+        assignedPlatformUser: {
+          with: {
+            authUser: true,
+          },
         },
         updates: {
           where: eq(supportTicketUpdates.visibility, "tenant_visible"),

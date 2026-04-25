@@ -162,7 +162,10 @@ export default async function PlatformAdminSupportPage({
                 <TableHead>Tenant</TableHead>
                 <TableHead>Submitted by</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Assigned</TableHead>
+                <TableHead>Attachments</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Last updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -199,12 +202,19 @@ export default async function PlatformAdminSupportPage({
                         {supportTicketStatusLabel(ticket.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {ticket.assignedPlatformUser?.authUser.name ??
+                        ticket.assignedPlatformUser?.authUser.email ??
+                        "Unassigned"}
+                    </TableCell>
+                    <TableCell>{ticket.attachments.length}</TableCell>
                     <TableCell>{formatDisplayDate(ticket.createdAt)}</TableCell>
+                    <TableCell>{formatDisplayDate(ticket.updatedAt)}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
+                  <TableCell colSpan={10} className="text-muted-foreground">
                     No support tickets match these filters.
                   </TableCell>
                 </TableRow>

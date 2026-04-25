@@ -19,6 +19,12 @@ Acme Distribution ERP is a multi-tenant operations platform for food and wholesa
 | File storage  | [Cloudflare R2](https://developers.cloudflare.com/r2/)                              |
 | Deployment    | [Vercel](https://vercel.com)                                                        |
 
+## Support workflow
+
+Tenant users can submit and track support tickets from `/support`. New tickets are created from `/support/new`, can include supporting documents, and preserve tenant isolation so users only see tickets for their workspace. Ticket detail pages show the original report, attachments, status timeline, assigned platform admin when available, and tenant-visible progress updates.
+
+Platform admins manage support from `admin.<ROOT_DOMAIN>/admin/support`. The platform view includes filters by status, priority, and issue type; ticket detail pages support status changes, assignment, internal notes, tenant-visible updates, and attachment downloads. Basic service-layer notifications use Resend when configured and fall back to structured console logging when email credentials are unavailable.
+
 ## Local dev
 
 1. **Install dependencies**

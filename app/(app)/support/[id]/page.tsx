@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SupportTicketAttachments } from "@/components/support-ticket-attachments";
+import { SupportTicketStatusTimeline } from "@/components/support-ticket-status-timeline";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import {
@@ -64,7 +65,7 @@ export default async function TenantSupportTicketDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader>
             <CardDescription>Status</CardDescription>
@@ -89,7 +90,29 @@ export default async function TenantSupportTicketDetailPage({
             </CardTitle>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Assigned admin</CardDescription>
+            <CardTitle className="text-lg">
+              {ticket.assignedPlatformUser?.authUser.name ??
+                ticket.assignedPlatformUser?.authUser.email ??
+                "Not assigned yet"}
+            </CardTitle>
+          </CardHeader>
+        </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Status timeline</CardTitle>
+          <CardDescription>
+            Current support progress for this ticket.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SupportTicketStatusTimeline status={ticket.status} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

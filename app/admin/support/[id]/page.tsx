@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SupportTicketAttachments } from "@/components/support-ticket-attachments";
+import { SupportTicketStatusTimeline } from "@/components/support-ticket-status-timeline";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import {
@@ -136,6 +137,18 @@ export default async function PlatformAdminSupportTicketDetailPage({
         </CardHeader>
         <CardContent>
           <p className="whitespace-pre-wrap text-sm leading-6">{ticket.message}</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Status timeline</CardTitle>
+          <CardDescription>
+            Current support progress for this ticket.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SupportTicketStatusTimeline status={ticket.status} />
         </CardContent>
       </Card>
 
