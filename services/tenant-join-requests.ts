@@ -162,126 +162,16 @@ async function notifyRequesterOfDecision(args: {
   });
 }
 
-export async function createTenantJoinRequest(input: {
+export async function createTenantJoinRequest(_input: {
   email: string;
   fullName: string;
   requestedRole?: TenantJoinRequestedRole | null;
   note?: string | null;
   password?: string | null;
 }) {
-  const tenant = await getActiveTenantForJoinRequest();
-  const normalizedEmail = normalizeTenantJoinRequestEmail(input.email);
-  const fullName = input.fullName.trim();
-  const requestedRole = normalizeRequestedRole(input.requestedRole);
-  const note = input.note?.trim() ? input.note.trim() : null;
-
-  if (!normalizedEmail) {
-    throw new Error("Email is required.");
-  }
-
-  if (!fullName) {
-    throw new Error("Full name is required.");
-  }
-
-  if (!ALLOWED_REQUESTED_ROLES.has(requestedRole)) {
-    throw new Error("Requested role is invalid.");
-  }
-
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (session?.user?.email) {
-    const sessionEmail = normalizeTenantJoinRequestEmail(session.user.email);
-    if (sessionEmail !== normalizedEmail) {
-      throw new Error(
-        `You are signed in as ${session.user.email}. Use that email or sign out before requesting access.`,
-      );
-    }
-  }
-
-  let authUserId =
-    session?.user?.id ?? (await findAuthUserIdByEmail(normalizedEmail));
-
-  if (!authUserId) {
-    const password = input.password?.trim() ?? "";
-
-    if (password.length < 8) {
-      throw new Error(
-        "Create a password with at least 8 characters so you can sign in after approval.",
-      );
-    }
-
-    try {
-      const signUpResult = await auth.api.signUpEmail({
-        body: {
-          name: fullName,
-          email: normalizedEmail,
-          password,
-        },
-      });
-
-      authUserId = signUpResult?.user?.id ?? null;
-    } catch (error) {
-      if (!isAPIError(error)) {
-        throw error;
-      }
-
-      authUserId = await findAuthUserIdByEmail(normalizedEmail);
-      if (!authUserId) {
-        throw new Error(error.message || "Could not create your account.");
-      }
-    }
-  }
-
-  await ensureNoPendingJoinRequest({
-    tenantId: tenant.id,
-    email: normalizedEmail,
-  });
-  await ensureNoActiveMembership({
-    tenantId: tenant.id,
-    email: normalizedEmail,
-    authUserId,
-  });
-
-  const existingInvitation = await db.query.userInvitations.findFirst({
-    where: and(
-      eq(userInvitations.tenantId, tenant.id),
-      eq(userInvitations.status, "pending"),
-      sql`lower(${userInvitations.email}) = ${normalizedEmail}`,
-    ),
-  });
-
-  if (existingInvitation) {
-    throw new Error("An invitation is already pending for that email.");
-  }
-
-  const [request] = await db
-    .insert(tenantJoinRequests)
-    .values({
-      tenantId: tenant.id,
-      authUserId,
-      email: normalizedEmail,
-      fullName,
-      requestedRole,
-      status: "pending",
-      note,
-    })
-    .returning();
-
-  if (!request) {
-    throw new Error("Failed to create access request.");
-  }
-
-  await notifyTenantAdminsOfNewJoinRequest({
-    tenantId: tenant.id,
-    tenantName: tenant.name,
-    email: normalizedEmail,
-    fullName,
-    requestedRole,
-  });
-
-  return request;
+  throw new Error(
+    "Self-service access requests are disabled. Ask a workspace admin for an invitation.",
+  );
 }
 
 export async function listPendingTenantJoinRequestsForAdmin() {

@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
@@ -72,7 +72,6 @@ const PREVIEW_FAILURE_COPY: Record<
 };
 
 export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
-  const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -108,12 +107,11 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
     }
     setSubmitError(null);
     try {
-      await acceptInvitationRequest({
+      const { redirectUrl } = await acceptInvitationRequest({
         token,
         password: data.newPassword,
       });
-      router.push("/invite/success");
-      router.refresh();
+      window.location.assign(redirectUrl);
     } catch (e) {
       if (e instanceof InvitationActionError) {
         if (e.code === "ALREADY_ACCEPTED" || e.code === "EXPIRED_OR_INVALID") {

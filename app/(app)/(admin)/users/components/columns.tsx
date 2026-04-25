@@ -7,8 +7,8 @@ import {
   Check,
   Mail,
   MoreHorizontal,
+  UserMinus,
   X,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -38,7 +38,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 export type UsersDirectoryRow = UsersDirectoryListItem;
 
 type ColumnActions = {
-  onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onDeactivateUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
   onResendInvitation: (
     invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
   ) => void;
@@ -50,13 +50,13 @@ type ColumnActions = {
 
 function ActionsCell({
   row,
-  onDeleteUser,
+  onDeactivateUser,
   onResendInvitation,
   onRevokeInvitation,
   resendInvitationId,
 }: {
   row: UsersDirectoryRow;
-  onDeleteUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
+  onDeactivateUser: (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => void;
   onResendInvitation: (
     invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"],
   ) => void;
@@ -65,7 +65,8 @@ function ActionsCell({
   ) => void;
   resendInvitationId: string | null;
 }) {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [deactivateUserOpen, setDeactivateUserOpen] = useState(false);
 
   if (row.kind === "invitation") {
     const inv = row.row;
@@ -89,15 +90,15 @@ function ActionsCell({
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
-              onClick={() => setShowDeleteDialog(true)}
+              onClick={() => setRevokeOpen(true)}
             >
-              <Trash2 />
+              <UserMinus className="size-4" />
               Revoke invitation
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialog open={revokeOpen} onOpenChange={setRevokeOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Revoke invitation</AlertDialogTitle>
@@ -113,7 +114,7 @@ function ActionsCell({
                 variant="destructive"
                 onClick={() => {
                   onRevokeInvitation(inv);
-                  setShowDeleteDialog(false);
+                  setRevokeOpen(false);
                 }}
               >
                 Revoke
@@ -141,23 +142,28 @@ function ActionsCell({
             <Link href={`/users/${user.id}`}>View user</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            <Trash2 />
-            Delete user
-          </DropdownMenuItem>
+          {user.isActive ? (
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setDeactivateUserOpen(true)}
+            >
+              <UserMinus className="size-4" />
+              Deactivate user
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialog
+        open={deactivateUserOpen}
+        onOpenChange={setDeactivateUserOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete user</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate user</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{user.fullName}&quot;? This
-              action cannot be undone.
+              Deactivate &quot;{user.fullName}&quot;? They will no longer be
+              able to sign in to this workspace until reactivated.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -165,11 +171,11 @@ function ActionsCell({
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                onDeleteUser(user);
-                setShowDeleteDialog(false);
+                onDeactivateUser(user);
+                setDeactivateUserOpen(false);
               }}
             >
-              Delete
+              Deactivate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -342,7 +348,7 @@ export function createColumns(
         <div className="flex justify-center">
           <ActionsCell
             row={row.original}
-            onDeleteUser={actions.onDeleteUser}
+            onDeactivateUser={actions.onDeactivateUser}
             onResendInvitation={actions.onResendInvitation}
             onRevokeInvitation={actions.onRevokeInvitation}
             resendInvitationId={actions.resendInvitationId}

@@ -306,3 +306,39 @@ export function buildRootAppUrl(args: {
 
   return url.toString();
 }
+
+/**
+ * Rewrites `Host` (and `x-forwarded-host`) so `parseTenantSlugFromHostname` sees
+ * a root app host, not a tenant subdomain. Use when a session is needed before
+ * a `portal_users` row exists (e.g. invite accept for an existing account).
+ */
+export function buildRootHostHeadersForAuth(
+  requestHeaders: Headers,
+): Headers {
+  const h = new Headers(requestHeaders);
+  const currentRaw =
+    requestHeaders.get("x-forwarded-host")?.split(",")[0]?.trim() ??
+    requestHeaders.get("host") ??
+    "";
+  const { hostname, port } = splitHostAndPort(currentRaw);
+  const rootDomain = getRootDomain();
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".127.0.0.1")
+  ) {
+    if (hostname.endsWith(".localhost")) {
+      h.set("host", `localhost${port ? `:${port}` : ""}`);
+      h.set("x-forwarded-host", `localhost${port ? `:${port}` : ""}`);
+    } else {
+      h.set("host", `${hostname}${port ? `:${port}` : ""}`);
+      h.set("x-forwarded-host", `${hostname}${port ? `:${port}` : ""}`);
+    }
+  } else {
+    h.set("host", `${rootDomain}${port ? `:${port}` : ""}`);
+    h.set("x-forwarded-host", `${rootDomain}${port ? `:${port}` : ""}`);
+  }
+  h.delete("x-tenant-slug");
+  return h;
+}

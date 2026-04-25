@@ -14,6 +14,7 @@ import { InventorySection } from "./inventory-section";
 import { MetricCards } from "./metric-cards";
 import { PurchasingSection } from "./purchasing-section";
 import { SalesSection } from "./sales-section";
+import { TenantSetupChecklistCard } from "./tenant-setup-checklist-card";
 
 export function DashboardShell({ role }: { role: PortalUserRole }) {
   const { data, isPending, isError, error } = useDashboardSummary();
@@ -55,6 +56,7 @@ export function DashboardShell({ role }: { role: PortalUserRole }) {
 
   return (
     <div className="flex flex-col gap-8 pb-10">
+      <TenantSetupChecklistCard role={role} />
       <MetricCards metrics={data.metrics} role={role} />
       {isSectionVisible(role, "sales") ? (
         <SalesSection sales={data.sales} />

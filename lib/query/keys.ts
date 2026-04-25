@@ -14,7 +14,6 @@ export const queryKeys = {
     all: ["users"] as const,
     list: (params: unknown) => ["users", "list", params] as const,
     invitations: ["users", "invitations"] as const,
-    joinRequests: ["users", "join-requests"] as const,
     detail: (id: string) => ["users", id] as const,
     auth: (authUserId: string) => ["users", "auth", authUserId] as const,
   },
@@ -22,6 +21,7 @@ export const queryKeys = {
     summary: ["dashboard"] as const,
     arAging: ["dashboard", "ar-aging"] as const,
     apAging: ["dashboard", "ap-aging"] as const,
+    setupChecklist: ["dashboard", "setup-checklist"] as const,
   },
   customers: {
     all: ["customers"] as const,

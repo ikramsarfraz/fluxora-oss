@@ -17,6 +17,7 @@ import { DataTable } from "./data-table";
 import {
   useResendUserInvitation,
   useRevokeUserInvitation,
+  useSetUserActive,
   useUsersDirectoryPage,
 } from "@/hooks/use-users";
 import type { UsersDirectoryListSort } from "@/services/portal-users";
@@ -44,11 +45,21 @@ export default function Users() {
   });
   const resendMutation = useResendUserInvitation();
   const revokeMutation = useRevokeUserInvitation();
+  const setActiveMutation = useSetUserActive();
 
-  const handleDeleteUser = useCallback((user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => {
-    // TODO: Implement user deletion
-    toast.info(`Delete user "${user.fullName}" - not yet implemented`);
-  }, []);
+  const handleDeactivateUser = useCallback(
+    async (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => {
+      try {
+        await setActiveMutation.mutateAsync({ id: user.id, isActive: false });
+        toast.success(`${user.fullName} was deactivated.`);
+      } catch (e) {
+        toast.error(
+          e instanceof Error ? e.message : "Could not deactivate this user.",
+        );
+      }
+    },
+    [setActiveMutation],
+  );
 
   const handleResendInvitation = useCallback(
     async (invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
@@ -84,13 +95,13 @@ export default function Users() {
   const columns = useMemo(
     () =>
       createColumns({
-        onDeleteUser: handleDeleteUser,
+        onDeactivateUser: handleDeactivateUser,
         onResendInvitation: handleResendInvitation,
         onRevokeInvitation: handleRevokeInvitation,
         resendInvitationId,
       }),
     [
-      handleDeleteUser,
+      handleDeactivateUser,
       handleResendInvitation,
       handleRevokeInvitation,
       resendInvitationId,

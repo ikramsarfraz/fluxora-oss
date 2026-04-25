@@ -11,6 +11,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { getApAging, getArAging } from "@/services/aging";
 import { getDashboardSummary } from "@/services/dashboard";
 import { getCurrentPortalUser } from "@/services/portal-users";
+import { getTenantSetupChecklistViewAction } from "@/actions/tenant-setup-checklist";
 
 import { DashboardShell } from "../(dashboard)/components/dashboard-shell";
 
@@ -24,6 +25,10 @@ export default async function DashboardRoute() {
     queryClient.prefetchQuery({
       queryKey: queryKeys.dashboard.summary,
       queryFn: () => getDashboardSummary(),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.dashboard.setupChecklist,
+      queryFn: () => getTenantSetupChecklistViewAction(),
     }),
   ];
   if (isSectionVisible(role, "arAging")) {

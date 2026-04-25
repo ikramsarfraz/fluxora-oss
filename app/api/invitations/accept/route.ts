@@ -32,11 +32,22 @@ export async function POST(request: Request) {
   };
 
   try {
-    await acceptInvitation(
+    const result = await acceptInvitation(
       { token: token ?? "", password: password ?? "" },
       { requestHeaders: request.headers },
     );
-    return NextResponse.json({ success: true });
+    const res = NextResponse.json({
+      success: true,
+      redirectUrl: result.redirectUrl,
+    });
+    const cookieList =
+      typeof result.forwardHeaders.getSetCookie === "function"
+        ? result.forwardHeaders.getSetCookie()
+        : [];
+    for (const c of cookieList) {
+      res.headers.append("set-cookie", c);
+    }
+    return res;
   } catch (err) {
     console.error(err);
     const message =

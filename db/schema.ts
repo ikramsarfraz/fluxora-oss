@@ -206,6 +206,10 @@ export const tenants = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /** When set, the first-run setup checklist card stays hidden for this tenant. */
+    setupChecklistDismissedAt: timestamp("setup_checklist_dismissed_at", {
+      withTimezone: true,
+    }),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),

@@ -53,10 +53,15 @@ export class InvitationActionError extends Error {
   }
 }
 
+export type AcceptInvitationResponse = {
+  success: true;
+  redirectUrl: string;
+};
+
 export async function acceptInvitationRequest(body: {
   token: string;
   password: string;
-}): Promise<{ success: true }> {
+}): Promise<AcceptInvitationResponse> {
   const path = `${BASE}${endpoints.invitations.accept()}`;
   const res = await fetch(path, {
     method: "POST",
@@ -67,6 +72,8 @@ export async function acceptInvitationRequest(body: {
   const data = (await res.json().catch(() => ({}))) as {
     detail?: string;
     code?: string;
+    success?: boolean;
+    redirectUrl?: string;
   };
   if (!res.ok) {
     throw new InvitationActionError(
@@ -75,5 +82,8 @@ export async function acceptInvitationRequest(body: {
       res.status,
     );
   }
-  return { success: true };
+  if (typeof data.redirectUrl !== "string" || !data.redirectUrl) {
+    throw new Error("Invite accept response missing redirect URL.");
+  }
+  return { success: true, redirectUrl: data.redirectUrl };
 }

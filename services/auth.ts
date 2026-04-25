@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import { addDays } from "date-fns";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { session as authSession, user as authUser } from "@/db/auth-schema";
@@ -186,6 +186,26 @@ async function setTenantOnSession(sessionId: string, tenantId: string | null) {
       updatedAt: new Date(),
     })
     .where(eq(authSession.id, sessionId));
+}
+
+/** Exposed for invite acceptance after root sign-in (before session had tenant). */
+export async function setAuthSessionTenantId(
+  sessionId: string,
+  tenantId: string,
+): Promise<void> {
+  await setTenantOnSession(sessionId, tenantId);
+}
+
+export async function getLatestAuthSessionIdForUser(
+  authUserId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ id: authSession.id })
+    .from(authSession)
+    .where(eq(authSession.userId, authUserId))
+    .orderBy(desc(authSession.createdAt))
+    .limit(1);
+  return row?.id ?? null;
 }
 
 async function getActivePlatformUserForAuthUser(authUserId: string) {

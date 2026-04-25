@@ -8,10 +8,16 @@ import { user as authUser } from "@/db/auth-schema";
 import { portalUsers, userInvitations } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import {
+  buildRootHostHeadersForAuth,
   buildTenantAppUrl,
   getRequestTenantHostContextFromHeaders,
 } from "@/lib/tenant-host";
-import { sendUserInvitationEmail, signUp } from "@/services/auth";
+import {
+  getLatestAuthSessionIdForUser,
+  sendUserInvitationEmail,
+  setAuthSessionTenantId,
+  signUp,
+} from "@/services/auth";
 import {
   createPortalUser,
   requireAdminPortalUser,
@@ -70,16 +76,67 @@ export async function getInvitationPreview(
   };
 }
 
+const OAUTH_ONLY_INVITE =
+  "Use your existing sign-in method or contact your admin.";
+
+type SignInWithReturnHeaders = (input: {
+  body: { email: string; password: string; rememberMe: boolean };
+  headers: Headers;
+  returnHeaders: true;
+}) => Promise<unknown>;
+
+function forwardHeadersFromSignInResult(result: unknown): Headers {
+  const out = new Headers();
+  if (!result || typeof result !== "object" || !("headers" in result)) {
+    return out;
+  }
+  const h = (result as { headers?: Headers }).headers;
+  if (!h) {
+    return out;
+  }
+  const list =
+    typeof h.getSetCookie === "function" ? h.getSetCookie() : [];
+  for (const c of list) {
+    out.append("set-cookie", c);
+  }
+  return out;
+}
+
+function throwIfOAuthOrAuthSignInError(e: unknown): never {
+  if (!isAPIError(e)) {
+    throw e;
+  }
+  const msg = (e.message ?? "").toLowerCase();
+  if (msg.includes("credential") || msg.includes("email and password")) {
+    throw new Error(OAUTH_ONLY_INVITE);
+  }
+  throw new Error(
+    e.message || "Sign-in failed. Check your password and try again.",
+  );
+}
+
+/**
+ * After a successful accept, the client should navigate to `redirectUrl`.
+ * `forwardHeaders` should be merged on the response so the browser stores the
+ * session cookie when sign-in succeeded.
+ */
+export type AcceptInvitationResult = {
+  redirectUrl: string;
+  forwardHeaders: Headers;
+};
+
 export async function acceptInvitation(
   input: { token: string; password: string },
   options?: { requestHeaders: Headers },
-) {
+): Promise<AcceptInvitationResult> {
   const requestHeaders = options?.requestHeaders;
-  const [invitation] = await db
-    .select()
-    .from(userInvitations)
-    .where(eq(userInvitations.token, input.token))
-    .limit(1);
+  const headerBag = requestHeaders ?? new Headers();
+  const requestCtx = getRequestTenantHostContextFromHeaders(headerBag);
+
+  const invitation = await db.query.userInvitations.findFirst({
+    where: eq(userInvitations.token, input.token),
+    with: { tenant: true },
+  });
 
   if (!invitation) {
     throw new Error("Invitation not found");
@@ -96,6 +153,49 @@ export async function acceptInvitation(
   if (invitation.expiresAt < new Date()) {
     throw new Error("This invitation has expired");
   }
+  if (!invitation.tenant.isActive) {
+    throw new Error("This workspace is not available.");
+  }
+
+  const tenantSlug = invitation.tenant.slug;
+  const dashboardUrl = buildTenantAppUrl({
+    slug: tenantSlug,
+    pathname: "/dashboard",
+    context: requestCtx,
+  });
+  const postInviteLoginUrl = buildTenantAppUrl({
+    slug: tenantSlug,
+    pathname: "/login",
+    context: requestCtx,
+    searchParams: {
+      email: invitation.email,
+      inviteAccepted: "1",
+    },
+  });
+
+  const markAccepted = async () => {
+    await db
+      .update(userInvitations)
+      .set({
+        status: "accepted",
+        acceptedAt: new Date(),
+      })
+      .where(eq(userInvitations.id, invitation.id));
+  };
+
+  const signInEmailCollectHeaders = async (h: Headers) => {
+    const fn = auth.api.signInEmail as SignInWithReturnHeaders;
+    const raw = await fn({
+      body: {
+        email: invitation.email,
+        password: input.password,
+        rememberMe: true,
+      },
+      headers: h,
+      returnHeaders: true,
+    });
+    return forwardHeadersFromSignInResult(raw);
+  };
 
   const alreadyMember = await db.query.portalUsers.findFirst({
     where: and(
@@ -104,101 +204,80 @@ export async function acceptInvitation(
     ),
   });
   if (alreadyMember) {
-    await db
-      .update(userInvitations)
-      .set({
-        status: "accepted",
-        acceptedAt: new Date(),
-      })
-      .where(eq(userInvitations.id, invitation.id));
-    return { success: true as const };
+    await markAccepted();
+    try {
+      const fh = await signInEmailCollectHeaders(headerBag);
+      return { redirectUrl: dashboardUrl, forwardHeaders: fh };
+    } catch {
+      return { redirectUrl: postInviteLoginUrl, forwardHeaders: new Headers() };
+    }
   }
 
-  let authUserId: string | null = null;
-  const headerBag = requestHeaders ?? new Headers();
+  const signUpRes = await signUp({
+    name: invitation.fullName,
+    email: invitation.email,
+    password: input.password,
+  });
+  if (!signUpRes?.user?.id) {
+    throw new Error("Sign up did not return a user id.");
+  }
 
-  try {
+  const dbUser = await db.query.user.findFirst({
+    where: sql`lower(${authUser.email}) = ${invitation.email.toLowerCase()}`,
+  });
+  if (!dbUser) {
+    throw new Error("Could not load your account after sign up.");
+  }
+
+  const isObfuscatedExistingAccount = dbUser.id !== signUpRes.user.id;
+  if (isObfuscatedExistingAccount) {
+    const rootH = buildRootHostHeadersForAuth(headerBag);
+    let forward: Headers;
     try {
-      const signup = await signUp({
-        name: invitation.fullName,
-        email: invitation.email,
-        password: input.password,
-      });
-      authUserId = signup?.user?.id ?? null;
+      forward = await signInEmailCollectHeaders(rootH);
     } catch (e) {
-      if (!isAPIError(e)) {
-        throw e;
-      }
-
-      const [existingAuthUser] = await db
-        .select()
-        .from(authUser)
-        .where(
-          sql`lower(${authUser.email}) = ${invitation.email.toLowerCase()}`,
-        )
-        .limit(1);
-
-      if (!existingAuthUser) {
-        throw new Error(e.message || "Could not create account.");
-      }
-
-      try {
-        await auth.api.signInEmail({
-          body: {
-            email: invitation.email,
-            password: input.password,
-            rememberMe: true,
-          },
-          headers: headerBag,
-        });
-      } catch (signInErr) {
-        if (!isAPIError(signInErr)) {
-          throw signInErr;
-        }
-        const msg = signInErr.message?.toLowerCase() ?? "";
-        if (
-          msg.includes("credential") ||
-          msg.includes("email and password")
-        ) {
-          throw new Error(
-            "This account may use Google (or another provider) to sign in. Open sign-in and use that method, or set a password for email sign-in first.",
-          );
-        }
-        throw new Error(
-          signInErr.message ||
-            "Incorrect password. Use the password for this email, or reset it from the sign-in page.",
-        );
-      }
-      authUserId = existingAuthUser.id;
+      throwIfOAuthOrAuthSignInError(e);
     }
-
-    if (!authUserId) {
-      throw new Error("Sign up did not return a user id.");
-    }
-
     await createPortalUser({
       tenantId: invitation.tenantId,
-      authUserId,
+      authUserId: dbUser.id,
       fullName: invitation.fullName,
       email: invitation.email,
       role: invitation.role,
     });
+    const sessionId = await getLatestAuthSessionIdForUser(dbUser.id);
+    if (sessionId) {
+      await setAuthSessionTenantId(sessionId, invitation.tenantId);
+    }
+    await markAccepted();
+    return { redirectUrl: dashboardUrl, forwardHeaders: forward };
+  }
+
+  await createPortalUser({
+    tenantId: invitation.tenantId,
+    authUserId: dbUser.id,
+    fullName: invitation.fullName,
+    email: invitation.email,
+    role: invitation.role,
+  });
+  await markAccepted();
+
+  try {
+    const fh = await signInEmailCollectHeaders(headerBag);
+    return { redirectUrl: dashboardUrl, forwardHeaders: fh };
   } catch (e) {
-    if (isAPIError(e)) {
-      throw new Error(e.message || "Could not create account.");
+    if (!isAPIError(e)) {
+      throw e;
+    }
+    const m = (e.message ?? "").toLowerCase();
+    if (
+      m.includes("verif") ||
+      m.includes("forbidden")
+    ) {
+      return { redirectUrl: postInviteLoginUrl, forwardHeaders: new Headers() };
     }
     throw e;
   }
-
-  await db
-    .update(userInvitations)
-    .set({
-      status: "accepted",
-      acceptedAt: new Date(),
-    })
-    .where(eq(userInvitations.id, invitation.id));
-
-  return { success: true as const };
 }
 
 /**
