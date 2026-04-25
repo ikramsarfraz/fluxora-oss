@@ -165,7 +165,11 @@ const navMain: NavGroup[] = [
   },
 ];
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  tenantName?: string;
+};
+
+export function AppSidebar({ tenantName, ...props }: AppSidebarProps) {
   const pathname = usePathname() ?? "";
   const isActive = (url: string) =>
     pathname === url || (url !== "/" && pathname.startsWith(url));
@@ -195,12 +199,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 aria-label="Home"
                 title="Home"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={tenantLogoUrl ?? "/prime-logo.png"}
-                  alt="Company logo"
-                  className="h-8 w-auto object-contain"
-                />
+                {tenantLogoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tenantLogoUrl}
+                    alt={`${tenantName ?? "Company"} logo`}
+                    className="h-8 w-auto object-contain"
+                  />
+                ) : (
+                  <span className="truncate text-base font-semibold">
+                    {tenantName ?? "Acme Distribution"}
+                  </span>
+                )}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

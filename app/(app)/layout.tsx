@@ -27,8 +27,9 @@ export default async function AppGroupLayout({
     redirect("/login");
   }
 
+  let tenant: Awaited<ReturnType<typeof getCurrentTenant>>;
   try {
-    await getCurrentTenant();
+    tenant = await getCurrentTenant();
   } catch {
     redirect("/login");
   }
@@ -37,7 +38,7 @@ export default async function AppGroupLayout({
     <TooltipProvider>
       <BreadcrumbLabelProvider>
         <SidebarProvider>
-          <AppSidebar />
+          <AppSidebar tenantName={tenant.name} />
           <SidebarInset>
             <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
               <SidebarTrigger className="-ml-1" />
