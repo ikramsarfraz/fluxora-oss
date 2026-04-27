@@ -9,6 +9,7 @@ import {
   getSuppliersPageAction,
   updateSupplierAction,
 } from "@/actions/suppliers";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { SupplierListParams } from "@/services/suppliers";
@@ -63,6 +64,7 @@ export function useCreateSupplier() {
           result,
         );
       }
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }

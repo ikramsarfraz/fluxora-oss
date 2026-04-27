@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import {
   createCategoryAction,
@@ -34,6 +35,7 @@ export function useCreateCategory() {
     mutationFn: createCategoryAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }

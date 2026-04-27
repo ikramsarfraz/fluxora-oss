@@ -15,6 +15,7 @@ import {
   updateSupplierInvoiceAction,
   uploadSupplierInvoiceAttachmentAction,
 } from "@/actions/supplier-invoices";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { SupplierInvoiceListParams } from "@/services/receiving";
@@ -58,6 +59,7 @@ export function useCreateSupplierInvoice() {
     mutationFn: createSupplierInvoiceAction,
     onSuccess: result => {
       invalidateAll(queryClient);
+      invalidateSetupChecklistQuery(queryClient);
       if (result?.id) {
         queryClient.setQueryData(
           queryKeys.supplierInvoices.detail(result.id),

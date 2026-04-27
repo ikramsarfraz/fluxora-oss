@@ -61,6 +61,7 @@ import { useCategories } from "@/hooks/use-categories";
 import type { ProductCategory } from "@/services/products";
 import { createProductAction } from "@/actions/products";
 import { createCategoryAction } from "@/actions/categories";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { useProducts } from "@/hooks/use-products";
 import { useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
@@ -124,6 +125,7 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.categories.all,
       });
+      invalidateSetupChecklistQuery(queryClient);
       onCreated(category.id);
       toast.success(`Category "${category.name}" created.`);
       setName("");
@@ -222,6 +224,7 @@ export function AddProductForm() {
       });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
+      invalidateSetupChecklistQuery(queryClient);
       form.reset(defaultForm);
       router.push("/products");
     } catch (e) {

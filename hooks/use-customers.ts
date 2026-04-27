@@ -8,6 +8,7 @@ import {
   getCustomersAction,
   getCustomersPageAction,
 } from "@/actions/customers";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { CustomerListParams } from "@/services/customers";
@@ -45,6 +46,7 @@ export function useCreateCustomer() {
     mutationFn: createCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }

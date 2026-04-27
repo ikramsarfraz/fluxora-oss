@@ -22,6 +22,7 @@ import {
   updateSalesOrderAction,
   updateSalesOrderNotesAction,
 } from "@/actions/orders";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { SalesOrderListParams } from "@/services/orders";
@@ -76,6 +77,7 @@ export function useCreateSalesOrder() {
     mutationFn: createSalesOrderAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 
 async function fetchLogoUrl(): Promise<string | null> {
@@ -35,6 +36,7 @@ export function useUploadTenantLogo() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tenant.logoUrl });
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }
@@ -51,6 +53,7 @@ export function useRemoveTenantLogo() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tenant.logoUrl });
+      invalidateSetupChecklistQuery(queryClient);
     },
   });
 }

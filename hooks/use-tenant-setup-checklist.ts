@@ -6,6 +6,7 @@ import {
   dismissTenantSetupChecklistAction,
   getTenantSetupChecklistViewAction,
 } from "@/actions/tenant-setup-checklist";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 
 const STALE = 1000 * 60 * 2;
@@ -23,7 +24,7 @@ export function useDismissTenantSetupChecklist() {
   return useMutation({
     mutationFn: () => dismissTenantSetupChecklistAction(),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: queryKeys.dashboard.setupChecklist });
+      invalidateSetupChecklistQuery(client);
     },
   });
 }

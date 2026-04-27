@@ -30,6 +30,7 @@ import {
 } from "../customer.schemas";
 import { createCustomerAction } from "@/actions/customers";
 import { US_STATES } from "@/lib/constants/us-states";
+import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 
 const emptyAddress = {
   addressType: "shipping" as const,
@@ -66,6 +67,7 @@ export function AddCustomerForm() {
     try {
       const customer = await createCustomerAction(data);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      invalidateSetupChecklistQuery(queryClient);
       form.reset();
       toast.success("Customer added");
       router.push("/customers/" + customer.id);
