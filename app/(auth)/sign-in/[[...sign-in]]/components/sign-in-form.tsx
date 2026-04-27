@@ -262,19 +262,19 @@ export function SignInForm({
         topHref={signUpUrl}
         topAction={inactiveTenant ? "Create tenant" : "Invite only"}
       >
-        <Card className="w-full max-w-[520px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+        <Card className="w-full max-w-100 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
           <CardHeader className="space-y-3 pb-6 text-center">
             <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
               <Building2 className="size-6" />
             </div>
             <div className="space-y-2">
-              <CardTitle className="text-3xl tracking-tight text-slate-950">
+              <CardTitle className="text-3xl tracking-tight text-foreground">
                 {inactiveTenant ? "Tenant access is inactive" : "Tenant not found"}
               </CardTitle>
-              <CardDescription className="text-base leading-7 text-slate-500">
+              <CardDescription className="text-base leading-7 text-muted-foreground">
                 {inactiveTenant ? (
                   <>
-                    <span className="font-medium text-slate-900">
+                    <span className="font-medium text-foreground">
                       {inactiveTenant.name}
                     </span>{" "}
                     is currently deactivated, so tenant users cannot access this workspace.
@@ -284,7 +284,7 @@ export function SignInForm({
                 ) : (
                   <>
                     We couldn&apos;t find an active tenant for{" "}
-                    <span className="font-mono text-slate-900">{tenantSlug}</span>.
+                    <span className="font-mono text-foreground">{tenantSlug}</span>.
                     Double-check the subdomain or create a new tenant from the main sign-up page.
                   </>
                 )}
@@ -314,15 +314,15 @@ export function SignInForm({
         topHref={signUpUrl}
         topAction={isRootHost ? "Sign up" : "Invite only"}
       >
-        <Card className="w-full max-w-[520px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+        <Card className="w-full max-w-100 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
           <CardHeader className="space-y-4 pb-5 text-center">
             {!isRootHost && tenant ? (
-              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
                 <LockKeyhole className="size-4" />
                 {tenant.name}
               </div>
             ) : (
-              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
                 {isPlatformAdminHost ? (
                   <>
                     <ShieldCheck className="size-4" />
@@ -337,14 +337,14 @@ export function SignInForm({
               </div>
             )}
             <div className="space-y-2">
-              <CardTitle className="text-3xl tracking-tight text-slate-950">
+              <CardTitle className="text-3xl tracking-tight text-foreground">
                 {isPlatformAdminHost
                   ? "Sign in to platform admin"
                   : isRootHost
                     ? "Welcome back"
                     : "Sign in to your workspace"}
               </CardTitle>
-              <CardDescription className="text-base leading-7 text-slate-500">
+              <CardDescription className="text-base leading-7 text-muted-foreground">
                 {isPlatformAdminHost
                   ? "Only active platform users can access this internal surface."
                   : isRootHost
@@ -355,11 +355,11 @@ export function SignInForm({
           </CardHeader>
           <CardContent className="space-y-5">
             {!isRootHost && tenant ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left">
-                <p className="text-sm font-medium text-slate-900">
+              <div className="rounded-2xl border border-border bg-muted/50 px-4 py-3 text-left">
+                <p className="text-sm font-medium text-foreground">
                   {tenant.name}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">{tenantPreview}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{tenantPreview}</p>
               </div>
             ) : null}
 
@@ -389,7 +389,7 @@ export function SignInForm({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-11 w-full justify-center gap-2 text-slate-600"
+                  className="h-11 w-full justify-center gap-2 text-muted-foreground"
                   disabled={isGoogleLoading}
                   onClick={handleGoogleSignIn}
                 >
@@ -403,7 +403,7 @@ export function SignInForm({
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-11 w-full justify-center gap-2 text-slate-600"
+                        className="h-11 w-full justify-center gap-2 text-muted-foreground"
                         disabled
                       >
                         <Google className="size-4" />
@@ -418,7 +418,7 @@ export function SignInForm({
               )}
               <div className="flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   or
                 </span>
                 <Separator className="flex-1" />
@@ -465,7 +465,7 @@ export function SignInForm({
                         </FieldLabel>
                         <Link
                           href="/forgot-password"
-                          className="ml-auto text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                          className="ml-auto text-sm font-medium text-muted-foreground transition hover:text-foreground"
                         >
                           Forgot password?
                         </Link>
@@ -484,10 +484,10 @@ export function SignInForm({
                     </Field>
                   )}
                 />
-                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                <div className="flex items-center justify-between rounded-xl border border-border bg-muted/50 px-3 py-2.5">
                   <label
                     htmlFor="remember-me"
-                    className="flex items-center gap-3 text-sm text-slate-600"
+                    className="flex items-center gap-3 text-sm text-muted-foreground"
                   >
                     <Checkbox
                       id="remember-me"
@@ -510,34 +510,34 @@ export function SignInForm({
             </form>
 
             <div className="space-y-3 pt-2 text-center">
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 {isRootHost ? "Need a tenant? " : "Need access? "}
                 <Link
                   href={signUpUrl}
-                  className="font-medium text-blue-600 transition hover:text-blue-700"
+                  className="font-medium text-foreground underline underline-offset-[3px] transition hover:opacity-70"
                 >
                   {isRootHost ? "Create one" : "Ask your admin"}
                 </Link>
               </p>
-              <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
+              <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
                 <Link
                   href="/forgot-password"
-                  className="transition hover:text-slate-700"
+                  className="transition hover:text-foreground"
                 >
                   Forgot password
                 </Link>
-                <span className="text-slate-300">•</span>
+                <span className="text-border">•</span>
                 <a
                   href={supportHref}
-                  className="inline-flex items-center gap-1.5 transition hover:text-slate-700"
+                  className="inline-flex items-center gap-1.5 transition hover:text-foreground"
                 >
                   <LifeBuoy className="size-4" />
                   Support
                 </a>
-                <span className="text-slate-300">•</span>
+                <span className="text-border">•</span>
                 <Link
                   href={signUpUrl}
-                  className="transition hover:text-slate-700"
+                  className="transition hover:text-foreground"
                 >
                   {isRootHost ? "Sign up" : "Invite only"}
                 </Link>

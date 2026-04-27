@@ -470,17 +470,17 @@ export function SignUpForm({
           topHref={tenantLoginUrl}
           topAction="Sign in"
         >
-          <Card className="w-full max-w-[560px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+          <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
             <CardHeader className="space-y-3 pb-5">
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-sm font-medium text-muted-foreground">
                 {requestsBlocked ? "Workspace unavailable" : "Invite-only access"}
               </p>
-              <CardTitle className="text-3xl tracking-tight text-slate-950">
+              <CardTitle className="text-3xl tracking-tight text-foreground">
                 {requestsBlocked
                   ? `${requestTenant?.name ?? "This tenant"} is inactive`
                   : "Ask your admin for an invite"}
               </CardTitle>
-              <CardDescription className="text-base leading-7 text-slate-500">
+              <CardDescription className="text-base leading-7 text-muted-foreground">
                 {requestsBlocked
                   ? "New access requests are disabled while this tenant is inactive."
                   : "This tenant workspace is invite-only. Public sign-ups and self-service access requests are disabled by default."}
@@ -503,7 +503,7 @@ export function SignUpForm({
 
               {requestsBlocked ? (
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-600">
+                  <div className="rounded-2xl border border-border bg-muted/50 p-5 text-sm leading-6 text-muted-foreground">
                     Ask your internal administrator to reactivate this tenant
                     before requesting access.
                   </div>
@@ -523,7 +523,7 @@ export function SignUpForm({
                       </AlertDescription>
                     </Alert>
                   ) : null}
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5 text-sm leading-6 text-slate-600">
+                  <div className="rounded-2xl border border-border bg-muted/50 p-5 text-sm leading-6 text-muted-foreground">
                     Ask your admin for an invite.
                   </div>
                   <div className="space-y-3">
@@ -549,28 +549,28 @@ export function SignUpForm({
           topHref={rootLoginUrl}
           topAction="Sign in"
         >
-          <Card className="w-full max-w-[560px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+          <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
             <CardHeader className="space-y-4 pb-6 text-center">
               <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <CheckCircle2 className="size-10" />
               </div>
               <div className="space-y-2">
-                <CardTitle className="text-3xl tracking-tight text-slate-950">
+                <CardTitle className="text-3xl tracking-tight text-foreground">
                   Your workspace is ready
                 </CardTitle>
-                <CardDescription className="text-base leading-7 text-slate-500">
+                <CardDescription className="text-base leading-7 text-muted-foreground">
                   Welcome to PrimeERP. Your tenant has been created and you&apos;ll
                   be redirected to its login page shortly.
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
-                <p className="text-sm font-medium text-slate-900">Workspace</p>
-                <p className="mt-2 text-lg font-semibold text-slate-950">
+              <div className="rounded-2xl border border-border bg-muted/50 p-5">
+                <p className="text-sm font-medium text-foreground">Workspace</p>
+                <p className="mt-2 text-lg font-semibold text-foreground">
                   {success.tenantName}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {buildTenantPreview({
                     slug: success.tenantSlug,
                     protocol,
@@ -582,13 +582,13 @@ export function SignUpForm({
               <Button asChild className="h-11 w-full">
                 <Link href={success.loginUrl}>Go to my workspace</Link>
               </Button>
-              <div className="space-y-2 text-center text-sm text-slate-500">
+              <div className="space-y-2 text-center text-sm text-muted-foreground">
                 <p>
                   Need to invite teammates next? You can do that after sign-in.
                 </p>
                 <Link
                   href={success.rootLoginUrl}
-                  className="font-medium text-blue-600 transition hover:text-blue-700"
+                  className="font-medium text-foreground underline underline-offset-[3px] transition hover:opacity-70"
                 >
                   Back to central login
                 </Link>
@@ -608,20 +608,20 @@ export function SignUpForm({
         topHref={rootLoginUrl}
         topAction="Sign in"
       >
-        <Card className="w-full max-w-[560px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
+        <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
           <CardHeader className="space-y-3 pb-5">
             <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-sm font-medium text-muted-foreground">
                 Step {currentStep + 1} of {SIGN_UP_STEPS.length}
               </p>
-              <CardTitle className="text-3xl tracking-tight text-slate-950">
+              <CardTitle className="text-3xl tracking-tight text-foreground">
                 {currentStep === 0 && "Create your account"}
                 {currentStep === 1 && "Create your workspace"}
                 {currentStep === 2 && "Tell us about your company"}
                 {currentStep === 3 && "Invite your team"}
                 {currentStep === 4 && "Review & create"}
               </CardTitle>
-              <CardDescription className="text-base leading-7 text-slate-500">
+              <CardDescription className="text-base leading-7 text-muted-foreground">
                 {currentStep === 0 &&
                   "Start with your account details and choose whether you need a solo or team tenant."}
                 {currentStep === 1 &&
@@ -667,18 +667,18 @@ export function SignUpForm({
                           type="button"
                           className={`rounded-2xl border p-4 text-left transition ${
                             accountType === "business"
-                              ? "border-blue-600 bg-blue-50 shadow-[0_14px_28px_rgba(59,130,246,0.12)]"
-                              : "border-slate-200 bg-white hover:border-slate-300"
+                              ? "border-primary bg-muted shadow-[0_4px_12px_oklch(0_0_0/0.08)]"
+                              : "border-border bg-white hover:border-border"
                           }`}
                           onClick={() => {
                             form.setValue("accountType", "business");
                             form.clearErrors(["tenantName", "tenantSlug"]);
                           }}
                         >
-                          <p className="font-medium text-slate-900">
+                          <p className="font-medium text-foreground">
                             Business / Team
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-500">
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
                             Choose your workspace name and invite your team
                             later.
                           </p>
@@ -687,18 +687,18 @@ export function SignUpForm({
                           type="button"
                           className={`rounded-2xl border p-4 text-left transition ${
                             accountType === "solo"
-                              ? "border-blue-600 bg-blue-50 shadow-[0_14px_28px_rgba(59,130,246,0.12)]"
-                              : "border-slate-200 bg-white hover:border-slate-300"
+                              ? "border-primary bg-muted shadow-[0_4px_12px_oklch(0_0_0/0.08)]"
+                              : "border-border bg-white hover:border-border"
                           }`}
                           onClick={() => {
                             form.setValue("accountType", "solo");
                             form.clearErrors(["tenantName", "tenantSlug"]);
                           }}
                         >
-                          <p className="font-medium text-slate-900">
+                          <p className="font-medium text-foreground">
                             Solo / Freelancer
                           </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-500">
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
                             We&apos;ll create a personal tenant automatically
                             for you.
                           </p>
@@ -711,7 +711,7 @@ export function SignUpForm({
                         <Button
                           type="button"
                           variant="outline"
-                          className="h-11 w-full justify-center gap-2 text-slate-600"
+                          className="h-11 w-full justify-center gap-2 text-muted-foreground"
                           disabled={isGoogleLoading}
                           onClick={handleGoogleSignUp}
                         >
@@ -720,7 +720,7 @@ export function SignUpForm({
                             ? "Redirecting to Google…"
                             : "Sign up with Google"}
                         </Button>
-                        <p className="text-center text-xs text-slate-400">
+                        <p className="text-center text-xs text-muted-foreground">
                           Creates a personal workspace automatically. For a
                           business workspace, use email/password below.
                         </p>
@@ -732,7 +732,7 @@ export function SignUpForm({
                             <Button
                               type="button"
                               variant="outline"
-                              className="h-11 w-full justify-center gap-2 text-slate-600"
+                              className="h-11 w-full justify-center gap-2 text-muted-foreground"
                               disabled
                             >
                               <Google className="size-4" />
@@ -748,7 +748,7 @@ export function SignUpForm({
 
                     <div className="flex items-center gap-3">
                       <Separator className="flex-1" />
-                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                         or
                       </span>
                       <Separator className="flex-1" />
@@ -846,8 +846,8 @@ export function SignUpForm({
                       )}
                     />
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                      <p className="text-sm font-medium text-slate-900">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-4">
+                      <p className="text-sm font-medium text-foreground">
                         Password guidance
                       </p>
                       <div className="mt-3 space-y-2">
@@ -855,7 +855,7 @@ export function SignUpForm({
                           <div
                             key={check.label}
                             className={`flex items-center gap-2 text-sm ${
-                              check.met ? "text-emerald-600" : "text-slate-500"
+                              check.met ? "text-emerald-600" : "text-muted-foreground"
                             }`}
                           >
                             <Check className="size-4" />
@@ -967,37 +967,37 @@ export function SignUpForm({
                         />
                       </>
                     ) : (
-                      <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="space-y-4 rounded-2xl border border-border bg-muted/50 p-5">
                         <div className="flex items-center gap-3">
-                          <div className="flex size-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                          <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                             <Globe className="size-5" />
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900">
+                            <p className="font-medium text-foreground">
                               Personal workspace
                             </p>
-                            <p className="text-sm text-slate-500">
+                            <p className="text-sm text-muted-foreground">
                               We&apos;ll create a solo tenant automatically
                               using your name.
                             </p>
                           </div>
                         </div>
                         <div className="rounded-2xl border border-white bg-white px-4 py-3">
-                          <p className="text-sm font-medium text-slate-900">
+                          <p className="text-sm font-medium text-foreground">
                             Workspace name
                           </p>
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-1 text-sm text-muted-foreground">
                             {(name?.trim() || "Your name") + "'s Workspace"}
                           </p>
                         </div>
                       </div>
                     )}
 
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                      <p className="text-sm font-medium text-slate-900">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-4">
+                      <p className="text-sm font-medium text-foreground">
                         Workspace preview
                       </p>
-                      <p className="mt-2 font-mono text-sm text-blue-700">
+                      <p className="mt-2 font-mono text-sm text-foreground">
                         {slugPreview}
                       </p>
                     </div>
@@ -1139,11 +1139,11 @@ export function SignUpForm({
                 {currentStep === 3 ? (
                   <>
                     {accountType === "solo" ? (
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
-                        <p className="font-medium text-slate-900">
+                      <div className="rounded-2xl border border-border bg-muted/50 p-5">
+                        <p className="font-medium text-foreground">
                           Solo setup selected
                         </p>
-                        <p className="mt-2 text-sm leading-6 text-slate-500">
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
                           You can skip team invites for now. If you add
                           teammates later, you&apos;ll be able to invite them
                           from inside the app.
@@ -1151,7 +1151,7 @@ export function SignUpForm({
                       </div>
                     ) : null}
 
-                    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="space-y-3 rounded-2xl border border-border bg-muted/50 p-4">
                       <div className="grid gap-3 sm:grid-cols-[1.4fr_0.9fr_auto]">
                         <Input
                           type="email"
@@ -1193,11 +1193,11 @@ export function SignUpForm({
                     </div>
 
                     <div className="space-y-3">
-                      <p className="text-sm font-medium text-slate-900">
+                      <p className="text-sm font-medium text-foreground">
                         Added team members
                       </p>
                       {teamInvites.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+                        <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
                           No teammates added yet.
                         </div>
                       ) : (
@@ -1205,13 +1205,13 @@ export function SignUpForm({
                           {teamInvites.map(invite => (
                             <div
                               key={invite.id}
-                              className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                              className="flex items-center justify-between rounded-2xl border border-border bg-white px-4 py-3"
                             >
                               <div>
-                                <p className="font-medium text-slate-900">
+                                <p className="font-medium text-foreground">
                                   {invite.email}
                                 </p>
-                                <p className="text-sm capitalize text-slate-500">
+                                <p className="text-sm capitalize text-muted-foreground">
                                   {invite.role}
                                 </p>
                               </div>
@@ -1233,17 +1233,17 @@ export function SignUpForm({
 
                 {currentStep === 4 ? (
                   <div className="space-y-4">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-5">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-500">
+                          <p className="text-sm font-medium text-muted-foreground">
                             Account
                           </p>
-                          <p className="mt-1 font-medium text-slate-900">
+                          <p className="mt-1 font-medium text-foreground">
                             {name}
                           </p>
-                          <p className="text-sm text-slate-500">{email}</p>
-                          <p className="mt-2 text-sm text-slate-500 capitalize">
+                          <p className="text-sm text-muted-foreground">{email}</p>
+                          <p className="mt-2 text-sm text-muted-foreground capitalize">
                             {accountType === "business"
                               ? "Business / Team"
                               : "Solo / Freelancer"}
@@ -1252,7 +1252,7 @@ export function SignUpForm({
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-blue-600"
+                          className="text-primary"
                           onClick={() => setCurrentStep(0)}
                         >
                           Edit
@@ -1260,25 +1260,25 @@ export function SignUpForm({
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-5">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-500">
+                          <p className="text-sm font-medium text-muted-foreground">
                             Workspace
                           </p>
-                          <p className="mt-1 font-medium text-slate-900">
+                          <p className="mt-1 font-medium text-foreground">
                             {accountType === "business"
                               ? tenantName || "Workspace pending"
                               : `${name || "Your"}'s Workspace`}
                           </p>
-                          <p className="mt-1 text-sm text-slate-500">
+                          <p className="mt-1 text-sm text-muted-foreground">
                             {slugPreview}
                           </p>
                         </div>
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-blue-600"
+                          className="text-primary"
                           onClick={() => setCurrentStep(1)}
                         >
                           Edit
@@ -1286,16 +1286,16 @@ export function SignUpForm({
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-5">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-500">
+                          <p className="text-sm font-medium text-muted-foreground">
                             Company
                           </p>
-                          <p className="mt-1 font-medium text-slate-900">
+                          <p className="mt-1 font-medium text-foreground">
                             {companyName || "Not provided"}
                           </p>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-muted-foreground">
                             {[industry, companySize, countryRegion, currency]
                               .filter(Boolean)
                               .join(" • ") ||
@@ -1305,7 +1305,7 @@ export function SignUpForm({
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-blue-600"
+                          className="text-primary"
                           onClick={() => setCurrentStep(2)}
                         >
                           Edit
@@ -1313,25 +1313,25 @@ export function SignUpForm({
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-5">
+                    <div className="rounded-2xl border border-border bg-muted/50 p-5">
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="text-sm font-medium text-slate-500">
+                          <p className="text-sm font-medium text-muted-foreground">
                             Team
                           </p>
-                          <p className="mt-1 font-medium text-slate-900">
+                          <p className="mt-1 font-medium text-foreground">
                             {teamInvites.length === 0
                               ? "No teammates added"
                               : `${teamInvites.length} teammate${teamInvites.length === 1 ? "" : "s"} prepared`}
                           </p>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-muted-foreground">
                             Invites will be managed after signup in this v1.
                           </p>
                         </div>
                         <Button
                           type="button"
                           variant="ghost"
-                          className="text-blue-600"
+                          className="text-primary"
                           onClick={() => setCurrentStep(3)}
                         >
                           Edit
@@ -1375,7 +1375,7 @@ export function SignUpForm({
                   )}
                 </div>
 
-                <div className="space-y-2 pt-1 text-center text-sm text-slate-500">
+                <div className="space-y-2 pt-1 text-center text-sm text-muted-foreground">
                   <p>
                     By creating an account, you agree to our terms of service
                     and privacy policy. Detailed legal pages can be added to the
@@ -1384,14 +1384,14 @@ export function SignUpForm({
                   <div className="flex items-center justify-center gap-4">
                     <Link
                       href={rootLoginUrl}
-                      className="transition hover:text-slate-700"
+                      className="transition hover:text-foreground"
                     >
                       Sign in
                     </Link>
-                    <span className="text-slate-300">•</span>
+                    <span className="text-border">•</span>
                     <a
                       href={supportHref}
-                      className="inline-flex items-center gap-1.5 transition hover:text-slate-700"
+                      className="inline-flex items-center gap-1.5 transition hover:text-foreground"
                     >
                       <MailPlus className="size-4" />
                       Support

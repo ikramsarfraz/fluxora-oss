@@ -1,0 +1,11 @@
+export { Navbar } from "./navbar";
+export { Hero } from "./hero";
+export { LogoStrip } from "./logo-strip";
+export { Stats } from "./stats";
+export { Features } from "./features";
+export { HowItWorks } from "./how-it-works";
+export { Testimonials } from "./testimonials";
+export { Pricing } from "./pricing";
+export { CTA } from "./cta";
+export { Footer } from "./footer";
+export * from "./styles";

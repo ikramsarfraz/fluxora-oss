@@ -2,16 +2,9 @@
 
 import { ShieldCheck, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { PortalUserRole } from "@/services/portal-users";
+import { AuthCenteredShell } from "@/app/(auth)/components/auth-shell";
 
 type TenantChooserTenantDestination = {
   type: "tenant";
@@ -20,7 +13,6 @@ type TenantChooserTenantDestination = {
   tenantSlug: string;
   role: PortalUserRole;
   continueUrl: string;
-  /** Shown under the title; defaults to the tenant slug. */
   subtitle?: string;
 };
 
@@ -30,7 +22,6 @@ type TenantChooserPlatformDestination = {
   name: string;
   role: string;
   continueUrl: string;
-  /** Shown under the title; defaults to "admin". */
   subtitle?: string;
 };
 
@@ -56,62 +47,65 @@ export function TenantChooserCard({
   className?: string;
 }) {
   const card = (
-    <Card
+    <div
       className={cn(
-        "w-full max-w-[480px] border-slate-200 shadow-[0_24px_60px_rgba(15,23,42,0.12)]",
-        variant === "embedded" && "max-w-full shadow-md",
+        "w-full rounded-[10px] border border-border bg-white shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]",
+        variant === "page" ? "max-w-100" : "max-w-full shadow-sm",
         className,
       )}
     >
-      <CardHeader className="space-y-3 pb-5 text-center">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-          <Users className="size-6" />
+      <div className="space-y-2 border-b border-border px-6 pb-5 pt-6 text-center">
+        <div
+          className="mx-auto mb-3 flex size-9 items-center justify-center rounded-[9px] text-[0.8rem] font-extrabold text-white"
+          style={{ background: "var(--primary)" }}
+        >
+          Fx
         </div>
-        <div className="space-y-2">
-          <CardTitle
-            className={cn(
-              "tracking-tight text-slate-950",
-              variant === "page" ? "text-2xl" : "text-xl",
-            )}
-          >
-            {title}
-          </CardTitle>
-          <CardDescription
-            className={cn(
-              "text-slate-500",
-              variant === "page" ? "text-base leading-7" : "text-sm leading-6",
-            )}
-          >
-            {description}
-          </CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-2">
+        <h2
+          className={cn(
+            "font-bold tracking-tight text-foreground",
+            variant === "page" ? "text-2xl" : "text-xl",
+          )}
+        >
+          {title}
+        </h2>
+        <p
+          className={cn(
+            "text-muted-foreground",
+            variant === "page" ? "text-sm leading-6" : "text-sm leading-6",
+          )}
+        >
+          {description}
+        </p>
+      </div>
+
+      <div className="space-y-2 p-4">
         {destinations.map(destination => (
-          <Button
+          <button
             key={
               destination.type === "tenant"
                 ? destination.tenantId
                 : destination.id
             }
             type="button"
-            variant="outline"
-            className="h-auto w-full justify-between rounded-xl px-4 py-3"
+            className="flex w-full items-center justify-between rounded-[8px] border border-border bg-white px-4 py-3 text-left transition-colors hover:bg-muted"
             onClick={() => window.location.assign(destination.continueUrl)}
           >
-            <div className="flex items-center gap-3 text-left">
-              {destination.type === "tenant" ? (
-                <Users className="size-4 text-slate-500" />
-              ) : (
-                <ShieldCheck className="size-4 text-slate-500" />
-              )}
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                {destination.type === "tenant" ? (
+                  <Users className="size-4" />
+                ) : (
+                  <ShieldCheck className="size-4" />
+                )}
+              </div>
               <div>
-                <p className="font-medium text-slate-900">
+                <p className="text-sm font-semibold text-foreground">
                   {destination.type === "tenant"
                     ? destination.tenantName
                     : destination.name}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {destination.type === "tenant"
                     ? (destination.subtitle ?? destination.tenantSlug)
                     : (destination.subtitle ?? "admin")}
@@ -121,19 +115,15 @@ export function TenantChooserCard({
             <Badge variant="secondary" className="capitalize">
               {destination.role.replaceAll("_", " ")}
             </Badge>
-          </Button>
+          </button>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 
   if (variant === "embedded") {
     return card;
   }
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-      {card}
-    </div>
-  );
+  return <AuthCenteredShell>{card}</AuthCenteredShell>;
 }
