@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -31,6 +32,14 @@ import {
 } from "./new-order-form.schema";
 
 type SubmitMode = "draft" | "confirm";
+
+function isMonthlyOrderLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("orders per month") &&
+    normalized.includes("upgrade your plan")
+  );
+}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -158,7 +167,21 @@ export function NewOrderForm() {
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Could not save order</AlertTitle>
-          <AlertDescription>{submitError}</AlertDescription>
+          <AlertDescription>
+            {isMonthlyOrderLimitError(submitError) ? (
+              <div className="space-y-2">
+                <p>Your current plan has reached the monthly order limit.</p>
+                <Link
+                  href="/account/billing#billing-plans"
+                  className="font-medium underline underline-offset-4"
+                >
+                  Upgrade plan
+                </Link>
+              </div>
+            ) : (
+              submitError
+            )}
+          </AlertDescription>
         </Alert>
       ) : null}
 

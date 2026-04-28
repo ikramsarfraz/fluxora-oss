@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
@@ -17,6 +17,8 @@ import {
   salesOrderLines,
   salesOrders,
 } from "@/db/schema";
+import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
+import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
 import {
   buildSalesOrderObjectKey,
   deleteFile,
@@ -1254,6 +1256,32 @@ export async function createSalesOrder(input: {
   }
 
   requirePermission(currentUser.role, "edit_order");
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const nextMonthStart = new Date(monthStart);
+  nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
+
+  const [{ c: currentMonthOrderCount }] = await db
+    .select({ c: count() })
+    .from(salesOrders)
+    .where(
+      and(
+        eq(salesOrders.tenantId, tenant.id),
+        gte(salesOrders.createdAt, monthStart),
+        lt(salesOrders.createdAt, nextMonthStart),
+      ),
+    );
+
+  const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
+  if ((currentMonthOrderCount ?? 0) + 1 > maxMonthlyOrders) {
+    throw new Error(
+      `Your current plan (${formatSubscriptionPlanLabel(
+        tenant.subscriptionPlan,
+      )}) allows up to ${maxMonthlyOrders} orders per month. Upgrade your plan to create another sales order.`,
+    );
+  }
 
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
