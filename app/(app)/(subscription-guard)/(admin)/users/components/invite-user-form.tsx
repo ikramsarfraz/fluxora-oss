@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -44,6 +45,14 @@ const defaultForm: InviteUserFormValues = {
   role: "sales",
 };
 
+function isPortalUserLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("portal users") &&
+    normalized.includes("upgrade your plan")
+  );
+}
+
 export function InviteUserForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +92,21 @@ export function InviteUserForm() {
             <Alert variant="destructive" className="max-w-xl mb-4">
               <AlertCircle />
               <AlertTitle>Invite user failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {isPortalUserLimitError(error) ? (
+                  <div className="space-y-2">
+                    <p>Your current plan has reached the portal user limit.</p>
+                    <Link
+                      href="/account/billing#billing-plans"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Upgrade plan
+                    </Link>
+                  </div>
+                ) : (
+                  error
+                )}
+              </AlertDescription>
             </Alert>
           ) : null}
           <FieldGroup>
