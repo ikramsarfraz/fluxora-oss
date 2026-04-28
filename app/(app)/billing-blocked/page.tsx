@@ -21,7 +21,7 @@ import {
 } from "@/lib/tenant-subscription-health";
 import { getUserByAuthUserId } from "@/services/portal-users";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenantCached } from "@/services/tenants";
 
 export default async function BillingBlockedPage() {
   const session = await auth.api.getSession({
@@ -48,7 +48,7 @@ export default async function BillingBlockedPage() {
     );
   }
 
-  const tenant = await getCurrentTenant();
+  const tenant = await getCurrentTenantCached();
 
   const health = getTenantSubscriptionHealth({
     subscriptionPlan: tenant.subscriptionPlan,
@@ -81,7 +81,7 @@ export default async function BillingBlockedPage() {
           <AlertTitle>Access to the app is limited</AlertTitle>
           <AlertDescription className="[&_a]:underline">
             {isCanceled
-              ? "Your subscription is canceled—only Billing and this page stay available until you start a new subscription."
+              ? "Your subscription is canceled—the rest of this app stays locked until Billing is resolved. Account profile and Billing (including Stripe Checkout / Customer Portal) stay available."
               : "The recorded trial or subscription period has lapsed without an active plan. Use Billing to subscribe or confirm payment in Stripe."}
           </AlertDescription>
         </Alert>

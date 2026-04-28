@@ -78,6 +78,19 @@ The **Stripe catalog** screen (`/admin/stripe-catalog`) is a read-only view of c
 
 After schema changes, run `**npm run db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.
 
+## Subscription access guard (canceled / expired tenants)
+
+Production/staging tenant hosts route through **`proxy.ts`** (Next.js Proxy middleware). On every forwarded request it sets **`x-internal-pathname`** (`lib/subscription-guard-constants.ts`) to `request.nextUrl.pathname`. `resolveTenantAppPathname()` (`lib/subscription-guard-pathname.ts`) reads that header (plus a few proxy fallbacks). **`app/(app)/(subscription-guard)/layout.tsx`** redirects canceled/expired workspaces to **`/billing-blocked`** unless the browser path matches **`isSubscriptionAccessExemptPath()`**.
+
+**Outside the subscription guard** (still use the tenant app shell): **`/account`** (including **`/account/billing`**) and **`/billing-blocked`**, so billing recovery does not depend on resolving the path for guarded routes. If the pathname cannot be resolved for a **guarded** route while the tenant is blocked, the user is sent to **`/billing-blocked`** and a **dev `console.error` / prod `console.warn`** log is emitted — do not deploy without the proxy setting the canonical header on HTML navigations.
+
+**Manual spot-checks (tenant host, test tenant):**
+
+1. **Canceled → dashboard** — With subscription health **canceled**, open **`/dashboard`**; expect redirect to **`/billing-blocked`**.
+2. **Canceled → Billing** — Open **`/account/billing`**; expect **no** redirect (full Billing page; Checkout / Customer Portal as before).
+3. **Active → unblock screen** — Healthy tenant opens **`/billing-blocked`**; expect redirect to **`/dashboard`** (see `billing-blocked/page.tsx`).
+4. **Platform admin** — On the internal admin host, navigation is unchanged (no tenant `(app)` subscription guard).
+
 ## Observability and manual regression checklist
 
 **Tenant Billing (`/account/billing`)** shows plan, status, trial, current period end, Stripe customer/subscription ids, default card, and a short note on webhook-driven updates.

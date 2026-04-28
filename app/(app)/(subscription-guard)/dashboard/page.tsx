@@ -13,7 +13,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { getApAging, getArAging } from "@/services/aging";
 import { getDashboardSummary } from "@/services/dashboard";
 import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenantCached } from "@/services/tenants";
 import { getTenantSetupChecklistViewAction } from "@/actions/tenant-setup-checklist";
 
 import { DashboardShell } from "../(dashboard)/components/dashboard-shell";
@@ -21,7 +21,7 @@ import { DashboardShell } from "../(dashboard)/components/dashboard-shell";
 export default async function DashboardRoute() {
   const [portalUser, tenant] = await Promise.all([
     getCurrentPortalUser(),
-    getCurrentTenant(),
+    getCurrentTenantCached(),
   ]);
   const role = portalUser.role as PortalUserRole;
   const canManageBilling =

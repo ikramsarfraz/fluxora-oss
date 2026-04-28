@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
+import { cache } from "react";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
@@ -123,6 +124,11 @@ export async function getCurrentTenant() {
 
   return tenant;
 }
+
+/**
+ * Dedupes `getCurrentTenant` within one React HTTP request when multiple layouts or server components read it.
+ */
+export const getCurrentTenantCached = cache(getCurrentTenant);
 
 export type CurrentTenant = Awaited<ReturnType<typeof getCurrentTenant>>;
 

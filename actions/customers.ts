@@ -11,7 +11,7 @@ import {
 import {
   createCustomerInputSchema,
   type CreateCustomerInput,
-} from "@/app/(app)/customers/customer.schemas";
+} from "@/app/(app)/(subscription-guard)/customers/customer.schemas";
 
 function emptyToNull(v: string | null | undefined): string | null {
   if (v == null || v.trim() === "") return null;

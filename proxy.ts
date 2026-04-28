@@ -1,5 +1,6 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
+import { TENANT_ROUTE_PATH_HEADER } from "@/lib/subscription-guard-constants";
 import { getRequestTenantHostContextFromHeaders } from "@/lib/tenant-host";
 
 function isSharedAuthPath(pathname: string) {
@@ -37,7 +38,7 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestHeaders = new Headers(request.headers);
   /** Passed to tenant RSC layout for subscription guards (see `app/(app)/layout.tsx`). */
-  requestHeaders.set("x-internal-pathname", pathname);
+  requestHeaders.set(TENANT_ROUTE_PATH_HEADER, pathname);
   const hostContext = getRequestTenantHostContextFromHeaders(request.headers);
   const tenantSlug = hostContext.tenantSlug;
   const isTenantHost = hostContext.isTenantHost;
@@ -208,6 +209,13 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+  /**
+   * Runs on navigations + API/`trpc` (not hashed static bundles under `_next`).
+   * Static assets/extensions and most images are skipped; subscription guard header is still pushed
+   * on every forwarded request that hits this middleware.
+   * `/api/stripe/webhook`, `/api/auth/*`, and `/api/invitations/*` routes pass through logic above and
+   * carry `pathname` (/api/stripe/webhook resolves to Stripe only — no tenant app layout).
+   */
   matcher: [
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",

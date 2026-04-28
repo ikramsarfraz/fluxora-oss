@@ -30,7 +30,7 @@ function priceKey(customerId: number, productId: number) {
   return `${customerId}:${productId}`;
 }
 
-export default function PriceChart() {
+export function PriceChartClient() {
   const queryClient = useQueryClient();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -168,7 +168,7 @@ export default function PriceChart() {
   const getCostValue = (productId: number, products: PriceChartProduct[]) => {
     const key = costKey(productId);
     if (draft[key] !== undefined) return draft[key];
-    const prod = products.find((p) => p.id === productId);
+    const prod = products.find(p => p.id === productId);
     return formatPriceString(prod?.cost);
   };
 
@@ -190,6 +190,9 @@ export default function PriceChart() {
     }
     setPrice.mutate({ customerId, productId, price: raw });
   };
+
+  const products = Array.isArray(data?.products) ? data.products : [];
+  const customers = Array.isArray(data?.customers) ? data.customers : [];
 
   const apply7PercentMarkup = async (customerId: number) => {
     setErrorMsg(null);
@@ -215,9 +218,6 @@ export default function PriceChart() {
     }
   };
 
-  const products = Array.isArray(data?.products) ? data.products : [];
-  const customers = Array.isArray(data?.customers) ? data.customers : [];
-
   const productsBySpecies = useMemo(() => {
     const map = new Map<string, PriceChartProduct[]>();
     const list = Array.isArray(products) ? products : [];
@@ -225,7 +225,7 @@ export default function PriceChart() {
       if (!p || typeof p !== "object" || p.id == null) continue;
       const species = (p && "species" in p ? p.species : undefined)?.trim() || "Other";
       if (!map.has(species)) map.set(species, []);
-      map.get(species)!.push(p as PriceChartProduct);
+      map.get(species)?.push(p as PriceChartProduct);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [products]);
@@ -235,11 +235,16 @@ export default function PriceChart() {
 
   return (
     <>
-      <h1>Price Chart</h1>
       <p className="weight-label">
-        Cost is your default price per lb. Each column shows that customer’s price per lb for the product (editable; clear to remove price). Cost can vary by vendor—use &quot;By vendor&quot; to add or edit. Grouped by species.
+        Cost is your default price per lb. Each column shows that customer&apos;s
+        price per lb for the product (editable; clear to remove price). Cost can vary
+        by vendor,use &quot;By vendor&quot; to add or edit. Grouped by species.
       </p>
-      {errorMsg && <p className="error" style={{ marginBottom: "1rem" }}>{errorMsg}</p>}
+      {errorMsg ? (
+        <p className="error" style={{ marginBottom: "1rem" }}>
+          {errorMsg}
+        </p>
+      ) : null}
       <div className="table-wrap" style={{ overflowX: "auto", maxHeight: "70vh" }}>
         <table style={{ borderCollapse: "collapse" }}>
           <thead>
@@ -270,7 +275,7 @@ export default function PriceChart() {
               >
                 Cost ($/lb)
               </th>
-              {customers.map((c) => (
+              {customers.map(c => (
                 <th
                   key={c.id}
                   style={{
@@ -283,7 +288,14 @@ export default function PriceChart() {
                   }}
                   title={c.name}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-start" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.25rem",
+                      alignItems: "flex-start",
+                    }}
+                  >
                     <span>{c.name}</span>
                     <button
                       type="button"
@@ -316,9 +328,15 @@ export default function PriceChart() {
               <td colSpan={1} style={{ color: "#64748b", fontSize: "0.8rem" }}>
                 —
               </td>
-              {customers.map((c) => {
-                const current = c.fuel_surcharge_amount != null ? formatChartNumber(String(c.fuel_surcharge_amount)) : "";
-                const value = fuelSurchargeDraft[c.id] !== undefined ? fuelSurchargeDraft[c.id] : current;
+              {customers.map(c => {
+                const current =
+                  c.fuel_surcharge_amount != null
+                    ? formatChartNumber(String(c.fuel_surcharge_amount))
+                    : "";
+                const value =
+                  fuelSurchargeDraft[c.id] !== undefined
+                    ? fuelSurchargeDraft[c.id]
+                    : current;
                 return (
                   <td key={c.id}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
@@ -327,7 +345,12 @@ export default function PriceChart() {
                         step="0.01"
                         min={0}
                         value={value}
-                        onChange={(e) => setFuelSurchargeDraft((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                        onChange={e =>
+                          setFuelSurchargeDraft(prev => ({
+                            ...prev,
+                            [c.id]: e.target.value,
+                          }))
+                        }
                         placeholder="0"
                         style={{ width: "4.5rem" }}
                         title={`Fuel surcharge per order for ${c.name}`}
@@ -338,8 +361,11 @@ export default function PriceChart() {
                         onClick={() => {
                           const v = (fuelSurchargeDraft[c.id] ?? value).trim();
                           const amt = v === "" || Number.isNaN(parseFloat(v)) ? null : v;
-                          updateCustomerFuelSurcharge.mutate({ customerId: c.id, fuel_surcharge_amount: amt });
-                          setFuelSurchargeDraft((prev) => {
+                          updateCustomerFuelSurcharge.mutate({
+                            customerId: c.id,
+                            fuel_surcharge_amount: amt,
+                          });
+                          setFuelSurchargeDraft(prev => {
                             const next = { ...prev };
                             delete next[c.id];
                             return next;
@@ -360,12 +386,18 @@ export default function PriceChart() {
                 <tr style={{ background: "#f1f5f9", fontWeight: 600 }}>
                   <td
                     colSpan={2 + customers.length}
-                    style={{ padding: "0.5rem 0.75rem", position: "sticky", left: 0, background: "#f1f5f9", zIndex: 1 }}
+                    style={{
+                      padding: "0.5rem 0.75rem",
+                      position: "sticky",
+                      left: 0,
+                      background: "#f1f5f9",
+                      zIndex: 1,
+                    }}
                   >
                     {species}
                   </td>
                 </tr>
-                {prods.map((prod) => (
+                {prods.map(prod => (
                   <tr key={prod.id}>
                     <td
                       style={{
@@ -385,10 +417,10 @@ export default function PriceChart() {
                             type="number"
                             step="0.01"
                             value={getCostValue(prod.id, products)}
-                            onChange={(e) => {
+                            onChange={e => {
                               const v = e.target.value;
                               const key = costKey(prod.id);
-                              setDraft((prev) => ({ ...prev, [key]: v }));
+                              setDraft(prev => ({ ...prev, [key]: v }));
                             }}
                             style={{ width: "4.5rem" }}
                           />
@@ -413,25 +445,69 @@ export default function PriceChart() {
                                 type="button"
                                 className="btn btn-secondary"
                                 style={{ fontSize: "0.7rem", padding: "0.15rem 0.35rem" }}
-                                onClick={() => setExpandedCostProductId((id) => (id === prod.id ? null : prod.id))}
+                                onClick={() =>
+                                  setExpandedCostProductId(id => (id === prod.id ? null : prod.id))
+                                }
                               >
-                                By vendor ({prod.costs_by_supplier.length}) {expandedCostProductId === prod.id ? "▼" : "▶"}
+                                By vendor ({prod.costs_by_supplier.length}){" "}
+                                {expandedCostProductId === prod.id ? "▼" : "▶"}
                               </button>
-                              {expandedCostProductId === prod.id && (
-                                <div style={{ marginTop: "0.35rem", padding: "0.35rem", background: "#f8fafc", borderRadius: 4 }}>
-                                  <div style={{ fontWeight: 600, fontSize: "0.7rem", marginBottom: "0.25rem", color: "var(--muted)" }}>Option 1: Stored (date & edit)</div>
-                                  {prod.costs_by_supplier.map((vc) => {
+                              {expandedCostProductId === prod.id ? (
+                                <div
+                                  style={{
+                                    marginTop: "0.35rem",
+                                    padding: "0.35rem",
+                                    background: "#f8fafc",
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      fontSize: "0.7rem",
+                                      marginBottom: "0.25rem",
+                                      color: "var(--muted)",
+                                    }}
+                                  >
+                                    Option 1: Stored (date & edit)
+                                  </div>
+                                  {prod.costs_by_supplier.map(vc => {
                                     const dk = vendorCostDraftKey(prod.id, vc.supplier_id);
-                                    const editVal = vendorCostDraft[dk] !== undefined ? vendorCostDraft[dk] : formatChartNumber(vc.cost_per_lb);
-                                    const dateStr = vc.updated_at ? new Date(vc.updated_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null;
+                                    const editVal =
+                                      vendorCostDraft[dk] !== undefined
+                                        ? vendorCostDraft[dk]
+                                        : formatChartNumber(vc.cost_per_lb);
+                                    const dateStr = vc.updated_at
+                                      ? new Date(vc.updated_at).toLocaleDateString(undefined, {
+                                          month: "short",
+                                          day: "numeric",
+                                          year: "numeric",
+                                        })
+                                      : null;
                                     return (
-                                      <div key={vc.supplier_id} style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.35rem", flexWrap: "wrap" }}>
-                                        <span style={{ minWidth: "5rem", fontSize: "0.75rem" }}>{vc.supplier_name}:</span>
+                                      <div
+                                        key={vc.supplier_id}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "0.35rem",
+                                          marginBottom: "0.35rem",
+                                          flexWrap: "wrap",
+                                        }}
+                                      >
+                                        <span style={{ minWidth: "5rem", fontSize: "0.75rem" }}>
+                                          {vc.supplier_name}:
+                                        </span>
                                         <input
                                           type="number"
                                           step="0.01"
                                           value={editVal}
-                                          onChange={(e) => setVendorCostDraft((prev) => ({ ...prev, [dk]: e.target.value }))}
+                                          onChange={e =>
+                                            setVendorCostDraft(prev => ({
+                                              ...prev,
+                                              [dk]: e.target.value,
+                                            }))
+                                          }
                                           style={{ width: "4rem", fontSize: "0.75rem" }}
                                           placeholder="Cost"
                                         />
@@ -443,22 +519,49 @@ export default function PriceChart() {
                                           onClick={() => {
                                             const v = (vendorCostDraft[dk] ?? editVal).trim();
                                             if (v && Number.isFinite(parseFloat(v))) {
-                                              setProductSupplierCost.mutate({ productId: prod.id, supplierId: vc.supplier_id, costPerLb: v });
+                                              setProductSupplierCost.mutate({
+                                                productId: prod.id,
+                                                supplierId: vc.supplier_id,
+                                                costPerLb: v,
+                                              });
                                             }
                                           }}
                                         >
                                           Save
                                         </button>
-                                        {dateStr && <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>Updated {dateStr}</span>}
+                                        {dateStr ? (
+                                          <span
+                                            style={{ fontSize: "0.7rem", color: "var(--muted)" }}
+                                          >
+                                            Updated {dateStr}
+                                          </span>
+                                        ) : null}
                                         <button
                                           type="button"
                                           className="btn"
-                                          style={{ fontSize: "0.7rem", padding: "0.2rem 0.4rem", marginLeft: "auto" }}
+                                          style={{
+                                            fontSize: "0.7rem",
+                                            padding: "0.2rem 0.4rem",
+                                            marginLeft: "auto",
+                                          }}
                                           disabled={deleteProductSupplierCost.isPending}
                                           onClick={() => {
-                                            if (typeof prod?.id !== "number" || prod.id < 1 || typeof vc?.supplier_id !== "number") return;
-                                            if (window.confirm(`Remove cost for ${vc.supplier_name}?`)) {
-                                              deleteProductSupplierCost.mutate({ productId: prod.id, supplierId: vc.supplier_id });
+                                            if (
+                                              typeof prod?.id !== "number" ||
+                                              prod.id < 1 ||
+                                              typeof vc?.supplier_id !== "number"
+                                            ) {
+                                              return;
+                                            }
+                                            if (
+                                              window.confirm(
+                                                `Remove cost for ${vc.supplier_name}?`,
+                                              )
+                                            ) {
+                                              deleteProductSupplierCost.mutate({
+                                                productId: prod.id,
+                                                supplierId: vc.supplier_id,
+                                              });
                                             }
                                           }}
                                         >
@@ -467,18 +570,34 @@ export default function PriceChart() {
                                       </div>
                                     );
                                   })}
-                                  <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.35rem", flexWrap: "wrap" }}>
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "0.25rem",
+                                      marginTop: "0.35rem",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
                                     <select
                                       value={newVendorCost[prod.id]?.supplierId ?? ""}
-                                      onChange={(e) => setNewVendorCost((prev) => ({
-                                        ...prev,
-                                        [prod.id]: { ...prev[prod.id], supplierId: e.target.value, cost: prev[prod.id]?.cost ?? "" },
-                                      }))}
+                                      onChange={e =>
+                                        setNewVendorCost(prev => ({
+                                          ...prev,
+                                          [prod.id]: {
+                                            ...prev[prod.id],
+                                            supplierId: e.target.value,
+                                            cost: prev[prod.id]?.cost ?? "",
+                                          },
+                                        }))
+                                      }
                                       style={{ width: "8rem", fontSize: "0.75rem" }}
                                     >
                                       <option value="">Add vendor…</option>
-                                      {(suppliers ?? []).map((s) => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                      {(suppliers ?? []).map(s => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.name}
+                                        </option>
                                       ))}
                                     </select>
                                     <input
@@ -486,17 +605,27 @@ export default function PriceChart() {
                                       step="0.01"
                                       placeholder="Cost"
                                       value={newVendorCost[prod.id]?.cost ?? ""}
-                                      onChange={(e) => setNewVendorCost((prev) => ({
-                                        ...prev,
-                                        [prod.id]: { ...prev[prod.id], supplierId: prev[prod.id]?.supplierId ?? "", cost: e.target.value },
-                                      }))}
+                                      onChange={e =>
+                                        setNewVendorCost(prev => ({
+                                          ...prev,
+                                          [prod.id]: {
+                                            ...prev[prod.id],
+                                            supplierId: prev[prod.id]?.supplierId ?? "",
+                                            cost: e.target.value,
+                                          },
+                                        }))
+                                      }
                                       style={{ width: "4rem" }}
                                     />
                                     <button
                                       type="button"
                                       className="btn btn-secondary"
                                       style={{ fontSize: "0.7rem" }}
-                                      disabled={!newVendorCost[prod.id]?.supplierId || !newVendorCost[prod.id]?.cost || setProductSupplierCost.isPending}
+                                      disabled={
+                                        !newVendorCost[prod.id]?.supplierId ||
+                                        !newVendorCost[prod.id]?.cost ||
+                                        setProductSupplierCost.isPending
+                                      }
                                       onClick={() => {
                                         const n = newVendorCost[prod.id];
                                         if (!n?.supplierId || !n?.cost) return;
@@ -505,52 +634,111 @@ export default function PriceChart() {
                                           supplierId: parseInt(n.supplierId, 10),
                                           costPerLb: n.cost,
                                         });
-                                        setNewVendorCost((prev) => ({ ...prev, [prod.id]: { supplierId: "", cost: "" } }));
+                                        setNewVendorCost(prev => ({
+                                          ...prev,
+                                          [prod.id]: { supplierId: "", cost: "" },
+                                        }));
                                       }}
                                     >
                                       Add
                                     </button>
                                   </div>
-                                  {prod.costs_from_invoices && prod.costs_from_invoices.length > 0 && (
-                                    <div style={{ marginTop: "0.5rem", paddingTop: "0.35rem", borderTop: "1px solid #e2e8f0" }}>
-                                      <div style={{ fontWeight: 600, fontSize: "0.7rem", marginBottom: "0.2rem", color: "var(--muted)" }}>Option 2: From last invoice</div>
-                                      {prod.costs_from_invoices.map((inv) => (
-                                        <div key={`${inv.supplier_id}-${inv.invoice_date}`} style={{ fontSize: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                                          <span style={{ minWidth: "5rem" }}>{inv.supplier_name}:</span>
-<span>${formatChartNumber(inv.cost_per_lb)}/lb</span>
-                                        {inv.invoice_date && <span style={{ color: "var(--muted)" }}>{inv.invoice_date}</span>}
+                                  {prod.costs_from_invoices && prod.costs_from_invoices.length > 0 ? (
+                                    <div
+                                      style={{
+                                        marginTop: "0.5rem",
+                                        paddingTop: "0.35rem",
+                                        borderTop: "1px solid #e2e8f0",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontWeight: 600,
+                                          fontSize: "0.7rem",
+                                          marginBottom: "0.2rem",
+                                          color: "var(--muted)",
+                                        }}
+                                      >
+                                        Option 2: From last invoice
                                       </div>
-                                    ))}
+                                      {prod.costs_from_invoices.map(inv => (
+                                        <div
+                                          key={`${inv.supplier_id}-${inv.invoice_date}`}
+                                          style={{
+                                            fontSize: "0.75rem",
+                                            display: "flex",
+                                            gap: "0.5rem",
+                                          }}
+                                        >
+                                          <span style={{ minWidth: "5rem" }}>
+                                            {inv.supplier_name}:
+                                          </span>
+                                          <span>${formatChartNumber(inv.cost_per_lb)}/lb</span>
+                                          {inv.invoice_date ? (
+                                            <span style={{ color: "var(--muted)" }}>
+                                              {inv.invoice_date}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ))}
                                     </div>
-                                  )}
+                                  ) : null}
                                 </div>
-                              )}
+                              ) : null}
                             </>
                           ) : (
                             <button
                               type="button"
                               className="btn btn-secondary"
                               style={{ fontSize: "0.7rem", padding: "0.15rem 0.35rem" }}
-                              onClick={() => setExpandedCostProductId((id) => (id === prod.id ? null : prod.id))}
+                              onClick={() =>
+                                setExpandedCostProductId(id => (id === prod.id ? null : prod.id))
+                              }
                             >
                               By vendor (0) {expandedCostProductId === prod.id ? "▼" : "▶"}
                             </button>
                           )}
-                          {expandedCostProductId === prod.id && (!prod.costs_by_supplier || prod.costs_by_supplier.length === 0) && (
-                            <div style={{ marginTop: "0.35rem", padding: "0.35rem", background: "#f8fafc", borderRadius: 4 }}>
-                              <div style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Add cost per vendor (same product can have different costs):</div>
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", flexWrap: "wrap" }}>
+                          {expandedCostProductId === prod.id &&
+                          (!prod.costs_by_supplier ||
+                            prod.costs_by_supplier.length === 0) ? (
+                            <div
+                              style={{
+                                marginTop: "0.35rem",
+                                padding: "0.35rem",
+                                background: "#f8fafc",
+                                borderRadius: 4,
+                              }}
+                            >
+                              <div style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>
+                                Add cost per vendor (same product can have different costs):
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  flexWrap: "wrap",
+                                }}
+                              >
                                 <select
                                   value={newVendorCost[prod.id]?.supplierId ?? ""}
-                                  onChange={(e) => setNewVendorCost((prev) => ({
-                                    ...prev,
-                                    [prod.id]: { ...prev[prod.id], supplierId: e.target.value, cost: prev[prod.id]?.cost ?? "" },
-                                  }))}
+                                  onChange={e =>
+                                    setNewVendorCost(prev => ({
+                                      ...prev,
+                                      [prod.id]: {
+                                        ...prev[prod.id],
+                                        supplierId: e.target.value,
+                                        cost: prev[prod.id]?.cost ?? "",
+                                      },
+                                    }))
+                                  }
                                   style={{ width: "8rem", fontSize: "0.75rem" }}
                                 >
                                   <option value="">Select vendor…</option>
-                                  {(suppliers ?? []).map((s) => (
-                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                  {(suppliers ?? []).map(s => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name}
+                                    </option>
                                   ))}
                                 </select>
                                 <input
@@ -558,17 +746,27 @@ export default function PriceChart() {
                                   step="0.01"
                                   placeholder="Cost $/lb"
                                   value={newVendorCost[prod.id]?.cost ?? ""}
-                                  onChange={(e) => setNewVendorCost((prev) => ({
-                                    ...prev,
-                                    [prod.id]: { ...prev[prod.id], supplierId: prev[prod.id]?.supplierId ?? "", cost: e.target.value },
-                                  }))}
+                                  onChange={e =>
+                                    setNewVendorCost(prev => ({
+                                      ...prev,
+                                      [prod.id]: {
+                                        ...prev[prod.id],
+                                        supplierId: prev[prod.id]?.supplierId ?? "",
+                                        cost: e.target.value,
+                                      },
+                                    }))
+                                  }
                                   style={{ width: "4rem" }}
                                 />
                                 <button
                                   type="button"
                                   className="btn btn-secondary"
                                   style={{ fontSize: "0.7rem" }}
-                                  disabled={!newVendorCost[prod.id]?.supplierId || !newVendorCost[prod.id]?.cost || setProductSupplierCost.isPending}
+                                  disabled={
+                                    !newVendorCost[prod.id]?.supplierId ||
+                                    !newVendorCost[prod.id]?.cost ||
+                                    setProductSupplierCost.isPending
+                                  }
                                   onClick={() => {
                                     const n = newVendorCost[prod.id];
                                     if (!n?.supplierId || !n?.cost) return;
@@ -577,30 +775,61 @@ export default function PriceChart() {
                                       supplierId: parseInt(n.supplierId, 10),
                                       costPerLb: n.cost,
                                     });
-                                    setNewVendorCost((prev) => ({ ...prev, [prod.id]: { supplierId: "", cost: "" } }));
+                                    setNewVendorCost(prev => ({
+                                      ...prev,
+                                      [prod.id]: { supplierId: "", cost: "" },
+                                    }));
                                   }}
                                 >
                                   Add
                                 </button>
                               </div>
-                              {prod.costs_from_invoices && prod.costs_from_invoices.length > 0 && (
-                                <div style={{ marginTop: "0.5rem", paddingTop: "0.35rem", borderTop: "1px solid #e2e8f0" }}>
-                                  <div style={{ fontWeight: 600, fontSize: "0.7rem", marginBottom: "0.2rem", color: "var(--muted)" }}>Option 2: From last invoice</div>
-                                  {prod.costs_from_invoices.map((inv) => (
-                                    <div key={`${inv.supplier_id}-${inv.invoice_date}`} style={{ fontSize: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                                      <span style={{ minWidth: "5rem" }}>{inv.supplier_name}:</span>
-<span>${formatChartNumber(inv.cost_per_lb)}/lb</span>
-                                    {inv.invoice_date && <span style={{ color: "var(--muted)" }}>{inv.invoice_date}</span>}
+                              {prod.costs_from_invoices && prod.costs_from_invoices.length > 0 ? (
+                                <div
+                                  style={{
+                                    marginTop: "0.5rem",
+                                    paddingTop: "0.35rem",
+                                    borderTop: "1px solid #e2e8f0",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontWeight: 600,
+                                      fontSize: "0.7rem",
+                                      marginBottom: "0.2rem",
+                                      color: "var(--muted)",
+                                    }}
+                                  >
+                                    Option 2: From last invoice
                                   </div>
-                                ))}
+                                  {prod.costs_from_invoices.map(inv => (
+                                    <div
+                                      key={`${inv.supplier_id}-${inv.invoice_date}`}
+                                      style={{
+                                        fontSize: "0.75rem",
+                                        display: "flex",
+                                        gap: "0.5rem",
+                                      }}
+                                    >
+                                      <span style={{ minWidth: "5rem" }}>
+                                        {inv.supplier_name}:
+                                      </span>
+                                      <span>${formatChartNumber(inv.cost_per_lb)}/lb</span>
+                                      {inv.invoice_date ? (
+                                        <span style={{ color: "var(--muted)" }}>
+                                          {inv.invoice_date}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
+                              ) : null}
                             </div>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     </td>
-                    {customers.map((c) => {
+                    {customers.map(c => {
                       const key = priceKey(c.id, prod.id);
                       const value = getValue(c.id, prod.id);
                       return (
@@ -610,9 +839,9 @@ export default function PriceChart() {
                               type="number"
                               step="0.01"
                               value={value}
-                              onChange={(e) => {
+                              onChange={e => {
                                 const v = e.target.value;
-                                setDraft((prev) => ({ ...prev, [key]: v }));
+                                setDraft(prev => ({ ...prev, [key]: v }));
                               }}
                               style={{ width: "4.5rem" }}
                             />
@@ -629,8 +858,15 @@ export default function PriceChart() {
                               type="button"
                               className="btn"
                               onClick={() => {
-                                if (typeof c?.id === "number" && typeof prod?.id === "number" && prod.id >= 1) {
-                                  deletePrice.mutate({ customerId: c.id, productId: prod.id });
+                                if (
+                                  typeof c?.id === "number" &&
+                                  typeof prod?.id === "number" &&
+                                  prod.id >= 1
+                                ) {
+                                  deletePrice.mutate({
+                                    customerId: c.id,
+                                    productId: prod.id,
+                                  });
                                 }
                               }}
                               disabled={isSavingCell(c.id, prod.id)}
@@ -649,9 +885,11 @@ export default function PriceChart() {
           </tbody>
         </table>
       </div>
-      {products.length === 0 && (
-        <p style={{ marginTop: "1rem", color: "var(--muted)" }}>No products yet. Add products and customers to see the chart.</p>
-      )}
+      {products.length === 0 ? (
+        <p style={{ marginTop: "1rem", color: "var(--muted)" }}>
+          No products yet. Add products and customers to see the chart.
+        </p>
+      ) : null}
     </>
   );
 }

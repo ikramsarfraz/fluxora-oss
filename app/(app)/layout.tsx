@@ -10,14 +10,9 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
-import {
-  getTenantSubscriptionHealth,
-  isSubscriptionAccessExemptPath,
-  shouldBlockTenantAccess,
-} from "@/lib/tenant-subscription-health";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenantCached } from "@/services/tenants";
 import { getAccessibleDestinationsForAuthUser } from "@/services/auth";
 
 export default async function AppGroupLayout({
@@ -34,32 +29,13 @@ export default async function AppGroupLayout({
     redirect("/login");
   }
 
-  let tenant: Awaited<ReturnType<typeof getCurrentTenant>>;
+  let tenant: Awaited<ReturnType<typeof getCurrentTenantCached>>;
   let destinations: Awaited<ReturnType<typeof getAccessibleDestinationsForAuthUser>>;
   try {
-    tenant = await getCurrentTenant();
+    tenant = await getCurrentTenantCached();
     destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
   } catch {
     redirect("/login");
-  }
-
-  const pathnameFromProxy = headerList.get("x-internal-pathname")?.trim() ?? "";
-
-  /** When `proxy.ts` did not annotate the pathname (unsupported deploy), subscription blocking is skipped. */
-  const blockTenantAppRoutes =
-    pathnameFromProxy !== "" &&
-    shouldBlockTenantAccess(
-      getTenantSubscriptionHealth({
-        subscriptionPlan: tenant.subscriptionPlan,
-        subscriptionStatus: tenant.subscriptionStatus,
-        trialEndsAt: tenant.trialEndsAt,
-        currentPeriodEndsAt: tenant.currentPeriodEndsAt,
-      }),
-    ) &&
-    !isSubscriptionAccessExemptPath(pathnameFromProxy);
-
-  if (blockTenantAppRoutes) {
-    redirect("/billing-blocked");
   }
 
   return (
@@ -83,9 +59,7 @@ export default async function AppGroupLayout({
                 <AuthUserMenu user={session.user} />
               </div>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-              {children}
-            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>
           </SidebarInset>
         </SidebarProvider>
       </BreadcrumbLabelProvider>
