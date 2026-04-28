@@ -11,8 +11,8 @@ import {
   PlanOverviewCard,
   UsageCard,
   BillingStateBanner,
-  deriveBillingBannerState,
 } from "@/components/billing/billing-components";
+import { deriveBillingBannerState } from "@/lib/billing-utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
