@@ -27,6 +27,8 @@ import {
   salesOrderLines,
   salesOrders,
   salesOrderAttachments,
+  stripePrices,
+  stripeProducts,
   supportTicketAttachments,
   supportTicketUpdates,
   supportTickets,
@@ -848,5 +850,16 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
     fields: [auditLogs.actorPlatformUserId],
     references: [platformUsers.id],
     relationName: "audit_logs_actor_platform_user",
+  }),
+}));
+
+export const stripeProductsRelations = relations(stripeProducts, ({ many }) => ({
+  prices: many(stripePrices),
+}));
+
+export const stripePricesRelations = relations(stripePrices, ({ one }) => ({
+  product: one(stripeProducts, {
+    fields: [stripePrices.stripeProductId],
+    references: [stripeProducts.stripeProductId],
   }),
 }));

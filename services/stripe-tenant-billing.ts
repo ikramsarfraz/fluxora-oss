@@ -5,7 +5,15 @@ import { db } from "@/db";
 import { auditLogs, tenants } from "@/db/schema";
 import { getPreferredBillingEmailForTenant } from "@/services/billing-contacts";
 import { getAppPublicOrigin, getStripeClient } from "@/lib/stripe/config";
-import { planFromStripePriceId, getStripePriceIdForPlan } from "@/lib/stripe/price-to-plan";
+import type { StripeSaasPaidPlanKey } from "@/lib/stripe/plan-metadata";
+import {
+  resolveStripePriceIdForPaidPlan,
+  resolveTenantPlanFromStripePriceId,
+} from "@/lib/stripe/price-to-plan";
+import {
+  isStripeCatalogWebhookEvent,
+  processStripeCatalogWebhook,
+} from "@/services/stripe-catalog";
 import { mapStripeSubscriptionStatus } from "@/lib/stripe/subscription-status";
 import {
   diffSubscriptionKeys,
@@ -13,7 +21,7 @@ import {
 } from "@/lib/tenant-subscription-audit";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
-export type StripeCheckoutPlan = "starter" | "growth" | "enterprise";
+export type StripeCheckoutPlan = StripeSaasPaidPlanKey;
 
 export async function createTenantStripeCheckoutSession(input: {
   tenantId: string;
@@ -29,7 +37,7 @@ export async function createTenantStripeCheckoutSession(input: {
   cancelPath: string;
   existingStripeCustomerId: string | null;
 }): Promise<{ url: string }> {
-  const priceId = getStripePriceIdForPlan(input.plan);
+  const priceId = await resolveStripePriceIdForPaidPlan(input.plan);
   const origin = getAppPublicOrigin();
   const successPath = input.successPath.startsWith("/")
     ? input.successPath
@@ -237,7 +245,7 @@ export async function syncTenantFromSubscription(
   }
   let plan: TenantSubscriptionPlan;
   try {
-    plan = planFromStripePriceId(priceId);
+    plan = await resolveTenantPlanFromStripePriceId(priceId);
   } catch (e) {
     console.warn(e);
     return;
@@ -274,6 +282,11 @@ function getSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
 export async function processStripeWebhookEvent(
   event: Stripe.Event,
 ): Promise<void> {
+  if (isStripeCatalogWebhookEvent(event.type)) {
+    await processStripeCatalogWebhook(event);
+    return;
+  }
+
   const stripe = getStripeClient();
   switch (event.type) {
     case "checkout.session.completed": {

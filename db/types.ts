@@ -46,6 +46,8 @@ import {
   supportTicketUpdates,
   supportTickets,
   auditLogs,
+  stripePrices,
+  stripeProducts,
 } from "./schema";
 
 // -------------------- Better Auth --------------------
@@ -182,6 +184,14 @@ export type SupportTicketAttachment = InferSelectModel<
 export type NewSupportTicketAttachment = InferInsertModel<
   typeof supportTicketAttachments
 >;
+
+// -------------------- Stripe catalog (billing) --------------------
+
+export type StripeProductCached = InferSelectModel<typeof stripeProducts>;
+export type NewStripeProductCached = InferInsertModel<typeof stripeProducts>;
+
+export type StripePriceCached = InferSelectModel<typeof stripePrices>;
+export type NewStripePriceCached = InferInsertModel<typeof stripePrices>;
 
 // -------------------- Audit --------------------
 

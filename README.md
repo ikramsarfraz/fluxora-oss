@@ -10,7 +10,7 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 | ----- | --- |
 | **Index of all docs** | [docs/README.md](docs/README.md) |
 | **Local setup, env, subdomain routing, UAT** | [docs/local-development.md](docs/local-development.md) |
-| **Stripe** (Checkout, webhooks, CLI testing, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
+| **Stripe** (Checkout, webhooks, CLI testing, catalog sync, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
 | **Support tickets** (tenant vs platform workflows) | [docs/support-workflow.md](docs/support-workflow.md) |
 | **Business rules & permissions** | [docs/rules/README.md](docs/rules/README.md) |
 | **Misc. workspace notes** | [docs/monorepo-notes.md](docs/monorepo-notes.md) |
@@ -37,7 +37,7 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 See **[docs/local-development.md](docs/local-development.md)** for host routing (`localtest.me`, `admin.` subdomain behavior) and UAT URLs.
 
 1. **`npm install`**
-2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing (**[stripe doc](docs/stripe-subscriptions.md)**).
+2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing. For Subscription Checkout use `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`; configure `STRIPE_PRICE_*` ids or populate the Stripe catalog with metadata **`plan=starter`**, **`growth`**, or **`enterprise`** (**[stripe subscriptions](docs/stripe-subscriptions.md)**).
 3. **`npm run db:migrate`**
 4. **`npm run dev`**
 

@@ -4,6 +4,7 @@ import {
   check,
   date,
   index,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -378,6 +379,73 @@ export const tenantJoinRequests = pgTable(
       table.reviewedByUserId,
     ),
     index("tenant_join_requests_email_idx").on(table.email),
+  ],
+);
+
+/** Cached Stripe Product objects for SaaS billing (not ERP catalogue products). */
+export const stripeProducts = pgTable(
+  "stripe_products",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stripeProductId: varchar("stripe_product_id", { length: 255 }).notNull(),
+    name: varchar("name", { length: 512 }).notNull(),
+    description: text("description"),
+    active: boolean("active").notNull(),
+    metadataJson: jsonb("metadata_json")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    stripeCreatedAt: timestamp("stripe_created_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("stripe_products_stripe_product_id_unique").on(table.stripeProductId),
+    index("stripe_products_active_idx").on(table.active),
+  ],
+);
+
+/** Cached Stripe Price rows; `billing_plan_key` is derived from metadata `plan` when present. */
+export const stripePrices = pgTable(
+  "stripe_prices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stripePriceId: varchar("stripe_price_id", { length: 255 }).notNull(),
+    stripeProductId: varchar("stripe_product_id", { length: 255 })
+      .notNull()
+      .references(() => stripeProducts.stripeProductId, { onDelete: "cascade" }),
+    lookupKey: varchar("lookup_key", { length: 255 }),
+    billingPlanKey: varchar("billing_plan_key", { length: 32 }),
+    currency: varchar("currency", { length: 16 }).notNull(),
+    unitAmount: integer("unit_amount"),
+    recurringInterval: varchar("recurring_interval", { length: 32 }),
+    recurringIntervalCount: integer("recurring_interval_count"),
+    active: boolean("active").notNull(),
+    metadataJson: jsonb("metadata_json")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    stripeCreatedAt: timestamp("stripe_created_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("stripe_prices_stripe_price_id_unique").on(table.stripePriceId),
+    index("stripe_prices_stripe_product_id_idx").on(table.stripeProductId),
+    index("stripe_prices_billing_plan_key_active_idx").on(
+      table.billingPlanKey,
+      table.active,
+    ),
   ],
 );
 
