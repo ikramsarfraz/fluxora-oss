@@ -1,12 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useState } from "react";
 
+import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { useInviteUser } from "@/hooks/use-users";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -31,6 +31,10 @@ import {
 } from "./invite-user-form.schema";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import {
+  isLimitReachedMessage,
+  stripSubscriptionEnforcementPrefix,
+} from "@/lib/subscription-enforcement";
 
 const ROLE_OPTIONS: { value: InviteUserFormValues["role"]; label: string }[] = [
   { value: "admin", label: "Admin" },
@@ -44,14 +48,6 @@ const defaultForm: InviteUserFormValues = {
   email: "",
   role: "sales",
 };
-
-function isPortalUserLimitError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("portal users") &&
-    normalized.includes("upgrade your plan")
-  );
-}
 
 export function InviteUserForm() {
   const router = useRouter();
@@ -93,18 +89,10 @@ export function InviteUserForm() {
               <AlertCircle />
               <AlertTitle>Invite user failed</AlertTitle>
               <AlertDescription>
-                {isPortalUserLimitError(error) ? (
-                  <div className="space-y-2">
-                    <p>Your current plan has reached the portal user limit.</p>
-                    <Link
-                      href="/account/billing#billing-plans"
-                      className="font-medium underline underline-offset-4"
-                    >
-                      Upgrade plan
-                    </Link>
-                  </div>
+                {isLimitReachedMessage(error, "maxPortalUsers") ? (
+                  <SubscriptionUpgradeMessage message="Your current plan has reached the portal user limit." />
                 ) : (
-                  error
+                  stripSubscriptionEnforcementPrefix(error)
                 )}
               </AlertDescription>
             </Alert>

@@ -44,8 +44,12 @@ export async function createInvoiceFromSalesOrder(input: {
   creditType?: "fixed" | "percentage";
   creditAmount?: string;
 }) {
+  const tenant = await getCurrentTenant();
   const order = await db.query.salesOrders.findFirst({
-    where: eq(salesOrders.id, input.salesOrderId),
+    where: and(
+      eq(salesOrders.id, input.salesOrderId),
+      eq(salesOrders.tenantId, tenant.id),
+    ),
     columns: {
       id: true,
       tenantId: true,

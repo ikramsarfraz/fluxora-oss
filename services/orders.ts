@@ -18,7 +18,10 @@ import {
   salesOrders,
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
-import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import {
+  createPlanLimitReachedError,
+  logSubscriptionEnforcementBlock,
+} from "@/lib/subscription-enforcement";
 import { countCurrentMonthSalesOrdersForTenant } from "@/services/subscription-usage";
 import {
   buildSalesOrderObjectKey,
@@ -1260,11 +1263,24 @@ export async function createSalesOrder(input: {
 
   const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
   if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
-    throw new Error(
-      `Your current plan (${formatSubscriptionPlanLabel(
-        tenant.subscriptionPlan,
-      )}) allows up to ${maxMonthlyOrders} orders per month. Upgrade your plan to create another sales order.`,
-    );
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+      resourceLabel: "orders per month",
+      actionLabel: "create another sales order",
+    });
   }
 
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({

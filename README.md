@@ -11,6 +11,8 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 | **Index of all docs** | [docs/README.md](docs/README.md) |
 | **Local setup, env, subdomain routing, UAT** | [docs/local-development.md](docs/local-development.md) |
 | **Stripe** (Checkout, Customer Portal, webhooks, CLI testing, catalog sync, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
+| **Subscription system overview** | [docs/subscription-system-overview.md](docs/subscription-system-overview.md) |
+| **Billing release checklist** | [docs/billing-release-checklist.md](docs/billing-release-checklist.md) |
 | **Support tickets** (tenant vs platform workflows) | [docs/support-workflow.md](docs/support-workflow.md) |
 | **Business rules & permissions** | [docs/rules/README.md](docs/rules/README.md) |
 | **Misc. workspace notes** | [docs/monorepo-notes.md](docs/monorepo-notes.md) |
@@ -40,6 +42,20 @@ See **[docs/local-development.md](docs/local-development.md)** for host routing 
 2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing. For Subscription Checkout use `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`; configure `STRIPE_PRICE_*` ids or populate the Stripe catalog with metadata **`plan=starter`**, **`growth`**, or **`enterprise`** (**[stripe subscriptions](docs/stripe-subscriptions.md)**).
 3. **`npm run db:migrate`**
 4. **`npm run dev`**
+
+## Billing in brief
+
+Tenant billing is Stripe-backed. Workspace admins and owners start paid subscriptions from `/account/billing` using Stripe Checkout, then manage payment methods, invoices, and cancellation through Stripe Customer Portal once the workspace has a stored Stripe customer id. Stripe webhooks update the tenant’s plan, status, and billing dates, and the app uses those persisted fields for subscription health, access blocking, feature gating, and numeric plan limits.
+
+## Billing local test
+
+To test billing locally, forward Stripe webhooks to the app with:
+
+```bash
+stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook
+```
+
+Then sign in as a tenant owner or admin, open `/account/billing`, start Checkout, and verify the Billing page updates after webhook sync. See [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) for setup details and [docs/billing-release-checklist.md](docs/billing-release-checklist.md) for the full launch checklist.
 
 ## Layout
 

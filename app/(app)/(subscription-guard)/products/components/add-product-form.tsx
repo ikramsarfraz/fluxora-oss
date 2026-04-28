@@ -10,6 +10,7 @@ import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateSku } from "./product-sku-utils";
+import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -64,6 +65,10 @@ import { createCategoryAction } from "@/actions/categories";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { useProducts } from "@/hooks/use-products";
+import {
+  isLimitReachedMessage,
+  stripSubscriptionEnforcementPrefix,
+} from "@/lib/subscription-enforcement";
 import { useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
 import { UnitOfMeasureListItem } from "@/services/units-of-measure";
 
@@ -97,11 +102,6 @@ const defaultForm: AddProductFormValues = {
   baseUnitId: "",
   units: [],
 };
-
-function isProductLimitError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return normalized.includes("allows up to") && normalized.includes("products");
-}
 
 function formatUomOption(u: UnitOfMeasureListItem): string {
   return u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name;
@@ -250,18 +250,10 @@ export function AddProductForm() {
               <AlertCircle />
               <AlertTitle>Add product failed</AlertTitle>
               <AlertDescription>
-                {isProductLimitError(mutationError) ? (
-                  <div className="space-y-2">
-                    <p>Your current plan has reached the product limit.</p>
-                    <Link
-                      href="/account/billing#billing-plans"
-                      className="font-medium underline underline-offset-4"
-                    >
-                      Upgrade plan
-                    </Link>
-                  </div>
+                {isLimitReachedMessage(mutationError, "maxProducts") ? (
+                  <SubscriptionUpgradeMessage message="Your current plan has reached the product limit." />
                 ) : (
-                  mutationError
+                  stripSubscriptionEnforcementPrefix(mutationError)
                 )}
               </AlertDescription>
             </Alert>

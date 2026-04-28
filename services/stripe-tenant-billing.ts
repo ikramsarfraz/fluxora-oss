@@ -30,6 +30,14 @@ import { isUuid } from "@/lib/utils/uuid";
 
 export type StripeCheckoutPlan = StripeSaasPaidPlanKey;
 
+function logStripeBillingEvent(
+  level: "info" | "warn" | "error",
+  message: string,
+  context: Record<string, unknown>,
+): void {
+  console[level](`[stripe billing] ${message}`, context);
+}
+
 /** Merge subscription payload with DB row: fill missing cust id; on mismatch prefer Stripe-subscription linkage. */
 function reconcileStripeCustomerIdFromWebhook(
   storedTenant: string | null | undefined,
@@ -342,6 +350,65 @@ function customerIdString(
   return customer.id;
 }
 
+async function findTenantIdForStripeReferences(input: {
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+}): Promise<string | null> {
+  const customerId = input.stripeCustomerId?.trim() || null;
+  const subscriptionId = input.stripeSubscriptionId?.trim() || null;
+  if (customerId) {
+    const customerTenant = await db.query.tenants.findFirst({
+      where: eq(tenants.stripeCustomerId, customerId),
+      columns: {
+        id: true,
+        stripeSubscriptionId: true,
+      },
+    });
+    if (
+      customerTenant &&
+      (!subscriptionId ||
+        !customerTenant.stripeSubscriptionId?.trim() ||
+        customerTenant.stripeSubscriptionId.trim() === subscriptionId)
+    ) {
+      return customerTenant.id;
+    }
+  }
+
+  if (subscriptionId) {
+    const subscriptionTenant = await db.query.tenants.findFirst({
+      where: eq(tenants.stripeSubscriptionId, subscriptionId),
+      columns: {
+        id: true,
+      },
+    });
+    return subscriptionTenant?.id ?? null;
+  }
+  return null;
+}
+
+function isStripeCanceledStatus(status: Stripe.Subscription.Status): boolean {
+  return status === "canceled" || status === "unpaid" || status === "incomplete_expired";
+}
+
+function logNonCanonicalStripeStatus(
+  status: Stripe.Subscription.Status,
+  context: Record<string, unknown>,
+): void {
+  if (
+    status === "active" ||
+    status === "trialing" ||
+    status === "past_due" ||
+    status === "canceled"
+  ) {
+    return;
+  }
+
+  logStripeBillingEvent("warn", "mapped non-canonical Stripe subscription status", {
+    stripeStatus: status,
+    ...context,
+  });
+}
+
 /**
  * Apply Stripe subscription to tenant row + system audit.
  */
@@ -423,26 +490,40 @@ export async function syncTenantFromSubscription(
   eventId: string,
   options?: { tenantId?: string | null },
 ): Promise<void> {
+  const stripeCustomerId = customerIdString(sub.customer);
+  const stripeSubscriptionId = sub.id;
   const raw =
-    options?.tenantId?.trim() ?? sub.metadata?.[STRIPE_METADATA_TENANT_ID]?.trim();
+    options?.tenantId?.trim() ??
+    sub.metadata?.[STRIPE_METADATA_TENANT_ID]?.trim() ??
+    (await findTenantIdForStripeReferences({
+      stripeCustomerId,
+      stripeSubscriptionId,
+    }));
   if (!raw) {
-    console.warn(
-      "Stripe subscription missing tenant id in metadata; skipping sync.",
-    );
+    logStripeBillingEvent("warn", "subscription sync skipped: missing tenant id", {
+      stripeEventId: eventId,
+      eventType,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      metadataTenantId: sub.metadata?.[STRIPE_METADATA_TENANT_ID] ?? null,
+    });
     return;
   }
   if (!isUuid(raw)) {
-    console.warn(
-      `Stripe subscription tenant id is not a valid UUID; skipping sync.`,
-    );
+    logStripeBillingEvent("warn", "subscription sync skipped: invalid tenant id", {
+      stripeEventId: eventId,
+      eventType,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      tenantId: raw,
+    });
     return;
   }
   const tenantId = raw;
-  if (sub.status === "canceled" && eventType === "customer.subscription.deleted") {
-    const cust = customerIdString(sub.customer);
+  if (isStripeCanceledStatus(sub.status)) {
     await updateTenantFromStripeEvent({
       tenantId,
-      stripeCustomerId: cust,
+      stripeCustomerId,
       stripeSubscriptionId: null,
       subscriptionPlan: "free",
       subscriptionStatus: "canceled",
@@ -455,24 +536,47 @@ export async function syncTenantFromSubscription(
   }
   const priceId = priceIdFromSubscriptionItem(sub);
   if (!priceId) {
-    console.warn("Stripe subscription has no price items; skipping.");
+    logStripeBillingEvent("warn", "subscription sync skipped: no price items", {
+      stripeEventId: eventId,
+      eventType,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      tenantId,
+      stripeStatus: sub.status,
+    });
     return;
   }
   let plan: TenantSubscriptionPlan;
   try {
     plan = await resolveTenantPlanFromStripePriceId(priceId);
   } catch (e) {
-    console.warn(e);
+    logStripeBillingEvent("warn", "subscription sync skipped: unmapped Stripe price", {
+      stripeEventId: eventId,
+      eventType,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      tenantId,
+      priceId,
+      error:
+        e instanceof Error
+          ? e.message
+          : String(e),
+    });
     return;
   }
   const { trial, periodEnd } = subscriptionDatesFromStripe(sub);
+  logNonCanonicalStripeStatus(sub.status, {
+    stripeEventId: eventId,
+    eventType,
+    stripeSubscriptionId,
+    stripeCustomerId,
+    tenantId,
+  });
   const status = mapStripeSubscriptionStatus(sub.status);
-  const cust = customerIdString(sub.customer);
-  const subId = sub.id;
   await updateTenantFromStripeEvent({
     tenantId,
-    stripeCustomerId: cust,
-    stripeSubscriptionId: subId,
+    stripeCustomerId,
+    stripeSubscriptionId,
     subscriptionPlan: plan,
     subscriptionStatus: status,
     trialEndsAt: trial,
@@ -538,10 +642,26 @@ async function dispatchStripeWebhookEvent(event: Stripe.Event): Promise<void> {
       const fromSubMeta = sub.metadata?.[STRIPE_METADATA_TENANT_ID]?.trim();
       const tenantId =
         fromSession ??
-        (fromSubMeta && isUuid(fromSubMeta) ? fromSubMeta : null);
+        (fromSubMeta && isUuid(fromSubMeta) ? fromSubMeta : null) ??
+        (await findTenantIdForStripeReferences({
+          stripeCustomerId: customerIdString(sub.customer),
+          stripeSubscriptionId: sub.id,
+        }));
       if (!tenantId) {
-        console.warn(
-          "checkout.session.completed: missing tenant id on session (client_reference_id / metadata) and subscription.metadata.",
+        logStripeBillingEvent(
+          "warn",
+          "checkout.session.completed skipped: missing tenant linkage",
+          {
+            stripeEventId: event.id,
+            stripeCheckoutSessionId: session.id,
+            stripeSubscriptionId: sub.id,
+            stripeCustomerId: customerIdString(sub.customer),
+            sessionClientReferenceId: session.client_reference_id ?? null,
+            sessionMetadataTenantId:
+              session.metadata?.[STRIPE_METADATA_TENANT_ID] ?? null,
+            subscriptionMetadataTenantId:
+              sub.metadata?.[STRIPE_METADATA_TENANT_ID] ?? null,
+          },
         );
         return;
       }
@@ -562,6 +682,12 @@ async function dispatchStripeWebhookEvent(event: Stripe.Event): Promise<void> {
       const invoice = event.data.object as Stripe.Invoice;
       const subId = getSubscriptionIdFromInvoice(invoice);
       if (!subId) {
+        logStripeBillingEvent("warn", "invoice event skipped: missing subscription reference", {
+          stripeEventId: event.id,
+          eventType: event.type,
+          stripeInvoiceId: invoice.id,
+          stripeCustomerId: customerIdString(invoice.customer),
+        });
         return;
       }
       const sub = await stripe.subscriptions.retrieve(subId);

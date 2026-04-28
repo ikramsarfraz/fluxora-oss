@@ -7,7 +7,10 @@ import {
   productUnits,
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
-import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import {
+  createPlanLimitReachedError,
+  logSubscriptionEnforcementBlock,
+} from "@/lib/subscription-enforcement";
 import { countActiveProductsForTenant } from "@/services/subscription-usage";
 import { getCurrentTenant } from "./tenants";
 import {
@@ -29,8 +32,9 @@ type ProductUnitInput = {
 };
 
 export async function getProductById(productId: string) {
+  const tenant = await getCurrentTenant();
   const result = await db.query.products.findFirst({
-    where: eq(products.id, productId),
+    where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
     with: {
       productCategories: {
         with: { category: true },
@@ -137,11 +141,24 @@ export async function createProduct(input: {
   const tenant = await getCurrentTenant();
   const maxProducts = getPlanLimit(tenant, "maxProducts");
   if ((await countActiveProductsForTenant(tenant.id)) + 1 > maxProducts) {
-    throw new Error(
-      `Your current plan (${formatSubscriptionPlanLabel(
-        tenant.subscriptionPlan,
-      )}) allows up to ${maxProducts} products. Upgrade your plan to add another product.`,
-    );
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxProducts",
+      limit: maxProducts,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxProducts",
+      limit: maxProducts,
+      resourceLabel: "products",
+      actionLabel: "add another product",
+    });
   }
 
   if (input.categoryIds.length > 0) {

@@ -4,8 +4,9 @@ import { categories } from "@/db/schema";
 import { getCurrentTenant } from "./tenants";
 
 export async function getCategoryById(categoryId: string) {
+  const tenant = await getCurrentTenant();
   const result = await db.query.categories.findFirst({
-    where: eq(categories.id, categoryId),
+    where: and(eq(categories.id, categoryId), eq(categories.tenantId, tenant.id)),
   });
   return result ?? null;
 }

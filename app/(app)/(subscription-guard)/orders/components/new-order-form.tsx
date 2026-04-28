@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -8,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
+import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,16 +30,12 @@ import {
   newOrderFormSchema,
   type NewOrderFormValues,
 } from "./new-order-form.schema";
+import {
+  isLimitReachedMessage,
+  stripSubscriptionEnforcementPrefix,
+} from "@/lib/subscription-enforcement";
 
 type SubmitMode = "draft" | "confirm";
-
-function isMonthlyOrderLimitError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("orders per month") &&
-    normalized.includes("upgrade your plan")
-  );
-}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -168,18 +164,10 @@ export function NewOrderForm() {
           <AlertCircle />
           <AlertTitle>Could not save order</AlertTitle>
           <AlertDescription>
-            {isMonthlyOrderLimitError(submitError) ? (
-              <div className="space-y-2">
-                <p>Your current plan has reached the monthly order limit.</p>
-                <Link
-                  href="/account/billing#billing-plans"
-                  className="font-medium underline underline-offset-4"
-                >
-                  Upgrade plan
-                </Link>
-              </div>
+            {isLimitReachedMessage(submitError, "maxMonthlyOrders") ? (
+              <SubscriptionUpgradeMessage message="Your current plan has reached the monthly order limit." />
             ) : (
-              submitError
+              stripSubscriptionEnforcementPrefix(submitError)
             )}
           </AlertDescription>
         </Alert>

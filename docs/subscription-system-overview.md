@@ -84,6 +84,13 @@ This document is the short internal map of the current subscription system acros
 - The existing local example is the AR aging action in [`actions/aging.ts`](actions/aging.ts).
 - Core ERP writes are not broadly feature-blocked by plan at this stage.
 
+## Upgrade-required errors
+
+- Limit and feature enforcement now use a shared subscription enforcement helper in [`lib/subscription-enforcement.ts`](lib/subscription-enforcement.ts).
+- Backend enforcement throws consistent, parseable upgrade-required errors.
+- Tenant UI strips the internal prefix and shows a clean upgrade CTA linked to `/account/billing#billing-plans`.
+- Enforcement blocks also emit lightweight structured `console.warn` logs for operational visibility.
+
 ## Numeric limits
 
 Numeric limits are enforced through the shared capability matrix plus shared usage counting helpers in [`services/subscription-usage.ts`](services/subscription-usage.ts).
@@ -124,6 +131,18 @@ When a limit is reached:
   - 80% or more: `Near limit`
   - at or above the cap: `At limit`
 - Platform admin uses the same usage data for visibility only, without upgrade CTAs.
+
+## Billing reliability notes
+
+- Stripe webhook processing is idempotent and tracked separately from tenant row updates.
+- Subscription sync now logs explicit warnings for:
+  - missing tenant linkage
+  - invalid tenant ids
+  - missing price items
+  - unmapped Stripe price ids
+  - non-canonical Stripe statuses that must be mapped into local tenant states
+- When metadata linkage is missing, Stripe sync can fall back to stored `stripeCustomerId` or `stripeSubscriptionId` on the tenant row before giving up.
+- Canceled, unpaid, and incomplete-expired Stripe subscriptions reconcile the tenant back to `free` + `canceled` instead of leaving a stale paid plan attached.
 
 ## What is intentionally not included yet
 

@@ -6,7 +6,10 @@ import { portalUsers, userInvitations } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
-import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import {
+  createPlanLimitReachedError,
+  logSubscriptionEnforcementBlock,
+} from "@/lib/subscription-enforcement";
 import { countPortalUserUsageForTenant } from "@/services/subscription-usage";
 import {
   createPaginatedResult,
@@ -526,11 +529,24 @@ export async function inviteUserByAdmin(input: {
   const maxPortalUsers = getPlanLimit(tenant, "maxPortalUsers");
   const projectedSeats = (await countPortalUserUsageForTenant(current.tenantId)) + 1;
   if (projectedSeats > maxPortalUsers) {
-    throw new Error(
-      `Your current plan (${formatSubscriptionPlanLabel(
-        tenant.subscriptionPlan,
-      )}) allows up to ${maxPortalUsers} portal users, including pending invites. Upgrade your plan to invite another user.`,
-    );
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxPortalUsers",
+      limit: maxPortalUsers,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxPortalUsers",
+      limit: maxPortalUsers,
+      resourceLabel: "portal users, including pending invites",
+      actionLabel: "invite another user",
+    });
   }
 
   await inviteUserAuth({

@@ -2,6 +2,7 @@ import type {
   TenantSubscriptionPlan,
   TenantSubscriptionStatus,
 } from "@/lib/tenant-subscription";
+import { createFeatureUnavailableError } from "@/lib/subscription-enforcement";
 
 export const SUBSCRIPTION_FEATURE_KEYS = [
   "sales_orders",
@@ -172,7 +173,8 @@ export function assertTenantCanUseFeature(
     return;
   }
 
-  throw new Error(
-    `Feature "${featureKey}" is not available on the ${tenant.subscriptionPlan} plan.`,
-  );
+  throw createFeatureUnavailableError({
+    featureKey,
+    currentPlan: tenant.subscriptionPlan,
+  });
 }

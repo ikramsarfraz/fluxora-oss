@@ -3,7 +3,10 @@ import { db } from "@/db";
 import { customerAddresses, customers } from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
-import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import {
+  createPlanLimitReachedError,
+  logSubscriptionEnforcementBlock,
+} from "@/lib/subscription-enforcement";
 import { countActiveCustomersForTenant } from "@/services/subscription-usage";
 import { getCurrentTenant } from "./tenants";
 import {
@@ -23,11 +26,24 @@ export async function createCustomer(
   const tenant = await getCurrentTenant();
   const maxCustomers = getPlanLimit(tenant, "maxCustomers");
   if ((await countActiveCustomersForTenant(tenant.id)) + 1 > maxCustomers) {
-    throw new Error(
-      `Your current plan (${formatSubscriptionPlanLabel(
-        tenant.subscriptionPlan,
-      )}) allows up to ${maxCustomers} customers. Upgrade your plan to add another customer.`,
-    );
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxCustomers",
+      limit: maxCustomers,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxCustomers",
+      limit: maxCustomers,
+      resourceLabel: "customers",
+      actionLabel: "add another customer",
+    });
   }
 
   const [customer] = await db
@@ -59,8 +75,9 @@ export async function createCustomer(
 }
 
 export async function getCustomerById(customerId: string) {
+  const tenant = await getCurrentTenant();
   const result = await db.query.customers.findFirst({
-    where: eq(customers.id, customerId),
+    where: and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)),
     with: {
       addresses: true,
       productPrices: true,
@@ -132,7 +149,10 @@ export async function getCustomersPage(input?: CustomerListParams) {
 }
 
 export async function deleteCustomer(customerId: string) {
-  await db.delete(customers).where(eq(customers.id, customerId));
+  const tenant = await getCurrentTenant();
+  await db
+    .delete(customers)
+    .where(and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)));
 }
 
 /** Row shape returned by `getCustomers()` / `GET /api/customers` (for client `import type` only). */
