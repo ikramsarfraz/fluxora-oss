@@ -6,6 +6,7 @@ import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-f
 import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
 import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
+import { TenantBillingHealthNotice } from "@/components/subscription/tenant-billing-health-notice";
 import { PageHeader } from "@/components/page-header";
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,16 @@ export default async function AccountBillingPage(props: {
         />
       </div>
       <div className="grid max-w-6xl gap-4">
+        <TenantBillingHealthNotice
+          tenant={{
+            subscriptionPlan: tenant.subscriptionPlan,
+            subscriptionStatus: tenant.subscriptionStatus,
+            trialEndsAt: tenant.trialEndsAt,
+            currentPeriodEndsAt: tenant.currentPeriodEndsAt,
+            stripeCustomerId: tenant.stripeCustomerId ?? null,
+          }}
+          canManageBilling={canManageBilling}
+        />
         {checkoutFeedback ? (
           <BillingCheckoutFeedback
             kind={checkoutFeedback.kind}
@@ -132,7 +143,7 @@ export default async function AccountBillingPage(props: {
             />
           </CardContent>
         </Card>
-        <Card>
+        <Card id="billing-plans">
           <CardHeader>
             <CardTitle>Choose or change plan</CardTitle>
             <CardDescription>

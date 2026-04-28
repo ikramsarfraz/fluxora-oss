@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
+import { TenantSubscriptionHealthBadge } from "@/components/subscription/tenant-subscription-health-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,8 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  formatStripeWebhookAuditSummary,
+  parseStripeWebhookAuditContext,
+} from "@/lib/stripe/audit-activity";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
+import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { getPlatformAdminTenantDetail } from "@/services/platform-admin";
 import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
 import { TenantStatusForm } from "./tenant-status-form";
@@ -32,19 +38,15 @@ function formatActivitySummary(item: {
   }
 
   try {
+    const stripeCtx = parseStripeWebhookAuditContext(item.contextJson);
+    if (stripeCtx) {
+      return formatStripeWebhookAuditSummary(stripeCtx);
+    }
+
     const context = JSON.parse(item.contextJson) as {
       action?: string;
       reason?: string | null;
-      eventType?: string;
-      stripeSyncResult?: string;
     };
-
-    if (context.action === "stripe_webhook" && context.eventType) {
-      if (context.stripeSyncResult === "unchanged") {
-        return `Stripe: ${context.eventType} (no field changes)`;
-      }
-      return `Stripe: ${context.eventType}`;
-    }
 
     if (context.action === "activate_tenant") {
       return `Activated ${label}`;
@@ -85,6 +87,12 @@ export default async function PlatformAdminTenantDetailPage({
 
   const { tenant, users, stats, activity } = detail;
   const defaultPaymentMethod = await getTenantDefaultPaymentMethod(tenant.id);
+  const subscriptionHealth = getTenantSubscriptionHealth({
+    subscriptionPlan: tenant.subscriptionPlan,
+    subscriptionStatus: tenant.subscriptionStatus,
+    trialEndsAt: tenant.trialEndsAt,
+    currentPeriodEndsAt: tenant.currentPeriodEndsAt,
+  });
 
   return (
     <div className="space-y-6">
@@ -112,10 +120,12 @@ export default async function PlatformAdminTenantDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Subscription overview</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>Subscription overview</CardTitle>
+            <TenantSubscriptionHealthBadge health={subscriptionHealth} />
+          </div>
           <CardDescription>
-            Cached subscription fields. Checkout and webhooks update them for this tenant; admins
-            can correct values in the form below when troubleshooting.
+            Values below match the tenant record; Checkout and webhooks keep it aligned with Stripe—see Activity for each applied event id and idempotent replays.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -127,6 +137,7 @@ export default async function PlatformAdminTenantDetailPage({
             stripeCustomerId={tenant.stripeCustomerId}
             stripeSubscriptionId={tenant.stripeSubscriptionId}
             defaultPaymentMethod={defaultPaymentMethod}
+            observabilityNote="Same persisted fields as tenant Billing. Webhook-driven sync may change this snapshot without a manual save; Stripe event ids and idempotent outcomes appear in Activity below."
           />
         </CardContent>
       </Card>
@@ -135,8 +146,7 @@ export default async function PlatformAdminTenantDetailPage({
         <CardHeader>
           <CardTitle>Subscription fields</CardTitle>
           <CardDescription>
-            Manual edits for Stripe identifiers, plan tier, lifecycle, or billing dates when
-            correcting data. Access is not gated on these values.
+            Manual corrections for Stripe ids, lifecycle, or billing dates—override behavior is unchanged. Future Stripe webhook deliveries may still overwrite these rows to reconcile with Stripe canonical state.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -239,8 +249,7 @@ export default async function PlatformAdminTenantDetailPage({
         <CardHeader>
           <CardTitle>Activity</CardTitle>
           <CardDescription>
-            Recent platform-admin changes to this tenant (activation, subscription, and other
-            updates).
+            Includes Stripe automation (`stripe_webhook` rows) with event type and Stripe event id. Duplicate webhook deliveries typically show Duplicate / idempotent when no tenant fields changed.
           </CardDescription>
         </CardHeader>
         <CardContent>

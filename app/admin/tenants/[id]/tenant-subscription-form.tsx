@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updateTenantSubscriptionAction } from "@/actions/platform-admin";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +86,15 @@ export function TenantSubscriptionForm({ tenant }: { tenant: Tenant }) {
         });
       }}
     >
+      <Alert variant="default" className="border-amber-500/40 bg-amber-50/70 dark:bg-amber-950/35 dark:border-amber-800/50">
+        <AlertTitle>Stripe webhooks may overwrite manual edits</AlertTitle>
+        <AlertDescription className="text-muted-foreground text-sm leading-relaxed">
+          Saving applies to this tenant row right away; enforcement is unchanged. Later webhook
+          deliveries for this customer (e.g. subscription updates, invoice events, or Checkout
+          completions) can still replace plan, status, dates, and Stripe ids to match Stripe canonical
+          billing data.
+        </AlertDescription>
+      </Alert>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="sub-plan">Plan</Label>

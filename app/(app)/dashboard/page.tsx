@@ -4,20 +4,35 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
+import { TenantSubscriptionHealthBanner } from "@/components/subscription/tenant-subscription-health-banner";
 import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { isSectionVisible } from "@/lib/dashboard/visibility";
+import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { queryKeys } from "@/lib/query/keys";
 import { getApAging, getArAging } from "@/services/aging";
 import { getDashboardSummary } from "@/services/dashboard";
 import { getCurrentPortalUser } from "@/services/portal-users";
+import { getCurrentTenant } from "@/services/tenants";
 import { getTenantSetupChecklistViewAction } from "@/actions/tenant-setup-checklist";
 
 import { DashboardShell } from "../(dashboard)/components/dashboard-shell";
 
 export default async function DashboardRoute() {
-  const portalUser = await getCurrentPortalUser();
+  const [portalUser, tenant] = await Promise.all([
+    getCurrentPortalUser(),
+    getCurrentTenant(),
+  ]);
   const role = portalUser.role as PortalUserRole;
+  const canManageBilling =
+    portalUser.role === "admin" || portalUser.role === "owner";
+  const tenantBillingSnapshot = {
+    subscriptionPlan: tenant.subscriptionPlan,
+    subscriptionStatus: tenant.subscriptionStatus,
+    trialEndsAt: tenant.trialEndsAt,
+    currentPeriodEndsAt: tenant.currentPeriodEndsAt,
+  };
+  const subscriptionHealth = getTenantSubscriptionHealth(tenantBillingSnapshot);
 
   const queryClient = new QueryClient();
 
@@ -55,6 +70,13 @@ export default async function DashboardRoute() {
         <PageHeader
           title="Dashboard"
           description="Overview of sales, purchasing, and inventory health."
+        />
+      </div>
+      <div className="px-4 lg:px-6">
+        <TenantSubscriptionHealthBanner
+          health={subscriptionHealth}
+          tenantFields={tenantBillingSnapshot}
+          canManageBilling={canManageBilling}
         />
       </div>
       <HydrationBoundary state={dehydrate(queryClient)}>

@@ -36,6 +36,8 @@ function isTenantAdminPath(pathname: string) {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestHeaders = new Headers(request.headers);
+  /** Passed to tenant RSC layout for subscription guards (see `app/(app)/layout.tsx`). */
+  requestHeaders.set("x-internal-pathname", pathname);
   const hostContext = getRequestTenantHostContextFromHeaders(request.headers);
   const tenantSlug = hostContext.tenantSlug;
   const isTenantHost = hostContext.isTenantHost;

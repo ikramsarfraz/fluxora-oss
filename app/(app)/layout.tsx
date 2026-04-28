@@ -10,6 +10,11 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
+import {
+  getTenantSubscriptionHealth,
+  isSubscriptionAccessExemptPath,
+  shouldBlockTenantAccess,
+} from "@/lib/tenant-subscription-health";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentTenant } from "@/services/tenants";
@@ -20,8 +25,9 @@ export default async function AppGroupLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const headerList = await headers();
   const session = await auth.api.getSession({
-    headers: await headers(),
+    headers: headerList,
   });
 
   if (!session?.user) {
@@ -35,6 +41,25 @@ export default async function AppGroupLayout({
     destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
   } catch {
     redirect("/login");
+  }
+
+  const pathnameFromProxy = headerList.get("x-internal-pathname")?.trim() ?? "";
+
+  /** When `proxy.ts` did not annotate the pathname (unsupported deploy), subscription blocking is skipped. */
+  const blockTenantAppRoutes =
+    pathnameFromProxy !== "" &&
+    shouldBlockTenantAccess(
+      getTenantSubscriptionHealth({
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+        trialEndsAt: tenant.trialEndsAt,
+        currentPeriodEndsAt: tenant.currentPeriodEndsAt,
+      }),
+    ) &&
+    !isSubscriptionAccessExemptPath(pathnameFromProxy);
+
+  if (blockTenantAppRoutes) {
+    redirect("/billing-blocked");
   }
 
   return (
