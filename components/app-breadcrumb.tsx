@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 /** Known path segments -> short labels (sidebar-aligned where possible). */
 const SEGMENT_LABELS: Record<string, string> = {
   account: "Account",
+  billing: "Billing",
   customers: "Customers",
   users: "Users",
   "price-chart": "Price list",

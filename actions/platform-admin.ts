@@ -1,8 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-import { setTenantActiveByPlatformAdmin } from "@/services/platform-admin";
+import {
+  parseTenantSubscriptionFormForService,
+  tenantSubscriptionFormSchema,
+} from "@/app/admin/tenants/[id]/tenant-subscription-form.schema";
+import {
+  setTenantActiveByPlatformAdmin,
+  updateTenantSubscriptionByPlatformAdmin,
+} from "@/services/platform-admin";
 
 export async function setTenantActiveAction(
   id: string,
@@ -16,4 +24,21 @@ export async function setTenantActiveAction(
   revalidatePath(`/admin/tenants/${id}`);
 
   return tenant;
+}
+
+export async function updateTenantSubscriptionAction(
+  tenantId: string,
+  raw: z.input<typeof tenantSubscriptionFormSchema>,
+) {
+  const input = tenantSubscriptionFormSchema.parse(raw);
+  const payload = parseTenantSubscriptionFormForService(input);
+  const updated = await updateTenantSubscriptionByPlatformAdmin(
+    tenantId,
+    payload,
+  );
+  revalidatePath("/admin");
+  revalidatePath("/admin/tenants");
+  revalidatePath("/admin/subscriptions");
+  revalidatePath(`/admin/tenants/${tenantId}`);
+  return updated;
 }

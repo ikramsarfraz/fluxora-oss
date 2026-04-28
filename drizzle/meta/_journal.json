@@ -120,6 +120,13 @@
       "when": 1777728000000,
       "tag": "0016_tenant_setup_checklist_dismissed",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1777814400000,
+      "tag": "0017_tenant_subscription",
+      "breakpoints": true
     }
   ]
 }

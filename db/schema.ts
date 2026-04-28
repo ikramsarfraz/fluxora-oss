@@ -189,6 +189,23 @@ export const productUnitPurposeEnum = pgEnum("product_unit_purpose", [
   "display",
 ]);
 
+/** Product / billing plan for a tenant (Stripe product mapping comes later). */
+export const tenantSubscriptionPlanEnum = pgEnum("tenant_subscription_plan", [
+  "free",
+  "starter",
+  "growth",
+  "enterprise",
+]);
+
+/** Subscription lifecycle; `comped` = complimentary / internal, no payment. */
+export const tenantSubscriptionStatusEnum = pgEnum("tenant_subscription_status", [
+  "trialing",
+  "active",
+  "past_due",
+  "canceled",
+  "comped",
+]);
+
 // -------------------- Core multi-tenant/auth-adjacent --------------------
 
 export const tenants = pgTable(
@@ -210,10 +227,23 @@ export const tenants = pgTable(
     setupChecklistDismissedAt: timestamp("setup_checklist_dismissed_at", {
       withTimezone: true,
     }),
+    /** Billing / Stripe subscription fields; enforced in app code later. */
+    subscriptionPlan: tenantSubscriptionPlanEnum("subscription_plan")
+      .notNull()
+      .default("free"),
+    subscriptionStatus: tenantSubscriptionStatusEnum("subscription_status")
+      .notNull()
+      .default("active"),
+    trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+    currentPeriodEndsAt: timestamp("current_period_ends_at", { withTimezone: true }),
+    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+    stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),
     index("tenants_is_active_idx").on(table.isActive),
+    index("tenants_subscription_status_idx").on(table.subscriptionStatus),
+    index("tenants_subscription_plan_idx").on(table.subscriptionPlan),
   ],
 );
 

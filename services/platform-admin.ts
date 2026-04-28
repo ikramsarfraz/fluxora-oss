@@ -1,7 +1,12 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, type SQL, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { auditLogs, portalUsers, platformUsers, tenants } from "@/db/schema";
+import type { TenantSubscriptionPlan, TenantSubscriptionStatus } from "@/lib/tenant-subscription";
+import {
+  diffSubscriptionKeys,
+  subscriptionSnapshotFromRow,
+} from "@/lib/tenant-subscription-audit";
 import { requirePlatformUser } from "./platform-users";
 
 function countAll(table: typeof tenants | typeof portalUsers) {
@@ -10,6 +15,16 @@ function countAll(table: typeof tenants | typeof portalUsers) {
       count: sql<number>`count(*)::int`,
     })
     .from(table);
+}
+
+async function countTenantsWhere(condition: SQL) {
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)::int`,
+    })
+    .from(tenants)
+    .where(condition);
+  return row?.count ?? 0;
 }
 
 export async function getPlatformAdminDashboardData() {
@@ -34,6 +49,8 @@ export async function getPlatformAdminDashboardData() {
       slug: tenants.slug,
       tenantType: tenants.tenantType,
       isActive: tenants.isActive,
+      subscriptionPlan: tenants.subscriptionPlan,
+      subscriptionStatus: tenants.subscriptionStatus,
       createdAt: tenants.createdAt,
       userCount:
         sql<number>`(
@@ -46,16 +63,48 @@ export async function getPlatformAdminDashboardData() {
     .orderBy(desc(tenants.createdAt))
     .limit(5);
 
+  const [
+    subTrialing,
+    subActive,
+    subPastDue,
+    subCanceled,
+    subComped,
+    planFree,
+    planStarter,
+    planGrowth,
+    planEnterprise,
+  ] = await Promise.all([
+    countTenantsWhere(eq(tenants.subscriptionStatus, "trialing")),
+    countTenantsWhere(eq(tenants.subscriptionStatus, "active")),
+    countTenantsWhere(eq(tenants.subscriptionStatus, "past_due")),
+    countTenantsWhere(eq(tenants.subscriptionStatus, "canceled")),
+    countTenantsWhere(eq(tenants.subscriptionStatus, "comped")),
+    countTenantsWhere(eq(tenants.subscriptionPlan, "free")),
+    countTenantsWhere(eq(tenants.subscriptionPlan, "starter")),
+    countTenantsWhere(eq(tenants.subscriptionPlan, "growth")),
+    countTenantsWhere(eq(tenants.subscriptionPlan, "enterprise")),
+  ]);
+
   return {
     totalTenants: tenantCountRow[0]?.count ?? 0,
     activeTenants: activeTenantCountRow?.count ?? 0,
     totalPortalUsers: portalUserCountRow?.count ?? 0,
     recentTenants,
+    subscriptionByStatus: {
+      trialing: subTrialing,
+      active: subActive,
+      past_due: subPastDue,
+      canceled: subCanceled,
+      comped: subComped,
+    },
+    subscriptionByPlan: {
+      free: planFree,
+      starter: planStarter,
+      growth: planGrowth,
+      enterprise: planEnterprise,
+    },
     subscriptionMetrics: {
-      mrr: "TBD",
-      arr: "TBD",
-      churn: "TBD",
-      note: "Billing integration is not wired yet.",
+      note: "MRR/ARR and Stripe webhooks are not wired yet. Counts use tenant subscription fields only.",
     },
   };
 }
@@ -70,6 +119,8 @@ export async function listPlatformAdminTenants() {
       slug: tenants.slug,
       tenantType: tenants.tenantType,
       isActive: tenants.isActive,
+      subscriptionPlan: tenants.subscriptionPlan,
+      subscriptionStatus: tenants.subscriptionStatus,
       createdAt: tenants.createdAt,
       userCount:
         sql<number>`(
@@ -136,7 +187,7 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
       },
     },
     orderBy: [desc(auditLogs.createdAt)],
-    limit: 10,
+    limit: 25,
   });
 
   return {
@@ -219,4 +270,79 @@ export async function setTenantActiveByPlatformAdmin(
   });
 
   return updatedTenant;
+}
+
+export type UpdateTenantSubscriptionByPlatformAdminInput = {
+  subscriptionPlan: TenantSubscriptionPlan;
+  subscriptionStatus: TenantSubscriptionStatus;
+  trialEndsAt: Date | null;
+  currentPeriodEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+};
+
+export async function updateTenantSubscriptionByPlatformAdmin(
+  tenantId: string,
+  input: UpdateTenantSubscriptionByPlatformAdminInput,
+) {
+  const platformUser = await requirePlatformUser();
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+  });
+
+  if (!tenant) {
+    throw new Error("Tenant not found");
+  }
+
+  const beforeSnap = subscriptionSnapshotFromRow(tenant);
+  const nextStripeCustomer =
+    input.stripeCustomerId?.trim() ? input.stripeCustomerId.trim() : null;
+  const nextStripeSub =
+    input.stripeSubscriptionId?.trim() ? input.stripeSubscriptionId.trim() : null;
+
+  const [updated] = await db.transaction(async tx => {
+    const [u] = await tx
+      .update(tenants)
+      .set({
+        subscriptionPlan: input.subscriptionPlan,
+        subscriptionStatus: input.subscriptionStatus,
+        trialEndsAt: input.trialEndsAt,
+        currentPeriodEndsAt: input.currentPeriodEndsAt,
+        stripeCustomerId: nextStripeCustomer,
+        stripeSubscriptionId: nextStripeSub,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+
+    if (!u) {
+      throw new Error("Failed to update tenant");
+    }
+
+    const afterSnap = subscriptionSnapshotFromRow(u);
+    const changed = diffSubscriptionKeys(beforeSnap, afterSnap);
+
+    if (changed.length > 0) {
+      await tx.insert(auditLogs).values({
+        tenantId: u.id,
+        actorType: "platform_user",
+        actorPlatformUserId: platformUser.id,
+        action: "update",
+        entityTable: "tenants",
+        entityId: u.id,
+        entityLabel: u.name,
+        changedFieldsJson: JSON.stringify(changed),
+        beforeJson: JSON.stringify(beforeSnap),
+        afterJson: JSON.stringify(afterSnap),
+        contextJson: JSON.stringify({
+          action: "update_tenant_subscription",
+        }),
+      });
+    }
+
+    return [u] as const;
+  });
+
+  return updated;
 }

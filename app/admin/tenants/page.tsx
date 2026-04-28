@@ -32,7 +32,9 @@ export default async function PlatformAdminTenantsPage() {
               <TableHead>Name</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Tenant Type</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Tenant</TableHead>
+              <TableHead>Plan</TableHead>
+              <TableHead>Subscription</TableHead>
               <TableHead>Users</TableHead>
               <TableHead>Created</TableHead>
             </TableRow>
@@ -51,6 +53,10 @@ export default async function PlatformAdminTenantsPage() {
                   <Badge variant={tenant.isActive ? "secondary" : "outline"}>
                     {tenant.isActive ? "Active" : "Inactive"}
                   </Badge>
+                </TableCell>
+                <TableCell className="capitalize">{tenant.subscriptionPlan}</TableCell>
+                <TableCell className="capitalize">
+                  {tenant.subscriptionStatus.replaceAll("_", " ")}
                 </TableCell>
                 <TableCell>{tenant.userCount}</TableCell>
                 <TableCell>{formatDisplayDate(tenant.createdAt)}</TableCell>

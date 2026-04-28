@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
-import { BadgeCheck, LogOut } from "lucide-react";
+import { BadgeCheck, CircleDollarSign, LogOut } from "lucide-react";
+
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -71,6 +72,12 @@ export function AuthUserMenu({
             <Link href={accountHref}>
               <BadgeCheck />
               Account
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/account/billing">
+              <CircleDollarSign />
+              Billing
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>

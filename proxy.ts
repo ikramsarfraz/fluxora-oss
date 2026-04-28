@@ -15,7 +15,8 @@ function isSharedAuthPath(pathname: string) {
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/invite") ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/invitations")
+    pathname.startsWith("/api/invitations") ||
+    pathname === "/api/stripe/webhook"
   );
 }
 
@@ -27,7 +28,8 @@ function isTenantAdminPath(pathname: string) {
   return (
     pathname === "/admin" ||
     pathname === "/admin/roles" ||
-    pathname === "/admin/branding"
+    pathname === "/admin/branding" ||
+    pathname === "/admin/billing"
   );
 }
 
@@ -127,12 +129,19 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/admin/roles" || pathname === "/admin/branding") {
+  if (
+    pathname === "/admin/roles" ||
+    pathname === "/admin/branding" ||
+    pathname === "/admin/billing"
+  ) {
     const rewrittenUrl = request.nextUrl.clone();
-    rewrittenUrl.pathname =
-      pathname === "/admin/roles"
-        ? "/tenant-admin/roles"
-        : "/tenant-admin/branding";
+    if (pathname === "/admin/roles") {
+      rewrittenUrl.pathname = "/tenant-admin/roles";
+    } else if (pathname === "/admin/branding") {
+      rewrittenUrl.pathname = "/tenant-admin/branding";
+    } else {
+      rewrittenUrl.pathname = "/account/billing";
+    }
     return NextResponse.rewrite(rewrittenUrl, {
       request: {
         headers: requestHeaders,

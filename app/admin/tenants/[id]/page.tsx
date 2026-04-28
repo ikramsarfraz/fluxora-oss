@@ -15,6 +15,8 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getPlatformAdminTenantDetail } from "@/services/platform-admin";
 import { TenantStatusForm } from "./tenant-status-form";
+import { TenantSubscriptionForm } from "./tenant-subscription-form";
+import { PlatformTenantStripeCheckoutButtons } from "./platform-tenant-stripe-checkout-buttons";
 
 function formatActivitySummary(item: {
   action: string;
@@ -31,7 +33,12 @@ function formatActivitySummary(item: {
     const context = JSON.parse(item.contextJson) as {
       action?: string;
       reason?: string | null;
+      eventType?: string;
     };
+
+    if (context.action === "stripe_webhook" && context.eventType) {
+      return `Stripe: ${context.eventType}`;
+    }
 
     if (context.action === "activate_tenant") {
       return `Activated ${label}`;
@@ -41,6 +48,10 @@ function formatActivitySummary(item: {
       return context.reason?.trim()
         ? `Deactivated ${label}: ${context.reason.trim()}`
         : `Deactivated ${label}`;
+    }
+
+    if (context.action === "update_tenant_subscription") {
+      return "Subscription fields updated";
     }
   } catch {
     return `${item.action} ${label}`;
@@ -91,6 +102,62 @@ export default async function PlatformAdminTenantDetailPage({
           <TenantStatusForm tenantId={tenant.id} isActive={tenant.isActive} />
         </div>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardDescription>Plan</CardDescription>
+            <CardTitle className="text-2xl capitalize">
+              {tenant.subscriptionPlan}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Subscription status</CardDescription>
+            <CardTitle className="text-2xl capitalize">
+              {tenant.subscriptionStatus.replaceAll("_", " ")}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Trial / period</CardDescription>
+            <CardTitle className="text-sm font-normal leading-snug text-muted-foreground">
+              Trial ends: {formatDisplayDate(tenant.trialEndsAt)}
+              <br />
+              Period ends: {formatDisplayDate(tenant.currentPeriodEndsAt)}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription</CardTitle>
+          <CardDescription>
+            Manual fields for now; Stripe checkout and webhooks are not connected yet. Access is
+            not gated on these values.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TenantSubscriptionForm tenant={tenant} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stripe Checkout</CardTitle>
+          <CardDescription>
+            Opens Stripe Checkout for the selected plan. <code className="text-xs">metadata.tenantId</code> is set on
+            the session and subscription. Webhook endpoint:{" "}
+            <code className="text-xs">/api/stripe/webhook</code>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -173,7 +240,8 @@ export default async function PlatformAdminTenantDetailPage({
         <CardHeader>
           <CardTitle>Activity</CardTitle>
           <CardDescription>
-            Recent platform-admin activation and deactivation events for this tenant.
+            Recent platform-admin changes to this tenant (activation, subscription, and other
+            updates).
           </CardDescription>
         </CardHeader>
         <CardContent>

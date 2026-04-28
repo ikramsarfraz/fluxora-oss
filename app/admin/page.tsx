@@ -49,10 +49,14 @@ export default async function PlatformAdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Subscription metrics</CardDescription>
-            <CardTitle className="text-3xl">{data.subscriptionMetrics.mrr}</CardTitle>
+            <CardDescription>Active subscription status</CardDescription>
+            <CardTitle className="text-3xl">
+              {data.subscriptionByStatus.active}
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-0 text-sm text-muted-foreground">
+            Tenants with{" "}
+            <code className="rounded bg-muted px-1">subscription_status = active</code>.{" "}
             {data.subscriptionMetrics.note}
           </CardContent>
         </Card>
@@ -71,7 +75,9 @@ export default async function PlatformAdminDashboardPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Slug</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Tenant</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Subscription</TableHead>
                   <TableHead>Users</TableHead>
                   <TableHead>Created</TableHead>
                 </TableRow>
@@ -91,6 +97,10 @@ export default async function PlatformAdminDashboardPage() {
                         {tenant.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
+                    <TableCell className="capitalize">{tenant.subscriptionPlan}</TableCell>
+                    <TableCell className="capitalize">
+                      {tenant.subscriptionStatus.replaceAll("_", " ")}
+                    </TableCell>
                     <TableCell>{tenant.userCount}</TableCell>
                     <TableCell>{formatDisplayDate(tenant.createdAt)}</TableCell>
                   </TableRow>
@@ -103,22 +113,32 @@ export default async function PlatformAdminDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Subscriptions</CardTitle>
-            <CardDescription>Placeholder metrics until billing is integrated.</CardDescription>
+            <CardDescription>{data.subscriptionMetrics.note}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
             <div className="rounded-xl border bg-slate-50 p-4">
-              <p className="font-medium text-slate-900">MRR</p>
-              <p className="mt-1 text-muted-foreground">{data.subscriptionMetrics.mrr}</p>
+              <p className="font-medium text-slate-900">By status</p>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>Trialing: {data.subscriptionByStatus.trialing}</li>
+                <li>Active: {data.subscriptionByStatus.active}</li>
+                <li>Past due: {data.subscriptionByStatus.past_due}</li>
+                <li>Canceled: {data.subscriptionByStatus.canceled}</li>
+                <li>Comped: {data.subscriptionByStatus.comped}</li>
+              </ul>
             </div>
             <div className="rounded-xl border bg-slate-50 p-4">
-              <p className="font-medium text-slate-900">ARR</p>
-              <p className="mt-1 text-muted-foreground">{data.subscriptionMetrics.arr}</p>
+              <p className="font-medium text-slate-900">By plan</p>
+              <ul className="mt-2 space-y-1 text-muted-foreground">
+                <li>Free: {data.subscriptionByPlan.free}</li>
+                <li>Starter: {data.subscriptionByPlan.starter}</li>
+                <li>Growth: {data.subscriptionByPlan.growth}</li>
+                <li>Enterprise: {data.subscriptionByPlan.enterprise}</li>
+              </ul>
             </div>
-            <div className="rounded-xl border bg-slate-50 p-4">
-              <p className="font-medium text-slate-900">Churn</p>
-              <p className="mt-1 text-muted-foreground">{data.subscriptionMetrics.churn}</p>
-            </div>
-            <Link href="/admin/subscriptions" className="inline-flex text-sm font-medium text-blue-700 hover:underline">
+            <Link
+              href="/admin/subscriptions"
+              className="inline-flex text-sm font-medium text-blue-700 hover:underline"
+            >
               Open subscriptions page
             </Link>
           </CardContent>

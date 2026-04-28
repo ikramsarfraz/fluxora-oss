@@ -44,6 +44,7 @@ Platform admins manage support from `admin.<ROOT_DOMAIN>/admin/support`. The pla
    Optional:
    - `DATABASE_URL_UNPOOLED`
    - `NEXT_PUBLIC_SUPPORT_EMAIL`
+   - Stripe (Checkout + webhooks; see [Stripe (subscriptions)](#stripe-subscriptions) below)
 
 4. **Run migrations**
    Run `npm run db:migrate`
@@ -109,6 +110,27 @@ Examples:
 - `admin.localtest.me:3000`
 
 Most modern browsers resolve `*.localhost` automatically, and `*.localtest.me` resolves publicly to `127.0.0.1`, so you usually do **not** need to edit `/etc/hosts` for local subdomain testing.
+
+### Stripe (subscriptions)
+
+To exercise Checkout and webhook sync against Stripe test mode:
+
+1. In the [Stripe Dashboard](https://dashboard.stripe.com/test), create three recurring **Prices** (Starter, Growth, Enterprise) and copy their price IDs.
+2. Add to `.env.local` (see `.env.local.example`):
+   - `STRIPE_SECRET_KEY` — test **Secret** key
+   - `STRIPE_WEBHOOK_SECRET` — signing secret (**must match how webhooks arrive** — CLI `stripe listen` shows a fresh `whsec_...`; the Dashboard webhook endpoint has its own different `whsec_...`; do not mix them.)
+   - `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_ENTERPRISE` — the three price IDs
+   - `NEXT_PUBLIC_APP_URL` (optional) — base URL the app uses for success/cancel redirects (e.g. `http://localtest.me:3000` if you test on that host)
+3. Forward webhooks to your dev server. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and run:
+   - `stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook`  
+   Use the same origin you browse (or `http://localhost:3000/...` if you use localhost). The CLI prints a **`whsec_...`** value — set that as `STRIPE_WEBHOOK_SECRET` while testing (it changes when you restart `listen` unless you use a fixed secret).
+4. Start the app (`npm run dev`), sign in as a tenant workspace user. Open **`/account` → Billing**, or **`/account/billing`**, then start Stripe Checkout when you’re an owner or admin. Use [test cards](https://docs.stripe.com/testing#cards) (e.g. `4242`…). After Checkout, Stripe redirects with `session_id`; the Billing page verifies the session (similar to Next’s [`with-stripe-typescript`](https://github.com/vercel/next.js/tree/canary/examples/with-stripe-typescript) example) before webhooks complete the tenant sync.
+
+Platform admins can still start Checkout from tenant detail pages (`/admin/tenants/[id]` on the internal admin host).
+
+Production: add an endpoint in the Dashboard **Developers → Webhooks** pointing to `https://<your-domain>/api/stripe/webhook`, select the events handled by the app, and set `STRIPE_WEBHOOK_SECRET` to that endpoint’s **Reveal signing secret** (`whsec_...`). That value is tied to **that deployed URL**. It must not be the same as the Stripe CLI forwarding secret unless you deliberately configure that way.
+
+If you see `No signatures found matching…` while testing locally, copy the **`whsec_`** from your **currently running** `stripe listen`, put it in `.env.local`, save, restart `npm run dev`, and trigger again ([Stripe webhook signing troubleshooting](https://docs.stripe.com/webhooks/signature)).
 
 ### UAT hosts
 
