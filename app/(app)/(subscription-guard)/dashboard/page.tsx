@@ -48,7 +48,7 @@ export default async function DashboardRoute() {
       queryFn: () => getTenantSetupChecklistViewAction(),
     }),
   ];
-  if (isSectionVisible(role, "arAging")) {
+  if (isSectionVisible(role, "arAging") && canAccessReports) {
     prefetches.push(
       queryClient.prefetchQuery({
         queryKey: queryKeys.dashboard.arAging,

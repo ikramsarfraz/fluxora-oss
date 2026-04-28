@@ -163,3 +163,16 @@ export function getPlanLimit(
     tenant.subscriptionStatus,
   ).limits[limitKey];
 }
+
+export function assertTenantCanUseFeature(
+  tenant: TenantPlanCapabilitySubject,
+  featureKey: SubscriptionFeatureKey,
+): void {
+  if (canUseFeature(tenant, featureKey)) {
+    return;
+  }
+
+  throw new Error(
+    `Feature "${featureKey}" is not available on the ${tenant.subscriptionPlan} plan.`,
+  );
+}

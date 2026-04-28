@@ -48,6 +48,12 @@ For now, these helpers exist so future enforcement and UI messaging can depend o
 - Backend API calls and server actions remain unchanged for now.
 - A second UI-only `reports` gate now wraps the dashboard AR aging section in [`app/(app)/(subscription-guard)/(dashboard)/components/dashboard-shell.tsx`](app/(app)/(subscription-guard)/(dashboard)/components/dashboard-shell.tsx).
 
+## Reporting guardrails
+
+- A minimal backend safeguard now exists for local reporting server actions via `assertTenantCanUseFeature()`.
+- The current local guard is applied to the AR aging server action in [`actions/aging.ts`](actions/aging.ts).
+- This is intentionally narrow and does not yet enforce plan access across core ERP writes or the legacy external API-backed reporting endpoints.
+
 ## Future usage pattern
 
 Start by reading the tenant once, then use the helpers at the edge of the behavior you want to evolve:
