@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -40,6 +41,11 @@ const emptyAddress = {
   zip: "",
   isDefault: false,
 };
+
+function isCustomerLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("allows up to") && normalized.includes("customers");
+}
 
 export function AddCustomerForm() {
   const router = useRouter();
@@ -352,7 +358,19 @@ export function AddCustomerForm() {
 
             {error && (
               <div className="text-sm text-destructive" role="alert">
-                {error}
+                {isCustomerLimitError(error) ? (
+                  <div className="space-y-2">
+                    <p>Your current plan has reached the customer limit.</p>
+                    <Link
+                      href="/account/billing#billing-plans"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Upgrade plan
+                    </Link>
+                  </div>
+                ) : (
+                  error
+                )}
               </div>
             )}
           </FieldGroup>
