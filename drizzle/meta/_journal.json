@@ -134,6 +134,20 @@
       "when": 1777340551210,
       "tag": "0018_stripe_catalog_cached",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778000000000,
+      "tag": "0019_stripe_webhook_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778100000000,
+      "tag": "0020_stripe_webhook_events_failed_index",
+      "breakpoints": true
     }
   ]
 }

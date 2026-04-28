@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { db } from "@/db";
@@ -193,6 +193,23 @@ export async function archiveStripeProductInCatalog(stripeProductId: string): Pr
     .where(eq(stripePrices.stripeProductId, sid));
 }
 
+/** Avoid duplicate catalog audit rows when the same Stripe `event.id` is reprocessed after a stale row. */
+async function stripeCatalogWebhookAuditAlreadyExists(
+  stripeEventId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: auditLogs.id })
+    .from(auditLogs)
+    .where(
+      and(
+        sql`(context_json::json ->> 'action') = 'stripe_catalog_webhook'`,
+        sql`(context_json::json ->> 'stripeEventId') = ${stripeEventId}`,
+      ),
+    )
+    .limit(1);
+  return row != null;
+}
+
 async function writeCatalogWebhookAudit(params: {
   action: "insert" | "update" | "delete";
   entityTable: "stripe_products" | "stripe_prices";
@@ -202,6 +219,9 @@ async function writeCatalogWebhookAudit(params: {
   stripeEventId: string;
   detail?: Record<string, unknown>;
 }): Promise<void> {
+  if (await stripeCatalogWebhookAuditAlreadyExists(params.stripeEventId)) {
+    return;
+  }
   await db.insert(auditLogs).values({
     tenantId: null,
     actorType: "system",

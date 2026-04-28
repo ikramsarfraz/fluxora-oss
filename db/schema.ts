@@ -207,6 +207,12 @@ export const tenantSubscriptionStatusEnum = pgEnum("tenant_subscription_status",
   "comped",
 ]);
 
+/** Dedup and lifecycle for verified Stripe webhook POSTs (`evt_…` id uniqueness). */
+export const stripeWebhookProcessingStatusEnum = pgEnum(
+  "stripe_webhook_processing_status",
+  ["processing", "succeeded", "failed"],
+);
+
 // -------------------- Core multi-tenant/auth-adjacent --------------------
 
 export const tenants = pgTable(
@@ -446,6 +452,33 @@ export const stripePrices = pgTable(
       table.billingPlanKey,
       table.active,
     ),
+  ],
+);
+
+/**
+ * One row per Stripe `event.id`; ensures idempotent webhook processing.
+ * Rows are inserted in `processing` before handler work completes; retries without duplicate side-effects.
+ */
+export const stripeWebhookEvents = pgTable(
+  "stripe_webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull(),
+    eventType: varchar("event_type", { length: 128 }).notNull(),
+    processingStatus: stripeWebhookProcessingStatusEnum("processing_status")
+      .notNull()
+      .default("processing"),
+    errorMessage: text("error_message"),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("stripe_webhook_events_stripe_event_id_unique").on(table.stripeEventId),
+    index("stripe_webhook_events_processing_status_idx").on(table.processingStatus),
   ],
 );
 

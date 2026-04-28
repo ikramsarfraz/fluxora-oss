@@ -48,6 +48,7 @@ import {
   auditLogs,
   stripePrices,
   stripeProducts,
+  stripeWebhookEvents,
 } from "./schema";
 
 // -------------------- Better Auth --------------------
@@ -192,6 +193,9 @@ export type NewStripeProductCached = InferInsertModel<typeof stripeProducts>;
 
 export type StripePriceCached = InferSelectModel<typeof stripePrices>;
 export type NewStripePriceCached = InferInsertModel<typeof stripePrices>;
+
+export type StripeWebhookEventRow = InferSelectModel<typeof stripeWebhookEvents>;
+export type NewStripeWebhookEventRow = InferInsertModel<typeof stripeWebhookEvents>;
 
 // -------------------- Audit --------------------
 

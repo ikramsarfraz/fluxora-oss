@@ -282,6 +282,18 @@ function getSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
 export async function processStripeWebhookEvent(
   event: Stripe.Event,
 ): Promise<void> {
+  try {
+    await dispatchStripeWebhookEvent(event);
+  } catch (err) {
+    console.error(
+      `[stripe webhook] Processor threw (type=${event.type} id=${event.id})`,
+      err,
+    );
+    throw err;
+  }
+}
+
+async function dispatchStripeWebhookEvent(event: Stripe.Event): Promise<void> {
   if (isStripeCatalogWebhookEvent(event.type)) {
     await processStripeCatalogWebhook(event);
     return;
@@ -329,6 +341,7 @@ export async function processStripeWebhookEvent(
       return;
     }
     default:
+      /** Subscribed-but-unhandled event types → no-op (no crash). */
       return;
   }
 }
