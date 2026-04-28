@@ -7,6 +7,7 @@ import {
 import { TenantSubscriptionHealthBanner } from "@/components/subscription/tenant-subscription-health-banner";
 import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
+import { canUseFeature } from "@/lib/subscription-plan-capabilities";
 import { isSectionVisible } from "@/lib/dashboard/visibility";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { queryKeys } from "@/lib/query/keys";
@@ -26,6 +27,7 @@ export default async function DashboardRoute() {
   const role = portalUser.role as PortalUserRole;
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
+  const canAccessReports = canUseFeature(tenant, "reports");
   const tenantBillingSnapshot = {
     subscriptionPlan: tenant.subscriptionPlan,
     subscriptionStatus: tenant.subscriptionStatus,
@@ -80,7 +82,11 @@ export default async function DashboardRoute() {
         />
       </div>
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <DashboardShell role={role} />
+        <DashboardShell
+          role={role}
+          canAccessReports={canAccessReports}
+          currentPlan={tenant.subscriptionPlan}
+        />
       </HydrationBoundary>
     </div>
   );

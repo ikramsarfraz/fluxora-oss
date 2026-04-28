@@ -46,6 +46,7 @@ For now, these helpers exist so future enforcement and UI messaging can depend o
 - It uses the `reports` capability through `PlanFeatureGate`.
 - When unavailable, the page shows an upgrade prompt instead of redirecting.
 - Backend API calls and server actions remain unchanged for now.
+- A second UI-only `reports` gate now wraps the dashboard AR aging section in [`app/(app)/(subscription-guard)/(dashboard)/components/dashboard-shell.tsx`](app/(app)/(subscription-guard)/(dashboard)/components/dashboard-shell.tsx).
 
 ## Future usage pattern
 

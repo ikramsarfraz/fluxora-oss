@@ -2,11 +2,13 @@
 
 import { AlertCircle } from "lucide-react";
 
+import { PlanFeatureGate } from "@/components/subscription/plan-feature-gate";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { isSectionVisible } from "@/lib/dashboard/visibility";
+import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 import { ApAgingSection } from "./ap-aging-section";
 import { ArAgingSection } from "./ar-aging-section";
@@ -16,7 +18,17 @@ import { PurchasingSection } from "./purchasing-section";
 import { SalesSection } from "./sales-section";
 import { TenantSetupChecklistCard } from "./tenant-setup-checklist-card";
 
-export function DashboardShell({ role }: { role: PortalUserRole }) {
+type DashboardShellProps = {
+  role: PortalUserRole;
+  canAccessReports: boolean;
+  currentPlan: TenantSubscriptionPlan;
+};
+
+export function DashboardShell({
+  role,
+  canAccessReports,
+  currentPlan,
+}: DashboardShellProps) {
   const { data, isPending, isError, error } = useDashboardSummary();
 
   if (isPending) {
@@ -61,7 +73,16 @@ export function DashboardShell({ role }: { role: PortalUserRole }) {
       {isSectionVisible(role, "sales") ? (
         <SalesSection sales={data.sales} />
       ) : null}
-      {isSectionVisible(role, "arAging") ? <ArAgingSection /> : null}
+      {isSectionVisible(role, "arAging") ? (
+        <PlanFeatureGate
+          enabled={canAccessReports}
+          featureKey="reports"
+          currentPlan={currentPlan}
+          requiredPlan="growth"
+        >
+          <ArAgingSection />
+        </PlanFeatureGate>
+      ) : null}
       {isSectionVisible(role, "purchasing") ? (
         <PurchasingSection purchasing={data.purchasing} />
       ) : null}
