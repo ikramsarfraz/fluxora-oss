@@ -7,6 +7,7 @@ import { BillingSubscriptionRefreshHint } from "@/components/account/billing-sub
 import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
 import { TenantBillingHealthNotice } from "@/components/subscription/tenant-billing-health-notice";
+import { TenantPlanUsageCard } from "@/components/subscription/tenant-plan-usage-card";
 import { PageHeader } from "@/components/page-header";
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
 import { auth } from "@/lib/auth";
 import { getUserByAuthUserId } from "@/services/portal-users";
 import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
+import { getCurrentTenantPlanUsage } from "@/services/subscription-usage";
 import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
 
@@ -76,9 +78,10 @@ export default async function AccountBillingPage(props: {
       params.success === "true" ||
       !!(params.session_id && params.session_id.trim()));
 
-  const [catalogPlans, defaultPaymentMethod] = await Promise.all([
+  const [catalogPlans, defaultPaymentMethod, usage] = await Promise.all([
     listActivePaidPlansForBillingPage(),
     getTenantDefaultPaymentMethod(tenant.id),
+    getCurrentTenantPlanUsage(),
   ]);
 
   const canManageBilling =
@@ -143,6 +146,7 @@ export default async function AccountBillingPage(props: {
             />
           </CardContent>
         </Card>
+        <TenantPlanUsageCard usage={usage} />
         <Card id="billing-plans">
           <CardHeader>
             <CardTitle>Choose or change plan</CardTitle>
