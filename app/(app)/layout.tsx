@@ -1,6 +1,5 @@
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AuthUserMenu } from "@/components/auth-user-menu";
 import { BreadcrumbLabelProvider } from "@/components/breadcrumb-label-provider";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -46,6 +45,7 @@ export default async function AppGroupLayout({
             tenantName={tenant.name}
             tenantSlug={tenant.slug}
             destinations={destinations}
+            user={session.user}
           />
           <SidebarInset>
             <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
@@ -55,9 +55,6 @@ export default async function AppGroupLayout({
                 className="mr-2 data-vertical:h-4 data-vertical:self-auto"
               />
               <AppBreadcrumb />
-              <div className="ml-auto">
-                <AuthUserMenu user={session.user} />
-              </div>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>
           </SidebarInset>
