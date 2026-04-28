@@ -1,10 +1,12 @@
 import { isAPIError } from "better-auth/api";
-import { desc, eq, sql, and } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { portalUsers, userInvitations } from "@/db/schema";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
+import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
 import {
   createPaginatedResult,
   getPaginationOffset,
@@ -479,7 +481,10 @@ export async function inviteUserByAdmin(input: {
   fullName: string;
   role?: Exclude<PortalUserRole, "owner">;
 }): Promise<{ success: true }> {
-  const current = await requireAdminPortalUser();
+  const [current, tenant] = await Promise.all([
+    requireAdminPortalUser(),
+    getCurrentTenant(),
+  ]);
 
   const emailTrim = input.email.trim();
   const fullNameTrim = input.fullName.trim();
@@ -514,6 +519,39 @@ export async function inviteUserByAdmin(input: {
   if (pendingInvite) {
     throw new Error(
       "An invitation is already pending for this email. Resend or revoke it from the Users list.",
+    );
+  }
+
+  const [activePortalUsers, pendingInvitations] = await Promise.all([
+    db
+      .select({ c: count() })
+      .from(portalUsers)
+      .where(
+        and(
+          eq(portalUsers.tenantId, current.tenantId),
+          eq(portalUsers.isActive, true),
+        ),
+      )
+      .then(rows => rows[0]?.c ?? 0),
+    db
+      .select({ c: count() })
+      .from(userInvitations)
+      .where(
+        and(
+          eq(userInvitations.tenantId, current.tenantId),
+          eq(userInvitations.status, "pending"),
+        ),
+      )
+      .then(rows => rows[0]?.c ?? 0),
+  ]);
+
+  const maxPortalUsers = getPlanLimit(tenant, "maxPortalUsers");
+  const projectedSeats = activePortalUsers + pendingInvitations + 1;
+  if (projectedSeats > maxPortalUsers) {
+    throw new Error(
+      `Your current plan (${formatSubscriptionPlanLabel(
+        tenant.subscriptionPlan,
+      )}) allows up to ${maxPortalUsers} portal users, including pending invites. Upgrade your plan to invite another user.`,
     );
   }
 
