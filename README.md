@@ -2,6 +2,19 @@
 
 Acme Distribution ERP is a multi-tenant operations platform for food and wholesale distribution teams. It helps tenants manage customers, suppliers, products, lots, inventory, sales orders, invoices, payments, expenses, and user access from one workspace-scoped application. The app supports tenant subdomains, role-aware workflows, warehouse traceability, supplier receiving, sales order fulfillment, invoice generation, tenant branding, and file uploads backed by Cloudflare R2.
 
+## Documentation
+
+Detailed guides live under **`docs/`** so this page stays lean. Start here:
+
+| Topic | Doc |
+| ----- | --- |
+| **Index of all docs** | [docs/README.md](docs/README.md) |
+| **Local setup, env, subdomain routing, UAT** | [docs/local-development.md](docs/local-development.md) |
+| **Stripe** (Checkout, webhooks, CLI testing, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
+| **Support tickets** (tenant vs platform workflows) | [docs/support-workflow.md](docs/support-workflow.md) |
+| **Business rules & permissions** | [docs/rules/README.md](docs/rules/README.md) |
+| **Misc. workspace notes** | [docs/monorepo-notes.md](docs/monorepo-notes.md) |
+
 ## Tech stack
 
 | Layer         | Technology                                                                          |
@@ -19,135 +32,14 @@ Acme Distribution ERP is a multi-tenant operations platform for food and wholesa
 | File storage  | [Cloudflare R2](https://developers.cloudflare.com/r2/)                              |
 | Deployment    | [Vercel](https://vercel.com)                                                        |
 
-## Support workflow
+## Local dev (minimal)
 
-Tenant users can submit and track support tickets from `/support`. New tickets are created from `/support/new`, can include supporting documents, and preserve tenant isolation so users only see tickets for their workspace. Ticket detail pages show the original report, attachments, status timeline, assigned platform admin when available, and tenant-visible progress updates.
+See **[docs/local-development.md](docs/local-development.md)** for host routing (`localtest.me`, `admin.` subdomain behavior) and UAT URLs.
 
-Platform admins manage support from `admin.<ROOT_DOMAIN>/admin/support`. The platform view includes filters by status, priority, and issue type; ticket detail pages support status changes, assignment, internal notes, tenant-visible updates, and attachment downloads. Basic service-layer notifications use Resend when configured and fall back to structured console logging when email credentials are unavailable.
-
-## Local dev
-
-1. **Install dependencies**
-   Run `npm install`
-
-2. **Set environment**
-   Copy `.env.local.example` to `.env.local`
-
-3. **Required env vars**
-   Set:
-   - `DATABASE_URL`
-   - `BETTER_AUTH_SECRET`
-   - `BETTER_AUTH_URL=http://localhost:3000`
-   - `NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000`
-   - `ROOT_DOMAIN=localhost`
-
-   Optional:
-   - `DATABASE_URL_UNPOOLED`
-   - `NEXT_PUBLIC_SUPPORT_EMAIL`
-   - Stripe (Checkout + webhooks; see [Stripe (subscriptions)](#stripe-subscriptions) below)
-
-4. **Run migrations**
-   Run `npm run db:migrate`
-
-5. **Run the app**
-   Run `npm run dev`
-
-### Host routing locally
-
-The app now resolves three host types:
-
-- `root`: marketing and shared auth on the base/root domain
-- `tenant`: customer ERP workspaces on tenant subdomains
-- `platform-admin`: internal Pelzer Solutions admin surface on the reserved `admin` host
-
-The `admin` slug is reserved. It is not a customer tenant and cannot be created in `tenants.slug`.
-
-For local development you can use either:
-
-- `ROOT_DOMAIN=localtest.me` with `admin.localtest.me:3000`
-- `ROOT_DOMAIN=app.localtest.me` with `admin.app.localtest.me:3000`
-
-Examples below use `localtest.me` because it maps wildcard subdomains to `127.0.0.1` without editing `/etc/hosts`.
-
-Examples:
-
-- root marketing: [http://localtest.me:3000/](http://localtest.me:3000/)
-- central login: [http://localtest.me:3000/login](http://localtest.me:3000/login)
-- root signup: [http://localtest.me:3000/signup](http://localtest.me:3000/signup)
-- platform admin login: [http://admin.localtest.me:3000/login](http://admin.localtest.me:3000/login)
-- platform admin dashboard: [http://admin.localtest.me:3000/admin](http://admin.localtest.me:3000/admin)
-- solo tenant login: [http://solo.localtest.me:3000/login](http://solo.localtest.me:3000/login)
-- business tenant login: [http://company.localtest.me:3000/login](http://company.localtest.me:3000/login)
-- tenant dashboard: [http://company.localtest.me:3000/](http://company.localtest.me:3000/)
-
-Behavior:
-
-- `localtest.me:3000/` = marketing homepage
-- `localtest.me:3000/features` and `localtest.me:3000/pricing` = public marketing routes
-- `localtest.me:3000/login` = central login
-  Enter an email first and the app finds the tenant or lets the user choose among multiple tenants.
-- `localtest.me:3000/signup` = first-time signup
-  Business and solo tenants are created from the root domain, then the user is redirected to the tenant subdomain login.
-- `admin.localtest.me:3000/login` = internal platform admin login
-  Sign-in succeeds only for active `platform_users`, and tenant resolution is blocked for the reserved `admin` host.
-- `admin.localtest.me:3000/admin` = internal platform admin surface
-- `tenant.localtest.me:3000/login` = tenant login
-  The tenant is derived from the request host and sign-in only succeeds if the user belongs to that tenant.
-- `tenant.localtest.me:3000/` = tenant dashboard
-  The proxy rewrites tenant root requests to the dashboard route internally.
-- `tenant.localtest.me:3000/signup` = redirected back to `localtest.me:3000/signup`
-- tenant-host access to `/admin` is blocked
-- root-host access to `/admin` is blocked
-- root-domain access to ERP routes like `localtest.me:3000/orders` is blocked and redirected back to the marketing home page
-- unauthenticated tenant app requests are redirected to the tenant's `/login`
-- authenticated users who hit tenant `/login` are redirected back to tenant `/`
-- unauthenticated platform admin requests are redirected to the admin host `/login`
-
-Examples:
-
-- `solofounder.localtest.me:3000`
-- `company.localtest.me:3000`
-- `admin.localtest.me:3000`
-
-Most modern browsers resolve `*.localhost` automatically, and `*.localtest.me` resolves publicly to `127.0.0.1`, so you usually do **not** need to edit `/etc/hosts` for local subdomain testing.
-
-### Stripe (subscriptions)
-
-To exercise Checkout and webhook sync against Stripe test mode:
-
-1. In the [Stripe Dashboard](https://dashboard.stripe.com/test), create three recurring **Prices** (Starter, Growth, Enterprise) and copy their price IDs.
-2. Add to `.env.local` (see `.env.local.example`):
-   - `STRIPE_SECRET_KEY` — test **Secret** key
-   - `STRIPE_WEBHOOK_SECRET` — signing secret (**must match how webhooks arrive** — CLI `stripe listen` shows a fresh `whsec_...`; the Dashboard webhook endpoint has its own different `whsec_...`; do not mix them.)
-   - `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_ENTERPRISE` — the three price IDs
-   - `NEXT_PUBLIC_APP_URL` (optional) — base URL the app uses for success/cancel redirects (e.g. `http://localtest.me:3000` if you test on that host)
-3. Forward webhooks to your dev server. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and run:
-   - `stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook`  
-   Use the same origin you browse (or `http://localhost:3000/...` if you use localhost). The CLI prints a **`whsec_...`** value — set that as `STRIPE_WEBHOOK_SECRET` while testing (it changes when you restart `listen` unless you use a fixed secret).
-4. Start the app (`npm run dev`), sign in as a tenant workspace user. Open **`/account` → Billing**, or **`/account/billing`**, then start Stripe Checkout when you’re an owner or admin. Use [test cards](https://docs.stripe.com/testing#cards) (e.g. `4242`…). After Checkout, Stripe redirects with `session_id`; the Billing page verifies the session (similar to Next’s [`with-stripe-typescript`](https://github.com/vercel/next.js/tree/canary/examples/with-stripe-typescript) example) before webhooks complete the tenant sync.
-
-Platform admins can still start Checkout from tenant detail pages (`/admin/tenants/[id]` on the internal admin host).
-
-Production: add an endpoint in the Dashboard **Developers → Webhooks** pointing to `https://<your-domain>/api/stripe/webhook`, select the events handled by the app, and set `STRIPE_WEBHOOK_SECRET` to that endpoint’s **Reveal signing secret** (`whsec_...`). That value is tied to **that deployed URL**. It must not be the same as the Stripe CLI forwarding secret unless you deliberately configure that way.
-
-If you see `No signatures found matching…` while testing locally, copy the **`whsec_`** from your **currently running** `stripe listen`, put it in `.env.local`, save, restart `npm run dev`, and trigger again ([Stripe webhook signing troubleshooting](https://docs.stripe.com/webhooks/signature)).
-
-### UAT hosts
-
-- root/shared auth: `uat.app.pelzersolutions.com`
-- tenant workspace: `<tenant>.uat.app.pelzersolutions.com`
-- platform admin: `admin.uat.app.pelzersolutions.com`
-
-`admin.uat.app.pelzersolutions.com` is reserved for internal platform admins. It must never resolve as a customer tenant slug.
-
-### Notes
-
-- Both solo/freelancer accounts and business/team accounts are stored as `tenants`.
-- Solo signup creates `tenantType=solo`.
-- Business signup creates `tenantType=business`.
-- Reserved tenant slugs such as `admin`, `www`, and `localhost` are blocked.
-
-See [`docs/monorepo-notes.md`](docs/monorepo-notes.md) for more.
+1. **`npm install`**
+2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing (**[stripe doc](docs/stripe-subscriptions.md)**).
+3. **`npm run db:migrate`**
+4. **`npm run dev`**
 
 ## Layout
 
@@ -156,7 +48,7 @@ app/
   (app)/            # Authenticated app shell (sidebar + breadcrumb)
     (admin)/        # Admin-only routes (users, invite)
     (dashboard)/    # Dashboard / overview
-    account/        # User account & profile
+    account/        # User account & profile (& billing route)
     customers/      # Customer management
     expenses/       # Expense tracking
     inventory/      # Inventory items
@@ -171,7 +63,7 @@ app/
     suppliers/
     units-of-measure/
   (auth)/           # Unauthenticated pages (sign-in, sign-up, invite, reset)
-  api/              # Next.js route handlers (Better Auth + ERP resource APIs)
+  api/              # Next.js route handlers (Better Auth + ERP APIs + Stripe webhook)
 
 components/         # Shared React components (app shell, auth, UI primitives)
   ui/               # shadcn/ui components

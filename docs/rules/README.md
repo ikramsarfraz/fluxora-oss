@@ -5,6 +5,7 @@ policies that govern the ERP. Keep these documents in sync with the code they
 describe — they are the source of truth teammates should reach for before
 reading the implementation.
 
+Other guides live in the sibling [documentation index](../README.md).
 ## Index
 
 - [`permissions.md`](./permissions.md) — role-based permission matrix for the
