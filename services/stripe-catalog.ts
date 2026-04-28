@@ -8,6 +8,7 @@ import {
   STRIPE_SAAS_PAID_PLAN_KEYS,
   type StripeSaasPaidPlanKey,
 } from "@/lib/stripe/plan-metadata";
+import { isPostgresUndefinedTableError } from "@/lib/pg/postgres-errors";
 import { getStripeClient } from "@/lib/stripe/config";
 
 const CATALOG_EVENT_TYPES: ReadonlyArray<string> = [
@@ -23,8 +24,33 @@ export function isStripeCatalogWebhookEvent(eventType: string): boolean {
   return CATALOG_EVENT_TYPES.includes(eventType);
 }
 
-function stripeUnixToDate(seconds: number): Date {
-  return new Date(seconds * 1000);
+/** Never returns an Invalid Date (avoids driver/serialize errors when binding timestamptz). */
+function stripeUnixToDate(seconds: number | null | undefined): Date {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds)) {
+    return new Date(0);
+  }
+  const d = new Date(seconds * 1000);
+  return Number.isNaN(d.getTime()) ? new Date(0) : d;
+}
+
+const STRIPE_PRODUCT_NAME_MAX = 512;
+
+function stripeProductNameForCatalog(product: Stripe.Product): string {
+  const raw = typeof product.name === "string" ? product.name.trim() : "";
+  if (raw.length > 0) {
+    return raw.length <= STRIPE_PRODUCT_NAME_MAX
+      ? raw
+      : raw.slice(0, STRIPE_PRODUCT_NAME_MAX);
+  }
+  return product.id;
+}
+
+function stripeProductDescriptionForCatalog(product: Stripe.Product): string | null {
+  if (product.description == null) {
+    return null;
+  }
+  const s = String(product.description).trim();
+  return s.length === 0 ? null : s;
 }
 
 function stripeMetadata(metadata: Stripe.Metadata): Record<string, string> {
@@ -87,23 +113,33 @@ export async function refreshCachedPricesForStripeProduct(
 }
 
 export async function upsertStripeProductFromStripe(product: Stripe.Product): Promise<void> {
+  const stripeProductId = product.id?.trim();
+  if (!stripeProductId) {
+    throw new Error("Stripe product missing id.");
+  }
+  const metadataJson = stripeMetadata(product.metadata ?? {});
+  const name = stripeProductNameForCatalog(product);
+  const description = stripeProductDescriptionForCatalog(product);
+  const stripeCreatedAt = stripeUnixToDate(product.created);
+  const active = product.active !== false;
+
   await db
     .insert(stripeProducts)
     .values({
-      stripeProductId: product.id,
-      name: product.name,
-      description: product.description ?? null,
-      active: product.active,
-      metadataJson: stripeMetadata(product.metadata ?? {}),
-      stripeCreatedAt: stripeUnixToDate(product.created),
+      stripeProductId,
+      name,
+      description,
+      active,
+      metadataJson,
+      stripeCreatedAt,
     })
     .onConflictDoUpdate({
       target: stripeProducts.stripeProductId,
       set: {
-        name: product.name,
-        description: product.description ?? null,
-        active: product.active,
-        metadataJson: stripeMetadata(product.metadata ?? {}),
+        name,
+        description,
+        active,
+        metadataJson,
         updatedAt: new Date(),
       },
     });
@@ -407,66 +443,80 @@ export type BillingCatalogPlanRow = {
 export async function listActivePaidPlansForBillingPage(): Promise<
   BillingCatalogPlanRow[]
 > {
-  const paid = [...STRIPE_SAAS_PAID_PLAN_KEYS];
-  const rows = await db
-    .select({
-      billingPlanKey: stripePrices.billingPlanKey,
-      stripePriceId: stripePrices.stripePriceId,
-      productName: stripeProducts.name,
-      productDescription: stripeProducts.description,
-      currency: stripePrices.currency,
-      unitAmount: stripePrices.unitAmount,
-      recurringInterval: stripePrices.recurringInterval,
-      recurringIntervalCount: stripePrices.recurringIntervalCount,
-    })
-    .from(stripePrices)
-    .innerJoin(
-      stripeProducts,
-      eq(stripePrices.stripeProductId, stripeProducts.stripeProductId),
-    )
-    .where(
-      and(
-        eq(stripePrices.active, true),
-        eq(stripeProducts.active, true),
-        isNotNull(stripePrices.billingPlanKey),
-        isNotNull(stripePrices.recurringInterval),
-        inArray(stripePrices.billingPlanKey, paid),
-      ),
-    )
-    .orderBy(desc(stripePrices.stripeCreatedAt));
+  try {
+    const paid = [...STRIPE_SAAS_PAID_PLAN_KEYS];
+    const rows = await db
+      .select({
+        billingPlanKey: stripePrices.billingPlanKey,
+        stripePriceId: stripePrices.stripePriceId,
+        productName: stripeProducts.name,
+        productDescription: stripeProducts.description,
+        currency: stripePrices.currency,
+        unitAmount: stripePrices.unitAmount,
+        recurringInterval: stripePrices.recurringInterval,
+        recurringIntervalCount: stripePrices.recurringIntervalCount,
+      })
+      .from(stripePrices)
+      .innerJoin(
+        stripeProducts,
+        eq(stripePrices.stripeProductId, stripeProducts.stripeProductId),
+      )
+      .where(
+        and(
+          eq(stripePrices.active, true),
+          eq(stripeProducts.active, true),
+          isNotNull(stripePrices.billingPlanKey),
+          isNotNull(stripePrices.recurringInterval),
+          inArray(stripePrices.billingPlanKey, paid),
+        ),
+      )
+      .orderBy(desc(stripePrices.stripeCreatedAt));
 
-  const byPlan = new Map<StripeSaasPaidPlanKey, BillingCatalogPlanRow>();
+    const byPlan = new Map<StripeSaasPaidPlanKey, BillingCatalogPlanRow>();
 
-  for (const row of rows) {
-    const k = row.billingPlanKey;
-    if (
-      k !== "starter" &&
-      k !== "growth" &&
-      k !== "enterprise"
-    ) {
-      continue;
+    for (const row of rows) {
+      const k = row.billingPlanKey;
+      if (
+        k !== "starter" &&
+        k !== "growth" &&
+        k !== "enterprise"
+      ) {
+        continue;
+      }
+      if (byPlan.has(k)) {
+        continue;
+      }
+      byPlan.set(k, {
+        planKey: k,
+        stripePriceId: row.stripePriceId,
+        productName: row.productName,
+        productDescription: row.productDescription,
+        currency: row.currency,
+        unitAmountCents: row.unitAmount,
+        recurringInterval: row.recurringInterval,
+        recurringIntervalCount: row.recurringIntervalCount,
+      });
     }
-    if (byPlan.has(k)) {
-      continue;
+
+    const ordered: BillingCatalogPlanRow[] = [];
+    for (const pk of STRIPE_SAAS_PAID_PLAN_KEYS) {
+      const r = byPlan.get(pk);
+      if (r) {
+        ordered.push(r);
+      }
     }
-    byPlan.set(k, {
-      planKey: k,
-      stripePriceId: row.stripePriceId,
-      productName: row.productName,
-      productDescription: row.productDescription,
-      currency: row.currency,
-      unitAmountCents: row.unitAmount,
-      recurringInterval: row.recurringInterval,
-      recurringIntervalCount: row.recurringIntervalCount,
-    });
+    return ordered;
+  } catch (err) {
+    if (isPostgresUndefinedTableError(err)) {
+      console.warn(
+        "[stripe-catalog] Cached Stripe catalog tables are missing (42P01). Run `npm run db:migrate` against the DATABASE_URL used by Next.js so stripe_products/stripe_prices exist.",
+      );
+    } else {
+      console.warn(
+        "[stripe-catalog] listActivePaidPlansForBillingPage failed (billing page will show an empty catalog):",
+        err,
+      );
+    }
+    return [];
   }
-
-  const ordered: BillingCatalogPlanRow[] = [];
-  for (const pk of STRIPE_SAAS_PAID_PLAN_KEYS) {
-    const r = byPlan.get(pk);
-    if (r) {
-      ordered.push(r);
-    }
-  }
-  return ordered;
 }

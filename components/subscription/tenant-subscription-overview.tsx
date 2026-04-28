@@ -5,7 +5,10 @@ import {
 import {
   formatSubscriptionCurrentPeriodLine,
   formatSubscriptionTrialLine,
+  formatTenantPaymentMethodExpiryLine,
+  formatTenantPaymentMethodSummary,
 } from "@/lib/subscription-display";
+import type { TenantDefaultPaymentMethod } from "@/lib/stripe/tenant-default-payment-method";
 import type {
   TenantSubscriptionPlan,
   TenantSubscriptionStatus,
@@ -18,6 +21,8 @@ export function TenantSubscriptionOverview(props: {
   currentPeriodEndsAt: Date | string | null | undefined;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
+  /** Server-fetched default (or first saved) card — null when none or unavailable. */
+  defaultPaymentMethod: TenantDefaultPaymentMethod | null;
 }) {
   return (
     <div className="space-y-4 text-sm">
@@ -52,6 +57,23 @@ export function TenantSubscriptionOverview(props: {
               {props.stripeSubscriptionId?.trim() || "—"}
             </span>
           </p>
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <p className="mb-2 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+            Payment method
+          </p>
+          {props.defaultPaymentMethod ? (
+            <div className="space-y-1 text-foreground">
+              <p className="font-medium">
+                {formatTenantPaymentMethodSummary(props.defaultPaymentMethod)}
+              </p>
+              <p className="text-muted-foreground tabular-nums">
+                {formatTenantPaymentMethodExpiryLine(props.defaultPaymentMethod)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No payment method on file</p>
+          )}
         </div>
       </div>
     </div>

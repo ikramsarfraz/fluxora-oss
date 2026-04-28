@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { getUserByAuthUserId } from "@/services/portal-users";
+import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
 import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
 
@@ -70,7 +71,10 @@ export default async function AccountBillingPage(props: {
       params.success === "true" ||
       !!(params.session_id && params.session_id.trim()));
 
-  const catalogPlans = await listActivePaidPlansForBillingPage();
+  const [catalogPlans, defaultPaymentMethod] = await Promise.all([
+    listActivePaidPlansForBillingPage(),
+    getTenantDefaultPaymentMethod(tenant.id),
+  ]);
 
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
@@ -105,6 +109,7 @@ export default async function AccountBillingPage(props: {
               currentPeriodEndsAt={tenant.currentPeriodEndsAt}
               stripeCustomerId={tenant.stripeCustomerId}
               stripeSubscriptionId={tenant.stripeSubscriptionId}
+              defaultPaymentMethod={defaultPaymentMethod}
             />
             <BillingSubscriptionRefreshHint
               snapshotPlan={tenant.subscriptionPlan}

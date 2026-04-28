@@ -4,14 +4,17 @@ import pg from "pg";
 
 import * as relations from "./relations";
 import * as schema from "./schema";
+import {
+  resolveDatabaseUrlForApp,
+  warnIfDatabaseUrlEnvMismatch,
+} from "./database-url";
 
 // Same resolution as drizzle.config.ts — `dotenv/config` only loads `.env`, not `.env.local`.
 loadEnv({ path: ".env" });
 loadEnv({ path: ".env.local", override: true });
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set");
-}
+const connectionString = resolveDatabaseUrlForApp();
+warnIfDatabaseUrlEnvMismatch();
 
 /**
  * node-postgres (TCP) driver with a shared pool. Chosen over the neon-http
@@ -23,7 +26,7 @@ if (!process.env.DATABASE_URL) {
  * Neon's connection limits in serverless environments.
  */
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
   ssl: { rejectUnauthorized: false },
   max: 10,
 });

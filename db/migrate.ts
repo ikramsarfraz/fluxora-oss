@@ -8,15 +8,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { join } from "node:path";
 import pg from "pg";
 
+import { resolveDatabaseUrlForMigrate } from "./database-url";
+
 loadEnv({ path: ".env" });
 loadEnv({ path: ".env.local", override: true });
 
-const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
+const url = resolveDatabaseUrlForMigrate();
 const MIGRATIONS_SCHEMA = process.env.DRIZZLE_MIGRATIONS_SCHEMA ?? "drizzle";
 const MIGRATIONS_TABLE = process.env.DRIZZLE_MIGRATIONS_TABLE ?? "__drizzle_migrations";
-if (!url) {
-  throw new Error("DATABASE_URL is not set. Add it to .env.local (or .env).");
-}
 
 async function main() {
   console.log("Using DB:", url?.replace(/:[^:@/]+@/, ":****@"));

@@ -15,6 +15,7 @@ import {
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getPlatformAdminTenantDetail } from "@/services/platform-admin";
+import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
 import { TenantStatusForm } from "./tenant-status-form";
 import { TenantSubscriptionForm } from "./tenant-subscription-form";
 import { PlatformTenantStripeCheckoutButtons } from "./platform-tenant-stripe-checkout-buttons";
@@ -79,6 +80,7 @@ export default async function PlatformAdminTenantDetailPage({
   }
 
   const { tenant, users, stats, activity } = detail;
+  const defaultPaymentMethod = await getTenantDefaultPaymentMethod(tenant.id);
 
   return (
     <div className="space-y-6">
@@ -120,6 +122,7 @@ export default async function PlatformAdminTenantDetailPage({
             currentPeriodEndsAt={tenant.currentPeriodEndsAt}
             stripeCustomerId={tenant.stripeCustomerId}
             stripeSubscriptionId={tenant.stripeSubscriptionId}
+            defaultPaymentMethod={defaultPaymentMethod}
           />
         </CardContent>
       </Card>

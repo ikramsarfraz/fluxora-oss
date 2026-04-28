@@ -98,3 +98,46 @@ export function formatSubscriptionCurrentPeriodLine(
 ): string {
   return formatSubscriptionBillingDate(currentPeriodEndsAt);
 }
+
+const CARD_BRAND_LABEL: Record<string, string> = {
+  visa: "Visa",
+  mastercard: "Mastercard",
+  amex: "American Express",
+  discover: "Discover",
+  diners: "Diners Club",
+  jcb: "JCB",
+  unionpay: "UnionPay",
+};
+
+export function formatCardBrandLabel(brand: string): string {
+  const key = brand.trim().toLowerCase();
+  if (CARD_BRAND_LABEL[key]) {
+    return CARD_BRAND_LABEL[key];
+  }
+  if (!key) {
+    return "Card";
+  }
+  return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
+}
+
+/** e.g. "Visa •••• 4242". */
+export function formatTenantPaymentMethodSummary(pm: {
+  brand: string;
+  last4: string;
+}): string {
+  return `${formatCardBrandLabel(pm.brand)} •••• ${pm.last4}`;
+}
+
+/** e.g. "Expires 04/2028". */
+export function formatTenantPaymentMethodExpiryLine(pm: {
+  expMonth: number;
+  expYear: number;
+}): string {
+  const m = Number(pm.expMonth);
+  const y = Number(pm.expYear);
+  const monthPart = Number.isFinite(m)
+    ? String(Math.min(99, Math.max(0, Math.floor(m)))).padStart(2, "0")
+    : "—";
+  const yearPart = Number.isFinite(y) ? String(Math.floor(y)) : "—";
+  return `Expires ${monthPart}/${yearPart}`;
+}

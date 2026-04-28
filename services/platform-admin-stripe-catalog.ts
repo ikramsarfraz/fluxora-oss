@@ -3,6 +3,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLogs, stripePrices, stripeProducts } from "@/db/schema";
 import { STRIPE_SAAS_PAID_PLAN_KEYS } from "@/lib/stripe/plan-metadata";
+import { isPostgresUndefinedTableError } from "@/lib/pg/postgres-errors";
 import { requirePlatformUser } from "@/services/platform-users";
 
 /** Grouped Stripe catalog rows for internal admin read-only view. */
@@ -35,30 +36,41 @@ export function stripePriceEligibleForSaasBilling(
 }
 
 async function groupedCatalogRows(): Promise<PlatformAdminGroupedStripeCatalog[]> {
-  const productRows = await db
-    .select()
-    .from(stripeProducts)
-    .orderBy(asc(stripeProducts.name));
+  try {
+    const productRows = await db
+      .select()
+      .from(stripeProducts)
+      .orderBy(asc(stripeProducts.name));
 
-  const priceRows = await db
-    .select()
-    .from(stripePrices)
-    .orderBy(desc(stripePrices.stripeCreatedAt));
+    const priceRows = await db
+      .select()
+      .from(stripePrices)
+      .orderBy(desc(stripePrices.stripeCreatedAt));
 
-  const pricesByPid = new Map<string, Array<typeof stripePrices.$inferSelect>>();
-  for (const p of priceRows) {
-    const list = pricesByPid.get(p.stripeProductId);
-    if (list) {
-      list.push(p);
-    } else {
-      pricesByPid.set(p.stripeProductId, [p]);
+    const pricesByPid = new Map<string, Array<typeof stripePrices.$inferSelect>>();
+    for (const p of priceRows) {
+      const list = pricesByPid.get(p.stripeProductId);
+      if (list) {
+        list.push(p);
+      } else {
+        pricesByPid.set(p.stripeProductId, [p]);
+      }
     }
-  }
 
-  return productRows.map(p => ({
-    product: p,
-    prices: pricesByPid.get(p.stripeProductId) ?? [],
-  }));
+    return productRows.map(p => ({
+      product: p,
+      prices: pricesByPid.get(p.stripeProductId) ?? [],
+    }));
+  } catch (err) {
+    if (isPostgresUndefinedTableError(err)) {
+      console.warn(
+        "[stripe-catalog] Cached Stripe catalog tables missing (42P01). Run `npm run db:migrate` on this DATABASE_URL.",
+      );
+    } else {
+      console.warn("[platform-admin-stripe-catalog] groupedCatalogRows failed:", err);
+    }
+    return [];
+  }
 }
 
 async function latestFullSyncAuditRow(): Promise<PlatformAdminStripeCatalogSyncAuditInfo | null> {

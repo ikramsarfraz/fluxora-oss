@@ -19,6 +19,7 @@ import {
   diffSubscriptionKeys,
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
+import type { TenantDefaultPaymentMethod } from "@/lib/stripe/tenant-default-payment-method";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 export type StripeCheckoutPlan = StripeSaasPaidPlanKey;
@@ -104,6 +105,100 @@ export async function getOrCreateStripeCustomerForTenant(tenantId: string): Prom
     .where(eq(tenants.id, tenantId));
 
   return customer.id;
+}
+
+export type { TenantDefaultPaymentMethod } from "@/lib/stripe/tenant-default-payment-method";
+
+function cardSummaryFromStripePaymentMethod(
+  pm: Stripe.PaymentMethod,
+): TenantDefaultPaymentMethod | null {
+  if (pm.type !== "card" || !pm.card) {
+    return null;
+  }
+  const { brand, last4, exp_month, exp_year } = pm.card;
+  if (!last4 || exp_month == null || exp_year == null) {
+    return null;
+  }
+  return {
+    brand: brand ?? "card",
+    last4,
+    expMonth: exp_month,
+    expYear: exp_year,
+  };
+}
+
+/**
+ * Resolves the tenant’s default card for display via `invoice_settings.default_payment_method`,
+ * falling back to the newest saved card (`type: card`, `limit: 1`). Never throws — returns null
+ * when there is no customer, no usable card, or Stripe errors.
+ *
+ * Intended for Route Handlers, Server Components, and server actions only (uses secrets + Stripe API).
+ */
+export async function getTenantDefaultPaymentMethod(
+  tenantId: string,
+): Promise<TenantDefaultPaymentMethod | null> {
+  try {
+    const row = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+    const stripeCustomerId = row?.stripeCustomerId?.trim();
+    if (!stripeCustomerId) {
+      return null;
+    }
+
+    const stripe = getStripeClient();
+
+    const resolveFromPmId = async (pmId: string): Promise<TenantDefaultPaymentMethod | null> => {
+      try {
+        const pm = await stripe.paymentMethods.retrieve(pmId);
+        return cardSummaryFromStripePaymentMethod(pm);
+      } catch {
+        return null;
+      }
+    };
+
+    const tryCustomerDefault = async (): Promise<TenantDefaultPaymentMethod | null> => {
+      let customer: Stripe.Customer | Stripe.DeletedCustomer;
+      try {
+        customer = (await stripe.customers.retrieve(stripeCustomerId, {
+          expand: ["invoice_settings.default_payment_method"],
+        })) as Stripe.Customer | Stripe.DeletedCustomer;
+      } catch {
+        return null;
+      }
+      if (typeof customer === "object" && "deleted" in customer && customer.deleted) {
+        return null;
+      }
+      const def = customer.invoice_settings?.default_payment_method;
+      if (!def) {
+        return null;
+      }
+      if (typeof def === "string") {
+        return resolveFromPmId(def);
+      }
+      if (typeof def === "object" && def.object === "payment_method") {
+        return cardSummaryFromStripePaymentMethod(def);
+      }
+      return null;
+    };
+
+    const fromDefault = await tryCustomerDefault();
+    if (fromDefault) {
+      return fromDefault;
+    }
+
+    try {
+      const listed = await stripe.paymentMethods.list({
+        customer: stripeCustomerId,
+        type: "card",
+        limit: 1,
+      });
+      const first = listed.data[0];
+      return first ? cardSummaryFromStripePaymentMethod(first) : null;
+    } catch {
+      return null;
+    }
+  } catch {
+    return null;
+  }
 }
 
 export async function createTenantStripeCheckoutSession(input: {
