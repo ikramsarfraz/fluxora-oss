@@ -4,6 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   formatSubscriptionPlanLabel,
 } from "@/lib/subscription-display";
+import {
+  formatUsageLimit,
+  getUsageState,
+  type SubscriptionUsageMetric,
+} from "@/lib/subscription-usage-metrics";
 import type { TenantPlanUsage } from "@/services/subscription-usage";
 import {
   Card,
@@ -13,36 +18,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-function formatLimit(limit: number): string {
-  return Number.isFinite(limit) ? String(limit) : "Unlimited";
-}
-
-type UsageMetric = {
-  current: number;
-  limit: number;
-};
-
-type UsageState = "normal" | "warning" | "at_limit";
-
-function getUsageState(metric: UsageMetric): UsageState {
-  if (!Number.isFinite(metric.limit) || metric.limit <= 0) {
-    return "normal";
-  }
-
-  if (metric.current >= metric.limit) {
-    return "at_limit";
-  }
-
-  if (metric.current / metric.limit >= 0.8) {
-    return "warning";
-  }
-
-  return "normal";
-}
-
 function UsageMetricCard(props: {
   label: string;
-  metric: UsageMetric;
+  metric: SubscriptionUsageMetric;
   showUpgradeCta: boolean;
 }) {
   const state = getUsageState(props.metric);
@@ -60,7 +38,7 @@ function UsageMetricCard(props: {
         ) : null}
       </div>
       <dd className="mt-1 font-medium text-foreground">
-        {props.metric.current} / {formatLimit(props.metric.limit)}
+        {props.metric.current} / {formatUsageLimit(props.metric.limit)}
       </dd>
       {showUpgradeLink ? (
         <div className="mt-2">
