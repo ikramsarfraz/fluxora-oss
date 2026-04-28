@@ -3,17 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { startCheckoutForTenant } from "@/services/stripe-tenant-billing";
+import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
 import { requirePlatformUser } from "@/services/platform-users";
-
-const paidPlanSchema = z.enum(["starter", "growth", "enterprise"]);
+import { startCheckoutForTenant } from "@/services/stripe-tenant-billing";
 
 export async function startPlatformAdminStripeCheckoutAction(
   tenantId: string,
-  plan: z.infer<typeof paidPlanSchema>,
+  plan: unknown,
 ): Promise<{ url: string }> {
-  const id = z.string().uuid().parse(tenantId);
-  const p = paidPlanSchema.parse(plan);
+  const id = z.uuid().parse(tenantId);
+  const p = stripeSaasPaidPlanSchema.parse(plan);
   await requirePlatformUser();
   const { url } = await startCheckoutForTenant({
     tenantId: id,

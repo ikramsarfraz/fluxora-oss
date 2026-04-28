@@ -36,9 +36,13 @@ function formatActivitySummary(item: {
       action?: string;
       reason?: string | null;
       eventType?: string;
+      stripeSyncResult?: string;
     };
 
     if (context.action === "stripe_webhook" && context.eventType) {
+      if (context.stripeSyncResult === "unchanged") {
+        return `Stripe: ${context.eventType} (no field changes)`;
+      }
       return `Stripe: ${context.eventType}`;
     }
 

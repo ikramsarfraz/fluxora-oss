@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { auditLogs, tenants } from "@/db/schema";
 import { getPreferredBillingEmailForTenant } from "@/services/billing-contacts";
 import { getAppPublicOrigin, getStripeClient } from "@/lib/stripe/config";
+import { tenantIdFromCheckoutSession } from "@/lib/stripe/checkout-tenant-resolution";
 import type { StripeSaasPaidPlanKey } from "@/lib/stripe/plan-metadata";
 import {
   resolveStripePriceIdForPaidPlan,
@@ -19,8 +20,13 @@ import {
   diffSubscriptionKeys,
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
+import { STRIPE_METADATA_TENANT_ID } from "@/lib/stripe/stripe-metadata-keys";
 import type { TenantDefaultPaymentMethod } from "@/lib/stripe/tenant-default-payment-method";
-import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
+import type {
+  TenantSubscriptionPlan,
+  TenantSubscriptionStatus,
+} from "@/lib/tenant-subscription";
+import { isUuid } from "@/lib/utils/uuid";
 
 export type StripeCheckoutPlan = StripeSaasPaidPlanKey;
 
@@ -91,7 +97,7 @@ export async function getOrCreateStripeCustomerForTenant(tenantId: string): Prom
     {
       email: email.trim(),
       name: tenant.name,
-      metadata: { tenantId },
+      metadata: { [STRIPE_METADATA_TENANT_ID]: tenantId },
     },
     { idempotencyKey: `tenant_create_customer:${tenantId}` },
   );
@@ -236,9 +242,9 @@ export async function createTenantStripeCheckoutSession(input: {
     cancel_url: cancelUrl,
     customer: customerId,
     client_reference_id: input.tenantId,
-    metadata: { tenantId: input.tenantId },
+    metadata: { [STRIPE_METADATA_TENANT_ID]: input.tenantId },
     subscription_data: {
-      metadata: { tenantId: input.tenantId },
+      metadata: { [STRIPE_METADATA_TENANT_ID]: input.tenantId },
     },
   };
 
@@ -257,19 +263,10 @@ export async function startCheckoutForTenant(input: {
   plan: StripeCheckoutPlan;
   successPath: string;
   cancelPath: string;
-  /** Optional override; default is preferred portal user email */
-  customerEmailOverride?: string | null;
 }): Promise<{ url: string }> {
   const t = await db.query.tenants.findFirst({ where: eq(tenants.id, input.tenantId) });
   if (!t) {
     throw new Error("Tenant not found.");
-  }
-  const email =
-    input.customerEmailOverride?.trim() ||
-    (await getPreferredBillingEmailForTenant(input.tenantId)) ||
-    null;
-  if (!email) {
-    throw new Error("No billing email could be determined for this tenant.");
   }
   return createTenantStripeCheckoutSession({
     tenantId: input.tenantId,
@@ -316,7 +313,7 @@ export async function updateTenantFromStripeEvent(args: {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   subscriptionPlan: TenantSubscriptionPlan;
-  subscriptionStatus: import("@/lib/tenant-subscription").TenantSubscriptionStatus;
+  subscriptionStatus: TenantSubscriptionStatus;
   trialEndsAt: Date | null;
   currentPeriodEndsAt: Date | null;
   eventType: string;
@@ -352,9 +349,6 @@ export async function updateTenantFromStripeEvent(args: {
     }
     const after = subscriptionSnapshotFromRow(u);
     const changed = diffSubscriptionKeys(before, after);
-    if (changed.length === 0) {
-      return;
-    }
     await tx.insert(auditLogs).values({
       tenantId: u.id,
       actorType: "system",
@@ -362,13 +356,14 @@ export async function updateTenantFromStripeEvent(args: {
       entityTable: "tenants",
       entityId: u.id,
       entityLabel: u.name,
-      changedFieldsJson: JSON.stringify(changed),
+      changedFieldsJson: JSON.stringify(changed.length > 0 ? changed : []),
       beforeJson: JSON.stringify(before),
       afterJson: JSON.stringify(after),
       contextJson: JSON.stringify({
         action: "stripe_webhook",
         eventType: args.eventType,
         stripeEventId: args.stripeEventId,
+        ...(changed.length === 0 ? { stripeSyncResult: "unchanged" as const } : {}),
       }),
     });
   });
@@ -391,11 +386,21 @@ export async function syncTenantFromSubscription(
   eventId: string,
   options?: { tenantId?: string | null },
 ): Promise<void> {
-  const tenantId = options?.tenantId ?? sub.metadata?.tenantId;
-  if (!tenantId) {
-    console.warn("Stripe subscription missing tenantId metadata; skipping sync.");
+  const raw =
+    options?.tenantId?.trim() ?? sub.metadata?.[STRIPE_METADATA_TENANT_ID]?.trim();
+  if (!raw) {
+    console.warn(
+      "Stripe subscription missing tenant id in metadata; skipping sync.",
+    );
     return;
   }
+  if (!isUuid(raw)) {
+    console.warn(
+      `Stripe subscription tenant id is not a valid UUID; skipping sync.`,
+    );
+    return;
+  }
+  const tenantId = raw;
   if (sub.status === "canceled" && eventType === "customer.subscription.deleted") {
     const cust = customerIdString(sub.customer);
     await updateTenantFromStripeEvent({
@@ -442,14 +447,21 @@ export async function syncTenantFromSubscription(
 
 function getSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
   const parent = invoice.parent;
-  if (!parent || parent.type !== "subscription_details") {
+  if (parent?.type === "subscription_details") {
+    const subRef = parent.subscription_details?.subscription;
+    if (subRef) {
+      return typeof subRef === "string" ? subRef : subRef.id;
+    }
+  }
+  const legacy = (
+    invoice as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null;
+    }
+  ).subscription;
+  if (!legacy) {
     return null;
   }
-  const sub = parent.subscription_details?.subscription;
-  if (!sub) {
-    return null;
-  }
-  return typeof sub === "string" ? sub : sub.id;
+  return typeof legacy === "string" ? legacy : legacy.id;
 }
 
 export async function processStripeWebhookEvent(
@@ -485,9 +497,15 @@ async function dispatchStripeWebhookEvent(event: Stripe.Event): Promise<void> {
       }
       const subId = typeof subRef === "string" ? subRef : subRef.id;
       const sub = await stripe.subscriptions.retrieve(subId);
-      const tenantId = session.metadata?.tenantId ?? sub.metadata?.tenantId;
+      const fromSession = tenantIdFromCheckoutSession(session);
+      const fromSubMeta = sub.metadata?.[STRIPE_METADATA_TENANT_ID]?.trim();
+      const tenantId =
+        fromSession ??
+        (fromSubMeta && isUuid(fromSubMeta) ? fromSubMeta : null);
       if (!tenantId) {
-        console.warn("Checkout session / subscription missing tenantId metadata.");
+        console.warn(
+          "checkout.session.completed: missing tenant id on session (client_reference_id / metadata) and subscription.metadata.",
+        );
         return;
       }
       await syncTenantFromSubscription(sub, event.type, event.id, {

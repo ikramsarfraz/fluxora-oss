@@ -1,21 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-
 import { getStripeClient } from "@/lib/stripe/config";
+import { tenantIdFromCheckoutSession } from "@/lib/stripe/checkout-tenant-resolution";
+import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
 import {
   getCurrentPortalUser,
   requireAdminPortalUser,
 } from "@/services/portal-users";
 import { startCheckoutForTenant } from "@/services/stripe-tenant-billing";
 
-const paidPlanSchema = z.enum(["starter", "growth", "enterprise"]);
-
 export async function startTenantAdminStripeCheckoutAction(
-  plan: z.infer<typeof paidPlanSchema>,
+  plan: unknown,
 ): Promise<{ url: string }> {
-  const p = paidPlanSchema.parse(plan);
+  const p = stripeSaasPaidPlanSchema.parse(plan);
   const admin = await requireAdminPortalUser();
   const billingPath = "/account/billing";
   const { url } = await startCheckoutForTenant({
@@ -43,8 +41,9 @@ export async function getStripeCheckoutSessionReturnLabels(sessionId: string): P
   const me = await getCurrentPortalUser();
   const stripe = getStripeClient();
   const sess = await stripe.checkout.sessions.retrieve(trimmed);
-  const tenantId = sess.metadata?.tenantId ?? sess.client_reference_id;
-  if (tenantId !== me.tenantId) {
+  const tenantId =
+    tenantIdFromCheckoutSession(sess) ?? null;
+  if (!tenantId || tenantId !== me.tenantId) {
     return { ok: false };
   }
   const email =

@@ -11,6 +11,11 @@ export {
 } from "./plan-resolution";
 
 export {
+  stripeSaasPaidPlanSchema,
+  type StripeSaasPaidPlanInput,
+} from "./checkout-plan-schema";
+
+export {
   stripePriceIdForPaidPlanFromEnv,
   tenantPlanFromEnvPriceId,
 } from "./price-to-plan-env";
