@@ -17,9 +17,9 @@ export default async function PriceChartPage() {
       />
       <PlanFeatureGate
         enabled={canAccessReports}
-        featureName="Reports"
-        requiredPlanLabel="Growth or Enterprise"
-        description="The price chart is the first UI-only plan-gated reports surface. Upgrade to Growth or Enterprise to unlock it."
+        featureKey="reports"
+        currentPlan={tenant.subscriptionPlan}
+        requiredPlan="growth"
       >
         <PriceChartClient />
       </PlanFeatureGate>

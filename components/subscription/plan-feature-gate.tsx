@@ -4,27 +4,49 @@ import { Lock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import type {
+  SubscriptionFeatureKey,
+} from "@/lib/subscription-plan-capabilities";
+import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 type PlanFeatureGateProps = {
   enabled: boolean;
-  featureName: string;
+  featureKey: SubscriptionFeatureKey;
+  currentPlan: TenantSubscriptionPlan;
   children: ReactNode;
-  description?: string;
-  requiredPlanLabel?: string;
-  upgradeHref?: string;
+  requiredPlan?: TenantSubscriptionPlan;
+};
+
+const FEATURE_LABEL: Record<SubscriptionFeatureKey, string> = {
+  sales_orders: "Sales orders",
+  purchasing: "Purchasing",
+  inventory: "Inventory",
+  dashboard: "Dashboard",
+  support_tickets: "Support tickets",
+  reports: "Reports",
+  platform_support: "Platform support",
 };
 
 export function PlanFeatureGate({
   enabled,
-  featureName,
+  featureKey,
+  currentPlan,
   children,
-  description,
-  requiredPlanLabel = "a higher plan",
-  upgradeHref = "/account/billing",
+  requiredPlan,
 }: PlanFeatureGateProps) {
   if (enabled) {
     return <>{children}</>;
   }
+
+  const featureName = FEATURE_LABEL[featureKey];
+  const currentPlanLabel = formatSubscriptionPlanLabel(currentPlan);
+  const requiredPlanLabel = requiredPlan
+    ? formatSubscriptionPlanLabel(requiredPlan)
+    : "a higher plan";
+  const requirementMessage = requiredPlan
+    ? `This feature requires ${requiredPlanLabel} or higher.`
+    : "This feature requires a higher plan.";
 
   return (
     <Card>
@@ -35,17 +57,16 @@ export function PlanFeatureGate({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          {description ??
-            `Upgrade to ${requiredPlanLabel} to unlock ${featureName.toLowerCase()}.`}
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">
+            Your current plan: {currentPlanLabel}
+          </p>
+          <p className="text-sm text-muted-foreground">{requirementMessage}</p>
+        </div>
         <div className="flex items-center gap-3">
           <Button asChild>
-            <Link href={upgradeHref}>View billing plans</Link>
+            <Link href="/account/billing#billing-plans">Upgrade plan</Link>
           </Button>
-          <p className="text-xs text-muted-foreground">
-            This is a UI-only gate for now. No redirects or backend enforcement are applied yet.
-          </p>
         </div>
       </CardContent>
     </Card>
