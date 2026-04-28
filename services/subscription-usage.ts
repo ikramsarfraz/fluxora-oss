@@ -32,64 +32,103 @@ export type TenantPlanUsage = {
   };
 };
 
-export async function getCurrentTenantPlanUsage(): Promise<TenantPlanUsage> {
-  const tenant = await getCurrentTenant();
-
+export function getCurrentServerMonthRange(): {
+  monthStart: Date;
+  nextMonthStart: Date;
+} {
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
   const nextMonthStart = new Date(monthStart);
   nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
 
-  const [activePortalUsers, pendingInvitations, activeProducts, activeCustomers, monthlyOrders] =
+  return { monthStart, nextMonthStart };
+}
+
+export async function countPortalUserUsageForTenant(
+  tenantId: string,
+): Promise<number> {
+  const [activePortalUsers, pendingInvitations] = await Promise.all([
+    db
+      .select({ c: count() })
+      .from(portalUsers)
+      .where(
+        and(
+          eq(portalUsers.tenantId, tenantId),
+          eq(portalUsers.isActive, true),
+        ),
+      )
+      .then(rows => rows[0]?.c ?? 0),
+    db
+      .select({ c: count() })
+      .from(userInvitations)
+      .where(
+        and(
+          eq(userInvitations.tenantId, tenantId),
+          eq(userInvitations.status, "pending"),
+        ),
+      )
+      .then(rows => rows[0]?.c ?? 0),
+  ]);
+
+  return activePortalUsers + pendingInvitations;
+}
+
+export async function countActiveProductsForTenant(
+  tenantId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ c: count() })
+    .from(products)
+    .where(and(eq(products.tenantId, tenantId), isNull(products.archivedAt)));
+
+  return row?.c ?? 0;
+}
+
+export async function countActiveCustomersForTenant(
+  tenantId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ c: count() })
+    .from(customers)
+    .where(and(eq(customers.tenantId, tenantId), isNull(customers.archivedAt)));
+
+  return row?.c ?? 0;
+}
+
+export async function countCurrentMonthSalesOrdersForTenant(
+  tenantId: string,
+): Promise<number> {
+  const { monthStart, nextMonthStart } = getCurrentServerMonthRange();
+
+  const [row] = await db
+    .select({ c: count() })
+    .from(salesOrders)
+    .where(
+      and(
+        eq(salesOrders.tenantId, tenantId),
+        gte(salesOrders.createdAt, monthStart),
+        lt(salesOrders.createdAt, nextMonthStart),
+      ),
+    );
+
+  return row?.c ?? 0;
+}
+
+export async function getCurrentTenantPlanUsage(): Promise<TenantPlanUsage> {
+  const tenant = await getCurrentTenant();
+  const [portalUserUsage, activeProducts, activeCustomers, monthlyOrders] =
     await Promise.all([
-      db
-        .select({ c: count() })
-        .from(portalUsers)
-        .where(
-          and(
-            eq(portalUsers.tenantId, tenant.id),
-            eq(portalUsers.isActive, true),
-          ),
-        )
-        .then(rows => rows[0]?.c ?? 0),
-      db
-        .select({ c: count() })
-        .from(userInvitations)
-        .where(
-          and(
-            eq(userInvitations.tenantId, tenant.id),
-            eq(userInvitations.status, "pending"),
-          ),
-        )
-        .then(rows => rows[0]?.c ?? 0),
-      db
-        .select({ c: count() })
-        .from(products)
-        .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt)))
-        .then(rows => rows[0]?.c ?? 0),
-      db
-        .select({ c: count() })
-        .from(customers)
-        .where(and(eq(customers.tenantId, tenant.id), isNull(customers.archivedAt)))
-        .then(rows => rows[0]?.c ?? 0),
-      db
-        .select({ c: count() })
-        .from(salesOrders)
-        .where(
-          and(
-            eq(salesOrders.tenantId, tenant.id),
-            gte(salesOrders.createdAt, monthStart),
-            lt(salesOrders.createdAt, nextMonthStart),
-          ),
-        )
-        .then(rows => rows[0]?.c ?? 0),
+      countPortalUserUsageForTenant(tenant.id),
+      countActiveProductsForTenant(tenant.id),
+      countActiveCustomersForTenant(tenant.id),
+      countCurrentMonthSalesOrdersForTenant(tenant.id),
     ]);
 
   return {
     currentPlan: tenant.subscriptionPlan,
     portalUsers: {
-      current: activePortalUsers + pendingInvitations,
+      current: portalUserUsage,
       limit: getPlanLimit(tenant, "maxPortalUsers"),
     },
     products: {

@@ -1,9 +1,10 @@
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customerAddresses, customers } from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import { countActiveCustomersForTenant } from "@/services/subscription-usage";
 import { getCurrentTenant } from "./tenants";
 import {
   buildTextSearchCondition,
@@ -20,13 +21,8 @@ export async function createCustomer(
   },
 ) {
   const tenant = await getCurrentTenant();
-  const [{ c: existingCustomerCount }] = await db
-    .select({ c: count() })
-    .from(customers)
-    .where(and(eq(customers.tenantId, tenant.id), isNull(customers.archivedAt)));
-
   const maxCustomers = getPlanLimit(tenant, "maxCustomers");
-  if ((existingCustomerCount ?? 0) + 1 > maxCustomers) {
+  if ((await countActiveCustomersForTenant(tenant.id)) + 1 > maxCustomers) {
     throw new Error(
       `Your current plan (${formatSubscriptionPlanLabel(
         tenant.subscriptionPlan,

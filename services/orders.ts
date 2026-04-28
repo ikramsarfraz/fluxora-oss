@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, count, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
@@ -19,6 +19,7 @@ import {
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import { countCurrentMonthSalesOrdersForTenant } from "@/services/subscription-usage";
 import {
   buildSalesOrderObjectKey,
   deleteFile,
@@ -1257,25 +1258,8 @@ export async function createSalesOrder(input: {
 
   requirePermission(currentUser.role, "edit_order");
 
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-  const nextMonthStart = new Date(monthStart);
-  nextMonthStart.setMonth(nextMonthStart.getMonth() + 1);
-
-  const [{ c: currentMonthOrderCount }] = await db
-    .select({ c: count() })
-    .from(salesOrders)
-    .where(
-      and(
-        eq(salesOrders.tenantId, tenant.id),
-        gte(salesOrders.createdAt, monthStart),
-        lt(salesOrders.createdAt, nextMonthStart),
-      ),
-    );
-
   const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
-  if ((currentMonthOrderCount ?? 0) + 1 > maxMonthlyOrders) {
+  if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
     throw new Error(
       `Your current plan (${formatSubscriptionPlanLabel(
         tenant.subscriptionPlan,

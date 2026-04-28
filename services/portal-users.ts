@@ -1,5 +1,5 @@
 import { isAPIError } from "better-auth/api";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { portalUsers, userInvitations } from "@/db/schema";
@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import { countPortalUserUsageForTenant } from "@/services/subscription-usage";
 import {
   createPaginatedResult,
   getPaginationOffset,
@@ -522,31 +523,8 @@ export async function inviteUserByAdmin(input: {
     );
   }
 
-  const [activePortalUsers, pendingInvitations] = await Promise.all([
-    db
-      .select({ c: count() })
-      .from(portalUsers)
-      .where(
-        and(
-          eq(portalUsers.tenantId, current.tenantId),
-          eq(portalUsers.isActive, true),
-        ),
-      )
-      .then(rows => rows[0]?.c ?? 0),
-    db
-      .select({ c: count() })
-      .from(userInvitations)
-      .where(
-        and(
-          eq(userInvitations.tenantId, current.tenantId),
-          eq(userInvitations.status, "pending"),
-        ),
-      )
-      .then(rows => rows[0]?.c ?? 0),
-  ]);
-
   const maxPortalUsers = getPlanLimit(tenant, "maxPortalUsers");
-  const projectedSeats = activePortalUsers + pendingInvitations + 1;
+  const projectedSeats = (await countPortalUserUsageForTenant(current.tenantId)) + 1;
   if (projectedSeats > maxPortalUsers) {
     throw new Error(
       `Your current plan (${formatSubscriptionPlanLabel(

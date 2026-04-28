@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -8,6 +8,7 @@ import {
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import { formatSubscriptionPlanLabel } from "@/lib/subscription-display";
+import { countActiveProductsForTenant } from "@/services/subscription-usage";
 import { getCurrentTenant } from "./tenants";
 import {
   buildTextSearchCondition,
@@ -134,13 +135,8 @@ export async function createProduct(input: {
   units?: ProductUnitInput[];
 }) {
   const tenant = await getCurrentTenant();
-  const [{ c: existingProductCount }] = await db
-    .select({ c: count() })
-    .from(products)
-    .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt)));
-
   const maxProducts = getPlanLimit(tenant, "maxProducts");
-  if ((existingProductCount ?? 0) + 1 > maxProducts) {
+  if ((await countActiveProductsForTenant(tenant.id)) + 1 > maxProducts) {
     throw new Error(
       `Your current plan (${formatSubscriptionPlanLabel(
         tenant.subscriptionPlan,
