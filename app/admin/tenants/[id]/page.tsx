@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { TenantPlanUsageCard } from "@/components/subscription/tenant-plan-usage-card";
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
 import { TenantSubscriptionHealthBadge } from "@/components/subscription/tenant-subscription-health-badge";
 import { Badge } from "@/components/ui/badge";
@@ -85,7 +86,7 @@ export default async function PlatformAdminTenantDetailPage({
     notFound();
   }
 
-  const { tenant, users, stats, activity } = detail;
+  const { tenant, users, stats, usage, activity } = detail;
   const defaultPaymentMethod = await getTenantDefaultPaymentMethod(tenant.id);
   const subscriptionHealth = getTenantSubscriptionHealth({
     subscriptionPlan: tenant.subscriptionPlan,
@@ -167,6 +168,8 @@ export default async function PlatformAdminTenantDetailPage({
           <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
         </CardContent>
       </Card>
+
+      {usage ? <TenantPlanUsageCard usage={usage} /> : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

@@ -7,6 +7,7 @@ import {
   diffSubscriptionKeys,
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
+import { getTenantPlanUsageByTenantId } from "@/services/subscription-usage";
 import { requirePlatformUser } from "./platform-users";
 
 function countAll(table: typeof tenants | typeof portalUsers) {
@@ -152,7 +153,7 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
     orderBy: [desc(portalUsers.createdAt)],
   });
 
-  const [totalUsersRow, activeUsersRow] = await Promise.all([
+  const [totalUsersRow, activeUsersRow, usage] = await Promise.all([
     db
       .select({
         count: sql<number>`count(*)::int`,
@@ -169,6 +170,7 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
         and(eq(portalUsers.tenantId, tenantId), eq(portalUsers.isActive, true)),
       )
       .then(rows => rows[0]),
+    getTenantPlanUsageByTenantId(tenantId),
   ]);
 
   const totalUsers = totalUsersRow?.count ?? 0;
@@ -198,6 +200,7 @@ export async function getPlatformAdminTenantDetail(tenantId: string) {
       activeUsers,
       inactiveUsers: Math.max(totalUsers - activeUsers, 0),
     },
+    usage,
     activity,
   };
 }

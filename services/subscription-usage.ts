@@ -6,6 +6,7 @@ import {
   portalUsers,
   products,
   salesOrders,
+  tenants,
   userInvitations,
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
@@ -117,12 +118,37 @@ export async function countCurrentMonthSalesOrdersForTenant(
 
 export async function getCurrentTenantPlanUsage(): Promise<TenantPlanUsage> {
   const tenant = await getCurrentTenant();
+  const usage = await getTenantPlanUsageByTenantId(tenant.id);
+
+  if (!usage) {
+    throw new Error("Current tenant usage could not be resolved.");
+  }
+
+  return usage;
+}
+
+export async function getTenantPlanUsageByTenantId(
+  tenantId: string,
+): Promise<TenantPlanUsage | null> {
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: {
+      id: true,
+      subscriptionPlan: true,
+      subscriptionStatus: true,
+    },
+  });
+
+  if (!tenant) {
+    return null;
+  }
+
   const [portalUserUsage, activeProducts, activeCustomers, monthlyOrders] =
     await Promise.all([
-      countPortalUserUsageForTenant(tenant.id),
-      countActiveProductsForTenant(tenant.id),
-      countActiveCustomersForTenant(tenant.id),
-      countCurrentMonthSalesOrdersForTenant(tenant.id),
+      countPortalUserUsageForTenant(tenantId),
+      countActiveProductsForTenant(tenantId),
+      countActiveCustomersForTenant(tenantId),
+      countCurrentMonthSalesOrdersForTenant(tenantId),
     ]);
 
   return {
