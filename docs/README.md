@@ -8,6 +8,7 @@ Detailed guides live here so the [root README](../README.md) stays a short orien
 | ----- | --- |
 | **Local setup, env, host routing, UAT URLs** | [Local development](./local-development.md) |
 | **Stripe subscriptions** (Checkout, webhooks, CLI vs Dashboard secrets) | [Stripe subscriptions](./stripe-subscriptions.md) |
+| **Plan capability matrix** (features, limits, future usage) | [Subscription plan capabilities](./subscription-plan-capabilities.md) |
 | **Support tickets** (tenant vs platform admin) | [Support workflow](./support-workflow.md) |
 | **Workspace / multi-package notes** | [Monorepo notes](./monorepo-notes.md) |
 
