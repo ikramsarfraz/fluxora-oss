@@ -8,7 +8,10 @@ import {
   getCurrentPortalUser,
   requireAdminPortalUser,
 } from "@/services/portal-users";
-import { startCheckoutForTenant } from "@/services/stripe-tenant-billing";
+import {
+  createTenantStripeCustomerPortalSession,
+  startCheckoutForTenant,
+} from "@/services/stripe-tenant-billing";
 
 export async function startTenantAdminStripeCheckoutAction(
   plan: unknown,
@@ -21,6 +24,21 @@ export async function startTenantAdminStripeCheckoutAction(
     plan: p,
     successPath: billingPath,
     cancelPath: billingPath,
+  });
+  revalidatePath("/account");
+  revalidatePath(billingPath);
+  revalidatePath("/dashboard");
+  return { url };
+}
+
+export async function startTenantAdminStripeCustomerPortalAction(): Promise<{
+  url: string;
+}> {
+  const admin = await requireAdminPortalUser();
+  const billingPath = "/account/billing";
+  const { url } = await createTenantStripeCustomerPortalSession({
+    tenantId: admin.tenantId,
+    returnPath: billingPath,
   });
   revalidatePath("/account");
   revalidatePath(billingPath);

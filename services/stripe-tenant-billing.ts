@@ -276,6 +276,43 @@ export async function startCheckoutForTenant(input: {
   });
 }
 
+/**
+ * Opens Stripe-hosted Customer Portal (payment methods, cancellations, invoices) for tenants
+ * that already have a Stripe Customer id persisted from Checkout or webhook sync.
+ */
+export async function createTenantStripeCustomerPortalSession(input: {
+  tenantId: string;
+  /** Path on this app origin; default `/account/billing` */
+  returnPath?: string;
+}): Promise<{ url: string }> {
+  const row = await db.query.tenants.findFirst({
+    where: eq(tenants.id, input.tenantId),
+  });
+  if (!row) {
+    throw new Error("Tenant not found.");
+  }
+  const customerId = row.stripeCustomerId?.trim() || null;
+  if (!customerId) {
+    throw new Error(
+      "Billing management is unavailable until this workspace completes its first Stripe subscription checkout (no Stripe customer on file).",
+    );
+  }
+  const raw = input.returnPath?.trim() || "/account/billing";
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  const origin = getAppPublicOrigin();
+  const returnUrl = `${origin}${path}`;
+
+  const stripe = getStripeClient();
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+  if (!session.url) {
+    throw new Error("Stripe did not return a Customer Portal URL.");
+  }
+  return { url: session.url };
+}
+
 function priceIdFromSubscriptionItem(
   sub: Stripe.Subscription,
 ): string | null {

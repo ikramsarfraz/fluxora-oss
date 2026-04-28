@@ -10,7 +10,7 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 | ----- | --- |
 | **Index of all docs** | [docs/README.md](docs/README.md) |
 | **Local setup, env, subdomain routing, UAT** | [docs/local-development.md](docs/local-development.md) |
-| **Stripe** (Checkout, webhooks, CLI testing, catalog sync, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
+| **Stripe** (Checkout, Customer Portal, webhooks, CLI testing, catalog sync, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
 | **Support tickets** (tenant vs platform workflows) | [docs/support-workflow.md](docs/support-workflow.md) |
 | **Business rules & permissions** | [docs/rules/README.md](docs/rules/README.md) |
 | **Misc. workspace notes** | [docs/monorepo-notes.md](docs/monorepo-notes.md) |

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-feedback";
 import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
+import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
@@ -20,6 +21,9 @@ import { getUserByAuthUserId } from "@/services/portal-users";
 import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
 import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
+
+const BILLING_SNAPSHOT_OBSERVABILITY =
+  "Stripe webhooks (Checkout completion, subscription lifecycle, and invoice payment events) refresh this snapshot. Allow a short delay after Stripe actions; duplicate deliveries are recorded in platform Activity with an idempotent outcome when nothing changed.";
 
 export default async function AccountBillingPage(props: {
   searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
@@ -110,7 +114,17 @@ export default async function AccountBillingPage(props: {
               stripeCustomerId={tenant.stripeCustomerId}
               stripeSubscriptionId={tenant.stripeSubscriptionId}
               defaultPaymentMethod={defaultPaymentMethod}
+              observabilityNote={BILLING_SNAPSHOT_OBSERVABILITY}
             />
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
+                Stripe Customer Portal
+              </p>
+              <TenantBillingPortalControls
+                canManageBilling={canManageBilling}
+                stripeCustomerId={tenant.stripeCustomerId}
+              />
+            </div>
             <BillingSubscriptionRefreshHint
               snapshotPlan={tenant.subscriptionPlan}
               snapshotStatus={tenant.subscriptionStatus}

@@ -1,8 +1,14 @@
 # Stripe subscriptions
 
-Tenant plans use **Stripe Checkout** (subscription mode). The app stores Stripe customer/subscription IDs and plan status on the tenant record; **webhooks** keep that data in sync. Plan limits and the Billing Portal are out of scope for the current integration.
+Tenant plans use **Stripe Checkout** (subscription mode). The app stores Stripe customer/subscription IDs and plan status on the tenant record; **webhooks** keep that data in sync. Plan limits remain out of scope for the current integration.
 
 **Code touchpoints:** `lib/stripe/`, `services/stripe-tenant-billing.ts`, `services/stripe-catalog.ts`, `app/api/stripe/webhook/route.ts`, server actions in `actions/stripe-billing.ts`, `actions/platform-stripe-billing.ts`, and `actions/stripe-catalog-sync.ts`. Tenant admins start Checkout from `**/account/billing`**; platform admins can start Checkout from `**/admin/tenants/[id]**` (internal admin host) or sync the catalog from `**/admin/subscriptions**`.
+
+## Stripe Customer Portal
+
+In the [Stripe Dashboard → Settings → Billing → Customer portal](https://dashboard.stripe.com/settings/billing/portal), enable and configure the **Customer portal** (which features customers can use, cancellation behavior, etc.). Without this, `billingPortal.sessions.create` will fail when a tenant admin opens **Manage billing** on `/account/billing`.
+
+After the workspace has a **Stripe Customer** id (from the first successful Checkout or other flow that persisted `tenants.stripe_customer_id`), **owners and admins** can open the hosted portal to update the default **payment method**, **cancel** the subscription, and **view invoices**. Stripe returns users to **`/account/billing`** on your app origin (`NEXT_PUBLIC_APP_URL` / `BETTER_AUTH_URL` / Vercel URL — see `getAppPublicOrigin()` in `lib/stripe/config.ts`). Webhooks continue to sync subscription changes back to the tenant row.
 
 ## Environment variables
 
@@ -71,3 +77,19 @@ Stripe `product.deleted` / `price.deleted` events **archive** local rows (`activ
 The **Stripe catalog** screen (`/admin/stripe-catalog`) is a read-only view of cached Products and grouped Prices plus the last full-sync audit entry.
 
 After schema changes, run `**npm run db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.
+
+## Observability and manual regression checklist
+
+**Tenant Billing (`/account/billing`)** shows plan, status, trial, current period end, Stripe customer/subscription ids, default card, and a short note on webhook-driven updates.
+
+**Platform tenant** subscription overview and **Activity** summarize Stripe automation: each webhook sync records a system audit with `eventType`, `stripeEventId`, and either applied field changes or **`stripeSyncResult: unchanged`** for idempotent retries (no duplicate row noise on field diffs—see `audit_logs` rows).
+
+**Manual spot-checks (Stripe test mode + `stripe listen`):**
+
+1. **Checkout completed** — Finish Checkout; expect `checkout.session.completed` in Activity (or platform tenant Activity) with Stripe event id; tenant row reflects plan/status.
+2. **Subscription updated** — Change plan in Stripe Dashboard or via subscription update; `customer.subscription.updated` syncs tenant fields.
+3. **Subscription deleted** — Cancel subscription; `customer.subscription.deleted` sets tenant toward free/canceled handling implemented in `syncTenantFromSubscription`.
+4. **Invoice payment succeeded / failed** — Paid invoice or failed charge paths should re-sync from subscription after `invoice.payment_succeeded` / `invoice.payment_failed`.
+5. **Duplicate webhook** — Replay the same Stripe event (CLI resend or Stripe Dashboard resend where available); expect an audit line with **Duplicate / idempotent** outcome when stored subscription fields already matched Stripe (no row diff).
+
+Platform admins editing subscription fields manually see an in-form warning that **future Stripe webhooks may overwrite** those corrections.
