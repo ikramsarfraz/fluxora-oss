@@ -146,7 +146,7 @@ export default async function AccountBillingPage(props: {
             />
           </CardContent>
         </Card>
-        <TenantPlanUsageCard usage={usage} />
+        <TenantPlanUsageCard usage={usage} showUpgradeCta />
         <Card id="billing-plans">
           <CardHeader>
             <CardTitle>Choose or change plan</CardTitle>
