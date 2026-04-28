@@ -1,5 +1,9 @@
 import Link from "next/link";
 
+import {
+  SubscriptionPlanBadge,
+  SubscriptionStatusBadge,
+} from "@/components/subscription/subscription-badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -54,9 +58,11 @@ export default async function PlatformAdminTenantsPage() {
                     {tenant.isActive ? "Active" : "Inactive"}
                   </Badge>
                 </TableCell>
-                <TableCell className="capitalize">{tenant.subscriptionPlan}</TableCell>
-                <TableCell className="capitalize">
-                  {tenant.subscriptionStatus.replaceAll("_", " ")}
+                <TableCell>
+                  <SubscriptionPlanBadge plan={tenant.subscriptionPlan} />
+                </TableCell>
+                <TableCell>
+                  <SubscriptionStatusBadge status={tenant.subscriptionStatus} />
                 </TableCell>
                 <TableCell>{tenant.userCount}</TableCell>
                 <TableCell>{formatDisplayDate(tenant.createdAt)}</TableCell>

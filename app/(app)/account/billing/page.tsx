@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { AccountBillingReturnBanner } from "@/components/account/account-billing-return-banner";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
+import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +15,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { formatDisplayDate } from "@/lib/utils/date";
 import { getUserByAuthUserId } from "@/services/portal-users";
 import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
@@ -74,37 +73,15 @@ export default async function AccountBillingPage(props: {
               Applies to this workspace ({tenant.slug}).
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <p>
-              <span className="text-muted-foreground">Plan: </span>
-              <span className="font-medium capitalize">
-                {tenant.subscriptionPlan}
-              </span>
-            </p>
-            <p>
-              <span className="text-muted-foreground">Status: </span>
-              <Badge variant="secondary" className="capitalize">
-                {tenant.subscriptionStatus.replaceAll("_", " ")}
-              </Badge>
-            </p>
-            <p>
-              <span className="text-muted-foreground">Trial ends: </span>
-              {formatDisplayDate(tenant.trialEndsAt)}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Current period ends: </span>
-              {formatDisplayDate(tenant.currentPeriodEndsAt)}
-            </p>
-            {tenant.stripeCustomerId ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                Stripe customer: {tenant.stripeCustomerId}
-              </p>
-            ) : null}
-            {tenant.stripeSubscriptionId ? (
-              <p className="font-mono text-xs text-muted-foreground">
-                Stripe subscription: {tenant.stripeSubscriptionId}
-              </p>
-            ) : null}
+          <CardContent>
+            <TenantSubscriptionOverview
+              subscriptionPlan={tenant.subscriptionPlan}
+              subscriptionStatus={tenant.subscriptionStatus}
+              trialEndsAt={tenant.trialEndsAt}
+              currentPeriodEndsAt={tenant.currentPeriodEndsAt}
+              stripeCustomerId={tenant.stripeCustomerId}
+              stripeSubscriptionId={tenant.stripeSubscriptionId}
+            />
           </CardContent>
         </Card>
         <Card>

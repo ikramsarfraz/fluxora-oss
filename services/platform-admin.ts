@@ -104,7 +104,7 @@ export async function getPlatformAdminDashboardData() {
       enterprise: planEnterprise,
     },
     subscriptionMetrics: {
-      note: "MRR/ARR and Stripe webhooks are not wired yet. Counts use tenant subscription fields only.",
+      note: "Buckets count every tenant once by subscription_status and once by subscription_plan (persisted Stripe-backed fields). MRR/ARR are not computed here.",
     },
   };
 }

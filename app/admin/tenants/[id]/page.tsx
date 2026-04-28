@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -103,41 +104,32 @@ export default async function PlatformAdminTenantDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardDescription>Plan</CardDescription>
-            <CardTitle className="text-2xl capitalize">
-              {tenant.subscriptionPlan}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Subscription status</CardDescription>
-            <CardTitle className="text-2xl capitalize">
-              {tenant.subscriptionStatus.replaceAll("_", " ")}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Trial / period</CardDescription>
-            <CardTitle className="text-sm font-normal leading-snug text-muted-foreground">
-              Trial ends: {formatDisplayDate(tenant.trialEndsAt)}
-              <br />
-              Period ends: {formatDisplayDate(tenant.currentPeriodEndsAt)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Subscription overview</CardTitle>
+          <CardDescription>
+            Cached subscription fields. Checkout and webhooks update them for this tenant; admins
+            can correct values in the form below when troubleshooting.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TenantSubscriptionOverview
+            subscriptionPlan={tenant.subscriptionPlan}
+            subscriptionStatus={tenant.subscriptionStatus}
+            trialEndsAt={tenant.trialEndsAt}
+            currentPeriodEndsAt={tenant.currentPeriodEndsAt}
+            stripeCustomerId={tenant.stripeCustomerId}
+            stripeSubscriptionId={tenant.stripeSubscriptionId}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Subscription</CardTitle>
+          <CardTitle>Subscription fields</CardTitle>
           <CardDescription>
-            Manual fields for now; Stripe checkout and webhooks are not connected yet. Access is
-            not gated on these values.
+            Manual edits for Stripe identifiers, plan tier, lifecycle, or billing dates when
+            correcting data. Access is not gated on these values.
           </CardDescription>
         </CardHeader>
         <CardContent>

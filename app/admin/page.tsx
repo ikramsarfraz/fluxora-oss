@@ -1,5 +1,10 @@
 import Link from "next/link";
 
+import { PlatformSubscriptionBuckets } from "@/components/platform/platform-subscription-buckets";
+import {
+  SubscriptionPlanBadge,
+  SubscriptionStatusBadge,
+} from "@/components/subscription/subscription-badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -97,9 +102,11 @@ export default async function PlatformAdminDashboardPage() {
                         {tenant.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="capitalize">{tenant.subscriptionPlan}</TableCell>
-                    <TableCell className="capitalize">
-                      {tenant.subscriptionStatus.replaceAll("_", " ")}
+                    <TableCell>
+                      <SubscriptionPlanBadge plan={tenant.subscriptionPlan} />
+                    </TableCell>
+                    <TableCell>
+                      <SubscriptionStatusBadge status={tenant.subscriptionStatus} />
                     </TableCell>
                     <TableCell>{tenant.userCount}</TableCell>
                     <TableCell>{formatDisplayDate(tenant.createdAt)}</TableCell>
@@ -116,25 +123,11 @@ export default async function PlatformAdminDashboardPage() {
             <CardDescription>{data.subscriptionMetrics.note}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <div className="rounded-xl border bg-slate-50 p-4">
-              <p className="font-medium text-slate-900">By status</p>
-              <ul className="mt-2 space-y-1 text-muted-foreground">
-                <li>Trialing: {data.subscriptionByStatus.trialing}</li>
-                <li>Active: {data.subscriptionByStatus.active}</li>
-                <li>Past due: {data.subscriptionByStatus.past_due}</li>
-                <li>Canceled: {data.subscriptionByStatus.canceled}</li>
-                <li>Comped: {data.subscriptionByStatus.comped}</li>
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-slate-50 p-4">
-              <p className="font-medium text-slate-900">By plan</p>
-              <ul className="mt-2 space-y-1 text-muted-foreground">
-                <li>Free: {data.subscriptionByPlan.free}</li>
-                <li>Starter: {data.subscriptionByPlan.starter}</li>
-                <li>Growth: {data.subscriptionByPlan.growth}</li>
-                <li>Enterprise: {data.subscriptionByPlan.enterprise}</li>
-              </ul>
-            </div>
+            <PlatformSubscriptionBuckets
+              totalTenants={data.totalTenants}
+              subscriptionByStatus={data.subscriptionByStatus}
+              subscriptionByPlan={data.subscriptionByPlan}
+            />
             <Link
               href="/admin/subscriptions"
               className="inline-flex text-sm font-medium text-blue-700 hover:underline"
