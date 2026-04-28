@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Loader2, X } from "lucide-react";
+import { CheckCircle2, Loader2, X, XCircle, AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getStripeCheckoutSessionReturnLabels } from "@/actions/stripe-billing";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const AUTO_DISMISS_MS = 10_000;
 
@@ -94,91 +94,77 @@ export function BillingCheckoutFeedback(props: {
     return null;
   }
 
-  if (props.kind === "canceled") {
-    return (
-      <Alert variant="default" className="relative border-border pr-14" role="status">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="absolute top-3 right-2 size-8"
-          aria-label="Dismiss"
-          onClick={() => dismiss()}
-        >
-          <X className="size-4" />
-        </Button>
-        <AlertTitle>Checkout canceled</AlertTitle>
-        <AlertDescription>
-          You closed Stripe Checkout before subscribing. Subscription below reflects your workspace
-          state.
-        </AlertDescription>
-      </Alert>
-    );
-  }
+  const variants = {
+    canceled: {
+      bg: "bg-muted/50",
+      border: "border-border",
+      icon: XCircle,
+      iconClass: "text-muted-foreground",
+      title: "Checkout canceled",
+      description: "You closed Stripe Checkout before completing your subscription.",
+    },
+    loading: {
+      bg: "bg-muted/50",
+      border: "border-border",
+      icon: Loader2,
+      iconClass: "text-muted-foreground animate-spin",
+      title: "Confirming checkout",
+      description: "Validating your return from Stripe...",
+    },
+    unverified: {
+      bg: "bg-amber-500/10",
+      border: "border-amber-500/30",
+      icon: AlertCircle,
+      iconClass: "text-amber-500",
+      title: "Could not confirm checkout",
+      description: "This session could not be matched to your workspace. Check your subscription status below.",
+    },
+    success: {
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/30",
+      icon: CheckCircle2,
+      iconClass: "text-emerald-500",
+      title: "Subscription updated",
+      description: "Your subscription has been updated. Changes will sync shortly.",
+    },
+  };
 
-  if (props.sessionId && confirmState === "loading") {
-    return (
-      <Alert variant="default" className="relative border-border pr-14">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="absolute top-3 right-2 size-8"
-          aria-label="Dismiss"
-          onClick={() => dismiss()}
-        >
-          <X className="size-4" />
-        </Button>
-        <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
-        <AlertTitle>Confirming Checkout</AlertTitle>
-        <AlertDescription>Validating your return from Stripe…</AlertDescription>
-      </Alert>
-    );
-  }
+  const variant = props.kind === "canceled" 
+    ? variants.canceled 
+    : confirmState === "loading" 
+      ? variants.loading 
+      : confirmState === "unverified" 
+        ? variants.unverified 
+        : variants.success;
 
-  if (props.sessionId && confirmState === "unverified") {
-    return (
-      <Alert variant="default" className="relative border-border pr-14">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="absolute top-3 right-2 size-8"
-          aria-label="Dismiss"
-          onClick={() => dismiss()}
-        >
-          <X className="size-4" />
-        </Button>
-        <AlertTitle>Could not confirm Checkout</AlertTitle>
-        <AlertDescription>
-          This session could not be matched to your workspace. Your subscription below reflects what
-          we have on file.
-        </AlertDescription>
-      </Alert>
-    );
-  }
+  const Icon = variant.icon;
 
   return (
-    <Alert
-      variant="default"
-      className="relative border-primary/30 bg-muted/30 pr-14"
+    <div
+      className={cn(
+        "relative flex items-start gap-3 rounded-lg border p-4",
+        variant.bg,
+        variant.border
+      )}
       role="status"
     >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background">
+        <Icon className={cn("h-4 w-4", variant.iconClass)} />
+      </div>
+      <div className="flex-1 space-y-0.5 pt-0.5">
+        <p className="text-sm font-medium text-foreground">{variant.title}</p>
+        <p className="text-xs text-muted-foreground">{variant.description}</p>
+      </div>
       <Button
         type="button"
         variant="ghost"
-        size="icon-xs"
-        className="absolute top-3 right-2 size-8"
+        size="sm"
+        className="h-8 w-8 shrink-0 p-0"
         aria-label="Dismiss"
         onClick={() => dismiss()}
       >
-        <X className="size-4" />
+        <X className="h-4 w-4" />
       </Button>
-      <AlertTitle>Subscription updated successfully</AlertTitle>
-      <AlertDescription>
-        You returned from Checkout; amounts and status shown below sync from Stripe shortly via
-        webhooks.
-      </AlertDescription>
-    </Alert>
+    </div>
   );
 }

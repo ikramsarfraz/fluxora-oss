@@ -6,10 +6,13 @@ import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-f
 import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
 import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
-import { TenantBillingHealthNotice } from "@/components/subscription/tenant-billing-health-notice";
-import { TenantPlanUsageCard } from "@/components/subscription/tenant-plan-usage-card";
 import { PageHeader } from "@/components/page-header";
-import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
+import {
+  PlanOverviewCard,
+  UsageCard,
+  BillingStateBanner,
+  deriveBillingBannerState,
+} from "@/components/billing/billing-components";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,9 +27,10 @@ import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing"
 import { getCurrentTenantPlanUsage } from "@/services/subscription-usage";
 import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
-
-const BILLING_SNAPSHOT_OBSERVABILITY =
-  "Stripe webhooks (Checkout completion, subscription lifecycle, and invoice payment events) refresh this snapshot. Allow a short delay after Stripe actions; duplicate deliveries are recorded in platform Activity with an idempotent outcome when nothing changed.";
+import {
+  formatTenantPaymentMethodSummary,
+  formatTenantPaymentMethodExpiryLine,
+} from "@/lib/subscription-display";
 
 export default async function AccountBillingPage(props: {
   searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
@@ -43,13 +47,20 @@ export default async function AccountBillingPage(props: {
 
   if (!portalUser) {
     return (
-      <div className="flex max-w-lg flex-col gap-4">
-        <h2 className="text-lg font-semibold tracking-tight">Billing</h2>
-        <p className="text-muted-foreground text-sm">
-          No portal profile is linked to this sign-in yet. Ask an administrator
-          to invite you or complete onboarding before managing billing.
-        </p>
-        <Button variant="outline" className="w-fit" asChild>
+      <div className="mx-auto flex max-w-lg flex-col items-center justify-center gap-6 py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+          <svg className="h-8 w-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold tracking-tight">No Profile Linked</h2>
+          <p className="text-sm text-muted-foreground">
+            No portal profile is linked to this sign-in yet. Ask an administrator
+            to invite you or complete onboarding before managing billing.
+          </p>
+        </div>
+        <Button variant="outline" asChild>
           <Link href="/account">Back to account</Link>
         </Button>
       </div>
@@ -87,94 +98,167 @@ export default async function AccountBillingPage(props: {
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
 
+  const bannerState = deriveBillingBannerState({
+    subscriptionPlan: tenant.subscriptionPlan,
+    subscriptionStatus: tenant.subscriptionStatus,
+    trialEndsAt: tenant.trialEndsAt,
+  });
+
   return (
-    <div className="@container/main flex flex-1 flex-col gap-6">
-      <div className="px-0 pt-2">
+    <div className="@container/main flex flex-1 flex-col gap-6 pb-8">
+      {/* Page Header */}
+      <div className="border-b border-border pb-6">
         <PageHeader
           title="Billing"
-          description="Stripe subscription for this workspace. Offerings below mirror synced Stripe Products and Prices; Stripe-hosted Checkout completes purchase or upgrade."
+          description="Manage your subscription, view usage, and update payment details."
         />
       </div>
-      <div className="grid max-w-6xl gap-4">
-        <TenantBillingHealthNotice
-          tenant={{
-            subscriptionPlan: tenant.subscriptionPlan,
-            subscriptionStatus: tenant.subscriptionStatus,
-            trialEndsAt: tenant.trialEndsAt,
-            currentPeriodEndsAt: tenant.currentPeriodEndsAt,
-            stripeCustomerId: tenant.stripeCustomerId ?? null,
-          }}
-          canManageBilling={canManageBilling}
-        />
-        {checkoutFeedback ? (
-          <BillingCheckoutFeedback
-            kind={checkoutFeedback.kind}
-            sessionId={checkoutFeedback.kind === "success" ? checkoutFeedback.sessionId : null}
-          />
-        ) : null}
-        <Card>
-          <CardHeader>
-            <CardTitle>Current subscription</CardTitle>
-            <CardDescription>
-              Applies to this workspace ({tenant.slug}).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TenantSubscriptionOverview
-              subscriptionPlan={tenant.subscriptionPlan}
-              subscriptionStatus={tenant.subscriptionStatus}
-              trialEndsAt={tenant.trialEndsAt}
-              currentPeriodEndsAt={tenant.currentPeriodEndsAt}
-              stripeCustomerId={tenant.stripeCustomerId}
-              stripeSubscriptionId={tenant.stripeSubscriptionId}
-              defaultPaymentMethod={defaultPaymentMethod}
-              observabilityNote={BILLING_SNAPSHOT_OBSERVABILITY}
+
+      {/* Main Content */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        {/* Left Column - Main Content */}
+        <div className="flex flex-col gap-6">
+          {/* State Banner (if applicable) */}
+          {bannerState && (
+            <BillingStateBanner
+              state={bannerState}
+              canManageBilling={canManageBilling}
             />
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
-                Stripe Customer Portal
-              </p>
+          )}
+
+          {/* Checkout Feedback */}
+          {checkoutFeedback && (
+            <BillingCheckoutFeedback
+              kind={checkoutFeedback.kind}
+              sessionId={checkoutFeedback.kind === "success" ? checkoutFeedback.sessionId : null}
+            />
+          )}
+
+          {/* Plan Overview Card */}
+          <PlanOverviewCard
+            subscriptionPlan={tenant.subscriptionPlan}
+            subscriptionStatus={tenant.subscriptionStatus}
+            trialEndsAt={tenant.trialEndsAt}
+            currentPeriodEndsAt={tenant.currentPeriodEndsAt}
+            canManageBilling={canManageBilling}
+            stripeCustomerId={tenant.stripeCustomerId ?? null}
+          />
+
+          {/* Usage Card */}
+          <UsageCard usage={usage} showUpgradeCta />
+
+          {/* Refresh Hint */}
+          <BillingSubscriptionRefreshHint
+            snapshotPlan={tenant.subscriptionPlan}
+            snapshotStatus={tenant.subscriptionStatus}
+            bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
+          />
+
+          {/* Plans Section */}
+          <Card id="billing-plans">
+            <CardHeader>
+              <CardTitle>Available Plans</CardTitle>
+              <CardDescription>
+                {catalogPlans.length > 0
+                  ? "Choose the plan that best fits your needs. Changes take effect immediately."
+                  : canManageBilling
+                    ? "No paid plans are available yet. Contact support or wait for catalog sync."
+                    : "No subscription plans are available at this time."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TenantBillingCatalogSection
+                catalogPlans={catalogPlans}
+                currentPlan={tenant.subscriptionPlan}
+                canManageBilling={canManageBilling}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column - Sidebar */}
+        <div className="flex flex-col gap-6">
+          {/* Quick Actions Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <TenantBillingPortalControls
                 canManageBilling={canManageBilling}
                 stripeCustomerId={tenant.stripeCustomerId}
               />
-            </div>
-            <BillingSubscriptionRefreshHint
-              snapshotPlan={tenant.subscriptionPlan}
-              snapshotStatus={tenant.subscriptionStatus}
-              bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
-            />
-          </CardContent>
-        </Card>
-        <TenantPlanUsageCard usage={usage} showUpgradeCta />
-        <Card id="billing-plans">
-          <CardHeader>
-            <CardTitle>Choose or change plan</CardTitle>
-            <CardDescription>
-              {catalogPlans.length > 0
-                ? `Active tiers from the cached Stripe catalog (${catalogPlans.length} offer${
-                    catalogPlans.length !== 1 ? "s" : ""
-                  }).`
-                : canManageBilling
-                  ? "No paid prices match the cached catalog yet. Use env STRIPE_PRICE_* IDs with the fallback buttons below, or ask a platform admin to sync the Stripe catalog."
-                  : "No paid subscription prices are cached yet. Owners or admins see Checkout options once the catalog is synced or STRIPE_PRICE_* IDs are configured."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <TenantBillingCatalogSection
-              catalogPlans={catalogPlans}
-              currentPlan={tenant.subscriptionPlan}
-              canManageBilling={canManageBilling}
-            />
-            {canManageBilling && catalogPlans.length > 0 ? (
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                Opens Stripe-hosted Checkout (
-                <code className="rounded bg-muted px-1 py-0.5 text-[0.65rem]">checkout.session.completed</code>
-                {" "}and subscription webhooks update billing fields afterward).
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+              {canManageBilling && (
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href="#billing-plans">
+                    View all plans
+                  </Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Payment Method Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payment Method</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {defaultPaymentMethod ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-14 items-center justify-center rounded-md border border-border bg-muted/50">
+                    <svg className="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">
+                      {formatTenantPaymentMethodSummary(defaultPaymentMethod)}
+                    </p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {formatTenantPaymentMethodExpiryLine(defaultPaymentMethod)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No payment method on file. Add one during checkout.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Workspace Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Workspace</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">Workspace ID</dt>
+                  <dd className="font-mono text-xs text-foreground">{tenant.slug}</dd>
+                </div>
+                {tenant.stripeCustomerId && (
+                  <div>
+                    <dt className="text-muted-foreground">Stripe Customer</dt>
+                    <dd className="truncate font-mono text-xs text-foreground">
+                      {tenant.stripeCustomerId}
+                    </dd>
+                  </div>
+                )}
+                {tenant.stripeSubscriptionId && (
+                  <div>
+                    <dt className="text-muted-foreground">Subscription ID</dt>
+                    <dd className="truncate font-mono text-xs text-foreground">
+                      {tenant.stripeSubscriptionId}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
