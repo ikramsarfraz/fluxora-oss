@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AccountBillingReturnBanner } from "@/components/account/account-billing-return-banner";
-import { TenantBillingCheckoutButtons } from "@/components/account/tenant-billing-checkout-buttons";
+import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { auth } from "@/lib/auth";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { getUserByAuthUserId } from "@/services/portal-users";
 import { getCurrentTenant } from "@/services/tenants";
+import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
 
 export default async function AccountBillingPage(props: {
   searchParams: Promise<{ session_id?: string }>;
@@ -49,6 +50,7 @@ export default async function AccountBillingPage(props: {
 
   const tenant = await getCurrentTenant();
   const params = await props.searchParams;
+  const catalogPlans = await listActivePaidPlansForBillingPage();
 
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
@@ -58,10 +60,10 @@ export default async function AccountBillingPage(props: {
       <div className="px-0 pt-2">
         <PageHeader
           title="Billing"
-          description="Workspace subscription (Stripe Checkout). Updates sync via webhooks; platform admins may also edit fields manually."
+          description="Stripe subscription for this workspace. Offerings below mirror synced Stripe Products and Prices; Stripe-hosted Checkout completes purchase or upgrade."
         />
       </div>
-      <div className="grid max-w-2xl gap-4">
+      <div className="grid max-w-6xl gap-4">
         {params.session_id ? (
           <AccountBillingReturnBanner sessionId={params.session_id} />
         ) : null}
@@ -107,30 +109,30 @@ export default async function AccountBillingPage(props: {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Upgrade or change plan</CardTitle>
+            <CardTitle>Choose or change plan</CardTitle>
             <CardDescription>
-              {canManageBilling
-                ? "Use Stripe-hosted Checkout below to subscribe or change plans."
-                : "Stripe Checkout may only be started by a workspace owner or admin."}
+              {catalogPlans.length > 0
+                ? `Active tiers from the cached Stripe catalog (${catalogPlans.length} offer${
+                    catalogPlans.length !== 1 ? "s" : ""
+                  }).`
+                : canManageBilling
+                  ? "No paid prices match the cached catalog yet. Use env STRIPE_PRICE_* IDs with the fallback buttons below, or ask a platform admin to sync the Stripe catalog."
+                  : "No paid subscription prices are cached yet. Owners or admins see Checkout options once the catalog is synced or STRIPE_PRICE_* IDs are configured."}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {canManageBilling ? (
-              <>
-                <p className="text-muted-foreground mb-4 text-sm">
-                  Requires <code className="text-xs">STRIPE_SECRET_KEY</code>{" "}
-                  and price IDs in env. After payment completes, Stripe sends{" "}
-                  <code className="text-xs">checkout.session.completed</code>{" "}
-                  and subscription webhooks — this app updates billing fields and
-                  writes an audit log.
-                </p>
-                <TenantBillingCheckoutButtons />
-              </>
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                Only workspace owners and admins can start a Stripe Checkout session.
+          <CardContent className="space-y-6">
+            <TenantBillingCatalogSection
+              catalogPlans={catalogPlans}
+              currentPlan={tenant.subscriptionPlan}
+              canManageBilling={canManageBilling}
+            />
+            {canManageBilling && catalogPlans.length > 0 ? (
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Opens Stripe-hosted Checkout (
+                <code className="rounded bg-muted px-1 py-0.5 text-[0.65rem]">checkout.session.completed</code>
+                {" "}and subscription webhooks update billing fields afterward).
               </p>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>

@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { db } from "@/db";
 import { auditLogs, stripePrices, stripeProducts } from "@/db/schema";
 import {
   parseBillingPlanFromStripeMetadata,
+  STRIPE_SAAS_PAID_PLAN_KEYS,
   type StripeSaasPaidPlanKey,
 } from "@/lib/stripe/plan-metadata";
 import { getStripeClient } from "@/lib/stripe/config";
@@ -368,4 +369,84 @@ export async function syncStripeCatalogFullFromStripeApi(input: {
   });
 
   return { productsUpserted, pricesUpserted };
+}
+
+/** One selectable paid tier for tenant billing UI (newest active Stripe price per plan key). */
+export type BillingCatalogPlanRow = {
+  planKey: StripeSaasPaidPlanKey;
+  stripePriceId: string;
+  productName: string;
+  productDescription: string | null;
+  currency: string;
+  unitAmountCents: number | null;
+  recurringInterval: string | null;
+  recurringIntervalCount: number | null;
+};
+
+/** Active paid prices/products only (`active` on both tables). Subscription tiers with `billing_plan_key`; deduped newest per plan. */
+export async function listActivePaidPlansForBillingPage(): Promise<
+  BillingCatalogPlanRow[]
+> {
+  const paid = [...STRIPE_SAAS_PAID_PLAN_KEYS];
+  const rows = await db
+    .select({
+      billingPlanKey: stripePrices.billingPlanKey,
+      stripePriceId: stripePrices.stripePriceId,
+      productName: stripeProducts.name,
+      productDescription: stripeProducts.description,
+      currency: stripePrices.currency,
+      unitAmount: stripePrices.unitAmount,
+      recurringInterval: stripePrices.recurringInterval,
+      recurringIntervalCount: stripePrices.recurringIntervalCount,
+    })
+    .from(stripePrices)
+    .innerJoin(
+      stripeProducts,
+      eq(stripePrices.stripeProductId, stripeProducts.stripeProductId),
+    )
+    .where(
+      and(
+        eq(stripePrices.active, true),
+        eq(stripeProducts.active, true),
+        isNotNull(stripePrices.billingPlanKey),
+        isNotNull(stripePrices.recurringInterval),
+        inArray(stripePrices.billingPlanKey, paid),
+      ),
+    )
+    .orderBy(desc(stripePrices.stripeCreatedAt));
+
+  const byPlan = new Map<StripeSaasPaidPlanKey, BillingCatalogPlanRow>();
+
+  for (const row of rows) {
+    const k = row.billingPlanKey;
+    if (
+      k !== "starter" &&
+      k !== "growth" &&
+      k !== "enterprise"
+    ) {
+      continue;
+    }
+    if (byPlan.has(k)) {
+      continue;
+    }
+    byPlan.set(k, {
+      planKey: k,
+      stripePriceId: row.stripePriceId,
+      productName: row.productName,
+      productDescription: row.productDescription,
+      currency: row.currency,
+      unitAmountCents: row.unitAmount,
+      recurringInterval: row.recurringInterval,
+      recurringIntervalCount: row.recurringIntervalCount,
+    });
+  }
+
+  const ordered: BillingCatalogPlanRow[] = [];
+  for (const pk of STRIPE_SAAS_PAID_PLAN_KEYS) {
+    const r = byPlan.get(pk);
+    if (r) {
+      ordered.push(r);
+    }
+  }
+  return ordered;
 }

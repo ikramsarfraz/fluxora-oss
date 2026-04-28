@@ -16,6 +16,7 @@ export async function syncStripeCatalogAdminAction(): Promise<
       platformUserId: pu.id,
     });
     revalidatePath("/admin/subscriptions");
+    revalidatePath("/admin/stripe-catalog");
     return { ok: true, ...result };
   } catch (e) {
     const msg =

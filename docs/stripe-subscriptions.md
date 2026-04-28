@@ -66,6 +66,8 @@ Stripe `product.deleted` / `price.deleted` events **archive** local rows (`activ
 **Keeping the cache fresh:**
 
 1. **Webhooks** — Forward the `product.*` and `price.*` events listed above; the handler upserts or deletes local rows and writes **system** audit logs.
-2. **Manual sync** — Platform admin: **Admin → Subscriptions → Sync Stripe catalog**. This pulls **active** Products and recurring Prices via the Stripe API. For scripts or tooling, call `syncStripeCatalogFullFromStripeApi` from `services/stripe-catalog.ts`.
+2. **Manual sync** — Platform admin: **Admin → Subscriptions** or **Admin → Stripe catalog**, then **Sync Stripe catalog**. This pulls **active** Products and recurring Prices via the Stripe API. For scripts or tooling, call `syncStripeCatalogFullFromStripeApi` from `services/stripe-catalog.ts`.
+
+The **Stripe catalog** screen (`/admin/stripe-catalog`) is a read-only view of cached Products and grouped Prices plus the last full-sync audit entry.
 
 After schema changes, run `**npm run db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.

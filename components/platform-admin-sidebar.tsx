@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronsUpDown,
   CreditCard,
+  Layers,
   LayoutDashboard,
   LifeBuoy,
   ShieldCheck,
@@ -60,6 +61,11 @@ const navItems: NavItem[] = [
     title: "Support",
     url: "/admin/support",
     icon: LifeBuoy,
+  },
+  {
+    title: "Stripe catalog",
+    url: "/admin/stripe-catalog",
+    icon: Layers,
   },
   {
     title: "Subscriptions",
