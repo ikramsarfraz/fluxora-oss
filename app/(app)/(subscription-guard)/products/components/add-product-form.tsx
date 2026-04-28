@@ -98,6 +98,11 @@ const defaultForm: AddProductFormValues = {
   units: [],
 };
 
+function isProductLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("allows up to") && normalized.includes("products");
+}
+
 function formatUomOption(u: UnitOfMeasureListItem): string {
   return u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name;
 }
@@ -244,7 +249,21 @@ export function AddProductForm() {
             <Alert variant="destructive" className="mb-4">
               <AlertCircle />
               <AlertTitle>Add product failed</AlertTitle>
-              <AlertDescription>{mutationError}</AlertDescription>
+              <AlertDescription>
+                {isProductLimitError(mutationError) ? (
+                  <div className="space-y-2">
+                    <p>Your current plan has reached the product limit.</p>
+                    <Link
+                      href="/account/billing#billing-plans"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Upgrade plan
+                    </Link>
+                  </div>
+                ) : (
+                  mutationError
+                )}
+              </AlertDescription>
             </Alert>
           ) : null}
           <FieldGroup>
