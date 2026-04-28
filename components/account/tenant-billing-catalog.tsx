@@ -2,7 +2,20 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Zap, Rocket, Crown, Sparkles, ArrowRight, Loader2 } from "lucide-react";
+import {
+  Check,
+  Zap,
+  Rocket,
+  Crown,
+  Sparkles,
+  ArrowRight,
+  Loader2,
+  Users,
+  Package,
+  UserCheck,
+  ShoppingCart,
+  Mail,
+} from "lucide-react";
 
 import { startTenantAdminStripeCheckoutAction } from "@/actions/stripe-billing";
 import { TenantBillingCheckoutButtons } from "@/components/account/tenant-billing-checkout-buttons";
@@ -14,9 +27,13 @@ import type { BillingCatalogPlanRow } from "@/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 import type { StripeCheckoutPlan } from "@/services/stripe-tenant-billing";
 
+// ============================================================================
+// Formatting Helpers
+// ============================================================================
+
 function formatMoney(currency: string, unitAmountCents: number | null): string {
   if (unitAmountCents == null) {
-    return "—";
+    return "Custom";
   }
   try {
     return new Intl.NumberFormat(undefined, {
@@ -31,12 +48,10 @@ function formatMoney(currency: string, unitAmountCents: number | null): string {
 }
 
 function formatCadence(interval: string | null, count: number | null): string {
-  if (!interval) {
-    return "";
-  }
+  if (!interval) return "";
   const raw = interval.toLowerCase();
   const n = count ?? 1;
-  
+
   if (n === 1) {
     if (raw === "month") return "/month";
     if (raw === "year") return "/year";
@@ -44,11 +59,25 @@ function formatCadence(interval: string | null, count: number | null): string {
     if (raw === "day") return "/day";
     return `/${interval}`;
   }
-  
+
   const plural =
-    raw === "month" ? "months" : raw === "year" ? "years" : raw === "week" ? "weeks" : raw === "day" ? "days" : `${interval}s`;
+    raw === "month"
+      ? "months"
+      : raw === "year"
+        ? "years"
+        : raw === "week"
+          ? "weeks"
+          : raw === "day"
+            ? "days"
+            : `${interval}s`;
   return `/${n} ${plural}`;
 }
+
+// ============================================================================
+// Plan Configuration
+// ============================================================================
+
+const PLAN_ORDER: TenantSubscriptionPlan[] = ["starter", "growth", "enterprise"];
 
 const PLAN_ICONS: Record<string, React.ElementType> = {
   starter: Zap,
@@ -56,201 +85,349 @@ const PLAN_ICONS: Record<string, React.ElementType> = {
   enterprise: Crown,
 };
 
-const PLAN_STYLES: Record<string, { 
-  iconBg: string; 
-  iconColor: string; 
-  border: string;
-  hoverBorder: string;
-  accent: string;
-}> = {
+const PLAN_CONFIG: Record<
+  string,
+  {
+    description: string;
+    iconBg: string;
+    iconColor: string;
+    cardBorder: string;
+    cardHoverBorder: string;
+    badgeBg: string;
+    badgeText: string;
+    checkBg: string;
+    checkColor: string;
+  }
+> = {
   starter: {
-    iconBg: "bg-blue-500/10",
-    iconColor: "text-blue-600 dark:text-blue-400",
-    border: "border-border",
-    hoverBorder: "hover:border-blue-500/30",
-    accent: "from-blue-500/5",
+    description: "Perfect for small teams getting started",
+    iconBg: "bg-sky-100 dark:bg-sky-900/30",
+    iconColor: "text-sky-600 dark:text-sky-400",
+    cardBorder: "border-border",
+    cardHoverBorder: "hover:border-sky-300 dark:hover:border-sky-700",
+    badgeBg: "bg-sky-100 dark:bg-sky-900/30",
+    badgeText: "text-sky-700 dark:text-sky-300",
+    checkBg: "bg-sky-100 dark:bg-sky-900/30",
+    checkColor: "text-sky-600 dark:text-sky-400",
   },
   growth: {
+    description: "For growing businesses that need more",
     iconBg: "bg-primary/10",
     iconColor: "text-primary",
-    border: "border-primary/30",
-    hoverBorder: "hover:border-primary/50",
-    accent: "from-primary/5",
+    cardBorder: "border-primary/40",
+    cardHoverBorder: "hover:border-primary",
+    badgeBg: "bg-primary",
+    badgeText: "text-primary-foreground",
+    checkBg: "bg-primary/10",
+    checkColor: "text-primary",
   },
   enterprise: {
-    iconBg: "bg-amber-500/10",
+    description: "Advanced features for large organizations",
+    iconBg: "bg-amber-100 dark:bg-amber-900/30",
     iconColor: "text-amber-600 dark:text-amber-400",
-    border: "border-border",
-    hoverBorder: "hover:border-amber-500/30",
-    accent: "from-amber-500/5",
+    cardBorder: "border-border",
+    cardHoverBorder: "hover:border-amber-300 dark:hover:border-amber-700",
+    badgeBg: "bg-amber-100 dark:bg-amber-900/30",
+    badgeText: "text-amber-700 dark:text-amber-300",
+    checkBg: "bg-amber-100 dark:bg-amber-900/30",
+    checkColor: "text-amber-600 dark:text-amber-400",
   },
 };
 
-// Feature lists for each plan
+// Usage limits per plan
+const PLAN_LIMITS: Record<
+  string,
+  { portalUsers: string; products: string; customers: string; monthlyOrders: string }
+> = {
+  starter: {
+    portalUsers: "5",
+    products: "100",
+    customers: "50",
+    monthlyOrders: "100",
+  },
+  growth: {
+    portalUsers: "25",
+    products: "500",
+    customers: "250",
+    monthlyOrders: "500",
+  },
+  enterprise: {
+    portalUsers: "Unlimited",
+    products: "Unlimited",
+    customers: "Unlimited",
+    monthlyOrders: "Unlimited",
+  },
+};
+
+// Feature lists per plan
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: [
-    "Up to 5 team members",
-    "100 products",
-    "50 customers",
-    "100 orders/month",
+    "Core distribution features",
+    "Basic reporting",
     "Email support",
   ],
   growth: [
-    "Up to 25 team members",
-    "500 products",
-    "250 customers",
-    "500 orders/month",
-    "Priority support",
+    "Everything in Starter",
+    "Advanced analytics",
     "API access",
+    "Priority support",
   ],
   enterprise: [
-    "Unlimited team members",
-    "Unlimited products",
-    "Unlimited customers",
-    "Unlimited orders",
-    "24/7 phone support",
+    "Everything in Growth",
     "Custom integrations",
     "Dedicated account manager",
+    "24/7 phone support",
+    "SLA guarantee",
   ],
 };
 
+// ============================================================================
+// Usage Limit Row
+// ============================================================================
+
+function UsageLimitRow({
+  icon: Icon,
+  label,
+  value,
+  isUnlimited,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  isUnlimited?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        <span>{label}</span>
+      </div>
+      <span
+        className={cn(
+          "font-medium",
+          isUnlimited ? "text-primary" : "text-foreground"
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ============================================================================
+// Plan Card Component
+// ============================================================================
+
 function PlanCard({
   plan,
-  isCurrent,
+  currentPlan,
   isPopular,
   canManageBilling,
   pending,
   onSelect,
 }: {
   plan: BillingCatalogPlanRow;
-  isCurrent: boolean;
+  currentPlan: TenantSubscriptionPlan;
   isPopular: boolean;
   canManageBilling: boolean;
   pending: boolean;
   onSelect: () => void;
 }) {
   const Icon = PLAN_ICONS[plan.planKey] || Sparkles;
-  const styles = PLAN_STYLES[plan.planKey] || PLAN_STYLES.starter;
+  const config = PLAN_CONFIG[plan.planKey] || PLAN_CONFIG.starter;
+  const limits = PLAN_LIMITS[plan.planKey] || PLAN_LIMITS.starter;
   const features = PLAN_FEATURES[plan.planKey] || [];
+
+  const isCurrent = currentPlan === plan.planKey;
+  const isEnterprise = plan.planKey === "enterprise";
+  const hasNoPrice = plan.unitAmountCents == null;
+
+  // Determine CTA state
+  const planTier = PLAN_ORDER.indexOf(plan.planKey as TenantSubscriptionPlan);
+  const currentTier = PLAN_ORDER.indexOf(currentPlan);
+  const isUpgrade = planTier > currentTier;
+  const isDowngrade = planTier < currentTier && currentPlan !== "free";
+
+  // CTA label logic
+  function getCtaLabel() {
+    if (isCurrent) return "Current Plan";
+    if (isEnterprise && hasNoPrice) return "Contact Us";
+    if (isUpgrade) return "Upgrade";
+    if (isDowngrade) return "Switch Plan";
+    return "Get Started";
+  }
+
+  // CTA disabled logic
+  const isCtaDisabled = isCurrent || pending;
 
   return (
     <div
       className={cn(
-        "group relative flex flex-col rounded-xl border-2 p-6 transition-all duration-200",
-        styles.border,
-        styles.hoverBorder,
-        "bg-card",
-        // Popular plan gets extra visual treatment
-        isPopular && !isCurrent && "ring-1 ring-primary/20 shadow-sm",
-        // Current plan indication
-        isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+        "group relative flex flex-col rounded-xl border-2 bg-card p-6 transition-all duration-200",
+        config.cardBorder,
+        !isCurrent && config.cardHoverBorder,
+        // Current plan highlight
+        isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        // Popular plan subtle shadow
+        isPopular && !isCurrent && "shadow-md"
       )}
     >
-      {/* Subtle gradient on hover */}
-      <div className={cn(
-        "absolute inset-0 rounded-xl bg-gradient-to-b to-transparent opacity-0 transition-opacity group-hover:opacity-100",
-        styles.accent
-      )} />
-
       {/* Popular Badge */}
       {isPopular && !isCurrent && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className="bg-primary px-3 py-1 text-primary-foreground shadow-sm">
+        <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+          <Badge className={cn("px-3 py-1 text-xs font-medium shadow-sm", config.badgeBg, config.badgeText)}>
             Most Popular
           </Badge>
         </div>
       )}
 
-      {/* Current Badge */}
+      {/* Current Plan Badge */}
       {isCurrent && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge variant="secondary" className="px-3 py-1 shadow-sm">
+        <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+          <Badge variant="secondary" className="px-3 py-1 text-xs font-medium shadow-sm">
             Current Plan
           </Badge>
         </div>
       )}
 
       {/* Plan Header */}
-      <div className="relative mb-6 space-y-4">
+      <div className="mb-5 space-y-3">
         <div className="flex items-center gap-3">
-          <div className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-lg transition-transform group-hover:scale-105",
-            styles.iconBg
-          )}>
-            <Icon className={cn("h-5 w-5", styles.iconColor)} />
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105",
+              config.iconBg
+            )}
+          >
+            <Icon className={cn("h-5 w-5", config.iconColor)} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold capitalize tracking-tight">{plan.planKey}</h3>
-            {plan.productDescription?.trim() && (
-              <p className="text-xs text-muted-foreground line-clamp-1">{plan.productDescription.trim()}</p>
-            )}
+            <h3 className="text-lg font-semibold capitalize">{plan.planKey}</h3>
+            <p className="text-xs text-muted-foreground">
+              {plan.productDescription?.trim() || config.description}
+            </p>
           </div>
         </div>
 
         {/* Pricing */}
-        <div className="flex items-baseline gap-1">
+        <div className="flex items-baseline gap-1.5">
           <span className="text-3xl font-bold tracking-tight">
             {formatMoney(plan.currency, plan.unitAmountCents)}
           </span>
-          <span className="text-sm text-muted-foreground">
-            {formatCadence(plan.recurringInterval, plan.recurringIntervalCount)}
-          </span>
+          {!hasNoPrice && (
+            <span className="text-sm text-muted-foreground">
+              {formatCadence(plan.recurringInterval, plan.recurringIntervalCount)}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Divider */}
-      <div className="relative mb-6 h-px bg-border" />
+      <div className="mb-5 h-px bg-border" />
 
-      {/* Features List */}
-      <ul className="relative mb-6 flex-1 space-y-3">
-        {features.map((feature, idx) => (
-          <li 
-            key={feature} 
-            className="flex items-start gap-2.5 text-sm"
-            style={{ animationDelay: `${idx * 50}ms` }}
-          >
-            <div className={cn(
-              "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
-              isPopular ? "bg-primary/10" : "bg-muted"
-            )}>
-              <Check className={cn(
-                "h-2.5 w-2.5",
-                isPopular ? "text-primary" : "text-muted-foreground"
-              )} />
-            </div>
-            <span className="text-muted-foreground">{feature}</span>
-          </li>
-        ))}
-      </ul>
+      {/* Usage Limits */}
+      <div className="mb-5 space-y-2.5">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Usage Limits
+        </p>
+        <div className="space-y-2">
+          <UsageLimitRow
+            icon={Users}
+            label="Portal users"
+            value={limits.portalUsers}
+            isUnlimited={limits.portalUsers === "Unlimited"}
+          />
+          <UsageLimitRow
+            icon={Package}
+            label="Products"
+            value={limits.products}
+            isUnlimited={limits.products === "Unlimited"}
+          />
+          <UsageLimitRow
+            icon={UserCheck}
+            label="Customers"
+            value={limits.customers}
+            isUnlimited={limits.customers === "Unlimited"}
+          />
+          <UsageLimitRow
+            icon={ShoppingCart}
+            label="Monthly orders"
+            value={limits.monthlyOrders}
+            isUnlimited={limits.monthlyOrders === "Unlimited"}
+          />
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mb-5 h-px bg-border" />
+
+      {/* Features */}
+      <div className="mb-6 flex-1">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Features
+        </p>
+        <ul className="space-y-2.5">
+          {features.map((feature) => (
+            <li key={feature} className="flex items-start gap-2.5 text-sm">
+              <div
+                className={cn(
+                  "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
+                  config.checkBg
+                )}
+              >
+                <Check className={cn("h-2.5 w-2.5", config.checkColor)} />
+              </div>
+              <span className="text-muted-foreground">{feature}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {/* CTA Button */}
-      <div className="relative mt-auto">
+      <div className="mt-auto">
         {canManageBilling ? (
-          <Button
-            type="button"
-            variant={isCurrent ? "outline" : isPopular ? "default" : "outline"}
-            className={cn(
-              "w-full transition-all active:scale-[0.98]",
-              isPopular && !isCurrent && "bg-primary shadow-sm hover:bg-primary/90"
-            )}
-            size="lg"
-            disabled={pending || isCurrent}
-            onClick={onSelect}
-          >
-            {pending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Redirecting...
-              </>
-            ) : isCurrent ? (
-              "Current plan"
-            ) : (
-              <>
-                Get started
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </>
-            )}
-          </Button>
+          isEnterprise && hasNoPrice ? (
+            // Enterprise "Contact Us" button
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2 transition-all duration-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-300"
+              size="lg"
+              asChild
+            >
+              <a href="mailto:sales@example.com">
+                <Mail className="h-4 w-4" />
+                Contact Us
+              </a>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant={isCurrent ? "outline" : isPopular ? "default" : "outline"}
+              className={cn(
+                "w-full transition-all duration-200 active:scale-[0.98]",
+                isPopular && !isCurrent && "shadow-sm",
+                isCurrent && "cursor-not-allowed opacity-60"
+              )}
+              size="lg"
+              disabled={isCtaDisabled}
+              onClick={onSelect}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Redirecting...
+                </>
+              ) : (
+                <>
+                  {getCtaLabel()}
+                  {!isCurrent && (
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                  )}
+                </>
+              )}
+            </Button>
+          )
         ) : (
           <p className="text-center text-xs text-muted-foreground">
             Contact an admin to change plans
@@ -260,6 +437,10 @@ function PlanCard({
     </div>
   );
 }
+
+// ============================================================================
+// Main Catalog Section
+// ============================================================================
 
 export function TenantBillingCatalogSection(props: {
   catalogPlans: BillingCatalogPlanRow[];
@@ -275,20 +456,22 @@ export function TenantBillingCatalogSection(props: {
         window.location.href = url;
       } catch (e) {
         toast.error(
-          e instanceof Error ? e.message : "Could not start Stripe Checkout.",
+          e instanceof Error ? e.message : "Could not start Stripe Checkout."
         );
       }
     });
   }
 
+  // Empty state
   if (props.catalogPlans.length === 0) {
     return (
       <div className="space-y-4">
         <Alert>
           <AlertTitle>No plans available</AlertTitle>
           <AlertDescription>
-            Subscription plans will appear here once the Stripe catalog is synced.
-            Platform administrators can sync Products and Prices from the admin dashboard.
+            Subscription plans will appear here once the Stripe catalog is
+            synced. Platform administrators can sync Products and Prices from
+            the admin dashboard.
           </AlertDescription>
         </Alert>
         {props.canManageBilling && (
@@ -308,14 +491,13 @@ export function TenantBillingCatalogSection(props: {
       {/* Plan Cards Grid */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {props.catalogPlans.map((plan) => {
-          const isCurrent = props.currentPlan !== "free" && props.currentPlan === plan.planKey;
           const isPopular = plan.planKey === "growth";
 
           return (
             <PlanCard
               key={plan.planKey}
               plan={plan}
-              isCurrent={isCurrent}
+              currentPlan={props.currentPlan}
               isPopular={isPopular}
               canManageBilling={props.canManageBilling}
               pending={pending}
@@ -325,7 +507,7 @@ export function TenantBillingCatalogSection(props: {
         })}
       </div>
 
-      {/* Footer Note */}
+      {/* Footer */}
       {props.canManageBilling && props.catalogPlans.length > 0 && (
         <p className="text-center text-xs text-muted-foreground">
           Secure checkout powered by Stripe. Cancel or change plans anytime.
