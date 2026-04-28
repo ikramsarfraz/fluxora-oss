@@ -56,25 +56,37 @@ const PLAN_ICONS: Record<string, React.ElementType> = {
   enterprise: Crown,
 };
 
-const PLAN_COLORS: Record<string, { border: string; bg: string; badge: string }> = {
+const PLAN_STYLES: Record<string, { 
+  iconBg: string; 
+  iconColor: string; 
+  border: string;
+  hoverBorder: string;
+  accent: string;
+}> = {
   starter: {
-    border: "border-border hover:border-primary/30",
-    bg: "bg-card",
-    badge: "bg-primary/10 text-primary",
+    iconBg: "bg-blue-500/10",
+    iconColor: "text-blue-600 dark:text-blue-400",
+    border: "border-border",
+    hoverBorder: "hover:border-blue-500/30",
+    accent: "from-blue-500/5",
   },
   growth: {
-    border: "border-primary/50 hover:border-primary ring-2 ring-primary/10",
-    bg: "bg-gradient-to-b from-primary/5 to-transparent",
-    badge: "bg-primary text-primary-foreground",
+    iconBg: "bg-primary/10",
+    iconColor: "text-primary",
+    border: "border-primary/30",
+    hoverBorder: "hover:border-primary/50",
+    accent: "from-primary/5",
   },
   enterprise: {
-    border: "border-border hover:border-primary/30",
-    bg: "bg-card",
-    badge: "bg-secondary text-secondary-foreground",
+    iconBg: "bg-amber-500/10",
+    iconColor: "text-amber-600 dark:text-amber-400",
+    border: "border-border",
+    hoverBorder: "hover:border-amber-500/30",
+    accent: "from-amber-500/5",
   },
 };
 
-// Feature lists for each plan (placeholder - replace with actual features from metadata if available)
+// Feature lists for each plan
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: [
     "Up to 5 team members",
@@ -118,40 +130,57 @@ function PlanCard({
   onSelect: () => void;
 }) {
   const Icon = PLAN_ICONS[plan.planKey] || Sparkles;
-  const colors = PLAN_COLORS[plan.planKey] || PLAN_COLORS.starter;
+  const styles = PLAN_STYLES[plan.planKey] || PLAN_STYLES.starter;
   const features = PLAN_FEATURES[plan.planKey] || [];
 
   return (
     <div
       className={cn(
-        "relative flex flex-col rounded-xl border-2 p-6 transition-all",
-        colors.border,
-        colors.bg,
+        "group relative flex flex-col rounded-xl border-2 p-6 transition-all duration-200",
+        styles.border,
+        styles.hoverBorder,
+        "bg-card",
+        // Popular plan gets extra visual treatment
+        isPopular && !isCurrent && "ring-1 ring-primary/20 shadow-sm",
+        // Current plan indication
         isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background"
       )}
     >
+      {/* Subtle gradient on hover */}
+      <div className={cn(
+        "absolute inset-0 rounded-xl bg-gradient-to-b to-transparent opacity-0 transition-opacity group-hover:opacity-100",
+        styles.accent
+      )} />
+
       {/* Popular Badge */}
       {isPopular && !isCurrent && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className={cn("px-3 py-1", colors.badge)}>Most Popular</Badge>
+          <Badge className="bg-primary px-3 py-1 text-primary-foreground shadow-sm">
+            Most Popular
+          </Badge>
         </div>
       )}
 
       {/* Current Badge */}
       {isCurrent && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge variant="default" className="px-3 py-1">Current Plan</Badge>
+          <Badge variant="secondary" className="px-3 py-1 shadow-sm">
+            Current Plan
+          </Badge>
         </div>
       )}
 
       {/* Plan Header */}
-      <div className="mb-6 space-y-4">
+      <div className="relative mb-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", isPopular ? "bg-primary/10" : "bg-muted")}>
-            <Icon className={cn("h-5 w-5", isPopular ? "text-primary" : "text-muted-foreground")} />
+          <div className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-lg transition-transform group-hover:scale-105",
+            styles.iconBg
+          )}>
+            <Icon className={cn("h-5 w-5", styles.iconColor)} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold capitalize">{plan.planKey}</h3>
+            <h3 className="text-lg font-semibold capitalize tracking-tight">{plan.planKey}</h3>
             {plan.productDescription?.trim() && (
               <p className="text-xs text-muted-foreground line-clamp-1">{plan.productDescription.trim()}</p>
             )}
@@ -169,23 +198,41 @@ function PlanCard({
         </div>
       </div>
 
+      {/* Divider */}
+      <div className="relative mb-6 h-px bg-border" />
+
       {/* Features List */}
-      <ul className="mb-6 flex-1 space-y-3">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-start gap-2 text-sm">
-            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <ul className="relative mb-6 flex-1 space-y-3">
+        {features.map((feature, idx) => (
+          <li 
+            key={feature} 
+            className="flex items-start gap-2.5 text-sm"
+            style={{ animationDelay: `${idx * 50}ms` }}
+          >
+            <div className={cn(
+              "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
+              isPopular ? "bg-primary/10" : "bg-muted"
+            )}>
+              <Check className={cn(
+                "h-2.5 w-2.5",
+                isPopular ? "text-primary" : "text-muted-foreground"
+              )} />
+            </div>
             <span className="text-muted-foreground">{feature}</span>
           </li>
         ))}
       </ul>
 
       {/* CTA Button */}
-      <div className="mt-auto">
+      <div className="relative mt-auto">
         {canManageBilling ? (
           <Button
             type="button"
             variant={isCurrent ? "outline" : isPopular ? "default" : "outline"}
-            className={cn("w-full", isPopular && !isCurrent && "bg-primary hover:bg-primary/90")}
+            className={cn(
+              "w-full transition-all active:scale-[0.98]",
+              isPopular && !isCurrent && "bg-primary shadow-sm hover:bg-primary/90"
+            )}
             size="lg"
             disabled={pending || isCurrent}
             onClick={onSelect}
@@ -200,7 +247,7 @@ function PlanCard({
             ) : (
               <>
                 Get started
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </>
             )}
           </Button>

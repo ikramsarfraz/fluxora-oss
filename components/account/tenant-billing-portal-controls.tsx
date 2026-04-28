@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, CreditCard } from "lucide-react";
+import { ExternalLink, Loader2, CreditCard, Settings } from "lucide-react";
 
 import { startTenantAdminStripeCustomerPortalAction } from "@/actions/stripe-billing";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,12 @@ export function TenantBillingPortalControls(props: {
 
   if (!props.canManageBilling) {
     return (
-      <p className="text-xs text-muted-foreground">
-        Only workspace owners and admins can manage billing.
-      </p>
+      <div className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+        <Settings className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Only workspace owners and admins can manage billing settings.
+        </p>
+      </div>
     );
   }
 
@@ -38,13 +41,10 @@ export function TenantBillingPortalControls(props: {
 
   if (!hasStripeCustomer) {
     return (
-      <div className="space-y-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <CreditCard className="h-5 w-5 text-muted-foreground" />
-        </div>
+      <div className="flex items-start gap-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+        <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Billing management becomes available after your first checkout.
-          Choose a plan below to get started.
+          Billing management becomes available after your first checkout. Choose a plan below to get started.
         </p>
       </div>
     );
@@ -55,19 +55,19 @@ export function TenantBillingPortalControls(props: {
       type="button"
       variant="default"
       size="sm"
-      className="w-full"
+      className="w-full transition-all active:scale-[0.98]"
       disabled={pending}
       onClick={openPortal}
     >
       {pending ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Opening...
+          Opening portal...
         </>
       ) : (
         <>
           <ExternalLink className="mr-2 h-4 w-4" />
-          Manage billing
+          Manage in Stripe
         </>
       )}
     </Button>

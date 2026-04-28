@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { CreditCard, Building2, ExternalLink } from "lucide-react";
 
 import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-feedback";
 import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
@@ -55,7 +56,7 @@ export default async function AccountBillingPage(props: {
         </div>
         <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight">No Profile Linked</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             No portal profile is linked to this sign-in yet. Ask an administrator
             to invite you or complete onboarding before managing billing.
           </p>
@@ -105,7 +106,7 @@ export default async function AccountBillingPage(props: {
   });
 
   return (
-    <div className="@container/main flex flex-1 flex-col gap-6 pb-8">
+    <div className="@container/main flex flex-1 flex-col gap-8 pb-8">
       {/* Page Header */}
       <div className="border-b border-border pb-6">
         <PageHeader
@@ -115,7 +116,7 @@ export default async function AccountBillingPage(props: {
       </div>
 
       {/* Main Content */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
         {/* Left Column - Main Content */}
         <div className="flex flex-col gap-6">
           {/* State Banner (if applicable) */}
@@ -155,8 +156,8 @@ export default async function AccountBillingPage(props: {
           />
 
           {/* Plans Section */}
-          <Card id="billing-plans">
-            <CardHeader>
+          <Card id="billing-plans" className="overflow-hidden">
+            <CardHeader className="border-b bg-muted/30">
               <CardTitle>Available Plans</CardTitle>
               <CardDescription>
                 {catalogPlans.length > 0
@@ -166,7 +167,7 @@ export default async function AccountBillingPage(props: {
                     : "No subscription plans are available at this time."}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <TenantBillingCatalogSection
                 catalogPlans={catalogPlans}
                 currentPlan={tenant.subscriptionPlan}
@@ -177,11 +178,14 @@ export default async function AccountBillingPage(props: {
         </div>
 
         {/* Right Column - Sidebar */}
-        <div className="flex flex-col gap-6">
-          {/* Quick Actions Card */}
+        <div className="flex flex-col gap-4">
+          {/* Billing Actions Section */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Quick Actions</CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Billing Actions</CardTitle>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <TenantBillingPortalControls
@@ -189,8 +193,14 @@ export default async function AccountBillingPage(props: {
                 stripeCustomerId={tenant.stripeCustomerId}
               />
               {canManageBilling && (
-                <Button variant="outline" size="sm" className="w-full" asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full justify-start text-muted-foreground hover:text-foreground" 
+                  asChild
+                >
                   <Link href="#billing-plans">
+                    <ExternalLink className="mr-2 h-4 w-4" />
                     View all plans
                   </Link>
                 </Button>
@@ -198,10 +208,13 @@ export default async function AccountBillingPage(props: {
             </CardContent>
           </Card>
 
-          {/* Payment Method Card */}
+          {/* Payment Method Section */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Payment Method</CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Payment Method</CardTitle>
+              </div>
             </CardHeader>
             <CardContent>
               {defaultPaymentMethod ? (
@@ -211,8 +224,8 @@ export default async function AccountBillingPage(props: {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
                   </div>
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="truncate text-sm font-medium">
                       {formatTenantPaymentMethodSummary(defaultPaymentMethod)}
                     </p>
                     <p className="text-xs text-muted-foreground tabular-nums">
@@ -221,36 +234,41 @@ export default async function AccountBillingPage(props: {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No payment method on file. Add one during checkout.
-                </p>
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    No payment method on file.<br />Add one during checkout.
+                  </p>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Workspace Info Card */}
+          {/* Workspace Info Section */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Workspace</CardTitle>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Workspace</CardTitle>
+              </div>
             </CardHeader>
             <CardContent>
               <dl className="space-y-3 text-sm">
-                <div>
+                <div className="flex items-center justify-between gap-2">
                   <dt className="text-muted-foreground">Workspace ID</dt>
-                  <dd className="font-mono text-xs text-foreground">{tenant.slug}</dd>
+                  <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground">{tenant.slug}</dd>
                 </div>
                 {tenant.stripeCustomerId && (
-                  <div>
+                  <div className="flex items-center justify-between gap-2">
                     <dt className="text-muted-foreground">Stripe Customer</dt>
-                    <dd className="truncate font-mono text-xs text-foreground">
+                    <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground max-w-[140px]">
                       {tenant.stripeCustomerId}
                     </dd>
                   </div>
                 )}
                 {tenant.stripeSubscriptionId && (
-                  <div>
-                    <dt className="text-muted-foreground">Subscription ID</dt>
-                    <dd className="truncate font-mono text-xs text-foreground">
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-muted-foreground">Subscription</dt>
+                    <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground max-w-[140px]">
                       {tenant.stripeSubscriptionId}
                     </dd>
                   </div>

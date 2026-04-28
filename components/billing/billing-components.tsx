@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Sparkles, Users, Package, Building2, ShoppingCart, Zap, Crown, Rocket } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Sparkles, Users, Package, Building2, ShoppingCart, Zap, Crown, Rocket, Info } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   formatSubscriptionPlanLabel,
@@ -40,8 +46,12 @@ const STATUS_STYLES: Record<TenantSubscriptionStatus, { bg: string; text: string
 export function BillingStatusBadge({ status }: { status: TenantSubscriptionStatus }) {
   const style = STATUS_STYLES[status];
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium", style.bg, style.text)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
+    <span className={cn(
+      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+      style.bg, 
+      style.text
+    )}>
+      <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", style.dot)} />
       {formatSubscriptionStatusLabel(status)}
     </span>
   );
@@ -87,35 +97,83 @@ export function PlanOverviewCard({
 
   const PlanIcon = subscriptionPlan === "enterprise" ? Crown : subscriptionPlan === "growth" ? Rocket : subscriptionPlan === "starter" ? Zap : Sparkles;
 
+  // Gradient colors per plan for visual identity
+  const planGradient = subscriptionPlan === "enterprise" 
+    ? "from-amber-500/10 via-amber-500/5 to-transparent" 
+    : subscriptionPlan === "growth" 
+      ? "from-primary/10 via-primary/5 to-transparent" 
+      : subscriptionPlan === "starter"
+        ? "from-blue-500/10 via-blue-500/5 to-transparent"
+        : "from-muted/50 via-transparent to-transparent";
+
+  const iconBg = subscriptionPlan === "enterprise"
+    ? "bg-amber-500/10"
+    : subscriptionPlan === "growth"
+      ? "bg-primary/10"
+      : subscriptionPlan === "starter"
+        ? "bg-blue-500/10"
+        : "bg-muted";
+
+  const iconColor = subscriptionPlan === "enterprise"
+    ? "text-amber-600 dark:text-amber-400"
+    : subscriptionPlan === "growth"
+      ? "text-primary"
+      : subscriptionPlan === "starter"
+        ? "text-blue-600 dark:text-blue-400"
+        : "text-muted-foreground";
+
   return (
-    <Card className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent" />
-      <CardHeader className="relative">
+    <Card className="relative overflow-hidden shadow-sm transition-shadow hover:shadow-md">
+      {/* Gradient background */}
+      <div className={cn("absolute inset-0 bg-gradient-to-br", planGradient)} />
+      
+      {/* Subtle top border accent */}
+      <div className={cn(
+        "absolute inset-x-0 top-0 h-0.5",
+        subscriptionPlan === "enterprise" ? "bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" :
+        subscriptionPlan === "growth" ? "bg-gradient-to-r from-transparent via-primary/50 to-transparent" :
+        subscriptionPlan === "starter" ? "bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" :
+        "bg-gradient-to-r from-transparent via-border to-transparent"
+      )} />
+
+      <CardHeader className="relative pb-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-              <PlanIcon className="h-6 w-6 text-primary" />
+            <div className={cn(
+              "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform hover:scale-105",
+              iconBg
+            )}>
+              <PlanIcon className={cn("h-6 w-6", iconColor)} />
             </div>
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-xl">{planLabel} Plan</CardTitle>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <CardTitle className="text-xl font-semibold tracking-tight">{planLabel} Plan</CardTitle>
                 <BillingStatusBadge status={subscriptionStatus} />
               </div>
               {billingPeriodText && (
-                <CardDescription className="text-sm">{billingPeriodText}</CardDescription>
+                <CardDescription className="text-sm text-muted-foreground">{billingPeriodText}</CardDescription>
               )}
             </div>
           </div>
           {canManageBilling && (
             <div className="flex flex-wrap gap-2">
               {hasStripeCustomer && onManageBilling && (
-                <Button variant="outline" size="sm" onClick={onManageBilling}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={onManageBilling}
+                  className="transition-all hover:bg-muted/80 active:scale-[0.98]"
+                >
                   <CreditCard className="mr-2 h-4 w-4" />
                   Manage billing
                 </Button>
               )}
               {(isFreePlan || subscriptionStatus === "canceled") && onUpgrade && (
-                <Button size="sm" onClick={onUpgrade}>
+                <Button 
+                  size="sm" 
+                  onClick={onUpgrade}
+                  className="transition-all active:scale-[0.98]"
+                >
                   Upgrade plan
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -129,13 +187,32 @@ export function PlanOverviewCard({
 }
 
 // ============================================================================
-// Usage Row with Progress Bar
+// Usage Row with Progress Bar + Tooltip
 // ============================================================================
 
-const USAGE_STATE_STYLES: Record<SubscriptionUsageState, { progress: string; text: string }> = {
-  normal: { progress: "bg-primary", text: "text-muted-foreground" },
-  warning: { progress: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" },
-  at_limit: { progress: "bg-red-500", text: "text-red-600 dark:text-red-400" },
+const USAGE_STATE_STYLES: Record<SubscriptionUsageState, { 
+  progress: string; 
+  text: string;
+  glow?: string;
+  badge: string;
+}> = {
+  normal: { 
+    progress: "bg-primary", 
+    text: "text-muted-foreground",
+    badge: "",
+  },
+  warning: { 
+    progress: "bg-amber-500", 
+    text: "text-amber-600 dark:text-amber-400",
+    glow: "shadow-[0_0_8px_rgba(245,158,11,0.3)]",
+    badge: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  },
+  at_limit: { 
+    progress: "bg-red-500", 
+    text: "text-red-600 dark:text-red-400",
+    glow: "shadow-[0_0_8px_rgba(239,68,68,0.3)]",
+    badge: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/50",
+  },
 };
 
 const USAGE_ICONS: Record<string, React.ElementType> = {
@@ -143,6 +220,13 @@ const USAGE_ICONS: Record<string, React.ElementType> = {
   "Products": Package,
   "Customers": Building2,
   "Monthly orders": ShoppingCart,
+};
+
+const USAGE_LABELS: Record<string, string> = {
+  "Portal users": "portal users",
+  "Products": "products",
+  "Customers": "customers",
+  "Monthly orders": "orders this month",
 };
 
 export function UsageRow({
@@ -159,47 +243,88 @@ export function UsageRow({
   const styles = USAGE_STATE_STYLES[state];
   const showUpgradeLink = showUpgradeCta && state !== "normal";
   const Icon = USAGE_ICONS[label] || Package;
+  const labelLower = USAGE_LABELS[label] || label.toLowerCase();
+  
+  const tooltipText = `${metric.current} / ${formatUsageLimit(metric.limit)} ${labelLower} used`;
 
   return (
-    <div className="space-y-3 rounded-lg border border-border/50 bg-card p-4 transition-colors hover:border-border">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <Icon className="h-4 w-4 text-muted-foreground" />
+    <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className={cn(
+            "group space-y-3 rounded-lg border bg-card p-4 transition-all duration-200",
+            state === "normal" 
+              ? "border-border/50 hover:border-border hover:bg-muted/30" 
+              : state === "warning"
+                ? "border-amber-500/30 hover:border-amber-500/50 bg-amber-500/[0.02]"
+                : "border-red-500/30 hover:border-red-500/50 bg-red-500/[0.02]"
+          )}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                  state === "normal" ? "bg-muted group-hover:bg-muted/80" :
+                  state === "warning" ? "bg-amber-500/10" : "bg-red-500/10"
+                )}>
+                  <Icon className={cn(
+                    "h-4 w-4 transition-colors",
+                    state === "normal" ? "text-muted-foreground" :
+                    state === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"
+                  )} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className={cn("text-xs tabular-nums", styles.text)}>
+                      {metric.current} / {formatUsageLimit(metric.limit)}
+                    </p>
+                    {percent !== null && (
+                      <span className={cn(
+                        "text-xs font-medium tabular-nums",
+                        state === "normal" ? "text-muted-foreground/70" :
+                        state === "warning" ? "text-amber-600/80 dark:text-amber-400/80" : 
+                        "text-red-600/80 dark:text-red-400/80"
+                      )}>
+                        ({Math.round(percent)}%)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {state !== "normal" && (
+                <Badge 
+                  variant="outline"
+                  className={cn("text-xs transition-colors", styles.badge)}
+                >
+                  {state === "at_limit" ? "At limit" : "Near limit"}
+                </Badge>
+              )}
+            </div>
+            {percent !== null && (
+              <div className={cn("relative", styles.glow && state !== "normal" && styles.glow)}>
+                <Progress
+                  value={Math.min(percent, 100)}
+                  className="h-1.5"
+                  indicatorClassName={cn(styles.progress, "transition-all duration-700 ease-out")}
+                />
+              </div>
+            )}
+            {showUpgradeLink && (
+              <Link
+                href="/account/billing#billing-plans"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+              >
+                Upgrade to increase limit
+                <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
           </div>
-          <div>
-            <p className="text-sm font-medium text-foreground">{label}</p>
-            <p className={cn("text-xs tabular-nums", styles.text)}>
-              {metric.current} / {formatUsageLimit(metric.limit)}
-            </p>
-          </div>
-        </div>
-        {state !== "normal" && (
-          <Badge 
-            variant={state === "at_limit" ? "destructive" : "outline"}
-            className={state === "warning" ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400" : ""}
-          >
-            {state === "at_limit" ? "At limit" : "Near limit"}
-          </Badge>
-        )}
-      </div>
-      {percent !== null && (
-        <Progress
-          value={Math.min(percent, 100)}
-          className="h-1.5"
-          indicatorClassName={styles.progress}
-        />
-      )}
-      {showUpgradeLink && (
-        <Link
-          href="/account/billing#billing-plans"
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-        >
-          Upgrade to increase limit
-          <ArrowRight className="h-3 w-3" />
-        </Link>
-      )}
-    </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -214,22 +339,28 @@ export function UsageCard({
   usage: TenantPlanUsage;
   showUpgradeCta?: boolean;
 }) {
-  const anyNearLimit = [usage.portalUsers, usage.products, usage.customers, usage.monthlyOrders].some(
-    (m) => getUsageState(m) !== "normal"
-  );
+  const metrics = [usage.portalUsers, usage.products, usage.customers, usage.monthlyOrders];
+  const nearLimitCount = metrics.filter((m) => getUsageState(m) === "warning").length;
+  const atLimitCount = metrics.filter((m) => getUsageState(m) === "at_limit").length;
+  const anyIssue = nearLimitCount > 0 || atLimitCount > 0;
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="transition-shadow hover:shadow-sm">
+      <CardHeader className="pb-4">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle>Plan Usage</CardTitle>
+          <div className="space-y-1">
+            <CardTitle className="text-lg">Plan Usage</CardTitle>
             <CardDescription>
               Current usage for the {formatSubscriptionPlanLabel(usage.currentPlan)} plan
             </CardDescription>
           </div>
-          {anyNearLimit && showUpgradeCta && (
-            <Button variant="outline" size="sm" asChild>
+          {anyIssue && showUpgradeCta && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              asChild
+              className="transition-all hover:bg-muted/80 active:scale-[0.98]"
+            >
               <Link href="/account/billing#billing-plans">
                 <Sparkles className="mr-2 h-4 w-4" />
                 Upgrade
@@ -246,12 +377,17 @@ export function UsageCard({
           <UsageRow label="Monthly orders" metric={usage.monthlyOrders} showUpgradeCta={showUpgradeCta} />
         </div>
       </CardContent>
-      {anyNearLimit && showUpgradeCta && (
+      {anyIssue && showUpgradeCta && (
         <CardFooter className="border-t bg-muted/30 px-6 py-3">
-          <p className="text-xs text-muted-foreground">
-            <AlertTriangle className="mr-1.5 inline-block h-3.5 w-3.5 text-amber-500" />
-            {"You're approaching your plan limits. Upgrade to avoid interruptions."}
-          </p>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+            <p className="text-xs text-muted-foreground">
+              {atLimitCount > 0 
+                ? `You've reached ${atLimitCount} plan limit${atLimitCount > 1 ? "s" : ""}. Upgrade to avoid service interruptions.`
+                : `You're approaching ${nearLimitCount} plan limit${nearLimitCount > 1 ? "s" : ""}. Consider upgrading soon.`
+              }
+            </p>
+          </div>
         </CardFooter>
       )}
     </Card>
@@ -266,45 +402,76 @@ const BANNER_CONFIG: Record<BillingBannerState, {
   title: string;
   description: string;
   variant: "warning" | "destructive" | "info" | "default";
+  icon: React.ElementType;
   cta?: { label: string; href?: string };
 }> = {
   past_due: {
-    title: "Payment failed",
-    description: "Your payment method was declined. Please update it to avoid service interruption.",
+    title: "Payment requires attention",
+    description: "Your payment method was declined. Please update it to continue using all features.",
     variant: "warning",
-    cta: { label: "Update payment method" },
+    icon: CreditCard,
+    cta: { label: "Update payment" },
   },
   canceled: {
     title: "Subscription canceled",
     description: "Your subscription has been canceled. Resubscribe to restore access to all features.",
     variant: "destructive",
-    cta: { label: "Resume subscription", href: "#billing-plans" },
+    icon: AlertTriangle,
+    cta: { label: "Choose a plan", href: "#billing-plans" },
   },
   expired: {
     title: "Subscription expired",
     description: "Your subscription or trial period has ended. Choose a plan to continue using the platform.",
     variant: "destructive",
+    icon: AlertTriangle,
     cta: { label: "Choose a plan", href: "#billing-plans" },
   },
   trialing_soon: {
     title: "Trial ending soon",
-    description: "Your trial period is ending soon. Upgrade now to ensure uninterrupted access.",
+    description: "Your trial period is ending soon. Upgrade now to ensure uninterrupted access to all features.",
     variant: "info",
+    icon: Info,
     cta: { label: "Upgrade now", href: "#billing-plans" },
   },
   no_subscription: {
-    title: "Choose a plan to get started",
-    description: "Select a subscription plan that fits your needs and unlock all features.",
+    title: "Choose a plan to unlock all features",
+    description: "Select a subscription plan that fits your needs and get started today.",
     variant: "default",
+    icon: Sparkles,
     cta: { label: "View plans", href: "#billing-plans" },
   },
 };
 
-const BANNER_STYLES: Record<"warning" | "destructive" | "info" | "default", { bg: string; border: string; icon: string }> = {
-  warning: { bg: "bg-amber-500/10", border: "border-amber-500/30", icon: "text-amber-500" },
-  destructive: { bg: "bg-red-500/10", border: "border-red-500/30", icon: "text-red-500" },
-  info: { bg: "bg-blue-500/10", border: "border-blue-500/30", icon: "text-blue-500" },
-  default: { bg: "bg-primary/5", border: "border-primary/20", icon: "text-primary" },
+const BANNER_STYLES: Record<"warning" | "destructive" | "info" | "default", { 
+  bg: string; 
+  border: string; 
+  iconBg: string;
+  icon: string;
+}> = {
+  warning: { 
+    bg: "bg-amber-500/5", 
+    border: "border-amber-500/30", 
+    iconBg: "bg-amber-500/10",
+    icon: "text-amber-500" 
+  },
+  destructive: { 
+    bg: "bg-red-500/5", 
+    border: "border-red-500/30", 
+    iconBg: "bg-red-500/10",
+    icon: "text-red-500" 
+  },
+  info: { 
+    bg: "bg-blue-500/5", 
+    border: "border-blue-500/30", 
+    iconBg: "bg-blue-500/10",
+    icon: "text-blue-500" 
+  },
+  default: { 
+    bg: "bg-primary/5", 
+    border: "border-primary/20", 
+    iconBg: "bg-primary/10",
+    icon: "text-primary" 
+  },
 };
 
 export function BillingStateBanner({
@@ -318,27 +485,48 @@ export function BillingStateBanner({
 }) {
   const config = BANNER_CONFIG[state];
   const styles = BANNER_STYLES[config.variant];
-  const Icon = config.variant === "default" ? Sparkles : AlertTriangle;
+  const Icon = config.icon;
 
   return (
-    <div className={cn("flex items-start gap-4 rounded-lg border p-4", styles.bg, styles.border)}>
-      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full", styles.bg)}>
+    <div className={cn(
+      "flex items-start gap-4 rounded-lg border p-4 transition-colors",
+      styles.bg, 
+      styles.border
+    )}>
+      <div className={cn(
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+        styles.iconBg
+      )}>
         <Icon className={cn("h-5 w-5", styles.icon)} />
       </div>
       <div className="flex-1 space-y-1">
         <h3 className="font-medium text-foreground">{config.title}</h3>
-        <p className="text-sm text-muted-foreground">{config.description}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{config.description}</p>
         {!canManageBilling && (
-          <p className="text-xs text-muted-foreground">Contact an admin to manage billing settings.</p>
+          <p className="text-xs text-muted-foreground pt-1">Contact an admin to manage billing settings.</p>
         )}
       </div>
       {canManageBilling && config.cta && (
         config.cta.href ? (
-          <Button size="sm" asChild>
-            <Link href={config.cta.href}>{config.cta.label}</Link>
+          <Button 
+            size="sm" 
+            asChild
+            className="transition-all active:scale-[0.98]"
+          >
+            <Link href={config.cta.href}>
+              {config.cta.label}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </Button>
         ) : (
-          <Button size="sm" onClick={onAction}>{config.cta.label}</Button>
+          <Button 
+            size="sm" 
+            onClick={onAction}
+            className="transition-all active:scale-[0.98]"
+          >
+            {config.cta.label}
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         )
       )}
     </div>
@@ -362,9 +550,9 @@ const PLAN_FEATURES: Record<TenantSubscriptionPlan, string[]> = {
 export function PlanFeatureList({ plan }: { plan: TenantSubscriptionPlan }) {
   const features = PLAN_FEATURES[plan];
   return (
-    <ul className="space-y-2 text-sm text-muted-foreground">
+    <ul className="space-y-2.5 text-sm text-muted-foreground">
       {features.map((feature) => (
-        <li key={feature} className="flex items-center gap-2">
+        <li key={feature} className="flex items-center gap-2.5">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
           <span>{feature}</span>
         </li>
