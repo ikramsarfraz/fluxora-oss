@@ -23,20 +23,102 @@ import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 export type StripeCheckoutPlan = StripeSaasPaidPlanKey;
 
+/** Merge subscription payload with DB row: fill missing cust id; on mismatch prefer Stripe-subscription linkage. */
+function reconcileStripeCustomerIdFromWebhook(
+  storedTenant: string | null | undefined,
+  fromSubscriptionCustomer: string | null,
+): string | null {
+  const incoming = fromSubscriptionCustomer?.trim() || null;
+  const saved = storedTenant?.trim() || null;
+  if (!incoming) {
+    return saved;
+  }
+  if (!saved) {
+    return incoming;
+  }
+  return incoming;
+}
+
+/**
+ * Ensures exactly one Stripe Customer per tenant: reuse `tenants.stripe_customer_id`, or create +
+ * persist (`metadata.tenantId`). Idempotent per tenant id.
+ */
+export async function getOrCreateStripeCustomerForTenant(tenantId: string): Promise<string> {
+  const stripe = getStripeClient();
+
+  const row = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+  if (!row) {
+    throw new Error("Tenant not found.");
+  }
+
+  let existing: string | null = row.stripeCustomerId?.trim() || null;
+  if (existing) {
+    try {
+      const fetched = await stripe.customers.retrieve(existing);
+      if (typeof fetched === "object" && "deleted" in fetched && fetched.deleted) {
+        existing = null;
+        await db
+          .update(tenants)
+          .set({ stripeCustomerId: null, updatedAt: new Date() })
+          .where(eq(tenants.id, tenantId));
+      } else {
+        return existing;
+      }
+    } catch {
+      await db
+        .update(tenants)
+        .set({ stripeCustomerId: null, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId));
+    }
+  }
+
+  const tenant = await db.query.tenants.findFirst({ where: eq(tenants.id, tenantId) });
+  if (!tenant) {
+    throw new Error("Tenant not found.");
+  }
+  existing = tenant.stripeCustomerId?.trim() ?? null;
+  if (existing) {
+    return existing;
+  }
+
+  const email = await getPreferredBillingEmailForTenant(tenantId);
+  if (!email?.trim()) {
+    throw new Error("No billing email could be determined for Stripe customer creation.");
+  }
+
+  const customer = await stripe.customers.create(
+    {
+      email: email.trim(),
+      name: tenant.name,
+      metadata: { tenantId },
+    },
+    { idempotencyKey: `tenant_create_customer:${tenantId}` },
+  );
+
+  await db
+    .update(tenants)
+    .set({
+      stripeCustomerId: customer.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenants.id, tenantId));
+
+  return customer.id;
+}
+
 export async function createTenantStripeCheckoutSession(input: {
   tenantId: string;
   plan: StripeCheckoutPlan;
-  /** Used when the tenant has no Stripe customer yet */
-  customerEmail: string;
   /**
-   * Path relative to app origin, e.g. "/account/billing" or "/admin/tenants/xyz"
-   * Success URL will receive ?session_id={CHECKOUT_SESSION_ID}
+   * Path-relative success and cancel URLs appended for tenant UX:
+   * — success: `?success=1&session_id={CHECKOUT_SESSION_ID}` (or `&` if the path already has a query string)
+   * — cancel: `?canceled=1` / `&canceled=1`
    */
   successPath: string;
   /** Path for cancel, e.g. same as billing page */
   cancelPath: string;
-  existingStripeCustomerId: string | null;
 }): Promise<{ url: string }> {
+  const customerId = await getOrCreateStripeCustomerForTenant(input.tenantId);
   const priceId = await resolveStripePriceIdForPaidPlan(input.plan);
   const origin = getAppPublicOrigin();
   const successPath = input.successPath.startsWith("/")
@@ -45,9 +127,11 @@ export async function createTenantStripeCheckoutSession(input: {
   const cancelPath = input.cancelPath.startsWith("/")
     ? input.cancelPath
     : `/${input.cancelPath}`;
-  // Stripe replaces {CHECKOUT_SESSION_ID} — must be a literal in the string.
-  const successUrl = `${origin}${successPath}?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}${cancelPath}`;
+  // Stripe replaces {CHECKOUT_SESSION_ID}; keep success=1 for tenant UX banners.
+  const qp = successPath.includes("?") ? "&" : "?";
+  const successUrl = `${origin}${successPath}${qp}success=1&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelSuffix = cancelPath.includes("?") ? "&canceled=1" : "?canceled=1";
+  const cancelUrl = `${origin}${cancelPath}${cancelSuffix}`;
 
   const stripe = getStripeClient();
   const params: Stripe.Checkout.SessionCreateParams = {
@@ -55,21 +139,13 @@ export async function createTenantStripeCheckoutSession(input: {
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: successUrl,
     cancel_url: cancelUrl,
+    customer: customerId,
     client_reference_id: input.tenantId,
     metadata: { tenantId: input.tenantId },
     subscription_data: {
       metadata: { tenantId: input.tenantId },
     },
   };
-  if (input.existingStripeCustomerId) {
-    params.customer = input.existingStripeCustomerId;
-  } else {
-    const email = input.customerEmail.trim();
-    if (!email) {
-      throw new Error("A billing contact email is required for Stripe Checkout.");
-    }
-    params.customer_email = email;
-  }
 
   const session = await stripe.checkout.sessions.create(params);
   if (!session.url) {
@@ -103,10 +179,8 @@ export async function startCheckoutForTenant(input: {
   return createTenantStripeCheckoutSession({
     tenantId: input.tenantId,
     plan: input.plan,
-    customerEmail: email,
     successPath: input.successPath,
     cancelPath: input.cancelPath,
-    existingStripeCustomerId: t.stripeCustomerId,
   });
 }
 
@@ -161,10 +235,14 @@ export async function updateTenantFromStripeEvent(args: {
       throw new Error("Tenant not found for Stripe sync.");
     }
     const before = subscriptionSnapshotFromRow(tenant);
+    const nextStripeCustomerId = reconcileStripeCustomerIdFromWebhook(
+      tenant.stripeCustomerId,
+      args.stripeCustomerId,
+    );
     const [u] = await tx
       .update(tenants)
       .set({
-        stripeCustomerId: args.stripeCustomerId,
+        stripeCustomerId: nextStripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
         subscriptionPlan: args.subscriptionPlan,
         subscriptionStatus: args.subscriptionStatus,

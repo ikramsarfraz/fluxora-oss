@@ -19,8 +19,6 @@ export function TenantSubscriptionOverview(props: {
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
 }) {
-  const hasStripeId = Boolean(props.stripeCustomerId || props.stripeSubscriptionId);
-
   return (
     <div className="space-y-4 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -37,21 +35,25 @@ export function TenantSubscriptionOverview(props: {
           {formatSubscriptionCurrentPeriodLine(props.currentPeriodEndsAt)}
         </dd>
       </dl>
-      {hasStripeId ? (
-        <div className="space-y-1.5 border-t border-border pt-4 font-mono text-[0.7rem] text-muted-foreground">
-          {props.stripeCustomerId ? (
-            <p>
-              <span className="text-muted-foreground">Stripe customer:</span> {props.stripeCustomerId}
-            </p>
-          ) : null}
-          {props.stripeSubscriptionId ? (
-            <p>
-              <span className="text-muted-foreground">Stripe subscription:</span>{" "}
-              {props.stripeSubscriptionId}
-            </p>
-          ) : null}
+      <div className="mt-4 border-t border-border pt-4">
+        <p className="mb-2 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+          Stripe linkage
+        </p>
+        <div className="space-y-1.5 font-mono text-[0.7rem] text-muted-foreground">
+          <p>
+            <span className="text-muted-foreground">Customer ID:</span>{" "}
+            <span className="tabular-nums text-foreground">
+              {props.stripeCustomerId?.trim() || "—"}
+            </span>
+          </p>
+          <p>
+            <span className="text-muted-foreground">Subscription ID:</span>{" "}
+            <span className="tabular-nums text-foreground">
+              {props.stripeSubscriptionId?.trim() || "—"}
+            </span>
+          </p>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }

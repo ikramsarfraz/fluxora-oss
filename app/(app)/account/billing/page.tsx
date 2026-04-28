@@ -2,7 +2,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AccountBillingReturnBanner } from "@/components/account/account-billing-return-banner";
+import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-feedback";
+import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
 import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
 import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
@@ -20,7 +21,7 @@ import { getCurrentTenant } from "@/services/tenants";
 import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
 
 export default async function AccountBillingPage(props: {
-  searchParams: Promise<{ session_id?: string }>;
+  searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
 }) {
   const session = await auth.api.getSession({
     headers: await headers(),
@@ -49,6 +50,26 @@ export default async function AccountBillingPage(props: {
 
   const tenant = await getCurrentTenant();
   const params = await props.searchParams;
+  const checkoutFeedback = (() => {
+    const c = params.canceled;
+    if (c === "1" || c === "true") {
+      return { kind: "canceled" as const };
+    }
+    const sessionId = params.session_id ?? null;
+    const s = params.success;
+    if (s === "1" || s === "true" || sessionId) {
+      return { kind: "success" as const, sessionId };
+    }
+    return null;
+  })();
+
+  const hadCanceledCheckout = params.canceled === "1" || params.canceled === "true";
+  const bootstrapFromCheckoutSuccess =
+    !hadCanceledCheckout &&
+    (params.success === "1" ||
+      params.success === "true" ||
+      !!(params.session_id && params.session_id.trim()));
+
   const catalogPlans = await listActivePaidPlansForBillingPage();
 
   const canManageBilling =
@@ -63,8 +84,11 @@ export default async function AccountBillingPage(props: {
         />
       </div>
       <div className="grid max-w-6xl gap-4">
-        {params.session_id ? (
-          <AccountBillingReturnBanner sessionId={params.session_id} />
+        {checkoutFeedback ? (
+          <BillingCheckoutFeedback
+            kind={checkoutFeedback.kind}
+            sessionId={checkoutFeedback.kind === "success" ? checkoutFeedback.sessionId : null}
+          />
         ) : null}
         <Card>
           <CardHeader>
@@ -81,6 +105,11 @@ export default async function AccountBillingPage(props: {
               currentPeriodEndsAt={tenant.currentPeriodEndsAt}
               stripeCustomerId={tenant.stripeCustomerId}
               stripeSubscriptionId={tenant.stripeSubscriptionId}
+            />
+            <BillingSubscriptionRefreshHint
+              snapshotPlan={tenant.subscriptionPlan}
+              snapshotStatus={tenant.subscriptionStatus}
+              bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
             />
           </CardContent>
         </Card>

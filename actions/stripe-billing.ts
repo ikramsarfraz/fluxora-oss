@@ -30,7 +30,7 @@ export async function startTenantAdminStripeCheckoutAction(
   return { url };
 }
 
-/** After Checkout redirect (`?session_id=` from success URL), verify the Stripe session belongs to this tenant — same retrieval pattern as the Next.js Stripe example apps. */
+/** After Checkout redirect (`?success=1&session_id=` or legacy `?session_id=`), verify Stripe session server-side when possible. */
 export async function getStripeCheckoutSessionReturnLabels(sessionId: string): Promise<
   | { ok: true; paymentStatus: string; customerEmail: string | null }
   | { ok: false }
