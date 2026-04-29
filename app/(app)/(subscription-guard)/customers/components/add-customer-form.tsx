@@ -421,11 +421,11 @@ export function AddCustomerForm(props?: {
         <Button type="submit" form="form-add-customer" disabled={isPending}>
           {isPending
             ? mode === "edit"
-              ? "Saving..."
-              : "Adding..."
+              ? "Saving…"
+              : "Adding…"
             : mode === "edit"
-              ? "Save Changes"
-              : "Add Customer"}
+              ? "Save changes"
+              : "Add customer"}
         </Button>
       </CardFooter>
     </Card>

@@ -71,12 +71,14 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
           )
         }
       >
-        <Button variant="outline" asChild>
-          <Link href={`/categories/${category.id}/edit`}>
-            <Pencil className="size-4" />
-            Edit
-          </Link>
-        </Button>
+        {category.isActive && !category.archivedAt ? (
+          <Button variant="outline" asChild>
+            <Link href={`/categories/${category.id}/edit`}>
+              <Pencil className="size-4" />
+              Edit
+            </Link>
+          </Button>
+        ) : null}
       </DetailPageHeader>
 
       <DetailSection

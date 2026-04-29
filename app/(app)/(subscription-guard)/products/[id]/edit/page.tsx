@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
 import { getProductById } from "@/services/products";
 
@@ -22,7 +25,14 @@ export default async function EditProductRoute({
       <PageHeader
         title="Edit product"
         description="Update product details, categories, and unit mappings."
-      />
+      >
+        <Button variant="outline" asChild>
+          <Link href={`/products/${product.id}`}>
+            <ArrowLeft className="size-4" />
+            Back to product
+          </Link>
+        </Button>
+      </PageHeader>
       <AddProductForm mode="edit" product={product} />
     </section>
   );
