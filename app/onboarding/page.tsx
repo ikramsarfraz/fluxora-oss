@@ -2,10 +2,26 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { getAccessibleDestinationsForAuthUser } from "@/services/auth";
+import {
+  buildRootAppUrl,
+  getRequestTenantHostContextFromHeaders,
+} from "@/lib/tenant-host";
+import { loadAuthenticatedDestinationSelectView } from "@/services/auth";
 import { getCurrentRequestTenant } from "@/services/tenants";
 
 import { OnboardingForm } from "./onboarding-form";
+
+function sameRootAppPath(a: string, b: string): boolean {
+  try {
+    const ua = new URL(a);
+    const ub = new URL(b);
+    const pa = ua.pathname.replace(/\/$/, "") || "/";
+    const pb = ub.pathname.replace(/\/$/, "") || "/";
+    return ua.origin === ub.origin && pa === pb;
+  } catch {
+    return false;
+  }
+}
 
 export default async function OnboardingPage() {
   const requestTenant = await getCurrentRequestTenant();
@@ -14,27 +30,45 @@ export default async function OnboardingPage() {
     redirect("/");
   }
 
+  const headerList = await headers();
   const session = await auth.api.getSession({
-    headers: await headers(),
+    headers: headerList,
   });
 
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !session.session?.id) {
     redirect("/login?callbackUrl=/onboarding");
   }
 
-  const destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
-  if (destinations.length === 1) {
-    redirect(destinations[0].targetUrl);
-  }
-  if (destinations.length > 1) {
+  const requestContext = getRequestTenantHostContextFromHeaders(headerList);
+
+  const selection = await loadAuthenticatedDestinationSelectView({
+    authUserId: session.user.id,
+    sessionId: session.session.id,
+    returnTo: null,
+  });
+
+  if (selection.view === "choose") {
     redirect("/select-destination");
+  }
+
+  const onboardingUrl = buildRootAppUrl({
+    pathname: "/onboarding",
+    context: requestContext,
+  });
+
+  if (
+    selection.view === "redirect" &&
+    !sameRootAppPath(selection.url, onboardingUrl)
+  ) {
+    redirect(selection.url);
   }
 
   return (
     <OnboardingForm
-      defaultName={session.user.name}
-      defaultEmail={session.user.email}
+      defaultName={session.user.name ?? ""}
+      defaultEmail={session.user.email ?? ""}
       protocol={requestTenant.protocol}
+      hostname={requestTenant.hostname}
       rootDomain={requestTenant.rootDomain}
       port={requestTenant.port}
     />

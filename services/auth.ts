@@ -124,11 +124,11 @@ type GoogleStartPayload = {
 
 async function ensureTenantSlugAvailable(slug: string) {
   if (!slug.trim()) {
-    throw new Error("Please choose a tenant slug.");
+    throw new Error("Please choose a workspace URL.");
   }
 
   if (isReservedTenantSlug(slug)) {
-    throw new Error("That tenant slug is reserved. Please choose another.");
+    throw new Error("That workspace URL is reserved. Please choose another.");
   }
 
   const existing = await db.query.tenants.findFirst({
@@ -136,7 +136,7 @@ async function ensureTenantSlugAvailable(slug: string) {
   });
 
   if (existing) {
-    throw new Error("That tenant slug is already taken.");
+    throw new Error("That workspace URL is already taken.");
   }
 }
 
@@ -803,7 +803,7 @@ export async function getAccessibleDestinationsForAuthUser(
       role: membership.role,
       targetUrl: buildTenantAppUrl({
         slug: membership.tenant.slug,
-        pathname: "/",
+        pathname: "/dashboard",
         context: requestContext,
       }),
     }))
@@ -1232,12 +1232,22 @@ export async function completeUserOnboarding(input: {
     throw new Error("Please choose a workspace URL.");
   }
 
-  await ensureTenantSlugAvailable(tenantSlug);
+  if (!requestContext.isRootHost) {
+    throw new Error(
+      "Workspace setup must be completed on your main application URL (not from a tenant subdomain).",
+    );
+  }
 
   const destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
   if (destinations.length > 0) {
-    throw new Error("Your account is already linked to a workspace.");
+    throw new Error(
+      destinations.some(d => d.type === "tenant")
+        ? "Your account is already linked to a workspace."
+        : "Your account already has platform admin access.",
+    );
   }
+
+  await ensureTenantSlugAvailable(tenantSlug);
 
   const normalizedEmail = normalizeEmail(session.user.email);
 

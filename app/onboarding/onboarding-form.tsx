@@ -19,6 +19,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { buildTenantHostnamePreview } from "@/lib/tenant-slug-policy";
 
 import {
   onboardingFormSchema,
@@ -29,6 +30,7 @@ type OnboardingFormProps = {
   defaultName: string;
   defaultEmail: string;
   protocol: "http" | "https";
+  hostname: string;
   rootDomain: string;
   port: string | null;
 };
@@ -43,15 +45,14 @@ function slugifyTenantInput(input: string) {
     .replace(/^-|-$/g, "");
 }
 
-function buildTenantPreview(args: {
-  slug: string;
-  protocol: "http" | "https";
-  rootDomain: string;
-  port: string | null;
-}) {
-  const portSuffix = args.port ? `:${args.port}` : "";
-  const slug = args.slug || "your-workspace";
-  return `${args.protocol}://${slug}.${args.rootDomain}${portSuffix}`;
+function buildTenantUrlPreview(props: OnboardingFormProps & { slug: string }) {
+  const hostPort = buildTenantHostnamePreview({
+    slug: props.slug,
+    hostname: props.hostname,
+    rootDomain: props.rootDomain,
+    port: props.port,
+  });
+  return `${props.protocol}://${hostPort}`;
 }
 
 export function OnboardingForm(props: OnboardingFormProps) {
@@ -77,21 +78,26 @@ export function OnboardingForm(props: OnboardingFormProps) {
   const tenantSlug = form.watch("tenantSlug");
   const tenantPreview = useMemo(
     () =>
-      buildTenantPreview({
-        slug: tenantSlug,
-        protocol: props.protocol,
-        rootDomain: props.rootDomain,
-        port: props.port,
+      buildTenantUrlPreview({
+        ...props,
+        slug: tenantSlug?.trim()
+          ? tenantSlug
+          : "your-workspace",
       }),
-    [props.port, props.protocol, props.rootDomain, tenantSlug],
+    [
+      tenantSlug,
+      props.hostname,
+      props.port,
+      props.protocol,
+      props.rootDomain,
+    ],
   );
 
   async function onSubmit(values: OnboardingFormValues) {
     setError(null);
     try {
       const result = await completeUserOnboardingAction(values);
-      router.push(result.redirectUrl);
-      router.refresh();
+      window.location.assign(result.redirectUrl);
     } catch (err) {
       setError(
         err instanceof Error
@@ -100,6 +106,8 @@ export function OnboardingForm(props: OnboardingFormProps) {
       );
     }
   }
+
+  const { isSubmitting } = form.formState;
 
   return (
     <AuthSplitShell
@@ -117,8 +125,8 @@ export function OnboardingForm(props: OnboardingFormProps) {
             Create your workspace
           </h1>
           <p className="text-sm text-[oklch(0.50_0.02_230)]">
-            Your account is ready. Choose the name and URL for the tenant
-            you&apos;ll use in the app.
+            Your login is ready. Below, pick how your workspace appears in Prime
+            Distribution and the URL your team signs in through.
           </p>
         </div>
 
@@ -126,7 +134,7 @@ export function OnboardingForm(props: OnboardingFormProps) {
           <CardContent className="pt-6">
             <form id="onboarding-form" onSubmit={form.handleSubmit(onSubmit)}>
               {error ? (
-                <FormErrorAlert title="We couldn't finish setting up your workspace.">
+                <FormErrorAlert title="We couldn't finish setting up your workspace">
                   {error}
                 </FormErrorAlert>
               ) : null}
@@ -146,6 +154,7 @@ export function OnboardingForm(props: OnboardingFormProps) {
                         placeholder="Acme Distribution"
                         aria-invalid={fieldState.invalid}
                         onChange={event => {
+                          setError(null);
                           field.onChange(event);
                           const currentSlug = form.getValues("tenantSlug");
                           if (!currentSlug) {
@@ -160,7 +169,7 @@ export function OnboardingForm(props: OnboardingFormProps) {
                         }}
                       />
                       <FieldDescription>
-                        This is the company or workspace name shown across your tenant.
+                        Shown in the app sidebar and invitations.
                       </FieldDescription>
                       {fieldState.invalid ? (
                         <FieldError errors={[fieldState.error]} />
@@ -191,7 +200,9 @@ export function OnboardingForm(props: OnboardingFormProps) {
                         }}
                       />
                       <FieldDescription>
-                        Used as the tenant subdomain for your team.
+                        The subdomain for your workspace: teammates use this
+                        address to reach your company app. Pick something clear
+                        and stable; subdomain changes are limited.
                       </FieldDescription>
                       {fieldState.invalid ? (
                         <FieldError errors={[fieldState.error]} />
@@ -204,10 +215,14 @@ export function OnboardingForm(props: OnboardingFormProps) {
                   <div className="flex items-center gap-2">
                     <Globe className="size-4 text-muted-foreground" />
                     <p className="text-sm font-medium text-foreground">
-                      Workspace preview
+                      Sign-in address preview
                     </p>
                   </div>
-                  <p className="mt-2 font-mono text-sm text-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Mirrors how subdomain routing uses your ROOT_DOMAIN (
+                    <span className="font-mono">{props.rootDomain}</span>).
+                  </p>
+                  <p className="mt-3 break-all font-mono text-sm text-foreground">
                     {tenantPreview}
                   </p>
                 </div>
@@ -216,9 +231,9 @@ export function OnboardingForm(props: OnboardingFormProps) {
           </CardContent>
           <FormActionFooter
             formId="onboarding-form"
-            isPending={form.formState.isSubmitting}
+            isPending={isSubmitting}
             onCancel={() => router.push("/login")}
-            pendingLabel="Creating…"
+            pendingLabel="Creating workspace…"
             submitLabel="Create workspace"
           />
         </Card>

@@ -1,5 +1,7 @@
 import * as z from "zod";
 
+import { isReservedTenantSlug } from "@/lib/tenant-slug-policy";
+
 export const onboardingFormSchema = z.object({
   tenantName: z
     .string()
@@ -12,7 +14,10 @@ export const onboardingFormSchema = z.object({
     .regex(
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
       "Use lowercase letters, numbers, and hyphens only.",
-    ),
+    )
+    .refine(value => !isReservedTenantSlug(value), {
+      message: "That workspace URL is reserved. Please choose another.",
+    }),
 });
 
 export type OnboardingFormValues = z.infer<typeof onboardingFormSchema>;

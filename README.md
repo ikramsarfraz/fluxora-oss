@@ -10,6 +10,7 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 | ----- | --- |
 | **Index of all docs** | [docs/README.md](docs/README.md) |
 | **Local setup, env, subdomain routing, UAT** | [docs/local-development.md](docs/local-development.md) |
+| **Account signup vs onboarding, invites** | [docs/account-and-workspace-setup.md](docs/account-and-workspace-setup.md) |
 | **Stripe** (Checkout, Customer Portal, webhooks, CLI testing, catalog sync, signing secrets) | [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) |
 | **Subscription system overview** | [docs/subscription-system-overview.md](docs/subscription-system-overview.md) |
 | **Billing release checklist** | [docs/billing-release-checklist.md](docs/billing-release-checklist.md) |

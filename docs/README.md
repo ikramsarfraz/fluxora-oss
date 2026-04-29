@@ -7,6 +7,7 @@ Detailed guides live here so the [root README](../README.md) stays a short orien
 | Topic | Doc |
 | ----- | --- |
 | **Local setup, env, host routing, UAT URLs** | [Local development](./local-development.md) |
+| **Account signup vs workspace onboarding, invites** | [Account & workspace](./account-and-workspace-setup.md) |
 | **Stripe subscriptions** (Checkout, webhooks, CLI vs Dashboard secrets) | [Stripe subscriptions](./stripe-subscriptions.md) |
 | **Subscription system overview** (Checkout, health, gating, limits, usage) | [Subscription system overview](./subscription-system-overview.md) |
 | **Billing release checklist** (launch verification, lifecycle, limits, isolation) | [Billing release checklist](./billing-release-checklist.md) |

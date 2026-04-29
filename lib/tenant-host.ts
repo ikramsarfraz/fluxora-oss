@@ -1,5 +1,10 @@
 import { headers } from "next/headers";
 
+import {
+  isReservedTenantSlug,
+  slugifyTenantName,
+} from "@/lib/tenant-slug-policy";
+
 export type RequestTenantHostContext = {
   host: string;
   hostname: string;
@@ -15,11 +20,7 @@ export type RequestTenantHostContext = {
 
 export const PLATFORM_ADMIN_SLUG = "admin";
 
-const RESERVED_TENANT_SLUGS = new Set([
-  PLATFORM_ADMIN_SLUG,
-  "www",
-  "localhost",
-]);
+export { slugifyTenantName, isReservedTenantSlug };
 
 function normalizeHostname(host: string) {
   return host.trim().toLowerCase();
@@ -41,22 +42,6 @@ function splitHostAndPort(rawHost: string) {
   }
 
   return { hostname: normalizeHostname(hostname), port };
-}
-
-export function slugifyTenantName(input: string) {
-  const slug = (input ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return slug || "tenant";
-}
-
-export function isReservedTenantSlug(slug: string) {
-  return RESERVED_TENANT_SLUGS.has(slug.trim().toLowerCase());
 }
 
 export function getRootDomain() {
