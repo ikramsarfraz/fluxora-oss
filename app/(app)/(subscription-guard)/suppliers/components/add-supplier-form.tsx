@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { useCreateSupplier } from "@/hooks/use-suppliers";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldDescription,
@@ -60,10 +61,9 @@ export function AddSupplierForm() {
     createSupplier.mutate(
       { name: data.name, netDays: data.netDays },
       {
-        onSuccess: () => {
-          form.reset();
-          toast.success("Supplier added");
-          router.push("/suppliers");
+        onSuccess: result => {
+          toast.success("Supplier created.");
+          router.push(`/suppliers/${result.id}`);
         },
         onError: (e: Error) => setError(e.message),
       },
@@ -74,6 +74,11 @@ export function AddSupplierForm() {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id="form-add-supplier" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert title="We couldn't create the supplier.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="name"
@@ -130,31 +135,16 @@ export function AddSupplierForm() {
                 </Field>
               )}
             />
-
-            {error && (
-              <div className="text-sm text-destructive" role="alert">
-                {error}
-              </div>
-            )}
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push("/suppliers")}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form="form-add-supplier"
-          disabled={createSupplier.isPending}
-        >
-          {createSupplier.isPending ? "Adding..." : "Add Supplier"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-add-supplier"
+        isPending={createSupplier.isPending}
+        onCancel={() => router.push("/suppliers")}
+        pendingLabel="Creating…"
+        submitLabel="Create supplier"
+      />
     </Card>
   );
 }

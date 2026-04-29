@@ -10,7 +10,9 @@ import { Plus, Trash2 } from "lucide-react";
 
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldError,
@@ -104,12 +106,7 @@ export function AddCustomerForm(props?: {
           : await createCustomerAction(data);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       invalidateSetupChecklistQuery(queryClient);
-      if (mode === "create") {
-        form.reset(buildDefaultCustomerForm());
-        toast.success("Customer added");
-      } else {
-        toast.success("Customer updated");
-      }
+      toast.success(mode === "edit" ? "Customer updated." : "Customer created.");
       router.push("/customers/" + result.id);
     } catch (e: unknown) {
       setError(
@@ -128,6 +125,21 @@ export function AddCustomerForm(props?: {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert
+              title={
+                mode === "edit"
+                  ? "We couldn't save your changes."
+                  : "We couldn't create the customer."
+              }
+            >
+              {isLimitReachedMessage(error, "maxCustomers") ? (
+                <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
+              ) : (
+                stripSubscriptionEnforcementPrefix(error)
+              )}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             {/* Customer name */}
             <Controller
@@ -396,38 +408,22 @@ export function AddCustomerForm(props?: {
               Add address
             </Button>
 
-            {error && (
-              <div className="text-sm text-destructive" role="alert">
-                {isLimitReachedMessage(error, "maxCustomers") ? (
-                  <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
-                ) : (
-                  stripSubscriptionEnforcementPrefix(error)
-                )}
-              </div>
-            )}
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            router.push(mode === "edit" && customer ? `/customers/${customer.id}` : "/customers")
-          }
-        >
-          Cancel
-        </Button>
-        <Button type="submit" form="form-add-customer" disabled={isPending}>
-          {isPending
-            ? mode === "edit"
-              ? "Saving…"
-              : "Adding…"
-            : mode === "edit"
-              ? "Save changes"
-              : "Add customer"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-add-customer"
+        isPending={isPending}
+        onCancel={() =>
+          router.push(
+            mode === "edit" && customer
+              ? `/customers/${customer.id}`
+              : "/customers",
+          )
+        }
+        pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
+        submitLabel={mode === "edit" ? "Save changes" : "Create customer"}
+      />
     </Card>
   );
 }

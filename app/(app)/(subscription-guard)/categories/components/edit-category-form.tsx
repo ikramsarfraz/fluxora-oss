@@ -2,12 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { updateCategoryAction } from "@/actions/categories";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldDescription,
@@ -26,6 +28,7 @@ import {
 
 export function EditCategoryForm({ category }: { category: CategoryDetail }) {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
   const form = useForm<AddCategoryFormValues>({
     resolver: zodResolver(addCategoryFormSchema),
     defaultValues: {
@@ -35,16 +38,17 @@ export function EditCategoryForm({ category }: { category: CategoryDetail }) {
   });
 
   async function onSubmit(data: AddCategoryFormValues) {
+    setError(null);
     try {
       await updateCategoryAction({
         id: category.id,
         name: data.name,
         description: data.description || null,
       });
-      toast.success(`Category "${data.name}" updated.`);
+      toast.success("Category updated.");
       router.push(`/categories/${category.id}`);
     } catch (err) {
-      toast.error(
+      setError(
         err instanceof Error ? err.message : "Failed to update category.",
       );
     }
@@ -54,6 +58,11 @@ export function EditCategoryForm({ category }: { category: CategoryDetail }) {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id="form-edit-category" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert title="We couldn't save your changes.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="name"
@@ -103,22 +112,13 @@ export function EditCategoryForm({ category }: { category: CategoryDetail }) {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push(`/categories/${category.id}`)}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form="form-edit-category"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting ? "Saving…" : "Save changes"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-edit-category"
+        isPending={form.formState.isSubmitting}
+        onCancel={() => router.push(`/categories/${category.id}`)}
+        pendingLabel="Saving…"
+        submitLabel="Save changes"
+      />
     </Card>
   );
 }
