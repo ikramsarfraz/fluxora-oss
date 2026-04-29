@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { dotPattern, diagonalLinesPattern } from "./styles";
 
 export function Footer() {
@@ -42,8 +44,12 @@ export function Footer() {
               <div className="flex flex-col gap-2 text-[0.85rem] text-[oklch(0.50_0.02_230)] sm:gap-2.5">
                 <a href="#" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">About</a>
                 <a href="#" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">Careers</a>
-                <a href="#" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">Privacy</a>
-                <a href="#" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">Terms</a>
+                <Link href="/privacy" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+                  Terms
+                </Link>
               </div>
             </div>
           </div>

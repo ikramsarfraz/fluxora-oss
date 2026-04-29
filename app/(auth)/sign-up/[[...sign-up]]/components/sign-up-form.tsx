@@ -303,8 +303,21 @@ export function SignUpForm({
 
             <div className="space-y-2 pt-1 text-center text-sm text-muted-foreground">
               <p>
-                By creating an account, you agree to our terms of service and
-                privacy policy.
+                By creating an account, you agree to our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
               </p>
               <div className="flex items-center justify-center gap-4">
                 <Link

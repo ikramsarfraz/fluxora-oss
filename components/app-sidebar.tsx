@@ -432,6 +432,23 @@ export function AppSidebar({
               </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
+          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
+            <Link
+              href="/privacy"
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Privacy
+            </Link>
+            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/terms"
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Terms
+            </Link>
+          </div>
         </SidebarFooter>
       )}
       <SidebarRail />
