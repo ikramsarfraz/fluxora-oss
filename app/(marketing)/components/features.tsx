@@ -28,7 +28,7 @@ export function Features() {
                 </div>
               ))}
             </div>
-            <a href="#" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.35_0.10_230)] transition-colors hover:text-[oklch(0.45_0.12_210)] sm:mt-8 sm:text-[0.9rem]">
+            <a href="/features" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.35_0.10_230)] transition-colors hover:text-[oklch(0.45_0.12_210)] sm:mt-8 sm:text-[0.9rem]">
               Explore orders 
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
             </a>
@@ -113,7 +113,7 @@ export function Features() {
                 </div>
               ))}
             </div>
-            <a href="#" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.40_0.12_195)] transition-colors hover:text-[oklch(0.50_0.14_195)] sm:mt-8 sm:text-[0.9rem]">
+            <a href="/features" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.40_0.12_195)] transition-colors hover:text-[oklch(0.50_0.14_195)] sm:mt-8 sm:text-[0.9rem]">
               Explore inventory 
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
             </a>
@@ -146,7 +146,7 @@ export function Features() {
                 </div>
               ))}
             </div>
-            <a href="#" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.45_0.12_85)] transition-colors hover:text-[oklch(0.55_0.14_85)] sm:mt-8 sm:text-[0.9rem]">
+            <a href="/features" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.45_0.12_85)] transition-colors hover:text-[oklch(0.55_0.14_85)] sm:mt-8 sm:text-[0.9rem]">
               Explore finance 
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
             </a>
@@ -265,7 +265,7 @@ function InvoiceFeature() {
               </div>
             ))}
           </div>
-          <a href="#" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.35_0.10_230)] transition-colors hover:text-[oklch(0.45_0.12_210)] sm:mt-8 sm:text-[0.9rem]">
+          <a href="/features" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.35_0.10_230)] transition-colors hover:text-[oklch(0.45_0.12_210)] sm:mt-8 sm:text-[0.9rem]">
             Explore invoicing 
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
           </a>
@@ -301,7 +301,7 @@ function EmailFeature() {
               </div>
             ))}
           </div>
-          <a href="#" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.45_0.12_165)] transition-colors hover:text-[oklch(0.55_0.14_165)] sm:mt-8 sm:text-[0.9rem]">
+          <a href="/features" className="mt-6 inline-flex items-center gap-2 text-[0.85rem] font-semibold text-[oklch(0.45_0.12_165)] transition-colors hover:text-[oklch(0.55_0.14_165)] sm:mt-8 sm:text-[0.9rem]">
             Explore notifications 
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
           </a>

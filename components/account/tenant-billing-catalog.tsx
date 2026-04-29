@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import type { BillingCatalogPlanRow } from "@/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 import type { StripeCheckoutPlan } from "@/services/stripe-tenant-billing";
+import { buildPublicSupportMailto } from "@/lib/public-contact";
 
 // ============================================================================
 // Formatting Helpers
@@ -140,16 +141,16 @@ const PLAN_LIMITS: Record<
   { portalUsers: string; products: string; customers: string; monthlyOrders: string }
 > = {
   starter: {
-    portalUsers: "5",
-    products: "100",
-    customers: "50",
+    portalUsers: "3",
+    products: "250",
+    customers: "250",
     monthlyOrders: "100",
   },
   growth: {
-    portalUsers: "25",
-    products: "500",
-    customers: "250",
-    monthlyOrders: "500",
+    portalUsers: "10",
+    products: "5,000",
+    customers: "5,000",
+    monthlyOrders: "1,000",
   },
   enterprise: {
     portalUsers: "Unlimited",
@@ -162,22 +163,19 @@ const PLAN_LIMITS: Record<
 // Feature lists per plan
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: [
-    "Core distribution features",
-    "Basic reporting",
-    "Email support",
+    "Sales orders and inventory",
+    "Dashboard and usage visibility",
+    "Support tickets",
   ],
   growth: [
     "Everything in Starter",
-    "Advanced analytics",
-    "API access",
-    "Priority support",
+    "Purchasing and supplier invoices",
+    "Reports and aging views",
   ],
   enterprise: [
     "Everything in Growth",
-    "Custom integrations",
-    "Dedicated account manager",
-    "24/7 phone support",
-    "SLA guarantee",
+    "Unlimited core limits",
+    "Platform support",
   ],
 };
 
@@ -395,7 +393,7 @@ function PlanCard({
               size="lg"
               asChild
             >
-              <a href="mailto:sales@example.com">
+              <a href={buildPublicSupportMailto("Fluxora enterprise plan inquiry")}>
                 <Mail className="h-4 w-4" />
                 Contact Us
               </a>

@@ -294,8 +294,8 @@ export function SignInForm({
               {isPlatformAdminHost
                 ? "Access the platform admin console."
                 : isRootHost
-                  ? "We&apos;ll email you a sign-in link. New users finish workspace setup afterward."
-                  : "We&apos;ll email you a sign-in link."}
+                  ? "We'll email you a sign-in link. New users finish workspace setup afterward."
+                  : "We'll email you a sign-in link."}
             </p>
           </div>
 

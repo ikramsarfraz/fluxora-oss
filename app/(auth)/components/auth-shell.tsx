@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Package, CheckCircle, Shield, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildPublicSupportMailto } from "@/lib/public-contact";
 
 // ── Marketing color tokens (matching marketing page) ─────────────────────────
 // Light backgrounds with soft blue/teal radial gradients
@@ -262,9 +263,9 @@ export function AuthSplitShell({
           <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Terms
           </Link>
-          <Link href="/support" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Help
-          </Link>
+          </a>
         </div>
       </footer>
     </div>
@@ -344,9 +345,9 @@ export function AuthCenteredShell({
           <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Terms
           </Link>
-          <Link href="/support" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Help
-          </Link>
+          </a>
         </div>
       </footer>
     </div>

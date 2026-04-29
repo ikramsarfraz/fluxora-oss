@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalDocShell } from "@/components/legal/legal-doc-shell";
+import { publicSupportEmail } from "@/lib/public-contact";
 
 export const metadata: Metadata = {
   title: "Terms of Service · Fluxora",
@@ -246,8 +247,8 @@ export default function TermsOfServicePage() {
         <h2>Contact</h2>
         <p>
           Legal notices and contractual questions:&nbsp;
-          <a href="mailto:support@yourdomain.com" className="font-medium text-primary underline">
-            support@yourdomain.com
+          <a href={`mailto:${publicSupportEmail}`} className="font-medium text-primary underline">
+            {publicSupportEmail}
           </a>
         </p>
       </section>

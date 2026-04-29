@@ -16,7 +16,7 @@ export function Hero() {
 
       {/* Announcement - hidden on small screens */}
       <div className="relative hidden justify-center px-4 pt-8 sm:flex sm:px-6 sm:pt-12 lg:px-8">
-        <a href="#" className="group inline-flex items-center gap-2 rounded-full border border-[oklch(0.88_0.02_230)] bg-white/80 px-3 py-1.5 text-[0.75rem] shadow-sm backdrop-blur-sm transition-all hover:border-[oklch(0.80_0.04_230)] hover:shadow-md sm:gap-2.5 sm:px-4 sm:text-[0.8rem]">
+        <a href="#features" className="group inline-flex items-center gap-2 rounded-full border border-[oklch(0.88_0.02_230)] bg-white/80 px-3 py-1.5 text-[0.75rem] shadow-sm backdrop-blur-sm transition-all hover:border-[oklch(0.80_0.04_230)] hover:shadow-md sm:gap-2.5 sm:px-4 sm:text-[0.8rem]">
           <div className="flex size-5 shrink-0 items-center justify-center rounded-full" style={{ background: "linear-gradient(135deg, oklch(0.50 0.14 230), oklch(0.55 0.15 195))" }}>
             <svg width="10" height="10" fill="none" viewBox="0 0 10 10"><path d="M5 1.5v4l2.5 1.25" stroke="white" strokeWidth="1.3" strokeLinecap="round"/></svg>
           </div>

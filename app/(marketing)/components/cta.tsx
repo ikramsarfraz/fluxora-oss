@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { buildPublicSupportMailto } from "@/lib/public-contact";
 import { gridPattern, crossPattern } from "./styles";
 
 export function CTA() {
@@ -29,7 +30,7 @@ export function CTA() {
             </Link>
           </Button>
           <Button asChild variant="outline" size="lg" className="h-11 w-full border-[oklch(0.85_0.03_230)] bg-white px-6 text-[0.9rem] font-semibold text-[oklch(0.30_0.05_230)] hover:bg-[oklch(0.97_0.005_230)] sm:h-12 sm:w-auto sm:px-7 sm:text-[0.95rem]">
-            <a href="#">Request a demo</a>
+            <a href={buildPublicSupportMailto("Fluxora demo request")}>Request a demo</a>
           </Button>
         </div>
         <p className="mt-4 text-[0.78rem] text-[oklch(0.55_0.02_230)] sm:mt-5 sm:text-[0.82rem]">Free during early access · No credit card · Cancel anytime</p>

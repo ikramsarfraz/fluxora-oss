@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalDocShell } from "@/components/legal/legal-doc-shell";
+import { publicSupportEmail } from "@/lib/public-contact";
 
 export const metadata: Metadata = {
   title: "Privacy Policy · Fluxora",
@@ -249,8 +250,8 @@ export default function PrivacyPolicyPage() {
         <h2>Contact us</h2>
         <p>
           Questions or requests about privacy:&nbsp;
-          <a href="mailto:support@yourdomain.com" className="font-medium text-primary underline">
-            support@yourdomain.com
+          <a href={`mailto:${publicSupportEmail}`} className="font-medium text-primary underline">
+            {publicSupportEmail}
           </a>
         </p>
       </section>

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { authClient } from "@/lib/auth-client";
 
 function roleLabel(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
@@ -76,6 +77,7 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
   const [magicSent, setMagicSent] = useState(false);
   const [magicPending, setMagicPending] = useState(false);
   const [joinPending, setJoinPending] = useState(false);
+  const [signOutPending, setSignOutPending] = useState(false);
 
   const invitationQuery = useQuery({
     queryKey: ["invitation", token],
@@ -156,6 +158,18 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
       );
     } finally {
       setJoinPending(false);
+    }
+  }
+
+  async function onSignOutAndContinue() {
+    setSubmitError(null);
+    setSignOutPending(true);
+    try {
+      await authClient.signOut();
+      window.location.reload();
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Could not sign out.");
+      setSignOutPending(false);
     }
   }
 
@@ -267,8 +281,20 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <Button asChild className="w-full" variant="secondary">
-            <Link href="/sign-in">Sign out and continue</Link>
+          {submitError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Could not sign out</AlertTitle>
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          ) : null}
+          <Button
+            type="button"
+            className="w-full"
+            variant="secondary"
+            disabled={signOutPending}
+            onClick={onSignOutAndContinue}
+          >
+            {signOutPending ? "Signing out…" : "Sign out and continue"}
           </Button>
         </CardContent>
       </Card>
@@ -285,8 +311,8 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
         <CardTitle>Accept invitation</CardTitle>
         <CardDescription>
           {sessionReady
-            ? "You&apos;re signed in with the invited email. Join this workspace to finish."
-            : "We&apos;ll email you a secure sign-in link for this address. Open the link from that email to sign in, then return here to join."}
+            ? "You're signed in with the invited email. Join this workspace to finish."
+            : "We'll email you a secure sign-in link for this address. Open the link from that email to sign in, then return here to join."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
