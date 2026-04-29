@@ -219,9 +219,15 @@ export function AuthSplitShell({
   const marketingPanel = side || <MarketingPanel />;
 
   const formPanel = (
-    <div className="flex flex-1 flex-col bg-white">
+    <div className="relative flex flex-1 flex-col bg-[oklch(0.99_0.003_230)]">
+      {/* Grid pattern overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30"
+        style={{ backgroundImage: gridPattern }}
+      />
+
       {/* Top nav */}
-      <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
+      <nav className="relative z-10 flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <div className="lg:hidden">
           <AuthBrand />
         </div>
@@ -240,12 +246,12 @@ export function AuthSplitShell({
       </nav>
 
       {/* Main content */}
-      <main className="flex flex-1 items-center justify-center px-6 py-8 lg:px-10">
+      <main className="relative z-10 flex flex-1 items-center justify-center px-6 py-8 lg:px-10">
         <div className="w-full max-w-sm">{children}</div>
       </main>
 
       {/* Footer */}
-      <footer className="shrink-0 px-6 py-4 lg:px-10">
+      <footer className="relative z-10 shrink-0 px-6 py-4 lg:px-10">
         <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
           <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
@@ -298,8 +304,14 @@ export function AuthCenteredShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
+    <div className="relative flex min-h-screen flex-col bg-[oklch(0.99_0.003_230)]">
+      {/* Grid pattern overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30"
+        style={{ backgroundImage: gridPattern }}
+      />
+
+      <nav className="relative z-10 flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <AuthBrand />
         {topLabel && topHref && topAction && (
           <div className="text-sm text-[oklch(0.55_0.02_230)]">
@@ -314,11 +326,11 @@ export function AuthCenteredShell({
         )}
       </nav>
 
-      <main className="flex flex-1 items-center justify-center px-6 py-8">
+      <main className="relative z-10 flex flex-1 items-center justify-center px-6 py-8">
         <div className="w-full max-w-sm">{children}</div>
       </main>
 
-      <footer className="shrink-0 px-6 py-4">
+      <footer className="relative z-10 shrink-0 px-6 py-4">
         <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
           <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
