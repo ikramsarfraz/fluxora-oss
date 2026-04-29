@@ -65,8 +65,6 @@ export default async function SignUpPage({
         }
         isRootHost={tenantRequest.isRootHost}
         rootDomain={tenantRequest.rootDomain}
-        protocol={tenantRequest.protocol}
-        port={tenantRequest.port}
         rootLoginUrl={rootLoginUrl}
         tenantLoginUrl={tenantLoginUrl}
         inviteToken={token ?? null}

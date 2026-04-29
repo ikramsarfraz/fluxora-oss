@@ -12,6 +12,7 @@ function isSharedAuthPath(pathname: string) {
     pathname.startsWith("/google/complete") ||
     pathname.startsWith("/google/select-tenant") ||
     pathname.startsWith("/select-destination") ||
+    pathname.startsWith("/onboarding") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/invite") ||

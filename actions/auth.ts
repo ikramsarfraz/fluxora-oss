@@ -3,9 +3,9 @@
 import {
   prepareGoogleAuthStart,
   discoverTenantsForEmail,
+  completeUserOnboarding,
   getAccessibleDestinationsForAuthUser,
-  signUpBusinessTenantAccount,
-  signUpSoloTenantAccount,
+  signUpAccountOnly,
   startEmailDestinationSelection,
 } from "@/services/auth";
 
@@ -33,14 +33,14 @@ export async function getAccessibleDestinationsForAuthUserAction(
   return await getAccessibleDestinationsForAuthUser(authUserId);
 }
 
-export async function signUpBusinessTenantAccountAction(
-  input: Parameters<typeof signUpBusinessTenantAccount>[0],
+export async function signUpAccountOnlyAction(
+  input: Parameters<typeof signUpAccountOnly>[0],
 ) {
-  return await signUpBusinessTenantAccount(input);
+  return await signUpAccountOnly(input);
 }
 
-export async function signUpSoloTenantAccountAction(
-  input: Parameters<typeof signUpSoloTenantAccount>[0],
+export async function completeUserOnboardingAction(
+  input: Parameters<typeof completeUserOnboarding>[0],
 ) {
-  return await signUpSoloTenantAccount(input);
+  return await completeUserOnboarding(input);
 }

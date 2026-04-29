@@ -339,6 +339,38 @@ export async function signUp(input: {
   return data;
 }
 
+export async function signUpAccountOnly(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  const requestContext = getRequestTenantHostContextFromHeaders(await headers());
+  const normalizedEmail = normalizeEmail(input.email);
+
+  await signUp({
+    name: input.name,
+    email: normalizedEmail,
+    password: input.password,
+  });
+
+  return {
+    email: normalizedEmail,
+    loginUrl: buildRootAppUrl({
+      pathname: "/login",
+      searchParams: {
+        email: normalizedEmail,
+        created: "1",
+        callbackUrl: "/onboarding",
+      },
+      context: requestContext,
+    }),
+    rootLoginUrl: buildRootAppUrl({
+      pathname: "/login",
+      context: requestContext,
+    }),
+  };
+}
+
 type TenantDiscoveryResult = {
   type: "tenant";
   tenantId: string;
@@ -822,8 +854,7 @@ export async function loadAuthenticatedDestinationSelectView(input: {
     return {
       view: "redirect",
       url: buildRootAppUrl({
-        pathname: "/signup",
-        searchParams: { oauthError: "no_tenants" },
+        pathname: "/onboarding",
         context: requestContext,
       }),
     };
@@ -1081,29 +1112,13 @@ export async function finalizeGoogleAuthFlow(input: {
     });
 
   if (flow.mode === "signup") {
-    const tenant =
-      flow.signupType === "business"
-        ? await createBusinessTenantForAuthUser({
-            authUserId: input.authUserId,
-            fullName: authUserRecord.name,
-            email: authUserRecord.email,
-            tenantName: flow.tenantName ?? "",
-            tenantSlug: flow.tenantSlug ?? "",
-          })
-        : await createSoloTenantForAuthUser({
-            authUserId: input.authUserId,
-            fullName: authUserRecord.name,
-            email: authUserRecord.email,
-          });
-
-    await setTenantOnSession(input.sessionId, tenant.id);
+    await setTenantOnSession(input.sessionId, null);
 
     return {
       type: "redirect" as const,
-      url: buildTenantReturnUrl({
-        slug: tenant.slug,
+      url: buildRootAppUrl({
+        pathname: "/onboarding",
         context: requestContext,
-        returnTo: flow.returnTo,
       }),
     };
   }
@@ -1195,152 +1210,57 @@ export async function completeGooglePlatformAdminSelection(input: {
   });
 }
 
-export async function signUpBusinessTenantAccount(input: {
-  name: string;
-  email: string;
-  password: string;
+export async function completeUserOnboarding(input: {
   tenantName: string;
   tenantSlug: string;
 }) {
   const requestContext = getRequestTenantHostContextFromHeaders(await headers());
-  const normalizedEmail = normalizeEmail(input.email);
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session?.user?.id) {
+    throw new Error("You must sign in before creating a workspace.");
+  }
+
   const tenantSlug = slugifyTenantName(input.tenantSlug);
   const tenantName = input.tenantName.trim();
 
   if (!tenantName) {
-    throw new Error("Please enter a tenant name.");
+    throw new Error("Please enter a workspace name.");
   }
 
   if (!input.tenantSlug.trim()) {
-    throw new Error("Please choose a tenant slug.");
+    throw new Error("Please choose a workspace URL.");
   }
 
   await ensureTenantSlugAvailable(tenantSlug);
 
-  const [tenant] = await db
-    .insert(tenants)
-    .values({
-      name: tenantName,
-      slug: tenantSlug,
-      tenantType: "business",
-      isActive: true,
-    })
-    .returning();
-
-  if (!tenant) {
-    throw new Error("Failed to create tenant.");
+  const destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
+  if (destinations.length > 0) {
+    throw new Error("Your account is already linked to a workspace.");
   }
 
-  try {
-    const signUpData = await signUp({
-      name: input.name,
-      email: normalizedEmail,
-      password: input.password,
-    });
+  const normalizedEmail = normalizeEmail(session.user.email);
 
-    if (!signUpData?.user?.id) {
-      throw new Error("Sign up did not return a user id.");
-    }
+  const tenant = await createBusinessTenantForAuthUser({
+    authUserId: session.user.id,
+    fullName: session.user.name,
+    email: normalizedEmail,
+    tenantName,
+    tenantSlug,
+  });
 
-    await createPortalUser({
-      tenantId: tenant.id,
-      authUserId: signUpData.user.id,
-      fullName: input.name,
-      email: normalizedEmail,
-      role: "owner",
-    });
+  await setTenantOnSession(session.session.id, tenant.id);
 
-    return {
-      tenantId: tenant.id,
-      tenantName: tenant.name,
-      tenantSlug: tenant.slug,
-      loginUrl: buildTenantAppUrl({
-        slug: tenant.slug,
-        pathname: "/login",
-        searchParams: {
-          email: normalizedEmail,
-          created: "1",
-        },
-        context: requestContext,
-      }),
-      rootLoginUrl: buildRootAppUrl({
-        pathname: "/login",
-        context: requestContext,
-      }),
-    };
-  } catch (error) {
-    await db.delete(tenants).where(eq(tenants.id, tenant.id));
-    throw error;
-  }
-}
-
-export async function signUpSoloTenantAccount(input: {
-  name: string;
-  email: string;
-  password: string;
-}) {
-  const requestContext = getRequestTenantHostContextFromHeaders(await headers());
-  const normalizedEmail = normalizeEmail(input.email);
-  const tenantName = `${input.name.trim() || normalizedEmail}'s Workspace`;
-  const tenantSlug = await createUniquePersonalTenantSlug(
-    input.name.trim() || normalizedEmail.split("@")[0] || "tenant",
-  );
-
-  const [tenant] = await db
-    .insert(tenants)
-    .values({
-      name: tenantName,
-      slug: tenantSlug,
-      tenantType: "solo",
-      isActive: true,
-    })
-    .returning();
-
-  if (!tenant) {
-    throw new Error("Failed to create your tenant.");
-  }
-
-  try {
-    const signUpData = await signUp({
-      name: input.name,
-      email: normalizedEmail,
-      password: input.password,
-    });
-
-    if (!signUpData?.user?.id) {
-      throw new Error("Sign up did not return a user id.");
-    }
-
-    await createPortalUser({
-      tenantId: tenant.id,
-      authUserId: signUpData.user.id,
-      fullName: input.name,
-      email: normalizedEmail,
-      role: "owner",
-    });
-
-    return {
-      tenantId: tenant.id,
-      tenantName: tenant.name,
-      tenantSlug: tenant.slug,
-      loginUrl: buildTenantAppUrl({
-        slug: tenant.slug,
-        pathname: "/login",
-        searchParams: {
-          email: normalizedEmail,
-          created: "1",
-        },
-        context: requestContext,
-      }),
-      rootLoginUrl: buildRootAppUrl({
-        pathname: "/login",
-        context: requestContext,
-      }),
-    };
-  } catch (error) {
-    await db.delete(tenants).where(eq(tenants.id, tenant.id));
-    throw error;
-  }
+  return {
+    tenantId: tenant.id,
+    tenantName: tenant.name,
+    tenantSlug: tenant.slug,
+    redirectUrl: buildTenantAppUrl({
+      slug: tenant.slug,
+      pathname: "/dashboard",
+      context: requestContext,
+    }),
+  };
 }
 
 /**

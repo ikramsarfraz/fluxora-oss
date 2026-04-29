@@ -205,7 +205,7 @@ export default async function SelectDestinationPage({
   }
 
   if (chooserData.destinations.length === 0) {
-    redirect("/signup?oauthError=no_tenants");
+    redirect("/onboarding");
   }
 
   return (
