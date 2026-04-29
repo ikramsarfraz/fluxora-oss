@@ -79,8 +79,6 @@ export function SignUpForm({
   const form = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpFormSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
       email: "",
     },
     mode: "onBlur",
@@ -119,8 +117,6 @@ export function SignUpForm({
 
     try {
       const result = await sendRootSignupMagicLinkAction({
-        firstName: data.firstName,
-        lastName: data.lastName,
         email: data.email,
       });
 
@@ -231,14 +227,14 @@ export function SignUpForm({
       <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-            Tell us about you
+            Create your account
           </h1>
           <p className="text-sm text-[oklch(0.50_0.02_230)]">
-            We&apos;ll email you a sign-in link.{" "}
+            Enter your work email—we&apos;ll send a secure link.{" "}
             <span className="font-medium text-foreground">
-              Set up your workspace
+              Your name and workspace
             </span>{" "}
-            right after your first login.
+            are set up after you sign in for the first time.
           </p>
         </div>
 
@@ -280,48 +276,6 @@ export function SignUpForm({
 
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
           <FieldGroup>
-            <Controller
-              name="firstName"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-first">First name</FieldLabel>
-                  <Input
-                    {...field}
-                    id="sign-up-first"
-                    type="text"
-                    placeholder="Jane"
-                    autoComplete="given-name"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-
-            <Controller
-              name="lastName"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-last">Last name</FieldLabel>
-                  <Input
-                    {...field}
-                    id="sign-up-last"
-                    type="text"
-                    placeholder="Doe"
-                    autoComplete="family-name"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-
             <Controller
               name="email"
               control={form.control}

@@ -215,22 +215,6 @@ export const stripeWebhookProcessingStatusEnum = pgEnum(
 
 // -------------------- Core multi-tenant/auth-adjacent --------------------
 
-/**
- * Holds first/last typed before Better Auth magic-link creates `user`.
- * Applied in `databaseHooks.user.create.after`; rows expire automatically.
- */
-export const signupProfilePending = pgTable(
-  "signup_profile_pending",
-  {
-    emailLower: varchar("email_lower", { length: 320 }).primaryKey(),
-    firstName: text("first_name").notNull(),
-    lastName: text("last_name").notNull(),
-    fullName: text("full_name").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  },
-  table => [index("signup_profile_pending_expires_at_idx").on(table.expiresAt)],
-);
-
 export const tenants = pgTable(
   "tenants",
   {

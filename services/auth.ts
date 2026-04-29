@@ -13,7 +13,6 @@ import {
 } from "@/lib/email-destination-select-flow";
 import {
   composeFullName,
-  formatAuthUserDisplayName,
 } from "@/lib/user-display-name";
 import {
   createGoogleAuthFlowToken,
@@ -42,7 +41,6 @@ import {
   isReservedTenantSlug,
   slugifyTenantName,
 } from "@/lib/tenant-host";
-import { upsertSignupProfilePending } from "@/services/signup-profile";
 import { getCurrentTenant, getTenantBySlug } from "./tenants";
 import { createPortalUser, type PortalUserRole } from "./portal-users";
 
@@ -353,31 +351,21 @@ export async function sendSignInMagicLink(input: {
 }
 
 /**
- * Stores pending first/last name for the magic link email, then sends the link.
+ * Sends a magic sign-in link (creates the user on first use when sign-up is allowed).
+ * Profile and workspace are collected on `/onboarding` after the user verifies their email.
  */
-export async function sendRootSignupMagicLink(input: {
-  firstName: string;
-  lastName: string;
-  email: string;
-}) {
+export async function sendRootSignupMagicLink(input: { email: string }) {
   const requestContext = getRequestTenantHostContextFromHeaders(await headers());
   const normalizedEmail = normalizeEmail(input.email);
-  await upsertSignupProfilePending({
-    firstName: input.firstName,
-    lastName: input.lastName,
-    email: normalizedEmail,
+  const onboardingUrl = buildRootAppUrl({
+    pathname: "/onboarding",
+    context: requestContext,
   });
 
   await sendSignInMagicLink({
     email: normalizedEmail,
-    name: composeFullName(input.firstName, input.lastName),
-    callbackURL: buildAuthenticatedSelectDestinationUrl({
-      context: requestContext,
-    }),
-    newUserCallbackURL: buildRootAppUrl({
-      pathname: "/onboarding",
-      context: requestContext,
-    }),
+    callbackURL: onboardingUrl,
+    newUserCallbackURL: onboardingUrl,
     errorCallbackURL: buildRootAppUrl({
       pathname: "/signup",
       searchParams: { error: "magic_link" },
@@ -1306,14 +1294,25 @@ export async function completeGooglePlatformAdminSelection(input: {
 }
 
 export async function completeUserOnboarding(input: {
+  firstName: string;
+  lastName: string;
   tenantName: string;
   tenantSlug: string;
 }) {
   const requestContext = getRequestTenantHostContextFromHeaders(await headers());
-  const session = await auth.api.getSession({ headers: await headers() });
+  const headerList = await headers();
+  const session = await auth.api.getSession({ headers: headerList });
 
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !session.session?.id) {
     throw new Error("You must sign in before creating a workspace.");
+  }
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const ownerFullName = composeFullName(firstName, lastName);
+
+  if (!ownerFullName) {
+    throw new Error("Please enter your first and last name.");
   }
 
   const tenantSlug = slugifyTenantName(input.tenantSlug);
@@ -1346,28 +1345,20 @@ export async function completeUserOnboarding(input: {
 
   const normalizedEmail = normalizeEmail(session.user.email);
 
-  const [authRow] = await db
-    .select({
-      fullName: authUser.fullName,
-      firstName: authUser.firstName,
-      lastName: authUser.lastName,
-      name: authUser.name,
-      email: authUser.email,
+  await db
+    .update(authUser)
+    .set({
+      firstName,
+      lastName,
+      fullName: ownerFullName,
+      name: ownerFullName,
+      updatedAt: new Date(),
     })
-    .from(authUser)
-    .where(eq(authUser.id, session.user.id))
-    .limit(1);
-
-  const ownerFullName = authRow
-    ? formatAuthUserDisplayName(authRow)
-    : formatAuthUserDisplayName({
-        name: session.user.name,
-        email: session.user.email ?? undefined,
-      });
+    .where(eq(authUser.id, session.user.id));
 
   const tenant = await createBusinessTenantForAuthUser({
     authUserId: session.user.id,
-    fullName: ownerFullName || normalizedEmail,
+    fullName: ownerFullName,
     email: normalizedEmail,
     tenantName,
     tenantSlug,

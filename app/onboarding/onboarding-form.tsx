@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Globe } from "lucide-react";
+import { Building2, Globe, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -27,8 +27,9 @@ import {
 } from "./onboarding-form.schema";
 
 type OnboardingFormProps = {
-  defaultName: string;
-  defaultEmail: string;
+  defaultFirstName: string;
+  defaultLastName: string;
+  defaultTenantName: string;
   protocol: "http" | "https";
   hostname: string;
   rootDomain: string;
@@ -62,15 +63,10 @@ export function OnboardingForm(props: OnboardingFormProps) {
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingFormSchema),
     defaultValues: {
-      tenantName:
-        props.defaultName.trim() ||
-        props.defaultEmail.split("@")[0] ||
-        "Workspace",
-      tenantSlug: slugifyTenantInput(
-        props.defaultName.trim() ||
-          props.defaultEmail.split("@")[0] ||
-          "workspace",
-      ),
+      firstName: props.defaultFirstName,
+      lastName: props.defaultLastName,
+      tenantName: props.defaultTenantName,
+      tenantSlug: slugifyTenantInput(props.defaultTenantName),
     },
     mode: "onBlur",
   });
@@ -122,111 +118,179 @@ export function OnboardingForm(props: OnboardingFormProps) {
             Workspace onboarding
           </div>
           <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-            Create your workspace
+            Finish setup
           </h1>
           <p className="text-sm text-[oklch(0.50_0.02_230)]">
-            Your login is ready. Below, pick how your workspace appears in Prime
-            Distribution and the URL your team signs in through.
+            Add your profile, then choose how your workspace appears and the URL
+            your team signs in through (
+            <span className="font-mono">{props.rootDomain}</span>).
           </p>
         </div>
 
         <Card className="border-[oklch(0.92_0.01_230)] shadow-none">
-          <CardContent className="pt-6">
+          <CardContent className="space-y-8 pt-6">
             <form id="onboarding-form" onSubmit={form.handleSubmit(onSubmit)}>
               {error ? (
-                <FormErrorAlert title="We couldn't finish setting up your workspace">
+                <FormErrorAlert title="We couldn't finish setup">
                   {error}
                 </FormErrorAlert>
               ) : null}
 
-              <FieldGroup>
-                <Controller
-                  name="tenantName"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="onboarding-tenant-name">
-                        Workspace name
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        id="onboarding-tenant-name"
-                        placeholder="Acme Distribution"
-                        aria-invalid={fieldState.invalid}
-                        onChange={event => {
-                          setError(null);
-                          field.onChange(event);
-                          const currentSlug = form.getValues("tenantSlug");
-                          if (!currentSlug) {
-                            form.setValue(
-                              "tenantSlug",
-                              slugifyTenantInput(event.target.value),
-                              {
-                                shouldDirty: true,
-                              },
-                            );
-                          }
-                        }}
-                      />
-                      <FieldDescription>
-                        Shown in the app sidebar and invitations.
-                      </FieldDescription>
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <UserRound className="size-4 text-muted-foreground" />
+                  Your profile
+                </div>
 
-                <Controller
-                  name="tenantSlug"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="onboarding-tenant-slug">
-                        Workspace URL
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        id="onboarding-tenant-slug"
-                        placeholder="acme-distribution"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        aria-invalid={fieldState.invalid}
-                        onChange={event => {
-                          setError(null);
-                          field.onChange(slugifyTenantInput(event.target.value));
-                        }}
-                      />
-                      <FieldDescription>
-                        The subdomain for your workspace: teammates use this
-                        address to reach your company app. Pick something clear
-                        and stable; subdomain changes are limited.
-                      </FieldDescription>
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
+                <FieldGroup>
+                  <Controller
+                    name="firstName"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="onboarding-first">
+                          First name
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          id="onboarding-first"
+                          placeholder="Jane"
+                          autoComplete="given-name"
+                          aria-invalid={fieldState.invalid}
+                          onChange={event => {
+                            setError(null);
+                            field.onChange(event);
+                          }}
+                        />
+                        {fieldState.invalid ? (
+                          <FieldError errors={[fieldState.error]} />
+                        ) : null}
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    name="lastName"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="onboarding-last">
+                          Last name
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          id="onboarding-last"
+                          placeholder="Doe"
+                          autoComplete="family-name"
+                          aria-invalid={fieldState.invalid}
+                          onChange={event => {
+                            setError(null);
+                            field.onChange(event);
+                          }}
+                        />
+                        {fieldState.invalid ? (
+                          <FieldError errors={[fieldState.error]} />
+                        ) : null}
+                      </Field>
+                    )}
+                  />
+                </FieldGroup>
+              </div>
 
-                <div className="rounded-2xl border border-border bg-muted/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <Globe className="size-4 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground">
-                      Sign-in address preview
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Building2 className="size-4 text-muted-foreground" />
+                  Your workspace
+                </div>
+
+                <FieldGroup>
+                  <Controller
+                    name="tenantName"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="onboarding-tenant-name">
+                          Workspace name
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          id="onboarding-tenant-name"
+                          placeholder="Acme Distribution"
+                          aria-invalid={fieldState.invalid}
+                          onChange={event => {
+                            setError(null);
+                            field.onChange(event);
+                            const currentSlug = form.getValues("tenantSlug");
+                            if (!currentSlug) {
+                              form.setValue(
+                                "tenantSlug",
+                                slugifyTenantInput(event.target.value),
+                                {
+                                  shouldDirty: true,
+                                },
+                              );
+                            }
+                          }}
+                        />
+                        <FieldDescription>
+                          Shown in the app sidebar and invitations.
+                        </FieldDescription>
+                        {fieldState.invalid ? (
+                          <FieldError errors={[fieldState.error]} />
+                        ) : null}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="tenantSlug"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="onboarding-tenant-slug">
+                          Workspace URL
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          id="onboarding-tenant-slug"
+                          placeholder="acme-distribution"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          aria-invalid={fieldState.invalid}
+                          onChange={event => {
+                            setError(null);
+                            field.onChange(slugifyTenantInput(event.target.value));
+                          }}
+                        />
+                        <FieldDescription>
+                          The subdomain for your workspace: teammates use this
+                          address to reach your company app. Pick something clear
+                          and stable; subdomain changes are limited.
+                        </FieldDescription>
+                        {fieldState.invalid ? (
+                          <FieldError errors={[fieldState.error]} />
+                        ) : null}
+                      </Field>
+                    )}
+                  />
+
+                  <div className="rounded-2xl border border-border bg-muted/50 p-4">
+                    <div className="flex items-center gap-2">
+                      <Globe className="size-4 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">
+                        Sign-in address preview
+                      </p>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Mirrors how subdomain routing uses your ROOT_DOMAIN (
+                      <span className="font-mono">{props.rootDomain}</span>).
+                    </p>
+                    <p className="mt-3 break-all font-mono text-sm text-foreground">
+                      {tenantPreview}
                     </p>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Mirrors how subdomain routing uses your ROOT_DOMAIN (
-                    <span className="font-mono">{props.rootDomain}</span>).
-                  </p>
-                  <p className="mt-3 break-all font-mono text-sm text-foreground">
-                    {tenantPreview}
-                  </p>
-                </div>
-              </FieldGroup>
+                </FieldGroup>
+              </div>
             </form>
           </CardContent>
           <FormActionFooter

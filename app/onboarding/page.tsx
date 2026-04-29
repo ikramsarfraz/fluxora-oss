@@ -87,10 +87,19 @@ export default async function OnboardingPage() {
         email: session.user.email ?? undefined,
       });
 
+  const tenantSuggestion =
+    defaultDisplayName.trim() ||
+    (session.user.email ?? "").split("@")[0] ||
+    "Workspace";
+
+  const defaultFirstName = identity?.firstName?.trim() ?? "";
+  const defaultLastName = identity?.lastName?.trim() ?? "";
+
   return (
     <OnboardingForm
-      defaultName={defaultDisplayName}
-      defaultEmail={session.user.email ?? ""}
+      defaultFirstName={defaultFirstName}
+      defaultLastName={defaultLastName}
+      defaultTenantName={tenantSuggestion}
       protocol={requestTenant.protocol}
       hostname={requestTenant.hostname}
       rootDomain={requestTenant.rootDomain}

@@ -3,6 +3,14 @@ import * as z from "zod";
 import { isReservedTenantSlug } from "@/lib/tenant-slug-policy";
 
 export const onboardingFormSchema = z.object({
+  firstName: z
+    .string()
+    .trim()
+    .min(1, "Please enter your first name."),
+  lastName: z
+    .string()
+    .trim()
+    .min(1, "Please enter your last name."),
   tenantName: z
     .string()
     .trim()

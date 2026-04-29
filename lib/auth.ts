@@ -7,12 +7,12 @@ import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import * as authSchema from "@/db/auth-schema";
-import { signupProfilePending, platformUsers, portalUsers, tenants } from "@/db/schema";
+import { platformUsers, portalUsers, tenants } from "@/db/schema";
 import { MagicLinkEmail } from "@/emails/magic-link";
 import { emailFrom, resend } from "./email";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import { claimApprovedTenantJoinRequestForSession } from "@/services/tenant-join-requests-core";
-import { applyPendingIdentityToNewUser } from "@/services/signup-profile";
+import { bootstrapAuthUserIdentityOnCreate } from "@/services/signup-profile";
 import {
   getRequestTenantHostContextFromHeaders,
   getRootDomain,
@@ -138,23 +138,13 @@ export const auth = betterAuth({
       expiresIn: 60 * 15,
       disableSignUp: false,
       sendMagicLink: async ({ email, url }) => {
-        const emailLower = email.trim().toLowerCase();
-        const pending =
-          (
-            await db
-              .select({ firstName: signupProfilePending.firstName })
-              .from(signupProfilePending)
-              .where(eq(signupProfilePending.emailLower, emailLower))
-              .limit(1)
-          )[0] ?? null;
-
         await resend.emails.send({
           from: emailFrom,
           to: email,
           subject: "Your Acme Distribution sign-in link",
           react: MagicLinkEmail({
             url,
-            name: pending?.firstName?.trim() || null,
+            name: null,
           }),
         });
       },
@@ -166,7 +156,7 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (createdUser): Promise<void> => {
-          await applyPendingIdentityToNewUser({
+          await bootstrapAuthUserIdentityOnCreate({
             userId: createdUser.id,
             emailLower: createdUser.email,
             initialName: createdUser.name ?? "",
