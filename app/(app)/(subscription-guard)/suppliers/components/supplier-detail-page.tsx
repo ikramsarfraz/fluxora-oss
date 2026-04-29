@@ -67,12 +67,14 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         title={supplier.name}
         description="Supplier details and account history."
       >
-        <Button variant="outline" asChild>
-          <Link href={`/suppliers/${supplier.id}/edit`}>
-            <Pencil className="size-4" />
-            Edit supplier
-          </Link>
-        </Button>
+        {!supplier.archivedAt ? (
+          <Button variant="outline" asChild>
+            <Link href={`/suppliers/${supplier.id}/edit`}>
+              <Pencil className="size-4" />
+              Edit supplier
+            </Link>
+          </Button>
+        ) : null}
       </DetailPageHeader>
 
       <DetailSection
@@ -107,15 +109,17 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
               </span>
             </DetailField>
           </DetailGrid>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setEditTermsOpen(true)}
-          >
-            <Pencil className="h-4 w-4" />
-            Edit payment terms
-          </Button>
+          {!supplier.archivedAt ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditTermsOpen(true)}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit payment terms
+            </Button>
+          ) : null}
         </div>
       </DetailSection>
 
