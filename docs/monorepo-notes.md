@@ -1,6 +1,6 @@
 # Workspace notes
 
-Acme Distribution ERP is structured as an application codebase (present repository), not as a Yarn/pnpm workspaces monorepo. This file exists so older links pointing here remain meaningful.
+The Fluxora application codebase (this repository) is structured as an application codebase, not as a Yarn/pnpm workspaces monorepo. This file exists so older links pointing here remain meaningful.
 
 ### Tenants
 

@@ -141,7 +141,7 @@ export const auth = betterAuth({
         await resend.emails.send({
           from: emailFrom,
           to: email,
-          subject: "Your Acme Distribution sign-in link",
+          subject: "Sign in to Fluxora",
           react: MagicLinkEmail({
             url,
             name: null,

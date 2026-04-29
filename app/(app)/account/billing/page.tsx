@@ -110,7 +110,7 @@ export default async function AccountBillingPage(props: {
       {/* Page Header */}
       <div className="border-b border-border pb-6">
         <PageHeader
-          title="Billing"
+          title="Fluxora Billing"
           description="Manage your subscription, view usage, and update payment details."
         />
       </div>

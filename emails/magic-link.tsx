@@ -19,7 +19,7 @@ export function MagicLinkEmail({ name, url }: MagicLinkEmailProps) {
   return (
     <Html>
       <Head />
-      <Preview>Your sign-in link</Preview>
+      <Preview>Sign in to Fluxora</Preview>
       <Body
         style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
       >
@@ -34,7 +34,7 @@ export function MagicLinkEmail({ name, url }: MagicLinkEmailProps) {
           }}
         >
           <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            Sign in to Acme Distribution
+            Sign in to Fluxora
           </Heading>
 
           <Text style={{ fontSize: "14px", color: "#334155" }}>

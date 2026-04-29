@@ -70,7 +70,7 @@ export default async function DashboardRoute() {
     <div className="@container/main flex flex-1 flex-col gap-4">
       <div className="px-4 pt-2 lg:px-6">
         <PageHeader
-          title="Dashboard"
+          title="Fluxora Dashboard"
           description="Overview of sales, purchasing, and inventory health."
         />
       </div>

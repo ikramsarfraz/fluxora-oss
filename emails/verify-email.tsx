@@ -19,7 +19,7 @@ export function VerifyEmail({ name, url }: VerifyEmailProps) {
   return (
     <Html>
       <Head />
-      <Preview>Verify your email</Preview>
+      <Preview>Verify your email for Fluxora</Preview>
       <Body
         style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
       >

@@ -19,7 +19,7 @@ export function InviteUserEmail({ fullName, inviteUrl }: InviteUserEmailProps) {
   return (
     <Html>
       <Head />
-      <Preview>You were invited to Acme Distribution</Preview>
+      <Preview>{`You're invited to Fluxora`}</Preview>
       <Body
         style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
       >
@@ -34,13 +34,14 @@ export function InviteUserEmail({ fullName, inviteUrl }: InviteUserEmailProps) {
           }}
         >
           <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            You were invited to Acme Distribution
+            {`You're invited to Fluxora`}
           </Heading>
           <Text style={{ fontSize: "14px", color: "#334155" }}>
             Hi {fullName},
           </Text>
           <Text style={{ fontSize: "14px", color: "#334155" }}>
-            Click the link below to activate your account and set your password.
+            Use the link below to accept your invitation and finish joining this
+            workspace in Fluxora.
           </Text>
           <Section style={{ margin: "24px 0" }}>
             <Button href={inviteUrl}>Accept invitation</Button>

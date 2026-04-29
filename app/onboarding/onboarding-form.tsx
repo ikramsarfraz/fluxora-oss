@@ -115,10 +115,10 @@ export function OnboardingForm(props: OnboardingFormProps) {
         <div className="space-y-1">
           <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.96_0.01_230)] px-2.5 py-1 text-xs font-medium text-[oklch(0.40_0.03_230)]">
             <Building2 className="size-3" />
-            Workspace onboarding
+            Workspace onboarding · Fluxora
           </div>
           <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-            Finish setup
+            Welcome to Fluxora
           </h1>
           <p className="text-sm text-[oklch(0.50_0.02_230)]">
             Add your profile, then choose how your workspace appears and the URL

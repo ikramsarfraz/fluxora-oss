@@ -19,7 +19,7 @@ export function ResetPasswordEmail({ name, url }: ResetPasswordProps) {
   return (
     <Html>
       <Head />
-      <Preview>Reset your password</Preview>
+      <Preview>Reset your Fluxora password</Preview>
       <Body
         style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
       >

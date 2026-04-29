@@ -1399,7 +1399,7 @@ export async function sendUserInvitationEmail(input: {
   await resend.emails.send({
     from: emailFrom,
     to: input.email,
-    subject: "You were invited to Acme Distribution",
+    subject: "You're invited to Fluxora",
     react: InviteUserEmail({
       fullName: input.fullName,
       inviteUrl,

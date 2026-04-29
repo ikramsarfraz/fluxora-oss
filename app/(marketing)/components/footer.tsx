@@ -83,18 +83,7 @@ export function Footer() {
         <div className="mt-10 flex flex-col gap-4 border-t border-[oklch(0.90_0.02_230)] pt-8 sm:mt-12 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:pt-10">
           <div className="flex flex-col gap-1">
             <div className="text-[0.78rem] text-[oklch(0.50_0.02_230)] sm:text-[0.8rem]">
-              © 2026 Fluxora, Inc. All rights reserved.
-            </div>
-            <div className="flex items-center gap-1.5 text-[0.72rem] text-[oklch(0.55_0.02_230)] sm:text-[0.75rem]">
-              Built by
-              <a
-                href="https://pelzersolutions.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-[oklch(0.45_0.12_195)] transition-colors hover:text-[oklch(0.35_0.14_195)]"
-              >
-                Pelzer Solutions
-              </a>
+              © {new Date().getFullYear()} Pelzer Solutions. All rights reserved.
             </div>
           </div>
         </div>

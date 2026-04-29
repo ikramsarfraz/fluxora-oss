@@ -17,8 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Acme Distribution ERP",
-  description: "Wholesale meat distribution ERP",
+  title: "Fluxora",
+  description:
+    "Fluxora — multi-tenant ERP for distribution teams: orders, inventory, invoicing, and payments in one workspace.",
 };
 
 export default function RootLayout({

@@ -1,6 +1,6 @@
 # Account signup and workspace onboarding
 
-Acme Distribution distinguishes **identity** (Better Auth `user` rows, including `first_name` / `last_name` / `full_name`) from **ERP access** (`portal_users` rows scoped to tenants). This separation keeps subdomain routing predictable and aligns with invite-only workspaces.
+Fluxora distinguishes **identity** (Better Auth `user` rows, including `first_name` / `last_name` / `full_name`) from **ERP access** (`portal_users` rows scoped to tenants). This separation keeps subdomain routing predictable and aligns with invite-only workspaces.
 
 ## Authentication
 

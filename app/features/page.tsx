@@ -9,7 +9,7 @@ export default function FeaturesPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-blue-600">PrimeERP features</p>
+            <p className="text-sm font-medium text-blue-600">Fluxora features</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight text-slate-950">
               Core workflows already running in the tenant app
             </h1>
