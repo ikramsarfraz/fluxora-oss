@@ -3,21 +3,29 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { sendSelfTenantSignInMagicLinkAction } from "@/actions/auth";
 import { PortalUserProfile } from "@/components/portal-user-profile";
-import { authClient } from "@/lib/auth-client";
 import type { PortalUserDetail } from "@/services/portal-users";
 
-export function AccountPortalProfile({ user }: { user: PortalUserDetail }) {
+export function AccountPortalProfile({
+  user,
+  tenantSlug,
+}: {
+  user: PortalUserDetail;
+  tenantSlug: string;
+}) {
   const [resetPending, setResetPending] = useState(false);
 
   async function onResetPassword() {
     setResetPending(true);
     try {
-      await authClient.requestPasswordReset({
-        email: user.email,
-        redirectTo: "/reset-password",
+      const slug = tenantSlug;
+      await sendSelfTenantSignInMagicLinkAction({
+        tenantSlug: slug,
+        email: user.email ?? user.authUser?.email ?? "",
+        displayNameHint: user.fullName,
       });
-      toast.success("Password reset email sent.");
+      toast.success("Check your email for a sign-in link.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to send email.");
     } finally {

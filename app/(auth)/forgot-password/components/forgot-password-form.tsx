@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+import { sendForgotMagicLinkAction } from "@/actions/auth";
 import { AuthCenteredShell } from "@/app/(auth)/components/auth-shell";
 import {
   Card,
@@ -22,7 +23,6 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
 
 import {
   forgotPasswordFormSchema,
@@ -38,13 +38,10 @@ export function ForgotPasswordForm() {
   });
 
   async function onSubmit(data: ForgotPasswordFormValues) {
-    await authClient.requestPasswordReset({
-      email: data.email,
-      redirectTo: "/reset-password",
-    });
+    await sendForgotMagicLinkAction({ email: data.email });
 
     toast.success(
-      `An email to reset your password has been sent to ${data.email}.`,
+      `If an account exists for ${data.email.trim()}, check your inbox for a sign-in link.`,
     );
 
     router.push("/login");
@@ -67,10 +64,10 @@ export function ForgotPasswordForm() {
             Fx
           </div>
           <CardTitle className="text-2xl tracking-tight text-foreground">
-            Reset your password
+            Email sign-in link
           </CardTitle>
           <CardDescription className="text-muted-foreground">
-            Enter your email and we&apos;ll send you a reset link.
+            Enter your email and we&apos;ll send you a one-time secure link to sign in.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -99,10 +96,10 @@ export function ForgotPasswordForm() {
                 )}
               />
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Sending reset link…" : "Send reset link"}
+                {isSubmitting ? "Sending link…" : "Email sign-in link"}
               </Button>
               <p className="text-center text-sm text-muted-foreground">
-                Remember your password?{" "}
+                Remember how you signed in?{" "}
                 <Link
                   href="/login"
                   className="font-medium text-foreground underline underline-offset-[3px] transition hover:opacity-70"

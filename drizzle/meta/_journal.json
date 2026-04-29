@@ -143,11 +143,9 @@
       "breakpoints": true
     },
     {
-      "idx": 20,
+      "idx": 21,
       "version": "7",
-      "when": 1778100000000,
-      "tag": "0020_stripe_webhook_events_failed_index",
+      "when": 1778200000000,
+      "tag": "0021_auth_magic_link_signup_names",
       "breakpoints": true
     }
-  ]
-}

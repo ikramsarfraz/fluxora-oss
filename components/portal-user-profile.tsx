@@ -33,12 +33,12 @@ function formatDateTime(value: string | Date | null | undefined): string {
 export type PortalUserProfileProps = {
   user: PortalUserDetail;
   variant?: "self" | "admin";
-  /** Your account: password reset email (and Cancel to leave). */
+  /** Your account: email sign-in link (magic link). */
   selfActions?: {
     onResetPassword: () => void;
     resetPending: boolean;
   };
-  /** Admin user detail: activate/deactivate, password reset, role change. */
+  /** Admin user detail: activate/deactivate, sign-in email, role change. */
   adminActions?: {
     isSelf: boolean;
     onToggleActive: () => void;
@@ -146,7 +146,7 @@ export function PortalUserProfile({
             >
               {selfActions.resetPending
                 ? "Sending…"
-                : "Send password reset email"}
+                : "Send sign-in link email"}
             </Button>
           </CardFooter>
         ) : null}
@@ -194,7 +194,7 @@ export function PortalUserProfile({
             >
               {adminActions.resetPending
                 ? "Sending…"
-                : "Send password reset email"}
+                : "Send sign-in link email"}
             </Button>
           </CardFooter>
         ) : null}

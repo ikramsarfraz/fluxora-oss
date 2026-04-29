@@ -12,6 +12,10 @@ import {
   parseEmailDestinationSelectToken,
 } from "@/lib/email-destination-select-flow";
 import {
+  composeFullName,
+  formatAuthUserDisplayName,
+} from "@/lib/user-display-name";
+import {
   createGoogleAuthFlowToken,
   isGoogleAuthEnabled,
   normalizeGoogleReturnTo,
@@ -38,8 +42,9 @@ import {
   isReservedTenantSlug,
   slugifyTenantName,
 } from "@/lib/tenant-host";
+import { upsertSignupProfilePending } from "@/services/signup-profile";
 import { getCurrentTenant, getTenantBySlug } from "./tenants";
-import { createPortalUser, PortalUserRole } from "./portal-users";
+import { createPortalUser, type PortalUserRole } from "./portal-users";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -323,52 +328,142 @@ async function createSoloTenantForAuthUser(input: {
   }
 }
 
-export async function signUp(input: {
-  name: string;
+/**
+ * Sends a magic sign-in link (creates the user on first use when sign-up is allowed).
+ */
+export async function sendSignInMagicLink(input: {
   email: string;
-  password: string;
+  name?: string;
+  callbackURL: string;
+  newUserCallbackURL?: string;
+  errorCallbackURL?: string;
+  requestHeaders?: Headers;
 }) {
-  const data = await auth.api.signUpEmail({
+  const h = input.requestHeaders ?? (await headers());
+  await auth.api.signInMagicLink({
     body: {
-      name: input.name,
-      email: input.email,
-      password: input.password,
+      email: normalizeEmail(input.email),
+      ...(input.name?.trim() ? { name: input.name.trim() } : {}),
+      callbackURL: input.callbackURL,
+      newUserCallbackURL: input.newUserCallbackURL,
+      errorCallbackURL: input.errorCallbackURL,
     },
+    headers: h,
   });
-
-  return data;
 }
 
-export async function signUpAccountOnly(input: {
-  name: string;
+/**
+ * Stores pending first/last name for the magic link email, then sends the link.
+ */
+export async function sendRootSignupMagicLink(input: {
+  firstName: string;
+  lastName: string;
   email: string;
-  password: string;
 }) {
   const requestContext = getRequestTenantHostContextFromHeaders(await headers());
   const normalizedEmail = normalizeEmail(input.email);
-
-  await signUp({
-    name: input.name,
+  await upsertSignupProfilePending({
+    firstName: input.firstName,
+    lastName: input.lastName,
     email: normalizedEmail,
-    password: input.password,
   });
 
-  return {
+  await sendSignInMagicLink({
     email: normalizedEmail,
-    loginUrl: buildRootAppUrl({
-      pathname: "/login",
-      searchParams: {
-        email: normalizedEmail,
-        created: "1",
-        callbackUrl: "/onboarding",
-      },
+    name: composeFullName(input.firstName, input.lastName),
+    callbackURL: buildAuthenticatedSelectDestinationUrl({
       context: requestContext,
     }),
-    rootLoginUrl: buildRootAppUrl({
-      pathname: "/login",
+    newUserCallbackURL: buildRootAppUrl({
+      pathname: "/onboarding",
       context: requestContext,
     }),
-  };
+    errorCallbackURL: buildRootAppUrl({
+      pathname: "/signup",
+      searchParams: { error: "magic_link" },
+      context: requestContext,
+    }),
+  });
+
+  return { email: normalizedEmail };
+}
+
+/** @deprecated Alias for `sendRootSignupMagicLink`. */
+export const signUpAccountOnly = sendRootSignupMagicLink;
+
+/** Sends a magic link to sign in to a tenant subdomain (admin “reset password”). */
+export async function sendTenantUserMagicLink(input: {
+  email: string;
+  tenantSlug: string;
+  displayNameHint?: string;
+}) {
+  const requestHeaders = await headers();
+  const ctx = getRequestTenantHostContextFromHeaders(requestHeaders);
+  const callbackURL = buildTenantAppUrl({
+    slug: input.tenantSlug,
+    pathname: "/dashboard",
+    context: ctx,
+  });
+  await sendSignInMagicLink({
+    email: input.email,
+    ...(input.displayNameHint?.trim()
+      ? { name: input.displayNameHint.trim() }
+      : {}),
+    callbackURL,
+    newUserCallbackURL: callbackURL,
+    errorCallbackURL: buildTenantAppUrl({
+      slug: input.tenantSlug,
+      pathname: "/login",
+      searchParams: { error: "magic_link" },
+      context: ctx,
+    }),
+    requestHeaders,
+  });
+}
+
+/** Magic-link “forgot password” / sign-in for the current hostname (root, tenant, or platform admin). */
+export async function sendMagicLinkForCurrentLoginContext(input: {
+  email: string;
+}) {
+  const requestHeaders = await headers();
+  const ctx = getRequestTenantHostContextFromHeaders(requestHeaders);
+  const normalizedEmail = normalizeEmail(input.email);
+
+  if (ctx.isPlatformAdminHost) {
+    const dash = buildPlatformAdminAppUrl({ pathname: "/admin", context: ctx });
+    await sendSignInMagicLink({
+      email: normalizedEmail,
+      callbackURL: dash,
+      newUserCallbackURL: dash,
+      errorCallbackURL: buildPlatformAdminAppUrl({
+        pathname: "/login",
+        searchParams: { error: "magic_link" },
+        context: ctx,
+      }),
+      requestHeaders,
+    });
+    return;
+  }
+
+  if (ctx.isTenantHost && ctx.tenantSlug) {
+    await sendTenantUserMagicLink({ email: normalizedEmail, tenantSlug: ctx.tenantSlug });
+    return;
+  }
+
+  await sendSignInMagicLink({
+    email: normalizedEmail,
+    callbackURL: buildAuthenticatedSelectDestinationUrl({ context: ctx }),
+    newUserCallbackURL: buildRootAppUrl({
+      pathname: "/onboarding",
+      context: ctx,
+    }),
+    errorCallbackURL: buildRootAppUrl({
+      pathname: "/login",
+      searchParams: { error: "magic_link" },
+      context: ctx,
+    }),
+    requestHeaders,
+  });
 }
 
 type TenantDiscoveryResult = {
@@ -1251,9 +1346,28 @@ export async function completeUserOnboarding(input: {
 
   const normalizedEmail = normalizeEmail(session.user.email);
 
+  const [authRow] = await db
+    .select({
+      fullName: authUser.fullName,
+      firstName: authUser.firstName,
+      lastName: authUser.lastName,
+      name: authUser.name,
+      email: authUser.email,
+    })
+    .from(authUser)
+    .where(eq(authUser.id, session.user.id))
+    .limit(1);
+
+  const ownerFullName = authRow
+    ? formatAuthUserDisplayName(authRow)
+    : formatAuthUserDisplayName({
+        name: session.user.name,
+        email: session.user.email ?? undefined,
+      });
+
   const tenant = await createBusinessTenantForAuthUser({
     authUserId: session.user.id,
-    fullName: session.user.name,
+    fullName: ownerFullName || normalizedEmail,
     email: normalizedEmail,
     tenantName,
     tenantSlug,
@@ -1331,8 +1445,6 @@ export async function inviteUser(input: {
   return { success: true };
 }
 
-/** Row shape returned by `signUp()` (for client `import type` only). */
-export type SignUpResponse = Awaited<ReturnType<typeof signUp>>;
 export type TenantDiscoveryItem = Awaited<
   ReturnType<typeof discoverTenantsForEmail>
 >[number];

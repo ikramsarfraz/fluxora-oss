@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AccountPortalProfile } from "@/app/(app)/account/account-portal-profile";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
+import { getCurrentTenant } from "@/services/tenants";
 import { getUserByAuthUserId } from "@/services/portal-users";
 
 export default async function AccountPage() {
@@ -16,7 +17,8 @@ export default async function AccountPage() {
     redirect("/sign-in");
   }
 
-  const portalUser = await getUserByAuthUserId(session.user.id);
+  const tenant = await getCurrentTenant();
+  const portalUser = await getUserByAuthUserId(session.user.id, tenant.id);
 
   if (!portalUser) {
     return (
@@ -33,5 +35,5 @@ export default async function AccountPage() {
     );
   }
 
-  return <AccountPortalProfile user={portalUser} />;
+  return <AccountPortalProfile user={portalUser} tenantSlug={tenant.slug} />;
 }

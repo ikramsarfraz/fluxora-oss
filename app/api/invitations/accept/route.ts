@@ -18,22 +18,25 @@ function acceptErrorToHttp(message: string): { status: number; code: string } {
   ) {
     return { status: 410, code: "EXPIRED_OR_INVALID" };
   }
-  if (message === "Sign up did not return a user id.") {
-    return { status: 500, code: "SIGNUP_INCOMPLETE" };
+  if (message === "Sign in required.") {
+    return { status: 401, code: "SIGN_IN_REQUIRED" };
+  }
+  if (message.includes("Sign in as the invited")) {
+    return { status: 403, code: "EMAIL_MISMATCH" };
   }
   return { status: 400, code: "REJECTED" };
 }
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { token, password } = body as {
+  const { token } = body as {
     token?: string;
     password?: string;
   };
 
   try {
     const result = await acceptInvitation(
-      { token: token ?? "", password: password ?? "" },
+      { token: token ?? "" },
       { requestHeaders: request.headers },
     );
     const res = NextResponse.json({

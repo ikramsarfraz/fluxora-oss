@@ -2,14 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { AlertCircle, Building2, CheckCircle2, MailPlus } from "lucide-react";
 import { Google } from "@/components/icons/google";
 
 import {
   prepareGoogleAuthStartAction,
-  signUpAccountOnlyAction,
+  sendRootSignupMagicLinkAction,
 } from "@/actions/auth";
 import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import {
@@ -48,8 +48,7 @@ type SignUpFormProps = {
 };
 
 type SignUpSuccess = {
-  loginUrl: string;
-  rootLoginUrl: string;
+  email: string;
 };
 
 function buildSupportHref(rootDomain: string) {
@@ -61,18 +60,7 @@ function buildSupportHref(rootDomain: string) {
   return `mailto:support@${emailDomain}`;
 }
 
-function getPasswordChecks(password: string) {
-  return [
-    {
-      label: "At least 8 characters",
-      met: password.length >= 8,
-    },
-    {
-      label: "Includes a number",
-      met: /\d/.test(password),
-    },
-  ];
-}
+
 
 export function SignUpForm({
   tenant,
@@ -91,29 +79,14 @@ export function SignUpForm({
   const form = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpFormSchema),
     defaultValues: {
-      name: "",
+      firstName: "",
+      lastName: "",
       email: "",
-      password: "",
-      confirmPassword: "",
     },
     mode: "onBlur",
   });
 
-  const password = form.watch("password");
-  const passwordChecks = useMemo(() => getPasswordChecks(password), [password]);
   const supportHref = useMemo(() => buildSupportHref(rootDomain), [rootDomain]);
-
-  useEffect(() => {
-    if (!success) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      window.location.assign(success.loginUrl);
-    }, 1500);
-
-    return () => window.clearTimeout(timeout);
-  }, [success]);
 
   async function handleGoogleSignUp() {
     setSubmitError(null);
@@ -145,15 +118,14 @@ export function SignUpForm({
     setSubmitError(null);
 
     try {
-      const result = await signUpAccountOnlyAction({
-        name: data.name,
+      const result = await sendRootSignupMagicLinkAction({
+        firstName: data.firstName,
+        lastName: data.lastName,
         email: data.email,
-        password: data.password,
       });
 
       setSuccess({
-        loginUrl: result.loginUrl,
-        rootLoginUrl: result.rootLoginUrl,
+        email: result.email,
       });
     } catch (error) {
       setSubmitError(
@@ -225,22 +197,25 @@ export function SignUpForm({
           </div>
           <div className="space-y-1">
             <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-              Account created
+              Check your email
             </h1>
             <p className="text-sm text-[oklch(0.50_0.02_230)]">
-              Sign in next and we&apos;ll take you to workspace onboarding.
+              We emailed a secure sign-in link to{" "}
+              <span className="font-medium text-foreground">{success.email}</span>.
+              Follow it to continue to workspace setup.
             </p>
           </div>
           <Button asChild className="h-10 w-full">
-            <Link href={success.loginUrl}>Continue to sign in</Link>
+            <Link href={rootLoginUrl}>Back to sign in</Link>
           </Button>
           <p className="text-sm text-[oklch(0.55_0.02_230)]">
-            <Link
-              href={success.rootLoginUrl}
+            Didn&apos;t get it?{" "}
+            <a
+              href={supportHref}
               className="font-medium text-[oklch(0.30_0.03_230)] underline underline-offset-2 transition hover:opacity-70"
             >
-              Back to login
-            </Link>
+              Contact support
+            </a>
           </p>
         </div>
       </AuthSplitShell>
@@ -256,11 +231,14 @@ export function SignUpForm({
       <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-            Create your account
+            Tell us about you
           </h1>
           <p className="text-sm text-[oklch(0.50_0.02_230)]">
-            Create your login first. Workspace setup happens right after you
-            sign in.
+            We&apos;ll email you a sign-in link.{" "}
+            <span className="font-medium text-foreground">
+              Set up your workspace
+            </span>{" "}
+            right after your first login.
           </p>
         </div>
 
@@ -303,17 +281,38 @@ export function SignUpForm({
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
           <FieldGroup>
             <Controller
-              name="name"
+              name="firstName"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-name">Full name</FieldLabel>
+                  <FieldLabel htmlFor="sign-up-first">First name</FieldLabel>
                   <Input
                     {...field}
-                    id="sign-up-name"
+                    id="sign-up-first"
                     type="text"
-                    placeholder="Jane Doe"
-                    autoComplete="name"
+                    placeholder="Jane"
+                    autoComplete="given-name"
+                    aria-invalid={fieldState.invalid}
+                  />
+                  {fieldState.invalid ? (
+                    <FieldError errors={[fieldState.error]} />
+                  ) : null}
+                </Field>
+              )}
+            />
+
+            <Controller
+              name="lastName"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="sign-up-last">Last name</FieldLabel>
+                  <Input
+                    {...field}
+                    id="sign-up-last"
+                    type="text"
+                    placeholder="Doe"
+                    autoComplete="family-name"
                     aria-invalid={fieldState.invalid}
                   />
                   {fieldState.invalid ? (
@@ -344,71 +343,8 @@ export function SignUpForm({
               )}
             />
 
-            <Controller
-              name="password"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-password">Password</FieldLabel>
-                  <Input
-                    {...field}
-                    id="sign-up-password"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Create a password"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-
-            <Controller
-              name="confirmPassword"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-confirm-password">
-                    Confirm password
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="sign-up-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder="Confirm your password"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-
-            <div className="rounded-2xl border border-border bg-muted/50 p-4">
-              <p className="text-sm font-medium text-foreground">
-                Password guidance
-              </p>
-              <div className="mt-3 space-y-2">
-                {passwordChecks.map(check => (
-                  <div
-                    key={check.label}
-                    className={`flex items-center gap-2 text-sm ${
-                      check.met ? "text-emerald-600" : "text-muted-foreground"
-                    }`}
-                  >
-                    <CheckCircle2 className="size-4" />
-                    {check.label}
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <Button type="submit" className="h-11 w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Creating…" : "Create account"}
+              {isSubmitting ? "Sending link…" : "Email sign-in link"}
             </Button>
 
             <div className="space-y-2 pt-1 text-center text-sm text-muted-foreground">

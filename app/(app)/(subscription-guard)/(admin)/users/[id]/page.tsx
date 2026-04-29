@@ -141,11 +141,11 @@ export default function UserDetailPage() {
       <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Send password reset email?</AlertDialogTitle>
+            <AlertDialogTitle>Send sign-in link email?</AlertDialogTitle>
             <AlertDialogDescription>
-              We will email a reset link to{" "}
+              We&apos;ll email a one-time sign-in link to{" "}
               <span className="font-medium text-foreground">{user.email}</span>.
-              They can choose a new password from that link.
+              They complete sign-in through that email.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -157,7 +157,7 @@ export default function UserDetailPage() {
                 resetPassword.mutate(userId, {
                   onSuccess: () => {
                     setResetOpen(false);
-                    toast.success("Password reset email sent.");
+                    toast.success("Sign-in link email sent.");
                   },
                   onError: (e: Error) => toast.error(e.message),
                 })

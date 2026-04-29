@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -21,7 +21,6 @@ import {
 } from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-in-form.schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -93,8 +92,8 @@ export function SignInForm({
   signUpUrl,
   googleEnabled,
 }: SignInFormProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
+
   const callbackUrl = useMemo(() => {
     const raw = searchParams.get("callbackUrl");
     if (raw != null && raw !== "") {
@@ -111,12 +110,12 @@ export function SignInForm({
   const created = searchParams.get("created") === "1";
 
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [linkSent, setLinkSent] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInFormSchema),
-    defaultValues: { email: emailParam, password: "" },
+    defaultValues: { email: emailParam },
   });
 
   const supportHref = useMemo(() => buildSupportHref(rootDomain), [rootDomain]);
@@ -133,21 +132,33 @@ export function SignInForm({
 
   async function onSubmit(data: SignInFormValues) {
     setSubmitError(null);
-    const postSignInUrl =
+    const origin =
+      typeof window === "undefined" ? "" : window.location.origin;
+
+    const postSignInPath =
       isRootHost && !isPlatformAdminHost
         ? `/select-destination?${new URLSearchParams({ returnTo: callbackUrl }).toString()}`
-        : callbackUrl;
-    const { error: err } = await authClient.signIn.email({
-      email: data.email,
-      password: data.password,
-      callbackURL: postSignInUrl,
+        : callbackUrl.startsWith("/")
+          ? callbackUrl
+          : `/${callbackUrl}`;
+
+    const callbackFull = `${origin}${postSignInPath}`;
+    const newUserCb =
+      isRootHost && !isPlatformAdminHost
+        ? `${origin}/onboarding`
+        : callbackFull;
+
+    const { error } = await authClient.signIn.magicLink({
+      email: data.email.trim(),
+      callbackURL: callbackFull,
+      newUserCallbackURL: newUserCb,
+      errorCallbackURL: `${origin}/login?${new URLSearchParams({ error: "magic_link" })}`,
     });
-    if (err) {
-      setSubmitError(err.message ?? "Sign in failed");
+    if (error) {
+      setSubmitError(error.message ?? "Could not send sign-in link.");
       return;
     }
-    router.push(postSignInUrl);
-    router.refresh();
+    setLinkSent(true);
   }
 
   const { isSubmitting } = form.formState;
@@ -173,6 +184,47 @@ export function SignInForm({
     } finally {
       setIsGoogleLoading(false);
     }
+  }
+
+
+  // Email linkSent confirmation
+  if (linkSent) {
+    return (
+      <TooltipProvider>
+        <AuthSplitShell
+          formPosition="left"
+          topLabel="Don't have an account?"
+          topHref={signUpUrl}
+          topAction={isRootHost ? "Sign up" : "Invite only"}
+        >
+          <div className="space-y-6 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <ShieldCheck className="size-6" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+                Check your email
+              </h1>
+              <p className="text-sm text-[oklch(0.50_0.02_230)]">
+                We sent a secure sign-in link. Open it in this browser on the same
+                device to continue.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full"
+              onClick={() => {
+                setLinkSent(false);
+                setSubmitError(null);
+              }}
+            >
+              Try a different email
+            </Button>
+          </div>
+        </AuthSplitShell>
+      </TooltipProvider>
+    );
   }
 
   // Tenant not found state
@@ -242,8 +294,8 @@ export function SignInForm({
               {isPlatformAdminHost
                 ? "Access the platform admin console."
                 : isRootHost
-                  ? "Enter your credentials to continue."
-                  : "Sign in to your workspace."}
+                  ? "We&apos;ll email you a sign-in link. New users finish workspace setup afterward."
+                  : "We&apos;ll email you a sign-in link."}
             </p>
           </div>
 
@@ -323,51 +375,18 @@ export function SignInForm({
                       autoComplete="email"
                       aria-invalid={fieldState.invalid}
                     />
-                    {isRootHost && (
-                      <FieldDescription>You&apos;ll choose your workspace after signing in.</FieldDescription>
-                    )}
+                    {isRootHost ? (
+                      <FieldDescription>
+                        You&apos;ll pick your workspace from the destinations list after
+                        you sign in.
+                      </FieldDescription>
+                    ) : null}
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
               />
-              <Controller
-                name="password"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <div className="flex items-center justify-between">
-                      <FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
-                      <Link
-                        href="/forgot-password"
-                        className="text-xs font-medium text-[oklch(0.50_0.02_230)] transition hover:text-[oklch(0.30_0.03_230)]"
-                      >
-                        Forgot?
-                      </Link>
-                    </div>
-                    <Input
-                      {...field}
-                      id="sign-in-password"
-                      type="password"
-                      autoComplete="current-password"
-                      placeholder="Enter password"
-                      aria-invalid={fieldState.invalid}
-                    />
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="remember-me"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(Boolean(checked))}
-                />
-                <label htmlFor="remember-me" className="text-sm text-[oklch(0.50_0.02_230)]">
-                  Keep me signed in
-                </label>
-              </div>
               <Button type="submit" className="h-10 w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Signing in..." : "Sign in"}
+                {isSubmitting ? "Sending…" : "Email me a sign-in link"}
               </Button>
             </FieldGroup>
           </form>

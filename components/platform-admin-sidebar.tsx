@@ -43,6 +43,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { authClient } from "@/lib/auth-client";
 import { getAvatarColor } from "@/lib/utils/get-avatar-color";
 import { getInitials } from "@/lib/utils/get-initials";
+import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 
 type NavItem = {
   title: string;
@@ -101,6 +102,12 @@ export function PlatformAdminSidebar({
     router.push("/sign-in");
     router.refresh();
   };
+
+  const userDisplayName = user
+    ? formatAuthUserDisplayName(
+        user as unknown as Parameters<typeof formatAuthUserDisplayName>[0],
+      )
+    : "";
 
   return (
     <Sidebar>
@@ -198,15 +205,15 @@ export function PlatformAdminSidebar({
                     className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage src={user.image ?? ""} alt={user.name} />
+                      <AvatarImage src={user.image ?? ""} alt={userDisplayName} />
                       <AvatarFallback
-                        className={`rounded-lg ${getAvatarColor(user.name)}`}
+                        className={`rounded-lg ${getAvatarColor(userDisplayName)}`}
                       >
-                        {getInitials(user.name)}
+                        {getInitials(userDisplayName)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{user.name}</span>
+                      <span className="truncate font-semibold">{userDisplayName}</span>
                       <span className="truncate text-xs text-muted-foreground">
                         {user.email}
                       </span>
@@ -223,15 +230,15 @@ export function PlatformAdminSidebar({
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                       <Avatar className="h-8 w-8 rounded-lg">
-                        <AvatarImage src={user.image ?? ""} alt={user.name} />
+                        <AvatarImage src={user.image ?? ""} alt={userDisplayName} />
                         <AvatarFallback
-                          className={`rounded-lg ${getAvatarColor(user.name)}`}
+                          className={`rounded-lg ${getAvatarColor(userDisplayName)}`}
                         >
-                          {getInitials(user.name)}
+                          {getInitials(userDisplayName)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate font-medium">{user.name}</span>
+                        <span className="truncate font-medium">{userDisplayName}</span>
                         <span className="truncate text-xs text-muted-foreground">
                           {user.email}
                         </span>

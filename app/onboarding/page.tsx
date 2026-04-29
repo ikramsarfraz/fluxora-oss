@@ -1,7 +1,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { eq } from "drizzle-orm";
+
+import { user as authUser } from "@/db/auth-schema";
+import { db } from "@/db";
 import { auth } from "@/lib/auth";
+import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import {
   buildRootAppUrl,
   getRequestTenantHostContextFromHeaders,
@@ -63,9 +68,28 @@ export default async function OnboardingPage() {
     redirect(selection.url);
   }
 
+  const [identity] = await db
+    .select({
+      fullName: authUser.fullName,
+      firstName: authUser.firstName,
+      lastName: authUser.lastName,
+      name: authUser.name,
+      email: authUser.email,
+    })
+    .from(authUser)
+    .where(eq(authUser.id, session.user.id))
+    .limit(1);
+
+  const defaultDisplayName = identity
+    ? formatAuthUserDisplayName(identity)
+    : formatAuthUserDisplayName({
+        name: session.user.name,
+        email: session.user.email ?? undefined,
+      });
+
   return (
     <OnboardingForm
-      defaultName={session.user.name ?? ""}
+      defaultName={defaultDisplayName}
       defaultEmail={session.user.email ?? ""}
       protocol={requestTenant.protocol}
       hostname={requestTenant.hostname}

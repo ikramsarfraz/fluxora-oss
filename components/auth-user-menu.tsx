@@ -20,6 +20,7 @@ import {
 import { Button } from "./ui/button";
 import { getAvatarColor } from "@/lib/utils/get-avatar-color";
 import { getInitials } from "@/lib/utils/get-initials";
+import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import type { User } from "better-auth";
 
 export function AuthUserMenu({
@@ -31,16 +32,19 @@ export function AuthUserMenu({
 }) {
   const router = useRouter();
 
+  const displayName = formatAuthUserDisplayName(
+    user as unknown as Parameters<typeof formatAuthUserDisplayName>[0],
+  );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-lg">
           <Avatar className="h-8 w-8 rounded-lg">
-            <AvatarImage src={user.image ?? ""} alt={user.name} />
+            <AvatarImage src={user.image ?? ""} alt={displayName} />
             <AvatarFallback
-              className={`rounded-lg ${getAvatarColor(user.name)}`}
+              className={`rounded-lg ${getAvatarColor(displayName)}`}
             >
-              {getInitials(user.name)}
+              {getInitials(displayName)}
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -53,15 +57,15 @@ export function AuthUserMenu({
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <Avatar className="h-8 w-8 rounded-lg">
-              <AvatarImage src={user.image ?? ""} alt={user.name} />
+              <AvatarImage src={user.image ?? ""} alt={displayName} />
               <AvatarFallback
-                className={`rounded-lg ${getAvatarColor(user.name)}`}
+                className={`rounded-lg ${getAvatarColor(displayName)}`}
               >
-                {getInitials(user.name)}
+                {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.name}</span>
+              <span className="truncate font-medium">{displayName}</span>
               <span className="truncate text-xs">{user.email}</span>
             </div>
           </div>

@@ -5,7 +5,9 @@ import {
   discoverTenantsForEmail,
   completeUserOnboarding,
   getAccessibleDestinationsForAuthUser,
-  signUpAccountOnly,
+  sendRootSignupMagicLink,
+  sendMagicLinkForCurrentLoginContext,
+  sendTenantUserMagicLink,
   startEmailDestinationSelection,
 } from "@/services/auth";
 
@@ -33,10 +35,29 @@ export async function getAccessibleDestinationsForAuthUserAction(
   return await getAccessibleDestinationsForAuthUser(authUserId);
 }
 
-export async function signUpAccountOnlyAction(
-  input: Parameters<typeof signUpAccountOnly>[0],
+export async function sendRootSignupMagicLinkAction(
+  input: Parameters<typeof sendRootSignupMagicLink>[0],
 ) {
-  return await signUpAccountOnly(input);
+  return await sendRootSignupMagicLink(input);
+}
+
+/** @deprecated */
+export async function signUpAccountOnlyAction(
+  input: Parameters<typeof sendRootSignupMagicLink>[0],
+) {
+  return await sendRootSignupMagicLink(input);
+}
+
+export async function sendForgotMagicLinkAction(
+  input: Parameters<typeof sendMagicLinkForCurrentLoginContext>[0],
+) {
+  return await sendMagicLinkForCurrentLoginContext(input);
+}
+
+export async function sendSelfTenantSignInMagicLinkAction(
+  input: Parameters<typeof sendTenantUserMagicLink>[0],
+) {
+  return await sendTenantUserMagicLink(input);
 }
 
 export async function completeUserOnboardingAction(

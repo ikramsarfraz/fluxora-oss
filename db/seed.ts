@@ -1207,6 +1207,9 @@ async function seedAuthAndTenant() {
     .values({
       id: "seed-user",
       name: "Demo Owner",
+      fullName: "Demo Owner",
+      firstName: "Demo",
+      lastName: "Owner",
       email: baseEmail,
       emailVerified: true,
     })

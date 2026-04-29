@@ -5,6 +5,11 @@ import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  /** Split names; synced with legacy `name` as combined display name where applicable */
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  /** Canonical display — kept in sync with `name` for Better Auth compatibility */
+  fullName: text("full_name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),

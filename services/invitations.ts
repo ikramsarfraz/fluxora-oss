@@ -1,14 +1,11 @@
-import { isAPIError } from "better-auth/api";
 import { randomUUID } from "crypto";
 import { addDays } from "date-fns";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { user as authUser } from "@/db/auth-schema";
 import { portalUsers, userInvitations } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import {
-  buildRootHostHeadersForAuth,
   buildTenantAppUrl,
   getRequestTenantHostContextFromHeaders,
 } from "@/lib/tenant-host";
@@ -16,7 +13,6 @@ import {
   getLatestAuthSessionIdForUser,
   sendUserInvitationEmail,
   setAuthSessionTenantId,
-  signUp,
 } from "@/services/auth";
 import {
   createPortalUser,
@@ -76,61 +72,89 @@ export async function getInvitationPreview(
   };
 }
 
-const OAUTH_ONLY_INVITE =
-  "Use your existing sign-in method or contact your admin.";
-
-type SignInWithReturnHeaders = (input: {
-  body: { email: string; password: string; rememberMe: boolean };
-  headers: Headers;
-  returnHeaders: true;
-}) => Promise<unknown>;
-
-function forwardHeadersFromSignInResult(result: unknown): Headers {
-  const out = new Headers();
-  if (!result || typeof result !== "object" || !("headers" in result)) {
-    return out;
-  }
-  const h = (result as { headers?: Headers }).headers;
-  if (!h) {
-    return out;
-  }
-  const list =
-    typeof h.getSetCookie === "function" ? h.getSetCookie() : [];
-  for (const c of list) {
-    out.append("set-cookie", c);
-  }
-  return out;
-}
-
-function throwIfOAuthOrAuthSignInError(e: unknown): never {
-  if (!isAPIError(e)) {
-    throw e;
-  }
-  const msg = (e.message ?? "").toLowerCase();
-  if (msg.includes("credential") || msg.includes("email and password")) {
-    throw new Error(OAUTH_ONLY_INVITE);
-  }
-  throw new Error(
-    e.message || "Sign-in failed. Check your password and try again.",
-  );
-}
 
 /**
- * After a successful accept, the client should navigate to `redirectUrl`.
- * `forwardHeaders` should be merged on the response so the browser stores the
- * session cookie when sign-in succeeded.
+ * After a successful invitation completion, navigate to `redirectUrl`.
  */
 export type AcceptInvitationResult = {
   redirectUrl: string;
   forwardHeaders: Headers;
 };
 
-export async function acceptInvitation(
-  input: { token: string; password: string },
-  options?: { requestHeaders: Headers },
+/**
+ * Sends an email-only magic sign-in link for the invite recipient.
+ */
+export async function sendInvitationMagicLink(
+  input: { token: string },
+  options?: { requestHeaders?: Headers },
+): Promise<{ ok: true }> {
+  const headerBag = options?.requestHeaders ?? new Headers();
+  const invitation = await db.query.userInvitations.findFirst({
+    where: eq(userInvitations.token, input.token),
+    with: { tenant: true },
+  });
+
+  if (!invitation) {
+    throw new Error("Invitation not found");
+  }
+  if (invitation.status === "revoked") {
+    throw new Error("This invitation was revoked.");
+  }
+  if (invitation.status === "accepted") {
+    throw new Error("This invitation was already accepted.");
+  }
+  if (invitation.status !== "pending") {
+    throw new Error("This invitation is no longer valid");
+  }
+  if (invitation.expiresAt < new Date()) {
+    throw new Error("This invitation has expired");
+  }
+  if (!invitation.tenant.isActive) {
+    throw new Error("This workspace is not available.");
+  }
+
+  const requestCtx = getRequestTenantHostContextFromHeaders(headerBag);
+  const invitePageUrl = buildTenantAppUrl({
+    slug: invitation.tenant.slug,
+    pathname: `/invite/${invitation.token}`,
+    searchParams: { from: "ml" },
+    context: requestCtx,
+  });
+
+  await auth.api.signInMagicLink({
+    body: {
+      email: invitation.email.trim().toLowerCase(),
+      ...(invitation.fullName.trim()
+        ? { name: invitation.fullName.trim() }
+        : {}),
+      callbackURL: invitePageUrl,
+      newUserCallbackURL: invitePageUrl,
+      errorCallbackURL: buildTenantAppUrl({
+        slug: invitation.tenant.slug,
+        pathname: "/login",
+        searchParams: { inviteError: "magic_link" },
+        context: requestCtx,
+      }),
+    },
+    headers: headerBag,
+  });
+
+  return { ok: true };
+}
+
+/**
+ * Finalize membership once the Better Auth session user matches the invitation email.
+ */
+export async function completeInvitationFromSession(
+  input: { token: string },
+  options?: { requestHeaders?: Headers },
 ): Promise<AcceptInvitationResult> {
-  const requestHeaders = options?.requestHeaders;
-  const headerBag = requestHeaders ?? new Headers();
+  const headerBag = options?.requestHeaders ?? new Headers();
+  const session = await auth.api.getSession({ headers: headerBag });
+  if (!session?.user?.email) {
+    throw new Error("Sign in required.");
+  }
+
   const requestCtx = getRequestTenantHostContextFromHeaders(headerBag);
 
   const invitation = await db.query.userInvitations.findFirst({
@@ -163,15 +187,12 @@ export async function acceptInvitation(
     pathname: "/dashboard",
     context: requestCtx,
   });
-  const postInviteLoginUrl = buildTenantAppUrl({
-    slug: tenantSlug,
-    pathname: "/login",
-    context: requestCtx,
-    searchParams: {
-      email: invitation.email,
-      inviteAccepted: "1",
-    },
-  });
+
+  const sessEmail = session.user.email.trim().toLowerCase();
+  const inviteEmail = invitation.email.trim().toLowerCase();
+  if (sessEmail !== inviteEmail) {
+    throw new Error("Sign in as the invited email address to continue.");
+  }
 
   const markAccepted = async () => {
     await db
@@ -183,101 +204,57 @@ export async function acceptInvitation(
       .where(eq(userInvitations.id, invitation.id));
   };
 
-  const signInEmailCollectHeaders = async (h: Headers) => {
-    const fn = auth.api.signInEmail as SignInWithReturnHeaders;
-    const raw = await fn({
-      body: {
-        email: invitation.email,
-        password: input.password,
-        rememberMe: true,
-      },
-      headers: h,
-      returnHeaders: true,
-    });
-    return forwardHeadersFromSignInResult(raw);
-  };
-
   const alreadyMember = await db.query.portalUsers.findFirst({
     where: and(
       eq(portalUsers.tenantId, invitation.tenantId),
-      sql`lower(${portalUsers.email}) = ${invitation.email.toLowerCase()}`,
+      sql`lower(${portalUsers.email}) = ${inviteEmail}`,
     ),
   });
+
   if (alreadyMember) {
-    await markAccepted();
-    try {
-      const fh = await signInEmailCollectHeaders(headerBag);
-      return { redirectUrl: dashboardUrl, forwardHeaders: fh };
-    } catch {
-      return { redirectUrl: postInviteLoginUrl, forwardHeaders: new Headers() };
-    }
-  }
-
-  const signUpRes = await signUp({
-    name: invitation.fullName,
-    email: invitation.email,
-    password: input.password,
-  });
-  if (!signUpRes?.user?.id) {
-    throw new Error("Sign up did not return a user id.");
-  }
-
-  const dbUser = await db.query.user.findFirst({
-    where: sql`lower(${authUser.email}) = ${invitation.email.toLowerCase()}`,
-  });
-  if (!dbUser) {
-    throw new Error("Could not load your account after sign up.");
-  }
-
-  const isObfuscatedExistingAccount = dbUser.id !== signUpRes.user.id;
-  if (isObfuscatedExistingAccount) {
-    const rootH = buildRootHostHeadersForAuth(headerBag);
-    let forward: Headers;
-    try {
-      forward = await signInEmailCollectHeaders(rootH);
-    } catch (e) {
-      throwIfOAuthOrAuthSignInError(e);
-    }
-    await createPortalUser({
-      tenantId: invitation.tenantId,
-      authUserId: dbUser.id,
-      fullName: invitation.fullName,
-      email: invitation.email,
-      role: invitation.role,
-    });
-    const sessionId = await getLatestAuthSessionIdForUser(dbUser.id);
-    if (sessionId) {
-      await setAuthSessionTenantId(sessionId, invitation.tenantId);
+    if (alreadyMember.authUserId !== session.user.id) {
+      throw new Error(
+        "This workspace already uses this email with a different login. Contact your administrator.",
+      );
     }
     await markAccepted();
-    return { redirectUrl: dashboardUrl, forwardHeaders: forward };
+    return {
+      redirectUrl: dashboardUrl,
+      forwardHeaders: new Headers(),
+    };
   }
 
   await createPortalUser({
     tenantId: invitation.tenantId,
-    authUserId: dbUser.id,
+    authUserId: session.user.id,
     fullName: invitation.fullName,
     email: invitation.email,
     role: invitation.role,
   });
+
+  const sessionId = await getLatestAuthSessionIdForUser(session.user.id);
+  if (sessionId) {
+    await setAuthSessionTenantId(sessionId, invitation.tenantId);
+  }
+
   await markAccepted();
 
-  try {
-    const fh = await signInEmailCollectHeaders(headerBag);
-    return { redirectUrl: dashboardUrl, forwardHeaders: fh };
-  } catch (e) {
-    if (!isAPIError(e)) {
-      throw e;
-    }
-    const m = (e.message ?? "").toLowerCase();
-    if (
-      m.includes("verif") ||
-      m.includes("forbidden")
-    ) {
-      return { redirectUrl: postInviteLoginUrl, forwardHeaders: new Headers() };
-    }
-    throw e;
-  }
+  return {
+    redirectUrl: dashboardUrl,
+    forwardHeaders: new Headers(),
+  };
+}
+
+/** @deprecated Use `completeInvitationFromSession`. */
+export async function acceptInvitation(
+  input: { token: string; password?: string },
+  options?: { requestHeaders?: Headers },
+): Promise<AcceptInvitationResult> {
+  void input.password;
+  return completeInvitationFromSession(
+    { token: input.token },
+    { requestHeaders: options?.requestHeaders },
+  );
 }
 
 /**

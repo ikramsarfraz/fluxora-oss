@@ -11,6 +11,7 @@ import {
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
 import { countPortalUserUsageForTenant } from "@/services/subscription-usage";
+import { inviteUser as inviteUserAuth, sendTenantUserMagicLink } from "@/services/auth";
 import {
   createPaginatedResult,
   getPaginationOffset,
@@ -18,7 +19,6 @@ import {
   type PaginatedQueryInput,
   type SortDirection,
 } from "@/lib/pagination";
-import { inviteUser as inviteUserAuth } from "@/services/auth";
 import { getCurrentRequestTenant, getCurrentTenant } from "./tenants";
 
 export type PortalUserRole =
@@ -33,7 +33,6 @@ const DEFAULT_SIGNUP_ROLE: PortalUserRole = "admin";
 
 /**
  * Creates ERP `portal_users` row for the signed-in Better Auth user (idempotent).
- * Call after `authClient.signUp.email` succeeds so cookies are present.
  */
 export async function createPortalUser(input: {
   tenantId: string;
@@ -326,6 +325,7 @@ export async function getUserByAuthUserId(authUserId: string, tenantId?: string)
       : eq(portalUsers.authUserId, authUserId),
     with: {
       authUser: true,
+      tenant: true,
     },
   });
   return user;
@@ -444,30 +444,31 @@ export async function setPortalUserRoleByAdmin(
 }
 
 /**
- * Sends Better Auth password-reset email to the user&apos;s sign-in address.
+ * Sends an email-only sign-in link to the user&apos;s address (replacing legacy password-reset).
  */
 export async function sendPasswordResetForUserByAdmin(
   targetUserId: string,
 ): Promise<{ success: true }> {
   await requireAdminPortalUser();
 
-  const target = await getUserById(targetUserId);
+  const [target, tenant] = await Promise.all([
+    getUserById(targetUserId),
+    getCurrentTenant(),
+  ]);
   if (!target) {
     throw new Error("User not found");
   }
 
   const email = target.authUser?.email ?? target.email;
-
   try {
-    await auth.api.requestPasswordReset({
-      body: {
-        email,
-        redirectTo: "/reset-password",
-      },
+    await sendTenantUserMagicLink({
+      email,
+      tenantSlug: tenant.slug,
+      displayNameHint: target.fullName,
     });
   } catch (e) {
     if (isAPIError(e)) {
-      throw new Error(e.message || "Failed to send password reset email.");
+      throw new Error(e.message || "Failed to send sign-in email.");
     }
     throw e;
   }

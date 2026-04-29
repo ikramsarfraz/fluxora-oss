@@ -2,15 +2,21 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { APIError } from "@better-auth/core/error";
+import { magicLink } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
+
 import { db } from "@/db";
 import * as authSchema from "@/db/auth-schema";
-import { platformUsers, portalUsers, tenants } from "@/db/schema";
-import { VerifyEmail } from "@/emails/verify-email";
+import { signupProfilePending, platformUsers, portalUsers, tenants } from "@/db/schema";
+import { MagicLinkEmail } from "@/emails/magic-link";
 import { emailFrom, resend } from "./email";
-import { getRequestTenantHostContextFromHeaders, getRootDomain } from "./tenant-host";
-import { ResetPasswordEmail } from "@/emails/reset-password";
+import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import { claimApprovedTenantJoinRequestForSession } from "@/services/tenant-join-requests-core";
+import { applyPendingIdentityToNewUser } from "@/services/signup-profile";
+import {
+  getRequestTenantHostContextFromHeaders,
+  getRootDomain,
+} from "./tenant-host";
 
 if (!process.env.BETTER_AUTH_SECRET) {
   throw new Error("BETTER_AUTH_SECRET is not set");
@@ -77,6 +83,28 @@ export const auth = betterAuth({
         }
       : undefined,
   },
+  user: {
+    additionalFields: {
+      firstName: {
+        type: "string",
+        required: false,
+        input: false,
+        defaultValue: "",
+      },
+      lastName: {
+        type: "string",
+        required: false,
+        input: false,
+        defaultValue: "",
+      },
+      fullName: {
+        type: "string",
+        required: false,
+        input: false,
+        defaultValue: "",
+      },
+    },
+  },
   session: {
     additionalFields: {
       tenantId: {
@@ -95,7 +123,57 @@ export const auth = betterAuth({
       }
     : {},
 
+  emailAndPassword: {
+    enabled: false,
+  },
+
+  emailVerification: {
+    sendOnSignUp: false,
+    sendOnSignIn: false,
+    autoSignInAfterVerification: false,
+  },
+
+  plugins: [
+    magicLink({
+      expiresIn: 60 * 15,
+      disableSignUp: false,
+      sendMagicLink: async ({ email, url }) => {
+        const emailLower = email.trim().toLowerCase();
+        const pending =
+          (
+            await db
+              .select({ firstName: signupProfilePending.firstName })
+              .from(signupProfilePending)
+              .where(eq(signupProfilePending.emailLower, emailLower))
+              .limit(1)
+          )[0] ?? null;
+
+        await resend.emails.send({
+          from: emailFrom,
+          to: email,
+          subject: "Your Acme Distribution sign-in link",
+          react: MagicLinkEmail({
+            url,
+            name: pending?.firstName?.trim() || null,
+          }),
+        });
+      },
+    }),
+    nextCookies(),
+  ],
+
   databaseHooks: {
+    user: {
+      create: {
+        after: async (createdUser): Promise<void> => {
+          await applyPendingIdentityToNewUser({
+            userId: createdUser.id,
+            emailLower: createdUser.email,
+            initialName: createdUser.name ?? "",
+          });
+        },
+      },
+    },
     session: {
       create: {
         before: async (session, ctx) => {
@@ -163,6 +241,9 @@ export const auth = betterAuth({
               .select({
                 email: authSchema.user.email,
                 name: authSchema.user.name,
+                fullName: authSchema.user.fullName,
+                firstName: authSchema.user.firstName,
+                lastName: authSchema.user.lastName,
               })
               .from(authSchema.user)
               .where(eq(authSchema.user.id, session.userId))
@@ -173,7 +254,7 @@ export const auth = betterAuth({
                   tenantId: tenant.id,
                   authUserId: session.userId,
                   email: authUserRecord.email,
-                  fallbackFullName: authUserRecord.name,
+                  fallbackFullName: formatAuthUserDisplayName(authUserRecord),
                 })
               : null;
 
@@ -202,42 +283,4 @@ export const auth = betterAuth({
       },
     },
   },
-
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: true,
-    autoSignIn: false,
-
-    async sendResetPassword({ user, url }) {
-      await resend.emails.send({
-        from: emailFrom,
-        to: user.email,
-        subject: "Reset your password",
-        react: ResetPasswordEmail({
-          name: user.name,
-          url,
-        }),
-      });
-    },
-  },
-
-  emailVerification: {
-    sendOnSignUp: true,
-    sendOnSignIn: true,
-    autoSignInAfterVerification: false,
-
-    async sendVerificationEmail({ user, url }) {
-      await resend.emails.send({
-        from: emailFrom,
-        to: user.email,
-        subject: "Verify your email",
-        react: VerifyEmail({
-          name: user.name,
-          url,
-        }),
-      });
-    },
-  },
-
-  plugins: [nextCookies()],
 });

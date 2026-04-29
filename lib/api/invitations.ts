@@ -58,9 +58,33 @@ export type AcceptInvitationResponse = {
   redirectUrl: string;
 };
 
+export async function sendInvitationMagicLinkRequest(body: {
+  token: string;
+}): Promise<{ success: true }> {
+  const path = `${BASE}${endpoints.invitations.sendMagic()}`;
+  const res = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    detail?: string;
+    code?: string;
+    success?: boolean;
+  };
+  if (!res.ok) {
+    throw new InvitationActionError(
+      typeof data.detail === "string" ? data.detail : res.statusText,
+      typeof data.code === "string" ? data.code : "REJECTED",
+      res.status,
+    );
+  }
+  return { success: true };
+}
+
 export async function acceptInvitationRequest(body: {
   token: string;
-  password: string;
 }): Promise<AcceptInvitationResponse> {
   const path = `${BASE}${endpoints.invitations.accept()}`;
   const res = await fetch(path, {

@@ -417,6 +417,7 @@ export const endpoints = {
   invitations: {
     preview: (token: string) => `${P.invitations}/${encodeURIComponent(token)}`,
     accept: () => `${P.invitations}/accept`,
+    sendMagic: () => `${P.invitations}/send-magic`,
   },
   userInvitations: {
     list: () => `${P.userInvitations}`,

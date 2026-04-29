@@ -1,15 +1,14 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
 
 import {
   acceptInvitationRequest,
   fetchInvitationPreview,
+  sendInvitationMagicLinkRequest,
   InvitationActionError,
 } from "@/lib/api/invitations";
 import type { InvitationPreviewFailureReason } from "@/services/invitations";
@@ -22,20 +21,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Field,
   FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-import {
-  inviteAcceptFormSchema,
-  type InviteAcceptFormValues,
-} from "./invite-user-form.schema";
 
 function roleLabel(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
@@ -81,8 +70,12 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
   const token = tokenFromPath ?? tokenFromQuery;
 
   const queryError = searchParams.get("error");
+  const fromMagicLink = searchParams.get("from") === "ml";
 
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [magicSent, setMagicSent] = useState(false);
+  const [magicPending, setMagicPending] = useState(false);
+  const [joinPending, setJoinPending] = useState(false);
 
   const invitationQuery = useQuery({
     queryKey: ["invitation", token],
@@ -90,15 +83,7 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
     enabled: Boolean(token),
   });
 
-  const form = useForm<InviteAcceptFormValues>({
-    resolver: zodResolver(inviteAcceptFormSchema),
-    defaultValues: {
-      newPassword: "",
-      confirmPassword: "",
-    },
-  });
-
-  async function onSubmit(data: InviteAcceptFormValues) {
+  async function onSendMagicLink() {
     if (!token) {
       setSubmitError(
         "Missing invite token. Open the full link from your invitation email.",
@@ -106,12 +91,10 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
       return;
     }
     setSubmitError(null);
+    setMagicPending(true);
     try {
-      const { redirectUrl } = await acceptInvitationRequest({
-        token,
-        password: data.newPassword,
-      });
-      window.location.assign(redirectUrl);
+      await sendInvitationMagicLinkRequest({ token });
+      setMagicSent(true);
     } catch (e) {
       if (e instanceof InvitationActionError) {
         if (e.code === "ALREADY_ACCEPTED" || e.code === "EXPIRED_OR_INVALID") {
@@ -126,12 +109,55 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
         }
       }
       setSubmitError(
-        e instanceof Error ? e.message : "Could not accept invitation",
+        e instanceof Error ? e.message : "Could not send sign-in email",
       );
+    } finally {
+      setMagicPending(false);
     }
   }
 
-  const { isSubmitting } = form.formState;
+  async function onJoinWorkspace() {
+    if (!token) {
+      setSubmitError(
+        "Missing invite token. Open the full link from your invitation email.",
+      );
+      return;
+    }
+    setSubmitError(null);
+    setJoinPending(true);
+    try {
+      const { redirectUrl } = await acceptInvitationRequest({ token });
+      window.location.assign(redirectUrl);
+    } catch (e) {
+      if (e instanceof InvitationActionError) {
+        if (e.code === "ALREADY_ACCEPTED" || e.code === "EXPIRED_OR_INVALID") {
+          setSubmitError(
+            e.message || "This invitation can no longer be accepted.",
+          );
+          return;
+        }
+        if (e.code === "REVOKED") {
+          setSubmitError("This invitation was revoked.");
+          return;
+        }
+        if (e.code === "SIGN_IN_REQUIRED") {
+          setSubmitError("Sign in with the invited email, then try again.");
+          return;
+        }
+        if (e.code === "EMAIL_MISMATCH") {
+          setSubmitError(
+            "You are signed in with a different email than this invite.",
+          );
+          return;
+        }
+      }
+      setSubmitError(
+        e instanceof Error ? e.message : "Could not join workspace.",
+      );
+    } finally {
+      setJoinPending(false);
+    }
+  }
 
   if (queryError === "INVALID_TOKEN") {
     return (
@@ -249,14 +275,18 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
     );
   }
 
+  const sessionReady = Boolean(
+    sessionEmail && sessionEmail === inviteEmail,
+  );
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
         <CardTitle>Accept invitation</CardTitle>
         <CardDescription>
-          Set a password for your account. If you already have a Prime
-          account for this email, we verify your existing password, then add
-          you to this workspace.
+          {sessionReady
+            ? "You&apos;re signed in with the invited email. Join this workspace to finish."
+            : "We&apos;ll email you a secure sign-in link for this address. Open the link from that email to sign in, then return here to join."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -267,70 +297,68 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
             <Badge variant="outline">{roleLabel(preview.role)}</Badge>
           </div>
         </div>
+        {fromMagicLink ? (
+          <Alert>
+            <AlertTitle>Signed in</AlertTitle>
+            <AlertDescription>
+              If you landed here after your email link, tap{" "}
+              <span className="font-medium">Join workspace</span> below when you
+              are ready.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {magicSent ? (
+          <Alert className="border-emerald-200 bg-emerald-50">
+            <AlertTitle>Check your email</AlertTitle>
+            <AlertDescription>
+              We sent a link to{" "}
+              <span className="font-medium">{preview.email}</span>. Open it, then come
+              back to this page and use{" "}
+              <span className="font-medium">Join workspace</span>.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {submitError ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not accept</AlertTitle>
+            <AlertTitle>Could not continue</AlertTitle>
             <AlertDescription>{submitError}</AlertDescription>
           </Alert>
         ) : null}
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-          <FieldGroup>
-            <Controller
-              name="newPassword"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="invite-new-password">Password</FieldLabel>
-                  <Input
-                    {...field}
-                    id="invite-new-password"
-                    type="password"
-                    autoComplete="new-password"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  <FieldDescription>
-                    New accounts: choose at least 8 characters. Existing
-                    users: your current sign-in password.
-                  </FieldDescription>
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-            <Controller
-              name="confirmPassword"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="invite-confirm-password">
-                    Confirm password
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="invite-confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
-              )}
-            />
-            <Field className="gap-3">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Joining workspace…"
-                  : "Join workspace / create account"}
+        <div className="flex flex-col gap-3">
+          {sessionReady ? (
+            <>
+              <Button
+                type="button"
+                className="w-full"
+                disabled={joinPending}
+                onClick={onJoinWorkspace}
+              >
+                {joinPending ? "Joining workspace…" : "Join workspace"}
               </Button>
-            </Field>
-            <FieldDescription className="text-center">
-              <Link href="/sign-in">Back to sign in</Link>
-            </FieldDescription>
-          </FieldGroup>
-        </form>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={magicPending}
+                onClick={onSendMagicLink}
+              >
+                {magicPending ? "Sending…" : "Resend sign-in email"}
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              className="w-full"
+              disabled={magicPending}
+              onClick={onSendMagicLink}
+            >
+              {magicPending ? "Sending…" : "Email me a sign-in link"}
+            </Button>
+          )}
+        </div>
+        <FieldDescription className="text-center">
+          <Link href="/sign-in">Back to sign in</Link>
+        </FieldDescription>
       </CardContent>
     </Card>
   );
