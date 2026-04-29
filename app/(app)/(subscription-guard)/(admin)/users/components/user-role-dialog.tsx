@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Select,
   SelectContent,
@@ -137,9 +139,9 @@ function RoleForm({
         </div>
 
         {error && (
-          <p className="text-sm text-destructive" role="alert">
+          <FormErrorAlert title="We couldn't update the role.">
             {error}
-          </p>
+          </FormErrorAlert>
         )}
       </FieldGroup>
       <DialogFooter>
@@ -156,7 +158,8 @@ function RoleForm({
           disabled={mutation.isPending || role === user.role}
           onClick={handleSave}
         >
-          {mutation.isPending ? "Saving..." : "Save role"}
+          {mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+          {mutation.isPending ? "Saving…" : "Save changes"}
         </Button>
       </DialogFooter>
     </>

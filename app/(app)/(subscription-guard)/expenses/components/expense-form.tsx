@@ -6,8 +6,9 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldError,
@@ -91,9 +92,9 @@ export function ExpenseForm(props: ExpenseFormProps) {
 
     if (props.mode === "create") {
       createExpense.mutate(payload, {
-        onSuccess: () => {
-          toast.success("Expense added.");
-          router.push("/expenses");
+        onSuccess: expense => {
+          toast.success("Expense created.");
+          router.push(expense?.id ? `/expenses/${expense.id}` : "/expenses");
         },
         onError: (e: Error) => setError(e.message),
       });
@@ -116,6 +117,17 @@ export function ExpenseForm(props: ExpenseFormProps) {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id={formId} onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert
+              title={
+                props.mode === "edit"
+                  ? "We couldn't save your changes."
+                  : "We couldn't create the expense."
+              }
+            >
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="expenseDate"
@@ -239,37 +251,24 @@ export function ExpenseForm(props: ExpenseFormProps) {
                 </Field>
               )}
             />
-
-            {error && (
-              <div className="text-sm text-destructive" role="alert">
-                {error}
-              </div>
-            )}
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            router.push(
-              props.mode === "edit"
-                ? `/expenses/${props.expense.id}`
-                : "/expenses",
-            )
-          }
-        >
-          Cancel
-        </Button>
-        <Button type="submit" form={formId} disabled={isSubmitting}>
-          {isSubmitting
-            ? "Saving..."
-            : props.mode === "create"
-              ? "Add expense"
-              : "Save changes"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId={formId}
+        isPending={isSubmitting}
+        onCancel={() =>
+          router.push(
+            props.mode === "edit"
+              ? `/expenses/${props.expense.id}`
+              : "/expenses",
+          )
+        }
+        pendingLabel={props.mode === "edit" ? "Saving…" : "Creating…"}
+        submitLabel={
+          props.mode === "edit" ? "Save changes" : "Create expense"
+        }
+      />
     </Card>
   );
 }

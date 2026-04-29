@@ -6,12 +6,10 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import {
-  createSupportTicketAction,
-  uploadTenantSupportTicketAttachmentAction,
-} from "@/actions/support";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { createSupportTicketAction, uploadTenantSupportTicketAttachmentAction } from "@/actions/support";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldDescription,
@@ -45,6 +43,7 @@ interface SupportFormProps {
 export function SupportForm({ defaults }: SupportFormProps) {
   const router = useRouter();
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const form = useForm<SupportFormValues, unknown, SupportFormParsed>({
     resolver: zodResolver(supportFormSchema),
     defaultValues: {
@@ -65,6 +64,7 @@ export function SupportForm({ defaults }: SupportFormProps) {
   const isSubmitting = form.formState.isSubmitting;
 
   async function onSubmit(data: SupportFormParsed) {
+    setError(null);
     try {
       const ticket = await createSupportTicketAction({
         name: data.name,
@@ -81,17 +81,9 @@ export function SupportForm({ defaults }: SupportFormProps) {
         await uploadTenantSupportTicketAttachmentAction(ticket.id, null, formData);
       }
       toast.success("Support ticket submitted.");
-      router.push("/support");
-      form.reset({
-        ...defaults,
-        issueType: data.issueType,
-        priority: data.priority,
-        subject: "",
-        message: "",
-        pageUrl: data.pageUrl,
-      });
+      router.push(`/support/${ticket.id}`);
     } catch (error) {
-      toast.error(
+      setError(
         error instanceof Error
           ? error.message
           : "Could not submit support ticket.",
@@ -103,6 +95,11 @@ export function SupportForm({ defaults }: SupportFormProps) {
     <Card className="max-w-2xl">
       <CardContent className="pt-6">
         <form id="support-ticket-form" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert title="We couldn't submit the support ticket.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <div className="grid gap-4 md:grid-cols-2">
               <Controller
@@ -310,11 +307,13 @@ export function SupportForm({ defaults }: SupportFormProps) {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter>
-        <Button type="submit" form="support-ticket-form" disabled={isSubmitting}>
-          {isSubmitting ? "Submitting..." : "Submit support ticket"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="support-ticket-form"
+        isPending={isSubmitting}
+        onCancel={() => router.push("/support")}
+        pendingLabel="Submitting…"
+        submitLabel="Create support ticket"
+      />
     </Card>
   );
 }

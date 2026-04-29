@@ -8,8 +8,9 @@ import { useState } from "react";
 
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { useInviteUser } from "@/hooks/use-users";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldError,
@@ -29,8 +30,6 @@ import {
   inviteUserFormSchema,
   type InviteUserFormValues,
 } from "./invite-user-form.schema";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
@@ -85,17 +84,13 @@ export function InviteUserForm() {
       <CardContent className="pt-6">
         <form id="form-add-user" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
-            <Alert variant="destructive" className="max-w-xl mb-4">
-              <AlertCircle />
-              <AlertTitle>Invite user failed</AlertTitle>
-              <AlertDescription>
+            <FormErrorAlert title="We couldn't send the invitation.">
                 {isLimitReachedMessage(error, "maxPortalUsers") ? (
                   <SubscriptionUpgradeMessage message="Your current plan has reached the portal user limit." />
                 ) : (
                   stripSubscriptionEnforcementPrefix(error)
                 )}
-              </AlertDescription>
-            </Alert>
+            </FormErrorAlert>
           ) : null}
           <FieldGroup>
             <Controller
@@ -170,22 +165,13 @@ export function InviteUserForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push("/users")}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form="form-add-user"
-          disabled={sendInvite.isPending}
-        >
-          {sendInvite.isPending ? "Sending…" : "Send invitation"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-add-user"
+        isPending={sendInvite.isPending}
+        onCancel={() => router.push("/users")}
+        pendingLabel="Sending…"
+        submitLabel="Send invitation"
+      />
     </Card>
   );
 }

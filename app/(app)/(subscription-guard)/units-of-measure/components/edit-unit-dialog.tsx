@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -51,6 +53,7 @@ export function EditUnitDialog({
   onOpenChange,
 }: EditUnitDialogProps) {
   const updateUnit = useUpdateUnitOfMeasure();
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<EditUnitFormValues>({
     resolver: zodResolver(editUnitFormSchema),
@@ -73,6 +76,7 @@ export function EditUnitDialog({
   async function onSubmit(data: EditUnitFormValues) {
     if (!unit) return;
 
+    setError(null);
     try {
       await updateUnit.mutateAsync({
         id: unit.id,
@@ -87,7 +91,7 @@ export function EditUnitDialog({
       toast.success("Unit of measure updated.");
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update unit");
+      setError(err instanceof Error ? err.message : "Failed to update unit.");
     }
   }
 
@@ -101,6 +105,11 @@ export function EditUnitDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {error ? (
+            <FormErrorAlert title="We couldn't save your changes.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup className="gap-4">
             <Controller
               name="name"
@@ -205,11 +214,15 @@ export function EditUnitDialog({
             <Button
               type="button"
               variant="outline"
+              disabled={updateUnit.isPending}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
             <Button type="submit" disabled={updateUnit.isPending}>
+              {updateUnit.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : null}
               {updateUnit.isPending ? "Saving…" : "Save changes"}
             </Button>
           </DialogFooter>
