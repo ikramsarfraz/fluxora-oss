@@ -1,3 +1,7 @@
+/**
+ * Node built-in runner with TypeScript via tsx (`devDependency`).
+ * Run: npm run test:unit
+ */
 import assert from "node:assert/strict";
 import test from "node:test";
 
