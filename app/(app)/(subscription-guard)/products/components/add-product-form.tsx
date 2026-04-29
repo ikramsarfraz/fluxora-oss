@@ -6,14 +6,14 @@ import { useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateSku } from "./product-sku-utils";
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
@@ -50,7 +50,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 
 import {
   addProductFormSchema,
@@ -196,7 +197,8 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
             Cancel
           </Button>
           <Button type="button" onClick={handleCreate} disabled={pending}>
-            {pending ? "Creating…" : "Create"}
+            {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {pending ? "Creating…" : "Create category"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -262,14 +264,8 @@ export function AddProductForm(props?: {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
       invalidateSetupChecklistQuery(queryClient);
-      if (mode === "create") {
-        form.reset(buildDefaultForm());
-        router.push("/products");
-        toast.success("Product added");
-      } else {
-        router.push(`/products/${result.id}`);
-        toast.success("Product updated");
-      }
+      router.push(`/products/${result.id}`);
+      toast.success(mode === "edit" ? "Product updated." : "Product created.");
     } catch (e) {
       setMutationError(
         e instanceof Error
@@ -288,19 +284,19 @@ export function AddProductForm(props?: {
       <CardContent className="pt-6">
         <form id="form-add-product" onSubmit={form.handleSubmit(onSubmit)}>
           {mutationError ? (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle />
-              <AlertTitle>
-                {mode === "edit" ? "Update product failed" : "Add product failed"}
-              </AlertTitle>
-              <AlertDescription>
+            <FormErrorAlert
+              title={
+                mode === "edit"
+                  ? "We couldn't save your changes."
+                  : "We couldn't create the product."
+              }
+            >
                 {isLimitReachedMessage(mutationError, "maxProducts") ? (
                   <SubscriptionUpgradeMessage message="Your current plan has reached the product limit." />
                 ) : (
                   stripSubscriptionEnforcementPrefix(mutationError)
                 )}
-              </AlertDescription>
-            </Alert>
+            </FormErrorAlert>
           ) : null}
           <FieldGroup>
             {/* SKU + Name */}
@@ -699,26 +695,17 @@ export function AddProductForm(props?: {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() =>
-            router.push(mode === "edit" && product ? `/products/${product.id}` : "/products")
-          }
-        >
-          Cancel
-        </Button>
-        <Button type="submit" form="form-add-product" disabled={isPending}>
-          {isPending
-            ? mode === "edit"
-              ? "Saving…"
-              : "Adding…"
-            : mode === "edit"
-              ? "Save changes"
-              : "Add product"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-add-product"
+        isPending={isPending}
+        onCancel={() =>
+          router.push(
+            mode === "edit" && product ? `/products/${product.id}` : "/products",
+          )
+        }
+        pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
+        submitLabel={mode === "edit" ? "Save changes" : "Create product"}
+      />
     </Card>
   );
 }

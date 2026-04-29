@@ -3,12 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldDescription,
@@ -31,6 +33,7 @@ const defaultForm: AddCategoryFormValues = {
 export default function AddCategoryForm() {
   const router = useRouter();
   const createCategory = useCreateCategory();
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<AddCategoryFormValues>({
     resolver: zodResolver(addCategoryFormSchema),
@@ -38,16 +41,16 @@ export default function AddCategoryForm() {
   });
 
   async function onSubmit(data: AddCategoryFormValues) {
+    setError(null);
     try {
-      await createCategory.mutateAsync({
+      const category = await createCategory.mutateAsync({
         name: data.name,
         description: data.description || null,
       });
-      form.reset(defaultForm);
-      toast.success(`Category "${data.name}" created.`);
-      router.push("/categories");
+      toast.success("Category created.");
+      router.push(`/categories/${category.id}`);
     } catch (err) {
-      toast.error(
+      setError(
         err instanceof Error ? err.message : "Failed to create category.",
       );
     }
@@ -57,6 +60,11 @@ export default function AddCategoryForm() {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id="form-add-category" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert title="We couldn't create the category.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="name"
@@ -106,22 +114,13 @@ export default function AddCategoryForm() {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push("/categories")}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form="form-add-category"
-          disabled={createCategory.isPending}
-        >
-          {createCategory.isPending ? "Adding…" : "Add category"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-add-category"
+        isPending={createCategory.isPending}
+        onCancel={() => router.push("/categories")}
+        pendingLabel="Creating…"
+        submitLabel="Create category"
+      />
     </Card>
   );
 }

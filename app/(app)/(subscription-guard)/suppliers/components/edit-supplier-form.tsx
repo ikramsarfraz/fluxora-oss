@@ -2,13 +2,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 
 import { updateSupplierAction } from "@/actions/suppliers";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { FormActionFooter } from "@/components/forms/form-action-footer";
+import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
   FieldDescription,
@@ -46,6 +48,7 @@ type EditSupplierParsed = z.output<typeof editSupplierSchema>;
 
 export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
   const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<EditSupplierValues, unknown, EditSupplierParsed>({
     resolver: zodResolver(editSupplierSchema),
@@ -56,16 +59,17 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
   });
 
   async function onSubmit(data: EditSupplierParsed) {
+    setError(null);
     try {
       await updateSupplierAction({
         id: supplier.id,
         name: data.name,
         netDays: data.netDays,
       });
-      toast.success("Supplier updated");
+      toast.success("Supplier updated.");
       router.push(`/suppliers/${supplier.id}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to update supplier.");
+      setError(e instanceof Error ? e.message : "Failed to update supplier.");
     }
   }
 
@@ -73,6 +77,11 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
     <Card className="w-full max-w-xl">
       <CardContent className="pt-6">
         <form id="form-edit-supplier" onSubmit={form.handleSubmit(onSubmit)}>
+          {error ? (
+            <FormErrorAlert title="We couldn't save your changes.">
+              {error}
+            </FormErrorAlert>
+          ) : null}
           <FieldGroup>
             <Controller
               name="name"
@@ -132,22 +141,13 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
           </FieldGroup>
         </form>
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2 border-t pt-6">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push(`/suppliers/${supplier.id}`)}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          form="form-edit-supplier"
-          disabled={form.formState.isSubmitting}
-        >
-          {form.formState.isSubmitting ? "Saving…" : "Save changes"}
-        </Button>
-      </CardFooter>
+      <FormActionFooter
+        formId="form-edit-supplier"
+        isPending={form.formState.isSubmitting}
+        onCancel={() => router.push(`/suppliers/${supplier.id}`)}
+        pendingLabel="Saving…"
+        submitLabel="Save changes"
+      />
     </Card>
   );
 }
