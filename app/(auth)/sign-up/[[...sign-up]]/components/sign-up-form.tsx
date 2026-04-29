@@ -33,13 +33,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Field,
   FieldDescription,
   FieldError,
@@ -470,23 +463,23 @@ export function SignUpForm({
           topHref={tenantLoginUrl}
           topAction="Sign in"
         >
-          <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
-            <CardHeader className="space-y-3 pb-5">
+          <div className="space-y-6">
+            <div className="space-y-2">
               <p className="text-sm font-medium text-muted-foreground">
                 {requestsBlocked ? "Workspace unavailable" : "Invite-only access"}
               </p>
-              <CardTitle className="text-3xl tracking-tight text-foreground">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {requestsBlocked
                   ? `${requestTenant?.name ?? "This tenant"} is inactive`
                   : "Ask your admin for an invite"}
-              </CardTitle>
-              <CardDescription className="text-base leading-7 text-muted-foreground">
+              </h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 {requestsBlocked
                   ? "New access requests are disabled while this tenant is inactive."
-                  : "This tenant workspace is invite-only. Public sign-ups and self-service access requests are disabled by default."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+                  : "This workspace is invite-only. Contact your admin for access."}
+              </p>
+            </div>
+            <div className="space-y-5">
               <Alert className="border-amber-200 bg-amber-50 text-left">
                 <Building2 className="size-4 text-amber-600" />
                 <AlertTitle>{requestTenant?.name}</AlertTitle>
@@ -533,8 +526,8 @@ export function SignUpForm({
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </AuthSplitShell>
       </TooltipProvider>
     );
@@ -549,52 +542,43 @@ export function SignUpForm({
           topHref={rootLoginUrl}
           topAction="Sign in"
         >
-          <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
-            <CardHeader className="space-y-4 pb-6 text-center">
-              <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                <CheckCircle2 className="size-10" />
-              </div>
-              <div className="space-y-2">
-                <CardTitle className="text-3xl tracking-tight text-foreground">
-                  Your workspace is ready
-                </CardTitle>
-                <CardDescription className="text-base leading-7 text-muted-foreground">
-                  Welcome to PrimeERP. Your tenant has been created and you&apos;ll
-                  be redirected to its login page shortly.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="rounded-2xl border border-border bg-muted/50 p-5">
-                <p className="text-sm font-medium text-foreground">Workspace</p>
-                <p className="mt-2 text-lg font-semibold text-foreground">
-                  {success.tenantName}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {buildTenantPreview({
-                    slug: success.tenantSlug,
-                    protocol,
-                    rootDomain,
-                    port,
-                  })}
-                </p>
-              </div>
-              <Button asChild className="h-11 w-full">
-                <Link href={success.loginUrl}>Go to my workspace</Link>
-              </Button>
-              <div className="space-y-2 text-center text-sm text-muted-foreground">
-                <p>
-                  Need to invite teammates next? You can do that after sign-in.
-                </p>
-                <Link
-                  href={success.rootLoginUrl}
-                  className="font-medium text-foreground underline underline-offset-[3px] transition hover:opacity-70"
-                >
-                  Back to central login
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-6 text-center">
+            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="size-8" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                Your workspace is ready
+              </h1>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Welcome to PrimeERP. Redirecting you to your workspace...
+              </p>
+            </div>
+            <div className="rounded-xl border border-border bg-muted/30 p-4 text-left">
+              <p className="text-sm font-medium text-foreground">
+                {success.tenantName}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {buildTenantPreview({
+                  slug: success.tenantSlug,
+                  protocol,
+                  rootDomain,
+                  port,
+                })}
+              </p>
+            </div>
+            <Button asChild className="h-11 w-full">
+              <Link href={success.loginUrl}>Go to my workspace</Link>
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              <Link
+                href={success.rootLoginUrl}
+                className="font-medium text-foreground underline underline-offset-2 transition hover:opacity-70"
+              >
+                Back to central login
+              </Link>
+            </p>
+          </div>
         </AuthSplitShell>
       </TooltipProvider>
     );
@@ -608,34 +592,32 @@ export function SignUpForm({
         topHref={rootLoginUrl}
         topAction="Sign in"
       >
-        <Card className="w-full max-w-140 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
-          <CardHeader className="space-y-3 pb-5">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">
-                Step {currentStep + 1} of {SIGN_UP_STEPS.length}
-              </p>
-              <CardTitle className="text-3xl tracking-tight text-foreground">
-                {currentStep === 0 && "Create your account"}
-                {currentStep === 1 && "Create your workspace"}
-                {currentStep === 2 && "Tell us about your company"}
-                {currentStep === 3 && "Invite your team"}
-                {currentStep === 4 && "Review & create"}
-              </CardTitle>
-              <CardDescription className="text-base leading-7 text-muted-foreground">
-                {currentStep === 0 &&
-                  "Start with your account details and choose whether you need a solo or team tenant."}
-                {currentStep === 1 &&
-                  "Set your tenant name and subdomain so your team knows where to sign in."}
-                {currentStep === 2 &&
-                  "These details help personalize setup. They are not yet persisted to tenant records in this v1."}
-                {currentStep === 3 &&
-                  "Prepare invitees now. They are reviewed here, but not automatically sent during signup yet."}
-                {currentStep === 4 &&
-                  "Confirm everything before we provision your tenant workspace."}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
+        <div className="w-full">
+          <div className="space-y-2 pb-6">
+            <p className="text-sm font-medium text-muted-foreground">
+              Step {currentStep + 1} of {SIGN_UP_STEPS.length}
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {currentStep === 0 && "Create your account"}
+              {currentStep === 1 && "Create your workspace"}
+              {currentStep === 2 && "Tell us about your company"}
+              {currentStep === 3 && "Invite your team"}
+              {currentStep === 4 && "Review & create"}
+            </h1>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {currentStep === 0 &&
+                "Start with your account details and choose your setup type."}
+              {currentStep === 1 &&
+                "Set your tenant name and subdomain for your team."}
+              {currentStep === 2 &&
+                "Help us personalize your onboarding experience."}
+              {currentStep === 3 &&
+                "Add teammates to invite after setup is complete."}
+              {currentStep === 4 &&
+                "Review and confirm before creating your workspace."}
+            </p>
+          </div>
+          <div>
             <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
               <FieldGroup>
                 {!isRootHost && tenant ? (
@@ -1400,8 +1382,8 @@ export function SignUpForm({
                 </div>
               </FieldGroup>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </AuthSplitShell>
     </TooltipProvider>
   );
