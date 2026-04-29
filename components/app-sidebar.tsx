@@ -86,16 +86,17 @@ const navMain: NavGroup[] = [
   },
   {
     title: "Sales",
+    // Workflow order: create order -> assign customer -> generate invoice
     items: [
-      {
-        title: "Customers",
-        url: "/customers",
-        icon: Users,
-      },
       {
         title: "Orders",
         url: "/orders",
         icon: ShoppingCart,
+      },
+      {
+        title: "Customers",
+        url: "/customers",
+        icon: Users,
       },
       {
         title: "Invoices",
@@ -106,16 +107,17 @@ const navMain: NavGroup[] = [
   },
   {
     title: "Inventory",
+    // Logical order: stock levels first, then products, then supporting config
     items: [
-      {
-        title: "Products",
-        url: "/products",
-        icon: Package,
-      },
       {
         title: "Inventory",
         url: "/inventory",
         icon: Boxes,
+      },
+      {
+        title: "Products",
+        url: "/products",
+        icon: Package,
       },
       {
         title: "Lots",
@@ -169,14 +171,15 @@ const navMain: NavGroup[] = [
     title: "Support",
     items: [
       {
-        title: "Report an Issue",
+        title: "Support",
         url: "/support",
         icon: LifeBuoy,
       },
     ],
   },
   {
-    title: "Admin",
+    title: "Settings",
+    // Tenant configuration: users, permissions, branding
     items: [
       {
         title: "Users",
