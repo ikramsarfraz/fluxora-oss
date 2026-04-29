@@ -16,6 +16,7 @@ function isSharedAuthPath(pathname: string) {
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/invite") ||
+    pathname === "/changelog" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
     pathname.startsWith("/api/auth") ||

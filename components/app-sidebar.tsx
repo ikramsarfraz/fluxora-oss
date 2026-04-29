@@ -434,6 +434,15 @@ export function AppSidebar({
           </SidebarMenu>
           <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
             <Link
+              href="/changelog"
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Changelog
+            </Link>
+            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
+              ·
+            </span>
+            <Link
               href="/privacy"
               className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >

@@ -252,7 +252,10 @@ export function AuthSplitShell({
 
       {/* Footer */}
       <footer className="relative z-10 shrink-0 px-6 py-4 lg:px-10">
-        <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[oklch(0.55_0.02_230)] sm:gap-6">
+          <Link href="/changelog" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+            Changelog
+          </Link>
           <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
           </Link>
@@ -331,7 +334,10 @@ export function AuthCenteredShell({
       </main>
 
       <footer className="relative z-10 shrink-0 px-6 py-4">
-        <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[oklch(0.55_0.02_230)] sm:gap-6">
+          <Link href="/changelog" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+            Changelog
+          </Link>
           <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
           </Link>
