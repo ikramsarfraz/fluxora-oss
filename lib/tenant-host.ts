@@ -1,9 +1,6 @@
 import { headers } from "next/headers";
 
-import {
-  isReservedTenantSlug,
-  slugifyTenantName,
-} from "@/lib/tenant-slug-policy";
+import * as tenantSlugPolicy from "@/lib/tenant-slug-policy";
 
 export type RequestTenantHostContext = {
   host: string;
@@ -20,7 +17,8 @@ export type RequestTenantHostContext = {
 
 export const PLATFORM_ADMIN_SLUG = "admin";
 
-export { slugifyTenantName, isReservedTenantSlug };
+export const slugifyTenantName = tenantSlugPolicy.slugifyTenantName;
+export const isReservedTenantSlug = tenantSlugPolicy.isReservedTenantSlug;
 
 function normalizeHostname(host: string) {
   return host.trim().toLowerCase();
@@ -181,7 +179,7 @@ export async function getRequestTenantHostContext() {
 }
 
 function buildHostForTenant(slug: string, context: RequestTenantHostContext) {
-  const normalizedSlug = slugifyTenantName(slug);
+  const normalizedSlug = tenantSlugPolicy.slugifyTenantName(slug);
 
   const localBaseHost =
     context.hostname === "localhost" ||
