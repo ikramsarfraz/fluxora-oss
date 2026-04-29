@@ -1,123 +1,203 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Building2,
-  CheckCircle,
-  Shield,
-  ArrowRight,
-} from "lucide-react";
-
+import { Package, CheckCircle, Shield, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// ── Marketing color tokens (matching marketing page) ─────────────────────────
+// Light backgrounds with soft blue/teal radial gradients
+const lightPanelBg = `
+  radial-gradient(ellipse 100% 80% at 50% -20%, oklch(0.92 0.04 230 / 0.6) 0%, transparent 60%),
+  radial-gradient(ellipse 80% 50% at 100% 0%, oklch(0.90 0.06 195 / 0.4) 0%, transparent 50%),
+  radial-gradient(ellipse 60% 40% at 0% 30%, oklch(0.94 0.03 230 / 0.3) 0%, transparent 50%),
+  linear-gradient(180deg, oklch(0.985 0.005 230) 0%, white 100%)
+`;
+
+const gridPattern = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='%23cbd5e1' stroke-width='0.5'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
+
+// Text gradient (navy to teal)
+const gradientTextStyle = {
+  background: "linear-gradient(135deg, oklch(0.50 0.14 230) 0%, oklch(0.55 0.15 195) 100%)",
+  WebkitBackgroundClip: "text" as const,
+  WebkitTextFillColor: "transparent" as const,
+  backgroundClip: "text" as const,
+};
+
+// Primary button background
+const primaryBtnBg = "oklch(0.35 0.10 230)";
 
 // ── Brand ────────────────────────────────────────────────────────────────────
 
-export function AuthBrand({ variant = "dark" }: { variant?: "dark" | "light" }) {
+export function AuthBrand() {
   return (
     <Link
       href="/"
-      className={cn(
-        "flex items-center gap-2 text-base font-bold tracking-tight transition-opacity hover:opacity-80",
-        variant === "light" ? "text-white" : "text-[oklch(0.20_0.03_230)]"
-      )}
+      className="flex items-center gap-2 text-base font-bold tracking-tight text-[oklch(0.20_0.03_230)] transition-opacity hover:opacity-80"
     >
       <div
-        className={cn(
-          "flex size-7 items-center justify-center rounded-md text-[0.65rem] font-extrabold",
-          variant === "light"
-            ? "bg-white/15 text-white"
-            : "bg-[oklch(0.35_0.10_230)] text-white"
-        )}
+        className="flex size-7 items-center justify-center rounded-lg text-white"
+        style={{ background: "linear-gradient(135deg, oklch(0.50 0.14 230), oklch(0.55 0.15 195))" }}
       >
-        PE
+        <Package className="size-3.5" />
       </div>
-      PrimeERP
+      Fluxora
     </Link>
   );
 }
 
-// ── Marketing Panel ──────────────────────────────────────────────────────────
+// ── Marketing Panel (Light, airy - matches marketing hero) ───────────────────
 
-type MarketingPanelProps = {
-  headline: string;
-  subtext?: string;
-  features?: string[];
-};
-
-function MarketingPanel({ headline, subtext, features }: MarketingPanelProps) {
-  const defaultFeatures = [
-    "Inventory tracking across warehouses",
-    "Order-to-invoice workflow",
-    "Real-time financial visibility",
-    "Role-based team access",
-  ];
-
-  const displayFeatures = features?.length ? features : defaultFeatures;
-
+function MarketingPanel() {
   return (
     <div
       className="relative flex h-full flex-col justify-between p-10 lg:p-12"
-      style={{
-        background: `
-          radial-gradient(ellipse 80% 60% at 80% 20%, oklch(0.45 0.12 230 / 0.3) 0%, transparent 50%),
-          radial-gradient(ellipse 60% 50% at 20% 80%, oklch(0.50 0.10 195 / 0.2) 0%, transparent 50%),
-          linear-gradient(160deg, oklch(0.22 0.03 230) 0%, oklch(0.16 0.02 230) 100%)
-        `,
-      }}
+      style={{ background: lightPanelBg }}
     >
-      {/* Subtle grid overlay */}
+      {/* Grid pattern overlay */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 40px",
-        }}
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{ backgroundImage: gridPattern }}
       />
 
       <div className="relative z-10">
-        <AuthBrand variant="light" />
+        <AuthBrand />
+      </div>
 
-        <div className="mt-16">
-          <h1 className="text-2xl font-semibold leading-tight tracking-tight text-white lg:text-3xl">
-            {headline}
-          </h1>
-          {subtext && (
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/60">
-              {subtext}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-10 space-y-3">
-          {displayFeatures.map((feature, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/10">
-                <CheckCircle className="size-3 text-white/70" />
-              </div>
-              <span className="text-sm text-white/70">{feature}</span>
-            </div>
+      {/* Center content */}
+      <div className="relative z-10 space-y-6">
+        <h2 className="text-2xl font-bold tracking-tight text-[oklch(0.20_0.03_230)] lg:text-3xl">
+          Distribution,{" "}
+          <span style={gradientTextStyle}>simplified.</span>
+        </h2>
+        <p className="max-w-xs text-sm leading-relaxed text-[oklch(0.45_0.02_230)]">
+          One platform for orders, inventory, invoicing, and payments.
+        </p>
+        
+        {/* Feature pills */}
+        <div className="flex flex-wrap gap-2">
+          {["Orders", "Inventory", "Invoicing", "Payments"].map((f) => (
+            <span
+              key={f}
+              className="rounded-full bg-[oklch(0.94_0.03_230)] px-3 py-1 text-xs font-medium text-[oklch(0.45_0.02_230)]"
+            >
+              {f}
+            </span>
           ))}
         </div>
       </div>
 
-      <div className="relative z-10 flex items-center gap-6 pt-8 text-xs text-white/40">
+      {/* Bottom quote */}
+      <div className="relative z-10">
+        <blockquote className="border-l-2 border-[oklch(0.55_0.15_195)] pl-4 text-sm italic text-[oklch(0.45_0.02_230)]">
+          &ldquo;Cut our order processing time in half.&rdquo;
+        </blockquote>
+        <p className="mt-2 pl-4 text-xs text-[oklch(0.55_0.02_230)]">
+          Metro Foods Distribution
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Stepper Panel (Light version for sign-up wizard) ─────────────────────────
+
+type AuthStep = { id: string; title: string; description: string };
+
+type AuthStepperPanelProps = {
+  currentStep: number;
+  steps: AuthStep[];
+};
+
+export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) {
+  return (
+    <div
+      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
+      style={{ background: lightPanelBg }}
+    >
+      {/* Grid pattern overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-40"
+        style={{ backgroundImage: gridPattern }}
+      />
+
+      <div className="relative z-10">
+        <AuthBrand />
+
+        <div className="mt-12">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[oklch(0.55_0.15_195)]">
+            Create workspace
+          </p>
+          <h1 className="mt-2 text-xl font-bold text-[oklch(0.20_0.03_230)] lg:text-2xl">
+            Get started with{" "}
+            <span style={gradientTextStyle}>Fluxora</span>
+          </h1>
+        </div>
+
+        {/* Steps */}
+        <div className="mt-8 space-y-1">
+          {steps.map((step, i) => {
+            const state =
+              i < currentStep ? "done" : i === currentStep ? "active" : "upcoming";
+            return (
+              <div
+                key={step.id}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
+                  state === "active" && "bg-white shadow-sm"
+                )}
+              >
+                <div
+                  className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                    state === "done" && "bg-[oklch(0.55_0.15_195)] text-white",
+                    state === "active" && "text-white",
+                    state === "upcoming" && "border border-[oklch(0.88_0.02_230)] bg-white text-[oklch(0.55_0.02_230)]"
+                  )}
+                  style={state === "active" ? { background: primaryBtnBg } : undefined}
+                >
+                  {state === "done" ? (
+                    <CheckCircle className="size-3.5" />
+                  ) : (
+                    i + 1
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    "text-sm transition-colors",
+                    state === "active"
+                      ? "font-medium text-[oklch(0.20_0.03_230)]"
+                      : state === "done"
+                        ? "text-[oklch(0.45_0.02_230)]"
+                        : "text-[oklch(0.55_0.02_230)]"
+                  )}
+                >
+                  {step.title}
+                </span>
+                {state === "active" && (
+                  <ArrowRight className="ml-auto size-3.5 text-[oklch(0.55_0.02_230)]" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bottom badges */}
+      <div className="relative z-10 flex items-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
         <div className="flex items-center gap-1.5">
-          <Shield className="size-3.5" />
-          <span>SOC 2</span>
+          <Shield className="size-3.5 text-[oklch(0.55_0.15_195)]" />
+          <span>Secure</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <CheckCircle className="size-3.5" />
-          <span>99.9% Uptime</span>
+          <CheckCircle className="size-3.5 text-[oklch(0.55_0.15_195)]" />
+          <span>No credit card</span>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Split Shell (Form LEFT, Marketing RIGHT for sign-in) ────────────────────
+// ── Split Shell (Form + Marketing panel) ─────────────────────────────────────
 
 type AuthSplitShellProps = {
   side?: React.ReactNode;
@@ -126,9 +206,6 @@ type AuthSplitShellProps = {
   topHref?: string;
   topAction?: string;
   formPosition?: "left" | "right";
-  marketingHeadline?: string;
-  marketingSubtext?: string;
-  marketingFeatures?: string[];
 };
 
 export function AuthSplitShell({
@@ -138,32 +215,23 @@ export function AuthSplitShell({
   topHref,
   topAction,
   formPosition = "left",
-  marketingHeadline = "Run your business from one workspace.",
-  marketingSubtext,
-  marketingFeatures,
 }: AuthSplitShellProps) {
-  const marketingPanel = side || (
-    <MarketingPanel
-      headline={marketingHeadline}
-      subtext={marketingSubtext}
-      features={marketingFeatures}
-    />
-  );
+  const marketingPanel = side || <MarketingPanel />;
 
   const formPanel = (
     <div className="flex flex-1 flex-col bg-white">
       {/* Top nav */}
       <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <div className="lg:hidden">
-          <AuthBrand variant="dark" />
+          <AuthBrand />
         </div>
         <div className="hidden lg:block" />
         {topLabel && topHref && topAction && (
-          <div className="text-sm text-[oklch(0.50_0.02_230)]">
+          <div className="text-sm text-[oklch(0.55_0.02_230)]">
             {topLabel}{" "}
             <Link
               href={topHref}
-              className="font-medium text-[oklch(0.25_0.03_230)] underline underline-offset-2 transition-opacity hover:opacity-70"
+              className="font-medium text-[oklch(0.55_0.15_195)] transition-opacity hover:opacity-70"
             >
               {topAction}
             </Link>
@@ -179,13 +247,13 @@ export function AuthSplitShell({
       {/* Footer */}
       <footer className="shrink-0 px-6 py-4 lg:px-10">
         <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
-          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
           </Link>
-          <Link href="/terms" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Terms
           </Link>
-          <Link href="/support" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/support" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Help
           </Link>
         </div>
@@ -232,13 +300,13 @@ export function AuthCenteredShell({
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
-        <AuthBrand variant="dark" />
+        <AuthBrand />
         {topLabel && topHref && topAction && (
-          <div className="text-sm text-[oklch(0.50_0.02_230)]">
+          <div className="text-sm text-[oklch(0.55_0.02_230)]">
             {topLabel}{" "}
             <Link
               href={topHref}
-              className="font-medium text-[oklch(0.25_0.03_230)] underline underline-offset-2 transition-opacity hover:opacity-70"
+              className="font-medium text-[oklch(0.55_0.15_195)] transition-opacity hover:opacity-70"
             >
               {topAction}
             </Link>
@@ -252,120 +320,17 @@ export function AuthCenteredShell({
 
       <footer className="shrink-0 px-6 py-4">
         <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
-          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Privacy
           </Link>
-          <Link href="/terms" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Terms
           </Link>
-          <Link href="/support" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+          <Link href="/support" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
             Help
           </Link>
         </div>
       </footer>
-    </div>
-  );
-}
-
-// ── Stepper Panel (for multi-step signup) ────────────────────────────────────
-
-type AuthStep = { id: string; title: string; description: string };
-
-type AuthStepperPanelProps = {
-  currentStep: number;
-  steps: AuthStep[];
-};
-
-export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) {
-  return (
-    <div
-      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
-      style={{
-        background: `
-          radial-gradient(ellipse 80% 60% at 80% 20%, oklch(0.45 0.12 230 / 0.3) 0%, transparent 50%),
-          radial-gradient(ellipse 60% 50% at 20% 80%, oklch(0.50 0.10 195 / 0.2) 0%, transparent 50%),
-          linear-gradient(160deg, oklch(0.22 0.03 230) 0%, oklch(0.16 0.02 230) 100%)
-        `,
-      }}
-    >
-      {/* Subtle grid overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-          `,
-          backgroundSize: "40px 40px",
-        }}
-      />
-
-      <div className="relative z-10">
-        <AuthBrand variant="light" />
-
-        <div className="mt-12">
-          <p className="text-xs font-medium uppercase tracking-wider text-white/50">
-            Create workspace
-          </p>
-          <h1 className="mt-2 text-xl font-semibold text-white lg:text-2xl">
-            Get started with PrimeERP
-          </h1>
-        </div>
-
-        {/* Steps */}
-        <div className="mt-8 space-y-1">
-          {steps.map((step, i) => {
-            const state =
-              i < currentStep ? "done" : i === currentStep ? "active" : "upcoming";
-            return (
-              <div
-                key={step.id}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
-                  state === "active" && "bg-white/5"
-                )}
-              >
-                <div
-                  className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                    state === "done" && "bg-[oklch(0.65_0.15_165)] text-white",
-                    state === "active" && "bg-white text-[oklch(0.20_0.03_230)]",
-                    state === "upcoming" && "bg-white/10 text-white/40"
-                  )}
-                >
-                  {state === "done" ? (
-                    <CheckCircle className="size-3.5" />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    "text-sm transition-colors",
-                    state === "active" ? "font-medium text-white" : "text-white/50"
-                  )}
-                >
-                  {step.title}
-                </span>
-                {state === "active" && (
-                  <ArrowRight className="ml-auto size-3.5 text-white/40" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="relative z-10 flex items-center gap-6 text-xs text-white/40">
-        <div className="flex items-center gap-1.5">
-          <Shield className="size-3.5" />
-          <span>Secure</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <CheckCircle className="size-3.5" />
-          <span>No credit card</span>
-        </div>
-      </div>
     </div>
   );
 }

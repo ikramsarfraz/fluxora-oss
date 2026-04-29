@@ -10,7 +10,6 @@ import {
   Building2,
   LockKeyhole,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 import { Google } from "@/components/icons/google";
 
@@ -176,24 +175,11 @@ export function SignInForm({
     }
   }
 
-  // Marketing panel content based on context
-  const marketingHeadline = isPlatformAdminHost
-    ? "Manage your entire platform."
-    : isRootHost
-      ? "Run your business from one workspace."
-      : `Welcome back to ${tenant?.name || "your workspace"}.`;
-
-  const marketingFeatures = isPlatformAdminHost
-    ? ["Tenant management", "User administration", "Subscription analytics", "Platform settings"]
-    : ["Inventory tracking", "Order-to-invoice workflow", "Real-time financials", "Team collaboration"];
-
   // Tenant not found state
   if (!isRootHost && tenantSlug && !tenant) {
     return (
       <AuthSplitShell
         formPosition="left"
-        marketingHeadline={inactiveTenant ? "Workspace temporarily unavailable." : "Workspace not found."}
-        marketingFeatures={marketingFeatures}
         topLabel="Need an account?"
         topHref={signUpUrl}
         topAction={inactiveTenant ? "Create tenant" : "Invite only"}
@@ -231,8 +217,6 @@ export function SignInForm({
     <TooltipProvider>
       <AuthSplitShell
         formPosition="left"
-        marketingHeadline={marketingHeadline}
-        marketingFeatures={marketingFeatures}
         topLabel="Don't have an account?"
         topHref={signUpUrl}
         topAction={isRootHost ? "Sign up" : "Invite only"}
