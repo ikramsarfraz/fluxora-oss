@@ -463,20 +463,18 @@ export function SignUpForm({
           topHref={tenantLoginUrl}
           topAction="Sign in"
         >
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">
-                {requestsBlocked ? "Workspace unavailable" : "Invite-only access"}
-              </p>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {requestsBlocked
-                  ? `${requestTenant?.name ?? "This tenant"} is inactive`
-                  : "Ask your admin for an invite"}
+          <div className="space-y-6 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <Building2 className="size-5" />
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+                {requestsBlocked ? "Workspace inactive" : "Invite only"}
               </h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm text-[oklch(0.50_0.02_230)]">
                 {requestsBlocked
-                  ? "New access requests are disabled while this tenant is inactive."
-                  : "This workspace is invite-only. Contact your admin for access."}
+                  ? `${requestTenant?.name ?? "This workspace"} is currently inactive.`
+                  : "Contact your admin for access."}
               </p>
             </div>
             <div className="space-y-5">
@@ -543,39 +541,34 @@ export function SignUpForm({
           topAction="Sign in"
         >
           <div className="space-y-6 text-center">
-            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-              <CheckCircle2 className="size-8" />
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <CheckCircle2 className="size-5" />
             </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Your workspace is ready
+            <div className="space-y-1">
+              <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+                Workspace ready
               </h1>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                Welcome to PrimeERP. Redirecting you to your workspace...
+              <p className="text-sm text-[oklch(0.50_0.02_230)]">
+                Redirecting to {success.tenantName}...
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/30 p-4 text-left">
-              <p className="text-sm font-medium text-foreground">
+            <div className="rounded-lg border border-[oklch(0.92_0.01_230)] bg-[oklch(0.98_0.005_230)] px-3 py-2.5 text-left">
+              <p className="text-sm font-medium text-[oklch(0.25_0.03_230)]">
                 {success.tenantName}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {buildTenantPreview({
-                  slug: success.tenantSlug,
-                  protocol,
-                  rootDomain,
-                  port,
-                })}
+              <p className="text-xs text-[oklch(0.55_0.02_230)]">
+                {buildTenantPreview({ slug: success.tenantSlug, protocol, rootDomain, port })}
               </p>
             </div>
-            <Button asChild className="h-11 w-full">
-              <Link href={success.loginUrl}>Go to my workspace</Link>
+            <Button asChild className="h-10 w-full">
+              <Link href={success.loginUrl}>Go to workspace</Link>
             </Button>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[oklch(0.55_0.02_230)]">
               <Link
                 href={success.rootLoginUrl}
-                className="font-medium text-foreground underline underline-offset-2 transition hover:opacity-70"
+                className="font-medium text-[oklch(0.30_0.03_230)] underline underline-offset-2 transition hover:opacity-70"
               >
-                Back to central login
+                Back to login
               </Link>
             </p>
           </div>
@@ -593,29 +586,17 @@ export function SignUpForm({
         topAction="Sign in"
       >
         <div className="w-full">
-          <div className="space-y-2 pb-6">
-            <p className="text-sm font-medium text-muted-foreground">
+          <div className="space-y-1 pb-6">
+            <p className="text-xs font-medium text-[oklch(0.55_0.02_230)]">
               Step {currentStep + 1} of {SIGN_UP_STEPS.length}
             </p>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
               {currentStep === 0 && "Create your account"}
-              {currentStep === 1 && "Create your workspace"}
-              {currentStep === 2 && "Tell us about your company"}
-              {currentStep === 3 && "Invite your team"}
+              {currentStep === 1 && "Name your workspace"}
+              {currentStep === 2 && "Company details"}
+              {currentStep === 3 && "Invite teammates"}
               {currentStep === 4 && "Review & create"}
             </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {currentStep === 0 &&
-                "Start with your account details and choose your setup type."}
-              {currentStep === 1 &&
-                "Set your tenant name and subdomain for your team."}
-              {currentStep === 2 &&
-                "Help us personalize your onboarding experience."}
-              {currentStep === 3 &&
-                "Add teammates to invite after setup is complete."}
-              {currentStep === 4 &&
-                "Review and confirm before creating your workspace."}
-            </p>
           </div>
           <div>
             <form onSubmit={form.handleSubmit(onSubmit)} noValidate>

@@ -5,12 +5,7 @@ import {
   Building2,
   CheckCircle,
   Shield,
-  Zap,
-  BarChart3,
-  Users,
-  Package,
-  Receipt,
-  TrendingUp,
+  ArrowRight,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,16 +17,16 @@ export function AuthBrand({ variant = "dark" }: { variant?: "dark" | "light" }) 
     <Link
       href="/"
       className={cn(
-        "flex items-center gap-2.5 text-base font-bold tracking-tight transition-opacity hover:opacity-80",
-        variant === "light" ? "text-white" : "text-foreground"
+        "flex items-center gap-2 text-base font-bold tracking-tight transition-opacity hover:opacity-80",
+        variant === "light" ? "text-white" : "text-[oklch(0.20_0.03_230)]"
       )}
     >
       <div
         className={cn(
-          "flex size-8 items-center justify-center rounded-lg text-xs font-extrabold",
+          "flex size-7 items-center justify-center rounded-md text-[0.65rem] font-extrabold",
           variant === "light"
-            ? "bg-white/20 text-white"
-            : "bg-primary text-primary-foreground"
+            ? "bg-white/15 text-white"
+            : "bg-[oklch(0.35_0.10_230)] text-white"
         )}
       >
         PE
@@ -41,162 +36,88 @@ export function AuthBrand({ variant = "dark" }: { variant?: "dark" | "light" }) 
   );
 }
 
-// ── Marketing Feature Item ───────────────────────────────────────────────────
+// ── Marketing Panel ──────────────────────────────────────────────────────────
 
-type MarketingFeature = {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
+type MarketingPanelProps = {
+  headline: string;
+  subtext?: string;
+  features?: string[];
 };
 
-function FeatureItem({ icon, title, description }: MarketingFeature) {
-  return (
-    <div className="flex gap-4">
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white">
-        {icon}
-      </div>
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
-        <p className="text-sm leading-relaxed text-white/70">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-// ── Marketing Panel (Left Side) ──────────────────────────────────────────────
-
-type AuthMarketingPanelProps = {
-  eyebrow?: string;
-  title: React.ReactNode;
-  description: string;
-  features: Array<{ icon?: React.ReactNode; title: string; description: string }>;
-  footerLabel?: string;
-  testimonial?: {
-    quote: string;
-    author: string;
-    role: string;
-    company: string;
-  };
-};
-
-export function AuthMarketingPanel({
-  eyebrow,
-  title,
-  description,
-  features,
-  footerLabel,
-  testimonial,
-}: AuthMarketingPanelProps) {
-  const defaultFeatures: MarketingFeature[] = [
-    {
-      icon: <Package className="size-5" />,
-      title: "Complete Inventory Control",
-      description: "Track products, lots, and stock levels across multiple warehouses in real-time.",
-    },
-    {
-      icon: <Receipt className="size-5" />,
-      title: "Streamlined Order Processing",
-      description: "From sales orders to invoicing - manage your entire sales workflow in one place.",
-    },
-    {
-      icon: <BarChart3 className="size-5" />,
-      title: "Financial Visibility",
-      description: "Monitor payments, expenses, and supplier invoices with detailed reporting.",
-    },
-    {
-      icon: <Users className="size-5" />,
-      title: "Team Collaboration",
-      description: "Role-based permissions ensure everyone has the right access to do their job.",
-    },
+function MarketingPanel({ headline, subtext, features }: MarketingPanelProps) {
+  const defaultFeatures = [
+    "Inventory tracking across warehouses",
+    "Order-to-invoice workflow",
+    "Real-time financial visibility",
+    "Role-based team access",
   ];
 
-  const displayFeatures = features.length > 0
-    ? features.map((f, i) => ({
-        icon: f.icon || defaultFeatures[i % defaultFeatures.length].icon,
-        title: f.title,
-        description: f.description,
-      }))
-    : defaultFeatures;
+  const displayFeatures = features?.length ? features : defaultFeatures;
 
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-10 lg:p-12">
-      {/* Decorative elements */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-20 -top-20 size-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 size-80 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="absolute left-1/2 top-1/2 size-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-3xl" />
-      </div>
+    <div
+      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
+      style={{
+        background: `
+          radial-gradient(ellipse 80% 60% at 80% 20%, oklch(0.45 0.12 230 / 0.3) 0%, transparent 50%),
+          radial-gradient(ellipse 60% 50% at 20% 80%, oklch(0.50 0.10 195 / 0.2) 0%, transparent 50%),
+          linear-gradient(160deg, oklch(0.22 0.03 230) 0%, oklch(0.16 0.02 230) 100%)
+        `,
+      }}
+    >
+      {/* Subtle grid overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 40px",
+        }}
+      />
 
       <div className="relative z-10">
         <AuthBrand variant="light" />
 
-        <div className="mt-12 space-y-4">
-          {eyebrow && (
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-white/80">
-              <Zap className="size-3" />
-              {eyebrow}
-            </div>
-          )}
-          <h1 className="text-3xl font-bold leading-tight tracking-tight text-white lg:text-4xl">
-            {title}
+        <div className="mt-16">
+          <h1 className="text-2xl font-semibold leading-tight tracking-tight text-white lg:text-3xl">
+            {headline}
           </h1>
-          <p className="max-w-md text-base leading-relaxed text-white/70">
-            {description}
-          </p>
+          {subtext && (
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/60">
+              {subtext}
+            </p>
+          )}
         </div>
 
-        <div className="mt-10 space-y-6">
-          {displayFeatures.slice(0, 4).map((feature, i) => (
-            <FeatureItem key={i} {...feature} />
+        <div className="mt-10 space-y-3">
+          {displayFeatures.map((feature, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/10">
+                <CheckCircle className="size-3 text-white/70" />
+              </div>
+              <span className="text-sm text-white/70">{feature}</span>
+            </div>
           ))}
         </div>
       </div>
 
-      <div className="relative z-10 mt-10 space-y-6">
-        {testimonial && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <p className="text-sm italic leading-relaxed text-white/80">
-              &ldquo;{testimonial.quote}&rdquo;
-            </p>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white">
-                {testimonial.author.split(" ").map(n => n[0]).join("")}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-white">{testimonial.author}</p>
-                <p className="text-xs text-white/60">
-                  {testimonial.role}, {testimonial.company}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {footerLabel && (
-          <p className="text-xs text-white/50">{footerLabel}</p>
-        )}
-
-        {/* Trust badges */}
-        <div className="flex flex-wrap items-center gap-4 pt-2">
-          <div className="flex items-center gap-1.5 text-xs text-white/50">
-            <Shield className="size-3.5" />
-            <span>SOC 2 Compliant</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-white/50">
-            <CheckCircle className="size-3.5" />
-            <span>99.9% Uptime</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-white/50">
-            <TrendingUp className="size-3.5" />
-            <span>500+ Teams</span>
-          </div>
+      <div className="relative z-10 flex items-center gap-6 pt-8 text-xs text-white/40">
+        <div className="flex items-center gap-1.5">
+          <Shield className="size-3.5" />
+          <span>SOC 2</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="size-3.5" />
+          <span>99.9% Uptime</span>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Split Shell (dub.co style) ───────────────────────────────────────────────
+// ── Split Shell (Form LEFT, Marketing RIGHT for sign-in) ────────────────────
 
 type AuthSplitShellProps = {
   side?: React.ReactNode;
@@ -204,6 +125,10 @@ type AuthSplitShellProps = {
   topLabel?: string;
   topHref?: string;
   topAction?: string;
+  formPosition?: "left" | "right";
+  marketingHeadline?: string;
+  marketingSubtext?: string;
+  marketingFeatures?: string[];
 };
 
 export function AuthSplitShell({
@@ -212,81 +137,81 @@ export function AuthSplitShell({
   topLabel,
   topHref,
   topAction,
+  formPosition = "left",
+  marketingHeadline = "Run your business from one workspace.",
+  marketingSubtext,
+  marketingFeatures,
 }: AuthSplitShellProps) {
-  // Default marketing panel if none provided
-  const defaultSide = (
-    <AuthMarketingPanel
-      eyebrow="All-in-one ERP platform"
-      title={
-        <>
-          Run your business.
-          <br />
-          <span className="text-primary">All in one place.</span>
-        </>
-      }
-      description="PrimeERP helps distribution and wholesale teams manage inventory, sales, purchasing, and finances from a single tenant-isolated platform."
-      features={[]}
-      testimonial={{
-        quote: "PrimeERP transformed how we manage our distribution business. What used to take hours now takes minutes.",
-        author: "Sarah Chen",
-        role: "Operations Director",
-        company: "Metro Foods Inc.",
-      }}
-      footerLabel="Trusted by modern distribution, wholesale, and operations teams."
+  const marketingPanel = side || (
+    <MarketingPanel
+      headline={marketingHeadline}
+      subtext={marketingSubtext}
+      features={marketingFeatures}
     />
+  );
+
+  const formPanel = (
+    <div className="flex flex-1 flex-col bg-white">
+      {/* Top nav */}
+      <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
+        <div className="lg:hidden">
+          <AuthBrand variant="dark" />
+        </div>
+        <div className="hidden lg:block" />
+        {topLabel && topHref && topAction && (
+          <div className="text-sm text-[oklch(0.50_0.02_230)]">
+            {topLabel}{" "}
+            <Link
+              href={topHref}
+              className="font-medium text-[oklch(0.25_0.03_230)] underline underline-offset-2 transition-opacity hover:opacity-70"
+            >
+              {topAction}
+            </Link>
+          </div>
+        )}
+      </nav>
+
+      {/* Main content */}
+      <main className="flex flex-1 items-center justify-center px-6 py-8 lg:px-10">
+        <div className="w-full max-w-sm">{children}</div>
+      </main>
+
+      {/* Footer */}
+      <footer className="shrink-0 px-6 py-4 lg:px-10">
+        <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Privacy
+          </Link>
+          <Link href="/terms" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Terms
+          </Link>
+          <Link href="/support" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Help
+          </Link>
+        </div>
+      </footer>
+    </div>
+  );
+
+  const sidePanel = (
+    <div className="hidden w-[45%] min-w-[360px] max-w-[480px] lg:block">
+      {marketingPanel}
+    </div>
   );
 
   return (
     <div className="flex min-h-screen">
-      {/* Left: Marketing Panel */}
-      <div className="hidden w-[45%] min-w-[400px] max-w-[560px] lg:block">
-        {side || defaultSide}
-      </div>
-
-      {/* Right: Form Side */}
-      <div className="flex flex-1 flex-col bg-background">
-        {/* Top nav */}
-        <nav className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6 lg:px-10">
-          <div className="lg:hidden">
-            <AuthBrand variant="dark" />
-          </div>
-          <div className="hidden lg:block" />
-          {topLabel && topHref && topAction && (
-            <div className="text-sm text-muted-foreground">
-              {topLabel}{" "}
-              <Link
-                href={topHref}
-                className="font-medium text-foreground underline underline-offset-2 transition-opacity hover:opacity-70"
-              >
-                {topAction}
-              </Link>
-            </div>
-          )}
-        </nav>
-
-        {/* Main content */}
-        <main className="flex flex-1 items-center justify-center px-6 py-10 lg:px-10">
-          <div className="w-full max-w-md">{children}</div>
-        </main>
-
-        {/* Footer */}
-        <footer className="shrink-0 border-t border-border px-6 py-4 lg:px-10">
-          <div className="flex flex-col items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
-            <div className="flex items-center gap-4">
-              <Link href="/privacy" className="transition-colors hover:text-foreground">
-                Privacy
-              </Link>
-              <Link href="/terms" className="transition-colors hover:text-foreground">
-                Terms
-              </Link>
-              <Link href="/support" className="transition-colors hover:text-foreground">
-                Support
-              </Link>
-            </div>
-            <p>&copy; {new Date().getFullYear()} PrimeERP. All rights reserved.</p>
-          </div>
-        </footer>
-      </div>
+      {formPosition === "left" ? (
+        <>
+          {formPanel}
+          {sidePanel}
+        </>
+      ) : (
+        <>
+          {sidePanel}
+          {formPanel}
+        </>
+      )}
     </div>
   );
 }
@@ -305,40 +230,37 @@ export function AuthCenteredShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <nav className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6 lg:px-10">
+    <div className="flex min-h-screen flex-col bg-white">
+      <nav className="flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <AuthBrand variant="dark" />
-        {topLabel && topHref && topAction ? (
-          <div className="text-sm text-muted-foreground">
+        {topLabel && topHref && topAction && (
+          <div className="text-sm text-[oklch(0.50_0.02_230)]">
             {topLabel}{" "}
             <Link
               href={topHref}
-              className="font-medium text-foreground underline underline-offset-2 transition-opacity hover:opacity-70"
+              className="font-medium text-[oklch(0.25_0.03_230)] underline underline-offset-2 transition-opacity hover:opacity-70"
             >
               {topAction}
             </Link>
           </div>
-        ) : null}
+        )}
       </nav>
 
-      <main className="flex flex-1 items-center justify-center px-6 py-10">
-        <div className="w-full max-w-md">{children}</div>
+      <main className="flex flex-1 items-center justify-center px-6 py-8">
+        <div className="w-full max-w-sm">{children}</div>
       </main>
 
-      <footer className="shrink-0 border-t border-border px-6 py-4">
-        <div className="flex flex-col items-center justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
-          <div className="flex items-center gap-4">
-            <Link href="/privacy" className="transition-colors hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/terms" className="transition-colors hover:text-foreground">
-              Terms
-            </Link>
-            <Link href="/support" className="transition-colors hover:text-foreground">
-              Support
-            </Link>
-          </div>
-          <p>&copy; {new Date().getFullYear()} PrimeERP. All rights reserved.</p>
+      <footer className="shrink-0 px-6 py-4">
+        <div className="flex items-center justify-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Privacy
+          </Link>
+          <Link href="/terms" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Terms
+          </Link>
+          <Link href="/support" className="transition-colors hover:text-[oklch(0.30_0.03_230)]">
+            Help
+          </Link>
         </div>
       </footer>
     </div>
@@ -356,31 +278,42 @@ type AuthStepperPanelProps = {
 
 export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) {
   return (
-    <div className="relative flex h-full flex-col justify-between overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-10 lg:p-12">
-      {/* Decorative elements */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-20 -top-20 size-80 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 size-80 rounded-full bg-blue-500/10 blur-3xl" />
-      </div>
+    <div
+      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
+      style={{
+        background: `
+          radial-gradient(ellipse 80% 60% at 80% 20%, oklch(0.45 0.12 230 / 0.3) 0%, transparent 50%),
+          radial-gradient(ellipse 60% 50% at 20% 80%, oklch(0.50 0.10 195 / 0.2) 0%, transparent 50%),
+          linear-gradient(160deg, oklch(0.22 0.03 230) 0%, oklch(0.16 0.02 230) 100%)
+        `,
+      }}
+    >
+      {/* Subtle grid overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+          `,
+          backgroundSize: "40px 40px",
+        }}
+      />
 
       <div className="relative z-10">
         <AuthBrand variant="light" />
 
-        <div className="mt-12 space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-wider text-white/80">
-            <Building2 className="size-3" />
-            Create your workspace
-          </div>
-          <h1 className="text-2xl font-bold text-white lg:text-3xl">
+        <div className="mt-12">
+          <p className="text-xs font-medium uppercase tracking-wider text-white/50">
+            Create workspace
+          </p>
+          <h1 className="mt-2 text-xl font-semibold text-white lg:text-2xl">
             Get started with PrimeERP
           </h1>
-          <p className="text-sm leading-relaxed text-white/70">
-            Set up your tenant workspace in just a few steps.
-          </p>
         </div>
 
         {/* Steps */}
-        <div className="mt-10 space-y-1">
+        <div className="mt-8 space-y-1">
           {steps.map((step, i) => {
             const state =
               i < currentStep ? "done" : i === currentStep ? "active" : "upcoming";
@@ -388,56 +321,49 @@ export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) 
               <div
                 key={step.id}
                 className={cn(
-                  "flex items-start gap-4 rounded-lg p-3 transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
                   state === "active" && "bg-white/5"
                 )}
               >
                 <div
                   className={cn(
-                    "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors",
-                    state === "done" && "bg-emerald-500/20 text-emerald-400",
-                    state === "active" && "bg-primary text-primary-foreground",
+                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+                    state === "done" && "bg-[oklch(0.65_0.15_165)] text-white",
+                    state === "active" && "bg-white text-[oklch(0.20_0.03_230)]",
                     state === "upcoming" && "bg-white/10 text-white/40"
                   )}
                 >
                   {state === "done" ? (
-                    <CheckCircle className="size-4" />
+                    <CheckCircle className="size-3.5" />
                   ) : (
                     i + 1
                   )}
                 </div>
-                <div className="flex-1 pt-0.5">
-                  <p
-                    className={cn(
-                      "text-sm font-medium transition-colors",
-                      state === "active" ? "text-white" : "text-white/60"
-                    )}
-                  >
-                    {step.title}
-                  </p>
-                  {state === "active" && (
-                    <p className="mt-1 text-xs leading-relaxed text-white/50">
-                      {step.description}
-                    </p>
+                <span
+                  className={cn(
+                    "text-sm transition-colors",
+                    state === "active" ? "font-medium text-white" : "text-white/50"
                   )}
-                </div>
+                >
+                  {step.title}
+                </span>
+                {state === "active" && (
+                  <ArrowRight className="ml-auto size-3.5 text-white/40" />
+                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="relative z-10 space-y-4">
-        {/* Trust badges */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-1.5 text-xs text-white/50">
-            <Shield className="size-3.5" />
-            <span>Secure by default</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-white/50">
-            <CheckCircle className="size-3.5" />
-            <span>No credit card required</span>
-          </div>
+      <div className="relative z-10 flex items-center gap-6 text-xs text-white/40">
+        <div className="flex items-center gap-1.5">
+          <Shield className="size-3.5" />
+          <span>Secure</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="size-3.5" />
+          <span>No credit card</span>
         </div>
       </div>
     </div>
