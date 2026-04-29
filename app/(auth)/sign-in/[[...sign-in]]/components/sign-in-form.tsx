@@ -8,18 +8,13 @@ import { Controller, useForm } from "react-hook-form";
 import {
   AlertCircle,
   Building2,
-  LifeBuoy,
   LockKeyhole,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 import { Google } from "@/components/icons/google";
 
 import { prepareGoogleAuthStartAction } from "@/actions/auth";
-import {
-  AuthMarketingPanel,
-  AuthSplitShell,
-} from "@/app/(auth)/components/auth-shell";
+import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import {
   signInFormSchema,
   type SignInFormValues,
@@ -27,13 +22,6 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Field,
   FieldDescription,
@@ -78,7 +66,6 @@ function buildSupportHref(rootDomain: string) {
     rootDomain === "localhost" || rootDomain === "127.0.0.1"
       ? "example.com"
       : rootDomain;
-
   return `mailto:support@${emailDomain}`;
 }
 
@@ -88,10 +75,7 @@ function buildTenantPreview(args: {
   rootDomain: string;
   port: string | null;
 }) {
-  if (!args.tenantSlug) {
-    return "Connect with your tenant workspace";
-  }
-
+  if (!args.tenantSlug) return "";
   const portSuffix = args.port ? `:${args.port}` : "";
   return `${args.protocol}://${args.tenantSlug}.${args.rootDomain}${portSuffix}`;
 }
@@ -119,12 +103,8 @@ export function SignInForm({
       }
       return raw;
     }
-    if (isRootHost) {
-      return "/";
-    }
-    if (isPlatformAdminHost) {
-      return "/admin";
-    }
+    if (isRootHost) return "/";
+    if (isPlatformAdminHost) return "/admin";
     return "/dashboard";
   }, [isPlatformAdminHost, isRootHost, searchParams]);
   const emailParam = searchParams.get("email") || "";
@@ -136,10 +116,7 @@ export function SignInForm({
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInFormSchema),
-    defaultValues: {
-      email: emailParam,
-      password: "",
-    },
+    defaultValues: { email: emailParam, password: "" },
   });
 
   const supportHref = useMemo(() => buildSupportHref(rootDomain), [rootDomain]);
@@ -158,9 +135,7 @@ export function SignInForm({
     setSubmitError(null);
     const postSignInUrl =
       isRootHost && !isPlatformAdminHost
-        ? `/select-destination?${new URLSearchParams({
-            returnTo: callbackUrl,
-          }).toString()}`
+        ? `/select-destination?${new URLSearchParams({ returnTo: callbackUrl }).toString()}`
         : callbackUrl;
     const { error: err } = await authClient.signIn.email({
       email: data.email,
@@ -192,116 +167,48 @@ export function SignInForm({
         newUserCallbackURL: payload.newUserCallbackURL,
         errorCallbackURL: payload.errorCallbackURL,
       });
-      if (error) {
-        setSubmitError(error.message ?? "Google sign-in failed.");
-      }
+      if (error) setSubmitError(error.message ?? "Google sign-in failed.");
     } catch (err) {
-      setSubmitError(
-        err instanceof Error ? err.message : "Google sign-in failed.",
-      );
+      setSubmitError(err instanceof Error ? err.message : "Google sign-in failed.");
     } finally {
       setIsGoogleLoading(false);
     }
   }
 
-  const marketingPanel = (
-    <AuthMarketingPanel
-      eyebrow={
-        isPlatformAdminHost
-          ? "Internal Pelzer Solutions access"
-          : isRootHost
-            ? "All-in-one ERP for growing teams"
-            : "Secure tenant access"
-      }
-      title={
-        <>
-          {isPlatformAdminHost ? "Operate the platform." : "Run your business."}
-          <br />
-          <span className="text-blue-600">
-            {isPlatformAdminHost
-              ? "Internal admin sign-in."
-              : isRootHost
-              ? "Find the right workspace."
-              : "Sign in with confidence."}
-          </span>
-        </>
-      }
-      description={
-        isPlatformAdminHost
-          ? "Use your internal platform account to review tenants, platform users, and subscriptions from the reserved admin host."
-          : isRootHost
-          ? "PrimeERP helps teams manage finance, sales, receiving, inventory, and operations from one tenant-isolated platform."
-          : "Access your tenant workspace with the same secure flow used across orders, receiving, invoicing, and payments."
-      }
-      features={[
-        {
-          title: "Tenant-isolated by design",
-          description:
-            "Each business gets its own subdomain, session context, and workspace permissions.",
-        },
-        {
-          title: "Operationally complete",
-          description:
-            "Sales orders, supplier invoices, lots, inventory, and payments stay in one workflow.",
-        },
-        {
-          title: "Built for teams",
-          description:
-            "Owners, operators, and finance users can collaborate without stepping on each other.",
-        },
-      ]}
-      footerLabel="Designed for modern distribution, wholesale, and operations teams."
-    />
-  );
-
+  // Tenant not found state
   if (!isRootHost && tenantSlug && !tenant) {
     return (
       <AuthSplitShell
-        side={marketingPanel}
+        formPosition="left"
         topLabel="Need an account?"
         topHref={signUpUrl}
         topAction={inactiveTenant ? "Create tenant" : "Invite only"}
       >
-        <Card className="w-full max-w-100 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
-          <CardHeader className="space-y-3 pb-6 text-center">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-              <Building2 className="size-6" />
-            </div>
-            <div className="space-y-2">
-              <CardTitle className="text-3xl tracking-tight text-foreground">
-                {inactiveTenant ? "Tenant access is inactive" : "Tenant not found"}
-              </CardTitle>
-              <CardDescription className="text-base leading-7 text-muted-foreground">
-                {inactiveTenant ? (
-                  <>
-                    <span className="font-medium text-foreground">
-                      {inactiveTenant.name}
-                    </span>{" "}
-                    is currently deactivated, so tenant users cannot access this workspace.
-                    Contact Pelzer Solutions or your internal platform admin if you believe this
-                    tenant should be reactivated.
-                  </>
-                ) : (
-                  <>
-                    We couldn&apos;t find an active tenant for{" "}
-                    <span className="font-mono text-foreground">{tenantSlug}</span>.
-                    Double-check the subdomain or create a new tenant from the main sign-up page.
-                  </>
-                )}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {!inactiveTenant ? (
-              <Button asChild className="h-11 w-full">
+        <div className="space-y-6 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+            <Building2 className="size-5" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+              {inactiveTenant ? "Tenant inactive" : "Tenant not found"}
+            </h1>
+            <p className="text-sm text-[oklch(0.50_0.02_230)]">
+              {inactiveTenant
+                ? `${inactiveTenant.name} is currently deactivated.`
+                : `No active tenant for "${tenantSlug}".`}
+            </p>
+          </div>
+          <div className="space-y-2">
+            {!inactiveTenant && (
+              <Button asChild className="h-10 w-full">
                 <Link href={rootSignUpUrl}>Create a tenant</Link>
               </Button>
-            ) : null}
-            <Button asChild variant="outline" className="h-11 w-full">
+            )}
+            <Button asChild variant="outline" className="h-10 w-full">
               <a href={supportHref}>Contact support</a>
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </AuthSplitShell>
     );
   }
@@ -309,242 +216,173 @@ export function SignInForm({
   return (
     <TooltipProvider>
       <AuthSplitShell
-        side={marketingPanel}
+        formPosition="left"
         topLabel="Don't have an account?"
         topHref={signUpUrl}
         topAction={isRootHost ? "Sign up" : "Invite only"}
       >
-        <Card className="w-full max-w-100 border-border shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]">
-          <CardHeader className="space-y-4 pb-5 text-center">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="space-y-1">
             {!isRootHost && tenant ? (
-              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-                <LockKeyhole className="size-4" />
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.96_0.01_230)] px-2.5 py-1 text-xs font-medium text-[oklch(0.40_0.03_230)]">
+                <LockKeyhole className="size-3" />
                 {tenant.name}
               </div>
+            ) : isPlatformAdminHost ? (
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-[oklch(0.96_0.01_230)] px-2.5 py-1 text-xs font-medium text-[oklch(0.40_0.03_230)]">
+                <ShieldCheck className="size-3" />
+                Admin Console
+              </div>
+            ) : null}
+            <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+              Sign in
+            </h1>
+            <p className="text-sm text-[oklch(0.50_0.02_230)]">
+              {isPlatformAdminHost
+                ? "Access the platform admin console."
+                : isRootHost
+                  ? "Enter your credentials to continue."
+                  : "Sign in to your workspace."}
+            </p>
+          </div>
+
+          {/* Tenant preview */}
+          {!isRootHost && tenant && tenantPreview && (
+            <div className="rounded-lg border border-[oklch(0.92_0.01_230)] bg-[oklch(0.98_0.005_230)] px-3 py-2.5">
+              <p className="text-sm font-medium text-[oklch(0.25_0.03_230)]">{tenant.name}</p>
+              <p className="text-xs text-[oklch(0.55_0.02_230)]">{tenantPreview}</p>
+            </div>
+          )}
+
+          {/* Success alert */}
+          {created && (
+            <Alert className="border-emerald-200 bg-emerald-50">
+              <ShieldCheck className="size-4 text-emerald-600" />
+              <AlertTitle>Workspace ready</AlertTitle>
+              <AlertDescription>Sign in to get started.</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error alert */}
+          {submitError && (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Social login */}
+          <div className="space-y-3">
+            {googleEnabled ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 w-full gap-2"
+                disabled={isGoogleLoading}
+                onClick={handleGoogleSignIn}
+              >
+                <Google className="size-4" />
+                {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
+              </Button>
             ) : (
-              <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
-                {isPlatformAdminHost ? (
-                  <>
-                    <ShieldCheck className="size-4" />
-                    Platform admin
-                  </>
-                ) : (
-                  <>
-                    <Users className="size-4" />
-                    Central login
-                  </>
-                )}
-              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="block">
+                    <Button type="button" variant="outline" className="h-10 w-full gap-2" disabled>
+                      <Google className="size-4" />
+                      Continue with Google
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>Google sign-in is not configured.</TooltipContent>
+              </Tooltip>
             )}
-            <div className="space-y-2">
-              <CardTitle className="text-3xl tracking-tight text-foreground">
-                {isPlatformAdminHost
-                  ? "Sign in to platform admin"
-                  : isRootHost
-                    ? "Welcome back"
-                    : "Sign in to your workspace"}
-              </CardTitle>
-              <CardDescription className="text-base leading-7 text-muted-foreground">
-                {isPlatformAdminHost
-                  ? "Only active platform users can access this internal surface."
-                  : isRootHost
-                  ? "Sign in once, then choose the tenant workspace or platform admin destination you want to enter."
-                  : "Use your email and password to access your tenant workspace."}
-              </CardDescription>
+            <div className="flex items-center gap-3">
+              <Separator className="flex-1" />
+              <span className="text-[0.65rem] font-medium uppercase tracking-wider text-[oklch(0.55_0.02_230)]">or</span>
+              <Separator className="flex-1" />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {!isRootHost && tenant ? (
-              <div className="rounded-2xl border border-border bg-muted/50 px-4 py-3 text-left">
-                <p className="text-sm font-medium text-foreground">
-                  {tenant.name}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">{tenantPreview}</p>
-              </div>
-            ) : null}
+          </div>
 
-            {created ? (
-              <Alert className="border-emerald-200 bg-emerald-50 text-left">
-                <ShieldCheck className="size-4 text-emerald-600" />
-                <AlertTitle>Tenant created</AlertTitle>
-                <AlertDescription>
-                  Your account and tenant are ready. If your email still needs
-                  verification, finish that first and then sign in here.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            {submitError ? (
-              <Alert variant="destructive" className="text-left">
-                <AlertCircle className="size-4" />
-                <AlertTitle>
-                  Sign in failed
-                </AlertTitle>
-                <AlertDescription>{submitError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            <div className="space-y-3">
-              {googleEnabled ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 w-full justify-center gap-2 text-muted-foreground"
-                  disabled={isGoogleLoading}
-                  onClick={handleGoogleSignIn}
-                >
-                  <Google className="size-4" />
-                  {isGoogleLoading ? "Redirecting to Google…" : "Continue with Google"}
-                </Button>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="block">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-11 w-full justify-center gap-2 text-muted-foreground"
-                        disabled
-                      >
-                        <Google className="size-4" />
-                        Continue with Google
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Google sign-in is not configured for this deployment.
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              <div className="flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  or
-                </span>
-                <Separator className="flex-1" />
-              </div>
-            </div>
-
-            <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-              <FieldGroup>
-                <Controller
-                  name="email"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="sign-in-email">
-                        Email address
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        id="sign-in-email"
-                        type="email"
-                        placeholder="you@company.com"
-                        autoComplete="email"
-                        aria-invalid={fieldState.invalid}
-                      />
-                      {isRootHost ? (
-                        <FieldDescription>
-                          If your account has more than one destination, you&apos;ll choose it after sign-in.
-                        </FieldDescription>
-                      ) : null}
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  name="password"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <div className="flex items-center">
-                        <FieldLabel htmlFor="sign-in-password">
-                          Password
-                        </FieldLabel>
-                        <Link
-                          href="/forgot-password"
-                          className="ml-auto text-sm font-medium text-muted-foreground transition hover:text-foreground"
-                        >
-                          Forgot password?
-                        </Link>
-                      </div>
-                      <Input
-                        {...field}
-                        id="sign-in-password"
-                        type="password"
-                        autoComplete="current-password"
-                        placeholder="Enter your password"
-                        aria-invalid={fieldState.invalid}
-                      />
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
-                <div className="flex items-center justify-between rounded-xl border border-border bg-muted/50 px-3 py-2.5">
-                  <label
-                    htmlFor="remember-me"
-                    className="flex items-center gap-3 text-sm text-muted-foreground"
-                  >
-                    <Checkbox
-                      id="remember-me"
-                      checked={rememberMe}
-                      onCheckedChange={checked =>
-                        setRememberMe(Boolean(checked))
-                      }
+          {/* Form */}
+          <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+            <FieldGroup>
+              <Controller
+                name="email"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="sign-in-email">Email</FieldLabel>
+                    <Input
+                      {...field}
+                      id="sign-in-email"
+                      type="email"
+                      placeholder="you@company.com"
+                      autoComplete="email"
+                      aria-invalid={fieldState.invalid}
                     />
-                    Keep me signed in on this device
-                  </label>
-                </div>
-                <Button
-                  type="submit"
-                  className="h-11 w-full"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Signing in…" : "Sign in"}
-                </Button>
-              </FieldGroup>
-            </form>
-
-            <div className="space-y-3 pt-2 text-center">
-              <p className="text-sm text-muted-foreground">
-                {isRootHost ? "Need a tenant? " : "Need access? "}
-                <Link
-                  href={signUpUrl}
-                  className="font-medium text-foreground underline underline-offset-[3px] transition hover:opacity-70"
-                >
-                  {isRootHost ? "Create one" : "Ask your admin"}
-                </Link>
-              </p>
-              <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
-                <Link
-                  href="/forgot-password"
-                  className="transition hover:text-foreground"
-                >
-                  Forgot password
-                </Link>
-                <span className="text-border">•</span>
-                <a
-                  href={supportHref}
-                  className="inline-flex items-center gap-1.5 transition hover:text-foreground"
-                >
-                  <LifeBuoy className="size-4" />
-                  Support
-                </a>
-                <span className="text-border">•</span>
-                <Link
-                  href={signUpUrl}
-                  className="transition hover:text-foreground"
-                >
-                  {isRootHost ? "Sign up" : "Invite only"}
-                </Link>
+                    {isRootHost && (
+                      <FieldDescription>You&apos;ll choose your workspace after signing in.</FieldDescription>
+                    )}
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
+              <Controller
+                name="password"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <div className="flex items-center justify-between">
+                      <FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
+                      <Link
+                        href="/forgot-password"
+                        className="text-xs font-medium text-[oklch(0.50_0.02_230)] transition hover:text-[oklch(0.30_0.03_230)]"
+                      >
+                        Forgot?
+                      </Link>
+                    </div>
+                    <Input
+                      {...field}
+                      id="sign-in-password"
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Enter password"
+                      aria-invalid={fieldState.invalid}
+                    />
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(Boolean(checked))}
+                />
+                <label htmlFor="remember-me" className="text-sm text-[oklch(0.50_0.02_230)]">
+                  Keep me signed in
+                </label>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <Button type="submit" className="h-10 w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Signing in..." : "Sign in"}
+              </Button>
+            </FieldGroup>
+          </form>
+
+          {/* Footer */}
+          <p className="text-center text-sm text-[oklch(0.55_0.02_230)]">
+            {isRootHost ? "Need a workspace? " : "Need access? "}
+            <Link
+              href={signUpUrl}
+              className="font-medium text-[oklch(0.30_0.03_230)] underline underline-offset-2 transition hover:opacity-70"
+            >
+              {isRootHost ? "Create one" : "Ask your admin"}
+            </Link>
+          </p>
+        </div>
       </AuthSplitShell>
     </TooltipProvider>
   );
