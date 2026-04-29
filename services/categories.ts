@@ -11,6 +11,10 @@ export async function getCategoryById(categoryId: string) {
   return result ?? null;
 }
 
+export type CategoryDetail = NonNullable<
+  Awaited<ReturnType<typeof getCategoryById>>
+>;
+
 export async function getCategories() {
   const tenant = await getCurrentTenant();
   const result = await db.query.categories.findMany({
@@ -37,6 +41,35 @@ export async function createCategory(input: { name: string; description?: string
       description: input.description?.trim() || null,
     })
     .returning();
+
+  return row;
+}
+
+export async function updateCategory(input: {
+  id: string;
+  name: string;
+  description?: string | null;
+}) {
+  const tenant = await getCurrentTenant();
+  const name = input.name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+  const [row] = await db
+    .update(categories)
+    .set({
+      name: input.name.trim(),
+      slug: name,
+      description: input.description?.trim() || null,
+    })
+    .where(and(eq(categories.id, input.id), eq(categories.tenantId, tenant.id)))
+    .returning();
+
+  if (!row) {
+    throw new Error("Category not found.");
+  }
 
   return row;
 }

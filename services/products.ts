@@ -49,6 +49,10 @@ export async function getProductById(productId: string) {
   return result ?? null;
 }
 
+export type ProductDetail = NonNullable<
+  Awaited<ReturnType<typeof getProductById>>
+>;
+
 export type ProductListSort =
   | "sku"
   | "name"
@@ -208,6 +212,86 @@ export async function createProduct(input: {
   }
 
   return product;
+}
+
+export async function updateProduct(input: {
+  id: string;
+  sku: string;
+  name: string;
+  categoryIds: string[];
+  baseUnitId?: string | null;
+  units?: ProductUnitInput[];
+}) {
+  const tenant = await getCurrentTenant();
+
+  const existing = await db.query.products.findFirst({
+    where: and(eq(products.id, input.id), eq(products.tenantId, tenant.id)),
+    columns: {
+      id: true,
+    },
+  });
+  if (!existing) {
+    throw new Error("Product not found.");
+  }
+
+  if (input.categoryIds.length > 0) {
+    const validCategories = await db.query.categories.findMany({
+      where: inArray(categories.id, input.categoryIds),
+    });
+    const invalidIds = input.categoryIds.filter(
+      id => !validCategories.some(c => c.id === id && c.tenantId === tenant.id),
+    );
+    if (invalidIds.length > 0) {
+      throw new Error("One or more category IDs are invalid.");
+    }
+  }
+
+  const [updated] = await db
+    .update(products)
+    .set({
+      sku: input.sku.trim(),
+      name: input.name.trim(),
+      baseUnitId: input.baseUnitId ?? null,
+    })
+    .where(and(eq(products.id, input.id), eq(products.tenantId, tenant.id)))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Failed to update product.");
+  }
+
+  await db
+    .delete(productCategories)
+    .where(eq(productCategories.productId, input.id));
+
+  if (input.categoryIds.length > 0) {
+    await db.insert(productCategories).values(
+      input.categoryIds.map(categoryId => ({
+        productId: input.id,
+        categoryId,
+      })),
+    );
+  }
+
+  await db
+    .delete(productUnits)
+    .where(eq(productUnits.productId, input.id));
+
+  if (input.units && input.units.length > 0) {
+    await db.insert(productUnits).values(
+      input.units.map((u, i) => ({
+        productId: input.id,
+        unitId: u.unitId,
+        purpose: u.purpose,
+        conversionToBase: u.conversionToBase,
+        isDefault: u.isDefault ?? i === 0,
+        allowsFractional: u.allowsFractional ?? true,
+        sortOrder: u.sortOrder ?? i,
+      })),
+    );
+  }
+
+  return updated;
 }
 
 export async function deleteProduct(productId: string) {

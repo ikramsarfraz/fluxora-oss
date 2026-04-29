@@ -74,6 +74,65 @@ export async function createCustomer(
   return customer;
 }
 
+export async function updateCustomer(
+  input: Partial<Omit<NewCustomer, "tenantId">> & {
+    id: string;
+    addresses?: Omit<NewCustomerAddress, "customerId">[];
+  },
+) {
+  const tenant = await getCurrentTenant();
+  const existing = await db.query.customers.findFirst({
+    where: and(eq(customers.id, input.id), eq(customers.tenantId, tenant.id)),
+    columns: {
+      id: true,
+    },
+  });
+  if (!existing) {
+    throw new Error("Customer not found.");
+  }
+
+  const [customer] = await db
+    .update(customers)
+    .set({
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.phoneNumber !== undefined
+        ? { phoneNumber: input.phoneNumber }
+        : {}),
+      ...(input.fuelSurchargeAmount !== undefined
+        ? { fuelSurchargeAmount: input.fuelSurchargeAmount }
+        : {}),
+      ...(input.invoicePrefix !== undefined
+        ? { invoicePrefix: input.invoicePrefix }
+        : {}),
+    })
+    .where(and(eq(customers.id, input.id), eq(customers.tenantId, tenant.id)))
+    .returning();
+
+  if (!customer) {
+    throw new Error("Failed to update customer.");
+  }
+
+  await db
+    .delete(customerAddresses)
+    .where(eq(customerAddresses.customerId, input.id));
+
+  if (input.addresses?.length) {
+    await db.insert(customerAddresses).values(
+      input.addresses.map((addr, i) => ({
+        customerId: customer.id,
+        addressType: addr.addressType ?? "shipping",
+        street: addr.street,
+        city: addr.city,
+        state: addr.state,
+        zip: addr.zip,
+        isDefault: addr.isDefault ?? i === 0,
+      })),
+    );
+  }
+
+  return customer;
+}
+
 export async function getCustomerById(customerId: string) {
   const tenant = await getCurrentTenant();
   const result = await db.query.customers.findFirst({
@@ -86,6 +145,10 @@ export async function getCustomerById(customerId: string) {
 
   return result ?? null;
 }
+
+export type CustomerDetail = NonNullable<
+  Awaited<ReturnType<typeof getCustomerById>>
+>;
 
 export type CustomerListSort = "name" | "createdAt";
 export type CustomerListParams = PaginatedQueryInput<CustomerListSort>;

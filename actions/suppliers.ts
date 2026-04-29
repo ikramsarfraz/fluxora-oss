@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import {
   createSupplier,
   deleteSupplier,
@@ -33,5 +35,10 @@ export async function createSupplierAction(input: CreateSupplierInput) {
 }
 
 export async function updateSupplierAction(input: UpdateSupplierInput) {
-  return await updateSupplier(input);
+  const supplier = await updateSupplier(input);
+  revalidatePath("/suppliers");
+  revalidatePath(`/suppliers/${input.id}`);
+  revalidatePath(`/suppliers/${input.id}/edit`);
+  revalidatePath("/dashboard");
+  return supplier;
 }

@@ -1,7 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AuthUserMenu } from "@/components/auth-user-menu";
 import { PlatformAdminSidebar } from "@/components/platform-admin-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -62,7 +61,7 @@ export default async function PlatformAdminLayout({
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <PlatformAdminSidebar destinations={destinations} />
+        <PlatformAdminSidebar destinations={destinations} user={session.user} />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
@@ -73,9 +72,6 @@ export default async function PlatformAdminLayout({
             <div>
               <p className="text-sm font-medium text-slate-900">Platform Admin</p>
               <p className="text-xs text-muted-foreground">{platformUser.role}</p>
-            </div>
-            <div className="ml-auto">
-              <AuthUserMenu user={session.user} accountHref="/admin/platform-users" />
             </div>
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>

@@ -59,8 +59,8 @@ import {
   type ProductUnitFormValue,
 } from "./add-product-form.schema";
 import { useCategories } from "@/hooks/use-categories";
-import type { ProductCategory } from "@/services/products";
-import { createProductAction } from "@/actions/products";
+import type { ProductCategory, ProductDetail } from "@/services/products";
+import { createProductAction, updateProductAction } from "@/actions/products";
 import { createCategoryAction } from "@/actions/categories";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
@@ -95,13 +95,32 @@ const defaultUnit: ProductUnitFormValue = {
   allowsFractional: true,
 };
 
-const defaultForm: AddProductFormValues = {
-  sku: "",
-  name: "",
-  categoryIds: [],
-  baseUnitId: "",
-  units: [],
-};
+function buildDefaultForm(product?: ProductDetail): AddProductFormValues {
+  if (!product) {
+    return {
+      sku: "",
+      name: "",
+      categoryIds: [],
+      baseUnitId: "",
+      units: [],
+    };
+  }
+
+  return {
+    sku: product.sku,
+    name: product.name,
+    categoryIds: (product.productCategories ?? []).map(pc => pc.categoryId),
+    baseUnitId: product.baseUnitId ?? "",
+    units: (product.productUnits ?? []).map(unit => ({
+      unitId: unit.unitId,
+      purpose: unit.purpose,
+      conversionToBase: unit.conversionToBase,
+      isDefault: unit.isDefault ?? false,
+      allowsFractional: unit.allowsFractional ?? true,
+      sortOrder: unit.sortOrder ?? 0,
+    })),
+  };
+}
 
 function formatUomOption(u: UnitOfMeasureListItem): string {
   return u.abbreviation ? `${u.name} (${u.abbreviation})` : u.name;
@@ -188,10 +207,16 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
 // ---------------------------------------------------------------------------
 // Main form
 // ---------------------------------------------------------------------------
-export function AddProductForm() {
+export function AddProductForm(props?: {
+  mode?: "create" | "edit";
+  product?: ProductDetail;
+}) {
+  const mode = props?.mode ?? "create";
+  const product = props?.product;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const defaultForm = buildDefaultForm(product);
 
   const form = useForm<AddProductFormValues>({
     resolver: zodResolver(addProductFormSchema),
@@ -220,21 +245,38 @@ export function AddProductForm() {
         sku = generateSku(data.name, firstCat?.name ?? "", products);
         form.setValue("sku", sku);
       }
-      await createProductAction({
+      const payload = {
         sku,
         name: data.name,
         categoryIds: data.categoryIds,
         baseUnitId: data.baseUnitId || null,
         units: data.units?.length ? data.units : undefined,
-      });
+      };
+      const result =
+        mode === "edit" && product
+          ? await updateProductAction({
+              id: product.id,
+              ...payload,
+            })
+          : await createProductAction(payload);
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
       invalidateSetupChecklistQuery(queryClient);
-      form.reset(defaultForm);
-      router.push("/products");
+      if (mode === "create") {
+        form.reset(buildDefaultForm());
+        router.push("/products");
+        toast.success("Product added");
+      } else {
+        router.push(`/products/${result.id}`);
+        toast.success("Product updated");
+      }
     } catch (e) {
       setMutationError(
-        e instanceof Error ? e.message : "Failed to add product.",
+        e instanceof Error
+          ? e.message
+          : mode === "edit"
+            ? "Failed to update product."
+            : "Failed to add product.",
       );
     }
   }
@@ -248,7 +290,9 @@ export function AddProductForm() {
           {mutationError ? (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle />
-              <AlertTitle>Add product failed</AlertTitle>
+              <AlertTitle>
+                {mode === "edit" ? "Update product failed" : "Add product failed"}
+              </AlertTitle>
               <AlertDescription>
                 {isLimitReachedMessage(mutationError, "maxProducts") ? (
                   <SubscriptionUpgradeMessage message="Your current plan has reached the product limit." />
@@ -659,12 +703,20 @@ export function AddProductForm() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/products")}
+          onClick={() =>
+            router.push(mode === "edit" && product ? `/products/${product.id}` : "/products")
+          }
         >
           Cancel
         </Button>
         <Button type="submit" form="form-add-product" disabled={isPending}>
-          {isPending ? "Adding…" : "Add product"}
+          {isPending
+            ? mode === "edit"
+              ? "Saving…"
+              : "Adding…"
+            : mode === "edit"
+              ? "Save changes"
+              : "Add product"}
         </Button>
       </CardFooter>
     </Card>
