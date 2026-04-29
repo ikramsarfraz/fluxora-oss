@@ -20,6 +20,10 @@ export async function getSupplierById(supplierId: string) {
   return result ?? null;
 }
 
+export type SupplierDetail = NonNullable<
+  Awaited<ReturnType<typeof getSupplierById>>
+>;
+
 export type SupplierListSort = "name" | "netDays" | "createdAt";
 export type SupplierListParams = PaginatedQueryInput<SupplierListSort>;
 

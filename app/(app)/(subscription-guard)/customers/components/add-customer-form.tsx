@@ -29,13 +29,14 @@ import {
   createCustomerInputSchema,
   type CreateCustomerInput,
 } from "../customer.schemas";
-import { createCustomerAction } from "@/actions/customers";
+import { createCustomerAction, updateCustomerAction } from "@/actions/customers";
 import { US_STATES } from "@/lib/constants/us-states";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
 } from "@/lib/subscription-enforcement";
+import type { CustomerDetail } from "@/services/customers";
 
 const emptyAddress = {
   addressType: "shipping" as const,
@@ -46,20 +47,47 @@ const emptyAddress = {
   isDefault: false,
 };
 
-export function AddCustomerForm() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const form = useForm<CreateCustomerInput>({
-    resolver: zodResolver(createCustomerInputSchema),
-    defaultValues: {
+function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInput {
+  if (!customer) {
+    return {
       name: "",
       phoneNumber: "",
       fuelSurchargeAmount: "",
       invoicePrefix: "",
       addresses: [],
-    },
+    };
+  }
+
+  return {
+    name: customer.name,
+    phoneNumber: customer.phoneNumber ?? "",
+    fuelSurchargeAmount: customer.fuelSurchargeAmount ?? "",
+    invoicePrefix: customer.invoicePrefix ?? "",
+    addresses: customer.addresses.map(address => ({
+      addressType: address.addressType,
+      street: address.street,
+      city: address.city ?? "",
+      state: address.state ?? "",
+      zip: address.zip ?? "",
+      isDefault: address.isDefault ?? false,
+    })),
+  };
+}
+
+export function AddCustomerForm(props?: {
+  mode?: "create" | "edit";
+  customer?: CustomerDetail;
+}) {
+  const mode = props?.mode ?? "create";
+  const customer = props?.customer;
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const defaultValues = buildDefaultCustomerForm(customer);
+
+  const form = useForm<CreateCustomerInput>({
+    resolver: zodResolver(createCustomerInputSchema),
+    defaultValues,
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -70,14 +98,27 @@ export function AddCustomerForm() {
   async function onSubmit(data: CreateCustomerInput) {
     setError(null);
     try {
-      const customer = await createCustomerAction(data);
+      const result =
+        mode === "edit" && customer
+          ? await updateCustomerAction(customer.id, data)
+          : await createCustomerAction(data);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       invalidateSetupChecklistQuery(queryClient);
-      form.reset();
-      toast.success("Customer added");
-      router.push("/customers/" + customer.id);
+      if (mode === "create") {
+        form.reset(buildDefaultCustomerForm());
+        toast.success("Customer added");
+      } else {
+        toast.success("Customer updated");
+      }
+      router.push("/customers/" + result.id);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to add customer");
+      setError(
+        e instanceof Error
+          ? e.message
+          : mode === "edit"
+            ? "Failed to update customer"
+            : "Failed to add customer",
+      );
     }
   }
 
@@ -371,12 +412,20 @@ export function AddCustomerForm() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/customers")}
+          onClick={() =>
+            router.push(mode === "edit" && customer ? `/customers/${customer.id}` : "/customers")
+          }
         >
           Cancel
         </Button>
         <Button type="submit" form="form-add-customer" disabled={isPending}>
-          {isPending ? "Adding..." : "Add Customer"}
+          {isPending
+            ? mode === "edit"
+              ? "Saving..."
+              : "Adding..."
+            : mode === "edit"
+              ? "Save Changes"
+              : "Add Customer"}
         </Button>
       </CardFooter>
     </Card>

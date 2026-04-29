@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Pencil } from "lucide-react";
 
 import { useCustomer } from "@/hooks/use-customers";
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -12,6 +14,7 @@ import {
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatPhone } from "@/lib/utils/phone";
 import { isUuid } from "@/lib/utils/uuid";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
@@ -57,7 +60,14 @@ export default function CustomerProfile() {
       <DetailPageHeader
         title={customer.name}
         description="View and manage contact details, addresses, and pricing."
-      />
+      >
+        <Button variant="outline" asChild>
+          <Link href={`/customers/${customer.id}/edit`}>
+            <Pencil className="size-4" />
+            Edit
+          </Link>
+        </Button>
+      </DetailPageHeader>
 
       {/* General details */}
       {hasContactDetails && (

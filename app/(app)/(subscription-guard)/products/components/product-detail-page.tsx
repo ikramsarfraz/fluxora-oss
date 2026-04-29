@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Pencil } from "lucide-react";
 
 import { useProduct, useDeleteProduct } from "@/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
@@ -71,7 +73,14 @@ export function ProductDetailPage({ productId }: { productId: string }) {
             {product.sku}
           </Badge>
         }
-      />
+      >
+        <Button variant="outline" asChild>
+          <Link href={`/products/${product.id}/edit`}>
+            <Pencil className="size-4" />
+            Edit
+          </Link>
+        </Button>
+      </DetailPageHeader>
 
       {/* Core details */}
       <DetailSection

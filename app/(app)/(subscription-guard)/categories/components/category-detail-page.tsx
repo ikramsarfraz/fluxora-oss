@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 
 import { useCategory } from "@/hooks/use-categories";
 import { useDeleteCategory } from "@/hooks/use-categories";
@@ -68,7 +70,14 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
             </Badge>
           )
         }
-      />
+      >
+        <Button variant="outline" asChild>
+          <Link href={`/categories/${category.id}/edit`}>
+            <Pencil className="size-4" />
+            Edit
+          </Link>
+        </Button>
+      </DetailPageHeader>
 
       <DetailSection
         title="Details"

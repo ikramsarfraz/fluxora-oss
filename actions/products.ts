@@ -1,11 +1,14 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import {
   createProduct,
   deleteProduct,
   getProductById,
   getProducts,
   getProductsPage,
+  updateProduct,
   type ProductListParams,
 } from "@/services/products";
 
@@ -36,6 +39,28 @@ export async function createProductAction(input: {
   }[];
 }) {
   return await createProduct(input);
+}
+
+export async function updateProductAction(input: {
+  id: string;
+  sku: string;
+  name: string;
+  categoryIds: string[];
+  baseUnitId?: string | null;
+  units?: {
+    unitId: string;
+    purpose: "stock" | "purchase" | "sales" | "pricing" | "display";
+    conversionToBase: string;
+    isDefault?: boolean;
+    allowsFractional?: boolean;
+    sortOrder?: number;
+  }[];
+}) {
+  const product = await updateProduct(input);
+  revalidatePath("/products");
+  revalidatePath(`/products/${input.id}`);
+  revalidatePath(`/products/${input.id}/edit`);
+  return product;
 }
 
 export async function deleteProductAction(id: string) {

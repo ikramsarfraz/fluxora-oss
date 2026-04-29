@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
@@ -65,7 +66,14 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       <DetailPageHeader
         title={supplier.name}
         description="Supplier details and account history."
-      />
+      >
+        <Button variant="outline" asChild>
+          <Link href={`/suppliers/${supplier.id}/edit`}>
+            <Pencil className="size-4" />
+            Edit supplier
+          </Link>
+        </Button>
+      </DetailPageHeader>
 
       <DetailSection
         title="Details"
