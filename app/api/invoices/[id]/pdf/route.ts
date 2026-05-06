@@ -1,5 +1,5 @@
 import { getSalesInvoiceById } from "@/services/invoicing";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant, getTenantLogoUrl } from "@/services/tenants";
 import { isUuid } from "@/lib/utils/uuid";
 import {
   getSalesInvoicePdfFilename,
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   ctx: {
     params: Promise<{ id: string }>;
   },
@@ -30,21 +30,28 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
+  const logoUrl = await getTenantLogoUrl(tenant).catch(() => null);
+
   const pdfBytes = await renderSalesInvoicePdf({
-    companyName: tenant.name,
+    tenant,
     invoice,
+    logoUrl,
   });
 
   // `renderToBuffer` returns a Node `Buffer`. Copy into a plain Uint8Array
   // backed by a non-shared ArrayBuffer so TS's `BodyInit` type matches.
   const pdfBody = new Uint8Array(pdfBytes.byteLength);
   pdfBody.set(pdfBytes);
+  const url = new URL(request.url);
+  const disposition =
+    url.searchParams.get("preview") === "1" ? "inline" : "attachment";
 
   return new Response(pdfBody, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${getSalesInvoicePdfFilename(invoice)}"`,
+      "Content-Disposition": `${disposition}; filename="${getSalesInvoicePdfFilename(invoice)}"`,
+      "Content-Length": String(pdfBody.byteLength),
       "Cache-Control": "private, no-store",
     },
   });

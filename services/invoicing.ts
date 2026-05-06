@@ -270,10 +270,28 @@ export async function getSalesInvoiceById(id: string) {
   return db.query.salesInvoices.findFirst({
     where: and(eq(salesInvoices.id, id), eq(salesInvoices.tenantId, tenant.id)),
     with: {
-      customer: true,
+      customer: {
+        with: {
+          addresses: true,
+        },
+      },
       salesOrder: {
         with: {
-          customer: true,
+          customer: {
+            with: {
+              addresses: true,
+            },
+          },
+          lines: {
+            with: {
+              product: true,
+              fulfillments: {
+                with: {
+                  inventoryItem: true,
+                },
+              },
+            },
+          },
         },
       },
       lines: {

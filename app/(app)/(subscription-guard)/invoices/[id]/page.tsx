@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download } from "lucide-react";
+import { Download, Eye } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,12 @@ export default async function InvoiceDetailPage({
             {invoice.invoiceNumber}
           </h1>
           <Badge variant="outline">{invoice.status.replaceAll("_", " ")}</Badge>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/invoices/${invoice.id}/preview`}>
+              <Eye className="size-4" />
+              Preview PDF
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href={`/api/invoices/${invoice.id}/pdf`}>
               <Download className="size-4" />
