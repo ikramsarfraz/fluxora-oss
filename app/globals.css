@@ -50,36 +50,55 @@
   --radius-2xl: calc(var(--radius) * 1.5);
   --radius-3xl: calc(var(--radius) * 1.8);
   --radius-4xl: calc(var(--radius) * 2.2);
+
+  /* Stone design system tokens → bg-stone-bg, text-stone-ink, border-stone-line, etc. */
+  --color-stone-bg: var(--stone-bg);
+  --color-stone-surface: var(--stone-surface);
+  --color-stone-ink: var(--stone-ink);
+  --color-stone-ink2: var(--stone-ink2);
+  --color-stone-muted: var(--stone-muted);
+  --color-stone-line: var(--stone-line);
+  --color-stone-line2: var(--stone-line2);
+
+  /* Status colors → bg-status-good-soft, text-status-warn, etc. */
+  --color-status-good: var(--status-good);
+  --color-status-good-soft: var(--status-good-soft);
+  --color-status-warn: var(--status-warn);
+  --color-status-warn-soft: var(--status-warn-soft);
+  --color-status-info: var(--status-info);
+  --color-status-info-soft: var(--status-info-soft);
 }
 
 :root {
-  /* Navy blue brand palette - #1e3a5f inspired */
+  /* Warm-stone background / surface */
   --background: #fafaf9;
-  --foreground: oklch(0.20 0.03 240);
+  --foreground: #0c0a09;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.20 0.03 240);
+  --card: #ffffff;
+  --card-foreground: #0c0a09;
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.20 0.03 240);
+  --popover: #ffffff;
+  --popover-foreground: #0c0a09;
 
-  --primary: oklch(0.35 0.08 240);
-  --primary-foreground: oklch(0.98 0.003 240);
+  /* Navy-blue primary */
+  --primary: oklch(48% 0.16 265);
+  --primary-foreground: #ffffff;
 
-  --secondary: oklch(0.96 0.01 240);
-  --secondary-foreground: oklch(0.25 0.03 240);
+  /* Subtle stone fills */
+  --secondary: #f5f5f4;
+  --secondary-foreground: #44403c;
 
-  --muted: oklch(0.96 0.008 240);
-  --muted-foreground: oklch(0.50 0.02 240);
+  --muted: #f5f5f4;
+  --muted-foreground: #78716c;
 
-  --accent: oklch(0.94 0.02 240);
-  --accent-foreground: oklch(0.25 0.03 240);
+  --accent: #f5f5f4;
+  --accent-foreground: #44403c;
 
   --destructive: oklch(0.55 0.22 25);
 
-  --border: oklch(0.90 0.012 240);
-  --input: oklch(0.90 0.012 240);
-  --ring: oklch(0.50 0.10 240);
+  --border: #e7e5e4;
+  --input: #e7e5e4;
+  --ring: oklch(48% 0.16 265);
 
   --chart-1: oklch(0.50 0.12 240);
   --chart-2: oklch(0.58 0.10 200);
@@ -90,13 +109,30 @@
   --radius: 0.625rem;
 
   --sidebar: #ffffff;
-  --sidebar-foreground: oklch(0.22 0.03 240);
-  --sidebar-primary: oklch(0.35 0.08 240);
-  --sidebar-primary-foreground: oklch(0.98 0.003 240);
-  --sidebar-accent: oklch(0.94 0.018 240);
-  --sidebar-accent-foreground: oklch(0.25 0.03 240);
-  --sidebar-border: oklch(0.91 0.01 240);
-  --sidebar-ring: oklch(0.50 0.10 240);
+  --sidebar-foreground: #44403c;
+  --sidebar-primary: oklch(48% 0.16 265);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f5f5f4;
+  --sidebar-accent-foreground: #44403c;
+  --sidebar-border: #e7e5e4;
+  --sidebar-ring: oklch(48% 0.16 265);
+
+  /* Stone design system palette */
+  --stone-bg: #fafaf9;
+  --stone-surface: #ffffff;
+  --stone-ink: #0c0a09;
+  --stone-ink2: #44403c;
+  --stone-muted: #78716c;
+  --stone-line: #e7e5e4;
+  --stone-line2: #f5f5f4;
+
+  /* Status semantic colors */
+  --status-good: oklch(58% 0.13 155);
+  --status-good-soft: oklch(96% 0.04 155);
+  --status-warn: oklch(70% 0.13 70);
+  --status-warn-soft: oklch(97% 0.04 70);
+  --status-info: oklch(60% 0.15 240);
+  --status-info-soft: oklch(96% 0.03 240);
 }
 
 .dark {
@@ -141,6 +177,23 @@
   --sidebar-accent-foreground: oklch(0.96 0.006 240);
   --sidebar-border: oklch(0.30 0.015 240);
   --sidebar-ring: oklch(0.60 0.10 240);
+
+  /* Stone tokens adapted for dark mode */
+  --stone-bg: oklch(0.16 0.015 240);
+  --stone-surface: oklch(0.20 0.018 240);
+  --stone-ink: oklch(0.96 0.006 240);
+  --stone-ink2: oklch(0.80 0.01 240);
+  --stone-muted: oklch(0.60 0.015 240);
+  --stone-line: oklch(0.30 0.015 240);
+  --stone-line2: oklch(0.25 0.015 240);
+
+  /* Status colors shifted for dark surfaces */
+  --status-good: oklch(65% 0.13 155);
+  --status-good-soft: oklch(25% 0.06 155);
+  --status-warn: oklch(75% 0.13 70);
+  --status-warn-soft: oklch(25% 0.06 70);
+  --status-info: oklch(65% 0.15 240);
+  --status-info-soft: oklch(25% 0.06 240);
 }
 
 @layer base {
