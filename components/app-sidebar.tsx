@@ -25,20 +25,18 @@ import {
   Package,
   Boxes,
   Truck,
-  ShieldCheck,
-  Ruler,
   type LucideIcon,
-  ListChecks,
   ShoppingCart,
   Layers,
   Receipt,
   Wallet,
   CreditCard,
-  Palette,
   Shield,
   BadgeCheck,
   CircleDollarSign,
   LogOut,
+  UserCog,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
@@ -161,29 +159,14 @@ const navMain: NavGroup[] = [
     title: "Settings",
     items: [
       {
-        title: "Users",
-        url: "/users",
-        icon: ShieldCheck,
+        title: "User Management",
+        url: "/user-management",
+        icon: UserCog,
       },
       {
-        title: "Roles & Permissions",
-        url: "/admin/roles",
-        icon: Shield,
-      },
-      {
-        title: "Branding",
-        url: "/admin/branding",
-        icon: Palette,
-      },
-      {
-        title: "Categories",
-        url: "/categories",
-        icon: ListChecks,
-      },
-      {
-        title: "Units of Measure",
-        url: "/units-of-measure",
-        icon: Ruler,
+        title: "Configuration",
+        url: "/configuration",
+        icon: SlidersHorizontal,
       },
     ],
   },
