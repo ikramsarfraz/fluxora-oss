@@ -5,7 +5,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal, Trash2 } from "lucide-react";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,21 +26,76 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { SalesOrderListItem } from "@/services/orders";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { orderStatusLabel } from "@/lib/utils/status-labels";
 
 type ColumnActions = {
   onDelete: (order: SalesOrderListItem) => void;
 };
 
-const STATUS_VARIANT: Record<
-  string,
-  "default" | "secondary" | "outline" | "destructive"
-> = {
-  sales_order: "outline",
-  confirmed: "secondary",
-  fulfilled: "default",
-  cancelled: "destructive",
+// ── Status pill — mirrors the detail page tokens ───────────────────────────
+
+interface PillConfig {
+  label: string;
+  bg: string;
+  color: string;
+}
+
+const STATUS_PILL: Record<string, PillConfig> = {
+  sales_order: {
+    label: "Draft",
+    bg: "#f5f5f4",
+    color: "#78716c",
+  },
+  confirmed: {
+    label: "Awaiting fulfillment",
+    bg: "oklch(96% 0.03 240)",
+    color: "oklch(60% 0.15 240)",
+  },
+  fulfilled: {
+    label: "Fulfilled",
+    bg: "oklch(96% 0.04 155)",
+    color: "oklch(58% 0.13 155)",
+  },
+  cancelled: {
+    label: "Cancelled",
+    bg: "oklch(97% 0.04 70)",
+    color: "oklch(70% 0.13 70)",
+  },
 };
+
+function OrderStatusPill({ status }: { status: string }) {
+  const pill = STATUS_PILL[status] ?? {
+    label: status.replaceAll("_", " "),
+    bg: "#f5f5f4",
+    color: "#78716c",
+  };
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        padding: "3px 9px",
+        borderRadius: "100px",
+        fontSize: "12px",
+        fontWeight: 500,
+        background: pill.bg,
+        color: pill.color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: "5px",
+          height: "5px",
+          borderRadius: "50%",
+          background: "currentColor",
+          flexShrink: 0,
+        }}
+      />
+      {pill.label}
+    </span>
+  );
+}
 
 function ActionsCell({
   order,
@@ -173,14 +227,9 @@ export function createColumns(
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("status") as string;
-        return (
-          <Badge variant={STATUS_VARIANT[status] ?? "outline"}>
-            {orderStatusLabel(status)}
-          </Badge>
-        );
-      },
+      cell: ({ row }) => (
+        <OrderStatusPill status={row.getValue("status") as string} />
+      ),
     },
     {
       id: "lines",

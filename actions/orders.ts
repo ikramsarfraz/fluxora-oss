@@ -1,18 +1,14 @@
 "use server";
 
 import {
-  addInventoryAllocationToSalesOrderLine,
-  allocateInventoryToSalesOrderLine,
   cancelSalesOrder,
   createSalesOrder,
   deleteSalesOrder,
-  getSalesOrderLineAllocationEditor,
   getSalesOrderById,
   getSalesOrders,
   getSalesOrdersPage,
   getSalesOrderAttachmentDownload,
   markSalesOrderLineShortShipped,
-  removeSalesOrderLineAllocation,
   removeSalesOrderAttachment,
   recordSalesOrderFulfillment,
   reverseSalesOrderFulfillment,
@@ -48,30 +44,6 @@ export async function createSalesOrderAction(
   input: Parameters<typeof createSalesOrder>[0],
 ) {
   return await createSalesOrder(input);
-}
-
-export async function allocateInventoryToSalesOrderLineAction(
-  input: Parameters<typeof allocateInventoryToSalesOrderLine>[0],
-) {
-  return await allocateInventoryToSalesOrderLine(input);
-}
-
-export async function getSalesOrderLineAllocationEditorAction(
-  input: Parameters<typeof getSalesOrderLineAllocationEditor>[0],
-) {
-  return await getSalesOrderLineAllocationEditor(input);
-}
-
-export async function addInventoryAllocationToSalesOrderLineAction(
-  input: Parameters<typeof addInventoryAllocationToSalesOrderLine>[0],
-) {
-  return await addInventoryAllocationToSalesOrderLine(input);
-}
-
-export async function removeSalesOrderLineAllocationAction(
-  input: Parameters<typeof removeSalesOrderLineAllocation>[0],
-) {
-  return await removeSalesOrderLineAllocation(input);
 }
 
 export async function updateSalesOrderNotesAction(

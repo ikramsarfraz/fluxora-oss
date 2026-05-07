@@ -36,7 +36,6 @@ import {
   hasLineFulfillments,
   isFulfillmentReversed,
 } from "./order-fulfillment-utils";
-import { OrderAllocationEditorDialog } from "./order-allocation-editor-dialog";
 
 type Line = SalesOrderDetail["lines"][number];
 
@@ -420,7 +419,6 @@ function LineBreakdown({
   const statusMeta = LINE_STATUS_META[lineStatus];
   const reconciliation = getLineAllocationReconciliation(line);
   const traceability = getLineTraceabilitySummary(line);
-  const [allocationEditorOpen, setAllocationEditorOpen] = useState(false);
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -661,7 +659,7 @@ function LineBreakdown({
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <div className="flex items-baseline gap-2">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Inventory allocations
+              Auto inventory allocations
             </span>
             {allocations.length > 0 && (
               <span className="text-xs tabular-nums text-muted-foreground">
@@ -669,14 +667,6 @@ function LineBreakdown({
               </span>
             )}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setAllocationEditorOpen(true)}
-          >
-            Manage allocations
-          </Button>
         </div>
         {allocations.length > 0 ? (
           <ul className="divide-y rounded-md border">
@@ -726,16 +716,10 @@ function LineBreakdown({
           </ul>
         ) : (
           <div className="rounded-md border border-dashed bg-background px-3 py-2 text-sm text-muted-foreground">
-            No inventory allocated yet. Box-level allocation details will appear
-            here during fulfillment.
+            No inventory allocated yet. Auto allocation details will appear here
+            once stock is available for this line.
           </div>
         )}
-        <OrderAllocationEditorDialog
-          open={allocationEditorOpen}
-          onOpenChange={setAllocationEditorOpen}
-          orderId={line.salesOrderId}
-          lineId={line.id}
-        />
       </div>
     </div>
   );

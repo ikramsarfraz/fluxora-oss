@@ -38,8 +38,6 @@ export interface OrderActionAvailability {
   generateInvoiceReason: string | null;
   canRecordPayment: boolean;
   recordPaymentReason: string | null;
-  canManageAllocations: boolean;
-  manageAllocationsReason: string | null;
   canCancel: boolean;
   cancelReason: string | null;
   primaryActionKey: OrderPrimaryActionKey | null;
@@ -97,8 +95,7 @@ export function getOrderActionAvailability(
     line =>
       line.shortShippedAt != null ||
       line.fulfilledCases > 0 ||
-      (line.fulfillments?.length ?? 0) > 0 ||
-      (line.allocations?.length ?? 0) > 0,
+      (line.fulfillments?.length ?? 0) > 0,
   );
 
   const editWorkflowReason =
@@ -107,7 +104,7 @@ export function getOrderActionAvailability(
       : hasInvoice
         ? "Orders lock after invoicing."
         : hasOperationalActivity
-          ? "Editing locks once fulfillment or allocation work has started."
+          ? "Editing locks once fulfillment work has started."
           : null;
   const editReason = layerPermission(editWorkflowReason, role, "edit_order");
   const canEdit = editReason == null;
@@ -223,21 +220,6 @@ export function getOrderActionAvailability(
   );
   const canRecordPayment = recordPaymentReason == null;
 
-  // Allocation editing is conceptually part of fulfillment prep: it only
-  // makes sense while the order is still open for fulfillment work.
-  const manageAllocationsWorkflowReason =
-    order.status === "cancelled"
-      ? "Cancelled orders cannot be re-allocated."
-      : hasInvoice
-        ? "Invoiced orders are closed for allocation changes."
-        : null;
-  const manageAllocationsReason = layerPermission(
-    manageAllocationsWorkflowReason,
-    role,
-    "fulfill_order",
-  );
-  const canManageAllocations = manageAllocationsReason == null;
-
   // Cancel is a destructive edit; map to `edit_order` so the same roles that
   // can mutate an order can also cancel it. Workflow still blocks after
   // invoicing, once already cancelled, or once fulfillment / short-ship
@@ -305,8 +287,6 @@ export function getOrderActionAvailability(
     generateInvoiceReason,
     canRecordPayment,
     recordPaymentReason,
-    canManageAllocations,
-    manageAllocationsReason,
     canCancel,
     cancelReason,
     primaryActionKey,

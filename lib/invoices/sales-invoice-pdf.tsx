@@ -519,6 +519,26 @@ let styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
+  headerRow1: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  headerRow2: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#E8EAED",
+    borderTopStyle: "solid",
+    paddingTop: 6,
+  },
+  invoiceTitleBlock: {
+    alignItems: "flex-end",
+  },
+  companyContactBlock: {
+    width: "36%",
+  },
   brandBlock: {
     width: "36%",
   },
@@ -972,16 +992,24 @@ function AddressBlock({
 
 function InvoiceHeader({ viewModel }: { viewModel: InvoicePdfViewModel }) {
   const contactLines = [
-    viewModel.company.email ? `Email: ${viewModel.company.email}` : null,
-    viewModel.company.phone ? `Phone: ${viewModel.company.phone}` : null,
     ...viewModel.company.addressLines,
+    viewModel.company.phone ?? null,
+    viewModel.company.email ?? null,
   ].filter((value): value is string => Boolean(value));
 
   return (
     <View fixed style={styles.fixedHeader}>
-      <View style={styles.headerTop}>
+      <View style={styles.headerRow1}>
         <View style={styles.brandBlock}>
           <BrandLogo viewModel={viewModel} />
+        </View>
+        <View style={styles.invoiceTitleBlock}>
+          <Text style={styles.invoiceTitle}>Invoice</Text>
+        </View>
+      </View>
+
+      <View style={styles.headerRow2}>
+        <View style={styles.companyContactBlock}>
           <Text style={styles.companyName}>{viewModel.company.name}</Text>
           {contactLines.map(line => (
             <Text key={line} style={styles.contactLine}>
@@ -991,7 +1019,6 @@ function InvoiceHeader({ viewModel }: { viewModel: InvoicePdfViewModel }) {
         </View>
 
         <View style={styles.invoiceBlock}>
-          <Text style={styles.invoiceTitle}>Invoice</Text>
           <View style={styles.metaRow}>
             <Text style={styles.metaLabel}>Invoice #</Text>
             <Text style={styles.metaValue}>{viewModel.invoiceNumber}</Text>

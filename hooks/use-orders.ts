@@ -2,17 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  addInventoryAllocationToSalesOrderLineAction,
   cancelSalesOrderAction,
   createSalesOrderAction,
   deleteSalesOrderAction,
   generateInvoiceForSalesOrderAction,
-  getSalesOrderLineAllocationEditorAction,
   getSalesOrderByIdAction,
   getSalesOrdersAction,
   getSalesOrdersPageAction,
   markSalesOrderLineShortShippedAction,
-  removeSalesOrderLineAllocationAction,
   removeSalesOrderAttachmentAction,
   recordPaymentForSalesOrderInvoiceAction,
   recordSalesOrderFulfillmentAction,
@@ -50,23 +47,6 @@ export function useSalesOrder(id: string) {
     queryFn: () => getSalesOrderByIdAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 2,
-  });
-}
-
-export function useSalesOrderLineAllocationEditor(
-  orderId: string,
-  lineId: string,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: queryKeys.salesOrders.allocationEditor(orderId, lineId),
-    queryFn: () =>
-      getSalesOrderLineAllocationEditorAction({
-        salesOrderId: orderId,
-        salesOrderLineId: lineId,
-      }),
-    enabled: enabled && !!orderId && !!lineId && isUuid(orderId) && isUuid(lineId),
-    staleTime: 1000 * 30,
   });
 }
 
@@ -206,52 +186,6 @@ export function useReverseSalesOrderFulfillment() {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.salesOrders.activity(variables.salesOrderId),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
-    },
-  });
-}
-
-export function useAddInventoryAllocationToSalesOrderLine() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: addInventoryAllocationToSalesOrderLineAction,
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.detail(variables.salesOrderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.activity(variables.salesOrderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.allocationEditor(
-          variables.salesOrderId,
-          variables.salesOrderLineId,
-        ),
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
-    },
-  });
-}
-
-export function useRemoveSalesOrderLineAllocation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: removeSalesOrderLineAllocationAction,
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.detail(variables.salesOrderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.activity(variables.salesOrderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.salesOrders.allocationEditor(
-          variables.salesOrderId,
-          variables.salesOrderLineId,
-        ),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
     },

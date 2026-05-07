@@ -30,8 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getInventoryStatusLabel } from "@/lib/inventory-status";
-import { formatDisplayDate } from "@/lib/utils/date";
 import {
   useMarkSalesOrderLineShortShipped,
   useRecordSalesOrderFulfillment,
@@ -58,8 +56,6 @@ interface FulfillmentFormValues {
   salesOrderLineId: string;
   quantityFulfilled: string;
   weightLbs: string;
-  inventoryItemId: string;
-  lotId: string;
   notes: string;
 }
 
@@ -71,33 +67,11 @@ interface LineOption {
   remainingQuantity: number;
 }
 
-interface InventoryOption {
-  id: string;
-  label: string;
-  lotId: string | null;
-  lotNumber: string | null;
-  expirationDate: string | Date | null;
-  receiveDate: string | Date | null;
-  status: string | null;
-}
-
-interface LotOption {
-  id: string;
-  label: string;
-  expirationDate: string | Date | null;
-  receiveDate: string | Date | null;
-  count: number;
-}
-
-const NONE_OPTION_VALUE = "__none__";
-
-function makeDefaultValues(lineId = ""): FulfillmentFormValues {
+function makeDefaultValues(line?: LineOption): FulfillmentFormValues {
   return {
-    salesOrderLineId: lineId,
-    quantityFulfilled: "1",
+    salesOrderLineId: line?.id ?? "",
+    quantityFulfilled: line ? String(line.remainingQuantity) : "1",
     weightLbs: "",
-    inventoryItemId: "",
-    lotId: "",
     notes: "",
   };
 }
@@ -119,106 +93,6 @@ function buildLineOptions(lines: Line[]): LineOption[] {
       };
     })
     .filter(option => option.remainingQuantity > 0);
-}
-
-function buildInventoryOptions(line: Line | undefined): InventoryOption[] {
-  if (!line) return [];
-
-  const options = new Map<string, InventoryOption>();
-
-  for (const allocation of line.allocations ?? []) {
-    const inventoryItem = allocation.inventoryItem;
-    if (!inventoryItem) continue;
-    options.set(inventoryItem.id, {
-      id: inventoryItem.id,
-      label: [
-        inventoryItem.barcodeId ?? inventoryItem.id.slice(0, 8),
-        inventoryItem.lot?.lotNumber ? `Lot ${inventoryItem.lot.lotNumber}` : null,
-        inventoryItem.lot?.expirationDate
-          ? `Exp ${formatDisplayDate(inventoryItem.lot.expirationDate)}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      lotId: inventoryItem.lotId ?? null,
-      lotNumber: inventoryItem.lot?.lotNumber ?? null,
-      expirationDate: inventoryItem.lot?.expirationDate ?? null,
-      receiveDate: inventoryItem.lot?.receiveDate ?? null,
-      status: inventoryItem.status ?? null,
-    });
-  }
-
-  for (const fulfillment of line.fulfillments ?? []) {
-    const inventoryItem = fulfillment.inventoryItem;
-    if (!inventoryItem) continue;
-    options.set(inventoryItem.id, {
-      id: inventoryItem.id,
-      label: [
-        inventoryItem.barcodeId ?? inventoryItem.id.slice(0, 8),
-        inventoryItem.lot?.lotNumber ? `Lot ${inventoryItem.lot.lotNumber}` : null,
-        inventoryItem.lot?.expirationDate
-          ? `Exp ${formatDisplayDate(inventoryItem.lot.expirationDate)}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      lotId: inventoryItem.lotId ?? null,
-      lotNumber: inventoryItem.lot?.lotNumber ?? null,
-      expirationDate: inventoryItem.lot?.expirationDate ?? null,
-      receiveDate: inventoryItem.lot?.receiveDate ?? null,
-      status: inventoryItem.status ?? null,
-    });
-  }
-
-  return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function buildLotOptions(line: Line | undefined): LotOption[] {
-  if (!line) return [];
-
-  const options = new Map<string, LotOption>();
-
-  const addLot = (
-    lot:
-      | {
-          id: string;
-          lotNumber: string;
-          expirationDate?: string | Date | null;
-          receiveDate?: string | Date | null;
-        }
-      | null
-      | undefined,
-  ) => {
-    if (!lot) return;
-    const existing = options.get(lot.id);
-    if (existing) {
-      existing.count += 1;
-      return;
-    }
-    options.set(lot.id, {
-      id: lot.id,
-      label: [
-        lot.lotNumber,
-        lot.expirationDate ? `Exp ${formatDisplayDate(lot.expirationDate)}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      expirationDate: lot.expirationDate ?? null,
-      receiveDate: lot.receiveDate ?? null,
-      count: 1,
-    });
-  };
-
-  for (const allocation of line.allocations ?? []) {
-    addLot(allocation.inventoryItem?.lot);
-  }
-
-  for (const fulfillment of line.fulfillments ?? []) {
-    addLot(fulfillment.lot);
-    addLot(fulfillment.inventoryItem?.lot);
-  }
-
-  return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function getQuantityValidationMessage(
@@ -275,8 +149,8 @@ export function OrderFulfillmentEntryDialog({
         <DialogHeader>
           <DialogTitle>Record fulfillment</DialogTitle>
           <DialogDescription>
-            Capture fulfilled quantity, billed weight, and optional lot or box
-            linkage for this order.
+            Capture fulfilled quantity and billed weight. Inventory is linked
+            automatically from the order&apos;s oldest allocated lots.
           </DialogDescription>
         </DialogHeader>
 
@@ -308,10 +182,10 @@ function FulfillmentEntryBody({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const lineOptions = useMemo(() => buildLineOptions(order.lines ?? []), [order.lines]);
-  const defaultLineId = lineOptions[0]?.id ?? "";
+  const defaultLine = lineOptions[0];
 
   const form = useForm<FulfillmentFormValues>({
-    defaultValues: makeDefaultValues(defaultLineId),
+    defaultValues: makeDefaultValues(defaultLine),
     mode: "onBlur",
   });
 
@@ -319,83 +193,26 @@ function FulfillmentEntryBody({
     control: form.control,
     name: "salesOrderLineId",
   });
-  const selectedInventoryItemId = useWatch({
-    control: form.control,
-    name: "inventoryItemId",
-  });
-  const selectedLotId = useWatch({
-    control: form.control,
-    name: "lotId",
-  });
 
   const selectedLine = useMemo(
     () => lineOptions.find(option => option.id === selectedLineId),
     [lineOptions, selectedLineId],
   );
-  const inventoryOptions = useMemo(
-    () => buildInventoryOptions(selectedLine?.line),
-    [selectedLine],
-  );
-  const lotOptions = useMemo(() => buildLotOptions(selectedLine?.line), [selectedLine]);
-  const filteredInventoryOptions = useMemo(
-    () =>
-      selectedLotId
-        ? inventoryOptions.filter(
-            option => option.lotId == null || option.lotId === selectedLotId,
-          )
-        : inventoryOptions,
-    [inventoryOptions, selectedLotId],
-  );
-  const selectedInventoryOption = useMemo(
-    () => inventoryOptions.find(option => option.id === selectedInventoryItemId),
-    [inventoryOptions, selectedInventoryItemId],
-  );
-  const selectedLotOption = useMemo(
-    () => lotOptions.find(option => option.id === selectedLotId),
-    [lotOptions, selectedLotId],
-  );
+  const selectedLineRemainingQuantity = selectedLine?.remainingQuantity;
+  const selectedLineUnitType = selectedLine?.line.unitType;
 
   useEffect(() => {
-    if (!selectedLine) return;
+    if (!selectedLineId || selectedLineRemainingQuantity == null) return;
 
-    const currentQuantity = form.getValues("quantityFulfilled");
-    if (!currentQuantity) {
-      form.setValue("quantityFulfilled", "1", { shouldDirty: false });
-    }
+    form.setValue("quantityFulfilled", String(selectedLineRemainingQuantity), {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
 
-    if (selectedLine.line.unitType !== "catch_weight") {
+    if (selectedLineUnitType !== "catch_weight") {
       form.setValue("weightLbs", "", { shouldValidate: true });
     }
-  }, [form, selectedLine]);
-
-  useEffect(() => {
-    if (
-      selectedInventoryItemId &&
-      !filteredInventoryOptions.some(option => option.id === selectedInventoryItemId)
-    ) {
-      form.setValue("inventoryItemId", "", { shouldValidate: true });
-    }
-  }, [filteredInventoryOptions, form, selectedInventoryItemId]);
-
-  useEffect(() => {
-    if (!selectedInventoryOption?.lotId) return;
-    if (selectedLotId === selectedInventoryOption.lotId) return;
-
-    form.setValue("lotId", selectedInventoryOption.lotId, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  }, [form, selectedInventoryOption, selectedLotId]);
-
-  useEffect(() => {
-    if (!selectedLotId || !selectedInventoryOption?.lotId) return;
-    if (selectedInventoryOption.lotId === selectedLotId) return;
-
-    form.setValue("inventoryItemId", "", {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  }, [form, selectedInventoryOption, selectedLotId]);
+  }, [form, selectedLineId, selectedLineRemainingQuantity, selectedLineUnitType]);
 
   const isCatchWeight = selectedLine?.line.unitType === "catch_weight";
   const isSubmitting =
@@ -423,8 +240,6 @@ function FulfillmentEntryBody({
         quantityFulfilled: Number.parseInt(values.quantityFulfilled, 10),
         weightLbs: values.weightLbs || undefined,
         notes: values.notes.trim() || undefined,
-        inventoryItemId: values.inventoryItemId || undefined,
-        lotId: values.lotId || undefined,
       });
 
       toast.success("Fulfillment recorded.");
@@ -505,9 +320,13 @@ function FulfillmentEntryBody({
                   <Select
                     value={field.value || undefined}
                     onValueChange={value => {
+                      const nextLine = lineOptions.find(option => option.id === value);
                       field.onChange(value);
-                      form.setValue("inventoryItemId", "", { shouldValidate: true });
-                      form.setValue("lotId", "", { shouldValidate: true });
+                      form.setValue(
+                        "quantityFulfilled",
+                        nextLine ? String(nextLine.remainingQuantity) : "1",
+                        { shouldValidate: true },
+                      );
                       form.setValue("weightLbs", "", { shouldValidate: true });
                     }}
                   >
@@ -608,125 +427,6 @@ function FulfillmentEntryBody({
                 </Field>
               ) : null}
             </div>
-
-            {(inventoryOptions.length > 0 || lotOptions.length > 0) && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {inventoryOptions.length > 0 ? (
-                  <Controller
-                    control={form.control}
-                    name="inventoryItemId"
-                    render={({ field }) => (
-                      <Field>
-                        <FieldLabel>Inventory item</FieldLabel>
-                        <Select
-                          value={field.value || undefined}
-                          onValueChange={value =>
-                            field.onChange(
-                              value === NONE_OPTION_VALUE ? "" : value,
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Optional box link…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NONE_OPTION_VALUE}>
-                              No inventory item
-                            </SelectItem>
-                            {filteredInventoryOptions.map(option => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FieldDescription>
-                          Available from this line&apos;s allocated boxes and prior
-                          fulfillment links. Selecting an inventory item is the
-                          most precise way to preserve lot traceability.
-                        </FieldDescription>
-                      </Field>
-                    )}
-                  />
-                ) : null}
-
-                {lotOptions.length > 0 ? (
-                  <Controller
-                    control={form.control}
-                    name="lotId"
-                    render={({ field }) => (
-                      <Field>
-                        <FieldLabel>Lot</FieldLabel>
-                        <Select
-                          value={field.value || undefined}
-                          onValueChange={value =>
-                            field.onChange(
-                              value === NONE_OPTION_VALUE ? "" : value,
-                            )
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Optional lot link…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NONE_OPTION_VALUE}>
-                              No lot
-                            </SelectItem>
-                            {lotOptions.map(option => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FieldDescription>
-                          Lot options come from the order&apos;s current allocations
-                          and fulfillment history for this line.
-                        </FieldDescription>
-                      </Field>
-                    )}
-                  />
-                ) : null}
-              </div>
-            )}
-
-            {selectedInventoryOption ? (
-              <Alert>
-                <PackagePlus />
-                <AlertTitle>Linked inventory context</AlertTitle>
-                <AlertDescription>
-                  {selectedInventoryOption.lotNumber
-                    ? `This inventory item belongs to lot ${selectedInventoryOption.lotNumber}.`
-                    : "This inventory item does not currently expose a lot number."}
-                  {selectedInventoryOption.status
-                    ? ` Current state: ${getInventoryStatusLabel(selectedInventoryOption.status)}.`
-                    : ""}
-                  {selectedInventoryOption.receiveDate
-                    ? ` Received ${formatDisplayDate(selectedInventoryOption.receiveDate)}.`
-                    : ""}
-                  {selectedInventoryOption.expirationDate
-                    ? ` Expires ${formatDisplayDate(selectedInventoryOption.expirationDate)}.`
-                    : ""}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            {selectedLotOption && !selectedInventoryOption ? (
-              <Alert>
-                <Info />
-                <AlertTitle>Lot-only traceability</AlertTitle>
-                <AlertDescription>
-                  This fulfillment will reference lot {selectedLotOption.label}
-                  {selectedLotOption.receiveDate
-                    ? ` · received ${formatDisplayDate(selectedLotOption.receiveDate)}`
-                    : ""}
-                  {selectedLotOption.expirationDate
-                    ? ` · expires ${formatDisplayDate(selectedLotOption.expirationDate)}`
-                    : ""}.
-                  Use inventory item linkage when you need box-level precision.
-                </AlertDescription>
-              </Alert>
-            ) : null}
 
             <Field>
               <FieldLabel htmlFor="order-fulfillment-notes">

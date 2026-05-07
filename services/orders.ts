@@ -8,7 +8,6 @@ import {
   customers,
   files,
   inventoryItems,
-  lots,
   products,
   productUnits,
   salesOrderAttachments,
@@ -30,7 +29,6 @@ import {
   uploadFile,
 } from "@/lib/uploads/r2";
 import {
-  markInventoryItemAllocated,
   markInventoryItemsAllocated,
   markInventoryItemsShipped,
   restoreInventoryItemsToStock,
@@ -71,146 +69,80 @@ function getInventoryItemCases(
   return Math.max(1, inventoryItem?.cases ?? 1);
 }
 
+function toSortableTime(value: Date | string | null | undefined) {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
+}
+
+function compareInventoryByOldestLot(
+  a: {
+    barcodeId: string;
+    createdAt: Date;
+    lot: {
+      lotNumber: string;
+      receiveDate: string;
+      createdAt: Date;
+    } | null;
+  },
+  b: {
+    barcodeId: string;
+    createdAt: Date;
+    lot: {
+      lotNumber: string;
+      receiveDate: string;
+      createdAt: Date;
+    } | null;
+  },
+) {
+  const receiveDateDelta =
+    toSortableTime(a.lot?.receiveDate) - toSortableTime(b.lot?.receiveDate);
+  if (receiveDateDelta !== 0) return receiveDateDelta;
+
+  const lotCreatedDelta =
+    toSortableTime(a.lot?.createdAt) - toSortableTime(b.lot?.createdAt);
+  if (lotCreatedDelta !== 0) return lotCreatedDelta;
+
+  const lotNumberDelta = (a.lot?.lotNumber ?? "").localeCompare(
+    b.lot?.lotNumber ?? "",
+  );
+  if (lotNumberDelta !== 0) return lotNumberDelta;
+
+  const itemCreatedDelta = toSortableTime(a.createdAt) - toSortableTime(b.createdAt);
+  if (itemCreatedDelta !== 0) return itemCreatedDelta;
+
+  return a.barcodeId.localeCompare(b.barcodeId);
+}
+
 function toFixedCostAmount(value: number) {
   return value.toFixed(4);
 }
 
-async function resolveFulfillmentCostSnapshot(args: {
-  salesOrderLineId: string;
-  productId: string;
+function calculateFulfillmentCostSnapshot(input: {
+  costPerUnitSnapshot: string;
+  costUnitTypeSnapshot: "catch_weight" | "fixed_case";
   quantityFulfilled: number;
   weightLbs: number | null;
-  inventoryItemId?: string | null;
-  lotId?: string | null;
 }) {
-  const loadDistinctSnapshots = async (
-    inventorySelection: Array<{
-      costPerUnitSnapshot: string;
-      costUnitTypeSnapshot: "catch_weight" | "fixed_case";
-    }>,
-  ) => {
-    const distinct = new Map<
-      string,
-      {
-        costPerUnitSnapshot: string;
-        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
-      }
-    >();
-
-    for (const item of inventorySelection) {
-      const key = `${item.costUnitTypeSnapshot}:${item.costPerUnitSnapshot}`;
-      if (!distinct.has(key)) {
-        distinct.set(key, item);
-      }
-    }
-
-    if (distinct.size === 0) {
-      throw new Error(
-        "No inventory cost snapshot is available for this fulfillment.",
-      );
-    }
-
-    if (distinct.size > 1) {
-      throw new Error(
-        "Fulfillment spans inventory with different receipt costs. Select a specific inventory item to capture stable COGS.",
-      );
-    }
-
-    return [...distinct.values()][0];
-  };
-
-  let snapshot:
-    | {
-        costPerUnitSnapshot: string;
-        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
-      }
-    | undefined;
-
-  if (args.inventoryItemId) {
-    const inventoryItem = await db.query.inventoryItems.findFirst({
-      where: eq(inventoryItems.id, args.inventoryItemId),
-      columns: {
-        costPerUnitSnapshot: true,
-        costUnitTypeSnapshot: true,
-      },
-    });
-
-    if (!inventoryItem?.costPerUnitSnapshot || !inventoryItem.costUnitTypeSnapshot) {
-      throw new Error(
-        "The selected inventory item is missing its receipt cost snapshot.",
-      );
-    }
-
-    snapshot = {
-      costPerUnitSnapshot: inventoryItem.costPerUnitSnapshot,
-      costUnitTypeSnapshot: inventoryItem.costUnitTypeSnapshot,
-    };
-  } else if (args.lotId) {
-    const lotInventory = await db.query.inventoryItems.findMany({
-      where: and(
-        eq(inventoryItems.productId, args.productId),
-        eq(inventoryItems.lotId, args.lotId),
-      ),
-      columns: {
-        costPerUnitSnapshot: true,
-        costUnitTypeSnapshot: true,
-      },
-    });
-
-    snapshot = await loadDistinctSnapshots(
-      lotInventory.filter(
-        item => item.costPerUnitSnapshot != null && item.costUnitTypeSnapshot != null,
-      ) as Array<{
-        costPerUnitSnapshot: string;
-        costUnitTypeSnapshot: "catch_weight" | "fixed_case";
-      }>,
-    );
-  } else {
-    const allocations = await db.query.salesOrderLineAllocations.findMany({
-      where: eq(salesOrderLineAllocations.salesOrderLineId, args.salesOrderLineId),
-      with: {
-        inventoryItem: {
-          columns: {
-            costPerUnitSnapshot: true,
-            costUnitTypeSnapshot: true,
-          },
-        },
-      },
-    });
-
-    snapshot = await loadDistinctSnapshots(
-      allocations
-        .map(allocation => allocation.inventoryItem)
-        .filter(
-          item =>
-            item?.costPerUnitSnapshot != null &&
-            item?.costUnitTypeSnapshot != null,
-        ) as Array<{
-          costPerUnitSnapshot: string;
-          costUnitTypeSnapshot: "catch_weight" | "fixed_case";
-        }>,
-    );
-  }
-
-  const costPerUnit = Number(snapshot.costPerUnitSnapshot ?? "0");
+  const costPerUnit = Number(input.costPerUnitSnapshot ?? "0");
   if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
     throw new Error("Invalid inventory cost snapshot on the selected fulfillment.");
   }
 
-  const costAmount =
-    snapshot.costUnitTypeSnapshot === "fixed_case"
-      ? args.quantityFulfilled * costPerUnit
-      : (args.weightLbs ?? 0) * costPerUnit;
-
-  if (snapshot.costUnitTypeSnapshot === "catch_weight" && args.weightLbs == null) {
+  if (input.costUnitTypeSnapshot === "catch_weight" && input.weightLbs == null) {
     throw new Error(
       "Catch-weight fulfillment requires billed weight so outbound cost can be captured accurately.",
     );
   }
 
+  const costAmount =
+    input.costUnitTypeSnapshot === "fixed_case"
+      ? input.quantityFulfilled * costPerUnit
+      : (input.weightLbs ?? 0) * costPerUnit;
+
   return {
-    costPerUnitSnapshot: snapshot.costPerUnitSnapshot,
-    costUnitTypeSnapshot: snapshot.costUnitTypeSnapshot,
+    costPerUnitSnapshot: input.costPerUnitSnapshot,
+    costUnitTypeSnapshot: input.costUnitTypeSnapshot,
     costAmountSnapshot: toFixedCostAmount(costAmount),
   };
 }
@@ -234,6 +166,41 @@ function getAllocationWeightForFulfillmentLink(fulfillment: {
   return "0.0000";
 }
 
+function distributeFulfillmentWeight(
+  totalWeightLbs: number | null,
+  selections: Array<{
+    quantityFulfilled: number;
+    allocatedWeightLbs: number;
+  }>,
+) {
+  if (totalWeightLbs == null) return selections.map(() => null);
+  if (selections.length === 1) return [totalWeightLbs];
+
+  const basis = selections.map(selection =>
+    selection.allocatedWeightLbs > 0
+      ? selection.allocatedWeightLbs
+      : selection.quantityFulfilled,
+  );
+  const totalBasis = basis.reduce((sum, value) => sum + value, 0);
+  if (totalBasis <= 0) return selections.map(() => null);
+
+  const weights: Array<number | null> = [];
+  let assignedWeight = 0;
+
+  for (let index = 0; index < selections.length; index += 1) {
+    if (index === selections.length - 1) {
+      weights.push(Number((totalWeightLbs - assignedWeight).toFixed(4)));
+      break;
+    }
+
+    const nextWeight = Number(((totalWeightLbs * basis[index]) / totalBasis).toFixed(4));
+    weights.push(nextWeight);
+    assignedWeight += nextWeight;
+  }
+
+  return weights;
+}
+
 function getLotLifecycleStatus(
   expirationDate: string | Date | null | undefined,
 ): "ok" | "warning" | "expired" {
@@ -252,6 +219,10 @@ function getLotLifecycleStatus(
   const warningThreshold = new Date(startOfToday);
   warningThreshold.setDate(warningThreshold.getDate() + 7);
   return expiration.getTime() <= warningThreshold.getTime() ? "warning" : "ok";
+}
+
+function isLotExpired(expirationDate: string | Date | null | undefined) {
+  return getLotLifecycleStatus(expirationDate) === "expired";
 }
 
 async function validateSalesOrderLineSelections(input: {
@@ -273,6 +244,8 @@ async function validateSalesOrderLineSelections(input: {
     ),
     columns: {
       id: true,
+      sku: true,
+      name: true,
       defaultPricePerLb: true,
       baseUnitId: true,
     },
@@ -319,6 +292,112 @@ async function validateSalesOrderLineSelections(input: {
   }
 
   return { validProducts, validSalesUnits };
+}
+
+async function assertSalesOrderLinesCanAutoAllocateInventory(input: {
+  tenantId: string;
+  lines: Array<{
+    productId: string;
+    expectedCases: number;
+  }>;
+  validProducts: ValidSalesOrderProduct[];
+  includeSalesOrderLineIds?: string[];
+}) {
+  const productIds = [...new Set(input.lines.map(line => line.productId))];
+  if (productIds.length === 0) return;
+
+  const includedLineIds = new Set(input.includeSalesOrderLineIds ?? []);
+  const inventory = await db.query.inventoryItems.findMany({
+    where: inArray(inventoryItems.productId, productIds),
+    with: {
+      lot: {
+        columns: {
+          tenantId: true,
+          lotNumber: true,
+          receiveDate: true,
+          expirationDate: true,
+          createdAt: true,
+        },
+      },
+      allocations: {
+        columns: {
+          salesOrderLineId: true,
+        },
+      },
+    },
+  });
+
+  const candidatesByProduct = new Map<string, typeof inventory>();
+  for (const item of inventory) {
+    if (item.lot?.tenantId !== input.tenantId) continue;
+    if (isLotExpired(item.lot.expirationDate)) continue;
+
+    const allocations = item.allocations ?? [];
+    const isOpenStock = item.status === "in_stock" && allocations.length === 0;
+    const isIncludedReservation =
+      item.status === "allocated" &&
+      allocations.some(allocation =>
+        includedLineIds.has(allocation.salesOrderLineId),
+      );
+
+    if (!isOpenStock && !isIncludedReservation) continue;
+
+    const existing = candidatesByProduct.get(item.productId) ?? [];
+    existing.push(item);
+    candidatesByProduct.set(item.productId, existing);
+  }
+
+  for (const candidates of candidatesByProduct.values()) {
+    candidates.sort(compareInventoryByOldestLot);
+  }
+
+  const selectedInventoryItemIds = new Set<string>();
+
+  for (const line of input.lines) {
+    const requiredQuantity = Math.trunc(line.expectedCases);
+    if (!Number.isFinite(requiredQuantity) || requiredQuantity <= 0) {
+      throw new Error("Sales order line quantities must be positive whole numbers.");
+    }
+
+    const candidates = candidatesByProduct.get(line.productId) ?? [];
+    let remainingQuantity = requiredQuantity;
+    const selectedForLine: string[] = [];
+
+    for (const item of candidates) {
+      if (selectedInventoryItemIds.has(item.id)) continue;
+
+      const itemQuantity = getInventoryItemCases(item);
+      if (itemQuantity > remainingQuantity) continue;
+
+      selectedForLine.push(item.id);
+      remainingQuantity -= itemQuantity;
+
+      if (remainingQuantity === 0) break;
+    }
+
+    if (remainingQuantity > 0) {
+      const allocatableQuantity = candidates
+        .filter(item => !selectedInventoryItemIds.has(item.id))
+        .reduce((sum, item) => sum + getInventoryItemCases(item), 0);
+
+      if (allocatableQuantity < requiredQuantity) {
+        const product = input.validProducts.find(
+          candidate => candidate.id === line.productId,
+        );
+        const productLabel = product
+          ? `${product.sku} · ${product.name}`
+          : "this product";
+        const matchedQuantity = requiredQuantity - remainingQuantity;
+        throw new Error(
+          `Not enough allocatable inventory for ${productLabel}. Requested ${requiredQuantity} case${requiredQuantity === 1 ? "" : "s"}, but only ${matchedQuantity + allocatableQuantity} case${(matchedQuantity + allocatableQuantity) === 1 ? "" : "s"} are available.`,
+        );
+      }
+    }
+
+    for (const inventoryItemId of selectedForLine) {
+      selectedInventoryItemIds.add(inventoryItemId);
+    }
+  }
 }
 
 type ValidSalesOrderProduct = Awaited<
@@ -637,9 +716,13 @@ async function reconcileSalesOrderLineAllocations(lineId: string) {
 
   for (const allocation of releasableAllocations) {
     if (openAllocatedQuantity <= remainingOpenQuantity) break;
+    const itemCases = getInventoryItemCases(allocation.inventoryItem);
+    // Don't release if doing so would drop coverage below the remaining demand.
+    // This preserves overshooting allocations when no smaller items are available.
+    if (openAllocatedQuantity - itemCases < remainingOpenQuantity) continue;
     releaseAllocationIds.add(allocation.id);
     releaseInventoryItemIds.add(allocation.inventoryItemId);
-    openAllocatedQuantity -= getInventoryItemCases(allocation.inventoryItem);
+    openAllocatedQuantity -= itemCases;
   }
 
   if (consumedAllocationIds.size > 0) {
@@ -682,6 +765,105 @@ async function reconcileSalesOrderLineAllocations(lineId: string) {
   if (reversedInventoryItemIds.length > 0) {
     await restoreInventoryItemsToStock(reversedInventoryItemIds);
   }
+}
+
+async function autoAllocateOldestInventoryToSalesOrderLine(input: {
+  tenantId: string;
+  salesOrderLineId: string;
+  productId: string;
+  targetQuantity: number;
+}) {
+  if (input.targetQuantity <= 0) return;
+
+  const existingAllocations = await db.query.salesOrderLineAllocations.findMany({
+    where: eq(salesOrderLineAllocations.salesOrderLineId, input.salesOrderLineId),
+    with: {
+      inventoryItem: {
+        columns: {
+          cases: true,
+        },
+      },
+    },
+  });
+  const currentAllocatedQuantity = existingAllocations.reduce(
+    (sum, allocation) => sum + getInventoryItemCases(allocation.inventoryItem),
+    0,
+  );
+  const allocationGap = Math.max(0, input.targetQuantity - currentAllocatedQuantity);
+  if (allocationGap <= 0) return;
+
+  const inventory = await db.query.inventoryItems.findMany({
+    where: and(
+      eq(inventoryItems.productId, input.productId),
+      eq(inventoryItems.status, "in_stock"),
+    ),
+    with: {
+      lot: {
+        columns: {
+          tenantId: true,
+          lotNumber: true,
+          receiveDate: true,
+          expirationDate: true,
+          createdAt: true,
+        },
+      },
+      allocations: {
+        columns: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  const selected: Array<(typeof inventory)[number]> = [];
+  let selectedQuantity = 0;
+
+  const candidates = inventory
+    .filter(
+      candidate =>
+        candidate.lot?.tenantId === input.tenantId &&
+        !isLotExpired(candidate.lot.expirationDate) &&
+        (candidate.allocations ?? []).length === 0,
+    )
+    .sort(compareInventoryByOldestLot);
+
+  for (const item of candidates) {
+    const itemQuantity = getInventoryItemCases(item);
+    if (selectedQuantity + itemQuantity > allocationGap) continue;
+
+    selected.push(item);
+    selectedQuantity += itemQuantity;
+
+    if (selectedQuantity >= allocationGap) break;
+  }
+
+  // If the exact-fit pass left a gap, fill it with the next-smallest item even
+  // if it overshoots. This handles lot sizes larger than the remaining demand.
+  if (selectedQuantity < allocationGap) {
+    const selectedIds = new Set(selected.map(s => s.id));
+    const overshoots = candidates
+      .filter(item => !selectedIds.has(item.id))
+      .sort((a, b) => getInventoryItemCases(a) - getInventoryItemCases(b));
+
+    for (const item of overshoots) {
+      if (selectedQuantity >= allocationGap) break;
+      selected.push(item);
+      selectedQuantity += getInventoryItemCases(item);
+    }
+  }
+
+  if (selected.length === 0) return;
+
+  await db.insert(salesOrderLineAllocations).values(
+    selected.map(item => ({
+      salesOrderLineId: input.salesOrderLineId,
+      inventoryItemId: item.id,
+      allocatedWeightLbs: item.exactWeightLbs,
+    })),
+  );
+
+  await markInventoryItemsAllocated(selected.map(item => item.id));
+  await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
 export async function getSalesOrders() {
@@ -1114,6 +1296,7 @@ export async function updateSalesOrder(input: {
           allocations: {
             columns: {
               id: true,
+              inventoryItemId: true,
             },
           },
         },
@@ -1138,17 +1321,16 @@ export async function updateSalesOrder(input: {
     throw new Error("Orders lock after invoicing.");
   }
 
-  const hasOperationalActivity = (order.lines ?? []).some(
+  const hasFulfillmentActivity = (order.lines ?? []).some(
     line =>
       line.shortShippedAt != null ||
       line.fulfilledCases > 0 ||
-      (line.fulfillments?.length ?? 0) > 0 ||
-      (line.allocations?.length ?? 0) > 0,
+      (line.fulfillments?.length ?? 0) > 0,
   );
 
-  if (hasOperationalActivity) {
+  if (hasFulfillmentActivity) {
     throw new Error(
-      "This order can no longer be edited because fulfillment or allocation activity has already started.",
+      "This order can no longer be edited because fulfillment activity has already started.",
     );
   }
 
@@ -1188,6 +1370,12 @@ export async function updateSalesOrder(input: {
     customerId: input.customerId,
     lines: input.lines,
   });
+  await assertSalesOrderLinesCanAutoAllocateInventory({
+    tenantId: tenant.id,
+    lines: input.lines,
+    validProducts,
+    includeSalesOrderLineIds: (order.lines ?? []).map(line => line.id),
+  });
 
   await db
     .update(salesOrders)
@@ -1202,6 +1390,20 @@ export async function updateSalesOrder(input: {
       updatedAt: new Date(),
     })
     .where(and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)));
+
+  const allocationIdsToRelease = (order.lines ?? []).flatMap(line =>
+    (line.allocations ?? []).map(allocation => allocation.id),
+  );
+  const inventoryItemIdsToRelease = (order.lines ?? []).flatMap(line =>
+    (line.allocations ?? []).map(allocation => allocation.inventoryItemId),
+  );
+
+  if (allocationIdsToRelease.length > 0) {
+    await db
+      .delete(salesOrderLineAllocations)
+      .where(inArray(salesOrderLineAllocations.id, allocationIdsToRelease));
+    await restoreInventoryItemsToStock(inventoryItemIdsToRelease);
+  }
 
   await db.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, input.id));
 
@@ -1223,13 +1425,23 @@ export async function updateSalesOrder(input: {
         : null,
     );
 
-    await db.insert(salesOrderLines).values({
-      salesOrderId: input.id,
+    const [createdLine] = await db
+      .insert(salesOrderLines)
+      .values({
+        salesOrderId: input.id,
+        productId: line.productId,
+        ...snapshot,
+        expectedCases: line.expectedCases,
+        unitType,
+        pricePerLbOverride: resolvedPricePerLb ?? undefined,
+      })
+      .returning();
+
+    await autoAllocateOldestInventoryToSalesOrderLine({
+      tenantId: tenant.id,
+      salesOrderLineId: createdLine.id,
       productId: line.productId,
-      ...snapshot,
-      expectedCases: line.expectedCases,
-      unitType,
-      pricePerLbOverride: resolvedPricePerLb ?? undefined,
+      targetQuantity: line.expectedCases,
     });
   }
 
@@ -1283,10 +1495,19 @@ export async function createSalesOrder(input: {
     });
   }
 
+  if (input.lines.length === 0) {
+    throw new Error("Add at least one line item before saving.");
+  }
+
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
     customerId: input.customerId,
     lines: input.lines,
+  });
+  await assertSalesOrderLinesCanAutoAllocateInventory({
+    tenantId: tenant.id,
+    lines: input.lines,
+    validProducts,
   });
 
   const [order] = await db
@@ -1327,430 +1548,29 @@ export async function createSalesOrder(input: {
       validSalesUnits,
     );
 
-    await db.insert(salesOrderLines).values({
-      salesOrderId: order.id,
+    const [createdLine] = await db
+      .insert(salesOrderLines)
+      .values({
+        salesOrderId: order.id,
+        productId: line.productId,
+        ...snapshot,
+        expectedCases: line.expectedCases,
+        unitType,
+        pricePerLbOverride: resolvedPricePerLb ?? undefined,
+      })
+      .returning();
+
+    await autoAllocateOldestInventoryToSalesOrderLine({
+      tenantId: tenant.id,
+      salesOrderLineId: createdLine.id,
       productId: line.productId,
-      ...snapshot,
-      expectedCases: line.expectedCases,
-      unitType,
-      pricePerLbOverride: resolvedPricePerLb ?? undefined,
+      targetQuantity: line.expectedCases,
     });
   }
 
   return db.query.salesOrders.findFirst({
     where: eq(salesOrders.id, order.id),
     with: { lines: true },
-  });
-}
-
-export async function allocateInventoryToSalesOrderLine(input: {
-  salesOrderLineId: string;
-  allocations: Array<{
-    inventoryItemId: string;
-    allocatedWeightLbs: string;
-  }>;
-}) {
-  const currentUser = await getCurrentPortalUser();
-  requirePermission(currentUser.role, "fulfill_order");
-
-  for (const allocation of input.allocations) {
-    await db.insert(salesOrderLineAllocations).values({
-      salesOrderLineId: input.salesOrderLineId,
-      inventoryItemId: allocation.inventoryItemId,
-      allocatedWeightLbs: allocation.allocatedWeightLbs,
-    });
-
-    await markInventoryItemAllocated(allocation.inventoryItemId);
-  }
-
-  await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
-
-  return db.query.salesOrderLines.findFirst({
-    where: eq(salesOrderLines.id, input.salesOrderLineId),
-    with: { allocations: true },
-  });
-}
-
-export async function getSalesOrderLineAllocationEditor(input: {
-  salesOrderId: string;
-  salesOrderLineId: string;
-}) {
-  const tenant = await getCurrentTenant();
-
-  const order = await db.query.salesOrders.findFirst({
-    where: and(
-      eq(salesOrders.id, input.salesOrderId),
-      eq(salesOrders.tenantId, tenant.id),
-    ),
-    with: {
-      lines: {
-        with: {
-          product: true,
-          allocations: {
-            with: {
-              inventoryItem: {
-                with: {
-                  lot: true,
-                },
-              },
-            },
-          },
-          fulfillments: {
-            columns: {
-              inventoryItemId: true,
-              reversedAt: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!order) {
-    throw new Error("Sales order not found.");
-  }
-
-  const line = order.lines.find(candidate => candidate.id === input.salesOrderLineId);
-  if (!line) {
-    throw new Error("Sales order line does not belong to this order.");
-  }
-
-  const remainingOpenQuantity = line.shortShippedAt
-    ? 0
-    : Math.max(0, line.expectedCases - line.fulfilledCases);
-  const allocatedQuantity = (line.allocations ?? []).reduce(
-    (sum, allocation) => sum + getInventoryItemCases(allocation.inventoryItem),
-    0,
-  );
-  const allocationGap = Math.max(0, remainingOpenQuantity - allocatedQuantity);
-  const activeFulfillmentItemIds = new Set(
-    (line.fulfillments ?? [])
-      .filter(fulfillment => !fulfillment.reversedAt)
-      .map(fulfillment => fulfillment.inventoryItemId)
-      .filter((value): value is string => Boolean(value)),
-  );
-  const isLineClosed = Boolean(line.shortShippedAt) || remainingOpenQuantity <= 0;
-
-  const inventory = await db.query.inventoryItems.findMany({
-    where: eq(inventoryItems.productId, line.productId),
-    with: {
-      lot: true,
-    },
-    orderBy: [desc(inventoryItems.updatedAt), desc(inventoryItems.createdAt)],
-  });
-
-  const availableInventory = inventory
-    .filter(
-      item =>
-        item.lot?.tenantId === tenant.id &&
-        item.status === "in_stock" &&
-        !(line.allocations ?? []).some(
-          allocation => allocation.inventoryItemId === item.id,
-        ),
-    )
-    .map(item => {
-      const canAllocate = !isLineClosed && getInventoryItemCases(item) <= allocationGap;
-      let blockedReason: string | null = null;
-
-      if (isLineClosed) {
-        blockedReason =
-          line.shortShippedAt != null
-            ? "This line is closed short and cannot take new allocations."
-            : "This line is already fully fulfilled.";
-      } else if (getInventoryItemCases(item) > allocationGap) {
-        blockedReason = `This item exceeds the ${allocationGap} remaining allocatable quantity.`;
-      }
-
-      return {
-        id: item.id,
-        barcodeId: item.barcodeId,
-        exactWeightLbs: item.exactWeightLbs,
-        cases: item.cases,
-        status: item.status,
-        lotId: item.lotId,
-        lotNumber: item.lot?.lotNumber ?? null,
-        receiveDate: item.lot?.receiveDate ?? null,
-        expirationDate: item.lot?.expirationDate ?? null,
-        lotStatus: getLotLifecycleStatus(item.lot?.expirationDate),
-        canAllocate,
-        blockedReason,
-      };
-    });
-
-  const allocatedInventory = (line.allocations ?? []).map(allocation => {
-    const inventoryItem = allocation.inventoryItem;
-    const canRemove =
-      !!inventoryItem &&
-      !activeFulfillmentItemIds.has(allocation.inventoryItemId) &&
-      inventoryItem.status !== "shipped" &&
-      inventoryItem.status !== "sold";
-
-    let blockedReason: string | null = null;
-    if (activeFulfillmentItemIds.has(allocation.inventoryItemId)) {
-      blockedReason =
-        "This allocation is already linked to active fulfillment and cannot be removed.";
-    } else if (
-      inventoryItem?.status === "shipped" ||
-      inventoryItem?.status === "sold"
-    ) {
-      blockedReason =
-        "This inventory has already progressed past allocation and cannot be released here.";
-    }
-
-    return {
-      allocationId: allocation.id,
-      inventoryItemId: allocation.inventoryItemId,
-      allocatedWeightLbs: allocation.allocatedWeightLbs,
-      createdAt: allocation.createdAt,
-      canRemove,
-      blockedReason,
-      inventoryItem: inventoryItem
-        ? {
-            id: inventoryItem.id,
-            barcodeId: inventoryItem.barcodeId,
-            exactWeightLbs: inventoryItem.exactWeightLbs,
-            cases: inventoryItem.cases,
-            status: inventoryItem.status,
-            lotId: inventoryItem.lotId,
-            lotNumber: inventoryItem.lot?.lotNumber ?? null,
-            receiveDate: inventoryItem.lot?.receiveDate ?? null,
-            expirationDate: inventoryItem.lot?.expirationDate ?? null,
-            lotStatus: getLotLifecycleStatus(inventoryItem.lot?.expirationDate),
-          }
-        : null,
-    };
-  });
-
-  return {
-    salesOrderId: order.id,
-    salesOrderLineId: line.id,
-    line: {
-      id: line.id,
-      productId: line.productId,
-      productLabel: line.product
-        ? `${line.product.sku} · ${line.product.name}`
-        : "Line item",
-      expectedCases: line.expectedCases,
-      fulfilledCases: line.fulfilledCases,
-      remainingOpenQuantity,
-      allocatedQuantity,
-      allocationGap,
-      unitType: line.unitType,
-      shortShippedAt: line.shortShippedAt,
-      isClosed: isLineClosed,
-    },
-    allocatedInventory,
-    availableInventory,
-  };
-}
-
-export async function addInventoryAllocationToSalesOrderLine(input: {
-  salesOrderId: string;
-  salesOrderLineId: string;
-  inventoryItemId: string;
-}) {
-  const tenant = await getCurrentTenant();
-  const currentUser = await getCurrentPortalUser();
-
-  if (currentUser.tenantId !== tenant.id) {
-    throw new Error("Forbidden");
-  }
-
-  requirePermission(currentUser.role, "fulfill_order");
-
-  const order = await db.query.salesOrders.findFirst({
-    where: and(
-      eq(salesOrders.id, input.salesOrderId),
-      eq(salesOrders.tenantId, tenant.id),
-    ),
-    with: {
-      lines: {
-        with: {
-          allocations: {
-            with: {
-              inventoryItem: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!order) {
-    throw new Error("Sales order not found.");
-  }
-  if (order.status === "cancelled") {
-    throw new Error("Cannot edit allocations on a cancelled order.");
-  }
-
-  const line = order.lines.find(candidate => candidate.id === input.salesOrderLineId);
-  if (!line) {
-    throw new Error("Sales order line does not belong to this order.");
-  }
-
-  if (line.shortShippedAt) {
-    throw new Error("Cannot add allocations to a short-shipped line.");
-  }
-
-  const remainingOpenQuantity = Math.max(
-    0,
-    line.expectedCases - line.fulfilledCases,
-  );
-  if (remainingOpenQuantity <= 0) {
-    throw new Error("This line is already fully fulfilled.");
-  }
-
-  const inventoryItem = await db.query.inventoryItems.findFirst({
-    where: eq(inventoryItems.id, input.inventoryItemId),
-    with: {
-      lot: {
-        columns: {
-          tenantId: true,
-          lotNumber: true,
-        },
-      },
-    },
-  });
-
-  if (!inventoryItem) {
-    throw new Error("Inventory item not found.");
-  }
-  if (inventoryItem.lot?.tenantId !== tenant.id) {
-    throw new Error("Inventory item does not belong to this tenant.");
-  }
-  if (inventoryItem.productId !== line.productId) {
-    throw new Error("Inventory item does not match the line product.");
-  }
-  if (inventoryItem.status !== "in_stock") {
-    throw new Error("Only in-stock inventory can be allocated to this line.");
-  }
-
-  const existingAllocation = await db.query.salesOrderLineAllocations.findFirst({
-    where: eq(salesOrderLineAllocations.inventoryItemId, inventoryItem.id),
-    columns: {
-      id: true,
-      salesOrderLineId: true,
-    },
-  });
-
-  if (existingAllocation) {
-    throw new Error("This inventory item is already allocated to another line.");
-  }
-
-  const currentAllocatedQuantity = (line.allocations ?? []).reduce(
-    (sum, allocation) => sum + getInventoryItemCases(allocation.inventoryItem),
-    0,
-  );
-  const proposedAllocatedQuantity =
-    currentAllocatedQuantity + getInventoryItemCases(inventoryItem);
-
-  if (proposedAllocatedQuantity > remainingOpenQuantity) {
-    throw new Error(
-      `This allocation would exceed the ${remainingOpenQuantity} remaining quantity on the line.`,
-    );
-  }
-
-  await db.insert(salesOrderLineAllocations).values({
-    salesOrderLineId: line.id,
-    inventoryItemId: inventoryItem.id,
-    allocatedWeightLbs: inventoryItem.exactWeightLbs,
-  });
-
-  await markInventoryItemAllocated(inventoryItem.id);
-  await reconcileSalesOrderLineAllocations(line.id);
-
-  return await getSalesOrderLineAllocationEditor({
-    salesOrderId: input.salesOrderId,
-    salesOrderLineId: input.salesOrderLineId,
-  });
-}
-
-export async function removeSalesOrderLineAllocation(input: {
-  salesOrderId: string;
-  salesOrderLineId: string;
-  allocationId: string;
-}) {
-  const tenant = await getCurrentTenant();
-  const currentUser = await getCurrentPortalUser();
-
-  if (currentUser.tenantId !== tenant.id) {
-    throw new Error("Forbidden");
-  }
-
-  requirePermission(currentUser.role, "fulfill_order");
-
-  const order = await db.query.salesOrders.findFirst({
-    where: and(
-      eq(salesOrders.id, input.salesOrderId),
-      eq(salesOrders.tenantId, tenant.id),
-    ),
-    with: {
-      lines: {
-        with: {
-          allocations: {
-            with: {
-              inventoryItem: true,
-            },
-          },
-          fulfillments: {
-            columns: {
-              inventoryItemId: true,
-              reversedAt: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!order) {
-    throw new Error("Sales order not found.");
-  }
-
-  const line = order.lines.find(candidate => candidate.id === input.salesOrderLineId);
-  if (!line) {
-    throw new Error("Sales order line does not belong to this order.");
-  }
-
-  const allocation = (line.allocations ?? []).find(
-    candidate => candidate.id === input.allocationId,
-  );
-  if (!allocation) {
-    throw new Error("Allocation not found for this line.");
-  }
-
-  const activeFulfillmentItemIds = new Set(
-    (line.fulfillments ?? [])
-      .filter(fulfillment => !fulfillment.reversedAt)
-      .map(fulfillment => fulfillment.inventoryItemId)
-      .filter((value): value is string => Boolean(value)),
-  );
-
-  if (activeFulfillmentItemIds.has(allocation.inventoryItemId)) {
-    throw new Error(
-      "This allocation is linked to active fulfillment and cannot be removed.",
-    );
-  }
-
-  if (
-    allocation.inventoryItem?.status === "shipped" ||
-    allocation.inventoryItem?.status === "sold"
-  ) {
-    throw new Error(
-      "This inventory item has already progressed past allocation and cannot be released here.",
-    );
-  }
-
-  await db
-    .delete(salesOrderLineAllocations)
-    .where(eq(salesOrderLineAllocations.id, allocation.id));
-
-  await restoreInventoryItemsToStock([allocation.inventoryItemId]);
-  await reconcileSalesOrderLineAllocations(line.id);
-
-  return await getSalesOrderLineAllocationEditor({
-    salesOrderId: input.salesOrderId,
-    salesOrderLineId: input.salesOrderLineId,
   });
 }
 
@@ -1816,6 +1636,250 @@ async function syncSalesOrderLineFulfillment(lineId: string) {
     .where(eq(salesOrders.id, line.salesOrderId));
 }
 
+async function selectAutoFulfillmentInventory(input: {
+  tenantId: string;
+  salesOrderLineId: string;
+  productId: string;
+  quantityFulfilled: number;
+}) {
+  const allocations = await db.query.salesOrderLineAllocations.findMany({
+    where: eq(salesOrderLineAllocations.salesOrderLineId, input.salesOrderLineId),
+    with: {
+      inventoryItem: {
+        with: {
+          lot: {
+            columns: {
+              tenantId: true,
+              lotNumber: true,
+              receiveDate: true,
+              createdAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const selected: Array<{
+    inventoryItemId: string;
+    lotId: string;
+    quantityFulfilled: number;
+    originalCases: number;
+    originalExactWeightLbs: string;
+    allocatedWeightLbs: number;
+    costPerUnitSnapshot: string;
+    costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+  }> = [];
+  let selectedQuantity = 0;
+
+  const candidates = allocations
+    .filter(allocation => {
+      const item = allocation.inventoryItem;
+      return (
+        item != null &&
+        item.productId === input.productId &&
+        item.lot?.tenantId === input.tenantId &&
+        item.status === "allocated"
+      );
+    })
+    .sort((a, b) => {
+      if (!a.inventoryItem || !b.inventoryItem) return 0;
+      return compareInventoryByOldestLot(a.inventoryItem, b.inventoryItem);
+    });
+
+  for (const allocation of candidates) {
+    const item = allocation.inventoryItem;
+    if (!item) continue;
+
+    const itemQuantity = getInventoryItemCases(item);
+    if (selectedQuantity + itemQuantity > input.quantityFulfilled) continue;
+
+    const allocatedWeight =
+      parseFloat(allocation.allocatedWeightLbs ?? "") ||
+      parseFloat(item.exactWeightLbs ?? "") ||
+      0;
+
+    selected.push({
+      inventoryItemId: item.id,
+      lotId: item.lotId,
+      quantityFulfilled: itemQuantity,
+      originalCases: itemQuantity,
+      originalExactWeightLbs: item.exactWeightLbs ?? "0",
+      allocatedWeightLbs: Number.isFinite(allocatedWeight) ? allocatedWeight : 0,
+      costPerUnitSnapshot: item.costPerUnitSnapshot,
+      costUnitTypeSnapshot: item.costUnitTypeSnapshot,
+    });
+    selectedQuantity += itemQuantity;
+
+    if (selectedQuantity >= input.quantityFulfilled) break;
+  }
+
+  // If the exact-fit pass left a gap, take the next allocated item and cap its
+  // quantity at the remaining demand. This handles lot sizes larger than the
+  // fulfillment quantity (e.g. a 120-case item fulfilling a 100-case order).
+  if (selectedQuantity < input.quantityFulfilled) {
+    const selectedIds = new Set(selected.map(s => s.inventoryItemId));
+    const remaining = input.quantityFulfilled - selectedQuantity;
+
+    for (const allocation of candidates) {
+      const item = allocation.inventoryItem;
+      if (!item || selectedIds.has(item.id)) continue;
+
+      const allocatedWeight =
+        parseFloat(allocation.allocatedWeightLbs ?? "") ||
+        parseFloat(item.exactWeightLbs ?? "") ||
+        0;
+
+      const itemCases = getInventoryItemCases(item);
+      const useQuantity = Math.min(itemCases, remaining);
+      selected.push({
+        inventoryItemId: item.id,
+        lotId: item.lotId,
+        quantityFulfilled: useQuantity,
+        originalCases: itemCases,
+        originalExactWeightLbs: item.exactWeightLbs ?? "0",
+        allocatedWeightLbs: Number.isFinite(allocatedWeight) ? allocatedWeight : 0,
+        costPerUnitSnapshot: item.costPerUnitSnapshot,
+        costUnitTypeSnapshot: item.costUnitTypeSnapshot,
+      });
+      selectedQuantity += useQuantity;
+
+      if (selectedQuantity >= input.quantityFulfilled) break;
+    }
+  }
+
+  if (selectedQuantity !== input.quantityFulfilled) {
+    const allocatedQuantity = candidates.reduce(
+      (sum, allocation) =>
+        sum + getInventoryItemCases(allocation.inventoryItem),
+      0,
+    );
+
+    throw new Error(
+      `Could not automatically match ${input.quantityFulfilled} fulfilled case${input.quantityFulfilled === 1 ? "" : "s"} to allocated inventory. Only ${allocatedQuantity} allocated case${allocatedQuantity === 1 ? "" : "s"} are available for this product.`,
+    );
+  }
+
+  return selected;
+}
+
+async function splitInventoryItemIfPartial(input: {
+  inventoryItemId: string;
+  quantityConsumed: number;
+  originalCases: number;
+  originalExactWeightLbs: string;
+}) {
+  if (input.quantityConsumed >= input.originalCases) return;
+
+  const original = await db.query.inventoryItems.findFirst({
+    where: eq(inventoryItems.id, input.inventoryItemId),
+  });
+  if (!original) return;
+
+  const remainderCases = input.originalCases - input.quantityConsumed;
+  const totalWeight = parseFloat(input.originalExactWeightLbs) || 0;
+  const consumedWeight =
+    totalWeight > 0 ? (totalWeight * input.quantityConsumed) / input.originalCases : 0;
+  const remainderWeight = totalWeight > 0 ? totalWeight - consumedWeight : 0;
+
+  await db
+    .update(inventoryItems)
+    .set({
+      cases: input.quantityConsumed,
+      exactWeightLbs: consumedWeight.toFixed(4),
+      updatedAt: new Date(),
+    })
+    .where(eq(inventoryItems.id, input.inventoryItemId));
+
+  await db.insert(inventoryItems).values({
+    productId: original.productId,
+    lotId: original.lotId,
+    barcodeId: crypto.randomUUID(),
+    exactWeightLbs: remainderWeight.toFixed(4),
+    cases: remainderCases,
+    costPerUnitSnapshot: original.costPerUnitSnapshot,
+    costUnitTypeSnapshot: original.costUnitTypeSnapshot,
+    status: "in_stock",
+  });
+}
+
+async function recordAutoAllocatedFulfillments(input: {
+  tenantId: string;
+  currentUserId: string;
+  salesOrderId: string;
+  salesOrderLineId: string;
+  productId: string;
+  remainingQuantity: number;
+  quantityFulfilled: number;
+  weightLbs: number | null;
+  fulfilledAt: Date;
+  notes?: string | null;
+}) {
+  await autoAllocateOldestInventoryToSalesOrderLine({
+    tenantId: input.tenantId,
+    salesOrderLineId: input.salesOrderLineId,
+    productId: input.productId,
+    targetQuantity: input.remainingQuantity,
+  });
+
+  const selections = await selectAutoFulfillmentInventory({
+    tenantId: input.tenantId,
+    salesOrderLineId: input.salesOrderLineId,
+    productId: input.productId,
+    quantityFulfilled: input.quantityFulfilled,
+  });
+  const weights = distributeFulfillmentWeight(input.weightLbs, selections);
+  const insertedIds: string[] = [];
+
+  for (let index = 0; index < selections.length; index += 1) {
+    const selection = selections[index];
+    const rowWeight =
+      weights[index] ??
+      (selection.costUnitTypeSnapshot === "catch_weight" &&
+      selection.allocatedWeightLbs > 0
+        ? selection.allocatedWeightLbs
+        : null);
+    const costWeight =
+      rowWeight ??
+      (selection.allocatedWeightLbs > 0 ? selection.allocatedWeightLbs : null);
+    const [fulfillment] = await db
+      .insert(salesOrderFulfillments)
+      .values({
+        salesOrderId: input.salesOrderId,
+        salesOrderLineId: input.salesOrderLineId,
+        quantityFulfilled: selection.quantityFulfilled,
+        weightLbs: rowWeight != null ? rowWeight.toFixed(4) : null,
+        fulfilledByUserId: input.currentUserId,
+        fulfilledAt: input.fulfilledAt,
+        notes: input.notes ?? null,
+        inventoryItemId: selection.inventoryItemId,
+        lotId: selection.lotId,
+        ...calculateFulfillmentCostSnapshot({
+          costPerUnitSnapshot: selection.costPerUnitSnapshot,
+          costUnitTypeSnapshot: selection.costUnitTypeSnapshot,
+          quantityFulfilled: selection.quantityFulfilled,
+          weightLbs: costWeight,
+        }),
+      })
+      .returning({ id: salesOrderFulfillments.id });
+
+    insertedIds.push(fulfillment.id);
+  }
+
+  for (const selection of selections) {
+    if (selection.quantityFulfilled < selection.originalCases) {
+      await splitInventoryItemIfPartial({
+        inventoryItemId: selection.inventoryItemId,
+        quantityConsumed: selection.quantityFulfilled,
+        originalCases: selection.originalCases,
+        originalExactWeightLbs: selection.originalExactWeightLbs,
+      });
+    }
+  }
+
+  return insertedIds[0] ?? null;
+}
+
 export async function recordSalesOrderFulfillment(input: {
   salesOrderId: string;
   salesOrderLineId: string;
@@ -1876,84 +1940,6 @@ export async function recordSalesOrderFulfillment(input: {
     throw new Error("This sales order line is already fully fulfilled.");
   }
 
-  let inventoryItemLotId: string | null = null;
-
-  if (input.inventoryItemId) {
-    const inventoryItem = await db.query.inventoryItems.findFirst({
-      where: eq(inventoryItems.id, input.inventoryItemId),
-      columns: {
-        id: true,
-        productId: true,
-        lotId: true,
-      },
-      with: {
-        lot: {
-          columns: {
-            tenantId: true,
-          },
-        },
-      },
-    });
-
-    if (!inventoryItem || inventoryItem.id !== input.inventoryItemId) {
-      throw new Error("Inventory item not found.");
-    }
-
-    if (inventoryItem.lot?.tenantId !== tenant.id) {
-      throw new Error("Inventory item does not belong to this tenant.");
-    }
-
-    if (inventoryItem.productId !== matchingLine.productId) {
-      throw new Error("Inventory item does not match the sales order line product.");
-    }
-
-    inventoryItemLotId = inventoryItem.lotId;
-  }
-
-  if (input.lotId) {
-    const lot = await db.query.lots.findFirst({
-      where: eq(lots.id, input.lotId),
-      columns: {
-        id: true,
-        tenantId: true,
-      },
-    });
-
-    if (!lot || lot.id !== input.lotId) {
-      throw new Error("Lot not found.");
-    }
-
-    if (lot.tenantId !== tenant.id) {
-      throw new Error("Lot does not belong to this tenant.");
-    }
-
-    if (!input.inventoryItemId) {
-      const matchingLotInventory = await db.query.inventoryItems.findFirst({
-        where: and(
-          eq(inventoryItems.productId, matchingLine.productId),
-          eq(inventoryItems.lotId, input.lotId),
-        ),
-        with: {
-          lot: {
-            columns: {
-              tenantId: true,
-            },
-          },
-        },
-      });
-
-      if (!matchingLotInventory || matchingLotInventory.lot?.tenantId !== tenant.id) {
-        throw new Error(
-          "Lot does not have inventory for this product, so it cannot be linked to this fulfillment.",
-        );
-      }
-    }
-  }
-
-  if (input.lotId && inventoryItemLotId && input.lotId !== inventoryItemLotId) {
-    throw new Error("Lot does not match the selected inventory item.");
-  }
-
   const fulfilledAt =
     input.fulfilledAt instanceof Date
       ? input.fulfilledAt
@@ -1984,33 +1970,27 @@ export async function recordSalesOrderFulfillment(input: {
     throw new Error("Weight must be a non-negative number.");
   }
 
-  const [fulfillment] = await db
-    .insert(salesOrderFulfillments)
-    .values({
-      salesOrderId: input.salesOrderId,
-      salesOrderLineId: input.salesOrderLineId,
-      quantityFulfilled,
-      weightLbs: weight != null ? weight.toFixed(4) : null,
-      fulfilledByUserId: currentUser.id,
-      fulfilledAt,
-      notes: input.notes ?? null,
-      inventoryItemId: input.inventoryItemId ?? null,
-      ...(await resolveFulfillmentCostSnapshot({
-        salesOrderLineId: input.salesOrderLineId,
-        productId: matchingLine.productId,
-        quantityFulfilled,
-        weightLbs: weight,
-        inventoryItemId: input.inventoryItemId ?? null,
-        lotId: input.lotId ?? null,
-      })),
-      lotId: input.lotId ?? null,
-    })
-    .returning();
+  const firstFulfillmentId = await recordAutoAllocatedFulfillments({
+    tenantId: tenant.id,
+    currentUserId: currentUser.id,
+    salesOrderId: input.salesOrderId,
+    salesOrderLineId: input.salesOrderLineId,
+    productId: matchingLine.productId,
+    remainingQuantity,
+    quantityFulfilled,
+    weightLbs: weight,
+    fulfilledAt,
+    notes: input.notes ?? null,
+  });
 
   await syncSalesOrderLineFulfillment(input.salesOrderLineId);
 
+  if (!firstFulfillmentId) {
+    throw new Error("Fulfillment could not be recorded.");
+  }
+
   return db.query.salesOrderFulfillments.findFirst({
-    where: eq(salesOrderFulfillments.id, fulfillment.id),
+    where: eq(salesOrderFulfillments.id, firstFulfillmentId),
     with: {
       fulfilledBy: true,
       reversedBy: true,
