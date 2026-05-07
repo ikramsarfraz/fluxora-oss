@@ -34,7 +34,6 @@ import {
   Receipt,
   Wallet,
   CreditCard,
-  LifeBuoy,
   Palette,
   Shield,
   BadgeCheck,
@@ -71,12 +70,14 @@ type NavItem = {
 
 type NavGroup = {
   title: string;
+  hideLabel?: boolean;
   items: NavItem[];
 };
 
 const navMain: NavGroup[] = [
   {
     title: "Overview",
+    hideLabel: true,
     items: [
       {
         title: "Dashboard",
@@ -87,7 +88,6 @@ const navMain: NavGroup[] = [
   },
   {
     title: "Sales",
-    // Workflow order: create order -> assign customer -> generate invoice
     items: [
       {
         title: "Orders",
@@ -107,8 +107,7 @@ const navMain: NavGroup[] = [
     ],
   },
   {
-    title: "Inventory",
-    // Logical order: stock levels first, then products, then supporting config
+    title: "Catalog",
     items: [
       {
         title: "Inventory",
@@ -125,36 +124,26 @@ const navMain: NavGroup[] = [
         url: "/lots",
         icon: Layers,
       },
-      {
-        title: "Categories",
-        url: "/categories",
-        icon: ListChecks,
-      },
-      {
-        title: "Units of Measure",
-        url: "/units-of-measure",
-        icon: Ruler,
-      },
     ],
   },
   {
     title: "Purchasing",
     items: [
       {
-        title: "Suppliers",
-        url: "/suppliers",
-        icon: Truck,
-      },
-      {
-        title: "Supplier Invoices",
+        title: "Bills",
         url: "/supplier-invoices",
         icon: Receipt,
         permission: "view_supplier_invoice",
       },
+      {
+        title: "Suppliers",
+        url: "/suppliers",
+        icon: Truck,
+      },
     ],
   },
   {
-    title: "Financials",
+    title: "Finance",
     items: [
       {
         title: "Payments",
@@ -169,18 +158,7 @@ const navMain: NavGroup[] = [
     ],
   },
   {
-    title: "Support",
-    items: [
-      {
-        title: "Support",
-        url: "/support",
-        icon: LifeBuoy,
-      },
-    ],
-  },
-  {
     title: "Settings",
-    // Tenant configuration: users, permissions, branding
     items: [
       {
         title: "Users",
@@ -196,6 +174,16 @@ const navMain: NavGroup[] = [
         title: "Branding",
         url: "/admin/branding",
         icon: Palette,
+      },
+      {
+        title: "Categories",
+        url: "/categories",
+        icon: ListChecks,
+      },
+      {
+        title: "Units of Measure",
+        url: "/units-of-measure",
+        icon: Ruler,
       },
     ],
   },
@@ -329,9 +317,11 @@ export function AppSidebar({
       <SidebarContent>
         {visibleGroups.map(group => (
           <SidebarGroup key={group.title}>
-            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-              {group.title}
-            </SidebarGroupLabel>
+            {!group.hideLabel && (
+              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+                {group.title}
+              </SidebarGroupLabel>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map(item => {
@@ -433,6 +423,15 @@ export function AppSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
           <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
+            <Link
+              href="/support"
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Support
+            </Link>
+            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
+              ·
+            </span>
             <Link
               href="/changelog"
               className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
