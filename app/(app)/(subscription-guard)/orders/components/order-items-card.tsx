@@ -4,6 +4,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
@@ -680,10 +690,10 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       }));
   }, [selectedLine]);
 
-  const [selectedLotId, setSelectedLotId] = useState(lotOptions[0]?.id ?? "");
-  useEffect(() => {
-    setSelectedLotId(lotOptions[0]?.id ?? "");
-  }, [lotOptions]);
+  const [selectedLotId, setSelectedLotId] = useState("");
+  const effectiveSelectedLotId = lotOptions.some(lot => lot.id === selectedLotId)
+    ? selectedLotId
+    : (lotOptions[0]?.id ?? "");
 
   const isCatchWeight = selectedLine?.unitType === "catch_weight";
   const isSubmitting = createFulfillment.isPending || markShortShipped.isPending;
@@ -789,23 +799,15 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             Capture cases, catch-weight, and lot. Saves to inventory and advances the order.
           </div>
         </div>
-        <button
+        <Button
           type="button"
           onClick={onClose}
-          style={{
-            padding: "5px 9px",
-            fontSize: "12px",
-            borderRadius: C.radiusSm,
-            border: `1px solid ${C.line}`,
-            background: C.surface,
-            color: C.ink,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            flexShrink: 0,
-          }}
+          variant="outline"
+          size="xs"
+          className="shrink-0 border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2"
         >
           Cancel
-        </button>
+        </Button>
       </div>
 
       {/* Line selector — only shown for multi-line orders */}
@@ -813,17 +815,21 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         <div style={{ padding: "6px 20px 0" }}>
           <label style={{ display: "block" }}>
             <span style={labelStyle}>Line</span>
-            <select
+            <Select
               value={selectedLineId}
-              onChange={e => setSelectedLineId(e.target.value)}
-              style={{ ...inputStyle, fontFamily: "inherit" }}
+              onValueChange={setSelectedLineId}
             >
-              {openLines.map(l => (
-                <option key={l.id} value={l.id}>
-                  {l.product?.name ?? "Line"} — {getLineRemainingQuantity(l)} remaining
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="border-stone-line bg-stone-surface text-sm shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {openLines.map(l => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.product?.name ?? "Line"} - {getLineRemainingQuantity(l)} remaining
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
       )}
@@ -841,14 +847,14 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Cases</span>
           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            <input
+            <Input
               type="number"
               min="1"
               max={remaining}
               step="1"
               value={casesValue}
               onChange={e => setCasesValue(e.target.value)}
-              style={{ ...inputStyle, flex: 1, minWidth: 0 }}
+              className="min-w-0 flex-1 border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
             />
             <span style={{ fontSize: "12px", color: C.muted, flexShrink: 0 }}>
               / {remaining}
@@ -859,14 +865,14 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         {/* Weight */}
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Weight (lbs)</span>
-          <input
+          <Input
             type="number"
             min="0"
             step="0.0001"
             placeholder={isCatchWeight ? "required" : "optional"}
             value={weightValue}
             onChange={e => setWeightValue(e.target.value)}
-            style={inputStyle}
+            className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
           />
         </label>
 
@@ -874,20 +880,24 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         <label style={{ display: "block" }}>
           <span style={labelStyle}>Lot</span>
           {lotOptions.length > 0 ? (
-            <select
-              value={selectedLotId}
-              onChange={e => setSelectedLotId(e.target.value)}
-              style={inputStyle}
+            <Select
+              value={effectiveSelectedLotId}
+              onValueChange={setSelectedLotId}
             >
-              {lotOptions.map(l => (
-                <option key={l.id} value={l.id}>
-                  {l.lotNumber} · {l.cases} cs
-                  {l.expirationDate
-                    ? ` · exp ${formatDisplayDate(l.expirationDate)}`
-                    : ""}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {lotOptions.map(l => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.lotNumber} · {l.cases} cs
+                    {l.expirationDate
+                      ? ` · exp ${formatDisplayDate(l.expirationDate)}`
+                      : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <div
               style={{
@@ -939,64 +949,43 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
           <label
             style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={printPackingSlip}
-              onChange={e => setPrintPackingSlip(e.target.checked)}
+              onCheckedChange={checked => setPrintPackingSlip(checked === true)}
             />
             Print packing slip
           </label>
           <label
             style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={generateInvoiceOnSave}
-              onChange={e => setGenerateInvoiceOnSave(e.target.checked)}
+              onCheckedChange={checked => setGenerateInvoiceOnSave(checked === true)}
             />
             Generate invoice on save
           </label>
         </div>
 
         <div style={{ display: "flex", gap: "8px" }}>
-          <button
+          <Button
             type="button"
             disabled={isSubmitting || !actionState.canFulfill}
             onClick={() => void handleSubmit(true)}
-            style={{
-              fontSize: "12px",
-              padding: "6px 12px",
-              borderRadius: C.radiusSm,
-              border: `1px solid ${C.line}`,
-              background: C.surface,
-              color: C.ink,
-              cursor: isSubmitting || !actionState.canFulfill ? "not-allowed" : "pointer",
-              opacity: isSubmitting || !actionState.canFulfill ? 0.5 : 1,
-              fontFamily: "inherit",
-              fontWeight: 500,
-            }}
+            variant="outline"
+            size="sm"
+            className="border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
           >
             Save as partial
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={isSubmitting || !actionState.canFulfill}
             onClick={() => void handleSubmit(false)}
-            style={{
-              fontSize: "12px",
-              padding: "6px 14px",
-              borderRadius: C.radiusSm,
-              border: `1px solid ${C.ink}`,
-              background: C.ink,
-              color: C.surface,
-              cursor: isSubmitting || !actionState.canFulfill ? "not-allowed" : "pointer",
-              opacity: isSubmitting || !actionState.canFulfill ? 0.5 : 1,
-              fontFamily: "inherit",
-              fontWeight: 500,
-            }}
+            size="sm"
+            className="border-stone-ink bg-stone-ink text-xs text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
           >
             {isSubmitting ? "Saving…" : "Confirm & fulfill"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

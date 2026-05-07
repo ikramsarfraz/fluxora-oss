@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteUnitOfMeasure, useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
 import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
 
@@ -93,24 +92,10 @@ export default function UnitsOfMeasure() {
         title="Units of Measure"
         subtitle="Define units for inventory, purchasing, and sales."
         primaryAction={
-          <Link
-            href="/units-of-measure/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/units-of-measure/new">
+            <Plus className="size-3.5" />
             Add unit
-          </Link>
+          </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
@@ -126,24 +111,10 @@ export default function UnitsOfMeasure() {
         emptyTitle="No units of measure yet"
         emptyDescription="Add units like lb, case, each, etc."
         emptyAction={
-          <Link
-            href="/units-of-measure/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/units-of-measure/new">
+            <Plus className="size-3.5" />
             Add unit
-          </Link>
+          </ListingAction>
         }
         hidePagination
         page={1}

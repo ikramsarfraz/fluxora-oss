@@ -27,6 +27,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/hooks/use-products";
 import { useCustomers } from "@/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
@@ -39,7 +49,6 @@ import {
   formatSalesUnitLabel,
   getDefaultSalesUnit,
   getSalesUnits,
-  getSelectedSalesUnit,
   inferLineUnitType,
 } from "./new-order-line-utils";
 
@@ -189,83 +198,28 @@ export function NewOrderLinesTable({
 
       {/* Line items table */}
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th
-                style={{
-                  textAlign: "left",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: C.muted,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  padding: "0 10px 8px",
-                  width: "40%",
-                }}
-              >
+        <Table className="text-[13px]">
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <TableHead className="h-auto w-[40%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Product
-              </th>
-              <th
-                style={{
-                  textAlign: "left",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: C.muted,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  padding: "0 10px 8px",
-                  width: "16%",
-                }}
-              >
+              </TableHead>
+              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Unit
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: C.muted,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  padding: "0 10px 8px",
-                  width: "12%",
-                }}
-              >
+              </TableHead>
+              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Qty
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: C.muted,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  padding: "0 10px 8px",
-                  width: "14%",
-                }}
-              >
+              </TableHead>
+              <TableHead className="h-auto w-[14%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Price
-              </th>
-              <th
-                style={{
-                  textAlign: "right",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: C.muted,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  padding: "0 10px 8px",
-                  width: "14%",
-                }}
-              >
+              </TableHead>
+              <TableHead className="h-auto w-[14%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Total
-              </th>
-              <th style={{ width: "30px" }} />
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+              <TableHead className="h-auto w-[30px] px-2.5 pt-0 pb-2" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {fields.map((field, index) => (
               <LineRow
                 key={field._fieldId}
@@ -278,8 +232,8 @@ export function NewOrderLinesTable({
                 onRemove={() => remove(index)}
               />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* Table footer */}
@@ -293,26 +247,14 @@ export function NewOrderLinesTable({
           marginTop: fields.length > 0 ? "4px" : "0",
         }}
       >
-        <button
+        <Button
           type="button"
           onClick={() => append(newLineDefaults())}
-          style={{
-            padding: "8px 14px",
-            borderRadius: C.radiusSm,
-            border: `1px dashed ${C.line}`,
-            background: "none",
-            color: C.muted,
-            fontSize: "13px",
-            fontWeight: 500,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-          }}
+          variant="outline"
+          className="h-8 border-dashed border-stone-line bg-transparent px-3.5 text-[13px] text-stone-muted shadow-none hover:bg-stone-line2 hover:text-stone-ink"
         >
           + Add product
-        </button>
+        </Button>
         <span style={{ fontSize: "12px", color: C.muted }}>
           ⚖ Totals for weight-based items are estimates — actual weights are recorded at fulfillment
         </span>
@@ -327,22 +269,14 @@ export function NewOrderLinesTable({
         }}
       >
         {!notesOpen ? (
-          <button
+          <Button
             type="button"
             onClick={() => setNotesOpen(true)}
-            style={{
-              background: "none",
-              border: 0,
-              color: C.accent,
-              fontSize: "13px",
-              fontWeight: 500,
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            variant="link"
+            className="h-auto p-0 text-[13px] font-medium text-primary"
           >
             + Add note
-          </button>
+          </Button>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
             <Controller
@@ -356,23 +290,11 @@ export function NewOrderLinesTable({
                       — shown on invoice
                     </span>
                   </label>
-                  <textarea
+                  <Textarea
                     {...field}
                     placeholder="Delivery instructions, packing requests…"
                     rows={2}
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: `1px solid ${C.line}`,
-                      borderRadius: C.radiusSm,
-                      background: C.surface,
-                      resize: "vertical",
-                      fontSize: "13px",
-                      minHeight: "60px",
-                      fontFamily: "inherit",
-                      color: C.ink,
-                      outline: "none",
-                    }}
+                    className="min-h-[60px] resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
                   />
                 </div>
               )}
@@ -388,23 +310,11 @@ export function NewOrderLinesTable({
                       — staff only
                     </span>
                   </label>
-                  <textarea
+                  <Textarea
                     {...field}
                     placeholder="Notes for warehouse and office staff…"
                     rows={2}
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: `1px solid ${C.line}`,
-                      borderRadius: C.radiusSm,
-                      background: C.surface,
-                      resize: "vertical",
-                      fontSize: "13px",
-                      minHeight: "60px",
-                      fontFamily: "inherit",
-                      color: C.ink,
-                      outline: "none",
-                    }}
+                    className="min-h-[60px] resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
                   />
                 </div>
               )}
@@ -439,35 +349,20 @@ function LineRow({
 
   const product = row?.productId ? productsById.get(row.productId) : undefined;
   const salesUnits = getSalesUnits(product);
-  const salesUnit = getSelectedSalesUnit(product, row?.salesUnitId);
   const lineTotal = row ? calculateLineTotal(row, product) : null;
 
   const availableProducts = products.filter(
     p => p.id === row?.productId || !takenProductIds.has(p.id),
   );
 
-  const tdBase: React.CSSProperties = {
-    padding: "6px 10px",
-    borderTop: `1px solid ${C.line2}`,
-    verticalAlign: "top",
-  };
-
-  const inputBase: React.CSSProperties = {
-    width: "100%",
-    padding: "9px 10px",
-    border: "1px solid transparent",
-    borderRadius: C.radiusSm,
-    background: C.line2,
-    fontSize: "13px",
-    fontFamily: "inherit",
-    color: C.ink,
-    outline: "none",
-  };
+  const cellClassName = "border-t border-stone-line2 px-2.5 py-1.5 align-top";
+  const inputClassName =
+    "h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none";
 
   return (
-    <tr>
+    <TableRow className="border-0 hover:bg-transparent">
       {/* Product */}
-      <td style={tdBase}>
+      <TableCell className={cellClassName}>
         <Controller
           control={control}
           name={`lines.${index}.productId`}
@@ -487,18 +382,7 @@ function LineRow({
                       type="button"
                       variant="outline"
                       aria-invalid={fieldState.invalid}
-                      style={{
-                        width: "100%",
-                        justifyContent: "flex-start",
-                        fontWeight: "normal",
-                        padding: "8px 10px",
-                        border: "1px solid transparent",
-                        background: C.line2,
-                        height: "auto",
-                        color: product ? C.ink : C.muted,
-                        fontSize: "13px",
-                        borderRadius: C.radiusSm,
-                      }}
+                      className="h-auto w-full justify-start border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] font-normal text-stone-ink shadow-none hover:bg-stone-line2 data-[placeholder=true]:text-stone-muted"
                     >
                       <ComboboxValue>
                         {product ? (
@@ -553,10 +437,10 @@ function LineRow({
             </div>
           )}
         />
-      </td>
+      </TableCell>
 
       {/* Unit */}
-      <td style={tdBase}>
+      <TableCell className={cellClassName}>
         <Controller
           control={control}
           name={`lines.${index}.salesUnitId`}
@@ -567,15 +451,7 @@ function LineRow({
               disabled={!product || salesUnits.length === 0}
             >
               <SelectTrigger
-                style={{
-                  border: "1px solid transparent",
-                  background: C.line2,
-                  fontSize: "13px",
-                  height: "auto",
-                  padding: "8px 10px",
-                  borderRadius: C.radiusSm,
-                  color: field.value ? C.ink : C.muted,
-                }}
+                className="h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               >
                 <SelectValue placeholder="Unit…" />
@@ -590,16 +466,16 @@ function LineRow({
             </Select>
           )}
         />
-      </td>
+      </TableCell>
 
       {/* Qty */}
-      <td style={{ ...tdBase, textAlign: "right" }}>
+      <TableCell className={`${cellClassName} text-right`}>
         <Controller
           control={control}
           name={`lines.${index}.quantity`}
           render={({ field, fieldState }) => (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-              <input
+              <Input
                 {...field}
                 type="number"
                 min="1"
@@ -607,12 +483,7 @@ function LineRow({
                 inputMode="numeric"
                 placeholder="0"
                 aria-invalid={fieldState.invalid}
-                style={{
-                  ...inputBase,
-                  textAlign: "right",
-                  fontFamily: C.mono,
-                  border: fieldState.invalid ? "1px solid oklch(55% 0.22 25)" : "1px solid transparent",
-                }}
+                className={`${inputClassName} text-right font-mono`}
               />
               {fieldState.invalid && (
                 <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
@@ -622,16 +493,16 @@ function LineRow({
             </div>
           )}
         />
-      </td>
+      </TableCell>
 
       {/* Price */}
-      <td style={{ ...tdBase, textAlign: "right" }}>
+      <TableCell className={`${cellClassName} text-right`}>
         <Controller
           control={control}
           name={`lines.${index}.pricePerLb`}
           render={({ field, fieldState }) => (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-              <input
+              <Input
                 {...field}
                 type="number"
                 min="0"
@@ -639,12 +510,7 @@ function LineRow({
                 inputMode="decimal"
                 placeholder="0.00"
                 aria-invalid={fieldState.invalid}
-                style={{
-                  ...inputBase,
-                  textAlign: "right",
-                  fontFamily: C.mono,
-                  border: fieldState.invalid ? "1px solid oklch(55% 0.22 25)" : "1px solid transparent",
-                }}
+                className={`${inputClassName} text-right font-mono`}
               />
               {product && !fieldState.invalid && (
                 <span style={{ fontSize: "11px", color: C.muted }}>
@@ -659,43 +525,30 @@ function LineRow({
             </div>
           )}
         />
-      </td>
+      </TableCell>
 
       {/* Total */}
-      <td
-        style={{
-          ...tdBase,
-          textAlign: "right",
-          fontFamily: C.mono,
-          fontSize: "13px",
-          color: lineTotal !== null ? C.ink : C.muted,
-          fontWeight: lineTotal !== null ? 500 : 400,
-          whiteSpace: "nowrap",
-        }}
+      <TableCell
+        className={`${cellClassName} whitespace-nowrap text-right font-mono text-[13px] ${
+          lineTotal !== null ? "font-medium text-stone-ink" : "font-normal text-stone-muted"
+        }`}
       >
         {lineTotal !== null ? formatMoney(lineTotal) : "—"}
-      </td>
+      </TableCell>
 
       {/* Delete */}
-      <td style={{ ...tdBase, textAlign: "center" }}>
-        <button
+      <TableCell className={`${cellClassName} text-center`}>
+        <Button
           type="button"
           onClick={onRemove}
           aria-label={`Remove line ${index + 1}`}
-          style={{
-            background: "none",
-            border: 0,
-            color: C.muted,
-            padding: "4px",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "13px",
-            lineHeight: 1,
-          }}
+          variant="ghost"
+          size="icon-xs"
+          className="size-7 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
         >
           ✕
-        </button>
-      </td>
-    </tr>
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }

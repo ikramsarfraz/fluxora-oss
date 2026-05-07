@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import { Controller, useWatch, type Control } from "react-hook-form";
 
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useCustomers } from "@/hooks/use-customers";
 import { useProducts } from "@/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
@@ -84,14 +88,7 @@ export function NewOrderSummaryCard({
   const total = Math.max(0, subtotal + fuelSurchargeAmt - discount);
 
   return (
-    <div
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.line}`,
-        borderRadius: C.radius,
-        padding: "18px 20px",
-      }}
-    >
+    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface px-5 py-[18px] shadow-none ring-0">
       <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "4px", color: C.ink }}>
         Estimate
       </div>
@@ -154,36 +151,24 @@ export function NewOrderSummaryCard({
             }}
           >
             <span>Apply fuel surcharge</span>
-            <button
+            <Button
               type="button"
               role="switch"
               aria-checked={field.value}
               onClick={() => field.onChange(!field.value)}
-              style={{
-                width: "34px",
-                height: "20px",
-                background: field.value ? C.ink : C.line,
-                borderRadius: "100px",
-                position: "relative",
-                cursor: "pointer",
-                border: 0,
-                flexShrink: 0,
-                transition: "background 0.15s",
-              }}
+              variant="ghost"
+              className={`relative h-5 w-[34px] shrink-0 rounded-full p-0 ${
+                field.value
+                  ? "bg-stone-ink hover:bg-stone-ink/90"
+                  : "bg-stone-line hover:bg-stone-line"
+              }`}
             >
               <span
-                style={{
-                  position: "absolute",
-                  top: "2px",
-                  left: field.value ? "16px" : "2px",
-                  width: "16px",
-                  height: "16px",
-                  background: "#fff",
-                  borderRadius: "50%",
-                  transition: "left 0.15s",
-                }}
+                className={`absolute top-0.5 size-4 rounded-full bg-white transition-[left] ${
+                  field.value ? "left-4" : "left-0.5"
+                }`}
               />
-            </button>
+            </Button>
           </div>
         )}
       />
@@ -191,22 +176,14 @@ export function NewOrderSummaryCard({
       {/* Discount toggle/input */}
       {showDiscountInput && <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: "10px" }}>
         {!discountOpen ? (
-          <button
+          <Button
             type="button"
             onClick={() => setDiscountOpen(true)}
-            style={{
-              background: "none",
-              border: 0,
-              color: C.accent,
-              fontSize: "13px",
-              fontWeight: 500,
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            variant="link"
+            className="h-auto p-0 text-[13px] font-medium text-primary"
           >
             + Add discount
-          </button>
+          </Button>
         ) : (
           <Controller
             control={control}
@@ -216,37 +193,25 @@ export function NewOrderSummaryCard({
                 <label style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>
                   Discount amount
                 </label>
-                <input
+                <Input
                   {...field}
                   type="number"
                   min="0"
                   step="0.01"
                   inputMode="decimal"
                   placeholder="0.00"
-                  style={{
-                    width: "100%",
-                    padding: "9px 12px",
-                    border: `1px solid ${fieldState.invalid ? "oklch(55% 0.22 25)" : C.line}`,
-                    borderRadius: C.radiusSm,
-                    background: C.surface,
-                    fontFamily: C.mono,
-                    fontSize: "13px",
-                    color: C.ink,
-                    outline: "none",
-                  }}
+                  className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
                   aria-invalid={fieldState.invalid}
                 />
                 {fieldState.invalid && (
-                  <span style={{ fontSize: "12px", color: "oklch(55% 0.22 25)" }}>
-                    {fieldState.error?.message}
-                  </span>
+                  <FieldError className="text-xs">{fieldState.error?.message}</FieldError>
                 )}
               </div>
             )}
           />
         )}
       </div>}
-    </div>
+    </Card>
   );
 }
 

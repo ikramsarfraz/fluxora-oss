@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteSupplier, useSuppliersPage } from "@/hooks/use-suppliers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -95,24 +94,10 @@ export default function Suppliers() {
         title="Suppliers"
         subtitle="Manage your supplier accounts."
         primaryAction={
-          <Link
-            href="/suppliers/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/suppliers/new">
+            <Plus className="size-3.5" />
             Add supplier
-          </Link>
+          </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
@@ -129,24 +114,10 @@ export default function Suppliers() {
         emptyTitle="No suppliers yet"
         emptyDescription="Add a supplier to start receiving inventory."
         emptyAction={
-          <Link
-            href="/suppliers/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/suppliers/new">
+            <Plus className="size-3.5" />
             Add supplier
-          </Link>
+          </ListingAction>
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}

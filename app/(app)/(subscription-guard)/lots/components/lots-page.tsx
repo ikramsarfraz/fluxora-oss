@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { ExpirationStateBadge, LotOperationalStatusBadge } from "@/components/warehouse/warehouse-badges";
 import { useLots } from "@/hooks/use-lots";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -161,24 +161,10 @@ export default function Lots() {
       title="Lots"
       subtitle="Inspect received stock, warehouse lifecycle, and lot traceability."
       primaryAction={
-        <Link
-          href="/lots/new"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            background: "#0c0a09",
-            color: "#fafaf9",
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            textDecoration: "none",
-          }}
-        >
-          <Plus style={{ width: 14, height: 14 }} />
+        <ListingAction href="/lots/new">
+          <Plus className="size-3.5" />
           New lot
-        </Link>
+        </ListingAction>
       }
       columns={COLUMNS}
       getRowId={row => row.id}

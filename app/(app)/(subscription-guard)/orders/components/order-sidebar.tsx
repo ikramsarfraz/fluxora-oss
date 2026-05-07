@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 import type { SalesOrderDetail } from "@/services/orders";
@@ -219,27 +220,13 @@ export function OrderSidebar({
           </div>
 
           {/* CTA button */}
-          <button
+          <Button
             type="button"
             onClick={onOpenFulfillDrawer}
-            style={{
-              width: "100%",
-              padding: "9px 14px",
-              borderRadius: C.radiusSm,
-              border: `1px solid ${C.ink}`,
-              background: C.ink,
-              color: C.surface,
-              fontSize: "13px",
-              fontWeight: 500,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            className="h-9 w-full border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90"
           >
             Record fulfillment
-          </button>
+          </Button>
 
           {/* Suggested lot */}
           {suggestedLot && (

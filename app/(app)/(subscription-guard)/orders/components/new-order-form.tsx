@@ -6,6 +6,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
 import { useCreateSalesOrder } from "@/hooks/use-orders";
 import { useProducts } from "@/hooks/use-products";
@@ -66,28 +67,6 @@ function makeDefaultValues(): NewOrderFormValues {
     ],
   };
 }
-
-const outlineBtn: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: "6px",
-  border: "1px solid #e7e5e4",
-  background: "#ffffff",
-  color: "#0c0a09",
-  fontSize: "13px",
-  fontWeight: 500,
-  cursor: "pointer",
-  fontFamily: "inherit",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
-const primaryBtn: React.CSSProperties = {
-  ...outlineBtn,
-  background: "#0c0a09",
-  color: "#fafaf9",
-  borderColor: "#0c0a09",
-};
 
 export function NewOrderForm() {
   const router = useRouter();
@@ -211,22 +190,24 @@ export function NewOrderForm() {
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-            <button
+            <Button
               type="button"
               onClick={() => router.push("/orders")}
               disabled={isPending}
-              style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+              variant="outline"
+              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => void handleSubmit("draft")}
               disabled={isPending}
-              style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+              variant="outline"
+              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
             >
               {pendingMode === "draft" ? "Saving…" : "Save draft"}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -300,22 +281,23 @@ export function NewOrderForm() {
           </b>
         </div>
         <div style={{ flex: 1 }} />
-        <button
+        <Button
           type="button"
           onClick={() => void handleSubmit("draft")}
           disabled={isPending}
-          style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+          variant="outline"
+          className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
         >
           {pendingMode === "draft" ? "Saving…" : "Save draft"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => void handleSubmit("confirm")}
           disabled={isPending}
-          style={{ ...primaryBtn, opacity: isPending ? 0.6 : 1 }}
+          className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-60"
         >
-          {pendingMode === "confirm" ? "Confirming…" : "Confirm order →"}
-        </button>
+          {pendingMode === "confirm" ? "Confirming…" : "Confirm order"}
+        </Button>
       </div>
     </>
   );

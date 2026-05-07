@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 
 import type { SalesOrderDetail } from "@/services/orders";
 
@@ -215,26 +216,16 @@ export function OrderNotesAttachmentsCard({ order }: OrderNotesAttachmentsCardPr
               onChange={handleFileChange}
               disabled={uploadMutation.isPending}
             />
-            <button
+            <Button
               type="button"
-              style={{
-                marginLeft: "auto",
-                padding: "5px 10px",
-                fontSize: "12px",
-                borderRadius: C.radiusSm,
-                border: `1px solid ${C.line}`,
-                background: C.surface,
-                color: C.ink,
-                cursor: uploadMutation.isPending ? "not-allowed" : "pointer",
-                opacity: uploadMutation.isPending ? 0.5 : 1,
-                fontFamily: "inherit",
-                fontWeight: 500,
-              }}
+              variant="outline"
+              size="xs"
+              className="ml-auto border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadMutation.isPending}
             >
               {uploadMutation.isPending ? "Uploading…" : "Upload"}
-            </button>
+            </Button>
           </div>
 
           {/* Attachment list */}
@@ -318,22 +309,15 @@ export function OrderNotesAttachmentsCard({ order }: OrderNotesAttachmentsCardPr
                         Download
                       </a>
                       <span style={{ color: C.line }}>·</span>
-                      <button
+                      <Button
                         type="button"
                         onClick={() => setPendingRemove(attachment)}
                         disabled={removeMutation.isPending}
-                        style={{
-                          background: "none",
-                          border: 0,
-                          padding: 0,
-                          fontSize: "12px",
-                          color: "oklch(55% 0.22 25)",
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                        }}
+                        variant="link"
+                        className="h-auto p-0 text-xs text-destructive"
                       >
                         Remove
-                      </button>
+                      </Button>
                     </div>
                   </li>
                 );

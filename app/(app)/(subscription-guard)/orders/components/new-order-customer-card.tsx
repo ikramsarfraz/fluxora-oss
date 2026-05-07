@@ -13,6 +13,9 @@ import {
   ComboboxValue,
 } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { FieldError } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { useCustomers } from "@/hooks/use-customers";
 import type { CustomerListItem } from "@/services/customers";
 
@@ -65,14 +68,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
     : "";
 
   return (
-    <div
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.line}`,
-        borderRadius: C.radius,
-        padding: "20px 22px",
-      }}
-    >
+    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface p-5 shadow-none ring-0 sm:p-[22px]">
       {/* Section header */}
       <div
         style={{
@@ -126,18 +122,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                         type="button"
                         variant="outline"
                         aria-invalid={fieldState.invalid}
-                        style={{
-                          width: "100%",
-                          justifyContent: "flex-start",
-                          fontWeight: "normal",
-                          padding: "11px 14px",
-                          borderRadius: C.radiusSm,
-                          border: `1px solid ${fieldState.invalid ? "oklch(55% 0.22 25)" : C.line}`,
-                          background: C.surface,
-                          height: "auto",
-                          color: C.muted,
-                          fontSize: "14px",
-                        }}
+                        className="h-auto w-full justify-start border-stone-line bg-stone-surface px-3.5 py-2.5 text-sm font-normal text-stone-muted shadow-none hover:bg-stone-line2"
                         disabled={isLoading}
                       >
                         <ComboboxValue>
@@ -182,11 +167,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>
-                {fieldState.invalid && (
-                  <span style={{ fontSize: "12px", color: "oklch(55% 0.22 25)", marginTop: "4px", display: "block" }}>
-                    {fieldState.error?.message}
-                  </span>
-                )}
+                <FieldError className="mt-1 text-xs">{fieldState.error?.message}</FieldError>
               </div>
             ) : (
               <div>
@@ -224,22 +205,15 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                       <div style={{ fontSize: "12px", color: C.muted }}>{metaLine}</div>
                     )}
                   </div>
-                  <button
+                  <Button
                     type="button"
                     onClick={() => field.onChange("")}
-                    style={{
-                      background: "none",
-                      border: 0,
-                      color: C.muted,
-                      padding: "4px 8px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      flexShrink: 0,
-                    }}
+                    variant="ghost"
+                    size="xs"
+                    className="shrink-0 text-xs text-stone-muted hover:bg-white/50 hover:text-stone-ink"
                   >
                     Change
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Info chips */}
@@ -316,27 +290,15 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
               >
                 Order date
               </label>
-              <input
+              <Input
                 {...field}
                 id="new-order-order-date"
                 type="date"
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: `1px solid ${fieldState.invalid ? "oklch(55% 0.22 25)" : C.line}`,
-                  borderRadius: C.radiusSm,
-                  background: C.surface,
-                  fontFamily: C.mono,
-                  fontSize: "13px",
-                  color: C.ink,
-                  outline: "none",
-                }}
+                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && (
-                <span style={{ fontSize: "12px", color: "oklch(55% 0.22 25)" }}>
-                  {fieldState.error?.message}
-                </span>
+                <FieldError className="text-xs">{fieldState.error?.message}</FieldError>
               )}
             </div>
           )}
@@ -352,27 +314,17 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
               >
                 Delivery date
               </label>
-              <input
+              <Input
                 {...field}
                 id="new-order-delivery-date"
                 type="date"
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: `1px solid ${fieldState.invalid ? "oklch(55% 0.22 25)" : C.line}`,
-                  borderRadius: C.radiusSm,
-                  background: C.surface,
-                  fontFamily: C.mono,
-                  fontSize: "13px",
-                  color: C.ink,
-                  outline: "none",
-                }}
+                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
             </div>
           )}
         />
       </div>
-    </div>
+    </Card>
   );
 }

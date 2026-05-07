@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 
+import { Button } from "@/components/ui/button";
 import { useSalesOrderActivity } from "@/hooks/use-activity";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
@@ -159,39 +160,23 @@ export function OrderActivityCard({ orderId }: { orderId: string }) {
         }}
       >
         {!showAll && items.length > PREVIEW_COUNT ? (
-          <button
+          <Button
             type="button"
             onClick={() => setShowAll(true)}
-            style={{
-              background: "none",
-              border: 0,
-              color: C.accent,
-              fontSize: "13px",
-              fontWeight: 500,
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            variant="link"
+            className="h-auto p-0 text-[13px] font-medium text-primary"
           >
-            View full audit log ({items.length - PREVIEW_COUNT} more) →
-          </button>
+            View full audit log ({items.length - PREVIEW_COUNT} more)
+          </Button>
         ) : items.length > PREVIEW_COUNT ? (
-          <button
+          <Button
             type="button"
             onClick={() => setShowAll(false)}
-            style={{
-              background: "none",
-              border: 0,
-              color: C.accent,
-              fontSize: "13px",
-              fontWeight: 500,
-              padding: 0,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            variant="link"
+            className="h-auto p-0 text-[13px] font-medium text-primary"
           >
-            Show less ↑
-          </button>
+            Show less
+          </Button>
         ) : (
           <span style={{ fontSize: "13px", color: C.muted }}>Full audit log</span>
         )}

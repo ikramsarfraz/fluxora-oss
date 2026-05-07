@@ -25,12 +25,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StatusPill } from "@/components/listing-page";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { formatDisplayDate } from "@/lib/utils/date";
 
@@ -185,30 +187,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             >
               {orderTitle}
             </h1>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "4px 10px",
-                borderRadius: "100px",
-                fontSize: "12px",
-                fontWeight: 500,
-                background: pill.bg,
-                color: pill.color,
-              }}
-            >
-              <span
-                style={{
-                  width: "6px",
-                  height: "6px",
-                  borderRadius: "50%",
-                  background: "currentColor",
-                  flexShrink: 0,
-                }}
-              />
-              {pill.label}
-            </span>
+            <StatusPill label={pill.label} bg={pill.bg} color={pill.color} />
           </div>
 
           {order.customer && (
@@ -332,23 +311,14 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
           {/* More menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
                 type="button"
-                style={{
-                  width: "30px",
-                  height: "30px",
-                  display: "grid",
-                  placeItems: "center",
-                  borderRadius: C.radiusSm,
-                  border: `1px solid ${C.line}`,
-                  background: C.surface,
-                  color: C.ink2,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
+                variant="outline"
+                size="icon-sm"
+                className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
               >
                 <MoreHorizontal className="h-4 w-4" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               {order.status !== "cancelled" && (
@@ -492,29 +462,14 @@ function PrimaryBtn({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      style={{
-        padding: "8px 14px",
-        borderRadius: C.radiusSm,
-        border: `1px solid ${C.ink}`,
-        background: C.ink,
-        color: C.surface,
-        fontSize: "13px",
-        fontWeight: 500,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        fontFamily: "inherit",
-        lineHeight: 1,
-      }}
+      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -526,26 +481,13 @@ function SecondaryBtn({
   onClick?: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      style={{
-        padding: "8px 14px",
-        borderRadius: C.radiusSm,
-        border: `1px solid ${C.line}`,
-        background: C.surface,
-        color: C.ink,
-        fontSize: "13px",
-        fontWeight: 500,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        cursor: "pointer",
-        fontFamily: "inherit",
-        lineHeight: 1,
-      }}
+      variant="outline"
+      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2"
     >
       {children}
-    </button>
+    </Button>
   );
 }

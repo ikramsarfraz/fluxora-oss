@@ -22,12 +22,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StatusPill } from "@/components/listing-page";
 import {
   Table,
   TableBody,
@@ -257,30 +260,11 @@ export function SupplierInvoiceDetailPage({
             >
               {invoice.invoiceNumber}
             </h1>
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "4px 10px",
-                borderRadius: "100px",
-                fontSize: "12px",
-                fontWeight: 500,
-                background: statusPill.bg,
-                color: statusPill.color,
-              }}
-            >
-              <span
-                style={{
-                  width: "6px",
-                  height: "6px",
-                  borderRadius: "50%",
-                  background: "currentColor",
-                  flexShrink: 0,
-                }}
-              />
-              {statusPill.label}
-            </span>
+            <StatusPill
+              label={statusPill.label}
+              bg={statusPill.bg}
+              color={statusPill.color}
+            />
           </div>
 
           {invoice.supplier && (
@@ -358,23 +342,14 @@ export function SupplierInvoiceDetailPage({
           {isDraft && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    display: "grid",
-                    placeItems: "center",
-                    borderRadius: C.radiusSm,
-                    border: `1px solid ${C.line}`,
-                    background: C.surface,
-                    color: C.ink2,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
+                  variant="outline"
+                  size="icon-sm"
+                  className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
                 >
                   <MoreHorizontal className="h-4 w-4" />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
@@ -447,7 +422,7 @@ export function SupplierInvoiceDetailPage({
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 {hasDetailedCaseWeights ? (
-                                  <button
+                                  <Button
                                     type="button"
                                     onClick={() => toggleCaseWeightLine(line.id)}
                                     aria-label={
@@ -455,25 +430,16 @@ export function SupplierInvoiceDetailPage({
                                         ? "Hide case weight breakdown"
                                         : "Show case weight breakdown"
                                     }
-                                    style={{
-                                      width: "24px",
-                                      height: "24px",
-                                      display: "grid",
-                                      placeItems: "center",
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      color: C.muted,
-                                      padding: 0,
-                                      flexShrink: 0,
-                                    }}
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="size-6 shrink-0 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
                                   >
                                     {isExpanded ? (
-                                      <ChevronDown style={{ width: "14px", height: "14px" }} />
+                                      <ChevronDown className="size-3.5" />
                                     ) : (
-                                      <ChevronRight style={{ width: "14px", height: "14px" }} />
+                                      <ChevronRight className="size-3.5" />
                                     )}
-                                  </button>
+                                  </Button>
                                 ) : null}
                                 {line.product ? (
                                   <Link
@@ -1059,14 +1025,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.line}`,
-        borderRadius: C.radius,
-        overflow: "hidden",
-      }}
-    >
+    <Card className="gap-0 overflow-hidden rounded-[10px] border-stone-line bg-stone-surface py-0 shadow-none ring-0">
       <div
         style={{
           padding: "16px 20px",
@@ -1083,22 +1042,15 @@ function Section({
         )}
       </div>
       <div style={{ padding: "20px" }}>{children}</div>
-    </div>
+    </Card>
   );
 }
 
 function SideCard({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: C.surface,
-        border: `1px solid ${C.line}`,
-        borderRadius: C.radius,
-        padding: "16px 18px",
-      }}
-    >
+    <Card className="rounded-[10px] border-stone-line bg-stone-surface px-[18px] py-4 shadow-none ring-0">
       {children}
-    </div>
+    </Card>
   );
 }
 
@@ -1133,30 +1085,15 @@ function PrimaryBtn({
   title?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={{
-        padding: "8px 14px",
-        borderRadius: C.radiusSm,
-        border: `1px solid ${C.ink}`,
-        background: C.ink,
-        color: C.surface,
-        fontSize: "13px",
-        fontWeight: 500,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        fontFamily: "inherit",
-        lineHeight: 1,
-      }}
+      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -1172,29 +1109,15 @@ function SecondaryBtn({
   title?: string;
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={{
-        padding: "8px 14px",
-        borderRadius: C.radiusSm,
-        border: `1px solid ${C.line}`,
-        background: C.surface,
-        color: C.ink,
-        fontSize: "13px",
-        fontWeight: 500,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        fontFamily: "inherit",
-        lineHeight: 1,
-      }}
+      variant="outline"
+      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
     >
       {children}
-    </button>
+    </Button>
   );
 }

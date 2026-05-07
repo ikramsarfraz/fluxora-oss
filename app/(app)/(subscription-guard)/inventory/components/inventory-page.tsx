@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import {
   ExpirationStateBadge,
   InventoryStatusBadge,

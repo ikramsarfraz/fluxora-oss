@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { ListingPage, StatusPill, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, StatusPill, type ListingColumn } from "@/components/listing-page";
 import {
   useResendUserInvitation,
   useRevokeUserInvitation,
@@ -88,7 +86,6 @@ function buildColumns(handlers: {
 }
 
 export default function Users() {
-  const router = useRouter();
   const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
 
   const pagination = useUrlPaginationState<UsersDirectoryListSort>({
@@ -169,24 +166,10 @@ export default function Users() {
       title="Users"
       subtitle="Manage team members and invitations."
       primaryAction={
-        <Link
-          href="/users/new"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            background: "#0c0a09",
-            color: "#fafaf9",
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            textDecoration: "none",
-          }}
-        >
-          <Plus style={{ width: 14, height: 14 }} />
+        <ListingAction href="/users/new">
+          <Plus className="size-3.5" />
           Invite user
-        </Link>
+        </ListingAction>
       }
       columns={columns}
       getRowId={row => row.kind === "user" ? `user-${row.row.id}` : `invitation-${row.row.id}`}
@@ -223,24 +206,10 @@ export default function Users() {
       emptyTitle="No users yet"
       emptyDescription="Invite team members to start collaborating."
       emptyAction={
-        <Link
-          href="/users/new"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            background: "#0c0a09",
-            color: "#fafaf9",
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            textDecoration: "none",
-          }}
-        >
-          <Plus style={{ width: 14, height: 14 }} />
+        <ListingAction href="/users/new">
+          <Plus className="size-3.5" />
           Invite user
-        </Link>
+        </ListingAction>
       }
       page={data?.page ?? pagination.page}
       pageSize={data?.pageSize ?? pagination.pageSize}

@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useDeleteExpense, useExpensesPage } from "@/hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
@@ -127,24 +127,10 @@ export function ExpensesPage() {
         primaryAction={
           canManage
             ? (
-              <Link
-                href="/expenses/new"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
-                  background: "#0c0a09",
-                  color: "#fafaf9",
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: "none",
-                }}
-              >
-                <Plus style={{ width: 14, height: 14 }} />
+              <ListingAction href="/expenses/new">
+                <Plus className="size-3.5" />
                 Add expense
-              </Link>
+              </ListingAction>
             )
             : undefined
         }
@@ -167,24 +153,10 @@ export function ExpensesPage() {
         emptyAction={
           canManage
             ? (
-              <Link
-                href="/expenses/new"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
-                  background: "#0c0a09",
-                  color: "#fafaf9",
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  textDecoration: "none",
-                }}
-              >
-                <Plus style={{ width: 14, height: 14 }} />
+              <ListingAction href="/expenses/new">
+                <Plus className="size-3.5" />
                 Add expense
-              </Link>
+              </ListingAction>
             )
             : undefined
         }

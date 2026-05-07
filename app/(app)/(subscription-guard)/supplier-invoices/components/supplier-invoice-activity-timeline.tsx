@@ -174,7 +174,7 @@ export function SupplierInvoiceActivityTimeline({
           const count = counts.get(filterOption.key) ?? 0;
           const isActive = filter === filterOption.key;
           return (
-            <button
+            <Button
               key={filterOption.key}
               type="button"
               onClick={() => {
@@ -183,7 +183,7 @@ export function SupplierInvoiceActivityTimeline({
               }}
               disabled={count === 0 && filterOption.key !== "all"}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                "h-auto gap-1.5 rounded-full border px-3 py-1 text-xs font-medium shadow-none transition-colors",
                 isActive
                   ? "border-foreground bg-foreground text-background"
                   : "border-border bg-background text-muted-foreground hover:border-foreground/40 hover:text-foreground",
@@ -203,7 +203,7 @@ export function SupplierInvoiceActivityTimeline({
               >
                 {count}
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

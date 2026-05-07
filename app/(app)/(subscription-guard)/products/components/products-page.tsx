@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteProduct, useProductsPage } from "@/hooks/use-products";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatMoney } from "@/lib/utils/currency";
@@ -88,24 +87,10 @@ export default function Products() {
         title="Products"
         subtitle="Manage your product catalog."
         primaryAction={
-          <Link
-            href="/products/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/products/new">
+            <Plus className="size-3.5" />
             Add product
-          </Link>
+          </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
@@ -122,24 +107,10 @@ export default function Products() {
         emptyTitle="No products yet"
         emptyDescription="Get started by adding your first product to the catalog."
         emptyAction={
-          <Link
-            href="/products/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/products/new">
+            <Plus className="size-3.5" />
             Add product
-          </Link>
+          </ListingAction>
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}

@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteSalesOrder, useSalesOrdersPage } from "@/hooks/use-orders";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -136,25 +136,10 @@ export default function Orders() {
         title="Sales Orders"
         subtitle="Track sales orders, their status, and linked customers."
         primaryAction={
-          <Link
-            href="/orders/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-              border: "1px solid #0c0a09",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/orders/new">
+            <Plus className="size-3.5" />
             New order
-          </Link>
+          </ListingAction>
         }
         statusSegments={SEGMENTS}
         activeSegment={activeSegment}
@@ -178,24 +163,10 @@ export default function Orders() {
         emptyTitle="No orders yet"
         emptyDescription="Create a sales order to get started."
         emptyAction={
-          <Link
-            href="/orders/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/orders/new">
+            <Plus className="size-3.5" />
             New order
-          </Link>
+          </ListingAction>
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}

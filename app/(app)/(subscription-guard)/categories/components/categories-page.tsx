@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, type ListingColumn } from "@/components/listing-page";
 import { useCategories, useDeleteCategory } from "@/hooks/use-categories";
 import type { Category } from "@/services/categories";
 
@@ -79,24 +78,10 @@ export default function Categories() {
         title="Categories"
         subtitle="Organize your product catalog with categories."
         primaryAction={
-          <Link
-            href="/categories/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/categories/new">
+            <Plus className="size-3.5" />
             Add category
-          </Link>
+          </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
@@ -112,24 +97,10 @@ export default function Categories() {
         emptyTitle="No categories yet"
         emptyDescription="Get started by adding your first category."
         emptyAction={
-          <Link
-            href="/categories/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/categories/new">
+            <Plus className="size-3.5" />
             Add category
-          </Link>
+          </ListingAction>
         }
         hidePagination
         page={1}

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { deleteCustomerAction } from "@/actions/customers";
 import { useCustomersPage } from "@/hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
@@ -115,24 +114,10 @@ export default function Customers() {
         title="Customers"
         subtitle="Manage your customer accounts and contact information."
         primaryAction={
-          <Link
-            href="/customers/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/customers/new">
+            <Plus className="size-3.5" />
             Add customer
-          </Link>
+          </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
@@ -149,24 +134,10 @@ export default function Customers() {
         emptyTitle="No customers yet"
         emptyDescription="Get started by adding your first customer."
         emptyAction={
-          <Link
-            href="/customers/new"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 14px",
-              background: "#0c0a09",
-              color: "#fafaf9",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              textDecoration: "none",
-            }}
-          >
-            <Plus style={{ width: 14, height: 14 }} />
+          <ListingAction href="/customers/new">
+            <Plus className="size-3.5" />
             Add customer
-          </Link>
+          </ListingAction>
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}

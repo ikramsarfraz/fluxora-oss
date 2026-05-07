@@ -1,26 +1,44 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import * as React from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronsUpDown,
+  Search,
+  X,
+} from "lucide-react";
 
-// ─── Design tokens ──────────────────────────────────────────────────────────
-
-const T = {
-  bg: "#fafaf9",
-  surface: "#ffffff",
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(0.35 0.08 240)",
-  radius: "10px",
-  radiusSm: "6px",
-  mono: "'Geist Mono', ui-monospace, monospace" as const,
-} as const;
-
-// ─── Types ──────────────────────────────────────────────────────────────────
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 
 export interface TwoLineCell {
   primary: React.ReactNode;
@@ -89,7 +107,6 @@ export interface ListingPageProps<TRow> {
   emptyDescription?: string;
   emptyAction?: React.ReactNode;
   hidePagination?: boolean;
-  // Pagination
   page: number;
   pageSize: number;
   pageCount: number;
@@ -102,42 +119,75 @@ export interface ListingPageProps<TRow> {
   onSortChange?: (key: string, dir: "asc" | "desc") => void;
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function SortIcon({ active, direction }: { active: boolean; direction: "asc" | "desc" }) {
-  if (!active) return <ChevronsUpDown style={{ width: 12, height: 12, opacity: 0.4 }} />;
-  if (direction === "asc") return <ChevronUp style={{ width: 12, height: 12 }} />;
-  return <ChevronDown style={{ width: 12, height: 12 }} />;
+function SortIcon({
+  active,
+  direction,
+}: {
+  active: boolean;
+  direction: "asc" | "desc";
+}) {
+  if (!active) return <ChevronsUpDown className="size-3 opacity-40" />;
+  if (direction === "asc") return <ChevronUp className="size-3" />;
+  return <ChevronDown className="size-3" />;
 }
 
 function LoadingBar() {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: "2px",
-        background: T.line2,
-        overflow: "hidden",
-        zIndex: 2,
-      }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width: "40%",
-          background: T.accent,
-          borderRadius: "2px",
-          animation: "listing-slide 1.2s ease-in-out infinite",
-        }}
-      />
+    <div className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-stone-line2">
+      <div className="h-full w-2/5 animate-[listing-slide_1.2s_ease-in-out_infinite] rounded-sm bg-primary" />
     </div>
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+export function ListingAction({
+  href,
+  children,
+  variant = "default",
+  className,
+}: {
+  href: string;
+  children: React.ReactNode;
+  variant?: "default" | "outline";
+  className?: string;
+}) {
+  return (
+    <Button
+      asChild
+      size="sm"
+      variant={variant}
+      className={cn(
+        variant === "default" &&
+          "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
+        "text-[13px]",
+        className,
+      )}
+    >
+      <Link href={href}>{children}</Link>
+    </Button>
+  );
+}
+
+function HeaderToggleCount({
+  count,
+  active,
+}: {
+  count: number;
+  active: boolean;
+}) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        "h-5 rounded-full px-1.5 text-[11px]",
+        active
+          ? "bg-stone-ink text-stone-surface"
+          : "bg-stone-line text-stone-muted",
+      )}
+    >
+      {count}
+    </Badge>
+  );
+}
 
 export function ListingPage<TRow>({
   title,
@@ -148,7 +198,7 @@ export function ListingPage<TRow>({
   activeView,
   onViewChange,
   kpis,
-  searchPlaceholder = "Search…",
+  searchPlaceholder = "Search...",
   statusSegments,
   activeSegment,
   onSegmentChange,
@@ -175,25 +225,6 @@ export function ListingPage<TRow>({
   onSearchChange,
   onSortChange,
 }: ListingPageProps<TRow>) {
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  // Inject keyframe animation
-  useEffect(() => {
-    const id = "listing-page-keyframes";
-    if (!document.getElementById(id)) {
-      const style = document.createElement("style");
-      style.id = id;
-      style.textContent = `
-        @keyframes listing-slide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(350%); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }, []);
-
   function handleSort(col: ListingColumn<TRow>) {
     if (!col.sortKey || !onSortChange) return;
     if (sort === col.sortKey) {
@@ -205,565 +236,386 @@ export function ListingPage<TRow>({
 
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
-
   const isEmpty = !isLoading && rows.length === 0 && !searchInput.trim();
+  const activeSavedView = activeView ?? savedViews?.[0]?.id ?? "";
+  const activeStatusSegment = activeSegment ?? statusSegments?.[0]?.value ?? "";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-
-      {/* ── Page header ── */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          gap: 16,
-          paddingBottom: 20,
-          marginBottom: 0,
-        }}
-      >
+    <div className="flex flex-col">
+      <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div>
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              color: T.ink,
-              margin: 0,
-            }}
-          >
+          <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
             {title}
           </h1>
-          {subtitle && (
-            <p style={{ fontSize: 13, color: T.muted, marginTop: 3, marginBottom: 0 }}>
+          {subtitle ? (
+            <p className="mt-1 mb-0 text-[13px] text-stone-muted">
               {subtitle}
             </p>
-          )}
+          ) : null}
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
-          {secondaryActions}
-          {primaryAction}
-        </div>
+        {(secondaryActions || primaryAction) && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {secondaryActions}
+            {primaryAction}
+          </div>
+        )}
       </div>
 
-      {/* ── Saved views ── */}
-      {savedViews && savedViews.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            gap: 0,
-            borderBottom: `1px solid ${T.line}`,
-            marginBottom: 0,
+      {savedViews && savedViews.length > 0 ? (
+        <ToggleGroup
+          type="single"
+          value={activeSavedView}
+          onValueChange={value => {
+            if (value) onViewChange?.(value);
           }}
+          className="mb-0 w-full justify-start rounded-none border-b border-stone-line"
+          variant="default"
+          size="sm"
         >
           {savedViews.map(view => {
-            const isActive = (activeView ?? savedViews[0]?.id) === view.id;
+            const isActive = activeSavedView === view.id;
             return (
-              <button
+              <ToggleGroupItem
                 key={view.id}
-                type="button"
-                onClick={() => onViewChange?.(view.id)}
-                style={{
-                  padding: "10px 14px",
-                  fontSize: 13,
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? T.ink : T.muted,
-                  background: "none",
-                  border: "none",
-                  borderBottom: `2px solid ${isActive ? T.ink : "transparent"}`,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  marginBottom: -1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  transition: "color 0.15s",
-                }}
+                value={view.id}
+                className={cn(
+                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-stone-muted hover:bg-transparent hover:text-stone-ink data-[state=on]:border-stone-ink data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-stone-ink",
+                )}
               >
                 {view.label}
-                {view.count !== undefined && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 500,
-                      padding: "1px 6px",
-                      borderRadius: 100,
-                      background: isActive ? T.ink : T.line,
-                      color: isActive ? T.surface : T.muted,
-                    }}
-                  >
-                    {view.count}
-                  </span>
-                )}
-              </button>
+                {view.count !== undefined ? (
+                  <HeaderToggleCount count={view.count} active={isActive} />
+                ) : null}
+              </ToggleGroupItem>
             );
           })}
-        </div>
-      )}
+        </ToggleGroup>
+      ) : null}
 
-      {/* ── KPI strip ── */}
-      {kpis && kpis.length > 0 && (
+      {kpis && kpis.length > 0 ? (
         <div
+          className="my-4 grid overflow-hidden rounded-md border border-stone-line bg-stone-line"
           style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${kpis.length}, 1fr)`,
+            gridTemplateColumns: `repeat(${kpis.length}, minmax(0, 1fr))`,
             gap: 1,
-            background: T.line,
-            border: `1px solid ${T.line}`,
-            borderRadius: T.radiusSm,
-            overflow: "hidden",
-            margin: "16px 0",
           }}
         >
           {kpis.map((kpi, i) => (
-            <div
-              key={i}
-              style={{
-                background: T.surface,
-                padding: "14px 18px",
-              }}
-            >
-              <div style={{ fontSize: 11, color: T.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+            <div key={i} className="bg-stone-surface px-4.5 py-3.5">
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted">
                 {kpi.label}
               </div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: T.ink, fontFamily: T.mono }}>
+              <div className="font-mono text-[22px] font-semibold leading-tight text-stone-ink">
                 {kpi.value}
               </div>
-              {kpi.sub && (
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{kpi.sub}</div>
-              )}
+              {kpi.sub ? (
+                <div className="mt-0.5 text-[11px] text-stone-muted">
+                  {kpi.sub}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
-      {/* ── Main card ── */}
-      <div
-        style={{
-          background: T.surface,
-          border: `1px solid ${T.line}`,
-          borderRadius: T.radius,
-          overflow: "hidden",
-          marginTop: (savedViews && savedViews.length > 0) || (kpis && kpis.length > 0) ? 16 : 16,
-        }}
-      >
-        {/* ── Toolbar ── */}
-        <div
-          style={{
-            padding: "12px 16px",
-            borderBottom: `1px solid ${T.line2}`,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexWrap: "wrap",
-          }}
-        >
-          {/* Search */}
-          <div style={{ position: "relative", flex: "1 1 180px", minWidth: 140, maxWidth: 320 }}>
-            <Search
-              style={{
-                position: "absolute",
-                left: 10,
-                top: "50%",
-                transform: "translateY(-50%)",
-                width: 14,
-                height: 14,
-                color: T.muted,
-                pointerEvents: "none",
-              }}
-            />
-            <input
-              ref={searchRef}
+      <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-stone-line2 px-4 py-3">
+          <InputGroup className="h-8 max-w-80 flex-[1_1_180px] border-stone-line bg-stone-line2 shadow-none">
+            <InputGroupAddon align="inline-start">
+              <Search className="size-3.5" />
+            </InputGroupAddon>
+            <InputGroupInput
               value={searchInput}
               onChange={e => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              style={{
-                width: "100%",
-                paddingLeft: 32,
-                paddingRight: searchInput ? 28 : 10,
-                paddingTop: 7,
-                paddingBottom: 7,
-                border: `1px solid ${T.line}`,
-                borderRadius: T.radiusSm,
-                background: T.line2,
-                fontSize: 13,
-                color: T.ink,
-                outline: "none",
-                fontFamily: "inherit",
-                boxSizing: "border-box",
-              }}
+              className="text-[13px]"
             />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => onSearchChange("")}
-                style={{
-                  position: "absolute",
-                  right: 8,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  color: T.muted,
-                  display: "flex",
-                }}
-              >
-                <X style={{ width: 13, height: 13 }} />
-              </button>
-            )}
-          </div>
+            {searchInput ? (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Clear search"
+                  onClick={() => onSearchChange("")}
+                >
+                  <X className="size-3.5" />
+                </InputGroupButton>
+              </InputGroupAddon>
+            ) : null}
+          </InputGroup>
 
-          {/* Status segments */}
-          {statusSegments && statusSegments.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                background: T.line2,
-                borderRadius: T.radiusSm,
-                padding: 2,
-                gap: 1,
+          {statusSegments && statusSegments.length > 0 ? (
+            <ToggleGroup
+              type="single"
+              value={activeStatusSegment}
+              onValueChange={value => {
+                if (value) onSegmentChange?.(value);
               }}
+              spacing={1}
+              className="rounded-md bg-stone-line2 p-0.5"
+              variant="default"
+              size="sm"
             >
-              {statusSegments.map(seg => {
-                const isActive = (activeSegment ?? statusSegments[0]?.value) === seg.value;
-                return (
-                  <button
-                    key={seg.value}
-                    type="button"
-                    onClick={() => onSegmentChange?.(seg.value)}
-                    style={{
-                      padding: "5px 11px",
-                      fontSize: 12,
-                      fontWeight: isActive ? 500 : 400,
-                      color: isActive ? T.ink : T.muted,
-                      background: isActive ? T.surface : "transparent",
-                      border: isActive ? `1px solid ${T.line}` : "1px solid transparent",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                      transition: "all 0.12s",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {seg.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+              {statusSegments.map(seg => (
+                <ToggleGroupItem
+                  key={seg.value}
+                  value={seg.value}
+                  className="h-7 rounded px-2.5 text-xs font-normal text-stone-muted shadow-none hover:bg-transparent hover:text-stone-ink data-[state=on]:border data-[state=on]:border-stone-line data-[state=on]:bg-stone-surface data-[state=on]:font-medium data-[state=on]:text-stone-ink data-[state=on]:shadow-xs"
+                >
+                  {seg.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          ) : null}
 
-          {/* Spacer + record count */}
-          <div style={{ marginLeft: "auto", fontSize: 12, color: T.muted, whiteSpace: "nowrap" }}>
-            {isLoading ? "Loading…" : total > 0 ? `${total.toLocaleString()} record${total === 1 ? "" : "s"}` : ""}
+          <div className="ml-auto whitespace-nowrap text-xs text-stone-muted">
+            {isLoading
+              ? "Loading..."
+              : total > 0
+                ? `${total.toLocaleString()} record${total === 1 ? "" : "s"}`
+                : ""}
           </div>
         </div>
 
-        {/* ── Table ── */}
-        <div style={{ position: "relative", overflowX: "auto" }}>
-          {isFetching && !isLoading && <LoadingBar />}
+        <div className="relative">
+          {isFetching && !isLoading ? <LoadingBar /> : null}
 
           {isLoading ? (
-            <div style={{ padding: "48px 24px", textAlign: "center", color: T.muted, fontSize: 13 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+            <div className="px-6 py-12 text-center text-[13px] text-stone-muted">
+              <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
                 {[...Array(5)].map((_, i) => (
-                  <div
+                  <Skeleton
                     key={i}
-                    style={{
-                      height: 14,
-                      width: `${60 + (i % 3) * 15}%`,
-                      background: T.line2,
-                      borderRadius: 4,
-                      opacity: 1 - i * 0.1,
-                    }}
+                    className="h-3.5 rounded-sm bg-stone-line2"
+                    style={{ width: `${60 + (i % 3) * 15}%`, opacity: 1 - i * 0.1 }}
                   />
                 ))}
               </div>
             </div>
           ) : isEmpty ? (
-            <div style={{ padding: "64px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            <div className="px-6 py-16 text-center">
+              <div className="mb-1.5 text-sm font-medium text-stone-ink">
                 {emptyTitle}
               </div>
-              {emptyDescription && (
-                <div style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>{emptyDescription}</div>
-              )}
+              {emptyDescription ? (
+                <div className="mb-4 text-[13px] text-stone-muted">
+                  {emptyDescription}
+                </div>
+              ) : null}
               {emptyAction}
             </div>
           ) : (
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: 13,
-                color: T.ink2,
-                opacity: isFetching ? 0.6 : 1,
-                transition: "opacity 0.15s",
-              }}
+            <div
+              className={cn(
+                "transition-opacity",
+                isFetching && "opacity-60",
+              )}
             >
-              <thead>
-                <tr>
-                  {columns.map(col => (
-                    <th
-                      key={col.key}
-                      style={{
-                        padding: "10px 16px",
-                        textAlign: col.align === "right" ? "right" : col.align === "center" ? "center" : "left",
-                        fontWeight: 500,
-                        fontSize: 12,
-                        color: T.muted,
-                        borderBottom: `1px solid ${T.line2}`,
-                        background: T.line2,
-                        whiteSpace: "nowrap",
-                        width: col.width,
-                        userSelect: "none",
-                        cursor: col.sortKey ? "pointer" : "default",
-                      }}
-                      onClick={() => col.sortKey && handleSort(col)}
-                    >
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        {col.header}
-                        {col.sortKey && (
-                          <SortIcon active={sort === col.sortKey} direction={direction} />
+              <Table className="text-[13px] text-stone-ink2">
+                <TableHeader>
+                  <TableRow className="border-stone-line2 hover:bg-transparent">
+                    {columns.map(col => (
+                      <TableHead
+                        key={col.key}
+                        style={{ width: col.width }}
+                        onClick={() => col.sortKey && handleSort(col)}
+                        className={cn(
+                          "h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted",
+                          col.sortKey && "cursor-pointer",
+                          col.align === "right" && "text-right",
+                          col.align === "center" && "text-center",
                         )}
-                      </span>
-                    </th>
-                  ))}
-                  {rowActions && rowActions.length > 0 && (
-                    <th
-                      style={{
-                        padding: "10px 16px",
-                        width: 1,
-                        background: T.line2,
-                        borderBottom: `1px solid ${T.line2}`,
-                      }}
-                    />
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={columns.length + (rowActions ? 1 : 0)}
-                      style={{ padding: "32px 24px", textAlign: "center", color: T.muted, fontSize: 13 }}
-                    >
-                      No results match your search.
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row, idx) => {
-                    const rowId = getRowId ? getRowId(row) : String(idx);
-                    const isHovered = hoveredRow === rowId;
-                    return (
-                      <tr
-                        key={rowId}
-                        onMouseEnter={() => setHoveredRow(rowId)}
-                        onMouseLeave={() => setHoveredRow(null)}
-                        onClick={onRowClick ? () => onRowClick(row) : undefined}
-                        style={{
-                          background: isHovered ? T.line2 : "transparent",
-                          cursor: onRowClick ? "pointer" : "default",
-                          transition: "background 0.1s",
-                          borderBottom: `1px solid ${T.line2}`,
-                        }}
                       >
-                        {columns.map(col => {
-                          const value = col.render(row);
-                          return (
-                            <td
-                              key={col.key}
-                              style={{
-                                padding: "11px 16px",
-                                textAlign: col.align === "right" ? "right" : col.align === "center" ? "center" : "left",
-                                verticalAlign: "middle",
-                              }}
-                            >
-                              {isTwoLine(value) ? (
-                                <div>
-                                  <div>{value.primary}</div>
-                                  {value.secondary !== undefined && (
-                                    <div style={{ fontSize: 11, color: T.muted, marginTop: 1 }}>
-                                      {value.secondary}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                value
-                              )}
-                            </td>
-                          );
-                        })}
-                        {rowActions && rowActions.length > 0 && (
-                          <td
-                            style={{
-                              padding: "11px 16px",
-                              whiteSpace: "nowrap",
-                              opacity: isHovered ? 1 : 0,
-                              transition: "opacity 0.12s",
-                            }}
-                          >
-                            <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "flex-end" }}>
-                              {rowActions.map((action, aIdx) => {
-                                const isDestructive = action.variant === "destructive";
-                                const href = action.href?.(row);
-                                const btnStyle: React.CSSProperties = {
-                                  padding: "4px 10px",
-                                  fontSize: 12,
-                                  fontWeight: 500,
-                                  color: isDestructive ? "oklch(0.55 0.22 25)" : T.ink2,
-                                  background: T.surface,
-                                  border: `1px solid ${T.line}`,
-                                  borderRadius: "5px",
-                                  cursor: "pointer",
-                                  fontFamily: "inherit",
-                                  textDecoration: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                };
-                                if (href) {
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1",
+                            col.align === "right" && "justify-end",
+                            col.align === "center" && "justify-center",
+                          )}
+                        >
+                          {col.header}
+                          {col.sortKey ? (
+                            <SortIcon active={sort === col.sortKey} direction={direction} />
+                          ) : null}
+                        </span>
+                      </TableHead>
+                    ))}
+                    {rowActions && rowActions.length > 0 ? (
+                      <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    ) : null}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={columns.length + (rowActions ? 1 : 0)}
+                        className="px-6 py-8 text-center text-[13px] text-stone-muted"
+                      >
+                        No results match your search.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    rows.map((row, idx) => {
+                      const rowId = getRowId ? getRowId(row) : String(idx);
+                      return (
+                        <TableRow
+                          key={rowId}
+                          onClick={onRowClick ? () => onRowClick(row) : undefined}
+                          className={cn(
+                            "group/row border-stone-line2 hover:bg-stone-line2",
+                            onRowClick && "cursor-pointer",
+                          )}
+                        >
+                          {columns.map(col => {
+                            const value = col.render(row);
+                            return (
+                              <TableCell
+                                key={col.key}
+                                className={cn(
+                                  "px-4 py-2.5 align-middle whitespace-normal",
+                                  col.align === "right" && "text-right",
+                                  col.align === "center" && "text-center",
+                                )}
+                              >
+                                {isTwoLine(value) ? (
+                                  <div>
+                                    <div>{value.primary}</div>
+                                    {value.secondary !== undefined ? (
+                                      <div className="mt-px text-[11px] text-stone-muted">
+                                        {value.secondary}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  value
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                          {rowActions && rowActions.length > 0 ? (
+                            <TableCell className="px-4 py-2.5 whitespace-nowrap opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
+                              <div className="flex items-center justify-end gap-1">
+                                {rowActions.map((action, aIdx) => {
+                                  const href = action.href?.(row);
+                                  const isDestructive =
+                                    action.variant === "destructive";
+                                  if (href) {
+                                    return (
+                                      <Button
+                                        key={aIdx}
+                                        asChild
+                                        variant="outline"
+                                        size="xs"
+                                        className={cn(
+                                          "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                          isDestructive &&
+                                            "text-destructive hover:text-destructive",
+                                        )}
+                                      >
+                                        <Link
+                                          href={href}
+                                          onClick={e => e.stopPropagation()}
+                                        >
+                                          {action.label}
+                                        </Link>
+                                      </Button>
+                                    );
+                                  }
                                   return (
-                                    <Link
+                                    <Button
                                       key={aIdx}
-                                      href={href}
-                                      style={btnStyle}
-                                      onClick={e => e.stopPropagation()}
+                                      type="button"
+                                      variant="outline"
+                                      size="xs"
+                                      className={cn(
+                                        "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                        isDestructive &&
+                                          "text-destructive hover:text-destructive",
+                                      )}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        action.onClick?.(row);
+                                      }}
                                     >
                                       {action.label}
-                                    </Link>
+                                    </Button>
                                   );
-                                }
-                                return (
-                                  <button
-                                    key={aIdx}
-                                    type="button"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      action.onClick?.(row);
-                                    }}
-                                    style={btnStyle}
-                                  >
-                                    {action.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                                })}
+                              </div>
+                            </TableCell>
+                          ) : null}
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
 
-        {/* ── Pagination ── */}
-        {!hidePagination && !isLoading && !isEmpty && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 16px",
-              borderTop: `1px solid ${T.line2}`,
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            {/* Per-page */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.muted }}>
+        {!hidePagination && !isLoading && !isEmpty ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-line2 px-4 py-2.5">
+            <div className="flex items-center gap-1.5 text-xs text-stone-muted">
               <span>Rows</span>
-              <select
-                value={pageSize}
-                onChange={e => onPageSizeChange(Number(e.target.value))}
-                style={{
-                  padding: "3px 6px",
-                  border: `1px solid ${T.line}`,
-                  borderRadius: "5px",
-                  background: T.surface,
-                  fontSize: 12,
-                  color: T.ink2,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                }}
+              <Select
+                value={String(pageSize)}
+                onValueChange={value => onPageSizeChange(Number(value))}
               >
-                {[10, 25, 50, 100].map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  size="sm"
+                  className="h-7 w-[72px] border-stone-line bg-stone-surface px-2 text-xs text-stone-ink2 shadow-none"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map(n => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Count */}
-            <div style={{ fontSize: 12, color: T.muted }}>
-              {total > 0 ? `${start}–${end} of ${total.toLocaleString()}` : "0 records"}
+            <div className="text-xs text-stone-muted">
+              {total > 0 ? `${start}-${end} of ${total.toLocaleString()}` : "0 records"}
             </div>
 
-            {/* Page nav */}
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <NavBtn
-                onClick={() => onPageChange(page - 1)}
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Previous"
                 disabled={page <= 1}
-                label="Previous"
-                icon={<ChevronLeft style={{ width: 14, height: 14 }} />}
-              />
-              <span style={{ fontSize: 12, color: T.muted, padding: "0 6px" }}>
+                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                onClick={() => onPageChange(page - 1)}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <span className="px-1.5 text-xs text-stone-muted">
                 {page} / {pageCount || 1}
               </span>
-              <NavBtn
-                onClick={() => onPageChange(page + 1)}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Next"
                 disabled={page >= pageCount}
-                label="Next"
-                icon={<ChevronRight style={{ width: 14, height: 14 }} />}
-              />
+                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                onClick={() => onPageChange(page + 1)}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
             </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </Card>
     </div>
   );
 }
-
-function NavBtn({
-  onClick,
-  disabled,
-  label,
-  icon,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  label: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      style={{
-        width: 28,
-        height: 28,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        border: `1px solid ${T.line}`,
-        borderRadius: "5px",
-        background: disabled ? T.line2 : T.surface,
-        color: disabled ? T.muted : T.ink2,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      {icon}
-    </button>
-  );
-}
-
-// ─── Pill helper ─────────────────────────────────────────────────────────────
 
 export function StatusPill({
   label,
@@ -777,41 +629,22 @@ export function StatusPill({
   dot?: boolean;
 }) {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "3px 9px",
-        borderRadius: 100,
-        fontSize: 12,
-        fontWeight: 500,
-        background: bg,
-        color,
-        whiteSpace: "nowrap",
-      }}
+    <Badge
+      variant="secondary"
+      className="h-auto rounded-full border-0 px-2.5 py-1 text-xs font-medium"
+      style={{ backgroundColor: bg, color }}
     >
-      {dot && (
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            background: "currentColor",
-            flexShrink: 0,
-          }}
-        />
-      )}
+      {dot ? (
+        <span className="size-1.5 shrink-0 rounded-full bg-current" />
+      ) : null}
       {label}
-    </span>
+    </Badge>
   );
 }
 
-// ─── Mono text helper ─────────────────────────────────────────────────────────
-
 export function MonoText({ children }: { children: React.ReactNode }) {
   return (
-    <span style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 12 }}>
+    <span className="font-mono text-xs tabular-nums">
       {children}
     </span>
   );
