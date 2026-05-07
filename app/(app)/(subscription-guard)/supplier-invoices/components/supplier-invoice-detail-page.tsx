@@ -6,13 +6,8 @@ import { Fragment, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
-  FileText,
-  Package,
-  Pencil,
-  Receipt,
+  MoreHorizontal,
   Trash2,
-  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,23 +22,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-import { DetailPageHeader } from "@/components/detail-page-header";
-import {
-  DetailField,
-  DetailGrid,
-  DetailSection,
-} from "@/components/detail-section";
-import { DetailPageSkeleton } from "@/components/loading-skeletons";
-import { PageError } from "@/components/page-error";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -52,6 +36,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
+import { DetailPageSkeleton } from "@/components/loading-skeletons";
+import { PageError } from "@/components/page-error";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   useCompleteSupplierInvoice,
@@ -74,6 +61,28 @@ import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-c
 import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
 
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  ink: "#0c0a09",
+  ink2: "#44403c",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  line2: "#f5f5f4",
+  accent: "oklch(48% 0.16 265)",
+  good: "oklch(58% 0.13 155)",
+  goodSoft: "oklch(96% 0.04 155)",
+  warn: "oklch(70% 0.13 70)",
+  warnSoft: "oklch(97% 0.04 70)",
+  info: "oklch(60% 0.15 240)",
+  infoSoft: "oklch(96% 0.03 240)",
+  radius: "10px",
+  radiusSm: "6px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
   check: "Check",
@@ -82,10 +91,12 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   credit_card: "Credit card",
 };
 
+function unitTypeLabel(type: "catch_weight" | "fixed_case") {
+  return type === "catch_weight" ? "Catch weight" : "Fixed case";
+}
+
 function renderCaseWeightSummary(caseWeightsLbs: string | null): string | null {
-  return summarizePersistedCaseWeights(
-    parsePersistedCaseWeights(caseWeightsLbs),
-  );
+  return summarizePersistedCaseWeights(parsePersistedCaseWeights(caseWeightsLbs));
 }
 
 function getCaseWeightPatternLabel(caseWeightsLbs: string | null): string | null {
@@ -97,9 +108,7 @@ function getCaseWeightPatternLabel(caseWeightsLbs: string | null): string | null
   return null;
 }
 
-function unitTypeLabel(type: "catch_weight" | "fixed_case") {
-  return type === "catch_weight" ? "Catch weight" : "Fixed case";
-}
+// ── Component ──────────────────────────────────────────────────────────────
 
 export function SupplierInvoiceDetailPage({
   invoiceId,
@@ -110,41 +119,34 @@ export function SupplierInvoiceDetailPage({
   const { data: invoice, isLoading, error } = useSupplierInvoice(invoiceId);
   const { data: currentUser } = useCurrentPortalUser();
   const role = currentUser?.role ?? null;
+
   const completeMutation = useCompleteSupplierInvoice();
   const deleteMutation = useDeleteSupplierInvoice();
   const reverseMutation = useReverseSupplierInvoice();
+
   const [completeOpen, setCompleteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<
-    Set<string>
-  >(new Set());
-
-  useSetBreadcrumbLabel(
-    `/supplier-invoices/${invoiceId}`,
-    invoice?.invoiceNumber,
+  const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<Set<string>>(
+    new Set(),
   );
+
+  useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.invoiceNumber);
 
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
     return (
       <PageError
-        message={
-          error ? (error as Error).message : "Supplier invoice not found."
-        }
+        message={error ? (error as Error).message : "Supplier invoice not found."}
       />
     );
   }
 
-  const isDraft = invoice.status === "draft";
-  const statusBadge = isDraft ? (
-    <Badge variant="secondary">Draft</Badge>
-  ) : (
-    <Badge variant="default">Completed</Badge>
-  );
+  // ── Permission & workflow gates ──────────────────────────────────────────
 
-  // Aggregate receiving summary across all lines.
+  const isDraft = invoice.status === "draft";
+
   const allLots = invoice.lines.flatMap(line =>
     line.lotReceipts.map(r => r.lot).filter(Boolean),
   );
@@ -154,10 +156,8 @@ export function SupplierInvoiceDetailPage({
     (acc, i) => acc + Number(i.exactWeightLbs ?? 0),
     0,
   );
-
-  // Reversal is blocked if any inventory item has been touched downstream
-  // (allocated, picked, packed, shipped, sold, damaged, expired).
   const blockedItems = allItems.filter(i => i.status !== "in_stock");
+
   const workflowAllowsReverse =
     invoice.status === "completed" && blockedItems.length === 0;
   const canReverseByRole = can(role, "reverse_supplier_receipt");
@@ -186,7 +186,6 @@ export function SupplierInvoiceDetailPage({
           ? getPermissionDeniedReason("record_supplier_payment")
           : undefined;
 
-  // Draft-only actions: edit, complete, delete.
   const canEditByRole = can(role, "edit_supplier_invoice");
   const canCompleteByRole = can(role, "complete_supplier_invoice");
   const canDeleteByRole = can(role, "delete_supplier_invoice");
@@ -199,541 +198,720 @@ export function SupplierInvoiceDetailPage({
   const deleteDisabledReason = !canDeleteByRole
     ? getPermissionDeniedReason("delete_supplier_invoice")
     : undefined;
-  const paymentStatusVariant: Record<
+
+  // ── Status pill ──────────────────────────────────────────────────────────
+
+  const statusPill = isDraft
+    ? { label: "Draft", bg: C.line2, color: C.muted }
+    : { label: "Completed", bg: C.goodSoft, color: C.good };
+
+  const paymentStatusPill: Record<
     typeof paymentSummary.paymentStatus,
-    "secondary" | "outline" | "default"
+    { label: string; bg: string; color: string }
   > = {
-    unpaid: "outline",
-    partial: "secondary",
-    paid: "default",
+    unpaid: { label: "Unpaid", bg: C.warnSoft, color: C.warn },
+    partial: { label: "Partially paid", bg: C.infoSoft, color: C.info },
+    paid: { label: "Paid", bg: C.goodSoft, color: C.good },
   };
-  const paymentStatusLabel: Record<typeof paymentSummary.paymentStatus, string> =
-    {
-      unpaid: "Unpaid",
-      partial: "Partially paid",
-      paid: "Paid",
-    };
+
+  // ── Toggle case weight row ───────────────────────────────────────────────
 
   function toggleCaseWeightLine(lineId: string) {
     setExpandedCaseWeightLines(prev => {
       const next = new Set(prev);
-      if (next.has(lineId)) {
-        next.delete(lineId);
-      } else {
-        next.add(lineId);
-      }
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
       return next;
     });
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex flex-col gap-6">
-      <DetailPageHeader
-        title={invoice.invoiceNumber}
-        description={
-          invoice.supplier
-            ? `Supplier invoice from ${invoice.supplier.name}.`
-            : "Supplier invoice."
-        }
-        badge={statusBadge}
-      >
-        {isDraft ? (
-          <>
-            {canEditByRole ? (
-              <Button asChild variant="outline">
-                <Link href={`/supplier-invoices/${invoiceId}/edit`}>
-                  <Pencil className="size-4" />
-                  Edit
-                </Link>
-              </Button>
-            ) : (
-              <Button variant="outline" disabled title={editDisabledReason}>
-                <Pencil className="size-4" />
-                Edit
-              </Button>
-            )}
-            <Button
-              onClick={() => setCompleteOpen(true)}
-              disabled={!canCompleteByRole}
-              title={completeDisabledReason}
-            >
-              <CheckCircle2 className="size-4" />
-              Complete & receive
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setReverseOpen(true)}
-              disabled={!canReverse || reverseMutation.isPending}
-              title={reverseDisabledReason}
-            >
-              <Undo2 className="size-4" />
-              Reverse receipt
-            </Button>
-            <Button
-              onClick={() => setPaymentOpen(true)}
-              disabled={!canRecordPayment}
-              title={recordPaymentDisabledReason}
-            >
-              <Receipt className="size-4" />
-              Record payment
-            </Button>
-          </>
-        )}
-      </DetailPageHeader>
+    <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
 
-      <DetailSection
-        title="Header"
-        description="Invoice metadata and receiving window."
+      {/* ── PAGE HEADER ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          gap: "24px",
+          alignItems: "start",
+          paddingBottom: "22px",
+          borderBottom: `1px solid ${C.line}`,
+          marginBottom: "24px",
+        }}
       >
-        <DetailGrid>
-          <DetailField label="Supplier">
-            {invoice.supplier ? (
-              <Link
-                href={`/suppliers/${invoice.supplier.id}`}
-                className="hover:underline"
-              >
-                {invoice.supplier.name}
-              </Link>
-            ) : (
-              <span className="text-muted-foreground">-</span>
-            )}
-          </DetailField>
-          <DetailField label="Invoice number">
-            <span className="font-mono text-sm">{invoice.invoiceNumber}</span>
-          </DetailField>
-          <DetailField label="Invoice date">
-            {formatDisplayDate(invoice.invoiceDate)}
-          </DetailField>
-          <DetailField label="Receive date">
-            {formatDisplayDate(invoice.receiveDate)}
-          </DetailField>
-          <DetailField label="Total">
-            <span className="tabular-nums">
-              {formatMoney(invoice.totalAmount)}
+        {/* Left: identity */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontFamily: C.mono,
+                fontSize: "26px",
+                fontWeight: 600,
+                letterSpacing: "-0.025em",
+                color: C.ink,
+                margin: 0,
+              }}
+            >
+              {invoice.invoiceNumber}
+            </h1>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "4px 10px",
+                borderRadius: "100px",
+                fontSize: "12px",
+                fontWeight: 500,
+                background: statusPill.bg,
+                color: statusPill.color,
+              }}
+            >
+              <span
+                style={{
+                  width: "6px",
+                  height: "6px",
+                  borderRadius: "50%",
+                  background: "currentColor",
+                  flexShrink: 0,
+                }}
+              />
+              {statusPill.label}
             </span>
-          </DetailField>
-          <DetailField label="Payment method">
-            {invoice.paymentMethod
-              ? (PAYMENT_METHOD_LABELS[invoice.paymentMethod] ??
-                invoice.paymentMethod)
-              : "Not specified"}
-          </DetailField>
-          <DetailField label="Status">{statusBadge}</DetailField>
-          {invoice.completedAt && (
-            <DetailField label="Completed">
-              {new Date(invoice.completedAt).toLocaleString()}
-            </DetailField>
-          )}
-        </DetailGrid>
-        {invoice.notes && (
-          <div className="mt-4">
-            <div className="text-muted-foreground mb-1 text-sm font-medium">
-              Notes
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
           </div>
-        )}
-      </DetailSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FileText className="size-4" />
-            Line items
-          </CardTitle>
-          <CardDescription>
-            Products included on this invoice. Each line produces one lot on
-            completion.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Unit type</TableHead>
-                  <TableHead className="text-right">Cases</TableHead>
-                  <TableHead className="text-right">Weight lbs</TableHead>
-                  <TableHead className="text-right">Unit price</TableHead>
-                  <TableHead className="text-right">Line total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invoice.lines.length === 0 ? (
+          {invoice.supplier && (
+            <div style={{ fontSize: "16px", color: C.ink2, marginTop: "4px" }}>
+              {invoice.supplier.name}
+            </div>
+          )}
+
+          <div
+            style={{
+              display: "flex",
+              gap: "18px",
+              marginTop: "14px",
+              color: C.muted,
+              fontSize: "13px",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>
+              <b style={{ color: C.ink2, fontWeight: 500 }}>Invoice date</b>{" "}
+              {formatDisplayDate(invoice.invoiceDate)}
+            </span>
+            <span>
+              <b style={{ color: C.ink2, fontWeight: 500 }}>Receive date</b>{" "}
+              {formatDisplayDate(invoice.receiveDate)}
+            </span>
+            {invoice.createdBy?.fullName && (
+              <span>by {invoice.createdBy.fullName}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Right: actions */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+          {isDraft ? (
+            <>
+              <SecondaryBtn
+                onClick={() => router.push(`/supplier-invoices/${invoiceId}/edit`)}
+                disabled={!canEditByRole}
+                title={editDisabledReason}
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M11 2l3 3-8 8-4 1 1-4 8-8Z" />
+                </svg>
+                Edit
+              </SecondaryBtn>
+              <PrimaryBtn
+                onClick={() => setCompleteOpen(true)}
+                disabled={!canCompleteByRole}
+                title={completeDisabledReason}
+              >
+                Complete &amp; receive
+              </PrimaryBtn>
+            </>
+          ) : (
+            <>
+              <SecondaryBtn
+                onClick={() => setReverseOpen(true)}
+                disabled={!canReverse || reverseMutation.isPending}
+                title={reverseDisabledReason}
+              >
+                Reverse receipt
+              </SecondaryBtn>
+              <PrimaryBtn
+                onClick={() => setPaymentOpen(true)}
+                disabled={!canRecordPayment}
+                title={recordPaymentDisabledReason}
+              >
+                Record payment
+              </PrimaryBtn>
+            </>
+          )}
+
+          {/* More menu */}
+          {isDraft && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    display: "grid",
+                    placeItems: "center",
+                    borderRadius: C.radiusSm,
+                    border: `1px solid ${C.line}`,
+                    background: C.surface,
+                    color: C.ink2,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={canDeleteByRole ? () => setDeleteOpen(true) : undefined}
+                  disabled={!canDeleteByRole}
+                  title={deleteDisabledReason}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete draft
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+
+      {/* ── BODY GRID ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 300px",
+          gap: "28px",
+          alignItems: "start",
+        }}
+      >
+        {/* ── LEFT COLUMN ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+
+          {/* Line items */}
+          <Section
+            title="Line items"
+            description="Products included on this invoice. Each line produces one lot on completion."
+          >
+            <div style={{ overflowX: "auto" }}>
+              <Table>
+                <TableHeader className="bg-muted">
                   <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-muted-foreground h-20 text-center"
-                    >
-                      No lines on this invoice.
-                    </TableCell>
+                    <TableHead>Product</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Unit type</TableHead>
+                    <TableHead className="text-right">Cases</TableHead>
+                    <TableHead className="text-right">Weight lbs</TableHead>
+                    <TableHead className="text-right">Unit price</TableHead>
+                    <TableHead className="text-right">Line total</TableHead>
                   </TableRow>
-                ) : (
-                  invoice.lines.map(line => {
-                    const caseWeights = parsePersistedCaseWeights(
-                      line.caseWeightsLbs,
-                    );
-                    const hasDetailedCaseWeights =
-                      line.unitType === "catch_weight" && caseWeights.length > 0;
-                    const isExpanded = expandedCaseWeightLines.has(line.id);
-                    const summary = renderCaseWeightSummary(line.caseWeightsLbs);
-                    const patternLabel = getCaseWeightPatternLabel(
-                      line.caseWeightsLbs,
-                    );
+                </TableHeader>
+                <TableBody>
+                  {invoice.lines.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-muted-foreground h-20 text-center"
+                      >
+                        No lines on this invoice.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    invoice.lines.map(line => {
+                      const caseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
+                      const hasDetailedCaseWeights =
+                        line.unitType === "catch_weight" && caseWeights.length > 0;
+                      const isExpanded = expandedCaseWeightLines.has(line.id);
+                      const summary = renderCaseWeightSummary(line.caseWeightsLbs);
+                      const patternLabel = getCaseWeightPatternLabel(line.caseWeightsLbs);
 
-                    return (
-                      <Fragment key={line.id}>
-                        <TableRow>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {hasDetailedCaseWeights ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={() => toggleCaseWeightLine(line.id)}
-                                  aria-label={
-                                    isExpanded
-                                      ? "Hide case weight breakdown"
-                                      : "Show case weight breakdown"
-                                  }
-                                >
-                                  {isExpanded ? (
-                                    <ChevronDown className="size-3.5" />
-                                  ) : (
-                                    <ChevronRight className="size-3.5" />
-                                  )}
-                                </Button>
-                              ) : null}
-                              {line.product ? (
-                                <Link
-                                  href={`/products/${line.product.id}`}
-                                  className="hover:underline"
-                                >
-                                  {line.product.name}
-                                </Link>
-                              ) : (
-                                "-"
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className="font-mono text-xs"
-                            >
-                              {line.product?.sku ?? "-"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col items-start gap-1">
-                              <span>{unitTypeLabel(line.unitType)}</span>
-                              {patternLabel ? (
-                                <Badge variant="secondary" className="text-[10px]">
-                                  {patternLabel}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {line.quantityCases}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            <div className="flex flex-col items-end">
-                              <span>{Number(line.weightLbs).toFixed(2)}</span>
-                              {summary ? (
-                                <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
-                                  {summary}
-                                </span>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatMoney(line.unitPrice)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatMoney(line.lineTotal)}
-                          </TableCell>
-                        </TableRow>
-                        {hasDetailedCaseWeights && isExpanded ? (
+                      return (
+                        <Fragment key={line.id}>
                           <TableRow>
-                            <TableCell colSpan={7} className="bg-muted/20 py-3">
-                              <div className="flex flex-col gap-3">
-                                <div className="flex flex-wrap items-center gap-2 text-sm">
-                                  <Badge variant="outline" className="text-xs">
-                                    {caseWeights.length} case
-                                    {caseWeights.length === 1 ? "" : "s"}
-                                  </Badge>
-                                  <span className="text-muted-foreground">
-                                    {Number(line.weightLbs).toFixed(2)} lb total
-                                  </span>
-                                </div>
-                                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                                  {caseWeights.map((weight, caseIndex) => (
-                                    <div
-                                      key={`${line.id}-case-${caseIndex + 1}`}
-                                      className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
-                                    >
-                                      <span className="text-muted-foreground">
-                                        Case {caseIndex + 1}
-                                      </span>
-                                      <span className="font-medium tabular-nums">
-                                        {formatEditableWeight(weight)} lb
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {hasDetailedCaseWeights ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCaseWeightLine(line.id)}
+                                    aria-label={
+                                      isExpanded
+                                        ? "Hide case weight breakdown"
+                                        : "Show case weight breakdown"
+                                    }
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      display: "grid",
+                                      placeItems: "center",
+                                      background: "none",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      color: C.muted,
+                                      padding: 0,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown style={{ width: "14px", height: "14px" }} />
+                                    ) : (
+                                      <ChevronRight style={{ width: "14px", height: "14px" }} />
+                                    )}
+                                  </button>
+                                ) : null}
+                                {line.product ? (
+                                  <Link
+                                    href={`/products/${line.product.id}`}
+                                    style={{ color: C.accent, textDecoration: "none" }}
+                                    className="hover:underline"
+                                  >
+                                    {line.product.name}
+                                  </Link>
+                                ) : (
+                                  "-"
+                                )}
                               </div>
                             </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Package className="size-4" />
-            Receiving summary
-          </CardTitle>
-          <CardDescription>
-            Lots and inventory items created from this invoice.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {allLots.length === 0 ? (
-            <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-              {isDraft
-                ? "Nothing received yet. Complete the invoice to create lots and inventory."
-                : "This invoice did not produce any receiving records."}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <DetailGrid>
-                <DetailField label="Lots created">{allLots.length}</DetailField>
-                <DetailField label="Inventory items">
-                  {allItems.length}
-                </DetailField>
-                <DetailField label="Total cases">{totalCases}</DetailField>
-                <DetailField label="Total weight">
-                  <span className="tabular-nums">
-                    {totalWeight.toFixed(2)} lbs
-                  </span>
-                </DetailField>
-              </DetailGrid>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader className="bg-muted">
-                    <TableRow>
-                      <TableHead>Lot #</TableHead>
-                      <TableHead>Expires</TableHead>
-                      <TableHead>Barcode</TableHead>
-                      <TableHead className="text-right">Cases</TableHead>
-                      <TableHead className="text-right">Weight lbs</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoice.lines.flatMap(line =>
-                      line.lotReceipts.flatMap(receipt => {
-                        const lot = receipt.lot;
-                        if (!lot) return [];
-                        return lot.inventoryItems.map(item => (
-                          <TableRow key={item.id}>
                             <TableCell>
-                              <Link
-                                href={`/lots/${lot.id}`}
-                                className="font-mono text-sm hover:underline"
-                              >
-                                {lot.lotNumber}
-                              </Link>
-                            </TableCell>
-                            <TableCell>
-                              {formatDisplayDate(lot.expirationDate)}
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-mono text-xs">
-                                {item.barcodeId}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {item.cases}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {Number(item.exactWeightLbs).toFixed(2)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className="capitalize"
-                              >
-                                {item.status.replace("_", " ")}
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {line.product?.sku ?? "-"}
                               </Badge>
                             </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col items-start gap-1">
+                                <span>{unitTypeLabel(line.unitType)}</span>
+                                {patternLabel ? (
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {patternLabel}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {line.quantityCases}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              <div className="flex flex-col items-end">
+                                <span>{Number(line.weightLbs).toFixed(2)}</span>
+                                {summary ? (
+                                  <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
+                                    {summary}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMoney(line.unitPrice)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMoney(line.lineTotal)}
+                            </TableCell>
                           </TableRow>
-                        ));
-                      }),
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                          {hasDetailedCaseWeights && isExpanded ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="bg-muted/20 py-3">
+                                <div className="flex flex-col gap-3">
+                                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                                    <Badge variant="outline" className="text-xs">
+                                      {caseWeights.length} case
+                                      {caseWeights.length === 1 ? "" : "s"}
+                                    </Badge>
+                                    <span className="text-muted-foreground">
+                                      {Number(line.weightLbs).toFixed(2)} lb total
+                                    </span>
+                                  </div>
+                                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                    {caseWeights.map((weight, caseIndex) => (
+                                      <div
+                                        key={`${line.id}-case-${caseIndex + 1}`}
+                                        className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm"
+                                      >
+                                        <span className="text-muted-foreground">
+                                          Case {caseIndex + 1}
+                                        </span>
+                                        <span className="font-medium tabular-nums">
+                                          {formatEditableWeight(weight)} lb
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </Section>
 
-      {invoice.status === "completed" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Receipt className="size-4" />
-              Payments
-            </CardTitle>
-            <CardDescription>
-              Payments applied to this supplier invoice.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              <DetailGrid>
-                <DetailField label="Total">
-                  <span className="tabular-nums">
-                    {formatMoney(paymentSummary.totalAmount)}
-                  </span>
-                </DetailField>
-                <DetailField label="Total paid">
-                  <span className="tabular-nums">
-                    {formatMoney(paymentSummary.totalPaid)}
-                  </span>
-                </DetailField>
-                <DetailField label="Balance due">
-                  <span className="tabular-nums">
-                    {formatMoney(paymentSummary.balanceDue)}
-                  </span>
-                </DetailField>
-                <DetailField label="Status">
-                  <Badge
-                    variant={
-                      paymentStatusVariant[paymentSummary.paymentStatus]
-                    }
-                    className="capitalize"
-                  >
-                    {paymentStatusLabel[paymentSummary.paymentStatus]}
-                  </Badge>
-                </DetailField>
-              </DetailGrid>
-              {invoice.payments.length === 0 ? (
-                <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-                  No payments recorded yet.
+          {/* Receiving summary */}
+          <Section
+            title="Receiving summary"
+            description="Lots and inventory items created from this invoice."
+          >
+            {allLots.length === 0 ? (
+              <div
+                style={{
+                  border: `1px dashed ${C.line}`,
+                  borderRadius: C.radiusSm,
+                  padding: "24px",
+                  textAlign: "center",
+                  fontSize: "13px",
+                  color: C.muted,
+                }}
+              >
+                {isDraft
+                  ? "Nothing received yet. Complete the invoice to create lots and inventory."
+                  : "This invoice did not produce any receiving records."}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gap: "12px",
+                  }}
+                >
+                  {[
+                    { label: "Lots created", value: allLots.length },
+                    { label: "Inventory items", value: allItems.length },
+                    { label: "Total cases", value: totalCases },
+                    {
+                      label: "Total weight",
+                      value: `${totalWeight.toFixed(2)} lbs`,
+                    },
+                  ].map(({ label, value }) => (
+                    <div
+                      key={label}
+                      style={{
+                        background: C.line2,
+                        borderRadius: C.radiusSm,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: C.muted, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>
+                        {label}
+                      </div>
+                      <div style={{ fontSize: "16px", fontWeight: 600, color: C.ink, fontFamily: C.mono }}>
+                        {value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <div className="overflow-x-auto rounded-md border">
+                <div style={{ overflowX: "auto" }}>
                   <Table>
                     <TableHeader className="bg-muted">
                       <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Recorded by</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead>Lot #</TableHead>
+                        <TableHead>Expires</TableHead>
+                        <TableHead>Barcode</TableHead>
+                        <TableHead className="text-right">Cases</TableHead>
+                        <TableHead className="text-right">Weight lbs</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invoice.payments.map(payment => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
-                            {formatDisplayDate(payment.paymentDate)}
-                          </TableCell>
-                          <TableCell>
-                            {PAYMENT_METHOD_LABELS[payment.paymentMethod] ??
-                              payment.paymentMethod}
-                          </TableCell>
-                          <TableCell>
-                            {payment.reference ? (
-                              <span className="font-mono text-xs">
-                                {payment.reference}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-muted-foreground text-xs">
-                              {payment.createdBy?.fullName ??
-                                payment.createdBy?.email ??
-                                "-"}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {formatMoney(payment.amount)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {invoice.lines.flatMap(line =>
+                        line.lotReceipts.flatMap(receipt => {
+                          const lot = receipt.lot;
+                          if (!lot) return [];
+                          return lot.inventoryItems.map(item => (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <Link
+                                  href={`/lots/${lot.id}`}
+                                  style={{
+                                    fontFamily: C.mono,
+                                    fontSize: "13px",
+                                    color: C.accent,
+                                    textDecoration: "none",
+                                  }}
+                                  className="hover:underline"
+                                >
+                                  {lot.lotNumber}
+                                </Link>
+                              </TableCell>
+                              <TableCell>
+                                {formatDisplayDate(lot.expirationDate)}
+                              </TableCell>
+                              <TableCell>
+                                <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                                  {item.barcodeId}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {item.cases}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {Number(item.exactWeightLbs).toFixed(2)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="capitalize">
+                                  {item.status.replace("_", " ")}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        }),
+                      )}
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </div>
+            )}
+          </Section>
 
-      <SupplierInvoiceAttachmentsCard
-        supplierInvoiceId={invoiceId}
-        attachments={invoice.attachments}
-        canUpload={canEditByRole}
-        canRemove={canEditByRole}
-        uploadDisabledReason={editDisabledReason}
-        removeDisabledReason={editDisabledReason}
-      />
+          {/* Payment history */}
+          {invoice.status === "completed" && invoice.payments.length > 0 && (
+            <Section
+              title="Payment history"
+              description="Payments applied to this supplier invoice."
+            >
+              <div style={{ overflowX: "auto" }}>
+                <Table>
+                  <TableHeader className="bg-muted">
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Recorded by</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoice.payments.map(payment => (
+                      <TableRow key={payment.id}>
+                        <TableCell>
+                          {formatDisplayDate(payment.paymentDate)}
+                        </TableCell>
+                        <TableCell>
+                          {PAYMENT_METHOD_LABELS[payment.paymentMethod] ??
+                            payment.paymentMethod}
+                        </TableCell>
+                        <TableCell>
+                          {payment.reference ? (
+                            <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                              {payment.reference}
+                            </span>
+                          ) : (
+                            <span style={{ color: C.muted }}>—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span style={{ fontSize: "12px", color: C.muted }}>
+                            {payment.createdBy?.fullName ??
+                              payment.createdBy?.email ??
+                              "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatMoney(payment.amount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Section>
+          )}
 
-      <DetailSection
-        title="Activity"
-        description="Who touched this invoice and when."
-      >
-        <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
-      </DetailSection>
+          {/* Attachments */}
+          <SupplierInvoiceAttachmentsCard
+            supplierInvoiceId={invoiceId}
+            attachments={invoice.attachments}
+            canUpload={canEditByRole}
+            canRemove={canEditByRole}
+            uploadDisabledReason={editDisabledReason}
+            removeDisabledReason={editDisabledReason}
+          />
 
-      {isDraft && (
-        <DetailSection
-          title="Danger zone"
-          description="Irreversible actions for this draft."
-          className="border-destructive/50"
+          {/* Activity */}
+          <Section title="Activity" description="Who touched this invoice and when.">
+            <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
+          </Section>
+        </div>
+
+        {/* ── RIGHT SIDEBAR ── */}
+        <aside
+          style={{
+            position: "sticky",
+            top: "76px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
         >
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setDeleteOpen(true)}
-            disabled={deleteMutation.isPending || !canDeleteByRole}
-            title={deleteDisabledReason}
-          >
-            <Trash2 className="size-4" />
-            Delete draft
-          </Button>
-        </DetailSection>
-      )}
+          {/* Invoice details */}
+          <SideCard>
+            <SideLabel>Invoice details</SideLabel>
+            <dl
+              style={{
+                display: "grid",
+                gridTemplateColumns: "90px 1fr",
+                gap: "8px 10px",
+                fontSize: "13px",
+                margin: 0,
+              }}
+            >
+              <dt style={{ color: C.muted }}>Supplier</dt>
+              <dd style={{ margin: 0, fontWeight: 500 }}>
+                {invoice.supplier ? (
+                  <Link
+                    href={`/suppliers/${invoice.supplier.id}`}
+                    style={{ color: C.accent, textDecoration: "none" }}
+                    className="hover:underline"
+                  >
+                    {invoice.supplier.name}
+                  </Link>
+                ) : (
+                  <span style={{ color: C.muted }}>—</span>
+                )}
+              </dd>
+
+              <dt style={{ color: C.muted }}>Invoice #</dt>
+              <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 500 }}>
+                {invoice.invoiceNumber}
+              </dd>
+
+              <dt style={{ color: C.muted }}>Invoice date</dt>
+              <dd style={{ margin: 0, fontWeight: 500 }}>
+                {formatDisplayDate(invoice.invoiceDate)}
+              </dd>
+
+              <dt style={{ color: C.muted }}>Receive date</dt>
+              <dd style={{ margin: 0, fontWeight: 500 }}>
+                {formatDisplayDate(invoice.receiveDate)}
+              </dd>
+
+              <dt style={{ color: C.muted }}>Total</dt>
+              <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 600 }}>
+                {formatMoney(invoice.totalAmount)}
+              </dd>
+
+              <dt style={{ color: C.muted }}>Payment</dt>
+              <dd style={{ margin: 0, fontWeight: 500 }}>
+                {invoice.paymentMethod
+                  ? (PAYMENT_METHOD_LABELS[invoice.paymentMethod] ??
+                    invoice.paymentMethod)
+                  : "Not specified"}
+              </dd>
+
+              {invoice.completedAt && (
+                <>
+                  <dt style={{ color: C.muted }}>Completed</dt>
+                  <dd style={{ margin: 0, fontWeight: 500 }}>
+                    {new Date(invoice.completedAt).toLocaleDateString()}
+                  </dd>
+                </>
+              )}
+            </dl>
+          </SideCard>
+
+          {/* Notes */}
+          {invoice.notes && (
+            <SideCard>
+              <SideLabel>Notes</SideLabel>
+              <p style={{ fontSize: "13px", color: C.ink2, margin: 0, whiteSpace: "pre-wrap" }}>
+                {invoice.notes}
+              </p>
+            </SideCard>
+          )}
+
+          {/* Payment summary */}
+          {invoice.status === "completed" && (
+            <SideCard>
+              <SideLabel>Payments</SideLabel>
+              <dl
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "90px 1fr",
+                  gap: "8px 10px",
+                  fontSize: "13px",
+                  margin: 0,
+                }}
+              >
+                <dt style={{ color: C.muted }}>Total</dt>
+                <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 500 }}>
+                  {formatMoney(paymentSummary.totalAmount)}
+                </dd>
+
+                <dt style={{ color: C.muted }}>Paid</dt>
+                <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 500 }}>
+                  {formatMoney(paymentSummary.totalPaid)}
+                </dd>
+
+                <dt style={{ color: C.muted }}>Balance</dt>
+                <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 600 }}>
+                  {formatMoney(paymentSummary.balanceDue)}
+                </dd>
+              </dl>
+              <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${C.line2}` }}>
+                {(() => {
+                  const pill = paymentStatusPill[paymentSummary.paymentStatus];
+                  return (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "4px 10px",
+                        borderRadius: "100px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        background: pill.bg,
+                        color: pill.color,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          background: "currentColor",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {pill.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            </SideCard>
+          )}
+        </aside>
+      </div>
+
+      {/* ── DIALOGS ── */}
 
       <AlertDialog open={completeOpen} onOpenChange={setCompleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Complete & receive invoice?</AlertDialogTitle>
+            <AlertDialogTitle>Complete &amp; receive invoice?</AlertDialogTitle>
             <AlertDialogDescription>
               This will post <strong>{invoice.invoiceNumber}</strong> and
-              automatically create one lot and one inventory item per line.
-              Lot numbers and expirations will use any overrides you entered,
+              automatically create one lot and one inventory item per line. Lot
+              numbers and expirations will use any overrides you entered,
               otherwise they default to{" "}
               <code>LOT-{invoice.invoiceNumber}-XX</code> and receive date + 7
               days. Completed invoices can no longer be edited.
@@ -751,9 +929,7 @@ export function SupplierInvoiceDetailPage({
                   { id: invoiceId },
                   {
                     onSuccess: () => {
-                      toast.success(
-                        `Invoice "${invoice.invoiceNumber}" posted.`,
-                      );
+                      toast.success(`Invoice "${invoice.invoiceNumber}" posted.`);
                       setCompleteOpen(false);
                     },
                     onError: err =>
@@ -794,9 +970,7 @@ export function SupplierInvoiceDetailPage({
                 event.preventDefault();
                 deleteMutation.mutate(invoiceId, {
                   onSuccess: () => {
-                    toast.success(
-                      `Draft "${invoice.invoiceNumber}" deleted.`,
-                    );
+                    toast.success(`Draft "${invoice.invoiceNumber}" deleted.`);
                     router.push("/supplier-invoices");
                   },
                   onError: err =>
@@ -870,5 +1044,157 @@ export function SupplierInvoiceDetailPage({
         defaultPaymentMethod={invoice.paymentMethod ?? undefined}
       />
     </div>
+  );
+}
+
+// ── Layout primitives ──────────────────────────────────────────────────────
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: C.radius,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "16px 20px",
+          borderBottom: `1px solid ${C.line}`,
+        }}
+      >
+        <div style={{ fontSize: "13px", fontWeight: 600, color: C.ink }}>
+          {title}
+        </div>
+        {description && (
+          <div style={{ fontSize: "12px", color: C.muted, marginTop: "2px" }}>
+            {description}
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "20px" }}>{children}</div>
+    </div>
+  );
+}
+
+function SideCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: C.radius,
+        padding: "16px 18px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SideLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: "11px",
+        fontWeight: 600,
+        color: C.muted,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        marginBottom: "12px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Button primitives ──────────────────────────────────────────────────────
+
+function PrimaryBtn({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        padding: "8px 14px",
+        borderRadius: C.radiusSm,
+        border: `1px solid ${C.ink}`,
+        background: C.ink,
+        color: C.surface,
+        fontSize: "13px",
+        fontWeight: 500,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        fontFamily: "inherit",
+        lineHeight: 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryBtn({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        padding: "8px 14px",
+        borderRadius: C.radiusSm,
+        border: `1px solid ${C.line}`,
+        background: C.surface,
+        color: C.ink,
+        fontSize: "13px",
+        fontWeight: 500,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        fontFamily: "inherit",
+        lineHeight: 1,
+      }}
+    >
+      {children}
+    </button>
   );
 }

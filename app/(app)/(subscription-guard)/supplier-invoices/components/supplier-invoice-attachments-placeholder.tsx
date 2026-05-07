@@ -2,13 +2,14 @@
 
 import { FileUp, Paperclip } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+const C = {
+  ink: "#0c0a09",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  line2: "#f5f5f4",
+  radius: "10px",
+} as const;
 
 /**
  * Shown on the create/edit form only. Real attachment upload lives on the
@@ -17,29 +18,54 @@ import {
  */
 export function SupplierInvoiceAttachmentsPlaceholder() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Paperclip className="size-4" />
-          Supporting documents
-        </CardTitle>
-        <CardDescription>
-          Attach the supplier&apos;s PDF invoice, bill of lading, packing slip,
-          or photos of the shipment.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="border-muted-foreground/25 bg-muted/20 text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center text-sm">
-          <FileUp className="size-8 opacity-50" />
-          <div className="font-medium">
-            Save the draft to attach documents
-          </div>
-          <div className="text-xs">
-            Uploads are available from the invoice detail page once the draft
-            exists.
-          </div>
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: C.radius,
+        padding: "20px 22px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "13px",
+          fontWeight: 600,
+          color: C.ink,
+          marginBottom: "4px",
+        }}
+      >
+        <Paperclip style={{ width: "14px", height: "14px" }} />
+        Supporting documents
+      </div>
+      <div style={{ fontSize: "13px", color: C.muted, marginBottom: "16px" }}>
+        Attach the supplier&apos;s PDF invoice, bill of lading, packing slip, or
+        photos of the shipment.
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          border: `1px dashed ${C.line}`,
+          borderRadius: "6px",
+          background: C.line2,
+          padding: "36px 24px",
+          textAlign: "center",
+        }}
+      >
+        <FileUp style={{ width: "28px", height: "28px", color: C.muted, opacity: 0.5 }} />
+        <div style={{ fontSize: "13px", fontWeight: 500, color: C.muted }}>
+          Save the draft to attach documents
         </div>
-      </CardContent>
-    </Card>
+        <div style={{ fontSize: "12px", color: C.muted }}>
+          Uploads are available from the invoice detail page once the draft exists.
+        </div>
+      </div>
+    </div>
   );
 }

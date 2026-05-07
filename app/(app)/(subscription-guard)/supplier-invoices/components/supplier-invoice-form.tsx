@@ -5,30 +5,6 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useProducts } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-suppliers";
@@ -51,6 +27,55 @@ import {
 } from "./supplier-invoice-form.schema";
 import { SupplierInvoiceLinesEditor } from "./supplier-invoice-lines-editor";
 
+// ── Design tokens ──────────────────────────────────────────────────────────
+const C = {
+  ink: "#0c0a09",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  err: "oklch(55% 0.22 25)",
+  radius: "10px",
+  radiusSm: "6px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
+
+const outlineBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: C.radiusSm,
+  border: `1px solid ${C.line}`,
+  background: C.surface,
+  color: C.ink,
+  fontSize: "13px",
+  fontWeight: 500,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const primaryBtn: React.CSSProperties = {
+  ...outlineBtn,
+  background: C.ink,
+  color: "#fafaf9",
+  borderColor: C.ink,
+};
+
+const fieldBase: React.CSSProperties = {
+  width: "100%",
+  padding: "9px 12px",
+  border: `1px solid ${C.line}`,
+  borderRadius: C.radiusSm,
+  background: C.surface,
+  fontSize: "14px",
+  color: C.ink,
+  fontFamily: "inherit",
+  outline: "none",
+  boxSizing: "border-box" as const,
+};
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
 type Mode = "create" | "edit";
 
 type Props = {
@@ -58,6 +83,8 @@ type Props = {
   invoiceId?: string;
   initialValues?: SupplierInvoiceFormValues;
 };
+
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -75,6 +102,8 @@ function defaultCreateValues(): SupplierInvoiceFormValues {
     lines: [emptyLine()],
   };
 }
+
+// ── Component ──────────────────────────────────────────────────────────────
 
 export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const router = useRouter();
@@ -104,6 +133,10 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     createMutation.isPending ||
     updateMutation.isPending ||
     completeMutation.isPending;
+
+  const cancelPath = invoiceId
+    ? `/supplier-invoices/${invoiceId}`
+    : "/supplier-invoices";
 
   async function submit(values: SupplierInvoiceFormValues, complete: boolean) {
     const normalizedLines = values.lines.map(line => ({
@@ -177,183 +210,298 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   }
 
   return (
-    <form
-      id="supplier-invoice-form"
-      onSubmit={form.handleSubmit(values => submit(values, false))}
-      className="flex flex-col gap-6"
-    >
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Invoice header</CardTitle>
-          <CardDescription>
-            Who sent the invoice, which PO number is on it, and when you
-            received the shipment.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <>
+      <form
+        id="supplier-invoice-form"
+        onSubmit={form.handleSubmit(values => submit(values, false))}
+        style={{ paddingBottom: "72px" }}
+      >
+        {/* Page header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "24px",
+            paddingBottom: "22px",
+            borderBottom: `1px solid ${C.line}`,
+            marginBottom: "28px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "22px",
+                fontWeight: 600,
+                letterSpacing: "-0.02em",
+                color: C.ink,
+              }}
+            >
+              {mode === "create" ? "New supplier invoice" : "Edit supplier invoice"}
+            </div>
+            <div style={{ fontSize: "13px", color: C.muted, marginTop: "4px" }}>
+              {mode === "create"
+                ? "Save a draft while gathering details, or complete to auto-generate lots and inventory."
+                : "Update invoice details. Completing will auto-create lots and inventory."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(cancelPath)}
+            disabled={isPending}
+            style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+          >
+            Cancel
+          </button>
+        </div>
+
+        {/* Invoice header */}
+        <div
+          style={{
+            background: C.surface,
+            border: `1px solid ${C.line}`,
+            borderRadius: C.radius,
+            padding: "20px 22px",
+            marginBottom: "18px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "13px",
+              fontWeight: 600,
+              color: C.ink,
+              marginBottom: "16px",
+            }}
+          >
+            Invoice header
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "14px",
+            }}
+          >
+            {/* Supplier */}
             <Controller
               name="supplierId"
               control={form.control}
               render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="si-supplier">Supplier *</FieldLabel>
-                  <Select
-                    value={field.value || ""}
-                    onValueChange={field.onChange}
-                    disabled={suppliersLoading || isPending}
+                <div>
+                  <label
+                    htmlFor="si-supplier"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
                   >
-                    <SelectTrigger
-                      id="si-supplier"
-                      aria-invalid={fieldState.invalid}
-                    >
-                      <SelectValue
-                        placeholder={
-                          suppliersLoading ? "Loading..." : "Select supplier"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(suppliers ?? []).map(s => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    Supplier *
+                  </label>
+                  <select
+                    id="si-supplier"
+                    value={field.value || ""}
+                    onChange={e => field.onChange(e.target.value)}
+                    disabled={suppliersLoading || isPending}
+                    aria-invalid={fieldState.invalid}
+                    style={{
+                      ...fieldBase,
+                      borderColor: fieldState.invalid ? C.err : C.line,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">
+                      {suppliersLoading ? "Loading..." : "Select supplier"}
+                    </option>
+                    {(suppliers ?? []).map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                   {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
+                    <span style={{ fontSize: "12px", color: C.err, marginTop: "4px", display: "block" }}>
+                      {fieldState.error?.message}
+                    </span>
                   )}
-                </Field>
+                </div>
               )}
             />
 
+            {/* Invoice number */}
             <Controller
               name="invoiceNumber"
               control={form.control}
               render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="si-number">Invoice number *</FieldLabel>
-                  <Input
+                <div>
+                  <label
+                    htmlFor="si-number"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
+                  >
+                    Invoice number *
+                  </label>
+                  <input
                     id="si-number"
                     {...field}
                     disabled={isPending}
-                    aria-invalid={fieldState.invalid}
                     placeholder="e.g. INV-24501"
+                    aria-invalid={fieldState.invalid}
+                    style={{
+                      ...fieldBase,
+                      borderColor: fieldState.invalid ? C.err : C.line,
+                    }}
                   />
                   {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
+                    <span style={{ fontSize: "12px", color: C.err, marginTop: "4px", display: "block" }}>
+                      {fieldState.error?.message}
+                    </span>
                   )}
-                </Field>
+                </div>
               )}
             />
 
+            {/* Invoice date */}
             <Controller
               name="invoiceDate"
               control={form.control}
               render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="si-invoice-date">
+                <div>
+                  <label
+                    htmlFor="si-invoice-date"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
+                  >
                     Invoice date *
-                  </FieldLabel>
-                  <Input
+                  </label>
+                  <input
                     id="si-invoice-date"
                     type="date"
                     {...field}
                     disabled={isPending}
                     aria-invalid={fieldState.invalid}
+                    style={{
+                      ...fieldBase,
+                      fontFamily: C.mono,
+                      borderColor: fieldState.invalid ? C.err : C.line,
+                    }}
                   />
                   {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
+                    <span style={{ fontSize: "12px", color: C.err, marginTop: "4px", display: "block" }}>
+                      {fieldState.error?.message}
+                    </span>
                   )}
-                </Field>
+                </div>
               )}
             />
 
+            {/* Receive date */}
             <Controller
               name="receiveDate"
               control={form.control}
               render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="si-receive-date">
+                <div>
+                  <label
+                    htmlFor="si-receive-date"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
+                  >
                     Receive date *
-                  </FieldLabel>
-                  <Input
+                  </label>
+                  <input
                     id="si-receive-date"
                     type="date"
                     {...field}
                     disabled={isPending}
                     aria-invalid={fieldState.invalid}
+                    style={{
+                      ...fieldBase,
+                      fontFamily: C.mono,
+                      borderColor: fieldState.invalid ? C.err : C.line,
+                    }}
                   />
-                  <FieldDescription>
-                    Lot expirations default to this date + 7 days unless
-                    overridden per line.
-                  </FieldDescription>
+                  <span style={{ fontSize: "12px", color: C.muted, marginTop: "4px", display: "block" }}>
+                    Lot expirations default to this date + 7 days unless overridden per line.
+                  </span>
                   {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
+                    <span style={{ fontSize: "12px", color: C.err, marginTop: "2px", display: "block" }}>
+                      {fieldState.error?.message}
+                    </span>
                   )}
-                </Field>
+                </div>
               )}
             />
 
+            {/* Payment method */}
             <Controller
               name="paymentMethod"
               control={form.control}
               render={({ field }) => (
-                <Field>
-                  <FieldLabel htmlFor="si-payment">Payment method</FieldLabel>
-                  <Select
+                <div>
+                  <label
+                    htmlFor="si-payment"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
+                  >
+                    Payment method
+                  </label>
+                  <select
+                    id="si-payment"
                     value={field.value ?? "none"}
-                    onValueChange={v =>
-                      field.onChange(v === "none" ? null : v)
+                    onChange={e =>
+                      field.onChange(e.target.value === "none" ? null : e.target.value)
                     }
                     disabled={isPending}
+                    style={{ ...fieldBase, cursor: "pointer" }}
                   >
-                    <SelectTrigger id="si-payment">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not specified</SelectItem>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="check">Check</SelectItem>
-                      <SelectItem value="ach">ACH</SelectItem>
-                      <SelectItem value="zelle">Zelle</SelectItem>
-                      <SelectItem value="credit_card">Credit card</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
+                    <option value="none">Not specified</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="ach">ACH</option>
+                    <option value="zelle">Zelle</option>
+                    <option value="credit_card">Credit card</option>
+                  </select>
+                </div>
               )}
             />
 
+            {/* Notes */}
             <Controller
               name="notes"
               control={form.control}
               render={({ field }) => (
-                <Field className="md:col-span-2">
-                  <FieldLabel htmlFor="si-notes">Notes</FieldLabel>
-                  <Textarea
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label
+                    htmlFor="si-notes"
+                    style={{ fontSize: "12px", color: C.muted, fontWeight: 500, display: "block", marginBottom: "5px" }}
+                  >
+                    Notes
+                  </label>
+                  <textarea
                     id="si-notes"
                     rows={2}
                     placeholder="Internal notes about this shipment..."
                     disabled={isPending}
                     {...field}
+                    style={{ ...fieldBase, resize: "vertical" }}
                   />
-                </Field>
+                </div>
               )}
             />
-          </FieldGroup>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Line items</CardTitle>
-          <CardDescription>
-            Each line becomes one lot and one inventory record when the invoice
-            is completed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        {/* Line items */}
+        <div
+          style={{
+            background: C.surface,
+            border: `1px solid ${C.line}`,
+            borderRadius: C.radius,
+            padding: "20px 22px",
+            marginBottom: "18px",
+          }}
+        >
+          <div
+            style={{ fontSize: "13px", fontWeight: 600, color: C.ink, marginBottom: "4px" }}
+          >
+            Line items
+          </div>
+          <div style={{ fontSize: "13px", color: C.muted, marginBottom: "16px" }}>
+            Each line becomes one lot and one inventory record when the invoice is
+            completed.
+          </div>
           <SupplierInvoiceLinesEditor
             control={form.control}
             register={form.register}
@@ -363,45 +511,62 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             disabled={isPending}
           />
           {form.formState.errors.lines?.message && (
-            <p className="text-destructive mt-2 text-sm">
+            <p style={{ fontSize: "13px", color: C.err, marginTop: "8px" }}>
               {form.formState.errors.lines.message}
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <SupplierInvoiceAttachmentsPlaceholder />
+        <SupplierInvoiceAttachmentsPlaceholder />
+      </form>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <Button
+      {/* Sticky action bar */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: C.surface,
+          borderTop: `1px solid ${C.line}`,
+          padding: "12px 32px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          zIndex: 40,
+        }}
+      >
+        <div style={{ flex: 1 }} />
+        <button
           type="button"
-          variant="outline"
-          onClick={() => router.push("/supplier-invoices")}
+          onClick={() => router.push(cancelPath)}
           disabled={isPending}
+          style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
         >
           Cancel
-        </Button>
-        <Button
-          type="submit"
-          variant="secondary"
+        </button>
+        <button
+          type="button"
+          onClick={form.handleSubmit(values => submit(values, false))}
           disabled={isPending || !canEdit}
           title={editDeniedReason}
+          style={{ ...outlineBtn, opacity: isPending || !canEdit ? 0.6 : 1 }}
         >
-          {isPending
-            ? "Saving..."
-            : mode === "create"
-              ? "Save draft"
-              : "Save draft"}
-        </Button>
-        <Button
+          {isPending ? "Saving…" : "Save draft"}
+        </button>
+        <button
           type="button"
+          onClick={form.handleSubmit(values => submit(values, true))}
           disabled={isPending || !canEdit || !canComplete}
           title={editDeniedReason ?? completeDeniedReason}
-          onClick={form.handleSubmit(values => submit(values, true))}
+          style={{
+            ...primaryBtn,
+            opacity: isPending || !canEdit || !canComplete ? 0.6 : 1,
+          }}
         >
-          {isPending ? "Posting..." : "Complete & receive"}
-        </Button>
+          {isPending ? "Posting…" : "Complete & receive →"}
+        </button>
       </div>
-    </form>
+    </>
   );
 }
