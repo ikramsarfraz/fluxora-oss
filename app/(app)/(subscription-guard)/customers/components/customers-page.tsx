@@ -1,37 +1,96 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo } from "react";
-
-import { Button } from "@/components/ui/button";
-import { useCustomersPage } from "@/hooks/use-customers";
-import { Plus, Users } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { PageError } from "@/components/page-error";
-import { EmptyState } from "@/components/empty-state";
-import { ListPageSkeleton } from "@/components/loading-skeletons";
-import { useUrlPaginationState } from "@/hooks/use-url-pagination";
-
-import { createColumns } from "./columns";
-import { DataTable } from "./data-table";
-import type { CustomerListItem, CustomerListSort } from "@/services/customers";
-import { deleteCustomerAction } from "@/actions/customers";
+import { Plus } from "lucide-react";
+import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { deleteCustomerAction } from "@/actions/customers";
+import { useCustomersPage } from "@/hooks/use-customers";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
+import { formatDisplayDate } from "@/lib/utils/date";
+import type { CustomerListItem, CustomerListSort } from "@/services/customers";
+
+type CustomerRow = CustomerListItem;
+
+function formatPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+}
+
+const COLUMNS: ListingColumn<CustomerRow>[] = [
+  {
+    key: "name",
+    header: "Customer",
+    sortKey: "name",
+    render: row => ({
+      primary: <span style={{ fontWeight: 500 }}>{row.name}</span>,
+      secondary: row.phoneNumber ? formatPhone(row.phoneNumber) : undefined,
+    }),
+  },
+  {
+    key: "location",
+    header: "Location",
+    render: row => {
+      const address = row.addresses?.[0];
+      if (!address) return { primary: <span style={{ color: "#78716c" }}>—</span> };
+      const parts = [address.city, address.state].filter(Boolean);
+      return { primary: parts.join(", ") || "—" };
+    },
+  },
+  {
+    key: "invoicePrefix",
+    header: "Invoice prefix",
+    render: row =>
+      row.invoicePrefix
+        ? { primary: <MonoText>{row.invoicePrefix}</MonoText> }
+        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+  },
+  {
+    key: "products",
+    header: "Products",
+    align: "right",
+    render: row => {
+      const count = row.productPrices?.length ?? 0;
+      return { primary: <span style={{ color: "#78716c" }}>{count}</span> };
+    },
+  },
+  {
+    key: "createdAt",
+    header: "Added",
+    sortKey: "createdAt",
+    render: row => ({ primary: <MonoText>{formatDisplayDate(row.createdAt)}</MonoText> }),
+  },
+];
 
 export default function Customers() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [deletingCustomer, setDeletingCustomer] = useState<CustomerRow | null>(null);
+
   const pagination = useUrlPaginationState<CustomerListSort>({
     defaultSort: "createdAt",
     defaultDirection: "desc",
   });
-  const queryClient = useQueryClient();
-  const {
-    data: customers,
-    isLoading,
-    isFetching,
-    error: loadError,
-    refetch,
-  } = useCustomersPage({
+
+  const { data, isLoading, isFetching, error, refetch } = useCustomersPage({
     page: pagination.page,
     pageSize: pagination.pageSize,
     search: pagination.search,
@@ -39,86 +98,117 @@ export default function Customers() {
     direction: pagination.direction,
   });
 
-  const columns = useMemo(
-    () =>
-      createColumns({
-        onDelete: async (customer: CustomerListItem) => {
-          await deleteCustomerAction(customer.id);
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.customers.all,
-          });
-        },
-      }),
-    [queryClient],
-  );
-
-  if (isLoading) {
-    return <ListPageSkeleton tableColumns={5} />;
-  }
-
-  if (loadError) {
+  if (error) {
     return (
-      <PageError
-        message={(loadError as Error).message}
-        onRetry={() => refetch()}
-      />
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
-  const hasCustomers =
-    (customers?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
-
   return (
-    <section
-      className="flex flex-col gap-6"
-      aria-labelledby="customers-heading"
-    >
-      <PageHeader
+    <>
+      <ListingPage
         title="Customers"
-        description="Manage your customer accounts and contact information."
-      >
-        <Button asChild>
-          <Link href="/customers/new">
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">Add Customer</span>
+        subtitle="Manage your customer accounts and contact information."
+        primaryAction={
+          <Link
+            href="/customers/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            Add customer
           </Link>
-        </Button>
-      </PageHeader>
+        }
+        columns={COLUMNS}
+        getRowId={row => row.id}
+        onRowClick={row => router.push(`/customers/${row.id}`)}
+        rowActions={[
+          { label: "View", href: row => `/customers/${row.id}` },
+          { label: "Delete", variant: "destructive", onClick: row => setDeletingCustomer(row) },
+        ]}
+        rows={data?.data ?? []}
+        total={data?.total ?? 0}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        searchPlaceholder="Search customers…"
+        emptyTitle="No customers yet"
+        emptyDescription="Get started by adding your first customer."
+        emptyAction={
+          <Link
+            href="/customers/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            Add customer
+          </Link>
+        }
+        page={data?.page ?? pagination.page}
+        pageSize={data?.pageSize ?? pagination.pageSize}
+        pageCount={data?.pageCount ?? 1}
+        searchInput={pagination.searchInput}
+        sort={pagination.sort}
+        direction={pagination.direction}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        onSearchChange={pagination.setSearch}
+        onSortChange={(key, dir) => pagination.setSort(key as CustomerListSort, dir)}
+      />
 
-      {hasCustomers ? (
-        <DataTable
-          columns={columns}
-          data={customers?.data ?? []}
-          searchPlaceholder="Search customers..."
-          searchValue={pagination.searchInput}
-          onSearchChange={pagination.setSearch}
-          page={customers?.page ?? pagination.page}
-          pageSize={customers?.pageSize ?? pagination.pageSize}
-          total={customers?.total ?? 0}
-          pageCount={customers?.pageCount ?? 1}
-          sort={pagination.sort}
-          direction={pagination.direction}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-          onSortChange={(nextSort, nextDirection) => {
-            pagination.setSort(nextSort as CustomerListSort, nextDirection);
-          }}
-          isFetching={isFetching}
-        />
-      ) : (
-        <EmptyState
-          icon={Users}
-          title="No customers yet"
-          description="Get started by adding your first customer to the system."
-        >
-          <Button asChild>
-            <Link href="/customers/new">
-              <Plus className="size-4" />
-              Add Customer
-            </Link>
-          </Button>
-        </EmptyState>
-      )}
-    </section>
+      <AlertDialog open={!!deletingCustomer} onOpenChange={open => { if (!open) setDeletingCustomer(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete customer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete <strong>{deletingCustomer?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={async () => {
+                if (!deletingCustomer) return;
+                try {
+                  await deleteCustomerAction(deletingCustomer.id);
+                  await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+                  toast.success("Customer deleted.");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed to delete customer.");
+                }
+                setDeletingCustomer(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

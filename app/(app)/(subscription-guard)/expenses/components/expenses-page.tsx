@@ -1,33 +1,103 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo } from "react";
-import { Plus, Receipt } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/empty-state";
-import { ListPageSkeleton } from "@/components/loading-skeletons";
-import { PageError } from "@/components/page-error";
-import { PageHeader } from "@/components/page-header";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
-  useDeleteExpense,
-  useExpensesPage,
-} from "@/hooks/use-expenses";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useDeleteExpense, useExpensesPage } from "@/hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
-import { canManageExpenses } from "@/lib/expenses/metadata";
+import { canManageExpenses, expenseCategoryLabel, expensePaymentMethodLabel } from "@/lib/expenses/metadata";
 import { formatMoney } from "@/lib/utils/currency";
-import type { ExpenseListSort } from "@/services/expenses";
+import { formatDisplayDate } from "@/lib/utils/date";
+import type { ExpenseListItem, ExpenseListSort } from "@/services/expenses";
 
-import { createExpenseColumns } from "./columns";
-import { DataTable } from "./data-table";
+type ExpenseRow = ExpenseListItem;
+
+const COLUMNS: ListingColumn<ExpenseRow>[] = [
+  {
+    key: "expenseDate",
+    header: "Date",
+    sortKey: "expenseDate",
+    render: row => ({
+      primary: (
+        <Link href={`/expenses/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+          <MonoText>{formatDisplayDate(row.expenseDate)}</MonoText>
+        </Link>
+      ),
+    }),
+  },
+  {
+    key: "description",
+    header: "Description",
+    render: row => ({
+      primary: row.note
+        ? <span style={{ fontWeight: 500 }}>{row.note}</span>
+        : <span style={{ color: "#78716c" }}>—</span>,
+      secondary: expenseCategoryLabel(row.category),
+    }),
+  },
+  {
+    key: "amount",
+    header: "Amount",
+    sortKey: "amount",
+    align: "right",
+    render: row => ({ primary: <MonoText>{formatMoney(row.amount)}</MonoText> }),
+  },
+  {
+    key: "paymentMethod",
+    header: "Method",
+    render: row => ({
+      primary: (
+        <span
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 100,
+            background: "#f5f5f4",
+            color: "#44403c",
+            fontWeight: 500,
+          }}
+        >
+          {expensePaymentMethodLabel(row.paymentMethod) ?? "—"}
+        </span>
+      ),
+    }),
+  },
+  {
+    key: "recordedBy",
+    header: "Recorded by",
+    render: row => ({
+      primary: row.createdBy?.fullName ?? <span style={{ color: "#78716c" }}>—</span>,
+    }),
+  },
+];
 
 export function ExpensesPage() {
+  const router = useRouter();
+  const [deletingExpense, setDeletingExpense] = useState<ExpenseRow | null>(null);
+
+  const { data: currentUser } = useCurrentPortalUser();
+  const canManage = canManageExpenses(currentUser?.role);
+
   const pagination = useUrlPaginationState<ExpenseListSort>({
     defaultSort: "expenseDate",
     defaultDirection: "desc",
   });
+
   const { data, isLoading, isFetching, error, refetch } = useExpensesPage({
     page: pagination.page,
     pageSize: pagination.pageSize,
@@ -35,108 +105,127 @@ export function ExpensesPage() {
     sort: pagination.sort,
     direction: pagination.direction,
   });
-  const { data: currentUser } = useCurrentPortalUser();
+
   const deleteExpense = useDeleteExpense();
-
-  const canManage = canManageExpenses(currentUser?.role);
-  const manageDisabledReason = canManage
-    ? undefined
-    : "Your role does not allow managing expenses.";
-
-  const columns = useMemo(
-    () =>
-      createExpenseColumns({
-        canManage,
-        manageDisabledReason,
-        onDelete: expense => {
-          deleteExpense.mutate(expense.id, {
-            onSuccess: () => toast.success("Expense deleted."),
-            onError: (e: Error) => toast.error(e.message),
-          });
-        },
-      }),
-    [canManage, manageDisabledReason, deleteExpense],
-  );
-
-  if (isLoading) {
-    return <ListPageSkeleton tableColumns={6} />;
-  }
 
   if (error) {
     return (
-      <PageError
-        message={(error as Error).message}
-        onRetry={() => refetch()}
-      />
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
-  const expenses = data?.data ?? [];
-  const hasExpenses =
-    (data?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
-  const total = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="expenses-heading">
-      <PageHeader
+    <>
+      <ListingPage
         title="Expenses"
-        description={
-          hasExpenses
-            ? `${expenses.length} expenses, totaling ${formatMoney(total)}.`
-            : "Track day-to-day operating expenses."
-        }
-      >
-        {canManage ? (
-          <Button asChild>
-            <Link href="/expenses/new">
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">New expense</span>
-            </Link>
-          </Button>
-        ) : (
-          <Button disabled title={manageDisabledReason}>
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">New expense</span>
-          </Button>
-        )}
-      </PageHeader>
-
-      {hasExpenses ? (
-        <DataTable
-          columns={columns}
-          data={expenses}
-          searchPlaceholder="Search by category, notes..."
-          searchValue={pagination.searchInput}
-          onSearchChange={pagination.setSearch}
-          page={data?.page ?? pagination.page}
-          pageSize={data?.pageSize ?? pagination.pageSize}
-          total={data?.total ?? 0}
-          pageCount={data?.pageCount ?? 1}
-          sort={pagination.sort}
-          direction={pagination.direction}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-          onSortChange={(nextSort, nextDirection) => {
-            pagination.setSort(nextSort as ExpenseListSort, nextDirection);
-          }}
-          isFetching={isFetching}
-        />
-      ) : (
-        <EmptyState
-          icon={Receipt}
-          title="No expenses yet"
-          description="Record your first operating expense to start tracking spend."
-        >
-          {canManage ? (
-            <Button asChild>
-              <Link href="/expenses/new">
-                <Plus className="size-4" />
-                New expense
+        subtitle="Track operational costs and business expenditures."
+        primaryAction={
+          canManage
+            ? (
+              <Link
+                href="/expenses/new"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  background: "#0c0a09",
+                  color: "#fafaf9",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textDecoration: "none",
+                }}
+              >
+                <Plus style={{ width: 14, height: 14 }} />
+                Add expense
               </Link>
-            </Button>
-          ) : null}
-        </EmptyState>
-      )}
-    </section>
+            )
+            : undefined
+        }
+        columns={COLUMNS}
+        getRowId={row => row.id}
+        onRowClick={row => router.push(`/expenses/${row.id}`)}
+        rowActions={[
+          { label: "View", href: row => `/expenses/${row.id}` },
+          ...(canManage
+            ? [{ label: "Delete", variant: "destructive" as const, onClick: (row: ExpenseRow) => setDeletingExpense(row) }]
+            : []),
+        ]}
+        rows={data?.data ?? []}
+        total={data?.total ?? 0}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        searchPlaceholder="Search expenses, vendors…"
+        emptyTitle="No expenses yet"
+        emptyDescription="Record your first business expense."
+        emptyAction={
+          canManage
+            ? (
+              <Link
+                href="/expenses/new"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "8px 14px",
+                  background: "#0c0a09",
+                  color: "#fafaf9",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  textDecoration: "none",
+                }}
+              >
+                <Plus style={{ width: 14, height: 14 }} />
+                Add expense
+              </Link>
+            )
+            : undefined
+        }
+        page={data?.page ?? pagination.page}
+        pageSize={data?.pageSize ?? pagination.pageSize}
+        pageCount={data?.pageCount ?? 1}
+        searchInput={pagination.searchInput}
+        sort={pagination.sort}
+        direction={pagination.direction}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        onSearchChange={pagination.setSearch}
+        onSortChange={(key, dir) => pagination.setSort(key as ExpenseListSort, dir)}
+      />
+
+      <AlertDialog open={!!deletingExpense} onOpenChange={open => { if (!open) setDeletingExpense(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete this expense? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!deletingExpense) return;
+                deleteExpense.mutate(deletingExpense.id, {
+                  onSuccess: () => toast.success("Expense deleted."),
+                  onError: (e: Error) => toast.error(e.message),
+                });
+                setDeletingExpense(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

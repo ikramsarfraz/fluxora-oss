@@ -1,625 +1,205 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowUpDown, Layers, Plus } from "lucide-react";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  type PaginationState,
-  useReactTable,
-} from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
-import { DataTablePagination } from "@/components/data-table-pagination";
-import { EmptyState } from "@/components/empty-state";
-import { PageError } from "@/components/page-error";
-import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
 import { ExpirationStateBadge, LotOperationalStatusBadge } from "@/components/warehouse/warehouse-badges";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useLots } from "@/hooks/use-lots";
 import { formatDisplayDate } from "@/lib/utils/date";
-import {
-  formatWeightLbs,
-  getExpirationState,
-  getLotOperationalStatus,
-  getLotOperationalStatusLabel,
-  type LotOperationalStatus,
-} from "@/lib/warehouse/insights";
+import { formatWeightLbs, getExpirationState, getLotOperationalStatus } from "@/lib/warehouse/insights";
 
-import {
-  getLotPrimaryProduct,
-  getLotSourceInvoices,
-  getLotTotals,
-} from "./lot-view-helpers";
+import { getLotPrimaryProduct, getLotSourceInvoices, getLotTotals } from "./lot-view-helpers";
 
-type SortKey =
-  | "lot"
-  | "supplier"
-  | "product"
-  | "receive"
-  | "expiration"
-  | "items"
-  | "cases"
-  | "weight"
-  | "status";
+type LotRow = NonNullable<ReturnType<typeof useLots>["data"]>[number];
 
-type SortDirection = "asc" | "desc";
+const COLUMNS: ListingColumn<LotRow>[] = [
+  {
+    key: "lotNumber",
+    header: "Lot #",
+    sortKey: "lot",
+    width: "120px",
+    render: row => ({
+      primary: (
+        <Link href={`/lots/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+          <MonoText>{row.lotNumber}</MonoText>
+        </Link>
+      ),
+      secondary: row.supplier?.name,
+    }),
+  },
+  {
+    key: "product",
+    header: "Product",
+    sortKey: "product",
+    render: row => {
+      const product = getLotPrimaryProduct(row);
+      const sourceInvoices = getLotSourceInvoices(row);
+      return {
+        primary: product
+          ? <span style={{ fontWeight: 500 }}>{product.name}</span>
+          : <span style={{ color: "#78716c" }}>—</span>,
+        secondary: sourceInvoices[0]?.invoiceNumber,
+      };
+    },
+  },
+  {
+    key: "receiveDate",
+    header: "Received",
+    sortKey: "receive",
+    render: row => ({ primary: <MonoText>{formatDisplayDate(row.receiveDate)}</MonoText> }),
+  },
+  {
+    key: "expiration",
+    header: "Expiration",
+    sortKey: "expiration",
+    render: row => {
+      const state = getExpirationState(row.expirationDate);
+      return {
+        primary: <ExpirationStateBadge state={state} />,
+        secondary: formatDisplayDate(row.expirationDate),
+      };
+    },
+  },
+  {
+    key: "cases",
+    header: "Cases",
+    sortKey: "cases",
+    align: "right",
+    render: row => {
+      const totals = getLotTotals(row);
+      return { primary: <span style={{ color: "#44403c" }}>{totals.totalCases}</span> };
+    },
+  },
+  {
+    key: "weight",
+    header: "Weight",
+    sortKey: "weight",
+    align: "right",
+    render: row => {
+      const totals = getLotTotals(row);
+      return { primary: <MonoText>{formatWeightLbs(totals.totalWeight)}</MonoText> };
+    },
+  },
+  {
+    key: "status",
+    header: "Status",
+    sortKey: "status",
+    render: row => {
+      const totals = getLotTotals(row);
+      const status = getLotOperationalStatus({
+        inventoryStatuses: totals.statuses,
+        expirationDate: row.expirationDate,
+      });
+      return { primary: <LotOperationalStatusBadge status={status} /> };
+    },
+  },
+];
 
-function SortHeader({
-  label,
-  sortKey,
-  activeSortKey,
-  activeDirection,
-  onSort,
-}: {
-  label: string;
-  sortKey: SortKey;
-  activeSortKey: SortKey;
-  activeDirection: SortDirection;
-  onSort: (sortKey: SortKey) => void;
-}) {
-  const isActive = activeSortKey === sortKey;
-  return (
-    <button
-      type="button"
-      onClick={() => onSort(sortKey)}
-      className="inline-flex items-center gap-1 font-medium hover:text-foreground"
-    >
-      {label}
-      <ArrowUpDown className="size-3.5" />
-      {isActive ? (
-        <span className="sr-only">
-          Sorted {activeDirection === "asc" ? "ascending" : "descending"}
-        </span>
-      ) : null}
-    </button>
-  );
-}
+const PAGE_SIZE = 25;
 
 export default function Lots() {
-  const { data, isLoading, error: loadError, refetch } = useLots();
+  const router = useRouter();
   const [search, setSearch] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("all");
-  const [productFilter, setProductFilter] = useState("all");
-  const [expirationFilter, setExpirationFilter] = useState("all");
-  const [lotStatusFilter, setLotStatusFilter] = useState("all");
-  const [sortKey, setSortKey] = useState<SortKey>("expiration");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
+  const [sortKey, setSortKey] = useState("expiration");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
 
-  const lots = useMemo(() => data ?? [], [data]);
+  const { data, isLoading, error, refetch } = useLots();
 
-  const supplierOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          lots
-            .filter(lot => lot.supplier)
-            .map(lot => [lot.supplier!.id, lot.supplier!]),
-        ).values(),
-      ).sort((a, b) => a.name.localeCompare(b.name)),
-    [lots],
-  );
-
-  const productOptions = useMemo(
-    () =>
-      Array.from(
-        new Map(
-          lots
-            .map(getLotPrimaryProduct)
-            .filter(Boolean)
-            .map(product => [product!.id, product!]),
-        ).values(),
-      ).sort((a, b) => a.name.localeCompare(b.name)),
-    [lots],
-  );
-
-  const lotStatusOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          lots.map(lot =>
-            getLotOperationalStatus({
-              inventoryStatuses: getLotTotals(lot).statuses,
-              expirationDate: lot.expirationDate,
-            }),
-          ),
-        ),
-      )
-        .sort((a, b) =>
-          getLotOperationalStatusLabel(a).localeCompare(
-            getLotOperationalStatusLabel(b),
-          ),
-        ) as LotOperationalStatus[],
-    [lots],
-  );
-
-  const filteredLots = useMemo(() => {
-    const searchValue = search.trim().toLowerCase();
-
-    return lots.filter(lot => {
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (data ?? []).filter(lot => {
+      if (!q) return true;
       const product = getLotPrimaryProduct(lot);
-      const sourceInvoice = getLotSourceInvoices(lot)[0] ?? null;
-      const expirationState = getExpirationState(lot.expirationDate);
-      const lotStatus = getLotOperationalStatus({
-        inventoryStatuses: getLotTotals(lot).statuses,
-        expirationDate: lot.expirationDate,
-      });
-      const matchesSearch =
-        searchValue.length === 0 ||
-        [
-          lot.lotNumber,
-          lot.supplier?.name,
-          product?.name,
-          product?.sku,
-          sourceInvoice?.invoiceNumber,
-        ]
-          .filter(Boolean)
-          .some(value => value!.toLowerCase().includes(searchValue));
-
-      return (
-        matchesSearch &&
-        (supplierFilter === "all" || lot.supplierId === supplierFilter) &&
-        (productFilter === "all" || product?.id === productFilter) &&
-        (expirationFilter === "all" || expirationState === expirationFilter) &&
-        (lotStatusFilter === "all" || lotStatus === lotStatusFilter)
-      );
+      const inv = getLotSourceInvoices(lot)[0];
+      return [lot.lotNumber, lot.supplier?.name, product?.name, product?.sku, inv?.invoiceNumber]
+        .filter(Boolean)
+        .some(v => v!.toLowerCase().includes(q));
     });
-  }, [
-    lots,
-    search,
-    supplierFilter,
-    productFilter,
-    expirationFilter,
-    lotStatusFilter,
-  ]);
+  }, [data, search]);
 
-  const sortedLots = useMemo(() => {
-    const list = [...filteredLots];
-
+  const sorted = useMemo(() => {
+    const list = [...filtered];
     list.sort((a, b) => {
-      const productA = getLotPrimaryProduct(a);
-      const productB = getLotPrimaryProduct(b);
-      const totalsA = getLotTotals(a);
-      const totalsB = getLotTotals(b);
-      const statusA = getLotOperationalStatus({
-        inventoryStatuses: totalsA.statuses,
-        expirationDate: a.expirationDate,
-      });
-      const statusB = getLotOperationalStatus({
-        inventoryStatuses: totalsB.statuses,
-        expirationDate: b.expirationDate,
-      });
-
-      const value =
-        sortKey === "lot"
-          ? a.lotNumber.localeCompare(b.lotNumber)
-          : sortKey === "supplier"
-            ? (a.supplier?.name ?? "").localeCompare(b.supplier?.name ?? "")
-            : sortKey === "product"
-              ? (productA?.name ?? "").localeCompare(productB?.name ?? "")
-              : sortKey === "receive"
-                ? a.receiveDate.localeCompare(b.receiveDate)
-                : sortKey === "expiration"
-                  ? a.expirationDate.localeCompare(b.expirationDate)
-                  : sortKey === "items"
-                    ? totalsA.inventoryItemCount - totalsB.inventoryItemCount
-                    : sortKey === "cases"
-                      ? totalsA.totalCases - totalsB.totalCases
-                      : sortKey === "weight"
-                        ? totalsA.totalWeight - totalsB.totalWeight
-                        : statusA.localeCompare(statusB);
-
-      return sortDirection === "asc" ? value : value * -1;
+      const pa = getLotPrimaryProduct(a);
+      const pb = getLotPrimaryProduct(b);
+      const ta = getLotTotals(a);
+      const tb = getLotTotals(b);
+      let v = 0;
+      if (sortKey === "lot") v = a.lotNumber.localeCompare(b.lotNumber);
+      else if (sortKey === "supplier") v = (a.supplier?.name ?? "").localeCompare(b.supplier?.name ?? "");
+      else if (sortKey === "product") v = (pa?.name ?? "").localeCompare(pb?.name ?? "");
+      else if (sortKey === "receive") v = a.receiveDate.localeCompare(b.receiveDate);
+      else if (sortKey === "expiration") v = a.expirationDate.localeCompare(b.expirationDate);
+      else if (sortKey === "cases") v = ta.totalCases - tb.totalCases;
+      else if (sortKey === "weight") v = ta.totalWeight - tb.totalWeight;
+      return sortDir === "asc" ? v : -v;
     });
-
     return list;
-  }, [filteredLots, sortDirection, sortKey]);
+  }, [filtered, sortKey, sortDir]);
 
-  const summary = useMemo(() => {
-    return {
-      totalLots: filteredLots.length,
-      totalItems: filteredLots.reduce(
-        (sum, lot) => sum + getLotTotals(lot).inventoryItemCount,
-        0,
-      ),
-      totalWeight: filteredLots.reduce(
-        (sum, lot) => sum + getLotTotals(lot).totalWeight,
-        0,
-      ),
-      expiringSoon: filteredLots.filter(
-        lot => getExpirationState(lot.expirationDate) === "expiring_soon",
-      ).length,
-    };
-  }, [filteredLots]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const paginationColumns = useMemo(() => [], []);
-  const paginatedTable = useReactTable({
-    data: sortedLots,
-    columns: paginationColumns,
-    state: { pagination },
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
-  const visibleLots = paginatedTable.getRowModel().rows.map(row => row.original);
-
-  function handleSort(nextKey: SortKey) {
-    if (nextKey === sortKey) {
-      setSortDirection(current => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-
-    setSortKey(nextKey);
-    setSortDirection(nextKey === "expiration" ? "asc" : "desc");
-  }
-
-  if (isLoading) {
-    return <PageLoading message="Loading lots..." />;
-  }
-
-  if (loadError) {
+  if (error) {
     return (
-      <PageError
-        message={(loadError as Error).message}
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
-  if (lots.length === 0) {
-    return (
-      <section className="flex flex-col gap-6" aria-labelledby="lots-heading">
-        <PageHeader
-          title="Lots"
-          description="Trace inbound lots, linked inventory, and expiration exposure."
-        >
-          <Button asChild>
-            <Link href="/lots/new">
-              <Plus className="size-4" />
-              Add lot
-            </Link>
-          </Button>
-        </PageHeader>
-        <EmptyState
-          icon={Layers}
-          title="No lots yet"
-          description="Completed supplier invoices will begin building your traceability history here."
-        >
-          <Button asChild>
-            <Link href="/lots/new">
-              <Plus className="size-4" />
-              Add lot
-            </Link>
-          </Button>
-        </EmptyState>
-      </section>
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="lots-heading">
-      <PageHeader
-        title="Lots"
-        description="Inspect lot traceability, linked inventory, source receipts, and expiration risk."
-      >
-        <Button asChild>
-          <Link href="/lots/new">
-            <Plus className="size-4" />
-            Add lot
-          </Link>
-        </Button>
-      </PageHeader>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Visible lots
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {summary.totalLots}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Inventory items
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {summary.totalItems}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total weight
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {summary.totalWeight.toFixed(2)} lb
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Expiring soon
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {summary.expiringSoon}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="gap-4">
-          <CardTitle className="text-lg">Lot inspection</CardTitle>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <Input
-              value={search}
-              onChange={event => setSearch(event.target.value)}
-              placeholder="Search lot, supplier, product, invoice..."
-              className="xl:col-span-2"
-            />
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Supplier" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All suppliers</SelectItem>
-                {supplierOptions.map(supplier => (
-                  <SelectItem key={supplier.id} value={supplier.id}>
-                    {supplier.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={productFilter} onValueChange={setProductFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Product" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All products</SelectItem>
-                {productOptions.map(product => (
-                  <SelectItem key={product.id} value={product.id}>
-                    {product.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={lotStatusFilter} onValueChange={setLotStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Lot status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All lot statuses</SelectItem>
-                {lotStatusOptions.map(status => (
-                  <SelectItem key={status} value={status}>
-                    {getLotOperationalStatusLabel(status)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["all", "fresh", "expiring_soon", "expired"] as const).map(value => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setExpirationFilter(value)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  expirationFilter === value
-                    ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
-                }`}
-              >
-                {value === "all"
-                  ? "All expiration"
-                  : value === "expiring_soon"
-                    ? "Expiring soon"
-                    : value}
-              </button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>
-                    <SortHeader
-                      label="Lot number"
-                      sortKey="lot"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortHeader
-                      label="Supplier"
-                      sortKey="supplier"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortHeader
-                      label="Product"
-                      sortKey="product"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortHeader
-                      label="Received"
-                      sortKey="receive"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortHeader
-                      label="Expiration"
-                      sortKey="expiration"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortHeader
-                      label="Items"
-                      sortKey="items"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortHeader
-                      label="Cases"
-                      sortKey="cases"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <SortHeader
-                      label="Weight lbs"
-                      sortKey="weight"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                  <TableHead>
-                    <SortHeader
-                      label="Status summary"
-                      sortKey="status"
-                      activeSortKey={sortKey}
-                      activeDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleLots.length > 0 ? (
-                  visibleLots.map(lot => {
-                    const product = getLotPrimaryProduct(lot);
-                    const totals = getLotTotals(lot);
-                    const sourceInvoice = getLotSourceInvoices(lot)[0] ?? null;
-                    const expirationState = getExpirationState(lot.expirationDate);
-                    const lotStatus = getLotOperationalStatus({
-                      inventoryStatuses: totals.statuses,
-                      expirationDate: lot.expirationDate,
-                    });
-
-                    return (
-                      <TableRow key={lot.id}>
-                        <TableCell>
-                          <Link
-                            href={`/lots/${lot.id}`}
-                            className="font-medium hover:underline"
-                          >
-                            {lot.lotNumber}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{lot.supplier?.name ?? "-"}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span>{product?.name ?? "Unknown product"}</span>
-                            {product?.sku ? (
-                              <span className="font-mono text-xs text-muted-foreground">
-                                {product.sku}
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDisplayDate(lot.receiveDate)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <ExpirationStateBadge state={expirationState} />
-                            <span className="text-xs text-muted-foreground">
-                              {formatDisplayDate(lot.expirationDate)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {totals.inventoryItemCount}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {totals.totalCases}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatWeightLbs(totals.totalWeight)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <LotOperationalStatusBadge status={lotStatus} />
-                            {sourceInvoice ? (
-                              <span className="text-xs text-muted-foreground">
-                                {sourceInvoice.invoiceNumber}
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center">
-                      No lots match the current filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="mt-4">
-            <DataTablePagination table={paginatedTable} />
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+    <ListingPage
+      title="Lots"
+      subtitle="Inspect received stock, warehouse lifecycle, and lot traceability."
+      primaryAction={
+        <Link
+          href="/lots/new"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 14px",
+            background: "#0c0a09",
+            color: "#fafaf9",
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
+          }}
+        >
+          <Plus style={{ width: 14, height: 14 }} />
+          New lot
+        </Link>
+      }
+      columns={COLUMNS}
+      getRowId={row => row.id}
+      onRowClick={row => router.push(`/lots/${row.id}`)}
+      rowActions={[{ label: "View", href: row => `/lots/${row.id}` }]}
+      rows={pageRows}
+      total={sorted.length}
+      isLoading={isLoading}
+      searchPlaceholder="Search lots, products, supplier, invoice…"
+      emptyTitle="No lots yet"
+      emptyDescription="Lots are created when supplier invoices are completed."
+      page={safePage}
+      pageSize={PAGE_SIZE}
+      pageCount={pageCount}
+      searchInput={search}
+      sort={sortKey}
+      direction={sortDir}
+      onPageChange={p => { setPage(p); }}
+      onPageSizeChange={() => {}}
+      onSearchChange={q => { setSearch(q); setPage(1); }}
+      onSortChange={(key, dir) => { setSortKey(key); setSortDir(dir); setPage(1); }}
+    />
   );
 }

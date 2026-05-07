@@ -1,76 +1,121 @@
 "use client";
 
+import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo, useCallback, useState } from "react";
-
-import { Button } from "@/components/ui/button";
-import { Plus, ShieldCheck } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { PageError } from "@/components/page-error";
-import { EmptyState } from "@/components/empty-state";
-import { ListPageSkeleton } from "@/components/loading-skeletons";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 
-import { createColumns, type UsersDirectoryRow } from "./columns";
-import { DataTable } from "./data-table";
+import { ListingPage, StatusPill, type ListingColumn } from "@/components/listing-page";
 import {
   useResendUserInvitation,
   useRevokeUserInvitation,
   useSetUserActive,
   useUsersDirectoryPage,
 } from "@/hooks/use-users";
-import type { UsersDirectoryListSort } from "@/services/portal-users";
+import { useUrlPaginationState } from "@/hooks/use-url-pagination";
+import { formatDisplayDate } from "@/lib/utils/date";
+import type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/services/portal-users";
+
+type UserRow = UsersDirectoryListItem;
+
+function RoleChip({ role }: { role: string }) {
+  const label = role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        padding: "2px 8px",
+        borderRadius: 100,
+        background: "oklch(96% 0.03 240)",
+        color: "oklch(60% 0.15 240)",
+        fontWeight: 500,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function buildColumns(handlers: {
+  onResend: (row: Extract<UserRow, { kind: "invitation" }>["row"]) => void;
+  onRevoke: (row: Extract<UserRow, { kind: "invitation" }>["row"]) => void;
+  onDeactivate: (row: Extract<UserRow, { kind: "user" }>["row"]) => void;
+}): ListingColumn<UserRow>[] {
+  return [
+    {
+      key: "name",
+      header: "Name",
+      sortKey: "fullName",
+      render: row => ({
+        primary: <span style={{ fontWeight: 500 }}>{row.row.fullName}</span>,
+        secondary: row.row.email,
+      }),
+    },
+    {
+      key: "role",
+      header: "Role",
+      render: row => ({ primary: <RoleChip role={row.row.role} /> }),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: row => {
+        if (row.kind === "invitation") {
+          const inv = row.row;
+          if (inv.inviteIsExpired) {
+            return { primary: <StatusPill label="Expired" bg="#f5f5f4" color="#78716c" /> };
+          }
+          return { primary: <StatusPill label="Invited" bg="oklch(97% 0.04 70)" color="oklch(60% 0.14 70)" /> };
+        }
+        const user = row.row;
+        if (!user.isActive) {
+          return { primary: <StatusPill label="Inactive" bg="#f5f5f4" color="#78716c" /> };
+        }
+        if (!user.authUser?.emailVerified) {
+          return { primary: <StatusPill label="Unverified" bg="oklch(97% 0.04 70)" color="oklch(60% 0.14 70)" /> };
+        }
+        return { primary: <StatusPill label="Active" bg="oklch(96% 0.04 155)" color="oklch(58% 0.13 155)" /> };
+      },
+    },
+    {
+      key: "createdAt",
+      header: "Joined",
+      sortKey: "createdAt",
+      render: row => ({ primary: formatDisplayDate(row.row.createdAt) }),
+    },
+  ];
+}
 
 export default function Users() {
-  const [resendInvitationId, setResendInvitationId] = useState<string | null>(
-    null,
-  );
+  const router = useRouter();
+  const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
+
   const pagination = useUrlPaginationState<UsersDirectoryListSort>({
     defaultSort: "createdAt",
     defaultDirection: "desc",
   });
-  const {
-    data,
-    isLoading,
-    isFetching,
-    error,
-    refetch,
-  } = useUsersDirectoryPage({
+
+  const { data, isLoading, isFetching, error, refetch } = useUsersDirectoryPage({
     page: pagination.page,
     pageSize: pagination.pageSize,
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
   });
+
   const resendMutation = useResendUserInvitation();
   const revokeMutation = useRevokeUserInvitation();
   const setActiveMutation = useSetUserActive();
 
-  const handleDeactivateUser = useCallback(
-    async (user: Extract<UsersDirectoryRow, { kind: "user" }>["row"]) => {
+  const handleResend = useCallback(
+    async (inv: Extract<UserRow, { kind: "invitation" }>["row"]) => {
+      setResendInvitationId(inv.id);
       try {
-        await setActiveMutation.mutateAsync({ id: user.id, isActive: false });
-        toast.success(`${user.fullName} was deactivated.`);
-      } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not deactivate this user.",
-        );
-      }
-    },
-    [setActiveMutation],
-  );
-
-  const handleResendInvitation = useCallback(
-    async (invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
-      setResendInvitationId(invitation.id);
-      try {
-        await resendMutation.mutateAsync(invitation.id);
+        await resendMutation.mutateAsync(inv.id);
         toast.success("Invitation email sent.");
       } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not resend the invitation.",
-        );
+        toast.error(e instanceof Error ? e.message : "Could not resend the invitation.");
       } finally {
         setResendInvitationId(null);
       }
@@ -78,109 +123,135 @@ export default function Users() {
     [resendMutation],
   );
 
-  const handleRevokeInvitation = useCallback(
-    async (invitation: Extract<UsersDirectoryRow, { kind: "invitation" }>["row"]) => {
+  const handleRevoke = useCallback(
+    async (inv: Extract<UserRow, { kind: "invitation" }>["row"]) => {
       try {
-        await revokeMutation.mutateAsync(invitation.id);
+        await revokeMutation.mutateAsync(inv.id);
         toast.success("Invitation revoked.");
       } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not revoke the invitation.",
-        );
+        toast.error(e instanceof Error ? e.message : "Could not revoke the invitation.");
       }
     },
     [revokeMutation],
   );
 
-  const columns = useMemo(
-    () =>
-      createColumns({
-        onDeactivateUser: handleDeactivateUser,
-        onResendInvitation: handleResendInvitation,
-        onRevokeInvitation: handleRevokeInvitation,
-        resendInvitationId,
-      }),
-    [
-      handleDeactivateUser,
-      handleResendInvitation,
-      handleRevokeInvitation,
-      resendInvitationId,
-    ],
+  const handleDeactivate = useCallback(
+    async (user: Extract<UserRow, { kind: "user" }>["row"]) => {
+      try {
+        await setActiveMutation.mutateAsync({ id: user.id, isActive: false });
+        toast.success(`${user.fullName} was deactivated.`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not deactivate this user.");
+      }
+    },
+    [setActiveMutation],
   );
 
-  const rows = useMemo<UsersDirectoryRow[]>(() => data?.data ?? [], [data]);
-
-  if (isLoading) {
-    return <ListPageSkeleton tableColumns={7} />;
-  }
+  const columns = buildColumns({
+    onResend: handleResend,
+    onRevoke: handleRevoke,
+    onDeactivate: handleDeactivate,
+  });
 
   if (error) {
     return (
-      <PageError
-        message={(error as Error).message}
-        onRetry={() => refetch()}
-      />
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
-  const hasUsers =
-    (data?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
-
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="users-heading">
-      <PageHeader
-        title="Users"
-        description="Manage team members and invitations."
-      >
-        <Button asChild>
-          <Link href="/users/new">
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">Invite User</span>
-          </Link>
-        </Button>
-      </PageHeader>
-      {hasUsers ? (
-        <DataTable
-          columns={columns}
-          data={rows}
-          searchValue={pagination.searchInput}
-          onSearchChange={pagination.setSearch}
-          page={data?.page ?? pagination.page}
-          pageSize={data?.pageSize ?? pagination.pageSize}
-          total={data?.total ?? 0}
-          pageCount={data?.pageCount ?? 1}
-          sort={pagination.sort}
-          direction={pagination.direction}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-          onSortChange={(nextSort, nextDirection) => {
-            pagination.setSort(
-              nextSort as UsersDirectoryListSort,
-              nextDirection,
-            );
+    <ListingPage
+      title="Users"
+      subtitle="Manage team members and invitations."
+      primaryAction={
+        <Link
+          href="/users/new"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 14px",
+            background: "#0c0a09",
+            color: "#fafaf9",
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
           }}
-          searchPlaceholder="Search users and invitations..."
-          getRowId={r =>
-            r.kind === "user"
-              ? `user-${r.row.id}`
-              : `invitation-${r.row.id}`
-          }
-          isFetching={isFetching}
-        />
-      ) : (
-        <EmptyState
-          icon={ShieldCheck}
-          title="No users yet"
-          description="Invite team members to start collaborating on your distribution operations."
         >
-          <Button asChild>
-            <Link href="/users/new">
-              <Plus className="size-4" />
-              Invite User
-            </Link>
-          </Button>
-        </EmptyState>
-      )}
-    </section>
+          <Plus style={{ width: 14, height: 14 }} />
+          Invite user
+        </Link>
+      }
+      columns={columns}
+      getRowId={row => row.kind === "user" ? `user-${row.row.id}` : `invitation-${row.row.id}`}
+      rowActions={[
+        {
+          label: "Resend invite",
+          onClick: row => {
+            if (row.kind !== "invitation") return;
+            void handleResend(row.row);
+          },
+        },
+        {
+          label: "Revoke invite",
+          variant: "destructive",
+          onClick: row => {
+            if (row.kind !== "invitation") return;
+            void handleRevoke(row.row);
+          },
+        },
+        {
+          label: "Deactivate",
+          variant: "destructive",
+          onClick: row => {
+            if (row.kind !== "user") return;
+            void handleDeactivate(row.row);
+          },
+        },
+      ]}
+      rows={data?.data ?? []}
+      total={data?.total ?? 0}
+      isLoading={isLoading}
+      isFetching={isFetching}
+      searchPlaceholder="Search users and invitations…"
+      emptyTitle="No users yet"
+      emptyDescription="Invite team members to start collaborating."
+      emptyAction={
+        <Link
+          href="/users/new"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 14px",
+            background: "#0c0a09",
+            color: "#fafaf9",
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
+          }}
+        >
+          <Plus style={{ width: 14, height: 14 }} />
+          Invite user
+        </Link>
+      }
+      page={data?.page ?? pagination.page}
+      pageSize={data?.pageSize ?? pagination.pageSize}
+      pageCount={data?.pageCount ?? 1}
+      searchInput={pagination.searchInput}
+      sort={pagination.sort}
+      direction={pagination.direction}
+      onPageChange={pagination.setPage}
+      onPageSizeChange={pagination.setPageSize}
+      onSearchChange={pagination.setSearch}
+      onSortChange={(key, dir) => pagination.setSort(key as UsersDirectoryListSort, dir)}
+    />
   );
 }

@@ -2,26 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/page-header";
-import { Textarea } from "@/components/ui/textarea";
 import { useCreateSalesOrder } from "@/hooks/use-orders";
+import { useProducts } from "@/hooks/use-products";
+import { useCustomers } from "@/hooks/use-customers";
+import { formatMoney } from "@/lib/utils/currency";
+import {
+  isLimitReachedMessage,
+  stripSubscriptionEnforcementPrefix,
+} from "@/lib/subscription-enforcement";
+import type { ProductListItem } from "@/services/products";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";
@@ -30,10 +24,17 @@ import {
   newOrderFormSchema,
   type NewOrderFormValues,
 } from "./new-order-form.schema";
-import {
-  isLimitReachedMessage,
-  stripSubscriptionEnforcementPrefix,
-} from "@/lib/subscription-enforcement";
+import { calculateLineTotal } from "./new-order-line-utils";
+
+const C = {
+  ink: "#0c0a09",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  radius: "10px",
+  radiusSm: "6px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
 
 type SubmitMode = "draft" | "confirm";
 
@@ -41,7 +42,7 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function defaultValues(): NewOrderFormValues {
+function makeDefaultValues(): NewOrderFormValues {
   return {
     customerId: "",
     orderDate: todayIso(),
@@ -66,23 +67,75 @@ function defaultValues(): NewOrderFormValues {
   };
 }
 
+const outlineBtn: React.CSSProperties = {
+  padding: "8px 14px",
+  borderRadius: "6px",
+  border: "1px solid #e7e5e4",
+  background: "#ffffff",
+  color: "#0c0a09",
+  fontSize: "13px",
+  fontWeight: 500,
+  cursor: "pointer",
+  fontFamily: "inherit",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+};
+
+const primaryBtn: React.CSSProperties = {
+  ...outlineBtn,
+  background: "#0c0a09",
+  color: "#fafaf9",
+  borderColor: "#0c0a09",
+};
+
 export function NewOrderForm() {
   const router = useRouter();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<SubmitMode | null>(null);
 
+  const { data: products } = useProducts();
+  const { data: customers } = useCustomers();
+
   const createOrder = useCreateSalesOrder();
 
   const form = useForm<NewOrderFormValues>({
     resolver: zodResolver(newOrderFormSchema),
-    defaultValues: useMemo(defaultValues, []),
+    defaultValues: useMemo(() => makeDefaultValues(), []),
     mode: "onBlur",
   });
+
+  const lines = useWatch({ control: form.control, name: "lines" });
+  const customerId = useWatch({ control: form.control, name: "customerId" });
+  const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
+  const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
+
+  const { lineCount, estTotal } = useMemo(() => {
+    const productsById = new Map<string, ProductListItem>();
+    for (const p of products ?? []) productsById.set(p.id, p);
+
+    const customer = customers?.find(c => c.id === customerId) ?? null;
+    const filledLines = (lines ?? []).filter(l => l.productId);
+
+    let subtotal = 0;
+    for (const l of filledLines) {
+      subtotal += calculateLineTotal(l, productsById.get(l.productId)) ?? 0;
+    }
+
+    const fuel = addFuelSurcharge
+      ? Number(customer?.fuelSurchargeAmount ?? 0) || 0
+      : 0;
+    const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
+
+    return {
+      lineCount: filledLines.length,
+      estTotal: Math.max(0, subtotal + fuel - disc),
+    };
+  }, [lines, products, customers, customerId, addFuelSurcharge, discountAmount]);
 
   async function handleSubmit(mode: SubmitMode) {
     setSubmitError(null);
     const valid = await form.trigger();
-
     if (!valid) {
       toast.error("Fix the errors above before continuing.");
       return;
@@ -106,14 +159,9 @@ export function NewOrderForm() {
           pricePerLbOverride: l.pricePerLb || undefined,
         })),
       });
-
       toast.success(mode === "draft" ? "Draft saved" : "Order confirmed");
-
-      if (order?.id) {
-        router.push(`/orders/${order.id}`);
-      } else {
-        router.push("/orders");
-      }
+      if (order?.id) router.push(`/orders/${order.id}`);
+      else router.push("/orders");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to save order.";
       setSubmitError(message);
@@ -126,157 +174,149 @@ export function NewOrderForm() {
   const isPending = pendingMode !== null;
 
   return (
-    <form
-      id="new-order-form"
-      onSubmit={e => {
-        e.preventDefault();
-        void handleSubmit("confirm");
-      }}
-      className="flex flex-col gap-6 pb-28"
-    >
-      <PageHeader
-        title="Create Sales Order"
-        description="Draft a new sales order for a customer. Final weights and totals are captured during fulfillment."
+    <>
+      <form
+        id="new-order-form"
+        onSubmit={e => {
+          e.preventDefault();
+          void handleSubmit("confirm");
+        }}
+        style={{ paddingBottom: "72px" }}
       >
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push("/orders")}
-          disabled={isPending}
+        {/* Page header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "24px",
+            paddingBottom: "22px",
+            borderBottom: `1px solid ${C.line}`,
+            marginBottom: "28px",
+          }}
         >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void handleSubmit("draft")}
-          disabled={isPending}
-        >
-          {pendingMode === "draft" ? "Saving…" : "Save as draft"}
-        </Button>
-        <Button type="submit" disabled={isPending}>
-          {pendingMode === "confirm" ? "Confirming…" : "Confirm order"}
-        </Button>
-      </PageHeader>
+          <div>
+            <div
+              style={{
+                fontSize: "22px",
+                fontWeight: 600,
+                letterSpacing: "-0.02em",
+                color: C.ink,
+              }}
+            >
+              New sales order
+            </div>
+            <div style={{ fontSize: "13px", color: C.muted, marginTop: "4px" }}>
+              Final weights and totals are captured during fulfillment.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => router.push("/orders")}
+              disabled={isPending}
+              style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSubmit("draft")}
+              disabled={isPending}
+              style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+            >
+              {pendingMode === "draft" ? "Saving…" : "Save draft"}
+            </button>
+          </div>
+        </div>
 
-      {submitError ? (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertTitle>Could not save order</AlertTitle>
-          <AlertDescription>
+        {/* Error banner */}
+        {submitError && (
+          <div
+            style={{
+              padding: "12px 16px",
+              marginBottom: "20px",
+              background: "oklch(97% 0.04 25)",
+              border: "1px solid oklch(80% 0.1 25)",
+              borderRadius: C.radiusSm,
+              fontSize: "13px",
+              color: "oklch(45% 0.22 25)",
+            }}
+          >
             {isLimitReachedMessage(submitError, "maxMonthlyOrders") ? (
               <SubscriptionUpgradeMessage message="Your current plan has reached the monthly order limit." />
             ) : (
               stripSubscriptionEnforcementPrefix(submitError)
             )}
-          </AlertDescription>
-        </Alert>
-      ) : null}
+          </div>
+        )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-        <div className="flex flex-col gap-6">
-          <NewOrderCustomerCard control={form.control} />
+        {/* Two-column layout */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 300px",
+            gap: "28px",
+            alignItems: "start",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 }}>
+            <NewOrderCustomerCard control={form.control} />
+            <NewOrderLinesTable control={form.control} setValue={form.setValue} />
+            {form.formState.errors.lines?.root && (
+              <p style={{ fontSize: "13px", color: "oklch(55% 0.22 25)" }}>
+                {form.formState.errors.lines.root.message}
+              </p>
+            )}
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Order details</CardTitle>
-              <CardDescription>
-                Scheduling and notes for this order.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <Controller
-                  control={form.control}
-                  name="orderDate"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="new-order-order-date">
-                        Order date *
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        id="new-order-order-date"
-                        type="date"
-                        aria-invalid={fieldState.invalid}
-                      />
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={form.control}
-                  name="deliveryDate"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="new-order-delivery-date">
-                        Delivery date
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        id="new-order-delivery-date"
-                        type="date"
-                        aria-invalid={fieldState.invalid}
-                      />
-                      {fieldState.invalid ? (
-                        <FieldError errors={[fieldState.error]} />
-                      ) : null}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={form.control}
-                  name="customerNotes"
-                  render={({ field }) => (
-                    <Field className="md:col-span-2">
-                      <FieldLabel htmlFor="new-order-customer-notes">
-                        Notes (visible on invoice)
-                      </FieldLabel>
-                      <Textarea
-                        {...field}
-                        id="new-order-customer-notes"
-                        rows={2}
-                        placeholder="Delivery instructions, packing requests…"
-                      />
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={form.control}
-                  name="internalNotes"
-                  render={({ field }) => (
-                    <Field className="md:col-span-2">
-                      <FieldLabel htmlFor="new-order-internal-notes">
-                        Internal notes
-                      </FieldLabel>
-                      <Textarea
-                        {...field}
-                        id="new-order-internal-notes"
-                        rows={2}
-                        placeholder="Notes for warehouse and office staff…"
-                      />
-                    </Field>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <NewOrderLinesTable control={form.control} setValue={form.setValue} />
-
-          {form.formState.errors.lines?.root ? (
-            <p className="text-sm text-destructive">
-              {form.formState.errors.lines.root.message}
-            </p>
-          ) : null}
+          <div style={{ position: "sticky", top: "76px" }}>
+            <NewOrderSummaryCard control={form.control} />
+          </div>
         </div>
+      </form>
 
-        <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <NewOrderSummaryCard control={form.control} />
+      {/* Sticky action bar */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: C.surface,
+          borderTop: `1px solid ${C.line}`,
+          padding: "12px 32px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          zIndex: 40,
+        }}
+      >
+        <div style={{ fontSize: "13px", color: C.muted }}>
+          <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
+          {lineCount === 1 ? "item" : "items"} · est.{" "}
+          <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
+            {formatMoney(estTotal)}
+          </b>
         </div>
+        <div style={{ flex: 1 }} />
+        <button
+          type="button"
+          onClick={() => void handleSubmit("draft")}
+          disabled={isPending}
+          style={{ ...outlineBtn, opacity: isPending ? 0.6 : 1 }}
+        >
+          {pendingMode === "draft" ? "Saving…" : "Save draft"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSubmit("confirm")}
+          disabled={isPending}
+          style={{ ...primaryBtn, opacity: isPending ? 0.6 : 1 }}
+        >
+          {pendingMode === "confirm" ? "Confirming…" : "Confirm order →"}
+        </button>
       </div>
-    </form>
+    </>
   );
 }

@@ -1,115 +1,242 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMemo } from "react";
-import { Plus, ShoppingCart } from "lucide-react";
+import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/empty-state";
-import { PageError } from "@/components/page-error";
-import { PageHeader } from "@/components/page-header";
-import { ListPageSkeleton } from "@/components/loading-skeletons";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteSalesOrder, useSalesOrdersPage } from "@/hooks/use-orders";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
-import type { SalesOrderListItem, SalesOrderListSort } from "@/services/orders";
+import { formatDisplayDate } from "@/lib/utils/date";
+import type { SalesOrderListSort } from "@/services/orders";
 
-import { createColumns } from "./columns";
-import { DataTable } from "./data-table";
+type OrderRow = NonNullable<ReturnType<typeof useSalesOrdersPage>["data"]>["data"][number];
+
+const STATUS_PILL: Record<string, { label: string; bg: string; color: string }> = {
+  sales_order: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
+  confirmed: { label: "Awaiting fulfillment", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
+  fulfilled: { label: "Fulfilled", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
+  cancelled: { label: "Cancelled", bg: "oklch(97% 0.04 70)", color: "oklch(70% 0.13 70)" },
+};
+
+const COLUMNS: ListingColumn<OrderRow>[] = [
+  {
+    key: "orderNumber",
+    header: "Order #",
+    sortKey: "orderNumber",
+    width: "130px",
+    render: row => ({
+      primary: (
+        <Link href={`/orders/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+          <MonoText>{row.orderNumber ?? row.id.slice(0, 8)}</MonoText>
+        </Link>
+      ),
+    }),
+  },
+  {
+    key: "customer",
+    header: "Customer",
+    render: row =>
+      row.customer
+        ? { primary: <span style={{ fontWeight: 500 }}>{row.customer.name}</span> }
+        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+  },
+  {
+    key: "orderDate",
+    header: "Order date",
+    sortKey: "orderDate",
+    render: row => ({ primary: <MonoText>{formatDisplayDate(row.orderDate)}</MonoText> }),
+  },
+  {
+    key: "dueDate",
+    header: "Due",
+    render: row =>
+      row.dueDate
+        ? { primary: <MonoText>{formatDisplayDate(row.dueDate)}</MonoText> }
+        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+  },
+  {
+    key: "status",
+    header: "Status",
+    sortKey: "status",
+    render: row => {
+      const pill = STATUS_PILL[row.status] ?? { label: row.status, bg: "#f5f5f4", color: "#78716c" };
+      return { primary: <StatusPill label={pill.label} bg={pill.bg} color={pill.color} /> };
+    },
+  },
+  {
+    key: "lines",
+    header: "Lines",
+    align: "right",
+    render: row => {
+      const count = row.lines?.length ?? 0;
+      return { primary: <span style={{ color: "#78716c" }}>{count}</span> };
+    },
+  },
+];
+
+const SEGMENTS = [
+  { value: "all", label: "All" },
+  { value: "sales_order", label: "Drafts" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "fulfilled", label: "Fulfilled" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 export default function Orders() {
+  const router = useRouter();
+  const [deletingOrder, setDeletingOrder] = useState<OrderRow | null>(null);
+  const [activeSegment, setActiveSegment] = useState("all");
+
   const pagination = useUrlPaginationState<SalesOrderListSort>({
     defaultSort: "orderDate",
     defaultDirection: "desc",
   });
-  const {
-    data: orders,
-    isLoading,
-    isFetching,
-    error: loadError,
-    refetch,
-  } = useSalesOrdersPage({
+
+  const { data, isLoading, isFetching, error, refetch } = useSalesOrdersPage({
     page: pagination.page,
     pageSize: pagination.pageSize,
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
   });
+
   const deleteOrder = useDeleteSalesOrder();
 
-  const columns = useMemo(
-    () =>
-      createColumns({
-        onDelete: (order: SalesOrderListItem) => {
-          deleteOrder.mutate(order.id);
-        },
-      }),
-    [deleteOrder],
+  const rows = (data?.data ?? []).filter(
+    row => activeSegment === "all" || row.status === activeSegment,
   );
 
-  if (isLoading) {
-    return <ListPageSkeleton tableColumns={6} />;
-  }
-
-  if (loadError) {
+  if (error) {
     return (
-      <PageError
-        message={(loadError as Error).message}
-        onRetry={() => refetch()}
-      />
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
-  const hasOrders =
-    (orders?.total ?? 0) > 0 || pagination.searchInput.trim().length > 0;
-
   return (
-    <section className="flex flex-col gap-6" aria-labelledby="orders-heading">
-      <PageHeader
-        title="Orders"
-        description="Track sales orders, their status, and linked customers."
-      >
-        <Button asChild>
-          <Link href="/orders/new">
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">New Order</span>
+    <>
+      <ListingPage
+        title="Sales Orders"
+        subtitle="Track sales orders, their status, and linked customers."
+        primaryAction={
+          <Link
+            href="/orders/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+              border: "1px solid #0c0a09",
+            }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            New order
           </Link>
-        </Button>
-      </PageHeader>
+        }
+        statusSegments={SEGMENTS}
+        activeSegment={activeSegment}
+        onSegmentChange={setActiveSegment}
+        columns={COLUMNS}
+        getRowId={row => row.id}
+        onRowClick={row => router.push(`/orders/${row.id}`)}
+        rowActions={[
+          { label: "View", href: row => `/orders/${row.id}` },
+          {
+            label: "Delete",
+            variant: "destructive",
+            onClick: row => setDeletingOrder(row),
+          },
+        ]}
+        rows={rows}
+        total={data?.total ?? 0}
+        isLoading={isLoading}
+        isFetching={isFetching}
+        searchPlaceholder="Search orders, customers…"
+        emptyTitle="No orders yet"
+        emptyDescription="Create a sales order to get started."
+        emptyAction={
+          <Link
+            href="/orders/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            New order
+          </Link>
+        }
+        page={data?.page ?? pagination.page}
+        pageSize={data?.pageSize ?? pagination.pageSize}
+        pageCount={data?.pageCount ?? 1}
+        searchInput={pagination.searchInput}
+        sort={pagination.sort}
+        direction={pagination.direction}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+        onSearchChange={pagination.setSearch}
+        onSortChange={(key, dir) => pagination.setSort(key as SalesOrderListSort, dir)}
+      />
 
-      {hasOrders ? (
-        <DataTable
-          columns={columns}
-          data={orders?.data ?? []}
-          searchPlaceholder="Search orders..."
-          searchValue={pagination.searchInput}
-          onSearchChange={pagination.setSearch}
-          page={orders?.page ?? pagination.page}
-          pageSize={orders?.pageSize ?? pagination.pageSize}
-          total={orders?.total ?? 0}
-          pageCount={orders?.pageCount ?? 1}
-          sort={pagination.sort}
-          direction={pagination.direction}
-          onPageChange={pagination.setPage}
-          onPageSizeChange={pagination.setPageSize}
-          onSortChange={(nextSort, nextDirection) => {
-            pagination.setSort(nextSort as SalesOrderListSort, nextDirection);
-          }}
-          isFetching={isFetching}
-        />
-      ) : (
-        <EmptyState
-          icon={ShoppingCart}
-          title="No orders yet"
-          description="Create a sales order to get started."
-        >
-          <Button asChild>
-            <Link href="/orders/new">
-              <Plus className="size-4" />
-              New Order
-            </Link>
-          </Button>
-        </EmptyState>
-      )}
-    </section>
+      <AlertDialog open={!!deletingOrder} onOpenChange={open => { if (!open) setDeletingOrder(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete sales order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete order{" "}
+              <strong>{deletingOrder?.orderNumber ?? deletingOrder?.id.slice(0, 8)}</strong>?
+              This will release any allocated inventory back to stock and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!deletingOrder) return;
+                deleteOrder.mutate(deletingOrder.id, {
+                  onSuccess: () => toast.success("Order deleted."),
+                  onError: (e: Error) => toast.error(e.message),
+                });
+                setDeletingOrder(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

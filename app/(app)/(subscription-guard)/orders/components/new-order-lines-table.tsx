@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -8,17 +8,7 @@ import {
   type Control,
   type UseFormSetValue,
 } from "react-hook-form";
-import { Info, Plus, Scale, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Combobox,
   ComboboxContent,
@@ -29,7 +19,6 @@ import {
   ComboboxTrigger,
   ComboboxValue,
 } from "@/components/ui/combobox";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -37,17 +26,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { useCustomers } from "@/hooks/use-customers";
+import { Button } from "@/components/ui/button";
 import { useProducts } from "@/hooks/use-products";
-import { cn } from "@/lib/utils";
+import { useCustomers } from "@/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerListItem } from "@/services/customers";
 import type { ProductListItem } from "@/services/products";
@@ -56,14 +37,25 @@ import type { NewOrderFormValues } from "./new-order-form.schema";
 import {
   calculateLineTotal,
   formatSalesUnitLabel,
-  formatSalesUnitShortLabel,
   getDefaultSalesUnit,
-  getLinePriceLabel,
   getSalesUnits,
   getSelectedSalesUnit,
-  getUnitTypeDisplayLabel,
   inferLineUnitType,
 } from "./new-order-line-utils";
+
+const C = {
+  ink: "#0c0a09",
+  ink2: "#44403c",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  line2: "#f5f5f4",
+  accent: "oklch(48% 0.16 265)",
+  good: "oklch(58% 0.13 155)",
+  radius: "10px",
+  radiusSm: "6px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
 
 interface NewOrderLinesTableProps {
   control: Control<NewOrderFormValues>;
@@ -88,6 +80,8 @@ export function NewOrderLinesTable({
   control,
   setValue,
 }: NewOrderLinesTableProps) {
+  const [notesOpen, setNotesOpen] = useState(false);
+
   const { fields, append, remove } = useFieldArray({
     control,
     name: "lines",
@@ -107,25 +101,23 @@ export function NewOrderLinesTable({
 
   const productsById = useMemo(() => {
     const map = new Map<string, ProductListItem>();
-    for (const product of products ?? []) {
-      map.set(product.id, product);
-    }
+    for (const product of products ?? []) map.set(product.id, product);
     return map;
   }, [products]);
 
   const takenProductIds = useMemo(
-    () => new Set((lines ?? []).map(line => line.productId).filter(Boolean)),
+    () => new Set((lines ?? []).map(l => l.productId).filter(Boolean)),
     [lines],
   );
 
+  const filledCount = (lines ?? []).filter(l => l.productId).length;
+  const isStep2Done = filledCount > 0;
+
   function resolvePricePerLb(productId: string): string {
     if (!productId) return "";
-    const contract = customer?.productPrices?.find(
-      price => price.productId === productId,
-    );
+    const contract = customer?.productPrices?.find(p => p.productId === productId);
     if (contract?.pricePerLb) return contract.pricePerLb;
-    const product = productsById.get(productId);
-    return product?.defaultPricePerLb ?? "";
+    return productsById.get(productId)?.defaultPricePerLb ?? "";
   }
 
   function handleProductSelected(index: number, product: ProductListItem) {
@@ -143,83 +135,284 @@ export function NewOrderLinesTable({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Line items</span>
-          <Badge variant="outline" className="font-normal">
-            {fields.length} {fields.length === 1 ? "line" : "lines"}
-          </Badge>
-        </CardTitle>
-        <CardDescription>
-          Add products, choose from each product&apos;s allowed sales units, and
-          enter the order quantity. Prices auto-fill from the customer contract
-          or product default and remain editable.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="w-[30%] min-w-64">Product</TableHead>
-                <TableHead className="w-44">Sales unit</TableHead>
-                <TableHead className="w-28 text-right">Quantity</TableHead>
-                <TableHead className="w-40">Unit type</TableHead>
-                <TableHead className="w-36 text-right">Price</TableHead>
-                <TableHead className="w-32 text-right">Line total</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fields.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No products yet. Click &quot;Add product&quot; to get started.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                fields.map((field, index) => (
-                  <LineRow
-                    key={field._fieldId}
-                    index={index}
-                    control={control}
-                    products={products ?? []}
-                    productsById={productsById}
-                    takenProductIds={takenProductIds}
-                    onProductSelected={product =>
-                      handleProductSelected(index, product)
-                    }
-                    onRemove={() => remove(index)}
-                  />
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append(newLineDefaults())}
+    <div
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: C.radius,
+        padding: "20px 22px",
+      }}
+    >
+      {/* Section header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "14px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "13px",
+            fontWeight: 600,
+            color: C.ink,
+          }}
+        >
+          <span
+            style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              background: isStep2Done ? C.good : C.line,
+              color: isStep2Done ? "#fff" : C.muted,
+              display: "grid",
+              placeItems: "center",
+              fontSize: "10px",
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
           >
-            <Plus className="h-4 w-4" />
-            Add product
-          </Button>
-
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Scale className="h-3.5 w-3.5" />
-            Catch-weight products capture final billed weight during
-            fulfillment.
-          </div>
+            {isStep2Done ? "✓" : "2"}
+          </span>
+          Products
         </div>
-      </CardContent>
-    </Card>
+        <span style={{ fontSize: "12px", color: C.muted }}>
+          {filledCount === 0
+            ? "No items"
+            : `${filledCount} ${filledCount === 1 ? "item" : "items"}`}
+        </span>
+      </div>
+
+      {/* Line items table */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th
+                style={{
+                  textAlign: "left",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "0 10px 8px",
+                  width: "40%",
+                }}
+              >
+                Product
+              </th>
+              <th
+                style={{
+                  textAlign: "left",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "0 10px 8px",
+                  width: "16%",
+                }}
+              >
+                Unit
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "0 10px 8px",
+                  width: "12%",
+                }}
+              >
+                Qty
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "0 10px 8px",
+                  width: "14%",
+                }}
+              >
+                Price
+              </th>
+              <th
+                style={{
+                  textAlign: "right",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "0 10px 8px",
+                  width: "14%",
+                }}
+              >
+                Total
+              </th>
+              <th style={{ width: "30px" }} />
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((field, index) => (
+              <LineRow
+                key={field._fieldId}
+                index={index}
+                control={control}
+                products={products ?? []}
+                productsById={productsById}
+                takenProductIds={takenProductIds}
+                onProductSelected={product => handleProductSelected(index, product)}
+                onRemove={() => remove(index)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Table footer */}
+      <div
+        style={{
+          paddingTop: "12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "8px",
+          marginTop: fields.length > 0 ? "4px" : "0",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => append(newLineDefaults())}
+          style={{
+            padding: "8px 14px",
+            borderRadius: C.radiusSm,
+            border: `1px dashed ${C.line}`,
+            background: "none",
+            color: C.muted,
+            fontSize: "13px",
+            fontWeight: 500,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+          }}
+        >
+          + Add product
+        </button>
+        <span style={{ fontSize: "12px", color: C.muted }}>
+          ⚖ Catch-weight items capture final lbs at fulfillment
+        </span>
+      </div>
+
+      {/* Notes toggle + row */}
+      <div
+        style={{
+          paddingTop: "12px",
+          borderTop: `1px solid ${C.line2}`,
+          marginTop: "14px",
+        }}
+      >
+        {!notesOpen ? (
+          <button
+            type="button"
+            onClick={() => setNotesOpen(true)}
+            style={{
+              background: "none",
+              border: 0,
+              color: C.accent,
+              fontSize: "13px",
+              fontWeight: 500,
+              padding: 0,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            + Add note
+          </button>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+            <Controller
+              control={control}
+              name="customerNotes"
+              render={({ field }) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>
+                    Customer note{" "}
+                    <span style={{ color: C.muted, fontWeight: 400 }}>
+                      — shown on invoice
+                    </span>
+                  </label>
+                  <textarea
+                    {...field}
+                    placeholder="Delivery instructions, packing requests…"
+                    rows={2}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: `1px solid ${C.line}`,
+                      borderRadius: C.radiusSm,
+                      background: C.surface,
+                      resize: "vertical",
+                      fontSize: "13px",
+                      minHeight: "60px",
+                      fontFamily: "inherit",
+                      color: C.ink,
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
+            />
+            <Controller
+              control={control}
+              name="internalNotes"
+              render={({ field }) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>
+                    Internal note{" "}
+                    <span style={{ color: C.muted, fontWeight: 400 }}>
+                      — staff only
+                    </span>
+                  </label>
+                  <textarea
+                    {...field}
+                    placeholder="Notes for warehouse and office staff…"
+                    rows={2}
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: `1px solid ${C.line}`,
+                      borderRadius: C.radiusSm,
+                      background: C.surface,
+                      resize: "vertical",
+                      fontSize: "13px",
+                      minHeight: "60px",
+                      fontFamily: "inherit",
+                      color: C.ink,
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              )}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -245,31 +438,47 @@ function LineRow({
   const row = useWatch({ control, name: `lines.${index}` });
 
   const product = row?.productId ? productsById.get(row.productId) : undefined;
-  const salesUnit = getSelectedSalesUnit(product, row?.salesUnitId);
   const salesUnits = getSalesUnits(product);
+  const salesUnit = getSelectedSalesUnit(product, row?.salesUnitId);
   const lineTotal = row ? calculateLineTotal(row, product) : null;
 
   const availableProducts = products.filter(
-    productItem =>
-      productItem.id === row?.productId || !takenProductIds.has(productItem.id),
+    p => p.id === row?.productId || !takenProductIds.has(p.id),
   );
 
+  const tdBase: React.CSSProperties = {
+    padding: "6px 10px",
+    borderTop: `1px solid ${C.line2}`,
+    verticalAlign: "top",
+  };
+
+  const inputBase: React.CSSProperties = {
+    width: "100%",
+    padding: "9px 10px",
+    border: "1px solid transparent",
+    borderRadius: C.radiusSm,
+    background: C.line2,
+    fontSize: "13px",
+    fontFamily: "inherit",
+    color: C.ink,
+    outline: "none",
+  };
+
   return (
-    <TableRow className="align-top">
-      <TableCell className="py-3">
+    <tr>
+      {/* Product */}
+      <td style={tdBase}>
         <Controller
           control={control}
           name={`lines.${index}.productId`}
           render={({ fieldState }) => (
-            <div className="flex flex-col gap-1">
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
               <Combobox
                 items={availableProducts}
-                itemToStringValue={(productItem: ProductListItem) =>
-                  `${productItem.sku} ${productItem.name}`
-                }
+                itemToStringValue={(p: ProductListItem) => `${p.sku} ${p.name}`}
                 value={product ?? null}
-                onValueChange={(productItem: ProductListItem | null) => {
-                  if (productItem) onProductSelected(productItem);
+                onValueChange={(p: ProductListItem | null) => {
+                  if (p) onProductSelected(p);
                 }}
               >
                 <ComboboxTrigger
@@ -278,43 +487,57 @@ function LineRow({
                       type="button"
                       variant="outline"
                       aria-invalid={fieldState.invalid}
-                      className="w-full justify-between font-normal"
+                      style={{
+                        width: "100%",
+                        justifyContent: "flex-start",
+                        fontWeight: "normal",
+                        padding: "8px 10px",
+                        border: "1px solid transparent",
+                        background: C.line2,
+                        height: "auto",
+                        color: product ? C.ink : C.muted,
+                        fontSize: "13px",
+                        borderRadius: C.radiusSm,
+                      }}
                     >
                       <ComboboxValue>
                         {product ? (
-                          <span className="flex items-center gap-2 truncate">
-                            <span className="font-mono text-xs text-muted-foreground">
+                          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontFamily: C.mono, fontSize: "11px", color: C.muted }}>
                               {product.sku}
                             </span>
-                            <span className="truncate">{product.name}</span>
+                            <span>{product.name}</span>
                           </span>
                         ) : (
-                          <span className="text-muted-foreground">
-                            Select product…
-                          </span>
+                          "Search product…"
                         )}
                       </ComboboxValue>
                     </Button>
                   }
                 />
                 <ComboboxContent>
-                  <ComboboxInput
-                    showTrigger={false}
-                    placeholder="Search by SKU or name…"
-                  />
+                  <ComboboxInput showTrigger={false} placeholder="Search by SKU or name…" />
                   <ComboboxEmpty>No products found.</ComboboxEmpty>
                   <ComboboxList>
-                    {(productItem: ProductListItem) => (
-                      <ComboboxItem key={productItem.id} value={productItem}>
-                        <div className="flex w-full items-center justify-between gap-3">
-                          <div className="flex flex-col">
-                            <span>{productItem.name}</span>
-                            <span className="font-mono text-[11px] text-muted-foreground">
-                              {productItem.sku}
-                            </span>
+                    {(p: ProductListItem) => (
+                      <ComboboxItem key={p.id} value={p}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            gap: "8px",
+                          }}
+                        >
+                          <div>
+                            <div>{p.name}</div>
+                            <div style={{ fontFamily: C.mono, fontSize: "11px", color: C.muted }}>
+                              {p.sku}
+                            </div>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {formatMoney(productItem.defaultPricePerLb)}
+                          <span style={{ fontSize: "12px", color: C.muted }}>
+                            {formatMoney(p.defaultPricePerLb)}
                           </span>
                         </div>
                       </ComboboxItem>
@@ -322,157 +545,157 @@ function LineRow({
                   </ComboboxList>
                 </ComboboxContent>
               </Combobox>
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
+              {fieldState.invalid && (
+                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
                   {fieldState.error?.message}
-                </span>
-              ) : product && salesUnits.length === 0 ? (
-                <span className="text-[11px] text-amber-600">
-                  No sales units configured for this product.
-                </span>
-              ) : product ? (
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  SKU {product.sku}
-                </span>
-              ) : null}
-            </div>
-          )}
-        />
-      </TableCell>
-
-      <TableCell className="py-3">
-        <Controller
-          control={control}
-          name={`lines.${index}.salesUnitId`}
-          render={({ field, fieldState }) => (
-            <div className="flex flex-col gap-1">
-              <Select
-                value={field.value}
-                onValueChange={field.onChange}
-                disabled={!product || salesUnits.length === 0}
-              >
-                <SelectTrigger className="w-full" aria-invalid={fieldState.invalid}>
-                  <SelectValue placeholder="Select unit…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {salesUnits.map(unit => (
-                    <SelectItem key={unit.id} value={unit.unitId}>
-                      {formatSalesUnitLabel(unit)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
-                  {fieldState.error?.message}
-                </span>
-              ) : salesUnit ? (
-                <span className="text-[11px] text-muted-foreground">
-                  {salesUnit.allowsFractional
-                    ? "Configured for fractional use"
-                    : "Whole quantities only"}
-                </span>
-              ) : null}
-            </div>
-          )}
-        />
-      </TableCell>
-
-      <TableCell className="py-3 text-right">
-        <Controller
-          control={control}
-          name={`lines.${index}.quantity`}
-          render={({ field, fieldState }) => (
-            <div className="flex flex-col items-end gap-1">
-              <Input
-                {...field}
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                aria-invalid={fieldState.invalid}
-                placeholder="0"
-                className="text-right"
-              />
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
-                  {fieldState.error?.message}
-                </span>
-              ) : null}
-            </div>
-          )}
-        />
-      </TableCell>
-
-      <TableCell className="py-3">
-        <div className="flex flex-col gap-1">
-          <Badge variant="outline" className="w-fit text-xs">
-            {getUnitTypeDisplayLabel(row?.unitType)}
-          </Badge>
-          {row?.unitType === "catch_weight" ? (
-            <span className="flex items-start gap-1 text-[11px] text-muted-foreground">
-              <Info className="mt-0.5 h-3 w-3 shrink-0" />
-              Final billed weight will be captured during fulfillment.
-            </span>
-          ) : salesUnit ? (
-            <span className="text-[11px] text-muted-foreground">
-              Sold by {formatSalesUnitShortLabel(salesUnit)}.
-            </span>
-          ) : null}
-        </div>
-      </TableCell>
-
-      <TableCell className="py-3 text-right">
-        <Controller
-          control={control}
-          name={`lines.${index}.pricePerLb`}
-          render={({ field, fieldState }) => (
-            <div className="flex flex-col items-end gap-1">
-              <Input
-                {...field}
-                type="number"
-                min="0"
-                step="0.0001"
-                inputMode="decimal"
-                aria-invalid={fieldState.invalid}
-                placeholder="0.0000"
-                className="text-right"
-              />
-              {fieldState.invalid ? (
-                <span className="text-xs text-destructive">
-                  {fieldState.error?.message}
-                </span>
-              ) : (
-                <span className="text-[11px] text-muted-foreground">
-                  {getLinePriceLabel(row?.unitType, salesUnit)}
                 </span>
               )}
             </div>
           )}
         />
-      </TableCell>
+      </td>
 
-      <TableCell
-        className={cn(
-          "py-3 text-right tabular-nums",
-          lineTotal === null ? "text-muted-foreground" : "font-medium",
-        )}
+      {/* Unit */}
+      <td style={tdBase}>
+        <Controller
+          control={control}
+          name={`lines.${index}.salesUnitId`}
+          render={({ field, fieldState }) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={!product || salesUnits.length === 0}
+            >
+              <SelectTrigger
+                style={{
+                  border: "1px solid transparent",
+                  background: C.line2,
+                  fontSize: "13px",
+                  height: "auto",
+                  padding: "8px 10px",
+                  borderRadius: C.radiusSm,
+                  color: field.value ? C.ink : C.muted,
+                }}
+                aria-invalid={fieldState.invalid}
+              >
+                <SelectValue placeholder="Unit…" />
+              </SelectTrigger>
+              <SelectContent>
+                {salesUnits.map(unit => (
+                  <SelectItem key={unit.id} value={unit.unitId}>
+                    {formatSalesUnitLabel(unit)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </td>
+
+      {/* Qty */}
+      <td style={{ ...tdBase, textAlign: "right" }}>
+        <Controller
+          control={control}
+          name={`lines.${index}.quantity`}
+          render={({ field, fieldState }) => (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+              <input
+                {...field}
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                placeholder="0"
+                aria-invalid={fieldState.invalid}
+                style={{
+                  ...inputBase,
+                  textAlign: "right",
+                  fontFamily: C.mono,
+                  border: fieldState.invalid ? "1px solid oklch(55% 0.22 25)" : "1px solid transparent",
+                }}
+              />
+              {fieldState.invalid && (
+                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
+                  {fieldState.error?.message}
+                </span>
+              )}
+            </div>
+          )}
+        />
+      </td>
+
+      {/* Price */}
+      <td style={{ ...tdBase, textAlign: "right" }}>
+        <Controller
+          control={control}
+          name={`lines.${index}.pricePerLb`}
+          render={({ field, fieldState }) => (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
+              <input
+                {...field}
+                type="number"
+                min="0"
+                step="0.0001"
+                inputMode="decimal"
+                placeholder="0.00"
+                aria-invalid={fieldState.invalid}
+                style={{
+                  ...inputBase,
+                  textAlign: "right",
+                  fontFamily: C.mono,
+                  border: fieldState.invalid ? "1px solid oklch(55% 0.22 25)" : "1px solid transparent",
+                }}
+              />
+              {salesUnit && !fieldState.invalid && (
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  {row?.unitType === "catch_weight" ? "$ / lb" : `$ / ${salesUnit.unit.abbreviation || salesUnit.unit.name}`}
+                </span>
+              )}
+              {fieldState.invalid && (
+                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
+                  {fieldState.error?.message}
+                </span>
+              )}
+            </div>
+          )}
+        />
+      </td>
+
+      {/* Total */}
+      <td
+        style={{
+          ...tdBase,
+          textAlign: "right",
+          fontFamily: C.mono,
+          fontSize: "13px",
+          color: lineTotal !== null ? C.ink : C.muted,
+          fontWeight: lineTotal !== null ? 500 : 400,
+          whiteSpace: "nowrap",
+        }}
       >
         {lineTotal !== null ? formatMoney(lineTotal) : "—"}
-      </TableCell>
+      </td>
 
-      <TableCell className="py-3 text-right">
-        <Button
+      {/* Delete */}
+      <td style={{ ...tdBase, textAlign: "center" }}>
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
           onClick={onRemove}
           aria-label={`Remove line ${index + 1}`}
-          className="text-muted-foreground hover:text-destructive"
+          style={{
+            background: "none",
+            border: 0,
+            color: C.muted,
+            padding: "4px",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "13px",
+            lineHeight: 1,
+          }}
         >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </TableCell>
-    </TableRow>
+          ✕
+        </button>
+      </td>
+    </tr>
   );
 }

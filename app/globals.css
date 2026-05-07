@@ -54,7 +54,7 @@
 
 :root {
   /* Navy blue brand palette - #1e3a5f inspired */
-  --background: oklch(0.985 0.006 240);
+  --background: #fafaf9;
   --foreground: oklch(0.20 0.03 240);
 
   --card: oklch(1 0 0);
@@ -89,7 +89,7 @@
 
   --radius: 0.625rem;
 
-  --sidebar: oklch(0.98 0.005 240);
+  --sidebar: #ffffff;
   --sidebar-foreground: oklch(0.22 0.03 240);
   --sidebar-primary: oklch(0.35 0.08 240);
   --sidebar-primary-foreground: oklch(0.98 0.003 240);

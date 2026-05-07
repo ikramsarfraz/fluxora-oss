@@ -1,91 +1,172 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Plus } from "lucide-react";
+import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Plus, Package } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
-import { PageLoading } from "@/components/page-loading";
-import { PageError } from "@/components/page-error";
-import { EmptyState } from "@/components/empty-state";
-
-import { createColumns } from "./columns";
-import { DataTable } from "./data-table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ListingPage, type ListingColumn } from "@/components/listing-page";
 import { useCategories, useDeleteCategory } from "@/hooks/use-categories";
+import type { Category } from "@/services/categories";
+
+type CategoryRow = Category;
+
+const COLUMNS: ListingColumn<CategoryRow>[] = [
+  {
+    key: "name",
+    header: "Name",
+    render: row => ({
+      primary: <span style={{ fontWeight: 500 }}>{row.name}</span>,
+      secondary: row.description ?? undefined,
+    }),
+  },
+  {
+    key: "isActive",
+    header: "Status",
+    render: row => ({
+      primary: (
+        <span
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 100,
+            background: row.isActive ? "oklch(96% 0.04 155)" : "#f5f5f4",
+            color: row.isActive ? "oklch(58% 0.13 155)" : "#78716c",
+            fontWeight: 500,
+          }}
+        >
+          {row.isActive ? "Active" : "Inactive"}
+        </span>
+      ),
+    }),
+  },
+];
 
 export default function Categories() {
-  const {
-    data: categories,
-    isLoading,
-    error: loadError,
-    refetch,
-  } = useCategories();
+  const router = useRouter();
+  const [deletingCategory, setDeletingCategory] = useState<CategoryRow | null>(null);
+
+  const { data: categories, isLoading, error, refetch } = useCategories();
   const deleteCategory = useDeleteCategory();
 
-  const columns = useMemo(
-    () =>
-      createColumns({
-        onDelete: category => deleteCategory.mutate(category.id),
-      }),
-    [deleteCategory],
-  );
-
-  if (isLoading) {
-    return <PageLoading message="Loading categories..." />;
-  }
-
-  if (loadError) {
+  if (error) {
     return (
-      <PageError
-        message={(loadError as Error).message}
-        onRetry={() => refetch()}
-      />
+      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+        {(error as Error).message}{" "}
+        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
+          Retry
+        </button>
+      </div>
     );
   }
 
-  const hasCategories = categories && categories.length > 0;
+  const rows = categories ?? [];
 
   return (
     <>
-      <section className="flex flex-col gap-6" aria-labelledby="uom-heading">
-        <PageHeader
-          title="Categories"
-          description="Define the units you use for inventory, purchasing, and sales (lb, case, each, etc.)."
-        >
-          <Button asChild>
-            <Link href="/categories/new">
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Add Category</span>
-            </Link>
-          </Button>
-        </PageHeader>
-
-        {hasCategories ? (
-          <DataTable columns={columns} data={categories} />
-        ) : (
-          <EmptyState
-            icon={Package}
-            title="No categories yet"
-            description="Get started by adding your first category."
+      <ListingPage
+        title="Categories"
+        subtitle="Organize your product catalog with categories."
+        primaryAction={
+          <Link
+            href="/categories/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
           >
-            <Button asChild>
-              <Link href="/categories/new">
-                <Plus className="size-4" />
-                Add Category
-              </Link>
-            </Button>
-          </EmptyState>
-        )}
-      </section>
+            <Plus style={{ width: 14, height: 14 }} />
+            Add category
+          </Link>
+        }
+        columns={COLUMNS}
+        getRowId={row => row.id}
+        onRowClick={row => router.push(`/categories/${row.id}`)}
+        rowActions={[
+          { label: "View", href: row => `/categories/${row.id}` },
+          { label: "Delete", variant: "destructive", onClick: row => setDeletingCategory(row) },
+        ]}
+        rows={rows}
+        total={rows.length}
+        isLoading={isLoading}
+        searchPlaceholder="Search categories…"
+        emptyTitle="No categories yet"
+        emptyDescription="Get started by adding your first category."
+        emptyAction={
+          <Link
+            href="/categories/new"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "8px 14px",
+              background: "#0c0a09",
+              color: "#fafaf9",
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: "none",
+            }}
+          >
+            <Plus style={{ width: 14, height: 14 }} />
+            Add category
+          </Link>
+        }
+        hidePagination
+        page={1}
+        pageSize={rows.length || 10}
+        pageCount={1}
+        searchInput=""
+        onPageChange={() => {}}
+        onPageSizeChange={() => {}}
+        onSearchChange={() => {}}
+      />
 
-      {/* <EditUnitDialog
-        unit={editingUnit}
-        open={!!editingUnit}
-        onOpenChange={(open) => {
-          if (!open) setEditingUnit(null);
-        }}
-      /> */}
+      <AlertDialog open={!!deletingCategory} onOpenChange={open => { if (!open) setDeletingCategory(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete <strong>{deletingCategory?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (!deletingCategory) return;
+                deleteCategory.mutate(deletingCategory.id, {
+                  onSuccess: () => toast.success("Category deleted."),
+                  onError: (e: Error) => toast.error(e.message),
+                });
+                setDeletingCategory(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
