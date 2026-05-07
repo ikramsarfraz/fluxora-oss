@@ -84,7 +84,9 @@ export function NewOrderForm() {
   const draftIdRef = useRef<string | null>(null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   const { data: products } = useProducts();
   const { data: customers } = useCustomers();

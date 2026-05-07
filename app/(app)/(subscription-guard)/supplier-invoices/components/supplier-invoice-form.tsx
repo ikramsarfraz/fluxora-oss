@@ -217,7 +217,9 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const draftIdRef = useRef<string | null>(invoiceId ?? null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     isPendingRef.current = isPending;
