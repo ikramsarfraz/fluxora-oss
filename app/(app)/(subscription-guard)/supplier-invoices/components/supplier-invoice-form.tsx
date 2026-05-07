@@ -149,8 +149,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         });
         toast.success(
           complete
-            ? `Invoice "${values.invoiceNumber}" posted. Lots and inventory created.`
-            : `Draft invoice "${values.invoiceNumber}" saved.`,
+            ? `Bill "${values.invoiceNumber}" received. Lots and inventory created.`
+            : `Draft bill "${values.invoiceNumber}" saved.`,
         );
         router.push(`/supplier-invoices/${result.id}`);
       } else if (invoiceId) {
@@ -176,10 +176,10 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               })),
           });
           toast.success(
-            `Invoice "${values.invoiceNumber}" posted. Lots and inventory created.`,
+            `Bill "${values.invoiceNumber}" received. Lots and inventory created.`,
           );
         } else {
-          toast.success(`Draft "${values.invoiceNumber}" updated.`);
+          toast.success(`Draft bill "${values.invoiceNumber}" updated.`);
         }
         router.push(`/supplier-invoices/${invoiceId}`);
       }
@@ -218,12 +218,12 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
                 color: C.ink,
               }}
             >
-              {mode === "create" ? "New supplier invoice" : "Edit supplier invoice"}
+              {mode === "create" ? "Record bill" : "Edit bill"}
             </div>
             <div style={{ fontSize: "13px", color: C.muted, marginTop: "4px" }}>
               {mode === "create"
-                ? "Save a draft while gathering details, or complete to auto-generate lots and inventory."
-                : "Update invoice details. Completing will auto-create lots and inventory."}
+                ? "Each line you add will create a lot and inventory record when the bill is received."
+                : "Update bill details. Receiving will create lots and inventory for each line."}
             </div>
           </div>
           <Button
@@ -247,7 +247,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               marginBottom: "16px",
             }}
           >
-            Invoice header
+            Bill details
           </div>
           <div
             style={{
@@ -427,8 +427,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             Line items
           </div>
           <div style={{ fontSize: "13px", color: C.muted, marginBottom: "16px" }}>
-            Each line becomes one lot and one inventory record when the invoice is
-            completed.
+            Each line becomes one lot and one inventory record when the bill is received.
           </div>
           <SupplierInvoiceLinesEditor
             control={form.control}

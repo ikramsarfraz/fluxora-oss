@@ -141,7 +141,7 @@ export function SupplierInvoiceDetailPage({
   if (error || !invoice) {
     return (
       <PageError
-        message={error ? (error as Error).message : "Supplier invoice not found."}
+        message={error ? (error as Error).message : "Bill not found."}
       />
     );
   }
@@ -182,7 +182,7 @@ export function SupplierInvoiceDetailPage({
   const canRecordPayment = workflowAllowsPayment && canRecordPaymentByRole;
   const recordPaymentDisabledReason =
     invoice.status !== "completed"
-      ? "Only completed invoices can be paid."
+      ? "Only received bills can be paid."
       : numericBalanceDue <= 0.005
         ? "No balance remaining on this invoice."
         : !canRecordPaymentByRole
@@ -206,7 +206,7 @@ export function SupplierInvoiceDetailPage({
 
   const statusPill = isDraft
     ? { label: "Draft", bg: C.line2, color: C.muted }
-    : { label: "Completed", bg: C.goodSoft, color: C.good };
+    : { label: "Received", bg: C.goodSoft, color: C.good };
 
   const paymentStatusPill: Record<
     typeof paymentSummary.paymentStatus,
@@ -382,7 +382,7 @@ export function SupplierInvoiceDetailPage({
           {/* Line items */}
           <Section
             title="Line items"
-            description="Products included on this invoice. Each line produces one lot on completion."
+            description="Products on this bill. Each line produced one lot when received."
           >
             <div style={{ overflowX: "auto" }}>
               <Table>
@@ -533,7 +533,7 @@ export function SupplierInvoiceDetailPage({
           {/* Receiving summary */}
           <Section
             title="Receiving summary"
-            description="Lots and inventory items created from this invoice."
+            description="Lots and inventory items created when this bill was received."
           >
             {allLots.length === 0 ? (
               <div
@@ -547,8 +547,8 @@ export function SupplierInvoiceDetailPage({
                 }}
               >
                 {isDraft
-                  ? "Nothing received yet. Complete the invoice to create lots and inventory."
-                  : "This invoice did not produce any receiving records."}
+                  ? "Nothing received yet. Receive this bill to create lots and inventory."
+                  : "This bill did not produce any receiving records."}
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -652,7 +652,7 @@ export function SupplierInvoiceDetailPage({
           {invoice.status === "completed" && invoice.payments.length > 0 && (
             <Section
               title="Payment history"
-              description="Payments applied to this supplier invoice."
+              description="Payments applied to this bill."
             >
               <div style={{ overflowX: "auto" }}>
                 <Table>
@@ -713,7 +713,7 @@ export function SupplierInvoiceDetailPage({
           />
 
           {/* Activity */}
-          <Section title="Activity" description="Who touched this invoice and when.">
+          <Section title="Activity" description="Who touched this bill and when.">
             <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
           </Section>
         </div>
@@ -730,7 +730,7 @@ export function SupplierInvoiceDetailPage({
         >
           {/* Invoice details */}
           <SideCard>
-            <SideLabel>Invoice details</SideLabel>
+            <SideLabel>Bill details</SideLabel>
             <dl
               style={{
                 display: "grid",
@@ -873,14 +873,14 @@ export function SupplierInvoiceDetailPage({
       <AlertDialog open={completeOpen} onOpenChange={setCompleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Complete &amp; receive invoice?</AlertDialogTitle>
+            <AlertDialogTitle>Receive this bill?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will post <strong>{invoice.invoiceNumber}</strong> and
+              Receiving <strong>{invoice.invoiceNumber}</strong> will
               automatically create one lot and one inventory item per line. Lot
               numbers and expirations will use any overrides you entered,
               otherwise they default to{" "}
               <code>LOT-{invoice.invoiceNumber}-XX</code> and receive date + 7
-              days. Completed invoices can no longer be edited.
+              days. Received bills can no longer be edited.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -895,20 +895,20 @@ export function SupplierInvoiceDetailPage({
                   { id: invoiceId },
                   {
                     onSuccess: () => {
-                      toast.success(`Invoice "${invoice.invoiceNumber}" posted.`);
+                      toast.success(`Bill "${invoice.invoiceNumber}" received. Lots and inventory created.`);
                       setCompleteOpen(false);
                     },
                     onError: err =>
                       toast.error(
                         err instanceof Error
                           ? err.message
-                          : "Could not complete invoice.",
+                          : "Could not receive bill.",
                       ),
                   },
                 );
               }}
             >
-              {completeMutation.isPending ? "Posting…" : "Complete & receive"}
+              {completeMutation.isPending ? "Receiving…" : "Receive bill"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -917,7 +917,7 @@ export function SupplierInvoiceDetailPage({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete draft invoice?</AlertDialogTitle>
+            <AlertDialogTitle>Delete draft bill?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete draft{" "}
               <strong>{invoice.invoiceNumber}</strong>. No inventory has been
@@ -936,7 +936,7 @@ export function SupplierInvoiceDetailPage({
                 event.preventDefault();
                 deleteMutation.mutate(invoiceId, {
                   onSuccess: () => {
-                    toast.success(`Draft "${invoice.invoiceNumber}" deleted.`);
+                    toast.success(`Draft bill "${invoice.invoiceNumber}" deleted.`);
                     router.push("/supplier-invoices");
                   },
                   onError: err =>

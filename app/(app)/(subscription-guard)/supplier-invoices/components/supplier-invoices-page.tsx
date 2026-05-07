@@ -55,7 +55,7 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     header: "Status",
     render: row => {
       if (row.status === "completed") {
-        return { primary: <StatusPill label="Completed" bg="oklch(96% 0.04 155)" color="oklch(58% 0.13 155)" /> };
+        return { primary: <StatusPill label="Received" bg="oklch(96% 0.04 155)" color="oklch(58% 0.13 155)" /> };
       }
       return { primary: <StatusPill label="Draft" bg="#f5f5f4" color="#78716c" /> };
     },
@@ -116,7 +116,7 @@ export default function SupplierInvoicesPage() {
           variant: "destructive" as const,
           onClick: (row: InvoiceRow) => {
             if (row.status !== "draft") {
-              toast.error("Only draft invoices can be deleted.");
+              toast.error("Only draft bills can be deleted.");
               return;
             }
             setDeletingInvoice(row);
@@ -128,12 +128,12 @@ export default function SupplierInvoicesPage() {
   return (
     <>
       <ListingPage
-        title="Supplier Invoices"
-        subtitle="Manage receiving invoices and stock intake."
+        title="Bills"
+        subtitle="Supplier bills are how inventory enters your system. Receiving a bill creates lots and stock."
         primaryAction={
           <ListingAction href="/supplier-invoices/new">
             <Plus className="size-3.5" />
-            New invoice
+            Record bill
           </ListingAction>
         }
         columns={COLUMNS}
@@ -144,13 +144,13 @@ export default function SupplierInvoicesPage() {
         total={data?.total ?? 0}
         isLoading={isLoading}
         isFetching={isFetching}
-        searchPlaceholder="Search invoices, suppliers…"
-        emptyTitle="No supplier invoices yet"
-        emptyDescription="Create a supplier invoice to start receiving inventory."
+        searchPlaceholder="Search bills, suppliers…"
+        emptyTitle="No bills yet"
+        emptyDescription="Record your first supplier bill to start receiving inventory."
         emptyAction={
           <ListingAction href="/supplier-invoices/new">
             <Plus className="size-3.5" />
-            New invoice
+            Record bill
           </ListingAction>
         }
         page={data?.page ?? pagination.page}
@@ -168,9 +168,9 @@ export default function SupplierInvoicesPage() {
       <AlertDialog open={!!deletingInvoice} onOpenChange={open => { if (!open) setDeletingInvoice(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete supplier invoice</AlertDialogTitle>
+            <AlertDialogTitle>Delete bill</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete draft invoice <strong>{deletingInvoice?.invoiceNumber}</strong>? This removes all
+              Delete draft bill <strong>{deletingInvoice?.invoiceNumber}</strong>? This removes all
               associated lines and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
