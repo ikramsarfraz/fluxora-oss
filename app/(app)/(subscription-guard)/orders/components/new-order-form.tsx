@@ -1,14 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useSidebar } from "@/components/ui/sidebar";
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
-import { useCreateSalesOrder } from "@/hooks/use-orders";
+import {
+  useCreateSalesOrder,
+  useUpdateSalesOrder,
+  useUpdateSalesOrderStatus,
+} from "@/hooks/use-orders";
 import { useProducts } from "@/hooks/use-products";
 import { useCustomers } from "@/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
@@ -70,13 +75,22 @@ function makeDefaultValues(): NewOrderFormValues {
 
 export function NewOrderForm() {
   const router = useRouter();
+  const { state: sidebarState, isMobile } = useSidebar();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<SubmitMode | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const draftIdRef = useRef<string | null>(null);
+  const autoSaveInProgressRef = useRef(false);
+  const isPendingRef = useRef(false);
 
   const { data: products } = useProducts();
   const { data: customers } = useCustomers();
 
   const createOrder = useCreateSalesOrder();
+  const updateOrder = useUpdateSalesOrder();
+  const updateOrderStatus = useUpdateSalesOrderStatus();
 
   const form = useForm<NewOrderFormValues>({
     resolver: zodResolver(newOrderFormSchema),
@@ -88,6 +102,7 @@ export function NewOrderForm() {
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
   const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
+  const allValues = useWatch({ control: form.control });
 
   const { lineCount, estTotal } = useMemo(() => {
     const productsById = new Map<string, ProductListItem>();
@@ -112,6 +127,66 @@ export function NewOrderForm() {
     };
   }, [lines, products, customers, customerId, addFuelSurcharge, discountAmount]);
 
+  useEffect(() => {
+    isPendingRef.current = pendingMode !== null;
+  }, [pendingMode]);
+
+  useEffect(() => {
+    if (isPendingRef.current || autoSaveInProgressRef.current) return;
+
+    const v = allValues as NewOrderFormValues;
+    const readyLines = (v.lines ?? []).filter(
+      (l) => l.productId && l.salesUnitId,
+    );
+    if (!v.customerId || readyLines.length === 0) return;
+
+    const timer = setTimeout(async () => {
+      if (isPendingRef.current || autoSaveInProgressRef.current) return;
+      autoSaveInProgressRef.current = true;
+      setAutoSaveStatus("saving");
+
+      const orderLines = readyLines.map((l) => ({
+        productId: l.productId,
+        salesUnitId: l.salesUnitId,
+        expectedCases: Number(l.quantity),
+        unitType: l.unitType,
+        pricePerLbOverride: l.pricePerLb || undefined,
+      }));
+
+      const payload = {
+        customerId: v.customerId,
+        orderDate: v.orderDate,
+        dueDate: v.deliveryDate || undefined,
+        addFuelSurcharge: v.addFuelSurcharge,
+        customerNotes: v.customerNotes || undefined,
+        internalNotes: v.internalNotes || undefined,
+        lines: orderLines,
+      };
+
+      try {
+        if (!draftIdRef.current) {
+          const order = await createOrder.mutateAsync({
+            ...payload,
+            status: "sales_order",
+          });
+          if (order?.id) draftIdRef.current = order.id;
+        } else {
+          await updateOrder.mutateAsync({
+            id: draftIdRef.current,
+            ...payload,
+          });
+        }
+        setAutoSaveStatus("saved");
+      } catch {
+        setAutoSaveStatus("error");
+      } finally {
+        autoSaveInProgressRef.current = false;
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [allValues]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleSubmit(mode: SubmitMode) {
     setSubmitError(null);
     const valid = await form.trigger();
@@ -121,26 +196,55 @@ export function NewOrderForm() {
     }
     const values = form.getValues();
     setPendingMode(mode);
+
+    const orderLines = values.lines
+      .filter((l) => l.productId && l.salesUnitId)
+      .map((l) => ({
+        productId: l.productId,
+        salesUnitId: l.salesUnitId,
+        expectedCases: Number(l.quantity),
+        unitType: l.unitType,
+        pricePerLbOverride: l.pricePerLb || undefined,
+      }));
+
+    const existingDraftId = draftIdRef.current;
+
     try {
-      const order = await createOrder.mutateAsync({
-        status: mode === "draft" ? "sales_order" : "confirmed",
-        customerId: values.customerId,
-        orderDate: values.orderDate,
-        dueDate: values.deliveryDate || undefined,
-        addFuelSurcharge: values.addFuelSurcharge,
-        customerNotes: values.customerNotes || undefined,
-        internalNotes: values.internalNotes || undefined,
-        lines: values.lines.map(l => ({
-          productId: l.productId,
-          salesUnitId: l.salesUnitId,
-          expectedCases: Number(l.quantity),
-          unitType: l.unitType,
-          pricePerLbOverride: l.pricePerLb || undefined,
-        })),
-      });
-      toast.success(mode === "draft" ? "Draft saved" : "Order confirmed");
-      if (order?.id) router.push(`/orders/${order.id}`);
-      else router.push("/orders");
+      if (existingDraftId) {
+        await updateOrder.mutateAsync({
+          id: existingDraftId,
+          customerId: values.customerId,
+          orderDate: values.orderDate,
+          dueDate: values.deliveryDate || undefined,
+          addFuelSurcharge: values.addFuelSurcharge,
+          customerNotes: values.customerNotes || undefined,
+          internalNotes: values.internalNotes || undefined,
+          lines: orderLines,
+        });
+        if (mode === "confirm") {
+          await updateOrderStatus.mutateAsync({
+            id: existingDraftId,
+            status: "confirmed",
+          });
+        }
+        toast.success(mode === "draft" ? "Draft saved" : "Order confirmed");
+        router.push(`/orders/${existingDraftId}`);
+      } else {
+        const order = await createOrder.mutateAsync({
+          status: mode === "draft" ? "sales_order" : "confirmed",
+          customerId: values.customerId,
+          orderDate: values.orderDate,
+          dueDate: values.deliveryDate || undefined,
+          addFuelSurcharge: values.addFuelSurcharge,
+          customerNotes: values.customerNotes || undefined,
+          internalNotes: values.internalNotes || undefined,
+          lines: orderLines,
+        });
+        if (order?.id) draftIdRef.current = order.id;
+        toast.success(mode === "draft" ? "Draft saved" : "Order confirmed");
+        if (order?.id) router.push(`/orders/${order.id}`);
+        else router.push("/orders");
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to save order.";
       setSubmitError(message);
@@ -262,7 +366,7 @@ export function NewOrderForm() {
         style={{
           position: "fixed",
           bottom: 0,
-          left: 0,
+          left: sidebarState === "expanded" && !isMobile ? "16rem" : 0,
           right: 0,
           background: C.surface,
           borderTop: `1px solid ${C.line}`,
@@ -270,15 +374,55 @@ export function NewOrderForm() {
           display: "flex",
           alignItems: "center",
           gap: "12px",
-          zIndex: 40,
+          zIndex: 10,
+          transition: "left 0.2s ease-linear",
         }}
       >
-        <div style={{ fontSize: "13px", color: C.muted }}>
-          <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
-          {lineCount === 1 ? "item" : "items"} · est.{" "}
-          <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
-            {formatMoney(estTotal)}
-          </b>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+            fontSize: "13px",
+            color: C.muted,
+          }}
+        >
+          <span>
+            <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
+            {lineCount === 1 ? "item" : "items"} · est.{" "}
+            <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
+              {formatMoney(estTotal)}
+            </b>
+          </span>
+          {autoSaveStatus === "saving" && (
+            <span style={{ fontSize: "12px" }}>Saving…</span>
+          )}
+          {autoSaveStatus === "saved" && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "12px",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "oklch(58% 0.13 155)",
+                  flexShrink: 0,
+                }}
+              />
+              Draft saved
+            </span>
+          )}
+          {autoSaveStatus === "error" && (
+            <span style={{ fontSize: "12px", color: "oklch(70% 0.13 70)" }}>
+              Auto-save failed
+            </span>
+          )}
         </div>
         <div style={{ flex: 1 }} />
         <Button

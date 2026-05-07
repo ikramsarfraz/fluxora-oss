@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -9,17 +9,8 @@ import {
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
-import {
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Scale,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -29,17 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   computeDraftLineWeight,
   formatEditableWeight,
-  getResolvedDraftCaseWeights,
   type SupplierInvoiceWeightEntryMode,
 } from "@/lib/supplier-invoices/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
@@ -51,6 +33,36 @@ import {
   type SupplierInvoiceFormValues,
 } from "./supplier-invoice-form.schema";
 
+// ─── Design tokens ─────────────────────────────────────────────────────────
+const T = {
+  surface: "#ffffff",
+  surfaceAlt: "#f5f5f4",
+  border: "#e7e5e4",
+  borderStrong: "#d4d1c7",
+  text: "#0c0a09",
+  muted: "#78716c",
+  mutedSoft: "#a8a29e",
+  accent: "oklch(60% 0.15 240)",
+  accentBorder: "oklch(60% 0.15 240 / 0.22)",
+  accentSoft: "oklch(96% 0.03 240)",
+  mono: "var(--font-mono)",
+} as const;
+
+const COL = "2fr 1.3fr 80px 1.5fr 1.1fr 1.1fr 36px";
+
+function fmt2(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getPositiveInteger(value: string | undefined): number {
+  const parsed = value ? Number.parseInt(value, 10) : 0;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
 type Props = {
   control: Control<SupplierInvoiceFormValues>;
   register: UseFormRegister<SupplierInvoiceFormValues>;
@@ -60,11 +72,166 @@ type Props = {
   disabled?: boolean;
 };
 
-function getPositiveInteger(value: string | undefined): number {
-  const parsed = value ? Number.parseInt(value, 10) : 0;
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+// ── Invoice total for card header (exported) ───────────────────────────────
+export function LineItemsInvoiceTotal({
+  control,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+}) {
+  const lines = useWatch({ control, name: "lines" });
+  const total = (lines ?? []).reduce(
+    (acc, line) => acc + computeLineTotal(line ?? {}),
+    0,
+  );
+  return <>{formatMoney(total)}</>;
 }
 
+// ── Shared sub-components ──────────────────────────────────────────────────
+function Stat({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string | number;
+  highlight?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div
+        style={{
+          fontSize: 10,
+          color: T.mutedSoft,
+          fontWeight: 600,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: highlight ? 16 : 13,
+          fontWeight: highlight ? 600 : 500,
+          color: T.text,
+          fontFamily: T.mono,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Segmented({
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: ReadonlyArray<{ readonly v: string; readonly l: string }>;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        background: T.surface,
+        border: `1px solid ${T.border}`,
+        borderRadius: 7,
+        padding: 2,
+      }}
+    >
+      {options.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          onClick={() => !disabled && onChange(o.v)}
+          style={{
+            background: value === o.v ? "#0c0a09" : "transparent",
+            color: value === o.v ? "#fff" : T.muted,
+            border: "none",
+            padding: "6px 12px",
+            borderRadius: 5,
+            cursor: disabled ? "default" : "pointer",
+            fontSize: 12,
+            fontWeight: 500,
+            transition: "background 0.12s, color 0.12s",
+          }}
+        >
+          {o.l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const lbl: React.CSSProperties = {
+  display: "block",
+  fontSize: 11,
+  fontWeight: 600,
+  color: T.muted,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  marginBottom: 6,
+};
+
+// ── Footer stats ───────────────────────────────────────────────────────────
+function FooterStats({
+  control,
+  lineCount,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  lineCount: number;
+}) {
+  const lines = useWatch({ control, name: "lines" });
+  const arr = lines ?? [];
+  const totalCases = arr.reduce(
+    (s, l) => s + (getPositiveInteger(l?.quantityCases) || 0),
+    0,
+  );
+  const totalWeight = arr.reduce(
+    (s, l) => s + computeDraftLineWeight(l ?? {}),
+    0,
+  );
+  const invoiceTotal = arr.reduce((s, l) => s + computeLineTotal(l ?? {}), 0);
+  return (
+    <div style={{ display: "flex", gap: 24, alignItems: "baseline" }}>
+      <Stat label="Lines" value={lineCount} />
+      <Stat label="Cases" value={totalCases} />
+      <Stat label="Total weight" value={`${fmt2(totalWeight)} lb`} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div
+          style={{
+            fontSize: 10,
+            color: T.mutedSoft,
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          Invoice total
+        </div>
+        <div
+          style={{
+            fontFamily: T.mono,
+            fontSize: 18,
+            fontWeight: 700,
+            fontVariantNumeric: "tabular-nums",
+            color: T.text,
+          }}
+        >
+          {formatMoney(invoiceTotal)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Per-line total ─────────────────────────────────────────────────────────
 function LineRowTotal({
   control,
   index,
@@ -73,27 +240,23 @@ function LineRowTotal({
   index: number;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
-  if (!line) return <span className="tabular-nums">{formatMoney(0)}</span>;
   return (
-    <span className="tabular-nums">{formatMoney(computeLineTotal(line))}</span>
+    <span
+      style={{ fontFamily: T.mono, fontVariantNumeric: "tabular-nums" }}
+    >
+      {formatMoney(computeLineTotal(line ?? {}))}
+    </span>
   );
 }
 
-function FooterTotal({
-  control,
-}: {
-  control: Control<SupplierInvoiceFormValues>;
-}) {
-  const lines = useWatch({ control, name: "lines" });
-  const total = (lines ?? []).reduce(
-    (acc, line) => acc + computeLineTotal(line),
-    0,
-  );
-  return (
-    <span className="font-semibold tabular-nums">{formatMoney(total)}</span>
-  );
-}
+// ── Weight entry modes ─────────────────────────────────────────────────────
+const WEIGHT_MODES = [
+  { v: "manual_case_weights", l: "Each case" },
+  { v: "default_case_weight", l: "Same value" },
+  { v: "total_weight", l: "Total ÷ cases" },
+] as const;
 
+// ── Main component ─────────────────────────────────────────────────────────
 export function SupplierInvoiceLinesEditor({
   control,
   register,
@@ -106,81 +269,109 @@ export function SupplierInvoiceLinesEditor({
     control,
     name: "lines",
   });
-
-  const productOptions = products.map(p => ({
+  const productOptions = products.map((p) => ({
     id: p.id,
-    label: `${p.name}`,
+    label: p.name,
     sku: p.sku,
   }));
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-md border">
-        <Table>
-          <TableHeader className="bg-muted">
-            <TableRow>
-              <TableHead className="min-w-[220px]">Product</TableHead>
-              <TableHead className="w-[120px]">SKU</TableHead>
-              <TableHead className="w-[140px]">Unit type</TableHead>
-              <TableHead className="w-[100px] text-right">Cases</TableHead>
-              <TableHead className="w-[160px] text-right">Weight lbs</TableHead>
-              <TableHead className="w-[120px] text-right">Unit price</TableHead>
-              <TableHead className="w-[110px] text-right">Line total</TableHead>
-              <TableHead className="w-[160px]">Lot # (optional)</TableHead>
-              <TableHead className="w-[150px]">Expires (optional)</TableHead>
-              <TableHead className="w-[60px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fields.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={10}
-                  className="text-muted-foreground h-20 text-center text-sm"
-                >
-                  No lines yet. Add a product to get started.
-                </TableCell>
-              </TableRow>
-            ) : (
-              fields.map((field, index) => (
-                <LineRow
-                  key={field.id}
-                  control={control}
-                  register={register}
-                  setValue={setValue}
-                  index={index}
-                  products={productOptions}
-                  productsLoading={productsLoading}
-                  disabled={disabled}
-                  onRemove={() => remove(index)}
-                  canRemove={fields.length > 1}
-                />
-              ))
-            )}
-          </TableBody>
-        </Table>
+    <div>
+      {/* Column headers strip */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: COL,
+          gap: "16px",
+          padding: "11px 28px",
+          background: T.surfaceAlt,
+          borderBottom: `1px solid ${T.border}`,
+          fontSize: 10,
+          fontWeight: 600,
+          color: T.mutedSoft,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        <div>Product</div>
+        <div>Pricing</div>
+        <div style={{ textAlign: "center" }}>Cases</div>
+        <div style={{ textAlign: "right" }}>Weight (lbs)</div>
+        <div style={{ textAlign: "right" }}>Unit price</div>
+        <div style={{ textAlign: "right" }}>Line total</div>
+        <div />
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <Button
+      {/* Lines */}
+      {fields.length === 0 ? (
+        <div
+          style={{
+            padding: "40px 28px",
+            textAlign: "center",
+            fontSize: 14,
+            color: T.muted,
+          }}
+        >
+          No lines yet — add a product below.
+        </div>
+      ) : (
+        fields.map((field, index) => (
+          <LineRow
+            key={field.id}
+            control={control}
+            register={register}
+            setValue={setValue}
+            index={index}
+            products={productOptions}
+            productsLoading={productsLoading}
+            disabled={disabled}
+            onRemove={() => remove(index)}
+            canRemove={fields.length > 1}
+          />
+        ))
+      )}
+
+      {/* Footer */}
+      <div
+        style={{
+          padding: "16px 28px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: T.surface,
+          borderTop: `1px solid ${T.border}`,
+        }}
+      >
+        <button
           type="button"
-          variant="outline"
-          size="sm"
           onClick={() => append(emptyLine())}
           disabled={disabled}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            background: T.surface,
+            color: T.text,
+            border: `1px dashed ${T.borderStrong}`,
+            padding: "9px 16px",
+            borderRadius: 8,
+            cursor: disabled ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: 500,
+            fontFamily: "inherit",
+            opacity: disabled ? 0.6 : 1,
+          }}
         >
-          <Plus className="size-4" />
+          <Plus style={{ width: 14, height: 14 }} />
           Add line
-        </Button>
-        <div className="text-muted-foreground flex items-center gap-3 text-sm">
-          <span>Invoice total</span>
-          <FooterTotal control={control} />
-        </div>
+        </button>
+        <FooterStats control={control} lineCount={fields.length} />
       </div>
     </div>
   );
 }
 
+// ── LineRow ────────────────────────────────────────────────────────────────
 function LineRow({
   control,
   register,
@@ -203,157 +394,127 @@ function LineRow({
   canRemove: boolean;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
-  const productId = line?.productId;
+  const [expanded, setExpanded] = useState(false);
+
+  const productId = line?.productId ?? "";
   const unitType = line?.unitType ?? "catch_weight";
-  const weightEntryMode = line?.weightEntryMode ?? "total_weight";
+  const weightEntryMode = (line?.weightEntryMode ??
+    "total_weight") as SupplierInvoiceWeightEntryMode;
   const quantityCases = getPositiveInteger(line?.quantityCases);
-  const sku = products.find(p => p.id === productId)?.sku ?? "—";
-  // `userExpanded` only controls whether the detailed-entry panel is open
-  // when the user has manually toggled it while in `total_weight` mode. The
-  // effective expansion is derived below so that switching unit type or
-  // weight-entry mode never needs to sync into state inside an effect.
-  const [userExpanded, setUserExpanded] = useState(false);
-  const expanded =
-    unitType === "catch_weight" &&
-    (weightEntryMode !== "total_weight" || userExpanded);
+  const sku = products.find((p) => p.id === productId)?.sku ?? "";
+  const isCatchWeight = unitType === "catch_weight";
 
+  // Auto-open tray when switching to catch_weight
+  const prevUnitTypeRef = useRef(unitType);
   useEffect(() => {
-    if (unitType !== "catch_weight") {
-      if (line?.weightEntryMode !== "total_weight") {
-        setValue(`lines.${index}.weightEntryMode`, "total_weight", {
-          shouldDirty: true,
-        });
-      }
-      if ((line?.defaultCaseWeightLbs ?? "") !== "") {
-        setValue(`lines.${index}.defaultCaseWeightLbs`, "", {
-          shouldDirty: true,
-        });
-      }
-      if ((line?.caseWeightEntries?.length ?? 0) > 0) {
-        setValue(`lines.${index}.caseWeightEntries`, [], { shouldDirty: true });
-      }
+    if (prevUnitTypeRef.current !== "catch_weight" && unitType === "catch_weight") {
+      setExpanded(true);
     }
-  }, [
-    index,
-    line?.caseWeightEntries?.length,
-    line?.defaultCaseWeightLbs,
-    line?.weightEntryMode,
-    quantityCases,
-    setValue,
-    unitType,
-    weightEntryMode,
-  ]);
+    prevUnitTypeRef.current = unitType;
+  }, [unitType]);
 
+  // Sync caseWeightEntries length with quantityCases
   useEffect(() => {
     if (unitType !== "catch_weight") return;
     const existingEntries = line?.caseWeightEntries ?? [];
     const nextEntries = Array.from(
       { length: quantityCases },
-      (_, caseIndex) => existingEntries[caseIndex] ?? "",
+      (_, i) => existingEntries[i] ?? "",
     );
-
-    const entriesChanged =
+    const changed =
       nextEntries.length !== existingEntries.length ||
-      nextEntries.some((value, caseIndex) => value !== existingEntries[caseIndex]);
-
-    if (entriesChanged) {
+      nextEntries.some((v, i) => v !== existingEntries[i]);
+    if (changed) {
       setValue(`lines.${index}.caseWeightEntries`, nextEntries, {
         shouldDirty: true,
       });
     }
   }, [index, line?.caseWeightEntries, quantityCases, setValue, unitType]);
 
+  // Sync computed weight → weightLbs in detail modes
   useEffect(() => {
     if (unitType !== "catch_weight" || weightEntryMode === "total_weight") return;
-
     const nextWeight = computeDraftLineWeight(line ?? {});
-    const nextWeightValue = nextWeight > 0 ? nextWeight.toFixed(4) : "0";
+    const nextValue = nextWeight > 0 ? nextWeight.toFixed(4) : "0";
+    if ((line?.weightLbs ?? "0") !== nextValue) {
+      setValue(`lines.${index}.weightLbs`, nextValue, { shouldDirty: true });
+    }
+  }, [index, line, setValue, unitType, weightEntryMode]);
 
-    if ((line?.weightLbs ?? "0") !== nextWeightValue) {
-      setValue(`lines.${index}.weightLbs`, nextWeightValue, {
+  // Reset detail fields when switching to fixed_case
+  useEffect(() => {
+    if (unitType !== "catch_weight" && line?.weightEntryMode !== "total_weight") {
+      setValue(`lines.${index}.weightEntryMode`, "total_weight", {
         shouldDirty: true,
       });
     }
-  }, [
-    index,
-    line,
-    line?.defaultCaseWeightLbs,
-    line?.caseWeightEntries,
-    line?.quantityCases,
-    line?.weightEntryMode,
-    line?.weightLbs,
-    setValue,
-    unitType,
-    weightEntryMode,
-  ]);
+  }, [index, line?.weightEntryMode, setValue, unitType]);
 
-  const resolvedCaseWeights = getResolvedDraftCaseWeights(line ?? {});
-  const overrideCount =
-    weightEntryMode === "default_case_weight"
-      ? (line?.caseWeightEntries ?? []).slice(0, quantityCases).filter(Boolean).length
-      : 0;
-  const totalWeightLbs =
-    unitType === "catch_weight"
-      ? computeDraftLineWeight(line ?? {})
-      : Number(line?.weightLbs ?? "0") || 0;
+  const totalWeightLbs = isCatchWeight
+    ? computeDraftLineWeight(line ?? {})
+    : Number(line?.weightLbs ?? "0") || 0;
 
-  function seedDetailedMode(nextMode: SupplierInvoiceWeightEntryMode) {
-    if (unitType !== "catch_weight") return;
+  // How many cases have weights entered (for the button indicator)
+  const filled = (() => {
+    if (!isCatchWeight) return quantityCases;
+    if (weightEntryMode === "total_weight")
+      return totalWeightLbs > 0 ? quantityCases : 0;
+    if (weightEntryMode === "default_case_weight")
+      return (Number(line?.defaultCaseWeightLbs ?? "") || 0) > 0
+        ? quantityCases
+        : 0;
+    return (line?.caseWeightEntries ?? [])
+      .slice(0, quantityCases)
+      .filter((v) => (Number(v) || 0) > 0).length;
+  })();
 
-    const currentEntries = [...(line?.caseWeightEntries ?? [])];
-    const averageWeight =
+  const complete = filled === quantityCases && totalWeightLbs > 0;
+
+  function handleModeChange(mode: SupplierInvoiceWeightEntryMode) {
+    setValue(`lines.${index}.weightEntryMode`, mode, { shouldDirty: true });
+    setExpanded(true);
+
+    const avgWeight =
       quantityCases > 0 && totalWeightLbs > 0
         ? totalWeightLbs / quantityCases
         : 0;
-    const averageWeightText =
-      averageWeight > 0 ? formatEditableWeight(averageWeight) : "";
+    const avgText = avgWeight > 0 ? formatEditableWeight(avgWeight) : "";
 
     if (
-      nextMode === "default_case_weight" &&
+      mode === "default_case_weight" &&
       !(line?.defaultCaseWeightLbs ?? "").trim() &&
-      averageWeightText
+      avgText
     ) {
-      setValue(`lines.${index}.defaultCaseWeightLbs`, averageWeightText, {
+      setValue(`lines.${index}.defaultCaseWeightLbs`, avgText, {
         shouldDirty: true,
       });
     }
-
-    if (
-      nextMode === "manual_case_weights" &&
-      quantityCases > 0 &&
-      currentEntries.slice(0, quantityCases).every(value => !value) &&
-      averageWeightText
-    ) {
-      setValue(
-        `lines.${index}.caseWeightEntries`,
-        Array.from({ length: quantityCases }, () => averageWeightText),
-        { shouldDirty: true },
-      );
+    if (mode === "manual_case_weights" && quantityCases > 0) {
+      const entries = line?.caseWeightEntries ?? [];
+      if (entries.slice(0, quantityCases).every((v) => !v) && avgText) {
+        setValue(
+          `lines.${index}.caseWeightEntries`,
+          Array.from({ length: quantityCases }, () => avgText),
+          { shouldDirty: true },
+        );
+      }
     }
   }
 
-  function handleWeightModeChange(nextMode: SupplierInvoiceWeightEntryMode) {
-    setValue(`lines.${index}.weightEntryMode`, nextMode, { shouldDirty: true });
-    seedDetailedMode(nextMode);
-  }
-
-  function handleApplyDefaultToRemaining() {
-    const defaultWeight = line?.defaultCaseWeightLbs?.trim() ?? "";
-    if (!defaultWeight || quantityCases <= 0) return;
-
-    const existingEntries = line?.caseWeightEntries ?? [];
-    const nextEntries = Array.from({ length: quantityCases }, (_, caseIndex) =>
-      existingEntries[caseIndex]?.trim() ? existingEntries[caseIndex] ?? "" : defaultWeight,
-    );
-    setValue(`lines.${index}.caseWeightEntries`, nextEntries, {
-      shouldDirty: true,
-    });
-  }
-
   return (
-    <>
-      <TableRow className="align-top">
-        <TableCell>
+    <div style={{ borderBottom: `1px solid ${T.border}` }}>
+      {/* Main row */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: COL,
+          gap: "16px",
+          padding: "14px 28px",
+          alignItems: "center",
+        }}
+      >
+        {/* 1. Product */}
+        <div>
           <Controller
             control={control}
             name={`lines.${index}.productId`}
@@ -365,16 +526,26 @@ function LineRow({
               >
                 <SelectTrigger
                   aria-invalid={fieldState.invalid}
-                  className="w-full"
+                  style={{
+                    width: "100%",
+                    height: 38,
+                    borderRadius: 8,
+                    border: `1px solid ${
+                      fieldState.invalid
+                        ? "oklch(0.55 0.22 25)"
+                        : T.border
+                    }`,
+                    fontSize: 14,
+                  }}
                 >
                   <SelectValue
                     placeholder={
-                      productsLoading ? "Loading..." : "Select product"
+                      productsLoading ? "Loading…" : "Select product…"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {products.map(p => (
+                  {products.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.label}
                     </SelectItem>
@@ -383,13 +554,625 @@ function LineRow({
               </Select>
             )}
           />
-        </TableCell>
-        <TableCell>
-          <Badge variant="outline" className="font-mono text-xs">
-            {sku}
-          </Badge>
-        </TableCell>
-        <TableCell>
+          {sku && (
+            <div
+              style={{
+                fontSize: 11,
+                color: T.mutedSoft,
+                fontFamily: T.mono,
+                marginTop: 5,
+                paddingLeft: 2,
+              }}
+            >
+              {sku}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Pricing badge */}
+        <div>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              background: isCatchWeight ? T.accentSoft : T.surfaceAlt,
+              color: isCatchWeight ? T.accent : T.muted,
+              fontSize: 12,
+              fontWeight: 500,
+              padding: "5px 10px",
+              borderRadius: 6,
+              border: `1px solid ${isCatchWeight ? T.accentBorder : T.border}`,
+            }}
+          >
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                background: "currentColor",
+                borderRadius: "50%",
+                flexShrink: 0,
+              }}
+            />
+            {isCatchWeight ? "Variable weight" : "Fixed case"}
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: T.mutedSoft,
+              marginTop: 5,
+              paddingLeft: 2,
+            }}
+          >
+            {isCatchWeight
+              ? "Priced per lb · weight per case"
+              : "Priced per case · fixed weight"}
+          </div>
+        </div>
+
+        {/* 3. Cases */}
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          disabled={disabled}
+          style={{ height: 38, textAlign: "center", borderRadius: 8 }}
+          {...register(`lines.${index}.quantityCases`)}
+        />
+
+        {/* 4. Weight — toggle button for catch_weight, plain input for fixed */}
+        {isCatchWeight ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((o) => !o)}
+            disabled={disabled}
+            style={{
+              width: "100%",
+              height: 38,
+              padding: "0 12px",
+              border: `1px solid ${
+                expanded ? T.accent : complete ? T.borderStrong : T.border
+              }`,
+              borderRadius: 8,
+              background: expanded ? T.accentSoft : T.surface,
+              cursor: disabled ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              color: T.text,
+              fontFamily: "inherit",
+            }}
+          >
+            <span
+              style={{ fontSize: 11, color: T.mutedSoft, fontWeight: 500 }}
+            >
+              {filled}/{quantityCases} cases
+            </span>
+            <span
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: 14,
+                  fontFamily: T.mono,
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {fmt2(totalWeightLbs)}
+              </span>
+              <ChevronDown
+                style={{
+                  width: 14,
+                  height: 14,
+                  color: T.muted,
+                  transform: expanded ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s",
+                  flexShrink: 0,
+                }}
+              />
+            </span>
+          </button>
+        ) : (
+          <div>
+            <div style={{ position: "relative" }}>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                disabled={disabled}
+                style={{
+                  height: 38,
+                  textAlign: "right",
+                  paddingRight: 30,
+                  borderRadius: 8,
+                }}
+                {...register(`lines.${index}.weightLbs`)}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: T.mutedSoft,
+                  fontSize: 11,
+                  pointerEvents: "none",
+                }}
+              >
+                lb
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded((o) => !o)}
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: expanded ? T.accent : T.mutedSoft,
+                background: "none",
+                border: "none",
+                padding: "0 2px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              <ChevronDown
+                style={{
+                  width: 10,
+                  height: 10,
+                  transform: expanded ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s",
+                }}
+              />
+              Lot · expires
+            </button>
+          </div>
+        )}
+
+        {/* 5. Unit price */}
+        <div style={{ position: "relative" }}>
+          <span
+            style={{
+              position: "absolute",
+              left: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: T.mutedSoft,
+              fontSize: 13,
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          >
+            $
+          </span>
+          <Input
+            type="number"
+            min={0}
+            step="0.0001"
+            disabled={disabled}
+            style={{
+              height: 38,
+              textAlign: "right",
+              paddingLeft: 22,
+              paddingRight: 30,
+              borderRadius: 8,
+            }}
+            {...register(`lines.${index}.unitPrice`)}
+          />
+          <span
+            style={{
+              position: "absolute",
+              right: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: T.mutedSoft,
+              fontSize: 11,
+              pointerEvents: "none",
+            }}
+          >
+            {isCatchWeight ? "/lb" : "/cs"}
+          </span>
+        </div>
+
+        {/* 6. Line total */}
+        <div
+          style={{
+            textAlign: "right",
+            fontFamily: T.mono,
+            fontSize: 15,
+            fontWeight: 600,
+            color: T.text,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          <LineRowTotal control={control} index={index} />
+        </div>
+
+        {/* 7. Delete */}
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled || !canRemove}
+          aria-label="Remove line"
+          style={{
+            width: 30,
+            height: 30,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "transparent",
+            border: "none",
+            borderRadius: 6,
+            color: T.mutedSoft,
+            cursor: disabled || !canRemove ? "not-allowed" : "pointer",
+            opacity: !canRemove ? 0.3 : 1,
+          }}
+        >
+          <Trash2 style={{ width: 14, height: 14 }} />
+        </button>
+      </div>
+
+      {/* Expanded tray */}
+      {expanded ? (
+        <div
+          style={{
+            background: T.surfaceAlt,
+            padding: "20px 28px 22px",
+            borderTop: `1px dashed ${T.borderStrong}`,
+          }}
+        >
+          {isCatchWeight ? (
+            <CatchWeightTray
+              control={control}
+              register={register}
+              setValue={setValue}
+              index={index}
+              line={line}
+              quantityCases={quantityCases}
+              totalWeightLbs={totalWeightLbs}
+              weightEntryMode={weightEntryMode}
+              onModeChange={handleModeChange}
+              disabled={disabled}
+            />
+          ) : (
+            <LotExpiresTray
+              control={control}
+              register={register}
+              index={index}
+              disabled={disabled}
+            />
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Catch-weight expanded tray ─────────────────────────────────────────────
+function CatchWeightTray({
+  control,
+  register,
+  setValue,
+  index,
+  line,
+  quantityCases,
+  totalWeightLbs,
+  weightEntryMode,
+  onModeChange,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  register: UseFormRegister<SupplierInvoiceFormValues>;
+  setValue: UseFormSetValue<SupplierInvoiceFormValues>;
+  index: number;
+  line: Partial<SupplierInvoiceFormValues["lines"][number]> | undefined;
+  quantityCases: number;
+  totalWeightLbs: number;
+  weightEntryMode: SupplierInvoiceWeightEntryMode;
+  onModeChange: (mode: SupplierInvoiceWeightEntryMode) => void;
+  disabled: boolean;
+}) {
+  const avgPerCase = quantityCases > 0 ? totalWeightLbs / quantityCases : 0;
+
+  return (
+    <>
+      {/* Header: label + segmented control + helper text + stats */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+          flexWrap: "wrap",
+          gap: 16,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{ fontSize: 12, fontWeight: 600, color: T.text }}
+          >
+            Per-case weights
+          </div>
+          <Segmented
+            value={weightEntryMode}
+            onChange={(v) =>
+              onModeChange(v as SupplierInvoiceWeightEntryMode)
+            }
+            options={WEIGHT_MODES}
+            disabled={disabled}
+          />
+          <span style={{ fontSize: 11, color: T.mutedSoft }}>
+            {weightEntryMode === "manual_case_weights" &&
+              "Enter each case weight individually."}
+            {weightEntryMode === "default_case_weight" &&
+              "Apply one weight to all cases."}
+            {weightEntryMode === "total_weight" &&
+              "Distribute a total evenly across cases."}
+          </span>
+        </div>
+        <div
+          style={{ display: "flex", gap: 22, alignItems: "baseline" }}
+        >
+          <Stat label="Cases" value={quantityCases} />
+          <Stat label="Avg / case" value={`${fmt2(avgPerCase)} lb`} />
+          <Stat
+            label="Total"
+            value={`${fmt2(totalWeightLbs)} lb`}
+            highlight
+          />
+        </div>
+      </div>
+
+      {/* Mode body */}
+      {weightEntryMode === "total_weight" && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            maxWidth: 540,
+          }}
+        >
+          <label
+            style={{ fontSize: 12, color: T.muted, minWidth: 90 }}
+          >
+            Total weight
+          </label>
+          <div style={{ position: "relative", flex: 1 }}>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={disabled}
+              style={{
+                height: 38,
+                textAlign: "right",
+                paddingRight: 36,
+                borderRadius: 8,
+              }}
+              {...register(`lines.${index}.weightLbs`)}
+            />
+            <span
+              style={{
+                position: "absolute",
+                right: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: T.mutedSoft,
+                fontSize: 12,
+                pointerEvents: "none",
+              }}
+            >
+              lbs
+            </span>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: T.mutedSoft,
+              fontFamily: T.mono,
+              whiteSpace: "nowrap",
+            }}
+          >
+            = {fmt2(avgPerCase)} lb / case
+          </div>
+        </div>
+      )}
+
+      {weightEntryMode === "default_case_weight" && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            maxWidth: 540,
+          }}
+        >
+          <label
+            style={{ fontSize: 12, color: T.muted, minWidth: 90 }}
+          >
+            Each case
+          </label>
+          <div style={{ position: "relative", flex: 1 }}>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={disabled}
+              style={{
+                height: 38,
+                textAlign: "right",
+                paddingRight: 36,
+                borderRadius: 8,
+              }}
+              {...register(`lines.${index}.defaultCaseWeightLbs`)}
+            />
+            <span
+              style={{
+                position: "absolute",
+                right: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: T.mutedSoft,
+                fontSize: 12,
+                pointerEvents: "none",
+              }}
+            >
+              lbs
+            </span>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: T.mutedSoft,
+              fontFamily: T.mono,
+              whiteSpace: "nowrap",
+            }}
+          >
+            × {quantityCases} = {fmt2(totalWeightLbs)} lb total
+          </div>
+        </div>
+      )}
+
+      {weightEntryMode === "manual_case_weights" &&
+        (quantityCases > 0 ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: 8,
+            }}
+          >
+            {Array.from({ length: quantityCases }, (_, i) => (
+              <div key={i} style={{ position: "relative" }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: T.mutedSoft,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    zIndex: 1,
+                    pointerEvents: "none",
+                  }}
+                >
+                  #{i + 1}
+                </span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder="0.00"
+                  disabled={disabled}
+                  style={{
+                    height: 38,
+                    textAlign: "right",
+                    paddingLeft: 38,
+                    paddingRight: 32,
+                    borderRadius: 8,
+                  }}
+                  {...register(
+                    `lines.${index}.caseWeightEntries.${i}`,
+                  )}
+                />
+                <span
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    color: T.mutedSoft,
+                    fontSize: 11,
+                    pointerEvents: "none",
+                  }}
+                >
+                  lb
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13, color: T.muted }}>
+            Enter a case count to see per-case weight inputs.
+          </div>
+        ))}
+
+      {/* Lot + Expires + Pricing type */}
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          marginTop: 18,
+          paddingTop: 16,
+          borderTop: `1px dashed ${T.borderStrong}`,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+          <label style={lbl}>
+            Lot #{" "}
+            <span
+              style={{
+                color: T.mutedSoft,
+                fontWeight: 400,
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
+              (optional)
+            </span>
+          </label>
+          <Input
+            placeholder="auto-generated"
+            disabled={disabled}
+            style={{
+              height: 38,
+              borderRadius: 8,
+              fontFamily: T.mono,
+              fontSize: 13,
+            }}
+            {...register(`lines.${index}.lotNumberOverride`)}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+          <label style={lbl}>
+            Expires{" "}
+            <span
+              style={{
+                color: T.mutedSoft,
+                fontWeight: 400,
+                textTransform: "none",
+                letterSpacing: 0,
+              }}
+            >
+              (optional)
+            </span>
+          </label>
+          <Input
+            type="date"
+            disabled={disabled}
+            style={{ height: 38, borderRadius: 8, fontSize: 13 }}
+            {...register(`lines.${index}.expirationDateOverride`)}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
+          <label style={lbl}>Pricing type</label>
           <Controller
             control={control}
             name={`lines.${index}.unitType`}
@@ -399,272 +1182,111 @@ function LineRow({
                 onValueChange={field.onChange}
                 disabled={disabled}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger
+                  style={{ height: 38, borderRadius: 8, fontSize: 13 }}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="catch_weight">Catch weight</SelectItem>
+                  <SelectItem value="catch_weight">
+                    Variable weight
+                  </SelectItem>
                   <SelectItem value="fixed_case">Fixed case</SelectItem>
                 </SelectContent>
               </Select>
             )}
           />
-        </TableCell>
-        <TableCell className="text-right">
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            className="text-right tabular-nums"
-            disabled={disabled}
-            {...register(`lines.${index}.quantityCases`)}
-          />
-        </TableCell>
-        <TableCell className="text-right">
-          <div className="flex flex-col items-end gap-2">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              className="text-right tabular-nums"
-              disabled={disabled || unitType === "fixed_case" || weightEntryMode !== "total_weight"}
-              readOnly={unitType === "catch_weight" && weightEntryMode !== "total_weight"}
-              value={
-                unitType === "catch_weight" && weightEntryMode !== "total_weight"
-                  ? totalWeightLbs > 0
-                    ? totalWeightLbs.toFixed(4)
-                    : "0"
-                  : line?.weightLbs ?? "0"
-              }
-              {...register(`lines.${index}.weightLbs`)}
-            />
-            {unitType === "catch_weight" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => setUserExpanded(open => !open)}
-                disabled={disabled}
-              >
-                {expanded ? (
-                  <ChevronDown className="size-3.5" />
-                ) : (
-                  <ChevronRight className="size-3.5" />
-                )}
-                Case weights
-              </Button>
-            ) : null}
-          </div>
-        </TableCell>
-        <TableCell className="text-right">
-          <Input
-            type="number"
-            min={0}
-            step="0.0001"
-            className="text-right tabular-nums"
-            disabled={disabled}
-            {...register(`lines.${index}.unitPrice`)}
-          />
-        </TableCell>
-        <TableCell className="text-right">
-          <LineRowTotal control={control} index={index} />
-        </TableCell>
-        <TableCell>
-          <Input
-            placeholder="auto"
-            disabled={disabled}
-            {...register(`lines.${index}.lotNumberOverride`)}
-          />
-        </TableCell>
-        <TableCell>
-          <Input
-            type="date"
-            placeholder="+7d"
-            disabled={disabled}
-            {...register(`lines.${index}.expirationDateOverride`)}
-          />
-        </TableCell>
-        <TableCell>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            disabled={disabled || !canRemove}
-            aria-label="Remove line"
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </TableCell>
-      </TableRow>
-
-      {unitType === "catch_weight" && expanded ? (
-        <TableRow className="bg-muted/20">
-          <TableCell colSpan={10}>
-            <div className="flex flex-col gap-4 py-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  {weightEntryMode === "total_weight"
-                    ? "Simple total"
-                    : weightEntryMode === "default_case_weight"
-                      ? "Shared default + overrides"
-                      : "Manual per case"}
-                </Badge>
-                <Badge variant="secondary" className="text-xs">
-                  {quantityCases || 0} case{quantityCases === 1 ? "" : "s"}
-                </Badge>
-                <Badge variant="secondary" className="text-xs">
-                  {totalWeightLbs.toFixed(2)} lbs total
-                </Badge>
-                {weightEntryMode === "default_case_weight" && overrideCount > 0 ? (
-                  <Badge variant="outline" className="text-xs">
-                    {overrideCount} override{overrideCount === 1 ? "" : "s"}
-                  </Badge>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Weight entry</div>
-                  <Controller
-                    control={control}
-                    name={`lines.${index}.weightEntryMode`}
-                    render={({ field }) => (
-                      <Select
-                        value={field.value}
-                        onValueChange={(value: SupplierInvoiceWeightEntryMode) => {
-                          field.onChange(value);
-                          handleWeightModeChange(value);
-                        }}
-                        disabled={disabled}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="total_weight">
-                            Simple total weight
-                          </SelectItem>
-                          <SelectItem value="default_case_weight">
-                            Shared default + overrides
-                          </SelectItem>
-                          <SelectItem value="manual_case_weights">
-                            Manual every case
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    Keep total-weight mode for quick entry, or expand into case
-                    weights when one or more cases differ.
-                  </p>
-                </div>
-
-                <div className="rounded-md border bg-background p-3">
-                  {weightEntryMode === "total_weight" ? (
-                    <div className="text-muted-foreground flex items-start gap-2 text-sm">
-                      <Scale className="mt-0.5 size-4 shrink-0" />
-                      <div>
-                        Enter the total line weight in the main row. Switch to a
-                        detailed mode when you want to capture case-level weights.
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      {weightEntryMode === "default_case_weight" ? (
-                        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-                          <div className="w-full max-w-xs">
-                            <div className="mb-1 text-sm font-medium">
-                              Default case weight
-                            </div>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              className="text-right tabular-nums"
-                              disabled={disabled}
-                              {...register(`lines.${index}.defaultCaseWeightLbs`)}
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleApplyDefaultToRemaining}
-                            disabled={
-                              disabled ||
-                              quantityCases <= 0 ||
-                              !(line?.defaultCaseWeightLbs ?? "").trim()
-                            }
-                          >
-                            <Sparkles className="size-4" />
-                            Apply to remaining cases
-                          </Button>
-                        </div>
-                      ) : null}
-
-                      {quantityCases > 0 ? (
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                          {Array.from({ length: quantityCases }, (_, caseIndex) => {
-                            const resolvedWeight = resolvedCaseWeights[caseIndex] ?? 0;
-                            const explicitValue =
-                              line?.caseWeightEntries?.[caseIndex] ?? "";
-                            return (
-                              <div
-                                key={caseIndex}
-                                className="rounded-md border bg-muted/20 p-3"
-                              >
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                  <div className="text-sm font-medium">
-                                    Case {caseIndex + 1}
-                                  </div>
-                                  {resolvedWeight > 0 ? (
-                                    <div className="text-xs tabular-nums text-muted-foreground">
-                                      {formatEditableWeight(resolvedWeight)} lbs
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  className="text-right tabular-nums"
-                                  disabled={disabled}
-                                  placeholder={
-                                    weightEntryMode === "default_case_weight"
-                                      ? line?.defaultCaseWeightLbs || "Use default"
-                                      : "0.00"
-                                  }
-                                  {...register(
-                                    `lines.${index}.caseWeightEntries.${caseIndex}`,
-                                  )}
-                                />
-                                <div className="mt-2 text-[11px] text-muted-foreground">
-                                  {weightEntryMode === "default_case_weight"
-                                    ? explicitValue
-                                      ? "Override for this case."
-                                      : "Leave blank to use the default weight."
-                                    : "Enter the exact weight for this case."}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground">
-                          Enter the case count first to capture per-case weights.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </TableCell>
-        </TableRow>
-      ) : null}
+        </div>
+      </div>
     </>
+  );
+}
+
+// ── Fixed-case tray (lot / expires / type) ─────────────────────────────────
+function LotExpiresTray({
+  control,
+  register,
+  index,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  register: UseFormRegister<SupplierInvoiceFormValues>;
+  index: number;
+  disabled: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+        <label style={lbl}>
+          Lot #{" "}
+          <span
+            style={{
+              color: T.mutedSoft,
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
+          >
+            (optional)
+          </span>
+        </label>
+        <Input
+          placeholder="auto-generated"
+          disabled={disabled}
+          style={{
+            height: 38,
+            borderRadius: 8,
+            fontFamily: T.mono,
+            fontSize: 13,
+          }}
+          {...register(`lines.${index}.lotNumberOverride`)}
+        />
+      </div>
+      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+        <label style={lbl}>
+          Expires{" "}
+          <span
+            style={{
+              color: T.mutedSoft,
+              fontWeight: 400,
+              textTransform: "none",
+              letterSpacing: 0,
+            }}
+          >
+            (optional)
+          </span>
+        </label>
+        <Input
+          type="date"
+          disabled={disabled}
+          style={{ height: 38, borderRadius: 8, fontSize: 13 }}
+          {...register(`lines.${index}.expirationDateOverride`)}
+        />
+      </div>
+      <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
+        <label style={lbl}>Pricing type</label>
+        <Controller
+          control={control}
+          name={`lines.${index}.unitType`}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={field.onChange}
+              disabled={disabled}
+            >
+              <SelectTrigger
+                style={{ height: 38, borderRadius: 8, fontSize: 13 }}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="catch_weight">Variable weight</SelectItem>
+                <SelectItem value="fixed_case">Fixed case</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </div>
+    </div>
   );
 }
