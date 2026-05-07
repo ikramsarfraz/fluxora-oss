@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
@@ -217,78 +217,84 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const draftIdRef = useRef<string | null>(invoiceId ?? null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     isPendingRef.current = isPending;
   }, [isPending]);
 
-  const watchedValues = useWatch({ control: form.control });
-
   useEffect(() => {
-    if (isPendingRef.current || autoSaveInProgressRef.current) return;
-
-    const v = watchedValues as SupplierInvoiceFormValues;
-    const ready =
-      !!v.supplierId &&
-      !!v.invoiceNumber &&
-      !!v.invoiceDate &&
-      !!v.receiveDate &&
-      (v.lines ?? []).some((l) => !!l?.productId);
-    if (!ready) return;
-
-    const timer = setTimeout(async () => {
+    const { unsubscribe } = form.watch(() => {
+      clearTimeout(autoSaveTimerRef.current);
       if (isPendingRef.current || autoSaveInProgressRef.current) return;
-      autoSaveInProgressRef.current = true;
-      setAutoSaveStatus("saving");
 
-      const lines = (v.lines ?? []).map((line) => ({
-        id: line.id,
-        productId: line.productId,
-        quantityCases: Number(line.quantityCases) || 0,
-        weightLbs:
-          line.unitType === "catch_weight"
-            ? computeDraftLineWeight(line).toFixed(4)
-            : line.weightLbs || "0",
-        unitType: line.unitType,
-        unitPrice: line.unitPrice || "0",
-        caseWeightsLbs: serializeDraftCaseWeights(line),
-        lotNumberOverride: line.lotNumberOverride?.trim() || null,
-        expirationDateOverride: line.expirationDateOverride?.trim() || null,
-      }));
+      autoSaveTimerRef.current = setTimeout(async () => {
+        if (isPendingRef.current || autoSaveInProgressRef.current) return;
 
-      const payload = {
-        supplierId: v.supplierId,
-        invoiceNumber: v.invoiceNumber,
-        invoiceDate: v.invoiceDate,
-        receiveDate: v.receiveDate,
-        paymentMethod: v.paymentMethod ?? null,
-        notes: v.notes || null,
-        lines,
-      };
+        const v = form.getValues();
+        const ready =
+          !!v.supplierId &&
+          !!v.invoiceNumber &&
+          !!v.invoiceDate &&
+          !!v.receiveDate &&
+          (v.lines ?? []).some((l) => !!l?.productId);
+        if (!ready) return;
 
-      try {
-        if (!draftIdRef.current) {
-          const result = await createMutation.mutateAsync({
-            ...payload,
-            complete: false,
-          });
-          draftIdRef.current = result.id;
-        } else {
-          await updateMutation.mutateAsync({
-            id: draftIdRef.current,
-            ...payload,
-          });
+        autoSaveInProgressRef.current = true;
+        setAutoSaveStatus("saving");
+
+        const lines = (v.lines ?? []).map((line) => ({
+          id: line.id,
+          productId: line.productId,
+          quantityCases: Number(line.quantityCases) || 0,
+          weightLbs:
+            line.unitType === "catch_weight"
+              ? computeDraftLineWeight(line).toFixed(4)
+              : line.weightLbs || "0",
+          unitType: line.unitType,
+          unitPrice: line.unitPrice || "0",
+          caseWeightsLbs: serializeDraftCaseWeights(line),
+          lotNumberOverride: line.lotNumberOverride?.trim() || null,
+          expirationDateOverride: line.expirationDateOverride?.trim() || null,
+        }));
+
+        const payload = {
+          supplierId: v.supplierId,
+          invoiceNumber: v.invoiceNumber,
+          invoiceDate: v.invoiceDate,
+          receiveDate: v.receiveDate,
+          paymentMethod: v.paymentMethod ?? null,
+          notes: v.notes || null,
+          lines,
+        };
+
+        try {
+          if (!draftIdRef.current) {
+            const result = await createMutation.mutateAsync({
+              ...payload,
+              complete: false,
+            });
+            draftIdRef.current = result.id;
+          } else {
+            await updateMutation.mutateAsync({
+              id: draftIdRef.current,
+              ...payload,
+            });
+          }
+          setAutoSaveStatus("saved");
+        } catch {
+          setAutoSaveStatus("error");
+        } finally {
+          autoSaveInProgressRef.current = false;
         }
-        setAutoSaveStatus("saved");
-      } catch {
-        setAutoSaveStatus("error");
-      } finally {
-        autoSaveInProgressRef.current = false;
-      }
-    }, 1500);
+      }, 1500);
+    });
 
-    return () => clearTimeout(timer);
-  }, [watchedValues]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      unsubscribe();
+      clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cancelPath = invoiceId
     ? `/supplier-invoices/${invoiceId}`

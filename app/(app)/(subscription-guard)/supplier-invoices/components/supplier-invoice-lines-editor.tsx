@@ -510,7 +510,7 @@ function LineRow({
           gridTemplateColumns: COL,
           gap: "16px",
           padding: "14px 28px",
-          alignItems: "center",
+          alignItems: "start",
         }}
       >
         {/* 1. Product */}
@@ -573,28 +573,36 @@ function LineRow({
         <div>
           <div
             style={{
-              display: "inline-flex",
+              height: 38,
+              display: "flex",
               alignItems: "center",
-              gap: 6,
-              background: isCatchWeight ? T.accentSoft : T.surfaceAlt,
-              color: isCatchWeight ? T.accent : T.muted,
-              fontSize: 12,
-              fontWeight: 500,
-              padding: "5px 10px",
-              borderRadius: 6,
-              border: `1px solid ${isCatchWeight ? T.accentBorder : T.border}`,
             }}
           >
-            <span
+            <div
               style={{
-                width: 5,
-                height: 5,
-                background: "currentColor",
-                borderRadius: "50%",
-                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: isCatchWeight ? T.accentSoft : T.surfaceAlt,
+                color: isCatchWeight ? T.accent : T.muted,
+                fontSize: 12,
+                fontWeight: 500,
+                padding: "5px 10px",
+                borderRadius: 6,
+                border: `1px solid ${isCatchWeight ? T.accentBorder : T.border}`,
               }}
-            />
-            {isCatchWeight ? "Variable weight" : "Fixed case"}
+            >
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  background: "currentColor",
+                  borderRadius: "50%",
+                  flexShrink: 0,
+                }}
+              />
+              {isCatchWeight ? "Variable weight" : "Fixed case"}
+            </div>
           </div>
           <div
             style={{
@@ -788,6 +796,7 @@ function LineRow({
             fontWeight: 600,
             color: T.text,
             fontVariantNumeric: "tabular-nums",
+            marginTop: 8,
           }}
         >
           <LineRowTotal control={control} index={index} />
@@ -811,6 +820,7 @@ function LineRow({
             color: T.mutedSoft,
             cursor: disabled || !canRemove ? "not-allowed" : "pointer",
             opacity: !canRemove ? 0.3 : 1,
+            marginTop: 4,
           }}
         >
           <Trash2 style={{ width: 14, height: 14 }} />

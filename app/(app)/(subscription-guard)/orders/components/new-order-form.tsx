@@ -84,6 +84,7 @@ export function NewOrderForm() {
   const draftIdRef = useRef<string | null>(null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { data: products } = useProducts();
   const { data: customers } = useCustomers();
@@ -102,8 +103,6 @@ export function NewOrderForm() {
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
   const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
-  const allValues = useWatch({ control: form.control });
-
   const { lineCount, estTotal } = useMemo(() => {
     const productsById = new Map<string, ProductListItem>();
     for (const p of products ?? []) productsById.set(p.id, p);
@@ -132,60 +131,67 @@ export function NewOrderForm() {
   }, [pendingMode]);
 
   useEffect(() => {
-    if (isPendingRef.current || autoSaveInProgressRef.current) return;
-
-    const v = allValues as NewOrderFormValues;
-    const readyLines = (v.lines ?? []).filter(
-      (l) => l.productId && l.salesUnitId,
-    );
-    if (!v.customerId || readyLines.length === 0) return;
-
-    const timer = setTimeout(async () => {
+    const { unsubscribe } = form.watch(() => {
+      clearTimeout(autoSaveTimerRef.current);
       if (isPendingRef.current || autoSaveInProgressRef.current) return;
-      autoSaveInProgressRef.current = true;
-      setAutoSaveStatus("saving");
 
-      const orderLines = readyLines.map((l) => ({
-        productId: l.productId,
-        salesUnitId: l.salesUnitId,
-        expectedCases: Number(l.quantity),
-        unitType: l.unitType,
-        pricePerLbOverride: l.pricePerLb || undefined,
-      }));
+      autoSaveTimerRef.current = setTimeout(async () => {
+        if (isPendingRef.current || autoSaveInProgressRef.current) return;
 
-      const payload = {
-        customerId: v.customerId,
-        orderDate: v.orderDate,
-        dueDate: v.deliveryDate || undefined,
-        addFuelSurcharge: v.addFuelSurcharge,
-        customerNotes: v.customerNotes || undefined,
-        internalNotes: v.internalNotes || undefined,
-        lines: orderLines,
-      };
+        const v = form.getValues();
+        const readyLines = (v.lines ?? []).filter(
+          (l) => l.productId && l.salesUnitId,
+        );
+        if (!v.customerId || readyLines.length === 0) return;
 
-      try {
-        if (!draftIdRef.current) {
-          const order = await createOrder.mutateAsync({
-            ...payload,
-            status: "sales_order",
-          });
-          if (order?.id) draftIdRef.current = order.id;
-        } else {
-          await updateOrder.mutateAsync({
-            id: draftIdRef.current,
-            ...payload,
-          });
+        autoSaveInProgressRef.current = true;
+        setAutoSaveStatus("saving");
+
+        const orderLines = readyLines.map((l) => ({
+          productId: l.productId,
+          salesUnitId: l.salesUnitId,
+          expectedCases: Number(l.quantity),
+          unitType: l.unitType,
+          pricePerLbOverride: l.pricePerLb || undefined,
+        }));
+
+        const payload = {
+          customerId: v.customerId,
+          orderDate: v.orderDate,
+          dueDate: v.deliveryDate || undefined,
+          addFuelSurcharge: v.addFuelSurcharge,
+          customerNotes: v.customerNotes || undefined,
+          internalNotes: v.internalNotes || undefined,
+          lines: orderLines,
+        };
+
+        try {
+          if (!draftIdRef.current) {
+            const order = await createOrder.mutateAsync({
+              ...payload,
+              status: "sales_order",
+            });
+            if (order?.id) draftIdRef.current = order.id;
+          } else {
+            await updateOrder.mutateAsync({
+              id: draftIdRef.current,
+              ...payload,
+            });
+          }
+          setAutoSaveStatus("saved");
+        } catch {
+          setAutoSaveStatus("error");
+        } finally {
+          autoSaveInProgressRef.current = false;
         }
-        setAutoSaveStatus("saved");
-      } catch {
-        setAutoSaveStatus("error");
-      } finally {
-        autoSaveInProgressRef.current = false;
-      }
-    }, 1500);
+      }, 1500);
+    });
 
-    return () => clearTimeout(timer);
-  }, [allValues]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      unsubscribe();
+      clearTimeout(autoSaveTimerRef.current);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(mode: SubmitMode) {
     setSubmitError(null);
@@ -378,24 +384,16 @@ export function NewOrderForm() {
           transition: "left 0.2s ease-linear",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-            fontSize: "13px",
-            color: C.muted,
-          }}
-        >
-          <span>
-            <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
-            {lineCount === 1 ? "item" : "items"} · est.{" "}
-            <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
-              {formatMoney(estTotal)}
-            </b>
-          </span>
+        <div style={{ fontSize: "13px", color: C.muted }}>
+          <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
+          {lineCount === 1 ? "item" : "items"} · est.{" "}
+          <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
+            {formatMoney(estTotal)}
+          </b>
+        </div>
+        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
           {autoSaveStatus === "saving" && (
-            <span style={{ fontSize: "12px" }}>Saving…</span>
+            <span style={{ fontSize: "12px", color: C.muted }}>Saving…</span>
           )}
           {autoSaveStatus === "saved" && (
             <span
@@ -404,6 +402,7 @@ export function NewOrderForm() {
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "12px",
+                color: C.muted,
               }}
             >
               <span
@@ -415,7 +414,7 @@ export function NewOrderForm() {
                   flexShrink: 0,
                 }}
               />
-              Draft saved
+              Draft saved · just now
             </span>
           )}
           {autoSaveStatus === "error" && (
@@ -424,7 +423,6 @@ export function NewOrderForm() {
             </span>
           )}
         </div>
-        <div style={{ flex: 1 }} />
         <Button
           type="button"
           onClick={() => void handleSubmit("draft")}
