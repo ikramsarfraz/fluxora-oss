@@ -37,14 +37,16 @@ export function ApAgingSection() {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <h2 className="text-base font-semibold tracking-tight">
-          Accounts payable aging
-        </h2>
-        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-          <Info className="size-3.5" />
-          Due date = invoice date + supplier payment terms (net days). Suppliers
-          without terms configured fall back to Net-0 (due on invoice date).
-        </p>
+        <div className="border-b border-stone-line pb-3">
+          <h2 className="text-sm font-semibold text-stone-ink">
+            Accounts payable aging
+          </h2>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-muted">
+            <Info className="size-3.5 shrink-0" />
+            Due date = invoice date + supplier payment terms (net days). Suppliers
+            without terms configured fall back to Net-0 (due on invoice date).
+          </p>
+        </div>
       </div>
 
       {isPending ? (
@@ -70,7 +72,7 @@ export function ApAgingSection() {
 
 function ApAgingSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
       <Skeleton className="h-[260px] rounded-xl" />
       <Skeleton className="h-[260px] rounded-xl" />
       <Skeleton className="h-[260px] rounded-xl" />
@@ -80,27 +82,25 @@ function ApAgingSkeleton() {
 
 function ApAgingContent({ data }: { data: ApAging }) {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-3">
-      <Card>
-        <CardHeader>
-          <CardTitle>Open balance</CardTitle>
-          <CardDescription>
+    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
+      <Card className="shadow-none">
+        <CardHeader className="border-b border-stone-line pb-3">
+          <CardTitle className="text-sm font-semibold text-stone-ink">Open balance</CardTitle>
+          <CardDescription className="text-xs text-stone-muted">
             Completed supplier invoices with balance remaining.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col rounded-lg border p-3">
-              <span className="text-xs text-muted-foreground">
-                Total open
-              </span>
-              <span className="text-xl font-semibold tabular-nums">
+            <div className="flex flex-col rounded-lg border border-stone-line p-3">
+              <span className="text-xs text-stone-muted">Total open</span>
+              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
                 {formatMoney(data.totalOpen)}
               </span>
             </div>
-            <div className="flex flex-col rounded-lg border p-3">
+            <div className="flex flex-col rounded-lg border border-stone-line p-3">
               <span className="text-xs text-destructive">Overdue</span>
-              <span className="text-xl font-semibold tabular-nums">
+              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
                 {formatMoney(data.totalOverdue)}
               </span>
             </div>
@@ -117,10 +117,12 @@ function ApAgingContent({ data }: { data: ApAging }) {
 
 function TopSuppliersCard({ rows }: { rows: ApAgingSupplierRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top unpaid suppliers</CardTitle>
-        <CardDescription>By overdue balance across open invoices.</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Top unpaid suppliers</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
+          By overdue balance across open invoices.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -145,7 +147,7 @@ function TopSuppliersCard({ rows }: { rows: ApAgingSupplierRow[] }) {
                     >
                       {row.name}
                     </Link>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-stone-muted">
                       {row.invoiceCount} invoice
                       {row.invoiceCount === 1 ? "" : "s"}
                     </div>
@@ -153,7 +155,7 @@ function TopSuppliersCard({ rows }: { rows: ApAgingSupplierRow[] }) {
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatMoney(row.totalOverdue)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                  <TableCell className="text-right tabular-nums text-stone-muted">
                     {formatMoney(row.totalBalance)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -173,10 +175,12 @@ function TopSuppliersCard({ rows }: { rows: ApAgingSupplierRow[] }) {
 
 function RecentOverdueCard({ rows }: { rows: ApAgingInvoiceRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent overdue invoices</CardTitle>
-        <CardDescription>Oldest past-due invoices, top 8.</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Recent overdue invoices</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
+          Oldest past-due invoices, top 8.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -214,7 +218,7 @@ function RecentOverdueCard({ rows }: { rows: ApAgingInvoiceRow[] }) {
                   <TableCell className="whitespace-nowrap text-sm">
                     <div className="flex flex-col">
                       <span>{formatDisplayDate(row.dueDate)}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-stone-muted">
                         {row.netDays == null
                           ? "Net-0 (no terms)"
                           : `Net-${row.netDays}`}
@@ -227,7 +231,7 @@ function RecentOverdueCard({ rows }: { rows: ApAgingInvoiceRow[] }) {
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end gap-1">
                       <BucketBadge bucket={row.bucket} />
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      <span className="text-xs text-stone-muted tabular-nums">
                         {row.daysOverdue}d
                       </span>
                     </div>
@@ -244,7 +248,7 @@ function RecentOverdueCard({ rows }: { rows: ApAgingInvoiceRow[] }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-sm text-muted-foreground">
+    <p className="px-6 py-6 text-center text-xs text-stone-muted">
       {children}
     </p>
   );

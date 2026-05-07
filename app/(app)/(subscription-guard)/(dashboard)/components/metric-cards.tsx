@@ -3,12 +3,9 @@
 import { Fragment, type ReactNode } from "react";
 import {
   AlertTriangle,
-  Calendar,
   Clock,
   DollarSign,
   Package,
-  Receipt,
-  ReceiptText,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -36,32 +33,26 @@ type MetricCardProps = {
   tone?: "default" | "warning" | "danger";
 };
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  helper,
-  tone = "default",
-}: MetricCardProps) {
+function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: MetricCardProps) {
   const toneClass =
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-amber-600 dark:text-amber-500"
-        : "text-muted-foreground";
+        ? "text-status-warn"
+        : "text-stone-muted";
 
   return (
-    <Card className="@container/card">
+    <Card className="@container/card shadow-none">
       <CardHeader>
-        <CardDescription className={`flex items-center gap-2 ${toneClass}`}>
-          <Icon className="size-4" />
+        <CardDescription className={`flex items-center gap-1.5 text-xs font-medium ${toneClass}`}>
+          <Icon className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight @[250px]/card:text-3xl">
           {value}
         </CardTitle>
         {helper ? (
-          <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+          <p className="mt-1 text-[11px] text-stone-muted">{helper}</p>
         ) : null}
       </CardHeader>
     </Card>
@@ -80,68 +71,13 @@ export function MetricCards({
 
   const cards: Array<{ key: DashboardMetricCard; node: ReactNode }> = [
     {
-      key: "sales7d",
-      node: (
-        <MetricCard
-          icon={TrendingUp}
-          label="Sales (last 7d)"
-          value={formatMoney(metrics.sales7d)}
-          helper="Non-void invoices, by invoice date."
-        />
-      ),
-    },
-    {
       key: "sales30d",
       node: (
         <MetricCard
-          icon={Calendar}
+          icon={TrendingUp}
           label="Revenue (last 30d)"
           value={formatMoney(metrics.sales30d)}
           helper="Non-void invoices, by invoice date."
-        />
-      ),
-    },
-    {
-      key: "cogs30d",
-      node: (
-        <MetricCard
-          icon={Receipt}
-          label="COGS (last 30d)"
-          value={formatMoney(metrics.cogs30d)}
-          helper="Frozen invoice-line cost snapshots."
-        />
-      ),
-    },
-    {
-      key: "grossProfit30d",
-      node: (
-        <MetricCard
-          icon={TrendingUp}
-          label="Gross profit (30d)"
-          value={formatMoney(metrics.grossProfit30d)}
-          helper="Revenue less COGS on non-void invoices."
-        />
-      ),
-    },
-    {
-      key: "grossMargin30d",
-      node: (
-        <MetricCard
-          icon={TrendingUp}
-          label="Gross margin (30d)"
-          value={`${metrics.grossMargin30d}%`}
-          helper="Gross profit divided by revenue."
-        />
-      ),
-    },
-    {
-      key: "purchases30d",
-      node: (
-        <MetricCard
-          icon={ReceiptText}
-          label="Purchases (last 30d)"
-          value={formatMoney(metrics.purchases30d)}
-          helper="Completed supplier invoices, by receive date."
         />
       ),
     },
@@ -208,7 +144,7 @@ export function MetricCards({
   if (visible.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-sm *:data-[slot=card]:border lg:px-6 @xl/main:grid-cols-2 @3xl/main:grid-cols-3 @5xl/main:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @xl/main:grid-cols-2 @3xl/main:grid-cols-3">
       {visible.map(card => (
         <Fragment key={card.key}>{card.node}</Fragment>
       ))}

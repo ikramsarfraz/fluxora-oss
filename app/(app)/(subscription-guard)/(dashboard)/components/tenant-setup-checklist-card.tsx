@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 function ProgressBar({ value }: { value: number }) {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-line2">
       <div
         className="h-full rounded-full bg-primary transition-[width]"
         style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }}
@@ -47,11 +47,11 @@ export function TenantSetupChecklistCard({ role }: Props) {
 
   return (
     <div className="px-4 lg:px-6">
-      <Card className="border-dashed">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-          <div className="space-y-1.5">
-            <CardTitle className="text-base">Get started</CardTitle>
-            <CardDescription>
+      <Card className="shadow-none border-dashed">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b border-stone-line pb-3">
+          <div className="space-y-0.5">
+            <CardTitle className="text-sm font-semibold text-stone-ink">Get started</CardTitle>
+            <CardDescription className="text-xs text-stone-muted">
               Complete these steps to finish setting up your workspace (
               {data.completedCount}/{data.total}).
             </CardDescription>
@@ -61,7 +61,7 @@ export function TenantSetupChecklistCard({ role }: Props) {
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 text-muted-foreground"
+              className="shrink-0 text-stone-muted hover:text-stone-ink2"
               title="Hide checklist"
               disabled={dismiss.isPending}
               onClick={() => dismiss.mutate()}
@@ -71,7 +71,7 @@ export function TenantSetupChecklistCard({ role }: Props) {
             </Button>
           ) : null}
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4">
           <ProgressBar value={progress} />
           <ul className="space-y-2">
             {data.items.map(item => (
@@ -84,14 +84,14 @@ export function TenantSetupChecklistCard({ role }: Props) {
                     "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
                     item.done
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-muted-foreground/30 bg-background text-muted-foreground",
+                      : "border-stone-line text-stone-muted",
                   )}
                   aria-hidden
                 >
                   {item.done ? <Check className="size-3" /> : null}
                 </span>
                 {item.done ? (
-                  <span className="text-muted-foreground line-through">
+                  <span className="text-stone-muted line-through">
                     {item.label}
                   </span>
                 ) : (

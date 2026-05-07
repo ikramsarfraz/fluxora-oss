@@ -7,11 +7,8 @@ import {
 import { TenantSubscriptionHealthBanner } from "@/components/subscription/tenant-subscription-health-banner";
 import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
-import { canUseFeature } from "@/lib/subscription-plan-capabilities";
-import { isSectionVisible } from "@/lib/dashboard/visibility";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { queryKeys } from "@/lib/query/keys";
-import { getApAging, getArAging } from "@/services/aging";
 import { getDashboardSummary } from "@/services/dashboard";
 import { getCurrentPortalUser } from "@/services/portal-users";
 import { getCurrentTenantCached } from "@/services/tenants";
@@ -27,7 +24,6 @@ export default async function DashboardRoute() {
   const role = portalUser.role as PortalUserRole;
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
-  const canAccessReports = canUseFeature(tenant, "reports");
   const tenantBillingSnapshot = {
     subscriptionPlan: tenant.subscriptionPlan,
     subscriptionStatus: tenant.subscriptionStatus,
@@ -37,8 +33,7 @@ export default async function DashboardRoute() {
   const subscriptionHealth = getTenantSubscriptionHealth(tenantBillingSnapshot);
 
   const queryClient = new QueryClient();
-
-  const prefetches: Array<Promise<unknown>> = [
+  await Promise.all([
     queryClient.prefetchQuery({
       queryKey: queryKeys.dashboard.summary,
       queryFn: () => getDashboardSummary(),
@@ -47,31 +42,14 @@ export default async function DashboardRoute() {
       queryKey: queryKeys.dashboard.setupChecklist,
       queryFn: () => getTenantSetupChecklistViewAction(),
     }),
-  ];
-  if (isSectionVisible(role, "arAging") && canAccessReports) {
-    prefetches.push(
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.dashboard.arAging,
-        queryFn: () => getArAging(),
-      }),
-    );
-  }
-  if (isSectionVisible(role, "apAging")) {
-    prefetches.push(
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.dashboard.apAging,
-        queryFn: () => getApAging(),
-      }),
-    );
-  }
-  await Promise.all(prefetches);
+  ]);
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4">
       <div className="px-4 pt-2 lg:px-6">
         <PageHeader
-          title="Fluxora Dashboard"
-          description="Overview of sales, purchasing, and inventory health."
+          title="Dashboard"
+          description="Key metrics and recent sales activity."
         />
       </div>
       <div className="px-4 lg:px-6">
@@ -82,11 +60,7 @@ export default async function DashboardRoute() {
         />
       </div>
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <DashboardShell
-          role={role}
-          canAccessReports={canAccessReports}
-          currentPlan={tenant.subscriptionPlan}
-        />
+        <DashboardShell role={role} />
       </HydrationBoundary>
     </div>
   );

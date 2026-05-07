@@ -37,13 +37,15 @@ export function PurchasingSection({ purchasing }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <h2 className="text-base font-semibold tracking-tight">Purchasing</h2>
-        <p className="text-sm text-muted-foreground">
-          Supplier activity and open payables.
-        </p>
+        <div className="border-b border-stone-line pb-3">
+          <h2 className="text-sm font-semibold text-stone-ink">Purchasing</h2>
+          <p className="mt-0.5 text-xs text-stone-muted">
+            Supplier activity and open payables.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
         <RecentSupplierInvoicesCard rows={purchasing.recent} />
         <UnpaidSupplierInvoicesCard rows={purchasing.unpaid} />
         <SpendBySupplierCard rows={purchasing.spendBySupplier} />
@@ -63,16 +65,14 @@ function statusBadge(status: string) {
   }
 }
 
-function RecentSupplierInvoicesCard({
-  rows,
-}: {
-  rows: RecentSupplierInvoiceRow[];
-}) {
+function RecentSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent supplier invoices</CardTitle>
-        <CardDescription>Newest 8 across all statuses.</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Recent supplier invoices</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
+          Newest 8 across all statuses.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -119,16 +119,12 @@ function RecentSupplierInvoicesCard({
   );
 }
 
-function UnpaidSupplierInvoicesCard({
-  rows,
-}: {
-  rows: RecentSupplierInvoiceRow[];
-}) {
+function UnpaidSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Unpaid supplier invoices</CardTitle>
-        <CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Unpaid supplier invoices</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
           Completed invoices with balance remaining.
         </CardDescription>
       </CardHeader>
@@ -180,14 +176,14 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Spend by supplier</CardTitle>
-        <CardDescription>
+    <Card className="shadow-none">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Spend by supplier</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
           Completed invoice totals, last 90 days.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {rows.length === 0 ? (
           <Empty>No completed supplier invoices in the last 90 days.</Empty>
         ) : (
@@ -211,13 +207,13 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative h-2 flex-1 overflow-hidden rounded bg-muted">
+                    <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-stone-line2">
                       <div
-                        className="absolute inset-y-0 left-0 rounded bg-primary"
+                        className="absolute inset-y-0 left-0 rounded-full bg-primary"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="w-14 text-right text-xs text-muted-foreground tabular-nums">
+                    <span className="w-14 text-right text-xs text-stone-muted tabular-nums">
                       {row.invoiceCount} inv
                     </span>
                   </div>
@@ -233,7 +229,7 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-sm text-muted-foreground">
+    <p className="px-6 py-6 text-center text-xs text-stone-muted">
       {children}
     </p>
   );

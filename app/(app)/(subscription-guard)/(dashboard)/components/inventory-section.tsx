@@ -63,20 +63,20 @@ export function InventorySection({ inventory }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <h2 className="text-base font-semibold tracking-tight">
-          Inventory &amp; lots
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Stock breakdown and expiration alerts.
-        </p>
+        <div className="border-b border-stone-line pb-3">
+          <h2 className="text-sm font-semibold text-stone-ink">Inventory &amp; lots</h2>
+          <p className="mt-0.5 text-xs text-stone-muted">
+            Stock breakdown and expiration alerts.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-2">
         <InventoryByStatusCard rows={inventory.byStatus} />
         <TopStockedProductsCard rows={inventory.topStockedProducts} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-2">
         <LotsTableCard
           title="Expiring soon (7d)"
           description="Active lots expiring within the next 7 days."
@@ -110,14 +110,14 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
   const allZero = ordered.every(r => r.itemCount === 0);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Inventory by status</CardTitle>
-        <CardDescription>
+    <Card className="shadow-none">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Inventory by status</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
           Item counts and case totals across all lots.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-4">
         {allZero ? (
           <Empty>No inventory on hand.</Empty>
         ) : (
@@ -133,15 +133,15 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
               return (
                 <li key={row.status} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium">{statusLabel(row.status)}</span>
-                    <span className="tabular-nums text-muted-foreground">
+                    <span className="font-medium text-stone-ink">{statusLabel(row.status)}</span>
+                    <span className="tabular-nums text-stone-muted text-xs">
                       {row.itemCount.toLocaleString()} items ·{" "}
                       {row.totalCases.toLocaleString()} cases
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded bg-muted">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-stone-line2">
                     <div
-                      className="h-full rounded bg-primary"
+                      className="h-full rounded-full bg-primary"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -155,16 +155,12 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
   );
 }
 
-function TopStockedProductsCard({
-  rows,
-}: {
-  rows: TopStockedProductRow[];
-}) {
+function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top stocked products</CardTitle>
-        <CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Top stocked products</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
           Highest active inventory item counts.
         </CardDescription>
       </CardHeader>
@@ -190,7 +186,7 @@ function TopStockedProductsCard({
                     >
                       {row.name}
                     </Link>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-stone-muted">
                       {row.sku}
                     </div>
                   </TableCell>
@@ -223,16 +219,13 @@ function LotsTableCard({
   emptyMessage: string;
   tone: "warning" | "danger";
 }) {
-  const dateClass =
-    tone === "danger"
-      ? "text-destructive"
-      : "text-amber-600 dark:text-amber-500";
+  const dateClass = tone === "danger" ? "text-destructive" : "text-status-warn";
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">{title}</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">{description}</CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -279,7 +272,7 @@ function LotsTableCard({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-sm text-muted-foreground">
+    <p className="px-6 py-6 text-center text-xs text-stone-muted">
       {children}
     </p>
   );

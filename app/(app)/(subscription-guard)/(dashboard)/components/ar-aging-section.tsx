@@ -37,13 +37,15 @@ export function ArAgingSection() {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <h2 className="text-base font-semibold tracking-tight">
-          Accounts receivable aging
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Open customer invoices bucketed by days past their due date.
-          Invoices without a due date are treated as current.
-        </p>
+        <div className="border-b border-stone-line pb-3">
+          <h2 className="text-sm font-semibold text-stone-ink">
+            Accounts receivable aging
+          </h2>
+          <p className="mt-0.5 text-xs text-stone-muted">
+            Open customer invoices bucketed by days past their due date.
+            Invoices without a due date are treated as current.
+          </p>
+        </div>
       </div>
 
       {isPending ? (
@@ -69,7 +71,7 @@ export function ArAgingSection() {
 
 function ArAgingSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
       <Skeleton className="h-[260px] rounded-xl" />
       <Skeleton className="h-[260px] rounded-xl" />
       <Skeleton className="h-[260px] rounded-xl" />
@@ -79,27 +81,25 @@ function ArAgingSkeleton() {
 
 function ArAgingContent({ data }: { data: ArAging }) {
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @3xl/main:grid-cols-3">
-      <Card>
-        <CardHeader>
-          <CardTitle>Open balance</CardTitle>
-          <CardDescription>
+    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
+      <Card className="shadow-none">
+        <CardHeader className="border-b border-stone-line pb-3">
+          <CardTitle className="text-sm font-semibold text-stone-ink">Open balance</CardTitle>
+          <CardDescription className="text-xs text-stone-muted">
             Non-void invoices with balance remaining.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col rounded-lg border p-3">
-              <span className="text-xs text-muted-foreground">
-                Total open
-              </span>
-              <span className="text-xl font-semibold tabular-nums">
+            <div className="flex flex-col rounded-lg border border-stone-line p-3">
+              <span className="text-xs text-stone-muted">Total open</span>
+              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
                 {formatMoney(data.totalOpen)}
               </span>
             </div>
-            <div className="flex flex-col rounded-lg border p-3">
+            <div className="flex flex-col rounded-lg border border-stone-line p-3">
               <span className="text-xs text-destructive">Overdue</span>
-              <span className="text-xl font-semibold tabular-nums">
+              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
                 {formatMoney(data.totalOverdue)}
               </span>
             </div>
@@ -116,10 +116,12 @@ function ArAgingContent({ data }: { data: ArAging }) {
 
 function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top overdue customers</CardTitle>
-        <CardDescription>By overdue balance across open invoices.</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Top overdue customers</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
+          By overdue balance across open invoices.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -144,7 +146,7 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
                     >
                       {row.name}
                     </Link>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-stone-muted">
                       {row.invoiceCount} invoice
                       {row.invoiceCount === 1 ? "" : "s"}
                     </div>
@@ -152,7 +154,7 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatMoney(row.totalOverdue)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                  <TableCell className="text-right tabular-nums text-stone-muted">
                     {formatMoney(row.totalBalance)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -172,10 +174,12 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
 
 function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent overdue invoices</CardTitle>
-        <CardDescription>Oldest past-due invoices, top 8.</CardDescription>
+    <Card className="shadow-none overflow-hidden">
+      <CardHeader className="border-b border-stone-line pb-3">
+        <CardTitle className="text-sm font-semibold text-stone-ink">Recent overdue invoices</CardTitle>
+        <CardDescription className="text-xs text-stone-muted">
+          Oldest past-due invoices, top 8.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -219,7 +223,7 @@ function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end gap-1">
                       <BucketBadge bucket={row.bucket} />
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      <span className="text-xs text-stone-muted tabular-nums">
                         {row.daysOverdue}d
                       </span>
                     </div>
@@ -236,7 +240,7 @@ function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-sm text-muted-foreground">
+    <p className="px-6 py-6 text-center text-xs text-stone-muted">
       {children}
     </p>
   );

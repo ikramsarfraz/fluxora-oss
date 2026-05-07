@@ -8,14 +8,11 @@ import type {
 } from "@/services/aging";
 
 const BUCKET_TONE: Record<AgingBucketKey, string> = {
-  current: "bg-muted text-muted-foreground",
-  d1_30: "bg-amber-100 text-amber-900 dark:bg-amber-500/15 dark:text-amber-200",
-  d31_60:
-    "bg-orange-100 text-orange-900 dark:bg-orange-500/15 dark:text-orange-200",
-  d61_90:
-    "bg-red-100 text-red-900 dark:bg-red-500/15 dark:text-red-200",
-  d90_plus:
-    "bg-destructive/10 text-destructive dark:bg-destructive/20",
+  current: "bg-stone-line2 text-stone-muted border-stone-line",
+  d1_30: "bg-status-warn-soft text-status-warn border-status-warn/20",
+  d31_60: "bg-status-warn-soft text-status-warn border-status-warn/30",
+  d61_90: "bg-destructive/10 text-destructive border-destructive/20",
+  d90_plus: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
 export function BucketBadge({ bucket }: { bucket: AgingBucketKey }) {
@@ -52,7 +49,7 @@ export function BucketBars({ buckets }: { buckets: AgingBucketRow[] }) {
             <div className="flex items-center justify-between gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <BucketBadge bucket={bucket.key} />
-                <span className="text-muted-foreground">
+                <span className="text-xs text-stone-muted">
                   {bucket.invoiceCount} invoice
                   {bucket.invoiceCount === 1 ? "" : "s"}
                 </span>
@@ -61,9 +58,9 @@ export function BucketBars({ buckets }: { buckets: AgingBucketRow[] }) {
                 {formatMoney(bucket.total)}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded bg-muted">
+            <div className="h-1.5 overflow-hidden rounded-full bg-stone-line2">
               <div
-                className="h-full rounded bg-primary"
+                className="h-full rounded-full bg-primary"
                 style={{ width: `${pct}%` }}
               />
             </div>
