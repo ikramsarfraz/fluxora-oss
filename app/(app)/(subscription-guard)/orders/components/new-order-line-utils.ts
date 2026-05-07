@@ -101,12 +101,12 @@ export function calculateLineTotal(
   if (!Number.isFinite(quantity) || quantity <= 0) return null;
   if (!Number.isFinite(price) || price < 0) return null;
 
-  if (line.unitType === "catch_weight") {
-    const salesUnit = getSelectedSalesUnit(product, line.salesUnitId);
-    const conversion = Number(salesUnit?.conversionToBase ?? "");
-    if (!Number.isFinite(conversion) || conversion <= 0) return null;
-    return quantity * conversion * price;
-  }
-
-  return quantity * price;
+  // Price is always per atomic unit ($/lb or $/ea).
+  // Multiply by conversionToBase to get the total for any selling unit.
+  // For lb or ea units, conversionToBase = 1 so the formula is the same.
+  // For case units, conversionToBase = lbs/case or units/case.
+  const salesUnit = getSelectedSalesUnit(product, line.salesUnitId);
+  const conversion = Number(salesUnit?.conversionToBase ?? "1");
+  if (!Number.isFinite(conversion) || conversion <= 0) return null;
+  return quantity * conversion * price;
 }

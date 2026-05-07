@@ -28,6 +28,7 @@ export async function createProductAction(input: {
   sku: string;
   name: string;
   categoryIds: string[];
+  defaultPricePerLb?: string;
   baseUnitId?: string | null;
   units?: {
     unitId: string;
@@ -46,6 +47,7 @@ export async function updateProductAction(input: {
   sku: string;
   name: string;
   categoryIds: string[];
+  defaultPricePerLb?: string;
   baseUnitId?: string | null;
   units?: {
     unitId: string;

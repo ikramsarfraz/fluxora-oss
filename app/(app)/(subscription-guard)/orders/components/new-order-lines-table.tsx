@@ -314,7 +314,7 @@ export function NewOrderLinesTable({
           + Add product
         </button>
         <span style={{ fontSize: "12px", color: C.muted }}>
-          ⚖ Catch-weight items capture final lbs at fulfillment
+          ⚖ Totals for weight-based items are estimates — actual weights are recorded at fulfillment
         </span>
       </div>
 
@@ -646,9 +646,9 @@ function LineRow({
                   border: fieldState.invalid ? "1px solid oklch(55% 0.22 25)" : "1px solid transparent",
                 }}
               />
-              {salesUnit && !fieldState.invalid && (
+              {product && !fieldState.invalid && (
                 <span style={{ fontSize: "11px", color: C.muted }}>
-                  {row?.unitType === "catch_weight" ? "$ / lb" : `$ / ${salesUnit.unit.abbreviation || salesUnit.unit.name}`}
+                  $ / {product.baseUnit?.abbreviation || product.baseUnit?.name || "unit"}
                 </span>
               )}
               {fieldState.invalid && (

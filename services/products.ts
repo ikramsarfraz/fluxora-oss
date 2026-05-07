@@ -139,6 +139,7 @@ export async function createProduct(input: {
   sku: string;
   name: string;
   categoryIds: string[];
+  defaultPricePerLb?: string;
   baseUnitId?: string | null;
   units?: ProductUnitInput[];
 }) {
@@ -183,7 +184,7 @@ export async function createProduct(input: {
       tenantId: tenant.id,
       sku: input.sku.trim(),
       name: input.name.trim(),
-      defaultPricePerLb: "0",
+      defaultPricePerLb: input.defaultPricePerLb ?? "0",
       baseUnitId: input.baseUnitId ?? null,
     })
     .returning();
@@ -219,6 +220,7 @@ export async function updateProduct(input: {
   sku: string;
   name: string;
   categoryIds: string[];
+  defaultPricePerLb?: string;
   baseUnitId?: string | null;
   units?: ProductUnitInput[];
 }) {
@@ -251,6 +253,9 @@ export async function updateProduct(input: {
     .set({
       sku: input.sku.trim(),
       name: input.name.trim(),
+      ...(input.defaultPricePerLb !== undefined && {
+        defaultPricePerLb: input.defaultPricePerLb,
+      }),
       baseUnitId: input.baseUnitId ?? null,
     })
     .where(and(eq(products.id, input.id), eq(products.tenantId, tenant.id)))
