@@ -20,7 +20,7 @@ import {
   supportPriorityLabel,
   supportTicketStatusLabel,
   supportTicketUpdateVisibilityLabel,
-} from "@/services/support";
+} from "@/modules/core/platform-admin/support/services/support";
 import { TicketAssignmentForm } from "@/modules/core/platform-admin/support/components/ticket-assignment-form";
 import { TicketStatusForm } from "@/modules/core/platform-admin/support/components/ticket-status-form";
 import { TicketUpdateForm } from "@/modules/core/platform-admin/support/components/ticket-update-form";

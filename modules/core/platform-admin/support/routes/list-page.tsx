@@ -28,7 +28,7 @@ import {
   type SupportIssueType,
   type SupportPriority,
   type SupportTicketStatus,
-} from "@/services/support";
+} from "@/modules/core/platform-admin/support/services/support";
 
 type SearchParams = {
   status?: string;
