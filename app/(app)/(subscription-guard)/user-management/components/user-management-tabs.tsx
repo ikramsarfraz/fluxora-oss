@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { RolesPermissionsCard } from "@/components/tenant-admin/roles-permissions-card";
-import Users from "@/app/(app)/(subscription-guard)/(admin)/users/components/users-page";
+import Users from "@/modules/core/workspace-settings/users/components/users-page";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 
 const TABS = [

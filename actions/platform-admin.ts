@@ -6,7 +6,7 @@ import { z } from "zod";
 import {
   parseTenantSubscriptionFormForService,
   tenantSubscriptionFormSchema,
-} from "@/app/admin/tenants/[id]/tenant-subscription-form.schema";
+} from "@/modules/core/platform-admin/tenants/validators/tenant-subscription-form.schema";
 import {
   setTenantActiveByPlatformAdmin,
   updateTenantSubscriptionByPlatformAdmin,

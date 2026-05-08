@@ -1,8 +1,8 @@
-import { InviteUserForm } from "../components/invite-user-form";
+import { InviteUserForm } from "@/modules/core/workspace-settings/users/components/invite-user-form";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import { requireAdminPortalUser } from "@/services/portal-users";
 
-export default async function NewUserPage() {
+export default async function WorkspaceUsersNewPage() {
   await requireAdminPortalUser();
 
   return (

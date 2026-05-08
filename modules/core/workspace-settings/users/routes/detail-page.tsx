@@ -27,9 +27,9 @@ import { isUuid } from "@/lib/utils/uuid";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
-import { UserRoleDialog } from "../components/user-role-dialog";
+import { UserRoleDialog } from "@/modules/core/workspace-settings/users/components/user-role-dialog";
 
-export default function UserDetailPage() {
+export default function WorkspaceUsersDetailPage() {
   const params = useParams<{ id: string }>();
   const userId = params.id;
 

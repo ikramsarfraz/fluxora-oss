@@ -29,7 +29,7 @@ import {
 import {
   inviteUserFormSchema,
   type InviteUserFormValues,
-} from "./invite-user-form.schema";
+} from "../validators/invite-user-form.schema";
 import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
