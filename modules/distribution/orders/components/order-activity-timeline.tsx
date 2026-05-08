@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type {
   ActivityScope,
   ActivityTimelineItem,
-} from "@/services/audit";
+} from "@/modules/distribution/services/audit";
 
 interface OrderActivityTimelineProps {
   orderId: string;

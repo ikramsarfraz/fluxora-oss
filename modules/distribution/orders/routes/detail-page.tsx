@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getActivityForSalesOrder } from "@/services/audit";
+import { getActivityForSalesOrder } from "@/modules/distribution/services/audit";
 import { getSalesOrderById, getSalesOrders } from "../services/orders";
 
 import { OrderDetailPage } from "../components/order-detail-page";
