@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { listPlatformAdminTenants } from "@/services/platform-admin";
+import { listPlatformAdminTenants } from "@/modules/core/platform-admin/services/platform-admin";
 
 export default async function PlatformAdminTenantsListPage() {
   const tenants = await listPlatformAdminTenants();

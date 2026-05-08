@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { listPlatformAdminUsers } from "@/services/platform-admin";
+import { listPlatformAdminUsers } from "@/modules/core/platform-admin/services/platform-admin";
 
 export default async function PlatformAdminUsersListPage() {
   const users = await listPlatformAdminUsers();

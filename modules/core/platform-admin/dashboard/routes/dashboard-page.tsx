@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { getPlatformAdminDashboardData } from "@/services/platform-admin";
+import { getPlatformAdminDashboardData } from "@/modules/core/platform-admin/services/platform-admin";
 
 export default async function PlatformAdminDashboardPage() {
   const data = await getPlatformAdminDashboardData();

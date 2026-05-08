@@ -1,3 +1,4 @@
+export * from "./services/platform-admin";
 export * from "./dashboard";
 export * from "./tenants";
 export * from "./subscriptions";

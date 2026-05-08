@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlatformSubscriptionBuckets } from "@/components/platform/platform-subscription-buckets";
 import { SyncStripeCatalogButton } from "@/components/platform/sync-stripe-catalog-button";
-import { getPlatformAdminDashboardData } from "@/services/platform-admin";
+import { getPlatformAdminDashboardData } from "@/modules/core/platform-admin/services/platform-admin";
 
 export default async function PlatformAdminSubscriptionsListPage() {
   const data = await getPlatformAdminDashboardData();
