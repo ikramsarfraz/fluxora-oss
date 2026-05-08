@@ -118,6 +118,7 @@ export default function Orders() {
   const rows = (data?.data ?? []).filter(
     row => activeSegment === "all" || row.status === activeSegment,
   );
+  const hasInvoice = (order: OrderRow) => (order.invoices?.length ?? 0) > 0;
 
   if (error) {
     return (
@@ -152,6 +153,7 @@ export default function Orders() {
           {
             label: "Delete",
             variant: "destructive",
+            isVisible: row => !hasInvoice(row),
             onClick: row => setDeletingOrder(row),
           },
         ]}
@@ -194,6 +196,7 @@ export default function Orders() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
+              disabled={deleteOrder.isPending}
               onClick={() => {
                 if (!deletingOrder) return;
                 deleteOrder.mutate(deletingOrder.id, {

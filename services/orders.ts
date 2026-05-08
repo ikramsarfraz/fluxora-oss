@@ -944,6 +944,12 @@ export async function getSalesOrdersPage(input?: SalesOrderListParams) {
     where: inArray(salesOrders.id, ids),
     with: {
       customer: true,
+      invoices: {
+        columns: {
+          id: true,
+          invoiceNumber: true,
+        },
+      },
       lines: {
         with: {
           salesUnit: true,
@@ -1049,6 +1055,77 @@ export async function deleteSalesOrder(id: string) {
   }
 
   requirePermission(currentUser.role, "edit_order");
+
+  const order = await db.query.salesOrders.findFirst({
+    where: and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)),
+    with: {
+      invoices: {
+        columns: {
+          id: true,
+          invoiceNumber: true,
+        },
+      },
+      lines: {
+        columns: {
+          id: true,
+          fulfilledCases: true,
+          shortShippedAt: true,
+        },
+        with: {
+          allocations: {
+            columns: {
+              id: true,
+              inventoryItemId: true,
+            },
+          },
+          fulfillments: {
+            columns: {
+              id: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new Error("Sales order not found.");
+  }
+
+  const firstInvoice = order.invoices?.[0];
+  if (firstInvoice) {
+    throw new Error(
+      `Orders lock after invoicing and cannot be deleted. Invoice ${firstInvoice.invoiceNumber} still references this order.`,
+    );
+  }
+
+  const hasFulfillmentActivity = (order.lines ?? []).some(
+    line =>
+      line.shortShippedAt != null ||
+      line.fulfilledCases > 0 ||
+      (line.fulfillments?.length ?? 0) > 0,
+  );
+
+  if (hasFulfillmentActivity) {
+    throw new Error(
+      "Orders with fulfillment activity cannot be deleted. Reverse fulfillment activity before deleting.",
+    );
+  }
+
+  const allocationsToRelease = (order.lines ?? []).flatMap(line =>
+    line.allocations ?? [],
+  );
+  const allocationIdsToRelease = allocationsToRelease.map(allocation => allocation.id);
+  const inventoryItemIdsToRelease = [
+    ...new Set(allocationsToRelease.map(allocation => allocation.inventoryItemId)),
+  ];
+
+  if (allocationIdsToRelease.length > 0) {
+    await db
+      .delete(salesOrderLineAllocations)
+      .where(inArray(salesOrderLineAllocations.id, allocationIdsToRelease));
+    await restoreInventoryItemsToStock(inventoryItemIdsToRelease);
+  }
 
   await db
     .delete(salesOrders)

@@ -395,6 +395,10 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               onClick={() => {
                 deleteOrder.mutate(orderId, {
                   onSuccess: () => router.push("/orders"),
+                  onError: err =>
+                    toast.error(
+                      err instanceof Error ? err.message : "Could not delete order.",
+                    ),
                 });
               }}
             >

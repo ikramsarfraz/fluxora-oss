@@ -62,6 +62,7 @@ export interface ListingRowAction<TRow> {
   label: string;
   href?: (row: TRow) => string;
   onClick?: (row: TRow) => void;
+  isVisible?: (row: TRow) => boolean;
   variant?: "default" | "destructive";
 }
 
@@ -458,6 +459,9 @@ export function ListingPage<TRow>({
                   ) : (
                     rows.map((row, idx) => {
                       const rowId = getRowId ? getRowId(row) : String(idx);
+                      const visibleRowActions =
+                        rowActions?.filter(action => action.isVisible?.(row) ?? true) ??
+                        [];
                       return (
                         <TableRow
                           key={rowId}
@@ -496,7 +500,7 @@ export function ListingPage<TRow>({
                           {rowActions && rowActions.length > 0 ? (
                             <TableCell className="px-4 py-2.5 whitespace-nowrap opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
                               <div className="flex items-center justify-end gap-1">
-                                {rowActions.map((action, aIdx) => {
+                                {visibleRowActions.map((action, aIdx) => {
                                   const href = action.href?.(row);
                                   const isDestructive =
                                     action.variant === "destructive";
