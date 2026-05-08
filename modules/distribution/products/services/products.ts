@@ -11,7 +11,7 @@ import {
   createPlanLimitReachedError,
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
-import { countActiveProductsForTenant } from "@/services/subscription-usage";
+import { countActiveProductsForTenant } from "@/modules/core/billing/services/subscription-usage";
 import { getCurrentTenant } from "@/services/tenants";
 import {
   buildTextSearchCondition,

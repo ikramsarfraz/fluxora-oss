@@ -7,7 +7,7 @@ import {
   diffSubscriptionKeys,
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
-import { getTenantPlanUsageByTenantId } from "@/services/subscription-usage";
+import { getTenantPlanUsageByTenantId } from "@/modules/core/billing/services/subscription-usage";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 function countAll(table: typeof tenants | typeof portalUsers) {

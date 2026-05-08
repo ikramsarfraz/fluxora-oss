@@ -21,7 +21,7 @@ import {
   createPlanLimitReachedError,
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
-import { countCurrentMonthSalesOrdersForTenant } from "@/services/subscription-usage";
+import { countCurrentMonthSalesOrdersForTenant } from "@/modules/core/billing/services/subscription-usage";
 import {
   buildSalesOrderObjectKey,
   deleteFile,
