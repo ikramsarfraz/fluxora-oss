@@ -2,4 +2,4 @@ export type { PlatformUser } from "@/db/types";
 export type {
   PlatformUserRole,
   PlatformUserListItem,
-} from "@/services/platform-users";
+} from "@/modules/core/platform-admin/services/platform-users";

@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { auditLogs, stripePrices, stripeProducts } from "@/db/schema";
 import { STRIPE_SAAS_PAID_PLAN_KEYS } from "@/lib/stripe/plan-metadata";
 import { isPostgresUndefinedTableError } from "@/lib/pg/postgres-errors";
-import { requirePlatformUser } from "@/services/platform-users";
+import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 /** Grouped Stripe catalog rows for internal admin read-only view. */
 export type PlatformAdminGroupedStripeCatalog = {
