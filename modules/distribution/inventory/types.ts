@@ -1,1 +1,7 @@
-export type { InventoryListParams } from "@/services/inventory";
+export type {
+  InventoryListParams,
+  InventoryListSort,
+  InventoryListFilters,
+  InventoryListItem,
+  InventoryDetail,
+} from "./services/inventory";

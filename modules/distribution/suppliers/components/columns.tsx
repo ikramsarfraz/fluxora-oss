@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SupplierListItem } from "@/services/suppliers";
+import { SupplierListItem } from "../services/suppliers";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 type ColumnActions = {

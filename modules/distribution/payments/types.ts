@@ -2,4 +2,4 @@ export type {
   PaymentListItem,
   PaymentDetail,
   PaymentListSort,
-} from "@/services/payments";
+} from "./services/payments";

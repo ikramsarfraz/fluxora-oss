@@ -5,7 +5,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { getCustomers } from "@/services/customers";
+import { getCustomers } from "../services/customers";
 
 import Customers from "../components/customers-page";
 

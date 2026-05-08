@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useSalesInvoicesPage } from "@/hooks/use-invoices";
+import { useSalesInvoicesPage } from "../hooks/use-invoices";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
-import type { SalesInvoiceListItem, SalesInvoiceListSort } from "@/services/invoicing";
+import type { SalesInvoiceListItem, SalesInvoiceListSort } from "../services/invoicing";
 
 type InvoiceRow = SalesInvoiceListItem;
 

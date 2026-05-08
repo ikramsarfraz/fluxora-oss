@@ -6,7 +6,7 @@ import { CheckCircle2, CircleDashed, FileText, Wallet } from "lucide-react";
 import { DetailSection } from "@/components/detail-section";
 import { Badge } from "@/components/ui/badge";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import { OrderPipeline } from "./order-pipeline";
 import {

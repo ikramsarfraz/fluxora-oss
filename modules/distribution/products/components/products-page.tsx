@@ -16,10 +16,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useDeleteProduct, useProductsPage } from "@/hooks/use-products";
+import { useDeleteProduct, useProductsPage } from "../hooks/use-products";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatMoney } from "@/lib/utils/currency";
-import type { ProductListItem, ProductListSort } from "@/services/products";
+import type { ProductListItem, ProductListSort } from "../services/products";
 
 type ProductRow = ProductListItem;
 

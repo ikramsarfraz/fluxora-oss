@@ -12,7 +12,7 @@ import {
   reverseSupplierInvoice,
   updateSupplierInvoice,
   uploadSupplierInvoiceAttachment,
-} from "@/services/receiving";
+} from "../services/receiving";
 
 export async function getSupplierInvoicesAction() {
   return await getSupplierInvoices();

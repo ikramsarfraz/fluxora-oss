@@ -48,7 +48,7 @@ import {
   useDeleteSupplierInvoice,
   useReverseSupplierInvoice,
   useSupplierInvoice,
-} from "@/hooks/use-supplier-invoices";
+} from "../hooks/use-supplier-invoices";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 import {
   formatEditableWeight,

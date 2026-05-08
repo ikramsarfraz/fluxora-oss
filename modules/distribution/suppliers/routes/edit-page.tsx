@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
-import { getSupplierById } from "@/services/suppliers";
+import { getSupplierById } from "../services/suppliers";
 
 import { EditSupplierForm } from "../components/edit-supplier-form";
 

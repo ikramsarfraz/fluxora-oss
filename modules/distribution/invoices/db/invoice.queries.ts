@@ -1,7 +1,7 @@
 import {
   createInvoiceFromSalesOrder,
   recordPayment,
-} from "@/services/invoicing";
+} from "../services/invoicing";
 import {
   createInvoiceFromSalesOrderInputSchema,
   type CreateInvoiceFromSalesOrderInput,

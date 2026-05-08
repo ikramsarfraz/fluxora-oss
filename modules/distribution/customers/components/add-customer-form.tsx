@@ -38,7 +38,7 @@ import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
 } from "@/lib/subscription-enforcement";
-import type { CustomerDetail } from "@/services/customers";
+import type { CustomerDetail } from "../services/customers";
 
 const emptyAddress = {
   addressType: "shipping" as const,

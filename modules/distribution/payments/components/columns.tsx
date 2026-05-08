@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { PaymentListItem } from "@/services/payments";
+import type { PaymentListItem } from "../services/payments";
 
 function paymentMethodLabel(
   method: PaymentListItem["paymentMethod"],

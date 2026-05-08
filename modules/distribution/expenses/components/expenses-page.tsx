@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
-import { useDeleteExpense, useExpensesPage } from "@/hooks/use-expenses";
+import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { canManageExpenses, expenseCategoryLabel, expensePaymentMethodLabel } from "@/lib/expenses/metadata";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { ExpenseListItem, ExpenseListSort } from "@/services/expenses";
+import type { ExpenseListItem, ExpenseListSort } from "../services/expenses";
 
 type ExpenseRow = ExpenseListItem;
 

@@ -1,2 +1,5 @@
-export type {};
-// Dashboard aggregate types will be added here as the module is populated.
+import type { getPlatformAdminDashboardData } from "@/services/platform-admin";
+
+export type PlatformAdminDashboardData = Awaited<
+  ReturnType<typeof getPlatformAdminDashboardData>
+>;

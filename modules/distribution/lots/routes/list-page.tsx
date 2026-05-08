@@ -4,7 +4,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { getLots } from "@/services/lots";
+import { getLots } from "../services/lots";
 import { queryKeys } from "@/lib/query/keys";
 
 import Lots from "../components/lots-page";

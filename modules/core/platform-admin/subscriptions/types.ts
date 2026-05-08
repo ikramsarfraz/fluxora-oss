@@ -1,2 +1,5 @@
-export type {};
-// Subscription management types will be added here as the module is populated.
+export type {
+  TenantSubscriptionPlan,
+  TenantSubscriptionStatus,
+} from "@/lib/tenant-subscription";
+export type { UpdateTenantSubscriptionByPlatformAdminInput } from "@/services/platform-admin";

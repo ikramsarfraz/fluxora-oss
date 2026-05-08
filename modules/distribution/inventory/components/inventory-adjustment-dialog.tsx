@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import { useAdjustInventoryItem } from "@/hooks/use-inventory";
+import { useAdjustInventoryItem } from "../hooks/use-inventory";
 import {
   INVENTORY_ADJUSTMENT_REASON_OPTIONS,
   INVENTORY_STATUS_ADJUSTMENT_OPTIONS,
-} from "@/lib/warehouse/adjustments";
-import { formatWeightLbs, getInventoryStatusLabel } from "@/lib/warehouse/insights";
+} from "../utils/adjustments";
+import { formatWeightLbs, getInventoryStatusLabel } from "../utils/insights";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { InventoryDetail } from "@/services/inventory";
+import type { InventoryDetail } from "../services/inventory";
 
 export function InventoryAdjustmentDialog({
   open,

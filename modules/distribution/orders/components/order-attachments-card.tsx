@@ -33,8 +33,8 @@ import {
 import {
   useUploadSalesOrderAttachment,
   useRemoveSalesOrderAttachment,
-} from "@/hooks/use-orders";
-import type { SalesOrderDetail } from "@/services/orders";
+} from "../hooks/use-orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 type Attachment = SalesOrderDetail["attachments"][number];
 

@@ -5,7 +5,7 @@ import { isUuid } from "@/lib/utils/uuid";
 import {
   canManageExpenses,
   getExpenseById,
-} from "@/services/expenses";
+} from "../services/expenses";
 import { getCurrentPortalUser } from "@/services/portal-users";
 
 import { ExpenseForm } from "../components/expense-form";

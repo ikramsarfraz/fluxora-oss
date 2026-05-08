@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import type { LotListItem } from "@/services/lots";
+import type { LotListItem } from "../services/lots";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 type ColumnActions = {

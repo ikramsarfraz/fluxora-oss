@@ -18,7 +18,7 @@ import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
-} from "@/hooks/use-supplier-invoices";
+} from "../hooks/use-supplier-invoices";
 import {
   Field,
   FieldDescription,

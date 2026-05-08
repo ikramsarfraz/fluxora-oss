@@ -13,7 +13,7 @@ import {
   useCreateSalesOrder,
   useUpdateSalesOrder,
   useUpdateSalesOrderStatus,
-} from "@/hooks/use-orders";
+} from "../hooks/use-orders";
 import { useProducts } from "@/hooks/use-products";
 import { useCustomers } from "@/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";

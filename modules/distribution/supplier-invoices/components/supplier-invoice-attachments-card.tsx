@@ -33,8 +33,8 @@ import {
 import {
   useRemoveSupplierInvoiceAttachment,
   useUploadSupplierInvoiceAttachment,
-} from "@/hooks/use-supplier-invoices";
-import type { SupplierInvoiceDetail } from "@/services/receiving";
+} from "../hooks/use-supplier-invoices";
+import type { SupplierInvoiceDetail } from "../services/receiving";
 
 type Attachment = SupplierInvoiceDetail["attachments"][number];
 

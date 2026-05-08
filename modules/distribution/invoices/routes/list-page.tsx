@@ -5,7 +5,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { getSalesInvoices } from "@/services/invoicing";
+import { getSalesInvoices } from "../services/invoicing";
 import { queryKeys } from "@/lib/query/keys";
 
 import Invoices from "../components/invoices-page";

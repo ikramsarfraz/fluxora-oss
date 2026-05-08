@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
-import { getCategoryById } from "@/services/categories";
+import { getCategoryById } from "../services/categories";
 
 import { EditCategoryForm } from "../components/edit-category-form";
 

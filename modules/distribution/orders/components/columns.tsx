@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { SalesOrderListItem } from "@/services/orders";
+import type { SalesOrderListItem } from "../services/orders";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 type ColumnActions = {

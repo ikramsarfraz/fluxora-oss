@@ -17,9 +17,9 @@ import {
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { getInventoryStatusLabel } from "@/lib/inventory-status";
+import { getInventoryStatusLabel } from "../utils/inventory-status";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import {
   formatFulfillmentTimestamp,

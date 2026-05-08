@@ -25,8 +25,8 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { useUpdateUnitOfMeasure } from "@/hooks/use-units-of-measure";
-import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+import { useUpdateUnitOfMeasure } from "../hooks/use-units-of-measure";
+import type { UnitOfMeasureListItem } from "../services/units-of-measure";
 
 import {
   editUnitFormSchema,

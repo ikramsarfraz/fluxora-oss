@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Pencil } from "lucide-react";
 
-import { useCustomer } from "@/hooks/use-customers";
+import { useCustomer } from "../hooks/use-customers";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,

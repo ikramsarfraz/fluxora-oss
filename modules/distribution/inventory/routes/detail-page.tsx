@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getInventoryItemById, getInventoryItems } from "@/services/inventory";
+import { getInventoryItemById, getInventoryItems } from "../services/inventory";
 
 import { InventoryDetailPage } from "../components/inventory-detail-page";
 

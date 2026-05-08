@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { useUnitOfMeasure, useDeleteUnitOfMeasure } from "@/hooks/use-units-of-measure";
+import { useUnitOfMeasure, useDeleteUnitOfMeasure } from "../hooks/use-units-of-measure";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,

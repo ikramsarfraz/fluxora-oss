@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getCategoryById } from "@/services/categories";
+import { getCategoryById } from "../services/categories";
 
 import { CategoryDetailPage } from "../components/category-detail-page";
 

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateLot } from "@/hooks/use-lots";
+import { useCreateLot } from "../hooks/use-lots";
 import { useSuppliers } from "@/hooks/use-suppliers";
 
 import {

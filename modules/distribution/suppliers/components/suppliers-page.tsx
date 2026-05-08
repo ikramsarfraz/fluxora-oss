@@ -16,10 +16,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useDeleteSupplier, useSuppliersPage } from "@/hooks/use-suppliers";
+import { useDeleteSupplier, useSuppliersPage } from "../hooks/use-suppliers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { SupplierListItem, SupplierListSort } from "@/services/suppliers";
+import type { SupplierListItem, SupplierListSort } from "../services/suppliers";
 
 type SupplierRow = SupplierListItem;
 

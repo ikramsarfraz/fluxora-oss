@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { CategoryDetail } from "@/services/categories";
+import type { CategoryDetail } from "../services/categories";
 
 import {
   addCategoryFormSchema,

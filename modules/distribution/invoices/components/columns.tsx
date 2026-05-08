@@ -13,7 +13,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { SalesInvoiceListItem } from "@/services/invoicing";
+import type { SalesInvoiceListItem } from "../services/invoicing";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 

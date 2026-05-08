@@ -6,7 +6,7 @@ import {
   getInventoryItemById,
   getInventoryItems,
   getInventoryItemsPage,
-} from "@/services/inventory";
+} from "../services/inventory";
 
 export async function getInventoryItemsAction() {
   return await getInventoryItems();

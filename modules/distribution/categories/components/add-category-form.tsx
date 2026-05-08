@@ -18,7 +18,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { useCreateCategory } from "@/hooks/use-categories";
+import { useCreateCategory } from "../hooks/use-categories";
 
 import {
   addCategoryFormSchema,

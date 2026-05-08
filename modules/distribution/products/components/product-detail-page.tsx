@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 
-import { useProduct, useDeleteProduct } from "@/hooks/use-products";
+import { useProduct, useDeleteProduct } from "../hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {

@@ -19,7 +19,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import type { SupplierDetail } from "@/services/suppliers";
+import type { SupplierDetail } from "../services/suppliers";
 
 const editSupplierSchema = z.object({
   name: z

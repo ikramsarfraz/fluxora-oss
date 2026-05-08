@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getUnitOfMeasureById } from "@/services/units-of-measure";
+import { getUnitOfMeasureById } from "../services/units-of-measure";
 
 import { UnitDetailPage } from "../components/unit-detail-page";
 

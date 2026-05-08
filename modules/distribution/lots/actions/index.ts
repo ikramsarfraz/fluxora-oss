@@ -5,7 +5,7 @@ import {
   deleteLot,
   getLotById,
   getLots,
-} from "@/services/lots";
+} from "../services/lots";
 
 export async function getLotsAction() {
   return await getLots();

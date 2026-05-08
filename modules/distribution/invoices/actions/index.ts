@@ -4,7 +4,7 @@ import {
   getSalesInvoiceById,
   getSalesInvoices,
   getSalesInvoicesPage,
-} from "@/services/invoicing";
+} from "../services/invoicing";
 
 export async function getSalesInvoicesAction() {
   return await getSalesInvoices();

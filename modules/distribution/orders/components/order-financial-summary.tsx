@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import { getLineFulfilledWeight } from "./order-fulfillment-utils";
 

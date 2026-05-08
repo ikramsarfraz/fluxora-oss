@@ -20,9 +20,9 @@ import {
   useGenerateInvoiceForSalesOrder,
   useRecordSalesOrderFulfillment,
   useMarkSalesOrderLineShortShipped,
-} from "@/hooks/use-orders";
+} from "../hooks/use-orders";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 import type { OrderActionAvailability } from "./order-action-rules";
 import {
   getLineFulfillmentState,

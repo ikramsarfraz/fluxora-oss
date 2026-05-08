@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { usePaymentsPage } from "@/hooks/use-payments";
+import { usePaymentsPage } from "../hooks/use-payments";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
-import type { PaymentListItem, PaymentListSort } from "@/services/payments";
+import type { PaymentListItem, PaymentListSort } from "../services/payments";
 
 type PaymentRow = PaymentListItem;
 

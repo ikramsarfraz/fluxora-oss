@@ -51,12 +51,12 @@ import {
   type AddProductFormValues,
 } from "./add-product-form.schema";
 import { useCategories } from "@/hooks/use-categories";
-import type { ProductCategory, ProductDetail } from "@/services/products";
+import type { ProductCategory, ProductDetail } from "../services/products";
 import { createProductAction, updateProductAction } from "@/actions/products";
 import { createCategoryAction } from "@/actions/categories";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
-import { useProducts } from "@/hooks/use-products";
+import { useProducts } from "../hooks/use-products";
 import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,

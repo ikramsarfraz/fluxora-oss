@@ -9,7 +9,7 @@ import {
   updateExpense,
   type CreateExpenseInput,
   type UpdateExpenseInput,
-} from "@/services/expenses";
+} from "../services/expenses";
 
 export async function getExpensesAction() {
   return await getExpenses();

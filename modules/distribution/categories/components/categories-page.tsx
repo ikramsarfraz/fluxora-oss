@@ -16,8 +16,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, type ListingColumn } from "@/components/listing-page";
-import { useCategories, useDeleteCategory } from "@/hooks/use-categories";
-import type { Category } from "@/services/categories";
+import { useCategories, useDeleteCategory } from "../hooks/use-categories";
+import type { Category } from "../services/categories";
 
 type CategoryRow = Category;
 

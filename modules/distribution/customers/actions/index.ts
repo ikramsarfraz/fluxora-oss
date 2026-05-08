@@ -10,7 +10,7 @@ import {
   getCustomersPage,
   updateCustomer,
   type CustomerListParams,
-} from "@/services/customers";
+} from "../services/customers";
 import {
   createCustomerInputSchema,
   type CreateCustomerInput,

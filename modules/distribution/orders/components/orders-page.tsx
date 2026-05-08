@@ -17,10 +17,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useDeleteSalesOrder, useSalesOrdersPage } from "@/hooks/use-orders";
+import { useDeleteSalesOrder, useSalesOrdersPage } from "../hooks/use-orders";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { SalesOrderListSort } from "@/services/orders";
+import type { SalesOrderListSort } from "../services/orders";
 
 type OrderRow = NonNullable<ReturnType<typeof useSalesOrdersPage>["data"]>["data"][number];
 

@@ -2,7 +2,7 @@
 
 import { OrderFulfillmentEntryDialog } from "./order-fulfillment-entry-dialog";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 interface OrderFulfillmentEntryModalProps {
   open: boolean;

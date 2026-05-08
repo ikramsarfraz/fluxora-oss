@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import { OrderNotesSection } from "./order-notes-section";
 

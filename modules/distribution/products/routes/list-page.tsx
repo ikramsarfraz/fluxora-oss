@@ -5,7 +5,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { getProductsPage, type ProductListParams } from "@/services/products";
+import { getProductsPage, type ProductListParams } from "../services/products";
 import { queryKeys } from "@/lib/query/keys";
 
 import Products from "../components/products-page";

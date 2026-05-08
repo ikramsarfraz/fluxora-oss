@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+import type { UnitOfMeasureListItem } from "../services/units-of-measure";
 
 type ColumnActions = {
   onDelete: (unit: UnitOfMeasureListItem) => void;

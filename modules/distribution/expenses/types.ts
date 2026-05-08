@@ -4,4 +4,4 @@ export type {
   ExpenseListSort,
   CreateExpenseInput,
   UpdateExpenseInput,
-} from "@/services/expenses";
+} from "./services/expenses";

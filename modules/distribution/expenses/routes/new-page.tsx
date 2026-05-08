@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/page-header";
-import { canManageExpenses } from "@/services/expenses";
+import { canManageExpenses } from "../services/expenses";
 import { getCurrentPortalUser } from "@/services/portal-users";
 
 import { ExpenseForm } from "../components/expense-form";

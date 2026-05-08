@@ -33,10 +33,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useMarkSalesOrderLineShortShipped,
   useRecordSalesOrderFulfillment,
-} from "@/hooks/use-orders";
+} from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import { getOrderActionAvailability } from "./order-action-rules";
 import {

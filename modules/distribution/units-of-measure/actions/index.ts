@@ -6,7 +6,7 @@ import {
   createUnitOfMeasure,
   updateUnitOfMeasure,
   deleteUnitOfMeasure,
-} from "@/services/units-of-measure";
+} from "../services/units-of-measure";
 
 export async function getUnitsOfMeasureAction() {
   return await getUnitsOfMeasure();

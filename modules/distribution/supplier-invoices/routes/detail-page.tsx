@@ -9,7 +9,7 @@ import { can } from "@/lib/auth/permissions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import { getCurrentPortalUser } from "@/services/portal-users";
-import { getSupplierInvoiceById } from "@/services/receiving";
+import { getSupplierInvoiceById } from "../services/receiving";
 
 import { SupplierInvoiceDetailPage } from "../components/supplier-invoice-detail-page";
 

@@ -18,11 +18,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { deleteCustomerAction } from "@/actions/customers";
-import { useCustomersPage } from "@/hooks/use-customers";
+import { useCustomersPage } from "../hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { CustomerListItem, CustomerListSort } from "@/services/customers";
+import type { CustomerListItem, CustomerListSort } from "../services/customers";
 
 type CustomerRow = CustomerListItem;
 

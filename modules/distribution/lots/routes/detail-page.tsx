@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getLotById } from "@/services/lots";
+import { getLotById } from "../services/lots";
 
 import { LotDetailPage } from "../components/lot-detail-page";
 

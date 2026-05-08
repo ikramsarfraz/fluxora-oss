@@ -32,7 +32,7 @@ import {
   expensePaymentMethodLabel,
   type ExpensePaymentMethod,
 } from "@/lib/expenses/metadata";
-import type { ExpenseListItem } from "@/services/expenses";
+import type { ExpenseListItem } from "../services/expenses";
 
 type ColumnActions = {
   canManage: boolean;

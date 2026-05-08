@@ -1,2 +1,2 @@
 export { ORDERS_FEATURE } from "./feature";
-export type { SalesOrderListSort } from "./types";
+export type * from "./types";

@@ -16,8 +16,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useDeleteUnitOfMeasure, useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
-import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+import { useDeleteUnitOfMeasure, useUnitsOfMeasure } from "../hooks/use-units-of-measure";
+import type { UnitOfMeasureListItem } from "../services/units-of-measure";
 
 type UoMRow = UnitOfMeasureListItem;
 

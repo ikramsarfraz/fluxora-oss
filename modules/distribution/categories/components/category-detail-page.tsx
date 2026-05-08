@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 
-import { useCategory } from "@/hooks/use-categories";
-import { useDeleteCategory } from "@/hooks/use-categories";
+import { useCategory } from "../hooks/use-categories";
+import { useDeleteCategory } from "../hooks/use-categories";
 import { queryKeys } from "@/lib/query/keys";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {

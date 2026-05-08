@@ -1,11 +1,2 @@
-import type { PortalUserRole } from "@/lib/auth/permissions";
-
-export function canManageWarehouseCorrections(
-  role: PortalUserRole | null | undefined,
-) {
-  return role === "owner" || role === "admin" || role === "warehouse";
-}
-
-export function getWarehouseCorrectionDeniedReason() {
-  return "Your role does not allow inventory adjustments or lot correction actions.";
-}
+// Moved to inventory module. This re-export keeps existing callers working.
+export * from "@/modules/distribution/inventory/utils/action-permissions";

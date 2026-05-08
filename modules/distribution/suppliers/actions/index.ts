@@ -12,7 +12,7 @@ import {
   updateSupplier,
   type CreateSupplierInput,
   type UpdateSupplierInput,
-} from "@/services/suppliers";
+} from "../services/suppliers";
 
 export async function getSuppliersAction() {
   return await getSuppliers();

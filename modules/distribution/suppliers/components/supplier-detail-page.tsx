@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 
-import { useSupplier, useDeleteSupplier } from "@/hooks/use-suppliers";
+import { useSupplier, useDeleteSupplier } from "../hooks/use-suppliers";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {

@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getUnitsOfMeasure } from "@/services/units-of-measure";
+import { getUnitsOfMeasure } from "../services/units-of-measure";
 
 import UnitsOfMeasure from "../components/units-of-measure-page";
 

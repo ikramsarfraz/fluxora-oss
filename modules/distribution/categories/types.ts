@@ -1,1 +1,1 @@
-export type { Category, CategoryDetail } from "@/services/categories";
+export type { Category, CategoryDetail } from "./services/categories";

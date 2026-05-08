@@ -1,6 +1,6 @@
 "use client";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 type Line = SalesOrderDetail["lines"][number];
 type FulfillmentRecord = NonNullable<Line["fulfillments"]>[number];

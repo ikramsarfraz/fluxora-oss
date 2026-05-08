@@ -10,7 +10,7 @@ import {
   getProductsPage,
   updateProduct,
   type ProductListParams,
-} from "@/services/products";
+} from "../services/products";
 
 export async function getProductsAction() {
   return await getProducts();

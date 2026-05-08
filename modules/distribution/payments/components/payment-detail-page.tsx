@@ -14,10 +14,10 @@ import {
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-import { usePayment } from "@/hooks/use-payments";
+import { usePayment } from "../hooks/use-payments";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { PaymentDetail } from "@/services/payments";
+import type { PaymentDetail } from "../services/payments";
 
 function paymentMethodLabel(
   method: PaymentDetail["paymentMethod"],

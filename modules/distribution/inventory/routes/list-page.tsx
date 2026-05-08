@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getInventoryItems } from "@/services/inventory";
+import { getInventoryItems } from "../services/inventory";
 
 import { InventoryPage } from "../components/inventory-page";
 

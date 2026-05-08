@@ -1,4 +1,4 @@
-import type { LotDetail, LotListItem } from "@/services/lots";
+import type { LotDetail, LotListItem } from "../services/lots";
 
 type LotLike = LotListItem | LotDetail;
 type InvoiceLike = NonNullable<

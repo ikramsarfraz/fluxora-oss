@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
 import { getOrderActionAvailability } from "./order-action-rules";

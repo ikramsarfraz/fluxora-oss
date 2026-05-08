@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CustomerListItem } from "@/services/customers";
+import { CustomerListItem } from "../services/customers";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
 

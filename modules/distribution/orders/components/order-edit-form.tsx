@@ -18,7 +18,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/hooks/use-products";
-import { useSalesOrder, useUpdateSalesOrder } from "@/hooks/use-orders";
+import { useSalesOrder, useUpdateSalesOrder } from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";

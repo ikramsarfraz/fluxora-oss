@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ProductListItem } from "@/services/products";
+import { ProductListItem } from "../services/products";
 import { formatMoney } from "@/lib/utils/currency";
 
 type ColumnActions = {

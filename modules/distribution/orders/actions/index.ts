@@ -16,7 +16,7 @@ import {
   updateSalesOrderStatus,
   updateSalesOrder,
   updateSalesOrderNotes,
-} from "@/services/orders";
+} from "../services/orders";
 import {
   generateInvoiceForSalesOrder,
   recordPaymentForSalesOrderInvoice,

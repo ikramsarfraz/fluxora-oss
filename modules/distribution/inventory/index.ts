@@ -1,2 +1,2 @@
 export { INVENTORY_FEATURE } from "./feature";
-export type { InventoryListParams } from "./types";
+export type * from "./types";

@@ -5,7 +5,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
-import { getSalesInvoiceById } from "@/services/invoicing";
+import { getSalesInvoiceById } from "../services/invoicing";
 
 import { InvoicePdfPreview } from "../components/invoice-pdf-preview";
 

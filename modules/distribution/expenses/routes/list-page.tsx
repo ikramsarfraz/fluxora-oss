@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getExpenses } from "@/services/expenses";
+import { getExpenses } from "../services/expenses";
 
 import { ExpensesPage } from "../components/expenses-page";
 

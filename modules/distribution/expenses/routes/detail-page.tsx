@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getExpenseById } from "@/services/expenses";
+import { getExpenseById } from "../services/expenses";
 
 import { ExpenseDetailPage } from "../components/expense-detail-page";
 

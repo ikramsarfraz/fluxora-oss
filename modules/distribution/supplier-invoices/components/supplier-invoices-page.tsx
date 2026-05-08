@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
-import { useDeleteSupplierInvoice, useSupplierInvoicesPage } from "@/hooks/use-supplier-invoices";
+import { useDeleteSupplierInvoice, useSupplierInvoicesPage } from "../hooks/use-supplier-invoices";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { can } from "@/lib/auth/permissions";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
-import type { SupplierInvoiceListItem, SupplierInvoiceListSort } from "@/services/receiving";
+import type { SupplierInvoiceListItem, SupplierInvoiceListSort } from "../services/receiving";
 
 type InvoiceRow = SupplierInvoiceListItem;
 

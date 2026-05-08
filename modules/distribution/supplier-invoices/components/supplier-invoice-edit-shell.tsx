@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { PageError } from "@/components/page-error";
 import { PageLoading } from "@/components/page-loading";
-import { useSupplierInvoice } from "@/hooks/use-supplier-invoices";
+import { useSupplierInvoice } from "../hooks/use-supplier-invoices";
 import { inferWeightDraftState } from "@/lib/supplier-invoices/case-weights";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";

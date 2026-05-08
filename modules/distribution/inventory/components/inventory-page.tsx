@@ -9,15 +9,15 @@ import {
   ExpirationStateBadge,
   InventoryStatusBadge,
 } from "@/components/warehouse/warehouse-badges";
-import { useInventoryItemsPage } from "@/hooks/use-inventory";
+import { useInventoryItemsPage } from "../hooks/use-inventory";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { formatWeightLbs, getExpirationState, getInventoryStatusLabel } from "@/lib/warehouse/insights";
+import { formatWeightLbs, getExpirationState, getInventoryStatusLabel } from "../utils/insights";
 import type {
   InventoryListFilters,
   InventoryListItem,
   InventoryListSort,
-} from "@/services/inventory";
+} from "../services/inventory";
 
 type InventoryRow = InventoryListItem;
 

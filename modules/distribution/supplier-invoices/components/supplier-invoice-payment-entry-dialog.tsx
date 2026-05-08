@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useRecordSupplierInvoicePayment } from "@/hooks/use-supplier-invoices";
+import { useRecordSupplierInvoicePayment } from "../hooks/use-supplier-invoices";
 import { formatMoney } from "@/lib/utils/currency";
 
 type PaymentMethod = "cash" | "check" | "ach" | "zelle" | "credit_card";

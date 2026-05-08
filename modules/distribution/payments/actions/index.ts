@@ -4,7 +4,7 @@ import {
   getPaymentById,
   getPayments,
   getPaymentsPage,
-} from "@/services/payments";
+} from "../services/payments";
 
 export async function getPaymentsAction() {
   return await getPayments();

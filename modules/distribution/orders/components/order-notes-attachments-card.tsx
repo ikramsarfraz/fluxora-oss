@@ -8,7 +8,7 @@ import {
   useUpdateSalesOrderNotes,
   useUploadSalesOrderAttachment,
   useRemoveSalesOrderAttachment,
-} from "@/hooks/use-orders";
+} from "../hooks/use-orders";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {

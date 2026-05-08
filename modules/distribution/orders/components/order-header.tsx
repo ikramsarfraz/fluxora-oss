@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { orderStatusLabel } from "@/lib/utils/status-labels";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 import type { OrderActionAvailability } from "./order-action-rules";
 

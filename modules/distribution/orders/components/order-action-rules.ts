@@ -1,4 +1,4 @@
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 import {
   can,
   getPermissionDeniedReason,

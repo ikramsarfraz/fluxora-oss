@@ -8,7 +8,7 @@ import {
   getCategories,
   getCategoryById,
   updateCategory,
-} from "@/services/categories";
+} from "../services/categories";
 
 export async function getCategoriesAction() {
   return await getCategories();

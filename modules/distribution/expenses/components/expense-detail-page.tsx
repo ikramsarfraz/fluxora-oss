@@ -31,7 +31,7 @@ import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import {
   useDeleteExpense,
   useExpense,
-} from "@/hooks/use-expenses";
+} from "../hooks/use-expenses";
 import {
   canManageExpenses,
   expenseCategoryLabel,

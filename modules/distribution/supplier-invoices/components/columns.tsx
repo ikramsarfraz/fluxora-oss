@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { SupplierInvoiceListItem } from "@/services/receiving";
+import type { SupplierInvoiceListItem } from "../services/receiving";
 
 type ColumnActions = {
   onDelete: (invoice: SupplierInvoiceListItem) => void;

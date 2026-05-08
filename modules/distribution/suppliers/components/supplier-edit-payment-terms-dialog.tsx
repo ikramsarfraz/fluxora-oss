@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { useUpdateSupplier } from "@/hooks/use-suppliers";
+import { useUpdateSupplier } from "../hooks/use-suppliers";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

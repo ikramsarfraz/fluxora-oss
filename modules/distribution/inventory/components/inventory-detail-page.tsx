@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { useInventoryItem } from "@/hooks/use-inventory";
+import { useInventoryItem } from "../hooks/use-inventory";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -38,12 +38,12 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import {
   formatWeightLbs,
   getExpirationState,
-} from "@/lib/warehouse/insights";
+} from "../utils/insights";
 import {
   canManageWarehouseCorrections,
   getWarehouseCorrectionDeniedReason,
-} from "@/lib/warehouse/action-permissions";
-import { getInventoryAdjustmentDisabledReason } from "@/lib/warehouse/adjustment-rules";
+} from "../utils/action-permissions";
+import { getInventoryAdjustmentDisabledReason } from "../utils/adjustment-rules";
 
 import { InventoryAdjustmentDialog } from "./inventory-adjustment-dialog";
 

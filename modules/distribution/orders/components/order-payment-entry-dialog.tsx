@@ -5,7 +5,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
-import { useRecordPaymentForSalesOrderInvoice } from "@/hooks/use-orders";
+import { useRecordPaymentForSalesOrderInvoice } from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,7 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 interface OrderPaymentEntryDialogProps {
   open: boolean;

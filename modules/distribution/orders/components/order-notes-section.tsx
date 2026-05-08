@@ -3,9 +3,9 @@
 import { Eye, Lock } from "lucide-react";
 
 import { InlineEditTextarea } from "@/components/inline-edit-textarea";
-import { useUpdateSalesOrderNotes } from "@/hooks/use-orders";
+import { useUpdateSalesOrderNotes } from "../hooks/use-orders";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 
 interface OrderNotesSectionProps {
   order: SalesOrderDetail;

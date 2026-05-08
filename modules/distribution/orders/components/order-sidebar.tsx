@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/utils/date";
 
-import type { SalesOrderDetail } from "@/services/orders";
+import type { SalesOrderDetail } from "../services/orders";
 import type { OrderActionAvailability } from "./order-action-rules";
 import { getLineFulfilledQuantity, getLineFulfilledWeight, getLineRemainingQuantity } from "./order-fulfillment-utils";
 

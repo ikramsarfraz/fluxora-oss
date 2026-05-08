@@ -11,7 +11,7 @@ import {
   useGenerateInvoiceForSalesOrder,
   useSalesOrder,
   useUpdateSalesOrderStatus,
-} from "@/hooks/use-orders";
+} from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";

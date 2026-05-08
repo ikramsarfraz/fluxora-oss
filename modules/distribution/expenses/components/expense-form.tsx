@@ -27,12 +27,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useCreateExpense,
   useUpdateExpense,
-} from "@/hooks/use-expenses";
+} from "../hooks/use-expenses";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_PAYMENT_METHODS,
 } from "@/lib/expenses/metadata";
-import type { ExpenseDetail } from "@/services/expenses";
+import type { ExpenseDetail } from "../services/expenses";
 
 import {
   expenseFormSchema,
