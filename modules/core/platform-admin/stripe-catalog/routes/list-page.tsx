@@ -18,7 +18,7 @@ import {
   getPlatformAdminStripeCatalogPagePayload,
   stripePriceEligibleForSaasBilling,
   type PlatformAdminGroupedStripeCatalog,
-} from "@/services/platform-admin-stripe-catalog";
+} from "../services/stripe-catalog";
 
 type StripePriceRow = InferSelectModel<typeof stripePrices>;
 

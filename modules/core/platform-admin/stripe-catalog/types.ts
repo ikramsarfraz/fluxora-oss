@@ -1,2 +1,4 @@
-export type {};
-// Stripe catalog types will be added here as the module is populated.
+export type {
+  PlatformAdminGroupedStripeCatalog,
+  PlatformAdminStripeCatalogSyncAuditInfo,
+} from "./services/stripe-catalog";
