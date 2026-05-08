@@ -155,6 +155,13 @@
       "when": 1778300000000,
       "tag": "0022_drop_signup_profile_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778214561924,
+      "tag": "0023_zippy_sway",
+      "breakpoints": true
     }
   ]
 }

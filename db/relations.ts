@@ -38,6 +38,7 @@ import {
   supplierInvoices,
   suppliers,
   tenantBranding,
+  tenantFeatures,
   tenantJoinRequests,
   tenants,
   unitsOfMeasure,
@@ -78,11 +79,19 @@ export const tenantsRelations = relations(tenants, ({ many, one }) => ({
   tenantJoinRequests: many(tenantJoinRequests),
   files: many(files),
   supportTicketAttachments: many(supportTicketAttachments),
+  features: many(tenantFeatures),
   branding: one(tenantBranding, {
     fields: [tenants.id],
     references: [tenantBranding.tenantId],
   }),
   auditLogs: many(auditLogs),
+}));
+
+export const tenantFeaturesRelations = relations(tenantFeatures, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tenantFeatures.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const portalUsersRelations = relations(portalUsers, ({ one, many }) => ({

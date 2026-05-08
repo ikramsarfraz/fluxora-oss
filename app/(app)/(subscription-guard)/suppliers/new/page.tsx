@@ -1,14 +1,1 @@
-import { AddSupplierForm } from "../components/add-supplier-form";
-import { DetailPageHeader } from "@/components/detail-page-header";
-
-export default function NewSupplierPage() {
-  return (
-    <div className="flex flex-col gap-6">
-      <DetailPageHeader
-        title="Add Supplier"
-        description="Create a new supplier for purchasing and invoicing."
-      />
-      <AddSupplierForm />
-    </div>
-  );
-}
+export { default } from "@/modules/distribution/suppliers/routes/new-page";

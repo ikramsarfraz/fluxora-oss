@@ -254,6 +254,32 @@ export const tenants = pgTable(
   ],
 );
 
+export const tenantFeatures = pgTable(
+  "tenant_features",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    feature: varchar("feature", { length: 128 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("tenant_features_tenant_feature_unique").on(
+      table.tenantId,
+      table.feature,
+    ),
+    index("tenant_features_tenant_idx").on(table.tenantId),
+  ],
+);
+
 export const platformUsers = pgTable(
   "platform_users",
   {
