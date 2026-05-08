@@ -1,5 +1,2 @@
-/**
- * Metadata key on Checkout Session, Stripe Customer, and Subscription objects
- * tying Stripe resources to our `tenants.id` (UUID).
- */
-export const STRIPE_METADATA_TENANT_ID = "tenantId" as const;
+// Moved to billing module. This re-export keeps existing callers working.
+export * from "@/modules/core/billing/stripe-tenant-billing/lib/stripe-metadata-keys";
