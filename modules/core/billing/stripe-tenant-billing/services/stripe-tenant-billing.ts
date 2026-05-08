@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { auditLogs, tenants } from "@/db/schema";
 import { getPreferredBillingEmailForTenant } from "@/modules/core/billing/services/billing-contacts";
 import { getAppPublicOrigin, getStripeClient } from "@/lib/stripe/config";
-import { tenantIdFromCheckoutSession } from "@/lib/stripe/checkout-tenant-resolution";
+import { tenantIdFromCheckoutSession } from "@/modules/core/billing/stripe-tenant-billing/lib/checkout-tenant-resolution";
 import type { StripeSaasPaidPlanKey } from "@/lib/stripe/plan-metadata";
 import {
   resolveStripePriceIdForPaidPlan,
