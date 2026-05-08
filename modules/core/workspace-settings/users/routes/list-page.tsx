@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import Users from "@/modules/core/workspace-settings/users/components/users-page";
 import { queryKeys } from "@/lib/query/keys";
-import { listPendingInvitationsForAdmin } from "@/services/invitations";
+import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
 import { getUsers } from "@/services/portal-users";
 
 export default async function WorkspaceUsersListPage() {
