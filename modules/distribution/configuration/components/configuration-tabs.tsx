@@ -5,8 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { TenantBrandingCard } from "@/components/tenant-admin/tenant-branding-card";
-import Categories from "@/app/(app)/(subscription-guard)/categories/components/categories-page";
-import UnitsOfMeasure from "@/app/(app)/(subscription-guard)/units-of-measure/components/units-of-measure-page";
+import Categories from "@/modules/distribution/categories/components/categories-page";
+import UnitsOfMeasure from "@/modules/distribution/units-of-measure/components/units-of-measure-page";
 
 const TABS = [
   { key: "branding", label: "Branding" },
