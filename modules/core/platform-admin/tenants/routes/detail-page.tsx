@@ -22,7 +22,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { getPlatformAdminTenantDetail } from "@/services/platform-admin";
-import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
+import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
 import { TenantStatusForm } from "@/modules/core/platform-admin/tenants/components/tenant-status-form";
 import { TenantSubscriptionForm } from "@/modules/core/platform-admin/tenants/components/tenant-subscription-form";
 import { PlatformTenantStripeCheckoutButtons } from "@/modules/core/platform-admin/tenants/components/platform-tenant-stripe-checkout-buttons";

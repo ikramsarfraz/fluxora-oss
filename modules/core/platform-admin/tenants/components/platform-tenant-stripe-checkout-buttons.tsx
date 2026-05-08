@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { startPlatformAdminStripeCheckoutAction } from "@/actions/platform-stripe-billing";
 import { Button } from "@/components/ui/button";
-import type { StripeCheckoutPlan } from "@/services/stripe-tenant-billing";
+import type { StripeCheckoutPlan } from "@/modules/core/billing/stripe-tenant-billing";
 
 const PLANS: { id: StripeCheckoutPlan; label: string }[] = [
   { id: "starter", label: "Starter" },
