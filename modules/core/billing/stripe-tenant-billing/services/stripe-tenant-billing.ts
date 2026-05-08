@@ -19,7 +19,7 @@ import { mapStripeSubscriptionStatus } from "@/modules/core/billing/stripe-tenan
 import {
   diffSubscriptionKeys,
   subscriptionSnapshotFromRow,
-} from "@/lib/tenant-subscription-audit";
+} from "@/modules/core/billing/stripe-tenant-billing/lib/tenant-subscription-audit";
 import { STRIPE_METADATA_TENANT_ID } from "@/modules/core/billing/stripe-tenant-billing/lib/stripe-metadata-keys";
 import type { TenantDefaultPaymentMethod } from "@/lib/stripe/tenant-default-payment-method";
 import type {
