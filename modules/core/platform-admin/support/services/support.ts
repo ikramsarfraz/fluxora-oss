@@ -33,7 +33,7 @@ import {
   notifyAssignedPlatformUser,
   notifyPlatformAdminsOfNewTicket,
   notifyTenantSubmitter,
-} from "@/services/support-notifications";
+} from "./support-notifications";
 
 export {
   SUPPORT_ISSUE_TYPES,
