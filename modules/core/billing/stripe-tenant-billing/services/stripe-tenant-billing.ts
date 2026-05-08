@@ -10,7 +10,7 @@ import type { StripeSaasPaidPlanKey } from "@/lib/stripe/plan-metadata";
 import {
   resolveStripePriceIdForPaidPlan,
   resolveTenantPlanFromStripePriceId,
-} from "@/lib/stripe/price-to-plan";
+} from "@/modules/core/billing/stripe-tenant-billing/lib/plan-resolution";
 import {
   isStripeCatalogWebhookEvent,
   processStripeCatalogWebhook,
