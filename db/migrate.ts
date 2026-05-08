@@ -8,7 +8,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { join } from "node:path";
 import pg from "pg";
 
-import { resolveDatabaseUrlForMigrate } from "./database-url";
+import { resolveDatabaseUrlForMigrate, resolvePgSslConfig } from "./database-url";
 
 loadEnv({ path: ".env" });
 loadEnv({ path: ".env.local", override: true });
@@ -22,9 +22,7 @@ async function main() {
 
   const pool = new pg.Pool({
     connectionString: url,
-    ssl: {
-      rejectUnauthorized: false,
-    },
+    ssl: resolvePgSslConfig(url),
   });
   const db = drizzle(pool);
 

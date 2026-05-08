@@ -22,6 +22,23 @@ function parsePostgresUrl(raw: string): URL {
   return new URL(`postgres://${raw}`);
 }
 
+export function resolvePgSslConfig(
+  connectionString: string,
+): false | { rejectUnauthorized: true } {
+  const url = parsePostgresUrl(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode === "disable") {
+    return false;
+  }
+
+  if (!sslMode && isLocalHostname(url.hostname)) {
+    return false;
+  }
+
+  return { rejectUnauthorized: true };
+}
+
 /**
  * Next.js app + server actions: prefer pooled `DATABASE_URL`, fall back to
  * `DATABASE_URL_UNPOOLED` when Neon direct is the only value set.

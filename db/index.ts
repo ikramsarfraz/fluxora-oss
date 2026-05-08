@@ -6,6 +6,7 @@ import * as relations from "./relations";
 import * as schema from "./schema";
 import {
   resolveDatabaseUrlForApp,
+  resolvePgSslConfig,
   warnIfDatabaseUrlEnvMismatch,
 } from "./database-url";
 
@@ -27,7 +28,7 @@ warnIfDatabaseUrlEnvMismatch();
  */
 const pool = new pg.Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: resolvePgSslConfig(connectionString),
   max: 10,
 });
 
