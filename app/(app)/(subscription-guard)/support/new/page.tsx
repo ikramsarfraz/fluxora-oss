@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
-import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 import { SupportForm } from "../support-form";
 

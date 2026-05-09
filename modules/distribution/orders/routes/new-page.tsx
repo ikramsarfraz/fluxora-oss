@@ -5,8 +5,8 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getCustomers } from "@/services/customers";
-import { getProducts } from "@/services/products";
+import { getCustomers } from "@/modules/distribution/customers/services/customers";
+import { getProducts } from "@/modules/distribution/products/services/products";
 
 import { NewOrderForm } from "../components/new-order-form";
 

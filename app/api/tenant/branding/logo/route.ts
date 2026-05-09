@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { removeTenantLogo, uploadTenantLogo } from "@/services/tenants";
+import { removeTenantLogo, uploadTenantLogo } from "@/modules/core/tenants/services/tenants";
 
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB — enforced server-side as well
 

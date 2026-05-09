@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { TenantBrandingCard } from "@/components/tenant-admin/tenant-branding-card";
-import { requireAdminPortalUser } from "@/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 export default async function TenantBrandingPage() {
   await requireAdminPortalUser();

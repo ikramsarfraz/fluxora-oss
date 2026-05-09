@@ -5,7 +5,7 @@ import { formatMoney } from "@/lib/utils/currency";
 import type {
   AgingBucketKey,
   AgingBucketRow,
-} from "@/services/aging";
+} from "@/modules/distribution/services/aging";
 
 const BUCKET_TONE: Record<AgingBucketKey, string> = {
   current: "bg-stone-line2 text-stone-muted border-stone-line",

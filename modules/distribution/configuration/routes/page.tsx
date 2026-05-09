@@ -6,8 +6,8 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getProductCategories } from "@/services/products";
-import { getUnitsOfMeasure } from "@/services/units-of-measure";
+import { getProductCategories } from "@/modules/distribution/products/services/products";
+import { getUnitsOfMeasure } from "@/modules/distribution/units-of-measure/services/units-of-measure";
 import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 import ConfigurationTabs from "../components/configuration-tabs";

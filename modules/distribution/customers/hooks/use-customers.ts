@@ -11,7 +11,7 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { CustomerListParams } from "@/services/customers";
+import type { CustomerListParams } from "@/modules/distribution/customers/services/customers";
 
 export function useCustomers() {
   return useQuery({

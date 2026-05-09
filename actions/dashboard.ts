@@ -1,6 +1,6 @@
 "use server";
 
-import { getDashboardSummary } from "@/services/dashboard";
+import { getDashboardSummary } from "@/modules/distribution/services/dashboard";
 
 export async function getDashboardSummaryAction() {
   return await getDashboardSummary();

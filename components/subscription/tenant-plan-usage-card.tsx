@@ -9,7 +9,7 @@ import {
   getUsageState,
   type SubscriptionUsageMetric,
 } from "@/lib/subscription-usage-metrics";
-import type { TenantPlanUsage } from "@/services/subscription-usage";
+import type { TenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
 import {
   Card,
   CardContent,

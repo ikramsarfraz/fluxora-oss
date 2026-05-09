@@ -16,7 +16,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { formatMoney } from "@/lib/utils/currency";
-import type { SalesOverTimePoint } from "@/services/dashboard";
+import type { SalesOverTimePoint } from "@/modules/distribution/services/dashboard";
 
 const chartConfig = {
   total: {

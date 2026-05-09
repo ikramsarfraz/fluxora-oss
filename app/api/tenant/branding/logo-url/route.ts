@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { getCurrentTenant, getTenantLogoUrl } from "@/services/tenants";
+import { getCurrentTenant, getTenantLogoUrl } from "@/modules/core/tenants/services/tenants";
 
 /**
  * GET /api/tenant/branding/logo-url

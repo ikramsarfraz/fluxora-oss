@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { auth } from "@/lib/auth";
-import { getInviteCanonicalRedirectUrl } from "@/services/invitations";
+import { getInviteCanonicalRedirectUrl } from "@/modules/core/workspace-settings/services/invitations";
 
 import { InviteUserForm } from "../components/invite-user-form";
 

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useCustomers } from "@/hooks/use-customers";
 import { useProducts } from "@/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
-import type { ProductListItem } from "@/services/products";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import { calculateLineTotal } from "./new-order-line-utils";
 import type { NewOrderFormValues } from "./new-order-form.schema";

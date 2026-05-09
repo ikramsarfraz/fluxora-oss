@@ -12,7 +12,7 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SupplierListParams } from "@/services/suppliers";
+import type { SupplierListParams } from "@/modules/distribution/suppliers/services/suppliers";
 
 export function useSuppliers() {
   return useQuery({

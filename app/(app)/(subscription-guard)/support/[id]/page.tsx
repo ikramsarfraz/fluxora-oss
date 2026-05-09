@@ -18,7 +18,7 @@ import {
   supportIssueTypeLabel,
   supportPriorityLabel,
   supportTicketStatusLabel,
-} from "@/services/support";
+} from "@/modules/core/platform-admin/support/services/support";
 
 import { TenantTicketUpdateForm } from "./tenant-ticket-update-form";
 

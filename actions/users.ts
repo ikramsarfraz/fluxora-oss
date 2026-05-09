@@ -10,12 +10,12 @@ import {
   setPortalUserActiveByAdmin,
   setPortalUserRoleByAdmin,
   type PortalUserRole,
-} from "@/services/portal-users";
+} from "@/modules/shared/services/portal-users";
 import {
   listPendingInvitationsForAdmin,
   resendUserInvitationByAdmin,
   revokeUserInvitationByAdmin,
-} from "@/services/invitations";
+} from "@/modules/core/workspace-settings/services/invitations";
 
 export async function getUsersAction() {
   return await getUsers();

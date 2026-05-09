@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { listPendingInvitationsForAdmin } from "@/services/invitations";
+import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
 
 export async function GET() {
   try {

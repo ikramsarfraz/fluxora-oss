@@ -19,9 +19,9 @@ import {
   getTenantSubscriptionHealth,
   shouldBlockTenantAccess,
 } from "@/lib/tenant-subscription-health";
-import { getUserByAuthUserId } from "@/services/portal-users";
-import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
-import { getCurrentTenantCached } from "@/services/tenants";
+import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
+import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 
 export default async function BillingBlockedPage() {
   const session = await auth.api.getSession({

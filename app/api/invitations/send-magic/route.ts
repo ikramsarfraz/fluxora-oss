@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { sendInvitationMagicLink } from "@/services/invitations";
+import { sendInvitationMagicLink } from "@/modules/core/workspace-settings/services/invitations";
 
 function errorToHttp(message: string): { status: number; code: string } {
   if (message === "Invitation not found") {

@@ -25,7 +25,7 @@ import {
   supportIssueTypeLabel,
   supportPriorityLabel,
   supportTicketStatusLabel,
-} from "@/services/support";
+} from "@/modules/core/platform-admin/support/services/support";
 
 export default async function SupportPage() {
   const tickets = await listTenantSupportTickets();

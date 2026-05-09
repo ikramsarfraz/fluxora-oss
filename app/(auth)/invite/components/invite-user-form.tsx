@@ -11,7 +11,7 @@ import {
   sendInvitationMagicLinkRequest,
   InvitationActionError,
 } from "@/lib/api/invitations";
-import type { InvitationPreviewFailureReason } from "@/services/invitations";
+import type { InvitationPreviewFailureReason } from "@/modules/core/workspace-settings/services/invitations";
 import { Button } from "@/components/ui/button";
 import {
   Card,

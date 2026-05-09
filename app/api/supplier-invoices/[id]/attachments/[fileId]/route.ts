@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { isUuid } from "@/lib/utils/uuid";
-import { getSupplierInvoiceAttachmentDownload } from "@/services/receiving";
+import { getSupplierInvoiceAttachmentDownload } from "@/modules/distribution/supplier-invoices/services/receiving";
 
 /**
  * GET /api/supplier-invoices/:id/attachments/:fileId

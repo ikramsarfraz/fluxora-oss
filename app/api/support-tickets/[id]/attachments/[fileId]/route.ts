@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
 import { isUuid } from "@/lib/utils/uuid";
-import { getSupportTicketAttachmentDownload } from "@/services/support";
+import { getSupportTicketAttachmentDownload } from "@/modules/core/platform-admin/support/services/support";
 
 export async function GET(
   req: Request,

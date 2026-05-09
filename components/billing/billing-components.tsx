@@ -28,7 +28,7 @@ import {
   type SubscriptionUsageState,
 } from "@/lib/subscription-usage-metrics";
 import type { TenantSubscriptionPlan, TenantSubscriptionStatus } from "@/lib/tenant-subscription";
-import type { TenantPlanUsage } from "@/services/subscription-usage";
+import type { TenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
 import type { BillingBannerState } from "@/lib/billing-utils";
 
 // ============================================================================

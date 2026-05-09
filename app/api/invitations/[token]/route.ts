@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import {
   getInvitationPreview,
   type InvitationPreviewFailureReason,
-} from "@/services/invitations";
+} from "@/modules/core/workspace-settings/services/invitations";
 
 const PREVIEW_MESSAGES: Record<InvitationPreviewFailureReason, string> = {
   not_found: "Invitation not found",

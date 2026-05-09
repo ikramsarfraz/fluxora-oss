@@ -23,11 +23,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { getUserByAuthUserId } from "@/services/portal-users";
-import { getTenantDefaultPaymentMethod } from "@/services/stripe-tenant-billing";
-import { getCurrentTenantPlanUsage } from "@/services/subscription-usage";
-import { getCurrentTenant } from "@/services/tenants";
-import { listActivePaidPlansForBillingPage } from "@/services/stripe-catalog";
+import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
+import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
+import { getCurrentTenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import {
   formatTenantPaymentMethodSummary,
   formatTenantPaymentMethodExpiryLine,

@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { syncStripeCatalogFullFromStripeApi } from "@/services/stripe-catalog";
-import { requirePlatformUser } from "@/services/platform-users";
+import { syncStripeCatalogFullFromStripeApi } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
+import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 export async function syncStripeCatalogAdminAction(): Promise<
   | { ok: true; productsUpserted: number; pricesUpserted: number }

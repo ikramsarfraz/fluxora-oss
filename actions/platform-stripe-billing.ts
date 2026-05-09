@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
-import { requirePlatformUser } from "@/services/platform-users";
-import { startCheckoutForTenant } from "@/services/stripe-tenant-billing";
+import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
+import { startCheckoutForTenant } from "@/modules/core/billing/stripe-tenant-billing";
 
 export async function startPlatformAdminStripeCheckoutAction(
   tenantId: string,

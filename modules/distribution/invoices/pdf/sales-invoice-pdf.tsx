@@ -16,7 +16,7 @@ import {
 
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { SalesInvoiceDetail } from "@/services/invoicing";
+import type { SalesInvoiceDetail } from "@/modules/distribution/invoices/services/invoicing";
 
 export type InvoicePricingType = "per_lb" | "per_case" | "per_unit";
 

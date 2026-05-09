@@ -13,7 +13,7 @@ import {
   type CreateSupportTicketUpdateInput,
   type CreateSupportTicketInput,
   type SupportTicketStatus,
-} from "@/services/support";
+} from "@/modules/core/platform-admin/support/services/support";
 
 async function fileFromFormData(formData: FormData) {
   const file = formData.get("file");

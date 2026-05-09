@@ -12,7 +12,7 @@ import {
   getRequestTenantHostContextFromHeaders,
 } from "@/lib/tenant-host";
 import { loadAuthenticatedDestinationSelectView } from "@/services/auth";
-import { getCurrentRequestTenant } from "@/services/tenants";
+import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 
 import { OnboardingForm } from "./onboarding-form";
 

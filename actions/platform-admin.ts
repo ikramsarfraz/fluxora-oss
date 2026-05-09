@@ -10,7 +10,7 @@ import {
 import {
   setTenantActiveByPlatformAdmin,
   updateTenantSubscriptionByPlatformAdmin,
-} from "@/services/platform-admin";
+} from "@/modules/core/platform-admin/services/platform-admin";
 
 export async function setTenantActiveAction(
   id: string,

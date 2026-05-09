@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import {
   dismissTenantSetupChecklist,
   getTenantSetupChecklistView,
-} from "@/services/tenant-setup-checklist";
-import type { TenantSetupChecklistView } from "@/services/tenant-setup-checklist";
+} from "@/modules/core/workspace-settings/services/setup-checklist";
+import type { TenantSetupChecklistView } from "@/modules/core/workspace-settings/services/setup-checklist";
 
 export async function getTenantSetupChecklistViewAction(): Promise<TenantSetupChecklistView> {
   return getTenantSetupChecklistView();

@@ -9,9 +9,9 @@ import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
 import { queryKeys } from "@/lib/query/keys";
-import { getDashboardSummary } from "@/services/dashboard";
-import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenantCached } from "@/services/tenants";
+import { getDashboardSummary } from "@/modules/distribution/services/dashboard";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 import { getTenantSetupChecklistViewAction } from "@/actions/tenant-setup-checklist";
 
 import { DashboardShell } from "../(dashboard)/components/dashboard-shell";

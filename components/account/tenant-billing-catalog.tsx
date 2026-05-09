@@ -23,9 +23,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { BillingCatalogPlanRow } from "@/services/stripe-catalog";
+import type { BillingCatalogPlanRow } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
-import type { StripeCheckoutPlan } from "@/services/stripe-tenant-billing";
+import type { StripeCheckoutPlan } from "@/modules/core/billing/stripe-tenant-billing";
 import { buildPublicSupportMailto } from "@/lib/public-contact";
 
 // ============================================================================

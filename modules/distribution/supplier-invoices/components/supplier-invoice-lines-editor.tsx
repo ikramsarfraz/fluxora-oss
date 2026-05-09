@@ -25,7 +25,7 @@ import {
   type SupplierInvoiceWeightEntryMode,
 } from "@/lib/supplier-invoices/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
-import type { ProductListItem } from "@/services/products";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import {
   computeLineTotal,

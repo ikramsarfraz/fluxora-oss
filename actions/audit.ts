@@ -3,7 +3,7 @@
 import {
   getActivityForSalesOrder,
   getActivityForSupplierInvoice,
-} from "@/services/audit";
+} from "@/modules/distribution/services/audit";
 
 export async function getActivityForSalesOrderAction(orderId: string) {
   return await getActivityForSalesOrder(orderId);

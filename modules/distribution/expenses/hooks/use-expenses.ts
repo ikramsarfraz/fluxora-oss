@@ -12,7 +12,7 @@ import {
 } from "@/actions/expenses";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { ExpenseListParams } from "@/services/expenses";
+import type { ExpenseListParams } from "@/modules/distribution/expenses/services/expenses";
 
 export function useExpenses() {
   return useQuery({

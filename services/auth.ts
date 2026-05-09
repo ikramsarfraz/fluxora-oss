@@ -41,8 +41,8 @@ import {
   isReservedTenantSlug,
   slugifyTenantName,
 } from "@/lib/tenant-host";
-import { getCurrentTenant, getTenantBySlug } from "./tenants";
-import { createPortalUser, type PortalUserRole } from "./portal-users";
+import { getCurrentTenant, getTenantBySlug } from "@/modules/core/tenants/services/tenants";
+import { createPortalUser, type PortalUserRole } from "@/modules/shared/services/portal-users";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();

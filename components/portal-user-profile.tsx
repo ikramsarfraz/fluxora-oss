@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { Check, X } from "lucide-react";
 
-import type { PortalUserDetail } from "@/services/portal-users";
+import type { PortalUserDetail } from "@/modules/shared/services/portal-users";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

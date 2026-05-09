@@ -21,7 +21,7 @@ import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
 } from "@/lib/subscription-enforcement";
-import type { ProductListItem } from "@/services/products";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";

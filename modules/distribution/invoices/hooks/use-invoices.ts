@@ -8,7 +8,7 @@ import {
   getSalesInvoicesPageAction,
 } from "@/actions/invoices";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SalesInvoiceListParams } from "@/services/invoicing";
+import type { SalesInvoiceListParams } from "@/modules/distribution/invoices/services/invoicing";
 
 export function useSalesInvoices() {
   return useQuery({

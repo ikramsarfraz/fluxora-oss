@@ -23,7 +23,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import type {
   RecentSupplierInvoiceRow,
   SpendBySupplierRow,
-} from "@/services/dashboard";
+} from "@/modules/distribution/services/dashboard";
 
 type Props = {
   purchasing: {

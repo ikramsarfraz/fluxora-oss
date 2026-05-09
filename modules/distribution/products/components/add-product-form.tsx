@@ -62,7 +62,7 @@ import {
   stripSubscriptionEnforcementPrefix,
 } from "@/lib/subscription-enforcement";
 import { useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
-import type { UnitOfMeasureListItem } from "@/services/units-of-measure";
+import type { UnitOfMeasureListItem } from "@/modules/distribution/units-of-measure/services/units-of-measure";
 
 // ---------------------------------------------------------------------------
 // Helpers

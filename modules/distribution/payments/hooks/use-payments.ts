@@ -9,7 +9,7 @@ import {
 } from "@/actions/payments";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { PaymentListParams } from "@/services/payments";
+import type { PaymentListParams } from "@/modules/distribution/payments/services/payments";
 
 export function usePayments() {
   return useQuery({

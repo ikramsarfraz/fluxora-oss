@@ -23,7 +23,7 @@ import {
   type DashboardMetricCard,
 } from "@/lib/dashboard/visibility";
 import { formatMoney } from "@/lib/utils/currency";
-import type { DashboardMetrics } from "@/services/dashboard";
+import type { DashboardMetrics } from "@/modules/distribution/services/dashboard";
 
 type MetricCardProps = {
   icon: LucideIcon;

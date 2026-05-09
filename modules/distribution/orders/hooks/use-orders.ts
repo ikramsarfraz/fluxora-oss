@@ -22,7 +22,7 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SalesOrderListParams } from "@/services/orders";
+import type { SalesOrderListParams } from "@/modules/distribution/orders/services/orders";
 
 export function useSalesOrders() {
   return useQuery({

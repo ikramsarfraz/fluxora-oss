@@ -1,4 +1,4 @@
-import type { ProductListItem } from "@/services/products";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import type { LineUnitType, NewOrderLineValues } from "./new-order-form.schema";
 

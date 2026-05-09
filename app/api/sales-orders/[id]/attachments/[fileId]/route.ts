@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 
 import { isUuid } from "@/lib/utils/uuid";
-import { getSalesOrderAttachmentDownload } from "@/services/orders";
+import { getSalesOrderAttachmentDownload } from "@/modules/distribution/orders/services/orders";
 
 /**
  * GET /api/sales-orders/:id/attachments/:fileId

@@ -10,7 +10,7 @@ import {
   isSubscriptionAccessExemptPath,
   shouldBlockTenantAccess,
 } from "@/lib/tenant-subscription-health";
-import { getCurrentTenantCached } from "@/services/tenants";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 
 /**
  * Hard subscription gate for tenant routes. `account/` and `billing-blocked/` live outside this

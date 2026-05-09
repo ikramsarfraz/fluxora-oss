@@ -27,7 +27,7 @@ import type {
   ApAging,
   ApAgingInvoiceRow,
   ApAgingSupplierRow,
-} from "@/services/aging";
+} from "@/modules/distribution/services/aging";
 
 import { BucketBadge, BucketBars } from "./aging-shared";
 

@@ -6,8 +6,8 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { listPendingInvitationsForAdmin } from "@/services/invitations";
-import { getUsers, requireAdminPortalUser } from "@/services/portal-users";
+import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
+import { getUsers, requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 import UserManagementTabs from "./components/user-management-tabs";
 
 export default async function UserManagementPage() {

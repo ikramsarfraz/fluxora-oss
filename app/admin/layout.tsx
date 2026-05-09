@@ -12,7 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
 import { buildRootAppUrl, getRequestTenantHostContext } from "@/lib/tenant-host";
 import { getAccessibleDestinationsForAuthUser } from "@/services/auth";
-import { requirePlatformUser } from "@/services/platform-users";
+import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 export default async function PlatformAdminLayout({
   children,

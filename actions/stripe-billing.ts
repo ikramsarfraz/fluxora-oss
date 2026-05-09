@@ -7,11 +7,11 @@ import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
 import {
   getCurrentPortalUser,
   requireAdminPortalUser,
-} from "@/services/portal-users";
+} from "@/modules/shared/services/portal-users";
 import {
   createTenantStripeCustomerPortalSession,
   startCheckoutForTenant,
-} from "@/services/stripe-tenant-billing";
+} from "@/modules/core/billing/stripe-tenant-billing";
 
 export async function startTenantAdminStripeCheckoutAction(
   plan: unknown,

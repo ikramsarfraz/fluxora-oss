@@ -1,5 +1,5 @@
-import type { InvitationPreviewFailureReason } from "@/services/invitations";
-import type { PortalUserRole } from "@/services/portal-users";
+import type { InvitationPreviewFailureReason } from "@/modules/core/workspace-settings/services/invitations";
+import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 import { endpoints } from "./endpoints";
 
 const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");

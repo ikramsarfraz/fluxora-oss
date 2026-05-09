@@ -40,8 +40,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/hooks/use-products";
 import { useCustomers } from "@/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
-import type { CustomerListItem } from "@/services/customers";
-import type { ProductListItem } from "@/services/products";
+import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 import {

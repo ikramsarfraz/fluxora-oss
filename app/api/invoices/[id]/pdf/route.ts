@@ -1,5 +1,5 @@
-import { getSalesInvoiceById } from "@/services/invoicing";
-import { getCurrentTenant, getTenantLogoUrl } from "@/services/tenants";
+import { getSalesInvoiceById } from "@/modules/distribution/invoices/services/invoicing";
+import { getCurrentTenant, getTenantLogoUrl } from "@/modules/core/tenants/services/tenants";
 import { isUuid } from "@/lib/utils/uuid";
 import {
   getSalesInvoicePdfFilename,

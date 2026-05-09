@@ -13,8 +13,8 @@ import {
   setUserActiveAction,
   setUserRoleAction,
 } from "@/actions/users";
-import type { PortalUserRole } from "@/services/portal-users";
-import type { UsersDirectoryListParams } from "@/services/portal-users";
+import type { PortalUserRole } from "@/modules/shared/services/portal-users";
+import type { UsersDirectoryListParams } from "@/modules/shared/services/portal-users";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";

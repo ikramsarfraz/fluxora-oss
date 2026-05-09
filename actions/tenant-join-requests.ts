@@ -4,7 +4,7 @@ import {
   createTenantJoinRequest,
   listPendingTenantJoinRequestsForAdmin,
   reviewTenantJoinRequestByAdmin,
-} from "@/services/tenant-join-requests";
+} from "@/modules/core/workspace-settings/services/tenant-join-requests";
 
 export async function createTenantJoinRequestAction(
   input: Parameters<typeof createTenantJoinRequest>[0],

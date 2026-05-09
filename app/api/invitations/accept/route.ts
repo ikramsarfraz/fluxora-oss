@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { acceptInvitation } from "@/services/invitations";
+import { acceptInvitation } from "@/modules/core/workspace-settings/services/invitations";
 
 function acceptErrorToHttp(message: string): { status: number; code: string } {
   if (message === "Invitation not found") {

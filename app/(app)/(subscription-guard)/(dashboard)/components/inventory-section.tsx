@@ -22,7 +22,7 @@ import type {
   ExpiringLotRow,
   InventoryStatusRow,
   TopStockedProductRow,
-} from "@/services/dashboard";
+} from "@/modules/distribution/services/dashboard";
 
 type Props = {
   inventory: {

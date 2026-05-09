@@ -19,7 +19,7 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SupplierInvoiceListParams } from "@/services/receiving";
+import type { SupplierInvoiceListParams } from "@/modules/distribution/supplier-invoices/services/receiving";
 
 export function useSupplierInvoices() {
   return useQuery({

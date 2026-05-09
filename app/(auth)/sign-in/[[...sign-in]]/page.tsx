@@ -4,7 +4,7 @@ import { SignInForm } from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-
 import { isGoogleAuthEnabled } from "@/lib/google-auth-flow";
 import { buildRootAppUrl, buildTenantAppUrl } from "@/lib/tenant-host";
 import { resolveExistingSessionLoginDestination } from "@/services/auth";
-import { getCurrentRequestTenant } from "@/services/tenants";
+import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 
 export default async function SignInPage({
   searchParams,

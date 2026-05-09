@@ -3,7 +3,7 @@
 import { ShieldCheck, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { PortalUserRole } from "@/services/portal-users";
+import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 import { AuthCenteredShell } from "@/app/(auth)/components/auth-shell";
 
 type TenantChooserTenantDestination = {

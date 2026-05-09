@@ -1,11 +1,11 @@
 import Stripe from "stripe";
 
-import { processStripeWebhookEvent } from "@/services/stripe-tenant-billing";
+import { processStripeWebhookEvent } from "@/modules/core/billing/stripe-tenant-billing";
 import {
   claimStripeWebhookEventForProcessing,
   finalizeStripeWebhookEventFailed,
   finalizeStripeWebhookEventSucceeded,
-} from "@/services/stripe-webhook-idempotency";
+} from "@/modules/core/billing/services/stripe-webhook-idempotency";
 import { getStripeClient, getStripeWebhookSecretOrThrow } from "@/lib/stripe/config";
 
 export const runtime = "nodejs";

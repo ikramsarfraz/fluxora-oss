@@ -20,7 +20,7 @@ import {
 import {
   generateInvoiceForSalesOrder,
   recordPaymentForSalesOrderInvoice,
-} from "@/services/invoicing";
+} from "@/modules/distribution/invoices/services/invoicing";
 
 export async function getSalesOrdersAction() {
   return await getSalesOrders();

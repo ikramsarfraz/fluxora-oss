@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { SignUpForm } from "@/app/(auth)/sign-up/[[...sign-up]]/components/sign-up-form";
 import { isGoogleAuthEnabled } from "@/lib/google-auth-flow";
 import { buildRootAppUrl, buildTenantAppUrl } from "@/lib/tenant-host";
-import { getTenantHostInvitationRedirect } from "@/services/invitations";
-import { getCurrentRequestTenant } from "@/services/tenants";
+import { getTenantHostInvitationRedirect } from "@/modules/core/workspace-settings/services/invitations";
+import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 
 export default async function SignUpPage({
   searchParams,

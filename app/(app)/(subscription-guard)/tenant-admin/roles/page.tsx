@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { RolesPermissionsCard } from "@/components/tenant-admin/roles-permissions-card";
-import { requireAdminPortalUser } from "@/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 export default async function TenantRolesPage() {
   const currentUser = await requireAdminPortalUser();

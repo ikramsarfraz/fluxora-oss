@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getProductCategories } from "@/services/products";
+import { getProductCategories } from "@/modules/distribution/products/services/products";
 
 import Categories from "../components/categories-page";
 

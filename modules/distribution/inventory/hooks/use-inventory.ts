@@ -11,7 +11,7 @@ import {
 } from "@/actions/inventory";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { InventoryListParams } from "@/services/inventory";
+import type { InventoryListParams } from "@/modules/distribution/inventory/services/inventory";
 
 export function useInventoryItems() {
   return useQuery({

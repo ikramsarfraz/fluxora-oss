@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { sendSelfTenantSignInMagicLinkAction } from "@/actions/auth";
 import { PortalUserProfile } from "@/components/portal-user-profile";
-import type { PortalUserDetail } from "@/services/portal-users";
+import type { PortalUserDetail } from "@/modules/shared/services/portal-users";
 
 export function AccountPortalProfile({
   user,
