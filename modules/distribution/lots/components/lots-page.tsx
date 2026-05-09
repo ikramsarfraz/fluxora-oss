@@ -161,9 +161,9 @@ export default function Lots() {
       title="Lots"
       subtitle="Inspect received stock, warehouse lifecycle, and lot traceability."
       primaryAction={
-        <ListingAction href="/lots/new">
+        <ListingAction href="/supplier-invoices/new">
           <Plus className="size-3.5" />
-          New lot
+          Record bill
         </ListingAction>
       }
       columns={COLUMNS}

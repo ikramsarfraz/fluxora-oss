@@ -7,6 +7,7 @@ import {
   inventoryItems,
   lots,
   products,
+  supplierInvoiceLines,
   suppliers,
 } from "@/db/schema";
 import type { PortalUserRole } from "@/modules/shared/services/portal-users";
@@ -441,7 +442,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
     return null;
   }
 
-  return await db.query.inventoryItems.findFirst({
+  const item = await db.query.inventoryItems.findFirst({
     where: eq(inventoryItems.id, inventoryItemId),
     with: {
       product: {
@@ -483,15 +484,6 @@ export async function getInventoryItemById(inventoryItemId: string) {
                       id: true,
                       sku: true,
                       name: true,
-                    },
-                  },
-                  supplierInvoice: {
-                    columns: {
-                      id: true,
-                      invoiceNumber: true,
-                      invoiceDate: true,
-                      receiveDate: true,
-                      status: true,
                     },
                   },
                 },
@@ -635,6 +627,53 @@ export async function getInventoryItemById(inventoryItemId: string) {
       },
     },
   });
+
+  if (!item) return null;
+
+  // Fetch supplier invoice data separately to avoid PostgreSQL LATERAL restriction
+  // on deeply nested correlated subqueries (5+ levels deep in Drizzle).
+  const lineIds = item.lot.lotReceipts
+    .map(r => r.supplierInvoiceLine?.id)
+    .filter((id): id is string => id != null);
+
+  const invoiceByLineId = new Map<string, { id: string; invoiceNumber: string; invoiceDate: string | null; receiveDate: string | null; status: string } | null>();
+
+  if (lineIds.length > 0) {
+    const lines = await db.query.supplierInvoiceLines.findMany({
+      where: inArray(supplierInvoiceLines.id, lineIds),
+      columns: { id: true },
+      with: {
+        supplierInvoice: {
+          columns: {
+            id: true,
+            invoiceNumber: true,
+            invoiceDate: true,
+            receiveDate: true,
+            status: true,
+          },
+        },
+      },
+    });
+    for (const line of lines) {
+      invoiceByLineId.set(line.id, line.supplierInvoice ?? null);
+    }
+  }
+
+  return {
+    ...item,
+    lot: {
+      ...item.lot,
+      lotReceipts: item.lot.lotReceipts.map(r => ({
+        ...r,
+        supplierInvoiceLine: r.supplierInvoiceLine
+          ? {
+              ...r.supplierInvoiceLine,
+              supplierInvoice: invoiceByLineId.get(r.supplierInvoiceLine.id) ?? null,
+            }
+          : null,
+      })),
+    },
+  };
 }
 
 async function loadInventoryItemForAdjustment(inventoryItemId: string) {

@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import {
   ExpirationStateBadge,
   InventoryStatusBadge,
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
+import { Plus } from "lucide-react";
 import { useInventoryItemsPage } from "../hooks/use-inventory";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -170,6 +171,12 @@ export function InventoryPage() {
     <ListingPage
       title="Inventory"
       subtitle="Inspect stock, lot traceability, expiration risk, and outbound usage."
+      primaryAction={
+        <ListingAction href="/supplier-invoices/new">
+          <Plus className="size-3.5" />
+          Record bill
+        </ListingAction>
+      }
       kpis={summary ? [
         { label: "Items", value: summary.totalItems },
         { label: "Cases", value: summary.totalCases },
