@@ -35,7 +35,7 @@ import {
   permissionsForRole,
   type PortalUserRole,
 } from "@/lib/auth/permissions";
-import type { PortalUserDetail } from "@/services/portal-users";
+import type { PortalUserDetail } from "@/modules/core/shared/services/portal-users";
 
 type UserRoleDialogProps = {
   user: PortalUserDetail;

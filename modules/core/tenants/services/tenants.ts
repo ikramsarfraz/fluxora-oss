@@ -13,7 +13,7 @@ import {
   deleteFile,
   uploadFile,
 } from "@/lib/uploads/r2";
-import { requireAdminPortalUser } from "@/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/core/shared/services/portal-users";
 
 // ---------------------------------------------------------------------------
 // Reads

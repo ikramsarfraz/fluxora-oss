@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import type { UsersDirectoryListItem } from "@/services/portal-users";
+import type { UsersDirectoryListItem } from "@/modules/core/shared/services/portal-users";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 export type UsersDirectoryRow = UsersDirectoryListItem;

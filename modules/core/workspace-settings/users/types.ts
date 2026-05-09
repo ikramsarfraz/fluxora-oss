@@ -1,1 +1,1 @@
-export type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/services/portal-users";
+export type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/modules/core/shared/services/portal-users";

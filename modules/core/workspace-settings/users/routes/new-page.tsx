@@ -1,6 +1,6 @@
 import { InviteUserForm } from "@/modules/core/workspace-settings/users/components/invite-user-form";
 import { DetailPageHeader } from "@/components/detail-page-header";
-import { requireAdminPortalUser } from "@/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/core/shared/services/portal-users";
 
 export default async function WorkspaceUsersNewPage() {
   await requireAdminPortalUser();

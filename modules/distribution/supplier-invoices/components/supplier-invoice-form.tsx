@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
@@ -18,6 +19,8 @@ import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
+  useParseSupplierInvoicePdf,
+  useUploadSupplierInvoiceAttachmentToInvoice,
 } from "../hooks/use-supplier-invoices";
 import {
   Field,
@@ -45,6 +48,7 @@ import {
   LineItemsInvoiceTotal,
   SupplierInvoiceLinesEditor,
 } from "./supplier-invoice-lines-editor";
+import type { SupplierInvoicePdfPrefillResult } from "@/lib/supplier-invoices/pdf-prefill";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -179,6 +183,8 @@ const lblStyle: React.CSSProperties = {
 const inputCls =
   "border-stone-line bg-stone-surface text-sm text-stone-ink shadow-none";
 
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+
 // ── Component ──────────────────────────────────────────────────────────────
 export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const router = useRouter();
@@ -189,6 +195,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const createMutation = useCreateSupplierInvoice();
   const updateMutation = useUpdateSupplierInvoice();
   const completeMutation = useCompleteSupplierInvoice();
+  const parsePdfMutation = useParseSupplierInvoicePdf();
+  const uploadParsedPdfMutation = useUploadSupplierInvoiceAttachmentToInvoice();
   const { data: currentUser } = useCurrentPortalUser();
   const role = currentUser?.role ?? null;
   const canEdit = can(role, "edit_supplier_invoice");
@@ -208,7 +216,14 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
-    completeMutation.isPending;
+    completeMutation.isPending ||
+    parsePdfMutation.isPending ||
+    uploadParsedPdfMutation.isPending;
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
+  const [pdfPrefill, setPdfPrefill] =
+    useState<SupplierInvoicePdfPrefillResult | null>(null);
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const [autoSaveStatus, setAutoSaveStatus] = useState<
@@ -302,6 +317,53 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     ? `/supplier-invoices/${invoiceId}`
     : "/supplier-invoices";
 
+  function handleReadPdfClick() {
+    pdfInputRef.current?.click();
+  }
+
+  async function handlePdfFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_PDF_BYTES) {
+      toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+
+    try {
+      const result = await parsePdfMutation.mutateAsync(file);
+      form.reset(result.values);
+      setPendingPdfFile(file);
+      setPdfPrefill(result);
+      setAutoSaveStatus("idle");
+      toast.success(`Read ${file.name}. Review the imported fields before saving.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not read this PDF.",
+      );
+    }
+  }
+
+  async function attachPendingPdf(targetInvoiceId: string) {
+    if (!pendingPdfFile) return;
+    try {
+      await uploadParsedPdfMutation.mutateAsync({
+        supplierInvoiceId: targetInvoiceId,
+        file: pendingPdfFile,
+      });
+      toast.success(`Attached ${pendingPdfFile.name}.`);
+      setPendingPdfFile(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Bill saved, but PDF attachment failed: ${err.message}`
+          : "Bill saved, but PDF attachment failed.",
+      );
+    }
+  }
+
   async function submit(
     values: SupplierInvoiceFormValues,
     complete: boolean,
@@ -341,6 +403,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           complete,
         });
         draftIdRef.current = result.id;
+        await attachPendingPdf(result.id);
         toast.success(
           complete
             ? `Bill "${values.invoiceNumber}" received. Lots and inventory created.`
@@ -356,10 +419,12 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             id: targetId,
             lineOverrides: [],
           });
+          await attachPendingPdf(targetId);
           toast.success(
             `Bill "${values.invoiceNumber}" received. Lots and inventory created.`,
           );
         } else {
+          await attachPendingPdf(targetId);
           toast.success(
             mode === "create"
               ? `Draft bill "${values.invoiceNumber}" saved.`
@@ -389,6 +454,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             alignItems: "flex-start",
             justifyContent: "space-between",
             gap: 24,
+            flexWrap: "wrap",
             marginBottom: 28,
           }}
         >
@@ -410,26 +476,71 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
                 : "Update bill details. Receiving will create lots and inventory for each line."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => router.push(cancelPath)}
-            disabled={isPending}
+          <div
             style={{
+              display: "flex",
+              gap: 10,
               flexShrink: 0,
-              background: C.surface,
-              color: C.ink,
-              border: `1px solid ${C.line}`,
-              padding: "9px 18px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: isPending ? "not-allowed" : "pointer",
-              opacity: isPending ? 0.6 : 1,
-              fontFamily: "inherit",
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
             }}
           >
-            Cancel
-          </button>
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handlePdfFileChange}
+              disabled={isPending || !canEdit}
+            />
+            <button
+              type="button"
+              onClick={handleReadPdfClick}
+              disabled={isPending || !canEdit}
+              title={editDeniedReason}
+              style={{
+                background: C.surface,
+                color: C.ink,
+                border: `1px solid ${C.lineStrong}`,
+                padding: "9px 16px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: isPending || !canEdit ? "not-allowed" : "pointer",
+                opacity: isPending || !canEdit ? 0.6 : 1,
+                fontFamily: "inherit",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+              }}
+            >
+              {parsePdfMutation.isPending ? (
+                <Loader2 style={{ width: 14, height: 14 }} className="animate-spin" />
+              ) : (
+                <FileText style={{ width: 14, height: 14 }} />
+              )}
+              Read PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(cancelPath)}
+              disabled={isPending}
+              style={{
+                background: C.surface,
+                color: C.ink,
+                border: `1px solid ${C.line}`,
+                padding: "9px 18px",
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: isPending ? "not-allowed" : "pointer",
+                opacity: isPending ? 0.6 : 1,
+                fontFamily: "inherit",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
 
         {/* ── Bill details card ──────────────────────────────────────────── */}
@@ -620,6 +731,68 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             </div>
           </SectionCard>
         </div>
+
+        {pdfPrefill && (
+          <div
+            style={{
+              marginBottom: 16,
+              border: `1px solid ${C.line}`,
+              borderRadius: 10,
+              background: C.surface,
+              padding: "14px 18px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                alignItems: "flex-start",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
+                  PDF import: {pdfPrefill.sourceFilename}
+                </div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                  {pendingPdfFile
+                    ? "This PDF will be attached when the bill is saved."
+                    : "PDF attached to the bill."}
+                </div>
+              </div>
+              {pdfPrefill.totalComparison.extractedTotal && (
+                <div
+                  style={{
+                    fontFamily: C.mono,
+                    fontSize: 12,
+                    color: C.muted,
+                    textAlign: "right",
+                    flexShrink: 0,
+                  }}
+                >
+                  PDF total {pdfPrefill.totalComparison.extractedTotal}
+                  <br />
+                  Lines {pdfPrefill.totalComparison.computedLineTotal}
+                </div>
+              )}
+            </div>
+            {pdfPrefill.warnings.length > 0 && (
+              <ul
+                style={{
+                  margin: "10px 0 0",
+                  paddingLeft: 18,
+                  color: C.ink2,
+                  fontSize: 12,
+                  lineHeight: 1.55,
+                }}
+              >
+                {pdfPrefill.warnings.map(warning => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* ── Line items card ────────────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>

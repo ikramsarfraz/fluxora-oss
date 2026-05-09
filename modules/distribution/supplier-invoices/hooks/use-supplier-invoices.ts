@@ -9,6 +9,7 @@ import {
   getSupplierInvoiceByIdAction,
   getSupplierInvoicesAction,
   getSupplierInvoicesPageAction,
+  parseSupplierInvoicePdfAction,
   recordSupplierInvoicePaymentAction,
   removeSupplierInvoiceAttachmentAction,
   reverseSupplierInvoiceAction,
@@ -146,6 +147,16 @@ export function useDeleteSupplierInvoice() {
   });
 }
 
+export function useParseSupplierInvoicePdf() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.set("file", file);
+      return await parseSupplierInvoicePdfAction(formData);
+    },
+  });
+}
+
 export function useUploadSupplierInvoiceAttachment(supplierInvoiceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -161,6 +172,32 @@ export function useUploadSupplierInvoiceAttachment(supplierInvoiceId: string) {
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
+      });
+    },
+  });
+}
+
+export function useUploadSupplierInvoiceAttachmentToInvoice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      supplierInvoiceId,
+      file,
+    }: {
+      supplierInvoiceId: string;
+      file: File;
+    }) => {
+      const formData = new FormData();
+      formData.set("supplierInvoiceId", supplierInvoiceId);
+      formData.set("file", file);
+      return await uploadSupplierInvoiceAttachmentAction(formData);
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.detail(variables.supplierInvoiceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
       });
     },
   });

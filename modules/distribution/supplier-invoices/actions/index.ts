@@ -13,6 +13,7 @@ import {
   updateSupplierInvoice,
   uploadSupplierInvoiceAttachment,
 } from "../services/receiving";
+import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
 
 export async function getSupplierInvoicesAction() {
   return await getSupplierInvoices();
@@ -60,6 +61,19 @@ export async function recordSupplierInvoicePaymentAction(
 
 export async function deleteSupplierInvoiceAction(id: string) {
   return await deleteSupplierInvoice(id);
+}
+
+export async function parseSupplierInvoicePdfAction(formData: FormData) {
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    throw new Error("Missing PDF file.");
+  }
+  const bytes = Buffer.from(await file.arrayBuffer());
+  return await parseSupplierInvoicePdf({
+    originalFilename: file.name,
+    mimeType: file.type || null,
+    bytes,
+  });
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(

@@ -8,7 +8,7 @@ import { notFound } from "next/navigation";
 
 import { can } from "@/lib/auth/permissions";
 import { queryKeys } from "@/lib/query/keys";
-import { getCurrentPortalUser } from "@/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
 import { getSupplierInvoices } from "../services/receiving";
 
 import SupplierInvoicesPage from "../components/supplier-invoices-page";
