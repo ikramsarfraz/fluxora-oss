@@ -7,6 +7,8 @@ import {
   deleteLotAction,
   getLotByIdAction,
   getLotsAction,
+  updateLotExpirationAction,
+  writeOffLotAsLossAction,
 } from "@/modules/distribution/lots/actions";
 import { isUuid } from "@/lib/utils/uuid";
 
@@ -44,6 +46,30 @@ export function useDeleteLot() {
   return useMutation({
     mutationFn: deleteLotAction,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
+    },
+  });
+}
+
+export function useUpdateLotExpiration() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateLotExpirationAction,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots.detail(variables.lotId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
+    },
+  });
+}
+
+export function useWriteOffLotAsLoss() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: writeOffLotAsLossAction,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots.detail(variables.lotId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
     },
   });

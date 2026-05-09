@@ -5,6 +5,8 @@ import {
   deleteLot,
   getLotById,
   getLots,
+  updateLotExpiration,
+  writeOffLotAsLoss,
 } from "../services/lots";
 
 export async function getLotsAction() {
@@ -26,4 +28,20 @@ export async function createLotAction(input: {
 
 export async function deleteLotAction(id: string) {
   return await deleteLot(id);
+}
+
+export async function updateLotExpirationAction(input: {
+  lotId: string;
+  expirationDate: string;
+}) {
+  return await updateLotExpiration(input);
+}
+
+export async function writeOffLotAsLossAction(input: {
+  lotId: string;
+  targetStatus: "expired" | "damaged";
+  reason: string;
+  notes?: string | null;
+}) {
+  return await writeOffLotAsLoss(input);
 }

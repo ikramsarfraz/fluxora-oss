@@ -10,6 +10,7 @@ import {
   INVENTORY_STATUS_ADJUSTMENT_OPTIONS,
 } from "../utils/adjustments";
 import { formatWeightLbs, getInventoryStatusLabel } from "../utils/insights";
+import { formatMoney } from "@/lib/utils/currency";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +58,26 @@ export function InventoryAdjustmentDialog({
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const cost = Number(item.costPerUnitSnapshot ?? 0);
+  const isCatchWeight = item.costUnitTypeSnapshot === "catch_weight";
+  const nextStatusResolved = targetStatus === "unchanged" ? item.status : targetStatus;
+  const nextCasesResolved = correctedCases.trim() !== "" ? Number.parseInt(correctedCases, 10) : item.cases;
+  const nextWeightResolved = correctedWeightLbs.trim() !== "" ? Number(correctedWeightLbs) : Number(item.exactWeightLbs);
+
+  const writeOffLoss = (() => {
+    if (cost === 0) return 0;
+    const isWriteOff = nextStatusResolved === "damaged" || nextStatusResolved === "expired";
+    const isRestore = nextStatusResolved === "in_stock";
+    if (isRestore) return 0;
+    if (isWriteOff) {
+      return isCatchWeight ? cost * Number(item.exactWeightLbs) : cost * item.cases;
+    }
+    const delta = isCatchWeight
+      ? Number(item.exactWeightLbs) - (Number.isFinite(nextWeightResolved) ? nextWeightResolved : Number(item.exactWeightLbs))
+      : item.cases - (Number.isInteger(nextCasesResolved) ? nextCasesResolved : item.cases);
+    return delta > 0 ? cost * delta : 0;
+  })();
 
   useEffect(() => {
     if (open) {
@@ -143,6 +164,17 @@ export function InventoryAdjustmentDialog({
               <p className="font-medium">{formatWeightLbs(item.exactWeightLbs)} lb</p>
             </div>
           </div>
+
+          {writeOffLoss > 0 && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <p className="font-medium text-destructive">
+                Write-off: {formatMoney(writeOffLoss.toFixed(2))}
+              </p>
+              <p className="mt-0.5 text-muted-foreground">
+                This adjustment will create an &quot;Inventory write-off&quot; expense entry for the lost value.
+              </p>
+            </div>
+          )}
 
           <Field>
             <FieldLabel htmlFor="inventory-adjustment-status">

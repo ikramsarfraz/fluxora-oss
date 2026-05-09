@@ -104,7 +104,7 @@ export default function Lots() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("expiration");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
 
   const { data, isLoading, error, refetch } = useLots();

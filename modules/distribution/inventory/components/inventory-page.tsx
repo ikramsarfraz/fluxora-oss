@@ -141,7 +141,7 @@ export function InventoryPage() {
 
   const pagination = useUrlPaginationState<InventoryListSort, Required<InventoryListFilters>>({
     defaultSort: "expiration",
-    defaultDirection: "asc",
+    defaultDirection: "desc",
     defaultFilters: DEFAULT_FILTERS,
   });
 

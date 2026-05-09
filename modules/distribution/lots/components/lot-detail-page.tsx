@@ -1,11 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-
-import { useLot, useDeleteLot } from "../hooks/use-lots";
+import { useLot } from "../hooks/use-lots";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { queryKeys } from "@/lib/query/keys";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
@@ -18,17 +15,6 @@ import {
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   Card,
   CardContent,
@@ -66,13 +52,12 @@ import {
   getLotSourceInvoices,
   getLotTotals,
 } from "./lot-view-helpers";
-import { LotBulkAdjustmentDialog } from "./lot-bulk-adjustment-dialog";
+import { LotExtendExpirationDialog } from "./lot-extend-expiration-dialog";
+import { LotWriteOffDialog } from "./lot-write-off-dialog";
 
 export function LotDetailPage({ lotId }: { lotId: string }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [damageDialogOpen, setDamageDialogOpen] = useState(false);
-  const [expireDialogOpen, setExpireDialogOpen] = useState(false);
+  const [extendExpirationOpen, setExtendExpirationOpen] = useState(false);
+  const [writeOffOpen, setWriteOffOpen] = useState(false);
   const {
     data: lot,
     isLoading,
@@ -82,8 +67,6 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
   const { data: currentUser } = useCurrentPortalUser();
 
   useSetBreadcrumbLabel(`/lots/${lotId}`, lot?.lotNumber);
-
-  const deleteLot = useDeleteLot();
 
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (isError || !lot) {
@@ -135,11 +118,25 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
     return { adjustableCount, lockedCount };
   })();
   const canManageCorrections = canManageWarehouseCorrections(currentUser?.role);
-  const lotActionDisabledReason = !canManageCorrections
+  const writeOffEligibleItems = lot.inventoryItems.filter(item => {
+    if (item.status === "shipped" || item.status === "sold" || item.status === "expired") return false;
+    if (item.allocations.length > 0) return false;
+    if (item.fulfillments.some(f => !f.reversedAt)) return false;
+    return true;
+  });
+  const estimatedWriteOffValue = writeOffEligibleItems.reduce((sum, item) => {
+    const cost = Number(item.costPerUnitSnapshot ?? 0);
+    const value = item.costUnitTypeSnapshot === "fixed_case"
+      ? cost * item.cases
+      : cost * Number(item.exactWeightLbs ?? 0);
+    return sum + value;
+  }, 0);
+  const writeOffDisabledReason = !canManageCorrections
     ? getWarehouseCorrectionDeniedReason()
-    : lotActionPreview.adjustableCount === 0
-      ? "No inventory in this lot is eligible for bulk correction."
+    : writeOffEligibleItems.length === 0
+      ? "No eligible inventory to write off in this lot."
       : null;
+
   const recentAdjustments = lot.inventoryItems
     .flatMap(item =>
       item.adjustments.map(adjustment => ({
@@ -162,46 +159,6 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
       >
         <ExpirationStateBadge state={expirationState} />
       </DetailPageHeader>
-
-      <DetailSection
-        title="Lot actions"
-        description="Run practical warehouse corrections across eligible inventory in this lot."
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setExpireDialogOpen(true)}
-              disabled={Boolean(lotActionDisabledReason)}
-              title={lotActionDisabledReason ?? undefined}
-            >
-              Mark eligible inventory expired
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setDamageDialogOpen(true)}
-              disabled={Boolean(lotActionDisabledReason)}
-              title={lotActionDisabledReason ?? undefined}
-            >
-              Mark eligible inventory damaged
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Lot actions only affect inventory that is not allocated, not part of
-            active fulfillment, and not already shipped or sold.
-          </p>
-          <p>
-            Eligible inventory: <span className="font-medium text-foreground">{lotActionPreview.adjustableCount}</span>
-            {" "} / Locked inventory: <span className="font-medium text-foreground">{lotActionPreview.lockedCount}</span>
-          </p>
-          {lotActionDisabledReason ? (
-            <p className="font-medium text-destructive">{lotActionDisabledReason}</p>
-          ) : null}
-        </div>
-      </DetailSection>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
@@ -289,6 +246,17 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
             <div className="flex flex-wrap items-center gap-2">
               <span>{formatDisplayDate(lot.expirationDate)}</span>
               <ExpirationStateBadge state={expirationState} />
+              {canManageCorrections && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setExtendExpirationOpen(true)}
+                >
+                  Extend
+                </Button>
+              )}
             </div>
           </DetailField>
         </DetailGrid>
@@ -459,67 +427,81 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
       </DetailSection>
 
       <DetailSection
-        title="Danger Zone"
-        description="Irreversible actions for this lot."
-        className="border-destructive/50"
+        title="Write off as loss"
+        description="Mark all eligible inventory in this lot as expired and record the cost as an expense."
+        footer={
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => setWriteOffOpen(true)}
+            disabled={Boolean(writeOffDisabledReason)}
+            title={writeOffDisabledReason ?? undefined}
+          >
+            Write off and record loss
+          </Button>
+        }
       >
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline">
-              Delete lot
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete lot?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete <strong>{lot.lotNumber}</strong>.
-                Delete will fail if inventory items or supplier invoice lines
-                still reference this lot. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={deleteLot.isPending}
-                onClick={() => {
-                  deleteLot.mutate(lotId, {
-                    onSuccess: () => {
-                      queryClient.invalidateQueries({
-                        queryKey: queryKeys.lots.all,
-                      });
-                      router.push("/lots");
-                    },
-                  });
-                }}
-              >
-                {deleteLot.isPending ? "Deleting..." : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            This marks all non-allocated, non-fulfilled inventory in this lot as expired and
+            creates an &quot;Inventory write-off&quot; expense entry for the total cost value.
+          </p>
+          {writeOffDisabledReason ? (
+            <p className="font-medium text-destructive">{writeOffDisabledReason}</p>
+          ) : (
+            <p>
+              {writeOffEligibleItems.length} item(s) eligible for write-off with an estimated
+              loss of <span className="font-medium text-foreground">{estimatedWriteOffValue.toLocaleString("en-US", { style: "currency", currency: "USD" })}</span>.
+            </p>
+          )}
+        </div>
       </DetailSection>
 
-      <LotBulkAdjustmentDialog
-        open={expireDialogOpen}
-        onOpenChange={setExpireDialogOpen}
+      <DetailSection
+        title="Reverse receipt"
+        description="Undo this lot by reversing its source supplier invoice."
+      >
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            Lots are created when a supplier invoice is completed. To remove this lot and its
+            inventory, reverse the receipt on the source invoice — this resets the invoice to
+            draft and deletes the lot and any untouched inventory in one transaction.
+          </p>
+          <p>
+            Reversal is blocked if any inventory in the lot has been allocated, fulfilled,
+            shipped, sold, or written off.
+          </p>
+          {sourceInvoices.length > 0 ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {sourceInvoices.map(invoice => (
+                <Button key={invoice.id} asChild variant="outline" size="sm">
+                  <Link href={`/supplier-invoices/${invoice.id}`}>
+                    Open {invoice.invoiceNumber} to reverse
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className="font-medium text-foreground">No source invoice linked to this lot.</p>
+          )}
+        </div>
+      </DetailSection>
+
+      <LotExtendExpirationDialog
+        open={extendExpirationOpen}
+        onOpenChange={setExtendExpirationOpen}
         lotId={lot.id}
         lotNumber={lot.lotNumber}
-        adjustableCount={lotActionPreview.adjustableCount}
-        lockedCount={lotActionPreview.lockedCount}
-        defaultTargetStatus="expired"
-        disabledReason={lotActionDisabledReason}
+        currentExpirationDate={lot.expirationDate}
       />
-      <LotBulkAdjustmentDialog
-        open={damageDialogOpen}
-        onOpenChange={setDamageDialogOpen}
+      <LotWriteOffDialog
+        open={writeOffOpen}
+        onOpenChange={setWriteOffOpen}
         lotId={lot.id}
         lotNumber={lot.lotNumber}
-        adjustableCount={lotActionPreview.adjustableCount}
-        lockedCount={lotActionPreview.lockedCount}
-        defaultTargetStatus="damaged"
-        disabledReason={lotActionDisabledReason}
+        eligibleItemCount={writeOffEligibleItems.length}
+        estimatedLossValue={estimatedWriteOffValue}
+        disabledReason={writeOffDisabledReason}
       />
     </div>
   );

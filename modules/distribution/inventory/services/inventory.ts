@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
+  expenses,
   inventoryAdjustments,
   inventoryItems,
   lots,
@@ -217,10 +218,10 @@ function getInventoryExpirationFilterSql(
   }
 
   if (expiration === "expiring_soon") {
-    return sql`${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '7 days'`;
+    return sql`${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '1 day'`;
   }
 
-  return sql`${lots.expirationDate} > current_date + interval '7 days'`;
+  return sql`${lots.expirationDate} > current_date + interval '1 day'`;
 }
 
 function buildInventoryWhere(args: {
@@ -282,7 +283,7 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
       totalItems: sql<number>`count(distinct ${inventoryItems.id})::int`,
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
       totalWeight: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
-      expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '7 days' then 1 else 0 end), 0)::int`,
+      expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '1 day' then 1 else 0 end), 0)::int`,
     })
     .from(inventoryItems)
     .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
@@ -694,6 +695,8 @@ async function loadInventoryItemForAdjustment(inventoryItemId: string) {
       barcodeId: true,
       exactWeightLbs: true,
       cases: true,
+      costPerUnitSnapshot: true,
+      costUnitTypeSnapshot: true,
       status: true,
     },
     with: {
@@ -719,6 +722,37 @@ async function loadInventoryItemForAdjustment(inventoryItemId: string) {
   }
 
   return { tenant, currentUser, inventoryItem };
+}
+
+function calculateWriteOffLoss(args: {
+  costPerUnitSnapshot: string | null;
+  costUnitTypeSnapshot: "catch_weight" | "fixed_case" | null;
+  statusBefore: InventoryLifecycleState;
+  statusAfter: InventoryLifecycleState;
+  casesBefore: number;
+  casesAfter: number;
+  weightBefore: number;
+  weightAfter: number;
+}): number {
+  const cost = Number(args.costPerUnitSnapshot ?? 0);
+  if (cost === 0) return 0;
+
+  const isWriteOff = args.statusAfter === "damaged" || args.statusAfter === "expired";
+  const isRestore = args.statusAfter === "in_stock";
+  if (isRestore) return 0;
+
+  const isCatchWeight = args.costUnitTypeSnapshot === "catch_weight";
+
+  if (isWriteOff) {
+    return isCatchWeight
+      ? cost * args.weightBefore
+      : cost * args.casesBefore;
+  }
+
+  const delta = isCatchWeight
+    ? args.weightBefore - args.weightAfter
+    : args.casesBefore - args.casesAfter;
+  return delta > 0 ? cost * delta : 0;
 }
 
 export async function adjustInventoryItem(input: {
@@ -785,6 +819,19 @@ export async function adjustInventoryItem(input: {
       ? "status_change"
       : "correction";
 
+  const writeOffLoss = calculateWriteOffLoss({
+    costPerUnitSnapshot: inventoryItem.costPerUnitSnapshot,
+    costUnitTypeSnapshot: inventoryItem.costUnitTypeSnapshot,
+    statusBefore: inventoryItem.status,
+    statusAfter: nextStatus,
+    casesBefore: inventoryItem.cases,
+    casesAfter: nextCases,
+    weightBefore: Number(inventoryItem.exactWeightLbs),
+    weightAfter: nextWeight,
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+
   await db.transaction(async tx => {
     await tx
       .update(inventoryItems)
@@ -841,6 +888,20 @@ export async function adjustInventoryItem(input: {
         notes: input.notes?.trim() || null,
       }),
     });
+
+    if (writeOffLoss > 0) {
+      await tx.insert(expenses).values({
+        tenantId: tenant.id,
+        expenseDate: today,
+        category: "Inventory write-off",
+        amount: writeOffLoss.toFixed(2),
+        note: [
+          `${inventoryItem.barcodeId} — ${nextStatus === inventoryItem.status ? `${inventoryItem.cases - nextCases} case(s) written off` : `item marked ${nextStatus}`}.`,
+          input.notes?.trim(),
+        ].filter(Boolean).join(" "),
+        createdByUserId: currentUser.id,
+      });
+    }
   });
 
   return await getInventoryItemById(inventoryItem.id);

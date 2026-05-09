@@ -24,7 +24,7 @@ const ACTIVE_INVENTORY_STATES: InventoryLifecycleState[] = [
 
 export function getExpirationState(
   expirationDate: string | Date | null | undefined,
-  warningDays = 7,
+  warningDays = 1,
 ): ExpirationState {
   if (!expirationDate) return "fresh";
 
