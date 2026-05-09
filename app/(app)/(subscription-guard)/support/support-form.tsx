@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { createSupportTicketAction, uploadTenantSupportTicketAttachmentAction } from "@/actions/support";
+import { createSupportTicketAction, uploadTenantSupportTicketAttachmentAction } from "@/modules/core/platform-admin/support/actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";

@@ -6,7 +6,7 @@ import {
   getProductByIdAction,
   getProductsAction,
   getProductsPageAction,
-} from "@/actions/products";
+} from "@/modules/distribution/products/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { ProductListParams } from "@/modules/distribution/products/services/products";

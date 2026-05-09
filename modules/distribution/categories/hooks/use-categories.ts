@@ -8,7 +8,7 @@ import {
   deleteCategoryAction,
   getCategoriesAction,
   getCategoryByIdAction,
-} from "@/actions/categories";
+} from "@/modules/distribution/categories/actions";
 import { isUuid } from "@/lib/utils/uuid";
 
 export function useCategories() {

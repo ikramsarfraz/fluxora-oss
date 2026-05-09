@@ -52,8 +52,8 @@ import {
 } from "./add-product-form.schema";
 import { useCategories } from "@/hooks/use-categories";
 import type { ProductCategory, ProductDetail } from "../services/products";
-import { createProductAction, updateProductAction } from "@/actions/products";
-import { createCategoryAction } from "@/actions/categories";
+import { createProductAction, updateProductAction } from "@/modules/distribution/products/actions";
+import { createCategoryAction } from "@/modules/distribution/categories/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { useProducts } from "../hooks/use-products";

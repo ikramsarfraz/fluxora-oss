@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
-import { completeUserOnboardingAction } from "@/actions/auth";
+import { completeUserOnboardingAction } from "@/modules/shared/actions";
 import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";

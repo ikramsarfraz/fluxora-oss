@@ -12,7 +12,7 @@ import {
   sendUserPasswordResetAction,
   setUserActiveAction,
   setUserRoleAction,
-} from "@/actions/users";
+} from "@/modules/core/workspace-settings/actions";
 import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 import type { UsersDirectoryListParams } from "@/modules/shared/services/portal-users";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";

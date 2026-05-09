@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { startPlatformAdminStripeCheckoutAction } from "@/actions/platform-stripe-billing";
+import { startPlatformAdminStripeCheckoutAction } from "@/modules/core/platform-admin/actions";
 import { Button } from "@/components/ui/button";
 import type { StripeCheckoutPlan } from "@/modules/core/billing/stripe-tenant-billing";
 

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { sendForgotMagicLinkAction } from "@/actions/auth";
+import { sendForgotMagicLinkAction } from "@/modules/shared/actions";
 import { AuthCenteredShell } from "@/app/(auth)/components/auth-shell";
 import {
   Card,

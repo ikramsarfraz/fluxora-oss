@@ -8,7 +8,7 @@ import {
   getSuppliersAction,
   getSuppliersPageAction,
   updateSupplierAction,
-} from "@/actions/suppliers";
+} from "@/modules/distribution/suppliers/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";

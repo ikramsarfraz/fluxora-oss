@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 import { ExternalLink, Loader2, CreditCard, Settings } from "lucide-react";
 
-import { startTenantAdminStripeCustomerPortalAction } from "@/actions/stripe-billing";
+import { startTenantAdminStripeCustomerPortalAction } from "@/modules/core/billing/actions";
 import { Button } from "@/components/ui/button";
 
 export function TenantBillingPortalControls(props: {

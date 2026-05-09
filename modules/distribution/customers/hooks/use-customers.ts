@@ -7,7 +7,7 @@ import {
   deleteCustomerAction,
   getCustomersAction,
   getCustomersPageAction,
-} from "@/actions/customers";
+} from "@/modules/distribution/customers/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";

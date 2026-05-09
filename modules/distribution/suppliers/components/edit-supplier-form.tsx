@@ -7,7 +7,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 
-import { updateSupplierAction } from "@/actions/suppliers";
+import { updateSupplierAction } from "@/modules/distribution/suppliers/actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";

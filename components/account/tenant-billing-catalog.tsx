@@ -17,7 +17,7 @@ import {
   Mail,
 } from "lucide-react";
 
-import { startTenantAdminStripeCheckoutAction } from "@/actions/stripe-billing";
+import { startTenantAdminStripeCheckoutAction } from "@/modules/core/billing/actions";
 import { TenantBillingCheckoutButtons } from "@/components/account/tenant-billing-checkout-buttons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";

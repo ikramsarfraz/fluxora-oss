@@ -10,7 +10,7 @@ import { Google } from "@/components/icons/google";
 import {
   prepareGoogleAuthStartAction,
   sendRootSignupMagicLinkAction,
-} from "@/actions/auth";
+} from "@/modules/shared/actions";
 import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import {
   signUpFormSchema,

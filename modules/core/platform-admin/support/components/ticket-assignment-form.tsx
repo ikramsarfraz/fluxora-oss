@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { assignSupportTicketAction } from "@/actions/support";
+import { assignSupportTicketAction } from "@/modules/core/platform-admin/support/actions";
 import {
   Select,
   SelectContent,

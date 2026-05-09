@@ -18,7 +18,7 @@ import {
   updateSalesOrderStatusAction,
   updateSalesOrderAction,
   updateSalesOrderNotesAction,
-} from "@/actions/orders";
+} from "@/modules/distribution/orders/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";

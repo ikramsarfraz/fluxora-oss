@@ -6,7 +6,7 @@ import {
   getPaymentByIdAction,
   getPaymentsAction,
   getPaymentsPageAction,
-} from "@/actions/payments";
+} from "@/modules/distribution/payments/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { PaymentListParams } from "@/modules/distribution/payments/services/payments";

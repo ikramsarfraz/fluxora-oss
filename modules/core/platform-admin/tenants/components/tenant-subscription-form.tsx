@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { updateTenantSubscriptionAction } from "@/actions/platform-admin";
+import { updateTenantSubscriptionAction } from "@/modules/core/platform-admin/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

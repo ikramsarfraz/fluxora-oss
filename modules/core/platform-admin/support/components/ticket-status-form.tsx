@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { updateSupportTicketStatusAction } from "@/actions/support";
+import { updateSupportTicketStatusAction } from "@/modules/core/platform-admin/support/actions";
 import {
   Select,
   SelectContent,

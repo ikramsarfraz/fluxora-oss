@@ -119,4 +119,3 @@ export async function uploadPlatformSupportTicketAttachmentAction(
   revalidatePath(`/admin/support/${ticketId}`);
   return attachment;
 }
-

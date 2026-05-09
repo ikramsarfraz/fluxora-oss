@@ -46,7 +46,6 @@ export async function startTenantAdminStripeCustomerPortalAction(): Promise<{
   return { url };
 }
 
-/** After Checkout redirect (`?success=1&session_id=` or legacy `?session_id=`), verify Stripe session server-side when possible. */
 export async function getStripeCheckoutSessionReturnLabels(sessionId: string): Promise<
   | { ok: true; paymentStatus: string; customerEmail: string | null }
   | { ok: false }
@@ -59,8 +58,7 @@ export async function getStripeCheckoutSessionReturnLabels(sessionId: string): P
   const me = await getCurrentPortalUser();
   const stripe = getStripeClient();
   const sess = await stripe.checkout.sessions.retrieve(trimmed);
-  const tenantId =
-    tenantIdFromCheckoutSession(sess) ?? null;
+  const tenantId = tenantIdFromCheckoutSession(sess) ?? null;
   if (!tenantId || tenantId !== me.tenantId) {
     return { ok: false };
   }

@@ -8,7 +8,7 @@ import {
   getUnitOfMeasureAction,
   getUnitsOfMeasureAction,
   updateUnitOfMeasureAction,
-} from "@/actions/units-of-measure";
+} from "@/modules/distribution/units-of-measure/actions";
 
 export function useUnitsOfMeasure() {
   return useQuery({

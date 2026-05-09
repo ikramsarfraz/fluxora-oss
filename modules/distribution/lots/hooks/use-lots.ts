@@ -7,7 +7,7 @@ import {
   deleteLotAction,
   getLotByIdAction,
   getLotsAction,
-} from "@/actions/lots";
+} from "@/modules/distribution/lots/actions";
 import { isUuid } from "@/lib/utils/uuid";
 
 export function useLots() {

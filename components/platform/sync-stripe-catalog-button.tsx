@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { toast } from "sonner";
 
-import { syncStripeCatalogAdminAction } from "@/actions/stripe-catalog-sync";
+import { syncStripeCatalogAdminAction } from "@/modules/core/platform-admin/actions";
 import { Button } from "@/components/ui/button";
 
 export function SyncStripeCatalogButton() {

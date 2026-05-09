@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   dismissTenantSetupChecklistAction,
   getTenantSetupChecklistViewAction,
-} from "@/actions/tenant-setup-checklist";
+} from "@/modules/core/workspace-settings/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 

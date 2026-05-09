@@ -9,7 +9,7 @@ import {
   getExpensesAction,
   getExpensesPageAction,
   updateExpenseAction,
-} from "@/actions/expenses";
+} from "@/modules/distribution/expenses/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { ExpenseListParams } from "@/modules/distribution/expenses/services/expenses";

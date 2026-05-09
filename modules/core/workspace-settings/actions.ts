@@ -1,5 +1,17 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
+import {
+  createTenantJoinRequest,
+  listPendingTenantJoinRequestsForAdmin,
+  reviewTenantJoinRequestByAdmin,
+} from "@/modules/core/workspace-settings/services/tenant-join-requests";
+import {
+  dismissTenantSetupChecklist,
+  getTenantSetupChecklistView,
+} from "@/modules/core/workspace-settings/services/setup-checklist";
+import type { TenantSetupChecklistView } from "@/modules/core/workspace-settings/services/setup-checklist";
 import {
   getCurrentPortalUser,
   getUsersDirectoryPage,
@@ -17,6 +29,37 @@ import {
   revokeUserInvitationByAdmin,
 } from "@/modules/core/workspace-settings/services/invitations";
 
+// --- Join requests ---
+
+export async function createTenantJoinRequestAction(
+  input: Parameters<typeof createTenantJoinRequest>[0],
+) {
+  return await createTenantJoinRequest(input);
+}
+
+export async function getPendingTenantJoinRequestsAction() {
+  return await listPendingTenantJoinRequestsForAdmin();
+}
+
+export async function reviewTenantJoinRequestAction(
+  input: Parameters<typeof reviewTenantJoinRequestByAdmin>[0],
+) {
+  return await reviewTenantJoinRequestByAdmin(input);
+}
+
+// --- Setup checklist ---
+
+export async function getTenantSetupChecklistViewAction(): Promise<TenantSetupChecklistView> {
+  return getTenantSetupChecklistView();
+}
+
+export async function dismissTenantSetupChecklistAction(): Promise<void> {
+  await dismissTenantSetupChecklist();
+  revalidatePath("/dashboard");
+}
+
+// --- Users & invitations ---
+
 export async function getUsersAction() {
   return await getUsers();
 }
@@ -27,10 +70,6 @@ export async function getUsersDirectoryPageAction(
   return await getUsersDirectoryPage(input);
 }
 
-/**
- * Returns a minimal, client-safe view of the signed-in portal user.
- * Used by client components that need the user's role for permission gating.
- */
 export async function getCurrentPortalUserAction() {
   const user = await getCurrentPortalUser();
   return {

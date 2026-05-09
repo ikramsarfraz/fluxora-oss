@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { deleteCustomerAction } from "@/actions/customers";
+import { deleteCustomerAction } from "@/modules/distribution/customers/actions";
 import { useCustomersPage } from "../hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";

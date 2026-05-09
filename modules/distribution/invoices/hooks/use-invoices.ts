@@ -6,7 +6,7 @@ import {
   getSalesInvoiceByIdAction,
   getSalesInvoicesAction,
   getSalesInvoicesPageAction,
-} from "@/actions/invoices";
+} from "@/modules/distribution/invoices/actions";
 import { isUuid } from "@/lib/utils/uuid";
 import type { SalesInvoiceListParams } from "@/modules/distribution/invoices/services/invoicing";
 

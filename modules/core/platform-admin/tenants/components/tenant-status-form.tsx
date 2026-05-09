@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { setTenantActiveAction } from "@/actions/platform-admin";
+import { setTenantActiveAction } from "@/modules/core/platform-admin/actions";
 
 export function TenantStatusForm({
   tenantId,

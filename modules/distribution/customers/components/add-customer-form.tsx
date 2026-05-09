@@ -31,7 +31,7 @@ import {
   createCustomerInputSchema,
   type CreateCustomerInput,
 } from "../validators/customer.schemas";
-import { createCustomerAction, updateCustomerAction } from "@/actions/customers";
+import { createCustomerAction, updateCustomerAction } from "@/modules/distribution/customers/actions";
 import { US_STATES } from "@/lib/constants/us-states";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import {

@@ -8,7 +8,7 @@ import {
   getInventoryItemByIdAction,
   getInventoryItemsAction,
   getInventoryItemsPageAction,
-} from "@/actions/inventory";
+} from "@/modules/distribution/inventory/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { InventoryListParams } from "@/modules/distribution/inventory/services/inventory";

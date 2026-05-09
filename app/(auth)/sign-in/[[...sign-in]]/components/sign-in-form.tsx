@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Google } from "@/components/icons/google";
 
-import { prepareGoogleAuthStartAction } from "@/actions/auth";
+import { prepareGoogleAuthStartAction } from "@/modules/shared/actions";
 import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import {
   signInFormSchema,

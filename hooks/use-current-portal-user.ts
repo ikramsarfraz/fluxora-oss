@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { getCurrentPortalUserAction } from "@/actions/users";
+import { getCurrentPortalUserAction } from "@/modules/core/workspace-settings/actions";
 import { queryKeys } from "@/lib/query/keys";
 
 /**

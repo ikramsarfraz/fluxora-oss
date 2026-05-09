@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   addTenantSupportTicketUpdateAction,
   uploadTenantSupportTicketAttachmentAction,
-} from "@/actions/support";
+} from "@/modules/core/platform-admin/support/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

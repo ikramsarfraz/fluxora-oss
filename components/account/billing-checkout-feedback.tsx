@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, X, XCircle, AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getStripeCheckoutSessionReturnLabels } from "@/actions/stripe-billing";
+import { getStripeCheckoutSessionReturnLabels } from "@/modules/core/billing/actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

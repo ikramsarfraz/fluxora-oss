@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getActivityForSalesOrderAction,
   getActivityForSupplierInvoiceAction,
-} from "@/actions/audit";
+} from "@/modules/distribution/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 

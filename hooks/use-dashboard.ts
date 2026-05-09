@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { getApAgingAction, getArAgingAction } from "@/actions/aging";
-import { getDashboardSummaryAction } from "@/actions/dashboard";
+import { getApAgingAction, getArAgingAction } from "@/modules/distribution/actions";
+import { getDashboardSummaryAction } from "@/modules/distribution/actions";
 import { queryKeys } from "@/lib/query/keys";
 
 // Dashboards aren't hot paths; cache for 2 minutes so clicking around feels

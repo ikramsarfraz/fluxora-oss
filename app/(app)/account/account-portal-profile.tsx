@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { sendSelfTenantSignInMagicLinkAction } from "@/actions/auth";
+import { sendSelfTenantSignInMagicLinkAction } from "@/modules/shared/actions";
 import { PortalUserProfile } from "@/components/portal-user-profile";
 import type { PortalUserDetail } from "@/modules/shared/services/portal-users";
 

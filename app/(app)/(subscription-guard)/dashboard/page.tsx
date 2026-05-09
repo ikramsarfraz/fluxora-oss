@@ -12,7 +12,7 @@ import { queryKeys } from "@/lib/query/keys";
 import { getDashboardSummary } from "@/modules/distribution/services/dashboard";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
-import { getTenantSetupChecklistViewAction } from "@/actions/tenant-setup-checklist";
+import { getTenantSetupChecklistViewAction } from "@/modules/core/workspace-settings/actions";
 
 import { DashboardShell } from "../(dashboard)/components/dashboard-shell";
 
