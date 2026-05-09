@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 
@@ -45,6 +45,8 @@ import {
   LineItemsInvoiceTotal,
   SupplierInvoiceLinesEditor,
 } from "./supplier-invoice-lines-editor";
+import type { PipelineResult } from "@/modules/distribution/supplier-invoices/services/parsing-pipeline";
+import { ImportReviewPanel } from "./import-review-panel";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -209,7 +211,19 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
-    completeMutation.isPending;
+    completeMutation.isPending ||
+    parsePdfMutation.isPending ||
+    uploadParsedPdfMutation.isPending;
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
+  const [pdfPrefill, setPdfPrefill] = useState<PipelineResult | null>(null);
+  // Maps vendorProductName → form line index for resolved lines.
+  // Built when a PDF is parsed; updated as the user accepts/chooses products.
+  const [vendorNameLineMap, setVendorNameLineMap] = useState<Map<string, number>>(new Map());
+  // Per-form-line vendor product names (from PDF import), indexed to match the lines array.
+  const [lineVendorNames, setLineVendorNames] = useState<(string | null)[]>([]);
+  const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" });
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const [autoSaveStatus, setAutoSaveStatus] = useState<
@@ -303,6 +317,73 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     ? `/supplier-invoices/${invoiceId}`
     : "/supplier-invoices";
 
+  function handleReadPdfClick() {
+    pdfInputRef.current?.click();
+  }
+
+  async function handlePdfFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_PDF_BYTES) {
+      toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+
+    try {
+      const result = await parsePdfMutation.mutateAsync(file);
+      form.reset(result.prefillResult.values);
+      setPendingPdfFile(file);
+      setPdfPrefill(result);
+      setAutoSaveStatus("idle");
+
+      // Map vendor name → form line index for lines still needing product selection.
+      // unmatchedLineDescriptions[k] corresponds to the (k+1)-th form line with empty productId.
+      const newMap = new Map<string, number>();
+      let unmatchedIdx = 0;
+      const unmatchedNames = result.prefillResult.unmatchedLineDescriptions;
+      for (let i = 0; i < result.prefillResult.values.lines.length; i++) {
+        if (!result.prefillResult.values.lines[i].productId && unmatchedIdx < unmatchedNames.length) {
+          newMap.set(unmatchedNames[unmatchedIdx], i);
+          unmatchedIdx++;
+        }
+      }
+      setVendorNameLineMap(newMap);
+
+      // Build per-line vendor name array for the lines editor display (invert newMap).
+      const vendorNames: (string | null)[] = Array(result.prefillResult.values.lines.length).fill(null);
+      for (const [vendorName, lineIdx] of newMap) {
+        vendorNames[lineIdx] = vendorName;
+      }
+      setLineVendorNames(vendorNames);
+
+      toast.success(`Read ${file.name}. Review the imported fields before saving.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not read this PDF.",
+      );
+    }
+  }
+
+  async function attachPendingPdf(targetInvoiceId: string) {
+    if (!pendingPdfFile) return;
+    try {
+      await uploadParsedPdfMutation.mutateAsync({
+        supplierInvoiceId: targetInvoiceId,
+        file: pendingPdfFile,
+      });
+      toast.success(`Attached ${pendingPdfFile.name}.`);
+      setPendingPdfFile(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Bill saved, but PDF attachment failed: ${err.message}`
+          : "Bill saved, but PDF attachment failed.",
+      );
+    }
+  }
 
   async function submit(
     values: SupplierInvoiceFormValues,
@@ -374,6 +455,13 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
       toast.error(
         err instanceof Error ? err.message : "Could not save invoice.",
       );
+    }
+  }
+
+  function handleVendorNameResolved(vendorName: string, productId: string) {
+    const lineIndex = vendorNameLineMap.get(vendorName);
+    if (lineIndex !== undefined) {
+      form.setValue(`lines.${lineIndex}.productId`, productId, { shouldValidate: true });
     }
   }
 
@@ -633,6 +721,40 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           </SectionCard>
         </div>
 
+        {pdfPrefill && (
+          <div style={{ marginBottom: 16 }}>
+            {/* PDF filename strip */}
+            <div
+              style={{
+                padding: "8px 14px",
+                background: C.surfaceAlt,
+                border: `1px solid ${C.line}`,
+                borderBottom: "none",
+                borderRadius: "10px 10px 0 0",
+                fontSize: 12,
+                color: C.muted,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <FileText style={{ width: 13, height: 13, flexShrink: 0 }} />
+              <span>
+                {pdfPrefill.prefillResult.sourceFilename}
+                {pendingPdfFile
+                  ? " · will be attached on save"
+                  : " · attached"}
+                {pdfPrefill.requiresOcr && " · scanned PDF, OCR not yet supported"}
+              </span>
+            </div>
+            <ImportReviewPanel
+              pipelineResult={pdfPrefill}
+              products={products ?? []}
+              supplierId={watchedSupplierId || null}
+              onVendorNameResolved={handleVendorNameResolved}
+            />
+          </div>
+        )}
 
         {/* ── Line items card ────────────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
@@ -715,6 +837,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               products={products ?? []}
               productsLoading={productsLoading}
               disabled={isPending}
+              vendorProductNames={lineVendorNames.length > 0 ? lineVendorNames : undefined}
             />
 
             {form.formState.errors.lines?.message && (

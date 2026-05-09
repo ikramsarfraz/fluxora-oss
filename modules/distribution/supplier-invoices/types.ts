@@ -13,3 +13,36 @@ export type {
   SupplierInvoiceAttachment,
 } from "./services/receiving";
 export type { SupplierInvoiceFormValues } from "./components/supplier-invoice-form.schema";
+export type {
+  ImportProfile,
+  ImportProfileParsingRules,
+  CreateImportProfileInput,
+  UpdateImportProfileInput,
+} from "./services/import-profiles";
+export type {
+  ProductAlias,
+  CreateAliasInput,
+  UpdateAliasInput,
+  ProductMatchResult,
+  MatchStage,
+  ProductMatchCandidate,
+} from "./services/product-matching";
+export type {
+  PipelineResult,
+  PipelineParseSource,
+  PipelineDebugInfo,
+  UnresolvedLine,
+  DetectedFee,
+} from "./services/parsing-pipeline";
+export type { ParsedConfidenceBreakdown } from "./utils/pipeline-scoring";
+export type { VisionExtractionScore } from "./utils/vision-scoring";
+export type { VisionExtractionInput, VisionExtractionResult } from "./services/ai-vision";
+export type {
+  AiProvider,
+  AiExtractionInput,
+  AiExtractionResult,
+  AiInvoiceLine,
+  AiProductMatchInput,
+  AiProductMatchResult,
+  AiProductMatch,
+} from "./services/ai-provider";

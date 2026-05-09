@@ -5,14 +5,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   completeSupplierInvoiceAction,
   createSupplierInvoiceAction,
+  createImportProfileAction,
   deleteSupplierInvoiceAction,
   getSupplierInvoiceByIdAction,
   getSupplierInvoicesAction,
   getSupplierInvoicesPageAction,
   parseSupplierInvoicePdfAction,
   recordSupplierInvoicePaymentAction,
+  recordManualProductSelectionAction,
   removeSupplierInvoiceAttachmentAction,
   reverseSupplierInvoiceAction,
+  saveConfirmedAiAliasAction,
   updateSupplierInvoiceAction,
   uploadSupplierInvoiceAttachmentAction,
 } from "@/modules/distribution/supplier-invoices/actions";
@@ -200,6 +203,24 @@ export function useUploadSupplierInvoiceAttachmentToInvoice() {
         queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
       });
     },
+  });
+}
+
+export function useSaveConfirmedAiAlias() {
+  return useMutation({
+    mutationFn: saveConfirmedAiAliasAction,
+  });
+}
+
+export function useRecordManualProductSelection() {
+  return useMutation({
+    mutationFn: recordManualProductSelectionAction,
+  });
+}
+
+export function useCreateImportProfile() {
+  return useMutation({
+    mutationFn: createImportProfileAction,
   });
 }
 

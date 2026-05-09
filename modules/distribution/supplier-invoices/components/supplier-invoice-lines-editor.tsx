@@ -70,6 +70,8 @@ type Props = {
   products: ProductListItem[];
   productsLoading: boolean;
   disabled?: boolean;
+  /** Per-line vendor product names from PDF import, indexed to match form lines array. */
+  vendorProductNames?: (string | null)[];
 };
 
 // ── Invoice total for card header (exported) ───────────────────────────────
@@ -264,6 +266,7 @@ export function SupplierInvoiceLinesEditor({
   products,
   productsLoading,
   disabled = false,
+  vendorProductNames,
 }: Props) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -327,6 +330,7 @@ export function SupplierInvoiceLinesEditor({
             disabled={disabled}
             onRemove={() => remove(index)}
             canRemove={fields.length > 1}
+            vendorProductName={vendorProductNames?.[index] ?? null}
           />
         ))
       )}
@@ -382,6 +386,7 @@ function LineRow({
   disabled,
   onRemove,
   canRemove,
+  vendorProductName,
 }: {
   control: Control<SupplierInvoiceFormValues>;
   register: UseFormRegister<SupplierInvoiceFormValues>;
@@ -392,6 +397,7 @@ function LineRow({
   disabled: boolean;
   onRemove: () => void;
   canRemove: boolean;
+  vendorProductName?: string | null;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
   const [expanded, setExpanded] = useState(false);
@@ -515,6 +521,22 @@ function LineRow({
       >
         {/* 1. Product */}
         <div>
+          {vendorProductName && (
+            <div
+              style={{
+                fontSize: 10,
+                color: T.mutedSoft,
+                fontFamily: T.mono,
+                marginBottom: 4,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={`Vendor name: ${vendorProductName}`}
+            >
+              {vendorProductName}
+            </div>
+          )}
           <Controller
             control={control}
             name={`lines.${index}.productId`}

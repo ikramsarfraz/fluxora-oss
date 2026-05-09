@@ -14,6 +14,25 @@ import {
   uploadSupplierInvoiceAttachment,
 } from "../services/receiving";
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
+import {
+  getImportProfilesForSupplier,
+  createImportProfile,
+  updateImportProfile,
+  deactivateImportProfile,
+  type CreateImportProfileInput,
+  type UpdateImportProfileInput,
+} from "../services/import-profiles";
+import {
+  getAliasesForSupplier,
+  getAllAliasesForTenant,
+  upsertProductAlias,
+  confirmProductAlias,
+  deleteProductAlias,
+  saveConfirmedAiAlias,
+  recordManualProductSelection,
+  type CreateAliasInput,
+  type UpdateAliasInput,
+} from "../services/product-matching";
 
 export async function getSupplierInvoicesAction() {
   return await getSupplierInvoices();
@@ -101,4 +120,64 @@ export async function removeSupplierInvoiceAttachmentAction(input: {
   fileId: string;
 }) {
   return await removeSupplierInvoiceAttachment(input);
+}
+
+// ---------------------------------------------------------------------------
+// Import profile actions
+// ---------------------------------------------------------------------------
+
+export async function getImportProfilesForSupplierAction(supplierId: string) {
+  return await getImportProfilesForSupplier(supplierId);
+}
+
+export async function createImportProfileAction(input: CreateImportProfileInput) {
+  return await createImportProfile(input);
+}
+
+export async function updateImportProfileAction(input: UpdateImportProfileInput) {
+  return await updateImportProfile(input);
+}
+
+export async function deactivateImportProfileAction(id: string) {
+  return await deactivateImportProfile(id);
+}
+
+// ---------------------------------------------------------------------------
+// Product alias actions
+// ---------------------------------------------------------------------------
+
+export async function getAliasesForSupplierAction(supplierId: string) {
+  return await getAliasesForSupplier(supplierId);
+}
+
+export async function getAllAliasesForTenantAction() {
+  return await getAllAliasesForTenant();
+}
+
+export async function upsertProductAliasAction(input: CreateAliasInput) {
+  return await upsertProductAlias(input);
+}
+
+export async function confirmProductAliasAction(aliasId: string) {
+  return await confirmProductAlias(aliasId);
+}
+
+export async function deleteProductAliasAction(aliasId: string) {
+  return await deleteProductAlias(aliasId);
+}
+
+export async function saveConfirmedAiAliasAction(args: {
+  supplierId: string;
+  vendorProductName: string;
+  internalProductId: string;
+}) {
+  return await saveConfirmedAiAlias(args);
+}
+
+export async function recordManualProductSelectionAction(args: {
+  supplierId: string;
+  vendorProductName: string;
+  internalProductId: string;
+}) {
+  return await recordManualProductSelection(args);
 }

@@ -132,6 +132,19 @@ export const supplierInvoiceStatusEnum = pgEnum("supplier_invoice_status", [
   "completed",
 ]);
 
+export const aliasSourceEnum = pgEnum("alias_source", [
+  "manual",
+  "ai_suggested",
+  "confirmed",
+  "parser",
+]);
+
+export const parserTypeEnum = pgEnum("parser_type", [
+  "deterministic",
+  "ai_fallback",
+  "hybrid",
+]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "insert",
   "update",
@@ -1870,6 +1883,98 @@ export const auditLogs = pgTable(
     index("audit_logs_actor_portal_user_idx").on(table.actorPortalUserId),
     index("audit_logs_actor_platform_user_idx").on(table.actorPlatformUserId),
     index("audit_logs_action_created_at_idx").on(table.action, table.createdAt),
+  ],
+);
+
+// -------------------- Supplier import profiles + aliases --------------------
+
+export const supplierImportProfiles = pgTable(
+  "supplier_import_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    profileName: varchar("profile_name", { length: 128 }).notNull(),
+    detectionKeywords: jsonb("detection_keywords").$type<string[]>().notNull().default([]),
+    parserType: parserTypeEnum("parser_type").notNull().default("deterministic"),
+    parsingRules: jsonb("parsing_rules")
+      .$type<{
+        headerFields?: Record<string, string>;
+        lineParsing?: Record<string, unknown>;
+        exclusions?: string[];
+        feePatterns?: string[];
+        totalsPattern?: string;
+      }>()
+      .notNull()
+      .default({}),
+    confidenceThreshold: numeric("confidence_threshold", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("60"),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_import_profiles_tenant_id_idx").on(table.tenantId),
+    index("supplier_import_profiles_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("supplier_import_profiles_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.profileName,
+    ),
+  ],
+);
+
+export const supplierProductAliases = pgTable(
+  "supplier_product_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    vendorProductName: varchar("vendor_product_name", { length: 256 }).notNull(),
+    normalizedVendorProductName: varchar("normalized_vendor_product_name", {
+      length: 256,
+    }).notNull(),
+    internalProductId: uuid("internal_product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    confidence: numeric("confidence", { precision: 5, scale: 2 }).notNull().default("100"),
+    source: aliasSourceEnum("source").notNull().default("manual"),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_product_aliases_tenant_id_idx").on(table.tenantId),
+    index("supplier_product_aliases_supplier_id_idx").on(table.supplierId),
+    index("supplier_product_aliases_product_id_idx").on(table.internalProductId),
+    uniqueIndex("supplier_product_aliases_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.normalizedVendorProductName,
+    ),
   ],
 );
 
