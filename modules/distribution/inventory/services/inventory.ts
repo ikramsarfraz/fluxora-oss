@@ -493,14 +493,6 @@ export async function getInventoryItemById(inventoryItemId: string) {
                       receiveDate: true,
                       status: true,
                     },
-                    with: {
-                      supplier: {
-                        columns: {
-                          id: true,
-                          name: true,
-                        },
-                      },
-                    },
                   },
                 },
               },

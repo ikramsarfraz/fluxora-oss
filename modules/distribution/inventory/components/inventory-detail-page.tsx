@@ -35,6 +35,7 @@ import {
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
 import { InventoryAdjustmentHistory } from "@/modules/distribution/components/warehouse/inventory-adjustment-history";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { formatMoney } from "@/lib/utils/currency";
 import {
   formatWeightLbs,
   getExpirationState,
@@ -102,6 +103,12 @@ export function InventoryDetailPage({
       ? getWarehouseCorrectionDeniedReason()
       : workflowAdjustmentBlockedReason;
 
+  const costUnitLabel = item.costUnitTypeSnapshot === "fixed_case" ? "case" : "lb";
+  const totalCostValue =
+    item.costUnitTypeSnapshot === "fixed_case"
+      ? Number(item.costPerUnitSnapshot) * item.cases
+      : Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs);
+
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
@@ -166,21 +173,21 @@ export function InventoryDetailPage({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active allocations
+              Cost value
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {item.allocations.length}
+            {formatMoney(totalCostValue.toFixed(2))}
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Fulfillment rows
+              Active allocations
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {activeFulfillments.length}
+            {item.allocations.length}
           </CardContent>
         </Card>
       </div>
@@ -204,6 +211,9 @@ export function InventoryDetailPage({
           <DetailField label="Cases">{item.cases}</DetailField>
           <DetailField label="Exact weight">
             {formatWeightLbs(item.exactWeightLbs)} lb
+          </DetailField>
+          <DetailField label="Unit cost">
+            {formatMoney(item.costPerUnitSnapshot)} / {costUnitLabel}
           </DetailField>
           <DetailField label="Status">
             <InventoryStatusBadge status={item.status} />

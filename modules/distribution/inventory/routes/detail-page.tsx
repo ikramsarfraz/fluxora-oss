@@ -1,45 +1,19 @@
-import {
-  HydrationBoundary,
-  QueryClient,
-  dehydrate,
-} from "@tanstack/react-query";
-import { notFound } from "next/navigation";
+"use client";
 
-import { queryKeys } from "@/lib/query/keys";
+import { useParams } from "next/navigation";
+
 import { isUuid } from "@/lib/utils/uuid";
-import { getInventoryItemById, getInventoryItems } from "../services/inventory";
+import { PageError } from "@/components/page-error";
 
 import { InventoryDetailPage } from "../components/inventory-detail-page";
 
-export default async function InventoryDetailRoute({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  if (!isUuid(id)) notFound();
+export default function InventoryDetailRoute() {
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "";
 
-  const queryClient = new QueryClient();
-  try {
-    const item = await queryClient.fetchQuery({
-      queryKey: queryKeys.inventory.detail(id),
-      queryFn: () => getInventoryItemById(id),
-    });
-    if (!item) notFound();
-  } catch {
-    notFound();
+  if (!isUuid(id)) {
+    return <PageError message="Invalid inventory item ID." />;
   }
 
-  await queryClient
-    .prefetchQuery({
-      queryKey: queryKeys.inventory.all,
-      queryFn: getInventoryItems,
-    })
-    .catch(() => {});
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <InventoryDetailPage inventoryItemId={id} />
-    </HydrationBoundary>
-  );
+  return <InventoryDetailPage inventoryItemId={id} />;
 }
