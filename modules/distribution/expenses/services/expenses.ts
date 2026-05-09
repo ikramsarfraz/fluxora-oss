@@ -8,7 +8,7 @@ import {
 } from "@/lib/expenses/metadata";
 
 import { getCurrentPortalUser, type PortalUserRole } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   buildTextSearchCondition,
   createPaginatedResult,

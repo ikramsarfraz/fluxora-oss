@@ -8,7 +8,7 @@ import {
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
 import { countActiveCustomersForTenant } from "@/modules/core/billing/services/subscription-usage";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   buildTextSearchCondition,
   createPaginatedResult,

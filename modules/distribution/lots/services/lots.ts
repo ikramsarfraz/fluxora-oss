@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { inventoryAdjustments, lots } from "@/db/schema";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 export async function getLotById(lotId: string) {
   const tenant = await getCurrentTenant();

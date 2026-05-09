@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 export async function getCategoryById(categoryId: string) {
   const tenant = await getCurrentTenant();

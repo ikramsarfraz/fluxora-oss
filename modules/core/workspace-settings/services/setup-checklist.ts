@@ -13,7 +13,7 @@ import {
   tenants,
   userInvitations,
 } from "@/db/schema";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/services/portal-users";
 
 export const SETUP_CHECKLIST_ITEM_IDS = [

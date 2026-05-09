@@ -11,7 +11,7 @@ import {
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 export type TenantPlanUsage = {
   currentPlan: TenantSubscriptionPlan;

@@ -22,7 +22,7 @@ import {
   type SupportTicketUpdateVisibility,
 } from "@/lib/support/metadata";
 import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 import {
   buildSupportTicketObjectKey,

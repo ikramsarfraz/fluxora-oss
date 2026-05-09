@@ -10,7 +10,7 @@ import {
   salesOrders,
 } from "@/db/schema";
 
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 export type ActivityScope =
   | "order"

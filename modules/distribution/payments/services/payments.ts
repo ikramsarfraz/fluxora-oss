@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, payments, salesInvoices } from "@/db/schema";
 
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   buildTextSearchCondition,
   createPaginatedResult,

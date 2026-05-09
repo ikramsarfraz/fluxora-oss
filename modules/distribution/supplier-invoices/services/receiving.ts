@@ -33,7 +33,7 @@ import { parsePersistedCaseWeights } from "../utils/case-weights";
 import { computePaymentSummary } from "../utils/payment-summary";
 
 import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 /**
  * Transaction handle inferred from the active driver. Use this in any helper

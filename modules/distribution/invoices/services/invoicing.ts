@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { markInventoryItemsSold } from "@/modules/distribution/services/inventory-state";
 import { getCurrentPortalUser } from "@/services/portal-users";
-import { getCurrentTenant } from "@/services/tenants";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildTextSearchCondition,

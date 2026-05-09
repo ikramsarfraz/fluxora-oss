@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { PlanFeatureGate } from "@/components/subscription/plan-feature-gate";
 import { canUseFeature } from "@/lib/subscription-plan-capabilities";
-import { getCurrentTenantCached } from "@/services/tenants";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 
 import { PriceChartClient } from "../components/price-chart-client";
 
