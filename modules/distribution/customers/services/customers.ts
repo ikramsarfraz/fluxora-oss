@@ -1,6 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { customerAddresses, customers } from "@/db/schema";
+import { customerAddresses, customers, salesInvoices, salesOrders } from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import {
@@ -51,9 +51,9 @@ export async function createCustomer(
     .values({
       tenantId: tenant.id,
       name: input.name,
+      abbreviation: input.abbreviation,
       phoneNumber: input.phoneNumber,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
-      invoicePrefix: input.invoicePrefix,
     })
     .returning();
 
@@ -101,8 +101,8 @@ export async function updateCustomer(
       ...(input.fuelSurchargeAmount !== undefined
         ? { fuelSurchargeAmount: input.fuelSurchargeAmount }
         : {}),
-      ...(input.invoicePrefix !== undefined
-        ? { invoicePrefix: input.invoicePrefix }
+      ...(input.abbreviation !== undefined
+        ? { abbreviation: input.abbreviation }
         : {}),
     })
     .where(and(eq(customers.id, input.id), eq(customers.tenantId, tenant.id)))
@@ -178,7 +178,7 @@ export async function getCustomersPage(input?: CustomerListParams) {
     buildTextSearchCondition(query.search, [
       customers.name,
       customers.phoneNumber,
-      customers.invoicePrefix,
+      customers.abbreviation,
     ]),
   );
   const [{ count }] = await db
@@ -220,3 +220,82 @@ export async function deleteCustomer(customerId: string) {
 
 /** Row shape returned by `getCustomers()` / `GET /api/customers` (for client `import type` only). */
 export type CustomerListItem = Awaited<ReturnType<typeof getCustomers>>[number];
+
+export async function getCustomerPortfolio(customerId: string) {
+  const tenant = await getCurrentTenant();
+
+  const [customer, recentOrders, recentInvoices, invoiceAggRows, orderAggRows] =
+    await Promise.all([
+      db.query.customers.findFirst({
+        where: and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)),
+        with: { addresses: true },
+      }),
+      db.query.salesOrders.findMany({
+        where: and(
+          eq(salesOrders.customerId, customerId),
+          eq(salesOrders.tenantId, tenant.id),
+        ),
+        columns: { id: true, orderNumber: true, orderDate: true, dueDate: true, status: true },
+        orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
+        limit: 20,
+      }),
+      db.query.salesInvoices.findMany({
+        where: and(
+          eq(salesInvoices.customerId, customerId),
+          eq(salesInvoices.tenantId, tenant.id),
+        ),
+        columns: {
+          id: true,
+          invoiceNumber: true,
+          invoiceDate: true,
+          dueDate: true,
+          status: true,
+          totalAmount: true,
+          amountPaid: true,
+          balanceDue: true,
+        },
+        orderBy: [desc(salesInvoices.invoiceDate)],
+        limit: 20,
+      }),
+      db
+        .select({
+          totalRevenue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.totalAmount}::numeric else 0 end), 0)`,
+          totalBalanceDue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.balanceDue}::numeric else 0 end), 0)`,
+          totalPaid: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.amountPaid}::numeric else 0 end), 0)`,
+        })
+        .from(salesInvoices)
+        .where(
+          and(
+            eq(salesInvoices.customerId, customerId),
+            eq(salesInvoices.tenantId, tenant.id),
+          ),
+        ),
+      db
+        .select({
+          openCount: sql<number>`count(case when ${salesOrders.status} not in ('fulfilled', 'cancelled') then 1 end)::int`,
+        })
+        .from(salesOrders)
+        .where(
+          and(
+            eq(salesOrders.customerId, customerId),
+            eq(salesOrders.tenantId, tenant.id),
+          ),
+        ),
+    ]);
+
+  if (!customer) return null;
+
+  return {
+    customer,
+    recentOrders,
+    recentInvoices,
+    metrics: {
+      totalRevenue: invoiceAggRows[0]?.totalRevenue ?? "0",
+      balanceDue: invoiceAggRows[0]?.totalBalanceDue ?? "0",
+      totalPaid: invoiceAggRows[0]?.totalPaid ?? "0",
+      openOrdersCount: orderAggRows[0]?.openCount ?? 0,
+    },
+  };
+}
+
+export type CustomerPortfolio = NonNullable<Awaited<ReturnType<typeof getCustomerPortfolio>>>;

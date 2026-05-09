@@ -53,18 +53,18 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
   if (!customer) {
     return {
       name: "",
+      abbreviation: "",
       phoneNumber: "",
       fuelSurchargeAmount: "",
-      invoicePrefix: "",
       addresses: [],
     };
   }
 
   return {
     name: customer.name,
+    abbreviation: customer.abbreviation ?? "",
     phoneNumber: customer.phoneNumber ?? "",
     fuelSurchargeAmount: customer.fuelSurchargeAmount ?? "",
-    invoicePrefix: customer.invoicePrefix ?? "",
     addresses: customer.addresses.map(address => ({
       addressType: address.addressType,
       street: address.street,
@@ -157,6 +157,30 @@ export function AddCustomerForm(props?: {
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. Acme Meats Inc."
                     autoComplete="organization"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Abbreviation */}
+            <Controller
+              name="abbreviation"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-customer-abbreviation">
+                    Abbreviation *
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    id="form-add-customer-abbreviation"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. ACME"
+                    maxLength={32}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />

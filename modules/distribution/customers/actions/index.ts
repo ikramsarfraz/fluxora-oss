@@ -6,6 +6,7 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomerById,
+  getCustomerPortfolio,
   getCustomers,
   getCustomersPage,
   updateCustomer,
@@ -39,7 +40,6 @@ export async function createCustomerAction(input: CreateCustomerInput) {
     ...parsed,
     phoneNumber: emptyToNull(parsed.phoneNumber),
     fuelSurchargeAmount: emptyToNull(parsed.fuelSurchargeAmount),
-    invoicePrefix: emptyToNull(parsed.invoicePrefix),
   });
 }
 
@@ -53,7 +53,6 @@ export async function updateCustomerAction(
     ...parsed,
     phoneNumber: emptyToNull(parsed.phoneNumber),
     fuelSurchargeAmount: emptyToNull(parsed.fuelSurchargeAmount),
-    invoicePrefix: emptyToNull(parsed.invoicePrefix),
   });
   revalidatePath("/customers");
   revalidatePath(`/customers/${customerId}`);
@@ -63,4 +62,8 @@ export async function updateCustomerAction(
 
 export async function deleteCustomerAction(customerId: string) {
   return await deleteCustomer(customerId);
+}
+
+export async function getCustomerPortfolioAction(customerId: string) {
+  return await getCustomerPortfolio(customerId);
 }

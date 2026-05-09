@@ -148,7 +148,7 @@ export async function createInvoiceFromSalesOrder(input: {
     .returning();
 
   const invoiceNumber = makeInvoiceNumber(
-    order.customer.invoicePrefix,
+    order.customer.abbreviation,
     invoice.id,
   );
 

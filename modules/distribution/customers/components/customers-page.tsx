@@ -55,11 +55,11 @@ const COLUMNS: ListingColumn<CustomerRow>[] = [
     },
   },
   {
-    key: "invoicePrefix",
-    header: "Invoice prefix",
+    key: "abbreviation",
+    header: "Abbreviation",
     render: row =>
-      row.invoicePrefix
-        ? { primary: <MonoText>{row.invoicePrefix}</MonoText> }
+      row.abbreviation
+        ? { primary: <MonoText>{row.abbreviation}</MonoText> }
         : { primary: <span style={{ color: "#78716c" }}>—</span> },
   },
   {

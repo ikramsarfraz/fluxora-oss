@@ -635,7 +635,7 @@ export const customers = pgTable(
       precision: 10,
       scale: 2,
     }),
-    invoicePrefix: varchar("invoice_prefix", { length: 32 }),
+    abbreviation: varchar("invoice_prefix", { length: 32 }),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {

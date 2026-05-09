@@ -145,10 +145,10 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
       },
     },
     {
-      accessorKey: "invoicePrefix",
-      header: "Invoice Prefix",
+      accessorKey: "abbreviation",
+      header: "Abbreviation",
       cell: ({ row }) => {
-        const prefix = row.getValue("invoicePrefix") as string | null;
+        const prefix = row.getValue("abbreviation") as string | null;
         return prefix ? (
           <code className="rounded bg-muted px-1.5 py-0.5 text-sm">{prefix}</code>
         ) : (

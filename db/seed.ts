@@ -1291,7 +1291,7 @@ async function seedCustomers(tenantId: string, portalUserId: string) {
         tenantId,
         name: c.name,
         phoneNumber: c.phone,
-        invoicePrefix: c.prefix,
+        abbreviation: c.prefix,
         fuelSurchargeAmount: c.fuelSurchargeAmount,
         createdByUserId: portalUserId,
         updatedByUserId: portalUserId,

@@ -45,9 +45,9 @@ import {
   type PaginatedQueryInput,
 } from "@/lib/pagination";
 
-/** Short human-readable suffix. Prefix (if any) is applied downstream per-customer. */
-function makeOrderNumber(id: string) {
-  return `SO-${id.slice(0, 8).toUpperCase()}`;
+function makeOrderNumber(id: string, prefix: string | null | undefined) {
+  const base = `SO-${id.slice(0, 8).toUpperCase()}`;
+  return prefix ? `${prefix}-${base}` : base;
 }
 
 function isLineClosed(line: {
@@ -1603,7 +1603,11 @@ export async function createSalesOrder(input: {
     })
     .returning();
 
-  const orderNumber = makeOrderNumber(order.id);
+  const customer = await db.query.customers.findFirst({
+    where: and(eq(customers.id, input.customerId), eq(customers.tenantId, tenant.id)),
+    columns: { abbreviation: true },
+  });
+  const orderNumber = makeOrderNumber(order.id, customer?.abbreviation);
 
   await db
     .update(salesOrders)

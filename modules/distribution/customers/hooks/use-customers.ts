@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getCustomerAction,
+  getCustomerPortfolioAction,
   createCustomerAction,
   deleteCustomerAction,
   getCustomersAction,
@@ -36,6 +37,15 @@ export function useCustomer(id: string) {
     queryFn: () => getCustomerAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useCustomerPortfolio(id: string) {
+  return useQuery({
+    queryKey: queryKeys.customers.portfolio(id),
+    queryFn: () => getCustomerPortfolioAction(id),
+    enabled: !!id && isUuid(id),
+    staleTime: 1000 * 60 * 2,
   });
 }
 

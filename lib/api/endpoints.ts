@@ -192,7 +192,7 @@ export type Customer = {
   zip?: string | null;
   phone_number?: string | null;
   fuel_surcharge_amount?: string | null;
-  invoice_prefix?: string | null;
+  abbreviation?: string | null;
   created_at: string;
 };
 export type CustomerPrice = {

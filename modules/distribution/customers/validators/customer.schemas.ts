@@ -26,9 +26,14 @@ export const customerAddressInputSchema = z.object({
 
 export const createCustomerInputSchema = z.object({
   name: z.string().trim().min(1, "Customer name is required"),
+  abbreviation: z
+    .string()
+    .trim()
+    .min(1, "Abbreviation is required")
+    .max(32, "Abbreviation must be 32 characters or less")
+    .toUpperCase(),
   phoneNumber: nullableOptionalString,
   fuelSurchargeAmount: nullableOptionalString,
-  invoicePrefix: nullableOptionalString,
   addresses: z.array(customerAddressInputSchema).optional(),
 });
 

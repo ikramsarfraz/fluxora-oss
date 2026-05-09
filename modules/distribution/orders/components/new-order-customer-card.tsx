@@ -218,7 +218,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
 
                 {/* Info chips */}
                 {(selected.fuelSurchargeAmount ||
-                  selected.invoicePrefix) && (
+                  selected.abbreviation) && (
                   <div
                     style={{
                       display: "flex",
@@ -245,7 +245,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                           ${Number(selected.fuelSurchargeAmount).toFixed(2)}
                         </span>
                       )}
-                    {selected.invoicePrefix && (
+                    {selected.abbreviation && (
                       <span
                         style={{
                           display: "inline-flex",
@@ -258,8 +258,8 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                           color: C.ink2,
                         }}
                       >
-                        <b style={{ fontWeight: 500 }}>Invoice prefix</b> ·{" "}
-                        <span style={{ fontFamily: C.mono }}>{selected.invoicePrefix}</span>
+                        <b style={{ fontWeight: 500 }}>Abbreviation</b> ·{" "}
+                        <span style={{ fontFamily: C.mono }}>{selected.abbreviation}</span>
                       </span>
                     )}
                   </div>
