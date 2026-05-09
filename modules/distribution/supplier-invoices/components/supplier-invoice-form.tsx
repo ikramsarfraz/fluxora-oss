@@ -14,7 +14,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import {
   computeDraftLineWeight,
   serializeDraftCaseWeights,
-} from "@/lib/supplier-invoices/case-weights";
+} from "@/modules/distribution/supplier-invoices/utils/case-weights";
 import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,

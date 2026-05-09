@@ -23,7 +23,7 @@ import {
   computeDraftLineWeight,
   formatEditableWeight,
   type SupplierInvoiceWeightEntryMode,
-} from "@/lib/supplier-invoices/case-weights";
+} from "@/modules/distribution/supplier-invoices/utils/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 

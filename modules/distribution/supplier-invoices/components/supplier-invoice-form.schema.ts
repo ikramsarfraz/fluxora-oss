@@ -4,7 +4,7 @@ import {
   computeDraftLineWeight,
   supplierInvoiceWeightEntryModes,
   type SupplierInvoiceWeightEntryMode,
-} from "@/lib/supplier-invoices/case-weights";
+} from "@/modules/distribution/supplier-invoices/utils/case-weights";
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 

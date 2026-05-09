@@ -55,10 +55,10 @@ import {
   inferPersistedCaseWeightPattern,
   parsePersistedCaseWeights,
   summarizePersistedCaseWeights,
-} from "@/lib/supplier-invoices/case-weights";
+} from "@/modules/distribution/supplier-invoices/utils/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { computePaymentSummary } from "@/lib/supplier-invoices/payment-summary";
+import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/utils/payment-summary";
 
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
 import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
