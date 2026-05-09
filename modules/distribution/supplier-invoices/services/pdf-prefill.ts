@@ -10,7 +10,7 @@ import {
   parseSupplierInvoicePdfText,
   type SupplierInvoicePdfPrefillResult,
 } from "@/lib/supplier-invoices/pdf-prefill";
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 export type { SupplierInvoicePdfPrefillResult };

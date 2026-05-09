@@ -1,2 +1,2 @@
-// Moved to core/shared module. This re-export keeps existing callers working.
-export * from "@/modules/core/shared/services/portal-users";
+// Moved to shared module. This re-export keeps existing callers working.
+export * from "@/modules/shared/services/portal-users";

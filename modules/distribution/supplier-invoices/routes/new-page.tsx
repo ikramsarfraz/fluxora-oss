@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { can } from "@/lib/auth/permissions";
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import { SupplierInvoiceForm } from "../components/supplier-invoice-form";
 

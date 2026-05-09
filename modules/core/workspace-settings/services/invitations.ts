@@ -18,7 +18,7 @@ import {
   createPortalUser,
   requireAdminPortalUser,
   type PortalUserRole,
-} from "@/modules/core/shared/services/portal-users";
+} from "@/modules/shared/services/portal-users";
 
 export type InvitationPreviewFailureReason =
   | "not_found"

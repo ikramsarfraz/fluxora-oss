@@ -9,7 +9,7 @@ import {
   salesOrders,
 } from "@/db/schema";
 import { markInventoryItemsSold } from "@/modules/distribution/services/inventory-state";
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { requirePermission } from "@/lib/auth/permissions";
 import {

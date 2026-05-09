@@ -11,7 +11,7 @@ import {
   userInvitations,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { requireAdminPortalUser } from "@/modules/core/shared/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 import {
   findAuthUserIdByEmail,

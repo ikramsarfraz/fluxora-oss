@@ -8,7 +8,7 @@ import { notFound, redirect } from "next/navigation";
 import { can } from "@/lib/auth/permissions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getSupplierInvoiceById } from "../services/receiving";
 
 import { SupplierInvoiceEditShell } from "../components/supplier-invoice-edit-shell";

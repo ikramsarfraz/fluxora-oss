@@ -13,7 +13,7 @@ import {
 } from "@/hooks/use-users";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/modules/core/shared/services/portal-users";
+import type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/modules/shared/services/portal-users";
 
 type UserRow = UsersDirectoryListItem;
 

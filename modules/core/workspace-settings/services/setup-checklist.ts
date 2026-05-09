@@ -14,7 +14,7 @@ import {
   userInvitations,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 export const SETUP_CHECKLIST_ITEM_IDS = [
   "branding",

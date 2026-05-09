@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
     "@react-pdf/fns",
     "@react-pdf/types",
     "fontkit",
+    "pdf-parse",
   ],
 };
 

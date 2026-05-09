@@ -9,9 +9,9 @@ import {
   products,
   suppliers,
 } from "@/db/schema";
-import type { PortalUserRole } from "@/modules/core/shared/services/portal-users";
+import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 
-import { getCurrentPortalUser } from "@/modules/core/shared/services/portal-users";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   type InventoryLifecycleState,
