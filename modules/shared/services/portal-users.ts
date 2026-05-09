@@ -11,7 +11,7 @@ import {
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
 import { countPortalUserUsageForTenant } from "@/modules/core/billing/services/subscription-usage";
-import { inviteUser as inviteUserAuth, sendTenantUserMagicLink } from "@/services/auth";
+import { inviteUser as inviteUserAuth, sendTenantUserMagicLink } from "@/modules/shared/services/auth";
 import {
   createPaginatedResult,
   getPaginationOffset,

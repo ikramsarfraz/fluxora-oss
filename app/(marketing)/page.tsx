@@ -12,7 +12,7 @@ import { Testimonials } from "./components/testimonials";
 import { Pricing } from "./components/pricing";
 import { CTA } from "./components/cta";
 import { Footer } from "./components/footer";
-import { loadAuthenticatedDestinationSelectView } from "@/services/auth";
+import { loadAuthenticatedDestinationSelectView } from "@/modules/shared/services/auth";
 import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 
 export default async function MarketingPage() {

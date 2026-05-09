@@ -12,7 +12,7 @@ import { MagicLinkEmail } from "@/emails/magic-link";
 import { emailFrom, resend } from "./email";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import { claimApprovedTenantJoinRequestForSession } from "@/modules/core/workspace-settings/services/tenant-join-requests-core";
-import { bootstrapAuthUserIdentityOnCreate } from "@/services/signup-profile";
+import { bootstrapAuthUserIdentityOnCreate } from "@/modules/shared/services/signup-profile";
 import {
   getRequestTenantHostContextFromHeaders,
   getRootDomain,

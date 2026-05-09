@@ -13,7 +13,7 @@ import {
   getGoogleTenantChooserData,
   loadAuthenticatedDestinationSelectView,
   loadEmailDestinationSelectView,
-} from "@/services/auth";
+} from "@/modules/shared/services/auth";
 
 export const dynamic = "force-dynamic";
 

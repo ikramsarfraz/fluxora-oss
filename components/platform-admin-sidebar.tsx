@@ -14,7 +14,7 @@ import {
   BadgeCheck,
   LogOut,
 } from "lucide-react";
-import type { AccessibleDestination } from "@/services/auth";
+import type { AccessibleDestination } from "@/modules/shared/services/auth";
 import type { User } from "better-auth";
 
 import {

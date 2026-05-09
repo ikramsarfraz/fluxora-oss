@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { finalizeGoogleAuthFlow } from "@/services/auth";
+import { finalizeGoogleAuthFlow } from "@/modules/shared/services/auth";
 
 export const dynamic = "force-dynamic";
 

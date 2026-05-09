@@ -42,7 +42,7 @@ import {
 import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
 import { useTenantLogoUrl } from "@/hooks/use-tenant-branding";
 import { can, type Permission } from "@/lib/auth/permissions";
-import type { AccessibleDestination } from "@/services/auth";
+import type { AccessibleDestination } from "@/modules/shared/services/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,

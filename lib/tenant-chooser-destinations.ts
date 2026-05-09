@@ -1,4 +1,4 @@
-import type { LoginDestinationDiscoveryItem } from "@/services/auth";
+import type { LoginDestinationDiscoveryItem } from "@/modules/shared/services/auth";
 import {
   buildRootAppUrl,
   type RequestTenantHostContext,

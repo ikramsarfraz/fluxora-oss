@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SignInForm } from "@/app/(auth)/sign-in/[[...sign-in]]/components/sign-in-form";
 import { isGoogleAuthEnabled } from "@/lib/google-auth-flow";
 import { buildRootAppUrl, buildTenantAppUrl } from "@/lib/tenant-host";
-import { resolveExistingSessionLoginDestination } from "@/services/auth";
+import { resolveExistingSessionLoginDestination } from "@/modules/shared/services/auth";
 import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
 
 export default async function SignInPage({

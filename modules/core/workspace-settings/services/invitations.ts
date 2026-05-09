@@ -13,7 +13,7 @@ import {
   getLatestAuthSessionIdForUser,
   sendUserInvitationEmail,
   setAuthSessionTenantId,
-} from "@/services/auth";
+} from "@/modules/shared/services/auth";
 import {
   createPortalUser,
   requireAdminPortalUser,

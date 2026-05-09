@@ -12,7 +12,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
-import { getAccessibleDestinationsForAuthUser } from "@/services/auth";
+import { getAccessibleDestinationsForAuthUser } from "@/modules/shared/services/auth";
 
 export default async function AppGroupLayout({
   children,

@@ -9,7 +9,7 @@ import {
   sendMagicLinkForCurrentLoginContext,
   sendTenantUserMagicLink,
   startEmailDestinationSelection,
-} from "@/services/auth";
+} from "@/modules/shared/services/auth";
 
 export async function prepareGoogleAuthStartAction(
   input: Parameters<typeof prepareGoogleAuthStart>[0],
