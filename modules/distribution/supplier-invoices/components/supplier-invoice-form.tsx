@@ -48,7 +48,7 @@ import {
   LineItemsInvoiceTotal,
   SupplierInvoiceLinesEditor,
 } from "./supplier-invoice-lines-editor";
-import type { SupplierInvoicePdfPrefillResult } from "@/lib/supplier-invoices/pdf-prefill";
+import type { SupplierInvoicePdfPrefillResult } from "@/modules/distribution/supplier-invoices/utils/pdf-prefill";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {

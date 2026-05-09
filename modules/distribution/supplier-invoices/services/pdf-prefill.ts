@@ -9,7 +9,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import {
   parseSupplierInvoicePdfText,
   type SupplierInvoicePdfPrefillResult,
-} from "@/lib/supplier-invoices/pdf-prefill";
+} from "../utils/pdf-prefill";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
