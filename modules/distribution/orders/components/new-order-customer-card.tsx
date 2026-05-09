@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useCustomers } from "@/hooks/use-customers";
+import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
 import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";

@@ -34,7 +34,7 @@ import {
   useMarkSalesOrderLineShortShipped,
   useRecordSalesOrderFulfillment,
 } from "../hooks/use-orders";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 
 import type { SalesOrderDetail } from "../services/orders";
 

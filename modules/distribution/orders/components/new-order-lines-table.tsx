@@ -37,8 +37,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { useProducts } from "@/hooks/use-products";
-import { useCustomers } from "@/hooks/use-customers";
+import { useProducts } from "@/modules/distribution/products/hooks/use-products";
+import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";

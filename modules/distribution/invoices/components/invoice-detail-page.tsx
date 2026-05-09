@@ -8,7 +8,7 @@ import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import { useSalesInvoice } from "../hooks/use-invoices";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";

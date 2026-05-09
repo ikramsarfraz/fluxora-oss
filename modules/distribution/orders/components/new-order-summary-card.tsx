@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useCustomers } from "@/hooks/use-customers";
-import { useProducts } from "@/hooks/use-products";
+import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 

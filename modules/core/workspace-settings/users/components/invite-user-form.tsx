@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 
 import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
-import { useInviteUser } from "@/hooks/use-users";
+import { useInviteUser } from "@/modules/core/workspace-settings/hooks/use-users";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";

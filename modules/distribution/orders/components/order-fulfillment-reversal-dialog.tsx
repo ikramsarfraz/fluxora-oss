@@ -17,7 +17,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { useReverseSalesOrderFulfillment } from "../hooks/use-orders";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 import { formatFulfillmentTimestamp } from "./order-fulfillment-utils";

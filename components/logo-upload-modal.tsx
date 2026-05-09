@@ -28,7 +28,7 @@ import {
   useRemoveTenantLogo,
   useTenantLogoUrl,
   useUploadTenantLogo,
-} from "@/hooks/use-tenant-branding";
+} from "@/modules/core/workspace-settings/hooks/use-tenant-branding";
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 const MAX_MB = 2;

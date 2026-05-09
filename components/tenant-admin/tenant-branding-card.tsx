@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useTenantLogoUrl } from "@/hooks/use-tenant-branding";
+import { useTenantLogoUrl } from "@/modules/core/workspace-settings/hooks/use-tenant-branding";
 
 export function TenantBrandingCard() {
   const { data: logoUrl, isLoading } = useTenantLogoUrl();

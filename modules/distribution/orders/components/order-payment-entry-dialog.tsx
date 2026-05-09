@@ -6,7 +6,7 @@ import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
 import { useRecordPaymentForSalesOrderInvoice } from "../hooks/use-orders";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

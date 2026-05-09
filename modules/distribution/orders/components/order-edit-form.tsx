@@ -17,9 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useProducts } from "@/hooks/use-products";
+import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSalesOrder, useUpdateSalesOrder } from "../hooks/use-orders";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";

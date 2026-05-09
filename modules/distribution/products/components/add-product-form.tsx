@@ -50,7 +50,7 @@ import {
   addProductFormSchema,
   type AddProductFormValues,
 } from "./add-product-form.schema";
-import { useCategories } from "@/hooks/use-categories";
+import { useCategories } from "@/modules/distribution/categories/hooks/use-categories";
 import type { ProductCategory, ProductDetail } from "../services/products";
 import { createProductAction, updateProductAction } from "@/modules/distribution/products/actions";
 import { createCategoryAction } from "@/modules/distribution/categories/actions";
@@ -61,7 +61,7 @@ import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
 } from "@/lib/subscription-enforcement";
-import { useUnitsOfMeasure } from "@/hooks/use-units-of-measure";
+import { useUnitsOfMeasure } from "@/modules/distribution/units-of-measure/hooks/use-units-of-measure";
 import type { UnitOfMeasureListItem } from "@/modules/distribution/units-of-measure/services/units-of-measure";
 
 // ---------------------------------------------------------------------------

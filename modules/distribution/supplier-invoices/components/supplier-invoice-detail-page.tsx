@@ -42,7 +42,7 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   useCompleteSupplierInvoice,
   useDeleteSupplierInvoice,

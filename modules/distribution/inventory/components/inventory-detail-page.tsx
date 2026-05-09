@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { useInventoryItem } from "../hooks/use-inventory";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {

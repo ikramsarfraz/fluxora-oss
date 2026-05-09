@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useArAging } from "@/hooks/use-dashboard";
+import { useArAging } from "@/modules/distribution/hooks/use-dashboard";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type {

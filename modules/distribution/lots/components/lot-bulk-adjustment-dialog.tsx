@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import { useBulkAdjustLotInventory } from "@/hooks/use-inventory";
+import { useBulkAdjustLotInventory } from "@/modules/distribution/inventory/hooks/use-inventory";
 import {
   INVENTORY_ADJUSTMENT_REASON_OPTIONS,
   INVENTORY_STATUS_ADJUSTMENT_OPTIONS,

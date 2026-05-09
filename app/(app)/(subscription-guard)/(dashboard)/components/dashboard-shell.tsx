@@ -4,7 +4,7 @@ import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDashboardSummary } from "@/hooks/use-dashboard";
+import { useDashboardSummary } from "@/modules/distribution/hooks/use-dashboard";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { isSectionVisible } from "@/lib/dashboard/visibility";
 

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 
 import { Button } from "@/components/ui/button";
-import { useSalesOrderActivity } from "@/hooks/use-activity";
+import { useSalesOrderActivity } from "@/modules/distribution/hooks/use-activity";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {

@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateLot } from "../hooks/use-lots";
-import { useSuppliers } from "@/hooks/use-suppliers";
+import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
 
 import {
   addLotFormSchema,

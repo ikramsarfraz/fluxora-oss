@@ -16,7 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSupplierInvoiceActivity } from "@/hooks/use-activity";
+import { useSupplierInvoiceActivity } from "@/modules/distribution/hooks/use-activity";
 import { cn } from "@/lib/utils";
 import type {
   ActivityScope,

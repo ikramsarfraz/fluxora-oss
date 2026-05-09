@@ -39,8 +39,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
-import { useTenantLogoUrl } from "@/hooks/use-tenant-branding";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { useTenantLogoUrl } from "@/modules/core/workspace-settings/hooks/use-tenant-branding";
 import { can, type Permission } from "@/lib/auth/permissions";
 import type { AccessibleDestination } from "@/modules/shared/services/auth";
 import {

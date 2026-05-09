@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { canManageExpenses, expenseCategoryLabel, expensePaymentMethodLabel } from "@/lib/expenses/metadata";

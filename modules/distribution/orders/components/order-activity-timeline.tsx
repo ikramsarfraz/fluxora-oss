@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSalesOrderActivity } from "@/hooks/use-activity";
+import { useSalesOrderActivity } from "@/modules/distribution/hooks/use-activity";
 import { cn } from "@/lib/utils";
 import type {
   ActivityScope,

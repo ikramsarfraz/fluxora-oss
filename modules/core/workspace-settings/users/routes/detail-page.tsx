@@ -10,8 +10,8 @@ import {
   useSendUserPasswordReset,
   useSetUserActive,
   useUser,
-} from "@/hooks/use-users";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+} from "@/modules/core/workspace-settings/hooks/use-users";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   AlertDialog,
   AlertDialogCancel,

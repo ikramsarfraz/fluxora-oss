@@ -7,9 +7,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
-import { useProducts } from "@/hooks/use-products";
-import { useSuppliers } from "@/hooks/use-suppliers";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { useProducts } from "@/modules/distribution/products/hooks/use-products";
+import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   computeDraftLineWeight,

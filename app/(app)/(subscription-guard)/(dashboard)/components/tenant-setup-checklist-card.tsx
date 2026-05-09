@@ -14,7 +14,7 @@ import {
 import {
   useDismissTenantSetupChecklist,
   useTenantSetupChecklist,
-} from "@/hooks/use-tenant-setup-checklist";
+} from "@/modules/core/workspace-settings/hooks/use-tenant-setup-checklist";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 

@@ -14,8 +14,8 @@ import {
   useUpdateSalesOrder,
   useUpdateSalesOrderStatus,
 } from "../hooks/use-orders";
-import { useProducts } from "@/hooks/use-products";
-import { useCustomers } from "@/hooks/use-customers";
+import { useProducts } from "@/modules/distribution/products/hooks/use-products";
+import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
 import {
   isLimitReachedMessage,

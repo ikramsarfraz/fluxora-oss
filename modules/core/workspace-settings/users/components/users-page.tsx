@@ -10,7 +10,7 @@ import {
   useRevokeUserInvitation,
   useSetUserActive,
   useUsersDirectoryPage,
-} from "@/hooks/use-users";
+} from "@/modules/core/workspace-settings/hooks/use-users";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { UsersDirectoryListItem, UsersDirectoryListSort } from "@/modules/shared/services/portal-users";

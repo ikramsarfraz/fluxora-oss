@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSetUserRole } from "@/hooks/use-users";
+import { useSetUserRole } from "@/modules/core/workspace-settings/hooks/use-users";
 import {
   PERMISSION_LABELS,
   ROLE_DESCRIPTIONS,

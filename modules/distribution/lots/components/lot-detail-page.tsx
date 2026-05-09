@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useLot, useDeleteLot } from "../hooks/use-lots";
-import { useCurrentPortalUser } from "@/hooks/use-current-portal-user";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { queryKeys } from "@/lib/query/keys";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageHeader } from "@/components/detail-page-header";
