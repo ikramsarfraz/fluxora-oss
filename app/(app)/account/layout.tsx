@@ -1,4 +1,4 @@
-import { AccountProfileTabNav } from "@/components/account/account-profile-tab-nav";
+import { AccountProfileTabNav } from "@/modules/core/billing/components/account/account-profile-tab-nav";
 
 export default function AccountSectionLayout({
   children,

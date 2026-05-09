@@ -1,7 +1,7 @@
 import {
   SubscriptionPlanBadge,
   SubscriptionStatusBadge,
-} from "@/components/subscription/subscription-badges";
+} from "@/modules/core/billing/components/subscription/subscription-badges";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   formatSubscriptionCurrentPeriodLine,

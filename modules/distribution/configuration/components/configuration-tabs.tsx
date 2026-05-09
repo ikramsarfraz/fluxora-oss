@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { TenantBrandingCard } from "@/components/tenant-admin/tenant-branding-card";
+import { TenantBrandingCard } from "@/modules/core/workspace-settings/components/tenant-admin/tenant-branding-card";
 import Categories from "@/modules/distribution/categories/components/categories-page";
 import UnitsOfMeasure from "@/modules/distribution/units-of-measure/components/units-of-measure-page";
 

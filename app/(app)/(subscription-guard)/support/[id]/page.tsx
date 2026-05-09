@@ -9,8 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SupportTicketAttachments } from "@/components/support-ticket-attachments";
-import { SupportTicketStatusTimeline } from "@/components/support-ticket-status-timeline";
+import { SupportTicketAttachments } from "@/modules/core/platform-admin/support/components/support-ticket-attachments";
+import { SupportTicketStatusTimeline } from "@/modules/core/platform-admin/support/components/support-ticket-status-timeline";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import {

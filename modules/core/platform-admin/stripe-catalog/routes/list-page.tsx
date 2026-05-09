@@ -1,6 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 
-import { SyncStripeCatalogButton } from "@/components/platform/sync-stripe-catalog-button";
+import { SyncStripeCatalogButton } from "@/modules/core/platform-admin/components/sync-stripe-catalog-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,

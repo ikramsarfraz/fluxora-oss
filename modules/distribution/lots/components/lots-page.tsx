@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { ExpirationStateBadge, LotOperationalStatusBadge } from "@/components/warehouse/warehouse-badges";
+import { ExpirationStateBadge, LotOperationalStatusBadge } from "@/modules/distribution/components/warehouse/warehouse-badges";
 import { useLots } from "../hooks/use-lots";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatWeightLbs, getExpirationState, getLotOperationalStatus } from "@/lib/warehouse/insights";

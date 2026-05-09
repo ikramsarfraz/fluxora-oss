@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { TenantPlanUsageCard } from "@/components/subscription/tenant-plan-usage-card";
-import { TenantSubscriptionOverview } from "@/components/subscription/tenant-subscription-overview";
-import { TenantSubscriptionHealthBadge } from "@/components/subscription/tenant-subscription-health-badge";
+import { TenantPlanUsageCard } from "@/modules/core/billing/components/subscription/tenant-plan-usage-card";
+import { TenantSubscriptionOverview } from "@/modules/core/billing/components/subscription/tenant-subscription-overview";
+import { TenantSubscriptionHealthBadge } from "@/modules/core/billing/components/subscription/tenant-subscription-health-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {

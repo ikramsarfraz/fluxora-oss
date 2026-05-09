@@ -10,7 +10,7 @@ import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateSku } from "./product-sku-utils";
-import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
+import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";

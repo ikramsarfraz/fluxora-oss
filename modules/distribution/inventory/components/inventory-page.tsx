@@ -8,7 +8,7 @@ import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-
 import {
   ExpirationStateBadge,
   InventoryStatusBadge,
-} from "@/components/warehouse/warehouse-badges";
+} from "@/modules/distribution/components/warehouse/warehouse-badges";
 import { useInventoryItemsPage } from "../hooks/use-inventory";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";

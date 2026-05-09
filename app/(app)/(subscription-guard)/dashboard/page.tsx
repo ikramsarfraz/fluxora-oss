@@ -4,7 +4,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { TenantSubscriptionHealthBanner } from "@/components/subscription/tenant-subscription-health-banner";
+import { TenantSubscriptionHealthBanner } from "@/modules/core/billing/components/subscription/tenant-subscription-health-banner";
 import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";

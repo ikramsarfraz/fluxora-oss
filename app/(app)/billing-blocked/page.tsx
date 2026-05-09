@@ -2,8 +2,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
-import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
+import { TenantBillingPortalControls } from "@/modules/core/billing/components/account/tenant-billing-portal-controls";
+import { TenantBillingCatalogSection } from "@/modules/core/billing/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

@@ -32,8 +32,8 @@ import {
 import {
   ExpirationStateBadge,
   InventoryStatusBadge,
-} from "@/components/warehouse/warehouse-badges";
-import { InventoryAdjustmentHistory } from "@/components/warehouse/inventory-adjustment-history";
+} from "@/modules/distribution/components/warehouse/warehouse-badges";
+import { InventoryAdjustmentHistory } from "@/modules/distribution/components/warehouse/inventory-adjustment-history";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
   formatWeightLbs,

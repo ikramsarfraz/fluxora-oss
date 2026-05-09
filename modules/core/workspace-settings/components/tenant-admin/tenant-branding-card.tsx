@@ -2,7 +2,7 @@
 
 import { Building2 } from "lucide-react";
 
-import { LogoUploadModal } from "@/components/logo-upload-modal";
+import { LogoUploadModal } from "@/modules/core/workspace-settings/components/logo-upload-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,

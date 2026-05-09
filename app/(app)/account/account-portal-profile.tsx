@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { sendSelfTenantSignInMagicLinkAction } from "@/modules/shared/actions";
-import { PortalUserProfile } from "@/components/portal-user-profile";
+import { PortalUserProfile } from "@/modules/shared/components/portal-user-profile";
 import type { PortalUserDetail } from "@/modules/shared/services/portal-users";
 
 export function AccountPortalProfile({

@@ -6,7 +6,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useState } from "react";
 
-import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
+import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import { useInviteUser } from "@/modules/core/workspace-settings/hooks/use-users";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";

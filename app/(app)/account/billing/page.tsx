@@ -3,16 +3,16 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { CreditCard, Building2, ExternalLink } from "lucide-react";
 
-import { BillingCheckoutFeedback } from "@/components/account/billing-checkout-feedback";
-import { BillingSubscriptionRefreshHint } from "@/components/account/billing-subscription-refresh-hint";
-import { TenantBillingPortalControls } from "@/components/account/tenant-billing-portal-controls";
-import { TenantBillingCatalogSection } from "@/components/account/tenant-billing-catalog";
+import { BillingCheckoutFeedback } from "@/modules/core/billing/components/account/billing-checkout-feedback";
+import { BillingSubscriptionRefreshHint } from "@/modules/core/billing/components/account/billing-subscription-refresh-hint";
+import { TenantBillingPortalControls } from "@/modules/core/billing/components/account/tenant-billing-portal-controls";
+import { TenantBillingCatalogSection } from "@/modules/core/billing/components/account/tenant-billing-catalog";
 import { PageHeader } from "@/components/page-header";
 import {
   PlanOverviewCard,
   UsageCard,
   BillingStateBanner,
-} from "@/components/billing/billing-components";
+} from "@/modules/core/billing/components/billing-components";
 import { deriveBillingBannerState } from "@/lib/billing-utils";
 import { Button } from "@/components/ui/button";
 import {

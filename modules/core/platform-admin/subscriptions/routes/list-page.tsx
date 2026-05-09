@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlatformSubscriptionBuckets } from "@/components/platform/platform-subscription-buckets";
-import { SyncStripeCatalogButton } from "@/components/platform/sync-stripe-catalog-button";
+import { PlatformSubscriptionBuckets } from "@/modules/core/platform-admin/components/platform-subscription-buckets";
+import { SyncStripeCatalogButton } from "@/modules/core/platform-admin/components/sync-stripe-catalog-button";
 import { getPlatformAdminDashboardData } from "@/modules/core/platform-admin/services/platform-admin";
 
 export default async function PlatformAdminSubscriptionsListPage() {

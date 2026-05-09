@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { PlanFeatureGate } from "@/components/subscription/plan-feature-gate";
+import { PlanFeatureGate } from "@/modules/core/billing/components/subscription/plan-feature-gate";
 import { canUseFeature } from "@/lib/subscription-plan-capabilities";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 

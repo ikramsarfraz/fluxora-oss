@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
-import { SubscriptionUpgradeMessage } from "@/components/subscription/subscription-upgrade-message";
+import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import {
   useCreateSalesOrder,
   useUpdateSalesOrder,

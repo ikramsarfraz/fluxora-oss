@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { TenantBrandingCard } from "@/components/tenant-admin/tenant-branding-card";
+import { TenantBrandingCard } from "@/modules/core/workspace-settings/components/tenant-admin/tenant-branding-card";
 import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 export default async function TenantBrandingPage() {

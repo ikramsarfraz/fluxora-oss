@@ -3,7 +3,7 @@ import Link from "next/link";
 import {
   SubscriptionPlanBadge,
   SubscriptionStatusBadge,
-} from "@/components/subscription/subscription-badges";
+} from "@/modules/core/billing/components/subscription/subscription-badges";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {

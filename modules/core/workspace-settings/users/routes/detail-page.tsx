@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
-import { PortalUserProfile } from "@/components/portal-user-profile";
+import { PortalUserProfile } from "@/modules/shared/components/portal-user-profile";
 import {
   useSendUserPasswordReset,
   useSetUserActive,

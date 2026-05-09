@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/page-header";
-import { RolesPermissionsCard } from "@/components/tenant-admin/roles-permissions-card";
+import { RolesPermissionsCard } from "@/modules/core/workspace-settings/components/tenant-admin/roles-permissions-card";
 import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 export default async function TenantRolesPage() {
