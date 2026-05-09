@@ -151,11 +151,36 @@ This allows per-tenant feature enabling/disabling without code changes. New feat
 | `app/` | `modules/`, `lib/`, `services/`, `components/`, `db/` |
 | `modules/distribution/X/` | `lib/`, `services/`, `db/`, `modules/core/`, `modules/shared/`, **not** other `modules/distribution/Y/` directly |
 | `modules/core/` | `lib/`, `services/`, `db/`, `modules/shared/` |
-| `modules/shared/` | `lib/` only |
+| `modules/shared/` | `lib/`, `modules/core/` (auth/session/tenant/billing primitives only — see below) |
 | `lib/` | `db/` (schema/types only), other `lib/` files |
 | `services/` | `db/`, `lib/`, other `services/` |
 
 Cross-distribution-module imports are a boundary violation. If two distribution modules share data, expose it through a service function, not a direct module import.
+
+### Explicitly Forbidden Imports
+
+The following import directions are architectural violations and must never appear:
+
+| Forbidden | Reason |
+|---|---|
+| `modules/**` → `app/` | Modules must not depend on routing decisions |
+| `modules/core/**` → `modules/distribution/**` | Core infrastructure must be vertical-agnostic |
+| `modules/shared/**` → `modules/distribution/**` | Shared utilities must not know distribution workflows |
+| `modules/distribution/<A>/**` → `modules/distribution/<B>/**` | Cross-domain coupling; use a service or shared utility instead |
+| Any file → `@/services/` or `@/actions/` (root) | These root directories have been migrated; import from the module directly |
+
+### The `shared → core` Narrow Exception
+
+`modules/shared/` may import from `modules/core/` **only** for these primitives:
+
+- Auth session helpers (`getCurrentUser`, `requireAuth`)
+- Tenant resolution (`getCurrentTenant`, `getCurrentTenantCached`)
+- Subscription/billing context (`assertTenantCanUseFeature`, plan capability helpers)
+- Portal user identity helpers
+
+**Why this exception exists:** Several shared utilities — such as permission helpers, audit hooks, and tenant-scoped query wrappers — genuinely need to know *who* the current user is and *what plan* they are on. These concerns are owned by `modules/core/` (tenants, billing). Without this narrow exception, shared utilities would need to accept session/tenant objects as parameters everywhere, which is impractical for deeply-used helpers.
+
+**The constraint that keeps this safe:** `modules/shared/` must remain infrastructure-oriented. It must not import from `modules/core/platform-admin/` or any core subdomain that itself does business logic. If a shared utility starts needing distribution domain data (orders, products, etc.), it belongs in the distribution module, not in shared.
 
 ---
 

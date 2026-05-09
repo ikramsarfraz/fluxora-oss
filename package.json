@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset-db.ts",
-    "db:seed": "tsx db/seed.ts"
+    "db:seed": "tsx db/seed.ts",
+    "check:boundaries": "node scripts/check-module-boundaries.mjs"
   },
   "overrides": {
     "lightningcss": "1.32.0"
