@@ -1,3 +1,4 @@
+export * from "./services/aging";
 export * from "./services/audit";
 export * from "./services/dashboard";
 export * from "./services/inventory-state";
