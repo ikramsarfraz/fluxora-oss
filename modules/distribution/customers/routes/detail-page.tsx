@@ -88,6 +88,12 @@ function StatusChip({ label, className }: { label: string; className: string }) 
   );
 }
 
+function sectionDesc(shown: number, total: number, singular: string, plural: string) {
+  if (total === 0) return `No ${plural} on record.`;
+  if (total <= shown) return `${total} ${total === 1 ? singular : plural}.`;
+  return `Showing ${shown} most recent of ${total.toLocaleString()} ${plural}.`;
+}
+
 export default function CustomerPortfolioPage() {
   const params = useParams<{ id: string }>();
   const customerId = params.id ?? "";
@@ -102,9 +108,8 @@ export default function CustomerPortfolioPage() {
   if (error) return <PageError message={(error as Error).message} />;
   if (!portfolio || !customer) return null;
 
-  const { metrics, recentOrders, recentInvoices } = portfolio;
-  const balanceDue = parseFloat(metrics.balanceDue);
-  const balanceTone = balanceDue > 0 ? "danger" : "default";
+  const { metrics, recentOrders, totalOrdersCount, recentInvoices, totalInvoicesCount } = portfolio;
+  const balanceTone = parseFloat(metrics.balanceDue) > 0 ? "danger" : "default";
 
   return (
     <div className="flex flex-col gap-6">
@@ -149,10 +154,10 @@ export default function CustomerPortfolioPage() {
         />
       </div>
 
-      {/* Customer details — always shown */}
+      {/* Details + addresses in one section */}
       <DetailSection
         title="Details"
-        description="Contact information and billing configuration."
+        description="Contact information, billing configuration, and addresses."
       >
         <DetailGrid>
           <DetailField label="Abbreviation">
@@ -167,15 +172,45 @@ export default function CustomerPortfolioPage() {
               : "—"}
           </DetailField>
         </DetailGrid>
+
+        {customer.addresses.length > 0 && (
+          <div className="mt-6 flex flex-col divide-y border-t pt-4">
+            {customer.addresses.map(addr => {
+              const line2 = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
+              return (
+                <div
+                  key={addr.id}
+                  className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{addr.street}</p>
+                    {line2 && (
+                      <p className="text-sm text-muted-foreground">{line2}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="capitalize">
+                      {ADDRESS_TYPE_LABEL[addr.addressType] ?? addr.addressType}
+                    </Badge>
+                    {addr.isDefault && <Badge variant="secondary">Default</Badge>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </DetailSection>
 
       {/* Recent orders */}
       <DetailSection
         title="Orders"
-        description={
-          recentOrders.length === 0
-            ? "No orders on record."
-            : `Showing ${recentOrders.length} most recent order${recentOrders.length !== 1 ? "s" : ""}.`
+        description={sectionDesc(recentOrders.length, totalOrdersCount, "order", "orders")}
+        footer={
+          totalOrdersCount > recentOrders.length ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/orders">View all orders</Link>
+            </Button>
+          ) : undefined
         }
       >
         {recentOrders.length === 0 ? (
@@ -226,10 +261,13 @@ export default function CustomerPortfolioPage() {
       {/* Recent invoices */}
       <DetailSection
         title="Invoices"
-        description={
-          recentInvoices.length === 0
-            ? "No invoices on record."
-            : `Showing ${recentInvoices.length} most recent invoice${recentInvoices.length !== 1 ? "s" : ""}.`
+        description={sectionDesc(recentInvoices.length, totalInvoicesCount, "invoice", "invoices")}
+        footer={
+          totalInvoicesCount > recentInvoices.length ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/invoices">View all invoices</Link>
+            </Button>
+          ) : undefined
         }
       >
         {recentInvoices.length === 0 ? (
@@ -287,39 +325,6 @@ export default function CustomerPortfolioPage() {
           </Table>
         )}
       </DetailSection>
-
-      {/* Addresses */}
-      {customer.addresses.length > 0 && (
-        <DetailSection
-          title="Addresses"
-          description={`${customer.addresses.length} address${customer.addresses.length !== 1 ? "es" : ""} on file.`}
-        >
-          <div className="flex flex-col divide-y">
-            {customer.addresses.map(addr => {
-              const line2 = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
-              return (
-                <div
-                  key={addr.id}
-                  className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{addr.street}</p>
-                    {line2 && (
-                      <p className="text-sm text-muted-foreground">{line2}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="capitalize">
-                      {ADDRESS_TYPE_LABEL[addr.addressType] ?? addr.addressType}
-                    </Badge>
-                    {addr.isDefault && <Badge variant="secondary">Default</Badge>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </DetailSection>
-      )}
     </div>
   );
 }

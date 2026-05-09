@@ -262,6 +262,7 @@ export async function getCustomerPortfolio(customerId: string) {
           totalRevenue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.totalAmount}::numeric else 0 end), 0)`,
           totalBalanceDue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.balanceDue}::numeric else 0 end), 0)`,
           totalPaid: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.amountPaid}::numeric else 0 end), 0)`,
+          totalCount: sql<number>`count(*)::int`,
         })
         .from(salesInvoices)
         .where(
@@ -273,6 +274,7 @@ export async function getCustomerPortfolio(customerId: string) {
       db
         .select({
           openCount: sql<number>`count(case when ${salesOrders.status} not in ('fulfilled', 'cancelled') then 1 end)::int`,
+          totalCount: sql<number>`count(*)::int`,
         })
         .from(salesOrders)
         .where(
@@ -288,7 +290,9 @@ export async function getCustomerPortfolio(customerId: string) {
   return {
     customer,
     recentOrders,
+    totalOrdersCount: orderAggRows[0]?.totalCount ?? 0,
     recentInvoices,
+    totalInvoicesCount: invoiceAggRows[0]?.totalCount ?? 0,
     metrics: {
       totalRevenue: invoiceAggRows[0]?.totalRevenue ?? "0",
       balanceDue: invoiceAggRows[0]?.totalBalanceDue ?? "0",
