@@ -6,6 +6,7 @@ import { DollarSign, Pencil, ShoppingCart, TrendingUp, Wallet } from "lucide-rea
 import type { LucideIcon } from "lucide-react";
 
 import { useCustomerPortfolio } from "../hooks/use-customers";
+import { CustomerPriceSection } from "../components/customer-price-section";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import { DetailSection, DetailField, DetailGrid } from "@/components/detail-section";
 import { PageLoading } from "@/components/page-loading";
@@ -168,7 +169,7 @@ export default function CustomerPortfolioPage() {
           </DetailField>
           <DetailField label="Fuel surcharge">
             {customer.fuelSurchargeAmount != null
-              ? `${formatMoney(customer.fuelSurchargeAmount)}/lb`
+              ? formatMoney(customer.fuelSurchargeAmount)
               : "—"}
           </DetailField>
         </DetailGrid>
@@ -200,6 +201,9 @@ export default function CustomerPortfolioPage() {
           </div>
         )}
       </DetailSection>
+
+      {/* Per-customer price chart */}
+      <CustomerPriceSection customerId={customerId} />
 
       {/* Recent orders */}
       <DetailSection
