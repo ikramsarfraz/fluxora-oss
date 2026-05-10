@@ -37,6 +37,7 @@ import {
   LogOut,
   UserCog,
   SlidersHorizontal,
+  TableProperties,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -101,6 +102,11 @@ const navMain: NavGroup[] = [
         title: "Invoices",
         url: "/invoices",
         icon: Receipt,
+      },
+      {
+        title: "Price Chart",
+        url: "/price-chart",
+        icon: TableProperties,
       },
     ],
   },

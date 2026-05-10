@@ -169,6 +169,13 @@
       "when": 1778214561924,
       "tag": "0023_zippy_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778388511392,
+      "tag": "0024_tiresome_shaman",
+      "breakpoints": true
     }
   ]
 }

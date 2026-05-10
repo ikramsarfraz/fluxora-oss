@@ -1,6 +1,13 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { customerAddresses, customers, salesInvoices, salesOrders } from "@/db/schema";
+import {
+  customerAddresses,
+  customerProductPrices,
+  customers,
+  products,
+  salesInvoices,
+  salesOrders,
+} from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import {
@@ -303,3 +310,65 @@ export async function getCustomerPortfolio(customerId: string) {
 }
 
 export type CustomerPortfolio = NonNullable<Awaited<ReturnType<typeof getCustomerPortfolio>>>;
+
+export async function getCustomerPrices(customerId: string) {
+  const tenant = await getCurrentTenant();
+  const rows = await db
+    .select({
+      id: customerProductPrices.id,
+      productId: customerProductPrices.productId,
+      pricePerLb: customerProductPrices.pricePerLb,
+      productSku: products.sku,
+      productName: products.name,
+    })
+    .from(customerProductPrices)
+    .innerJoin(products, eq(customerProductPrices.productId, products.id))
+    .where(
+      and(
+        eq(customerProductPrices.customerId, customerId),
+        eq(products.tenantId, tenant.id),
+      ),
+    );
+  return rows;
+}
+
+export async function setCustomerPrice(
+  customerId: string,
+  productId: string,
+  pricePerLb: string,
+) {
+  const tenant = await getCurrentTenant();
+  const customer = await db.query.customers.findFirst({
+    where: and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)),
+    columns: { id: true },
+  });
+  if (!customer) throw new Error("Customer not found.");
+
+  await db
+    .insert(customerProductPrices)
+    .values({ customerId, productId, pricePerLb })
+    .onConflictDoUpdate({
+      target: [customerProductPrices.customerId, customerProductPrices.productId],
+      set: { pricePerLb, updatedAt: new Date() },
+    });
+}
+
+export async function deleteCustomerPrice(customerId: string, productId: string) {
+  const tenant = await getCurrentTenant();
+  const customer = await db.query.customers.findFirst({
+    where: and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)),
+    columns: { id: true },
+  });
+  if (!customer) throw new Error("Customer not found.");
+
+  await db
+    .delete(customerProductPrices)
+    .where(
+      and(
+        eq(customerProductPrices.customerId, customerId),
+        eq(customerProductPrices.productId, productId),
+      ),
+    );
+}
+
+export type CustomerPriceRow = Awaited<ReturnType<typeof getCustomerPrices>>[number];

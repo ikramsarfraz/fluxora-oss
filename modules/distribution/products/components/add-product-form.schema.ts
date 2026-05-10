@@ -9,12 +9,6 @@ export const addProductFormSchema = z
     name: z.string().trim(),
     categoryIds: z.array(z.string()).min(1, "Select at least one category."),
     sellingType: z.enum(sellingTypeValues),
-    defaultPrice: z
-      .string()
-      .min(1, "Required.")
-      .refine(v => Number.isFinite(Number(v)) && Number(v) >= 0, {
-        message: "Enter a valid price.",
-      }),
     // by_weight options
     sellByPound: z.boolean(),
     // by_unit options

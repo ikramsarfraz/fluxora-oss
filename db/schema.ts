@@ -939,6 +939,8 @@ export const productSupplierCosts = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: "cascade" }),
     costPerLb: numeric("cost_per_lb", { precision: 10, scale: 4 }).notNull(),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    lastReceivedAt: timestamp("last_received_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

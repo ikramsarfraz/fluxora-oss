@@ -5,10 +5,13 @@ import { revalidatePath } from "next/cache";
 import {
   createCustomer,
   deleteCustomer,
+  deleteCustomerPrice,
   getCustomerById,
   getCustomerPortfolio,
+  getCustomerPrices,
   getCustomers,
   getCustomersPage,
+  setCustomerPrice,
   updateCustomer,
   type CustomerListParams,
 } from "../services/customers";
@@ -66,4 +69,20 @@ export async function deleteCustomerAction(customerId: string) {
 
 export async function getCustomerPortfolioAction(customerId: string) {
   return await getCustomerPortfolio(customerId);
+}
+
+export async function getCustomerPricesAction(customerId: string) {
+  return await getCustomerPrices(customerId);
+}
+
+export async function setCustomerPriceAction(
+  customerId: string,
+  productId: string,
+  pricePerLb: string,
+) {
+  return await setCustomerPrice(customerId, productId, pricePerLb);
+}
+
+export async function deleteCustomerPriceAction(customerId: string, productId: string) {
+  return await deleteCustomerPrice(customerId, productId);
 }

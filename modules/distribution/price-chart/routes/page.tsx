@@ -1,28 +1,14 @@
 import { PageHeader } from "@/components/page-header";
-import { PlanFeatureGate } from "@/modules/core/billing/components/subscription/plan-feature-gate";
-import { canUseFeature } from "@/lib/subscription-plan-capabilities";
-import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
-
 import { PriceChartClient } from "../components/price-chart-client";
 
 export default async function PriceChartPage() {
-  const tenant = await getCurrentTenantCached();
-  const canAccessReports = canUseFeature(tenant, "reports");
-
   return (
     <section className="flex flex-col gap-6">
       <PageHeader
         title="Price Chart"
-        description="Customer-specific pricing and cost views for internal reporting workflows."
+        description="Pick a customer on the left and edit their pricing on the right. Empty fields mean they pay the default — cost × markup. Type a number to override; clear it to fall back."
       />
-      <PlanFeatureGate
-        enabled={canAccessReports}
-        featureKey="reports"
-        currentPlan={tenant.subscriptionPlan}
-        requiredPlan="growth"
-      >
-        <PriceChartClient />
-      </PlanFeatureGate>
+      <PriceChartClient />
     </section>
   );
 }

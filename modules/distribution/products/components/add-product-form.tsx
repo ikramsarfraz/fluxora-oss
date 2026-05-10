@@ -75,7 +75,6 @@ function buildDefaultForm(product?: ProductDetail): AddProductFormValues {
       name: "",
       categoryIds: [],
       sellingType: "by_weight",
-      defaultPrice: "",
       sellByPound: true,
       sellByEach: true,
       sellInCases: false,
@@ -104,7 +103,6 @@ function buildDefaultForm(product?: ProductDetail): AddProductFormValues {
     name: product.name,
     categoryIds: (product.productCategories ?? []).map(pc => pc.categoryId),
     sellingType: isWeightBased ? "by_weight" : "by_unit",
-    defaultPrice: product.defaultPricePerLb ?? "",
     sellByPound: hasPoundUnit || (isWeightBased && !caseUnit),
     sellByEach: !isWeightBased ? hasEachUnit || !caseUnit : false,
     sellInCases: !!caseUnit,
@@ -307,7 +305,6 @@ export function AddProductForm(props?: {
         sku,
         name: data.name,
         categoryIds: data.categoryIds,
-        defaultPricePerLb: data.defaultPrice,
         baseUnitId: getBaseUnitId(data, uoms),
         units: buildUnitsPayload(data, uoms),
       };
@@ -367,42 +364,6 @@ export function AddProductForm(props?: {
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. Beef Ribeye"
                   />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Default price */}
-            <Controller
-              name="defaultPrice"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-product-price">
-                    {sellingType === "by_weight"
-                      ? "Default price per lb *"
-                      : "Default price per unit (each) *"}
-                  </FieldLabel>
-                  <div className="flex items-center gap-2 max-w-48">
-                    <span className="text-sm text-muted-foreground">$</span>
-                    <Input
-                      {...field}
-                      id="form-add-product-price"
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      aria-invalid={fieldState.invalid}
-                    />
-                  </div>
-                  <FieldDescription>
-                    {sellingType === "by_weight"
-                      ? "Case totals are estimated from this rate × lbs per case."
-                      : "Case totals are calculated from this rate × units per case."}
-                  </FieldDescription>
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
                   )}

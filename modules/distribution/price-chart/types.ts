@@ -1,5 +1,1 @@
-export type {
-  PriceChartData,
-  PriceChartProduct,
-  CustomerPrice,
-} from "@/lib/api";
+export type { PriceChartData } from "./services/price-chart";

@@ -85,4 +85,7 @@ export const queryKeys = {
     branding: ["tenant", "branding"] as const,
     logoUrl: ["tenant", "branding", "logo-url"] as const,
   },
+  priceChart: {
+    all: ["price-chart"] as const,
+  },
 } as const;

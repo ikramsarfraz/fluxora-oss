@@ -130,7 +130,7 @@ export type MonthlyReport = {
   purchases: MonthlyPurchasesSummary;
 };
 
-export type Supplier = { id: number; name: string; created_at: string };
+export type Supplier = { id: string; name: string; created_at: string };
 export type SupplierInvoiceLine = {
   id: number;
   supplier_invoice_id: number;
@@ -196,9 +196,9 @@ export type Customer = {
   created_at: string;
 };
 export type CustomerPrice = {
-  id: number;
-  customer_id: number;
-  product_id: number;
+  id: string;
+  customer_id: string;
+  product_id: string;
   price_per_lb: string;
   product_sku?: string;
   product_name?: string;
@@ -364,19 +364,19 @@ export type Invoice = {
 };
 
 export type PriceChartProductCostBySupplier = {
-  supplier_id: number;
+  supplier_id: string;
   supplier_name: string;
   cost_per_lb: string;
   updated_at?: string | null;
 };
 export type PriceChartCostFromInvoice = {
-  supplier_id: number;
+  supplier_id: string;
   supplier_name: string;
   cost_per_lb: string;
   invoice_date: string | null;
 };
 export type PriceChartProduct = {
-  id: number;
+  id: string;
   sku: string;
   name: string;
   species?: string;
@@ -385,13 +385,13 @@ export type PriceChartProduct = {
   costs_from_invoices?: PriceChartCostFromInvoice[];
 };
 export type PriceChartCustomer = {
-  id: number;
+  id: string;
   name: string;
   fuel_surcharge_amount: string | null;
 };
 export type PriceChartPrice = {
-  customer_id: number;
-  product_id: number;
+  customer_id: string;
+  product_id: string;
   price_per_lb: string;
 };
 export type PriceChartData = {
@@ -464,18 +464,18 @@ export const endpoints = {
   },
   priceChart: {
     get: () => P.priceChart,
-    setProductSupplierCost: (productId: number) =>
+    setProductSupplierCost: (productId: string) =>
       `${P.priceChart}/product-supplier-cost/${productId}`,
-    deleteProductSupplierCost: (productId: number, supplierId: number) =>
+    deleteProductSupplierCost: (productId: string, supplierId: string) =>
       `${P.priceChart}/product-supplier-cost/${productId}/${supplierId}`,
   },
   suppliers: {
     list: () => P.suppliers,
-    one: (id: number) => `${P.suppliers}/${id}`,
-    portfolio: (id: number) => `${P.suppliers}/${id}/portfolio`,
+    one: (id: string) => `${P.suppliers}/${id}`,
+    portfolio: (id: string) => `${P.suppliers}/${id}/portfolio`,
     create: () => P.suppliers,
-    update: (id: number) => `${P.suppliers}/${id}`,
-    delete: (id: number) => `${P.suppliers}/${id}`,
+    update: (id: string) => `${P.suppliers}/${id}`,
+    delete: (id: string) => `${P.suppliers}/${id}`,
   },
   supplierInvoices: {
     list: () => P.supplierInvoices,
@@ -488,14 +488,14 @@ export const endpoints = {
   },
   customers: {
     list: () => P.customers,
-    one: (id: number) => `${P.customers}/${id}`,
-    portfolio: (id: number) => `${P.customers}/${id}/portfolio`,
+    one: (id: string) => `${P.customers}/${id}`,
+    portfolio: (id: string) => `${P.customers}/${id}/portfolio`,
     create: () => P.customers,
-    update: (id: number) => `${P.customers}/${id}`,
-    delete: (id: number) => `${P.customers}/${id}`,
-    prices: (id: number) => `${P.customers}/${id}/prices`,
-    setPrice: (id: number) => `${P.customers}/${id}/prices`,
-    deletePrice: (customerId: number, productId: number) =>
+    update: (id: string) => `${P.customers}/${id}`,
+    delete: (id: string) => `${P.customers}/${id}`,
+    prices: (id: string) => `${P.customers}/${id}/prices`,
+    setPrice: (id: string) => `${P.customers}/${id}/prices`,
+    deletePrice: (customerId: string, productId: string) =>
       `${P.customers}/${customerId}/prices/${productId}`,
   },
   unitsOfMeasure: {
@@ -507,10 +507,10 @@ export const endpoints = {
   },
   products: {
     list: () => P.products,
-    one: (id: number) => `${P.products}/${id}`,
+    one: (id: string) => `${P.products}/${id}`,
     create: () => P.products,
-    update: (id: number) => `${P.products}/${id}`,
-    delete: (id: number) => `${P.products}/${id}`,
+    update: (id: string) => `${P.products}/${id}`,
+    delete: (id: string) => `${P.products}/${id}`,
   },
   lots: {
     list: () => P.lots,

@@ -1,0 +1,2 @@
+ALTER TABLE "product_supplier_costs" ADD COLUMN "is_primary" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "product_supplier_costs" ADD COLUMN "last_received_at" timestamp with time zone;
