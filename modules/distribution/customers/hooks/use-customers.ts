@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getCustomerAction,
+  getCustomerInvoicesPageAction,
+  getCustomerOrdersPageAction,
   getCustomerPortfolioAction,
   createCustomerAction,
   deleteCustomerAction,
@@ -12,7 +14,11 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { CustomerListParams } from "@/modules/distribution/customers/services/customers";
+import type {
+  CustomerInvoicesParams,
+  CustomerListParams,
+  CustomerOrdersParams,
+} from "@/modules/distribution/customers/services/customers";
 
 export function useCustomers() {
   return useQuery({
@@ -69,5 +75,25 @@ export function useDeleteCustomer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     },
+  });
+}
+
+export function useCustomerOrdersPage(id: string, params: CustomerOrdersParams) {
+  return useQuery({
+    queryKey: queryKeys.customers.ordersPage(id, params),
+    queryFn: () => getCustomerOrdersPageAction(id, params),
+    enabled: !!id && isUuid(id),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useCustomerInvoicesPage(id: string, params: CustomerInvoicesParams) {
+  return useQuery({
+    queryKey: queryKeys.customers.invoicesPage(id, params),
+    queryFn: () => getCustomerInvoicesPageAction(id, params),
+    enabled: !!id && isUuid(id),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 2,
   });
 }

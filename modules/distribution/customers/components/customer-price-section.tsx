@@ -1,20 +1,32 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 
 import {
+  useCustomerProductPricesPage,
   useDeleteCustomerPrice,
-  usePriceChart,
   usePromoteProductVendor,
   useSetCustomerPrice,
 } from "@/modules/distribution/price-chart/hooks/use-price-chart";
 import { DetailSection } from "@/components/detail-section";
-import type { PriceChartData } from "@/modules/distribution/price-chart/services/price-chart";
+import { TablePager } from "@/components/table-pager";
+import type { CustomerProductRow } from "@/modules/distribution/price-chart/services/price-chart";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-type Product = PriceChartData["products"][number];
-type Vendor = Product["vendors"][number];
+type Vendor = CustomerProductRow["vendors"][number];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,53 +66,26 @@ function VendorSubRows({
         const isPromoting = promoting && promotingId === v.supplier_id;
 
         return (
-          <tr
-            key={v.supplier_id}
-            style={{ background: "oklch(98.5% 0 0)", borderBottom: "1px solid #f5f5f4" }}
-          >
-            {/* indent */}
-            <td style={{ padding: "8px 16px 8px 36px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <TableRow key={v.supplier_id} className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2">
+            <TableCell className="py-2 pl-9 pr-4">
+              <div className="flex items-center gap-2">
                 <div
-                  style={{
-                    width: 3,
-                    alignSelf: "stretch",
-                    borderRadius: 2,
-                    background: v.is_primary ? "oklch(48% 0.16 265)" : "#e7e5e4",
-                    flexShrink: 0,
-                    marginRight: 4,
-                  }}
+                  className={cn(
+                    "w-0.5 self-stretch rounded-sm shrink-0 mr-1",
+                    v.is_primary ? "bg-primary" : "bg-stone-line",
+                  )}
                 />
                 <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12.5,
-                      fontWeight: 500,
-                      color: "#0c0a09",
-                    }}
-                  >
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
                     {v.supplier_name}
                     {v.is_primary && (
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          color: "oklch(48% 0.16 265)",
-                          background: "oklch(96% 0.02 265)",
-                          padding: "1px 6px",
-                          borderRadius: 100,
-                          border: "1px solid oklch(90% 0.04 265)",
-                        }}
-                      >
+                      <Badge className="bg-primary/10 text-primary border-primary/25 font-semibold text-[10.5px] h-4.5">
                         Primary
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   {v.last_received_at && (
-                    <div style={{ fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
+                    <div className="text-[11px] text-stone-muted/70 mt-0.5">
                       Last received{" "}
                       {new Date(v.last_received_at).toLocaleDateString(undefined, {
                         month: "short",
@@ -110,64 +95,45 @@ function VendorSubRows({
                   )}
                 </div>
               </div>
-            </td>
+            </TableCell>
 
-            {/* cost */}
-            <td style={{ padding: "8px 16px", textAlign: "right", verticalAlign: "middle" }}>
+            <TableCell className="py-2 text-right">
               <span
-                style={{
-                  fontFamily: "var(--font-geist-mono, monospace)",
-                  fontSize: 13,
-                  fontVariantNumeric: "tabular-nums",
-                  fontWeight: v.is_primary ? 600 : 500,
-                  color: v.is_primary ? "#0c0a09" : "#78716c",
-                }}
+                className={cn(
+                  "font-mono tabular-nums text-[13px]",
+                  v.is_primary ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                )}
               >
                 ${fmt(v.cost_per_lb)}
               </span>
               {!v.is_primary && Math.abs(delta) > 0.001 && (
                 <div
-                  style={{
-                    fontSize: 10.5,
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontVariantNumeric: "tabular-nums",
-                    color: delta > 0 ? "oklch(58% 0.18 25)" : "oklch(58% 0.13 155)",
-                    marginTop: 1,
-                  }}
+                  className={cn(
+                    "text-[10.5px] font-mono tabular-nums mt-0.5",
+                    delta > 0 ? "text-destructive" : "text-status-good",
+                  )}
                 >
                   {delta > 0 ? "+" : ""}${Math.abs(delta).toFixed(2)} ({deltaPct > 0 ? "+" : ""}
                   {deltaPct.toFixed(1)}%)
                 </div>
               )}
-            </td>
+            </TableCell>
 
-            {/* default / their price / margin — empty */}
-            <td /><td /><td />
+            <TableCell /><TableCell /><TableCell />
 
-            {/* make primary */}
-            <td style={{ padding: "8px 16px", textAlign: "center" }}>
+            <TableCell className="py-2 text-center">
               {!v.is_primary && (
-                <button
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={() => onPromote(v.supplier_id)}
                   disabled={promoting}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 11.5,
-                    fontWeight: 500,
-                    border: "1px solid #e7e5e4",
-                    borderRadius: 5,
-                    background: "#fff",
-                    color: "#44403c",
-                    cursor: promoting ? "not-allowed" : "pointer",
-                    opacity: promoting ? 0.6 : 1,
-                    whiteSpace: "nowrap",
-                  }}
                 >
                   {isPromoting ? "Promoting…" : "Make primary"}
-                </button>
+                </Button>
               )}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         );
       })}
     </>
@@ -190,7 +156,7 @@ function ProductRow({
   promoting,
   promotingId,
 }: {
-  prod: Product;
+  prod: CustomerProductRow;
   customerId: string;
   markup: number;
   priceMap: Map<string, string>;
@@ -225,154 +191,85 @@ function ProductRow({
         : ((def - Number(prod.cost)) / Number(prod.cost)) * 100
       : null;
 
-  const marginColor =
+  const marginClass =
     displayMargin == null
-      ? "#a8a29e"
+      ? "text-stone-muted/60"
       : displayMargin >= 5
-        ? "oklch(58% 0.13 155)"
+        ? "text-status-good"
         : displayMargin < 0
-          ? "oklch(58% 0.18 25)"
-          : "#78716c";
+          ? "text-destructive"
+          : "text-stone-muted";
 
   const multiVendor = prod.vendors.length > 1;
   const primaryVendor = prod.vendors.find(v => v.is_primary) ?? prod.vendors[0] ?? null;
 
   return (
     <>
-      <tr style={{ borderBottom: expanded ? "none" : "1px solid #f5f5f4" }}>
-        {/* product */}
-        <td style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 10.5,
-                color: "#78716c",
-                padding: "2px 6px",
-                background: "#f5f5f4",
-                borderRadius: 4,
-                minWidth: 80,
-                textAlign: "center",
-                flexShrink: 0,
-              }}
-            >
+      <TableRow className={expanded ? "border-0" : undefined}>
+        <TableCell className="py-3 px-4">
+          <div className="flex items-center gap-3">
+            <div className="font-mono text-[10.5px] text-stone-muted bg-muted px-1.5 py-0.5 rounded min-w-20 text-center shrink-0">
               {prod.sku}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{prod.name}</div>
+              <div className="text-[13px] font-medium text-stone-ink">{prod.name}</div>
               {multiVendor && primaryVendor && (
-                <div style={{ fontSize: 11, color: "#a8a29e", marginTop: 1 }}>
+                <div className="text-[11px] text-stone-muted/70 mt-px">
                   {primaryVendor.supplier_name}
                 </div>
               )}
             </div>
           </div>
-        </td>
+        </TableCell>
 
-        {/* cost */}
-        <td style={{ padding: "12px 16px", textAlign: "right", verticalAlign: "middle" }}>
+        <TableCell className="py-3 px-4 text-right">
           {prod.cost ? (
             multiVendor ? (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={onToggleExpand}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  background: expanded ? "#f5f5f4" : "transparent",
-                  border: "none",
-                  borderRadius: 5,
-                  padding: "3px 6px 3px 3px",
-                  cursor: "pointer",
-                }}
+                className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
               >
-                <span style={{ color: "#a8a29e", display: "grid", placeItems: "center" }}>
+                <span className="text-stone-muted">
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: 500,
-                    color: "#44403c",
-                  }}
-                >
+                <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
                   ${fmt(prod.cost)}
                 </span>
-                <span
-                  style={{
-                    fontSize: 10.5,
-                    color: "oklch(48% 0.16 265)",
-                    background: "oklch(96% 0.02 265)",
-                    padding: "1px 5px",
-                    borderRadius: 100,
-                    fontWeight: 500,
-                  }}
-                >
+                <Badge className="bg-primary/10 text-primary text-[10.5px] h-4.5 font-medium">
                   of {prod.vendors.length}
-                </span>
-              </button>
+                </Badge>
+              </Button>
             ) : (
-              <>
-                <span
-                  style={{
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: 500,
-                    color: "#44403c",
-                  }}
-                >
-                  ${fmt(prod.cost)}
-                </span>
-                <span style={{ fontSize: 11, color: "#a8a29e", marginLeft: 2 }}>/lb</span>
-              </>
+              <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+                ${fmt(prod.cost)}
+                <span className="text-[11px] text-stone-muted ml-0.5">/lb</span>
+              </span>
             )
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* default */}
-        <td style={{ padding: "12px 16px", textAlign: "right", verticalAlign: "middle" }}>
+        <TableCell className="py-3 px-4 text-right">
           {def != null ? (
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 13,
-                fontVariantNumeric: "tabular-nums",
-                color: "#78716c",
-                fontWeight: 500,
-              }}
-            >
+            <span className="font-mono tabular-nums text-[13px] font-medium text-stone-muted">
               ${def.toFixed(2)}
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* their price */}
-        <td style={{ padding: "8px 16px", verticalAlign: "middle" }}>
+        <TableCell className="py-2 px-4">
           {def != null ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                <span
-                  style={{
-                    position: "absolute",
-                    left: 9,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#a8a29e",
-                    fontSize: 12,
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    pointerEvents: "none",
-                  }}
-                >
+            <div className="inline-flex items-center gap-2">
+              <div className="relative inline-flex items-center">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
                   $
                 </span>
-                <input
+                <Input
                   type="number"
                   step={0.01}
                   min={0}
@@ -393,108 +290,54 @@ function ProductRow({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
-                  style={{
-                    width: 110,
-                    padding: "7px 10px 7px 22px",
-                    borderRadius: 6,
-                    border: focused
-                      ? "1px solid oklch(48% 0.16 265)"
+                  className={cn(
+                    "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
+                    "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+                    focused
+                      ? "border-ring bg-white ring-3 ring-ring/50"
                       : isOverride
-                        ? "1px solid oklch(92% 0.03 265)"
-                        : "1px solid transparent",
-                    background: focused
-                      ? "#fff"
-                      : isOverride
-                        ? "oklch(98% 0.015 265)"
-                        : "transparent",
-                    boxShadow: focused ? "0 0 0 3px oklch(96% 0.02 265)" : "none",
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: isOverride && !focused ? 600 : 500,
-                    color: focused ? "#0c0a09" : isOverride ? "oklch(50% 0.15 265)" : "#78716c",
-                    textAlign: "right",
-                    outline: "none",
-                    transition: "background 0.1s, border-color 0.1s",
-                  }}
+                        ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                        : "border-transparent bg-transparent shadow-none",
+                  )}
                 />
               </div>
               {isOverride && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "1px 6px",
-                    borderRadius: 100,
-                    fontSize: 10.5,
-                    fontWeight: 500,
-                    background: "oklch(98% 0.015 265)",
-                    color: "oklch(50% 0.15 265)",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: "50%",
-                      background: "oklch(50% 0.15 265)",
-                      display: "inline-block",
-                    }}
-                  />
+                <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   Override
-                </span>
+                </Badge>
               )}
             </div>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* margin */}
-        <td style={{ padding: "12px 16px", textAlign: "right", verticalAlign: "middle" }}>
+        <TableCell className="py-3 px-4 text-right">
           {displayMargin != null ? (
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 12,
-                fontVariantNumeric: "tabular-nums",
-                color: marginColor,
-              }}
-            >
+            <span className={cn("font-mono tabular-nums text-[12px]", marginClass)}>
               {displayMargin >= 0 ? "+" : ""}
               {displayMargin.toFixed(1)}%
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* reset */}
-        <td style={{ padding: "12px 16px", textAlign: "center", verticalAlign: "middle" }}>
+        <TableCell className="py-3 px-4 text-center">
           {isOverride && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onReset}
               disabled={deleting}
               title="Reset to default"
-              style={{
-                width: 24,
-                height: 24,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: 4,
-                border: "none",
-                background: "transparent",
-                color: "#78716c",
-                cursor: deleting ? "not-allowed" : "pointer",
-                opacity: deleting ? 0.5 : 1,
-              }}
             >
               <RotateCcw size={13} />
-            </button>
+            </Button>
           )}
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
 
       {expanded && prod.vendors.length > 0 && (
         <VendorSubRows
@@ -505,9 +348,9 @@ function ProductRow({
         />
       )}
       {expanded && (
-        <tr>
-          <td colSpan={6} style={{ height: 1, background: "#e7e5e4", padding: 0 }} />
-        </tr>
+        <TableRow className="hover:bg-transparent border-0">
+          <TableCell colSpan={6} className="h-px bg-stone-line p-0" />
+        </TableRow>
       )}
     </>
   );
@@ -516,7 +359,6 @@ function ProductRow({
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export function CustomerPriceSection({ customerId }: { customerId: string }) {
-  const { data, isLoading } = usePriceChart();
   const setPrice = useSetCustomerPrice();
   const deletePrice = useDeleteCustomerPrice();
   const promote = usePromoteProductVendor();
@@ -525,18 +367,32 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
   const [markup, setMarkup] = useState(7);
   const [editingMarkup, setEditingMarkup] = useState(false);
   const [markupDraft, setMarkupDraft] = useState("7");
+  const markupInputRef = useRef<HTMLInputElement>(null);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  const products = useMemo(() => data?.products ?? [], [data]);
-  const prices = useMemo(() => data?.prices ?? [], [data]);
+  const prevCustomerId = useRef(customerId);
+  if (prevCustomerId.current !== customerId) {
+    prevCustomerId.current = customerId;
+    setPage(1);
+    setExpandedProductId(null);
+  }
+
+  const { data: pageData, isLoading } = useCustomerProductPricesPage(customerId, {
+    page,
+    pageSize,
+  });
 
   const priceMap = useMemo(() => {
     const m = new Map<string, string>();
-    for (const p of prices) {
-      m.set(`${p.customer_id}:${p.product_id}`, fmt(p.price_per_lb));
+    for (const row of pageData?.data ?? []) {
+      if (row.customerPrice != null) {
+        m.set(`${customerId}:${row.id}`, fmt(row.customerPrice));
+      }
     }
     return m;
-  }, [prices]);
+  }, [pageData, customerId]);
 
   function commitMarkup() {
     const v = parseFloat(markupDraft);
@@ -545,7 +401,7 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
   }
 
   function handleCommit(productId: string, rawValue: string) {
-    const prod = products.find(p => p.id === productId);
+    const prod = pageData?.data.find(p => p.id === productId);
     if (!prod?.cost) return;
     const def = defPrice(prod.cost, markup);
     if (!rawValue.trim()) {
@@ -572,32 +428,25 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
     );
   }
 
-  const overrideCount = prices.filter(p => p.customer_id === customerId).length;
+  const totalProducts = pageData?.totalProducts ?? 0;
+  const overrideCount = pageData?.overrideCount ?? 0;
 
   const description = isLoading
     ? "Loading prices…"
-    : `${products.length} products · ${overrideCount} override${overrideCount !== 1 ? "s" : ""}. Empty = cost × markup. Type a value to override; clear to revert.`;
+    : `${totalProducts} products · ${overrideCount} override${overrideCount !== 1 ? "s" : ""}. Empty = cost × markup. Type a value to override; clear to revert.`;
 
   return (
     <DetailSection title="Prices" description={description}>
-      {isLoading ? null : products.length === 0 ? (
+      {isLoading ? null : totalProducts === 0 ? (
         <p className="text-sm text-muted-foreground">No products yet.</p>
       ) : (
-        <div style={{ marginTop: 4 }}>
+        <div className="mt-1">
           {/* markup control */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 12,
-              fontSize: 12,
-              color: "#78716c",
-            }}
-          >
+          <div className="flex items-center gap-1.5 mb-3 text-xs text-stone-muted">
             <span>Default markup:</span>
             {editingMarkup ? (
-              <input
+              <Input
+                ref={markupInputRef}
                 autoFocus
                 type="number"
                 min={0}
@@ -610,87 +459,57 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                   if (e.key === "Enter") commitMarkup();
                   if (e.key === "Escape") setEditingMarkup(false);
                 }}
-                style={{
-                  width: 52,
-                  padding: "2px 4px",
-                  border: "1px solid oklch(48% 0.16 265)",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  outline: "none",
-                  boxShadow: "0 0 0 2px oklch(96% 0.02 265)",
-                }}
+                className="w-14 h-6 text-xs font-semibold px-2"
               />
             ) : (
-              <button
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => {
                   setMarkupDraft(String(markup));
                   setEditingMarkup(true);
+                  setTimeout(() => markupInputRef.current?.select(), 0);
                 }}
-                style={{
-                  fontWeight: 600,
-                  color: "#0c0a09",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 12,
-                  padding: "0 2px",
-                  borderRadius: 3,
-                  textDecoration: "underline dotted",
-                  textUnderlineOffset: 2,
-                }}
+                className="h-5 px-1 text-xs font-semibold text-stone-ink underline decoration-dotted underline-offset-2 hover:no-underline"
               >
                 {markup}%
-              </button>
+              </Button>
             )}
-            <span style={{ color: "#a8a29e", fontSize: 11 }}>
+            <span className="text-stone-muted/60 text-[11px]">
               (used to compute Default column · not stored)
             </span>
           </div>
 
           {/* table */}
-          <div
-            style={{
-              border: "1px solid #e7e5e4",
-              borderRadius: 8,
-              overflow: "hidden",
-            }}
-          >
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
+          <div className="border border-stone-line rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
                   {(
                     [
-                      ["Product", "auto", "left"],
-                      ["Cost", 110, "right"],
-                      ["Default", 120, "right"],
-                      ["Their price", 190, "left"],
-                      ["Margin", 90, "right"],
-                      ["", 44, "center"],
+                      ["Product", "auto", "text-left"],
+                      ["Cost", "110px", "text-right"],
+                      ["Default", "120px", "text-right"],
+                      ["Their price", "190px", "text-left"],
+                      ["Margin", "90px", "text-right"],
+                      ["", "44px", "text-center"],
                     ] as const
                   ).map(([label, w, align], i) => (
-                    <th
+                    <TableHead
                       key={i}
-                      style={{
-                        textAlign: align,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "#78716c",
-                        padding: "9px 16px",
-                        borderBottom: "1px solid #e7e5e4",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.04em",
-                        background: "#fafaf9",
-                        width: typeof w === "number" ? w : undefined,
-                      }}
+                      className={cn(
+                        align,
+                        "text-[11px] font-semibold text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
+                      )}
+                      style={{ width: w === "auto" ? undefined : w }}
                     >
                       {label}
-                    </th>
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {products.map(prod => (
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(pageData?.data ?? []).map(prod => (
                   <ProductRow
                     key={prod.id}
                     prod={prod}
@@ -722,8 +541,15 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                     promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
                   />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
+            <TablePager
+              total={pageData?.total ?? 0}
+              perPage={pageSize}
+              page={page}
+              onPageChange={p => { setPage(p); setExpandedProductId(null); }}
+              onPerPageChange={ps => { setPageSize(ps); setPage(1); setExpandedProductId(null); }}
+            />
           </div>
         </div>
       )}

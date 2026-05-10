@@ -7,13 +7,17 @@ import {
   deleteCustomer,
   deleteCustomerPrice,
   getCustomerById,
+  getCustomerInvoicesPage,
+  getCustomerOrdersPage,
   getCustomerPortfolio,
   getCustomerPrices,
   getCustomers,
   getCustomersPage,
   setCustomerPrice,
   updateCustomer,
+  type CustomerInvoicesParams,
   type CustomerListParams,
+  type CustomerOrdersParams,
 } from "../services/customers";
 import {
   createCustomerInputSchema,
@@ -85,4 +89,12 @@ export async function setCustomerPriceAction(
 
 export async function deleteCustomerPriceAction(customerId: string, productId: string) {
   return await deleteCustomerPrice(customerId, productId);
+}
+
+export async function getCustomerOrdersPageAction(customerId: string, params?: CustomerOrdersParams) {
+  return await getCustomerOrdersPage(customerId, params);
+}
+
+export async function getCustomerInvoicesPageAction(customerId: string, params?: CustomerInvoicesParams) {
+  return await getCustomerInvoicesPage(customerId, params);
 }

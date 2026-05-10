@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -12,6 +12,15 @@ import {
   suppliers,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import {
+  buildTextSearchCondition,
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+  type PaginatedResult,
+} from "@/lib/pagination";
 
 export async function getPriceChartData() {
   const tenant = await getCurrentTenant();
@@ -327,3 +336,208 @@ export async function promoteProductVendor(productId: string, supplierId: string
 }
 
 export type PriceChartData = Awaited<ReturnType<typeof getPriceChartData>>;
+
+export type CustomerProductSort = "name" | "sku";
+export type CustomerProductFilters = { category?: string; overridesOnly?: string };
+export type CustomerProductsParams = PaginatedQueryInput<CustomerProductSort, CustomerProductFilters>;
+
+export type CustomerProductRow = {
+  id: string;
+  sku: string;
+  name: string;
+  cost: string;
+  category: string | null;
+  customerPrice: string | null;
+  vendors: {
+    supplier_id: string;
+    supplier_name: string;
+    cost_per_lb: string;
+    is_primary: boolean;
+    last_received_at: string | null;
+    updated_at: string | null;
+  }[];
+};
+
+export type CustomerProductsPage = PaginatedResult<CustomerProductRow> & {
+  totalProducts: number;
+  overrideCount: number;
+  allCategories: string[];
+};
+
+export async function getCustomerProductPricesPage(
+  customerId: string,
+  input?: CustomerProductsParams,
+): Promise<CustomerProductsPage> {
+  const tenant = await getCurrentTenant();
+  const tid = tenant.id;
+
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "name",
+    defaultDirection: "asc",
+    defaultPageSize: 10,
+    defaultFilters: {},
+  });
+
+  const { category, overridesOnly } = (query.filters ?? {}) as CustomerProductFilters;
+  const isOverridesOnly = overridesOnly === "true";
+
+  const searchCond = buildTextSearchCondition(query.search, [products.name, products.sku]);
+
+  const where = and(
+    eq(products.tenantId, tid),
+    searchCond,
+    category
+      ? inArray(
+          products.id,
+          db
+            .select({ id: productCategories.productId })
+            .from(productCategories)
+            .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+            .where(eq(categories.name, category)),
+        )
+      : undefined,
+    isOverridesOnly
+      ? inArray(
+          products.id,
+          db
+            .select({ id: customerProductPrices.productId })
+            .from(customerProductPrices)
+            .where(eq(customerProductPrices.customerId, customerId)),
+        )
+      : undefined,
+  );
+
+  const [[{ total }], [{ totalProducts }], [{ overrideCount }], allCategoryRows] =
+    await Promise.all([
+      db.select({ total: sql<number>`count(*)::int` }).from(products).where(where),
+      db
+        .select({ totalProducts: sql<number>`count(*)::int` })
+        .from(products)
+        .where(eq(products.tenantId, tid)),
+      db
+        .select({ overrideCount: sql<number>`count(*)::int` })
+        .from(customerProductPrices)
+        .innerJoin(products, eq(products.id, customerProductPrices.productId))
+        .where(and(eq(customerProductPrices.customerId, customerId), eq(products.tenantId, tid))),
+      db
+        .selectDistinct({ categoryName: categories.name })
+        .from(productCategories)
+        .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+        .innerJoin(products, eq(products.id, productCategories.productId))
+        .where(eq(products.tenantId, tid))
+        .orderBy(asc(categories.name)),
+    ]);
+
+  const allCategories = allCategoryRows.map(r => r.categoryName);
+
+  const pagedProducts = await db
+    .select({
+      id: products.id,
+      sku: products.sku,
+      name: products.name,
+      defaultPricePerLb: products.defaultPricePerLb,
+    })
+    .from(products)
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: { name: products.name, sku: products.sku },
+      }),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+
+  if (pagedProducts.length === 0) {
+    return {
+      ...createPaginatedResult({ data: [], page: query.page, pageSize: query.pageSize, total }),
+      totalProducts,
+      overrideCount,
+      allCategories,
+    };
+  }
+
+  const productIds = pagedProducts.map(p => p.id);
+
+  const [categoryRows, priceRows, vendorRows] = await Promise.all([
+    db
+      .select({ productId: productCategories.productId, categoryName: categories.name })
+      .from(productCategories)
+      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .where(inArray(productCategories.productId, productIds)),
+    db
+      .select({
+        productId: customerProductPrices.productId,
+        pricePerLb: customerProductPrices.pricePerLb,
+      })
+      .from(customerProductPrices)
+      .where(
+        and(
+          eq(customerProductPrices.customerId, customerId),
+          inArray(customerProductPrices.productId, productIds),
+        ),
+      ),
+    db
+      .select({
+        productId: productSupplierCosts.productId,
+        supplierId: productSupplierCosts.supplierId,
+        costPerLb: productSupplierCosts.costPerLb,
+        isPrimary: productSupplierCosts.isPrimary,
+        lastReceivedAt: productSupplierCosts.lastReceivedAt,
+        updatedAt: productSupplierCosts.updatedAt,
+        supplierName: suppliers.name,
+      })
+      .from(productSupplierCosts)
+      .innerJoin(suppliers, eq(productSupplierCosts.supplierId, suppliers.id))
+      .where(inArray(productSupplierCosts.productId, productIds)),
+  ]);
+
+  const categoryByProduct = new Map<string, string>();
+  for (const r of categoryRows) {
+    if (!categoryByProduct.has(r.productId)) categoryByProduct.set(r.productId, r.categoryName);
+  }
+
+  const priceByProduct = new Map<string, string>();
+  for (const r of priceRows) priceByProduct.set(r.productId, r.pricePerLb);
+
+  const vendorsByProduct = new Map<string, CustomerProductRow["vendors"]>();
+  for (const r of vendorRows) {
+    if (!vendorsByProduct.has(r.productId)) vendorsByProduct.set(r.productId, []);
+    vendorsByProduct.get(r.productId)!.push({
+      supplier_id: r.supplierId,
+      supplier_name: r.supplierName,
+      cost_per_lb: r.costPerLb,
+      is_primary: r.isPrimary,
+      last_received_at: r.lastReceivedAt?.toISOString() ?? null,
+      updated_at: r.updatedAt?.toISOString() ?? null,
+    });
+  }
+  for (const [, vendors] of vendorsByProduct) {
+    vendors.sort((a, b) => {
+      if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
+      return Number(a.cost_per_lb) - Number(b.cost_per_lb);
+    });
+  }
+
+  const data: CustomerProductRow[] = pagedProducts.map(p => {
+    const vendors = vendorsByProduct.get(p.id) ?? [];
+    const primaryVendor = vendors.find(v => v.is_primary) ?? vendors[0] ?? null;
+    return {
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      cost: primaryVendor ? primaryVendor.cost_per_lb : p.defaultPricePerLb,
+      category: categoryByProduct.get(p.id) ?? null,
+      customerPrice: priceByProduct.get(p.id) ?? null,
+      vendors,
+    };
+  });
+
+  return {
+    ...createPaginatedResult({ data, page: query.page, pageSize: query.pageSize, total }),
+    totalProducts,
+    overrideCount,
+    allCategories,
+  };
+}

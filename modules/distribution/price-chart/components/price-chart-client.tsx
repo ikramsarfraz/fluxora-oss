@@ -1,19 +1,40 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
 import {
   useApplyMarkupToCustomer,
+  useCustomerProductPricesPage,
   useDeleteCustomerPrice,
   usePriceChart,
   usePromoteProductVendor,
   useSetCustomerPrice,
   useUpdateCustomerFuelSurcharge,
 } from "../hooks/use-price-chart";
-import type { PriceChartData } from "../services/price-chart";
+import type { CustomerProductRow, PriceChartData } from "../services/price-chart";
 import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
+import { TablePager } from "@/components/table-pager";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 
 type Product = PriceChartData["products"][number];
 type Vendor = Product["vendors"][number];
@@ -60,183 +81,73 @@ function CustomerList({
   );
 
   return (
-    <aside
-      style={{
-        width: 300,
-        flexShrink: 0,
-        background: "#fff",
-        border: "1px solid #e7e5e4",
-        borderRadius: 10,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        position: "sticky",
-        top: 80,
-        maxHeight: "calc(100vh - 110px)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
+    <Card
+      className="w-75 shrink-0 gap-0 p-0 rounded-[10px] overflow-hidden sticky top-20 flex-col"
+      style={{ maxHeight: "calc(100vh - 110px)" }}
     >
-      <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid #f5f5f4" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 8,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "#78716c",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
+      <div className="px-4 pt-3.5 pb-2.5 border-b border-stone-line">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-semibold text-stone-muted uppercase tracking-wider">
             Customers
           </span>
-          <span
-            style={{
-              background: "#f5f5f4",
-              color: "#44403c",
-              fontSize: 11,
-              padding: "1px 7px",
-              borderRadius: 100,
-            }}
-          >
-            {filtered.length}
-          </span>
+          <Badge variant="secondary" className="text-[11px] px-2">{filtered.length}</Badge>
         </div>
-        <div style={{ position: "relative" }}>
-          <Search
-            size={14}
-            style={{
-              position: "absolute",
-              left: 9,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#78716c",
-              pointerEvents: "none",
-            }}
-          />
-          <input
+        <InputGroup>
+          <InputGroupAddon align="inline-start">
+            <Search size={14} />
+          </InputGroupAddon>
+          <InputGroupInput
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search customers…"
-            style={{
-              width: "100%",
-              padding: "7px 10px 7px 30px",
-              border: "1px solid #e7e5e4",
-              borderRadius: 6,
-              background: "#fafaf9",
-              fontSize: 13,
-              outline: "none",
-            }}
+            className="text-[13px]"
           />
-        </div>
+        </InputGroup>
       </div>
 
-      <div style={{ overflowY: "auto", padding: "6px 0" }}>
+      <div className="overflow-y-auto py-1.5 flex-1">
         {filtered.map(c => {
           const isActive = c.id === selected;
           const ovr = overrideCount(prices, c.id);
           const fuel = c.fuel_surcharge_amount;
           return (
-            <button
+            <Button
               key={c.id}
+              variant="ghost"
               onClick={() => onSelect(c.id)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "9px 16px",
-                width: "100%",
-                background: isActive ? "oklch(96% 0.02 265)" : "transparent",
-                border: "none",
-                borderLeft: isActive ? "3px solid oklch(48% 0.16 265)" : "3px solid transparent",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
+              className={cn(
+                "w-full h-auto justify-start gap-3 rounded-none py-2.5 px-4",
+                isActive && "bg-primary/5 hover:bg-primary/8",
+              )}
+              style={{ borderLeft: isActive ? "3px solid var(--color-primary)" : "3px solid transparent" }}
             >
               <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  flexShrink: 0,
-                  borderRadius: 7,
-                  background: isActive ? "oklch(48% 0.16 265)" : "#f5f5f4",
-                  color: isActive ? "#fff" : "#44403c",
-                  display: "grid",
-                  placeItems: "center",
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}
+                className={cn(
+                  "w-7 h-7 shrink-0 rounded-[7px] grid place-items-center text-[11px] font-semibold",
+                  isActive ? "bg-primary text-white" : "bg-muted text-stone-ink2",
+                )}
               >
                 {initials(c.name)}
               </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    lineHeight: 1.25,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    color: "#0c0a09",
-                  }}
-                >
+              <div className="min-w-0 flex-1 text-left">
+                <div className="text-[13px] font-medium leading-snug truncate text-stone-ink">
                   {c.name}
                 </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#78716c",
-                    marginTop: 2,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  {fuel && Number(fuel) > 0 && (
-                    <>
-                      <span style={{ color: "#a8a29e" }}>·</span>
-                      <span>${fmt(fuel)} fuel</span>
-                    </>
-                  )}
+                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-stone-muted">
+                  {fuel && Number(fuel) > 0 && <span>${fmt(fuel)} fuel</span>}
                   {ovr > 0 && (
-                    <>
-                      <span style={{ color: "#a8a29e" }}>·</span>
-                      <span
-                        style={{
-                          color: "oklch(50% 0.15 265)",
-                          fontWeight: 500,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: "50%",
-                            background: "oklch(50% 0.15 265)",
-                            display: "inline-block",
-                          }}
-                        />
-                        {ovr}
-                      </span>
-                    </>
+                    <span className="text-primary font-medium flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
+                      {ovr}
+                    </span>
                   )}
                 </div>
               </div>
-            </button>
+            </Button>
           );
         })}
       </div>
-    </aside>
+    </Card>
   );
 }
 
@@ -289,82 +200,32 @@ function CustomerCard({
   }
 
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e7e5e4",
-        borderRadius: 10,
-        padding: "18px 20px",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        display: "flex",
-        alignItems: "center",
-        gap: 18,
-      }}
-    >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          flexShrink: 0,
-          borderRadius: 10,
-          background: "oklch(96% 0.02 265)",
-          color: "oklch(48% 0.16 265)",
-          display: "grid",
-          placeItems: "center",
-          fontWeight: 600,
-          fontSize: 16,
-        }}
-      >
+    <Card className="flex-row items-center gap-4 px-5 py-4 rounded-[10px] overflow-visible">
+      <div className="w-12 h-12 shrink-0 rounded-[10px] bg-primary/10 text-primary grid place-items-center font-semibold text-base">
         {initials(customer.name)}
       </div>
       <div>
-        <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>
-          {customer.name}
-        </div>
+        <div className="text-lg font-semibold tracking-tight text-stone-ink">{customer.name}</div>
       </div>
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      {/* stats */}
-      <div
-        style={{
-          display: "flex",
-          border: "1px solid #e7e5e4",
-          borderRadius: 6,
-          overflow: "hidden",
-        }}
-      >
-        <button
+      <div className="flex border border-stone-line rounded-md overflow-hidden">
+        <Button
+          variant="ghost"
           onClick={() => {
             setEditingMarkup(true);
             setMarkupDraft(String(markup));
             setTimeout(() => inputRef.current?.select(), 0);
           }}
           title="Click to edit default markup"
-          style={{
-            padding: "10px 14px",
-            minWidth: 110,
-            background: "transparent",
-            border: "none",
-            borderRight: "1px solid #f5f5f4",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
+          className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-stone-line px-3.5 py-2.5 hover:bg-muted/60"
         >
-          <div
-            style={{
-              fontSize: 10.5,
-              color: "#78716c",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
+          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
             Markup
-          </div>
+          </span>
           {editingMarkup ? (
-            <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-              <input
+            <div className="flex items-baseline gap-1">
+              <Input
                 ref={inputRef}
                 autoFocus
                 type="number"
@@ -378,110 +239,50 @@ function CustomerCard({
                   if (e.key === "Enter") commitMarkup();
                   if (e.key === "Escape") setEditingMarkup(false);
                 }}
-                style={{
-                  width: 56,
-                  padding: "2px 4px",
-                  border: "1px solid oklch(48% 0.16 265)",
-                  borderRadius: 4,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  outline: "none",
-                  boxShadow: "0 0 0 2px oklch(96% 0.02 265)",
-                }}
+                className="w-14 h-7 text-sm font-semibold px-2"
               />
-              <span style={{ fontSize: 12, color: "#78716c", fontWeight: 500 }}>%</span>
+              <span className="text-xs text-stone-muted">%</span>
             </div>
           ) : (
-            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>
+            <div className="text-base font-semibold tracking-tight text-stone-ink">
               {markup}
-              <span style={{ fontSize: 12, color: "#78716c", fontWeight: 500, marginLeft: 1 }}>
-                %
-              </span>
+              <span className="text-xs text-stone-muted font-medium ml-px">%</span>
             </div>
           )}
-        </button>
+        </Button>
 
-        <div
-          style={{
-            padding: "10px 14px",
-            borderRight: "1px solid #f5f5f4",
-            minWidth: 130,
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10.5,
-              color: "#78716c",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
+        <div className="px-3.5 py-2.5 min-w-32.5 border-r border-stone-line flex flex-col gap-0.5">
+          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
             Overrides
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          </span>
+          <div className="text-base font-semibold tracking-tight text-stone-ink">
             {ovr}
-            <span style={{ fontSize: 12, color: "#78716c", fontWeight: 500, marginLeft: 2 }}>
-              / {totalOverrides}
-            </span>
+            <span className="text-xs text-stone-muted font-medium ml-0.5">/ {totalOverrides}</span>
           </div>
         </div>
 
-        <div
-          style={{
-            padding: "10px 14px",
-            minWidth: 120,
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10.5,
-              color: "#78716c",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              fontWeight: 600,
-              marginBottom: 2,
-            }}
-          >
+        <div className="px-3.5 py-2.5 min-w-30 flex flex-col gap-0.5">
+          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
             Avg margin
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>
+          </span>
+          <div className="text-base font-semibold tracking-tight text-stone-ink">
             {avgMargin >= 0 ? "+" : ""}
             {avgMargin.toFixed(1)}
-            <span style={{ fontSize: 12, color: "#78716c", fontWeight: 500, marginLeft: 1 }}>
-              %
-            </span>
+            <span className="text-xs text-stone-muted font-medium ml-px">%</span>
           </div>
         </div>
       </div>
 
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         onClick={onApplyMarkup}
         disabled={applyingMarkup}
         title={`Set all prices to cost × ${markup}%`}
-        style={{
-          padding: "7px 12px",
-          borderRadius: 6,
-          border: "1px solid #e7e5e4",
-          background: "#fff",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "#44403c",
-          cursor: applyingMarkup ? "not-allowed" : "pointer",
-          opacity: applyingMarkup ? 0.6 : 1,
-          whiteSpace: "nowrap",
-        }}
       >
         {applyingMarkup ? "Applying…" : `Apply ${markup}% markup`}
-      </button>
-    </div>
+      </Button>
+    </Card>
   );
 }
 
@@ -509,54 +310,19 @@ function FuelCard({
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        padding: "12px 16px",
-        background: "oklch(98.5% 0.015 70)",
-        border: "1px solid oklch(92% 0.04 70)",
-        borderRadius: 10,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-      }}
-    >
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          flexShrink: 0,
-          borderRadius: 8,
-          background: "oklch(94% 0.05 70)",
-          color: "oklch(40% 0.13 70)",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
+    <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-status-warn-soft ring-status-warn/20">
+      <div className="w-8 h-8 shrink-0 rounded-lg bg-status-warn/20 text-status-warn grid place-items-center">
         <Truck size={16} />
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 500 }}>Fuel surcharge</div>
-        <div style={{ fontSize: 11.5, color: "#78716c", marginTop: 2 }}>
+      <div className="flex-1">
+        <div className="text-[12.5px] font-medium text-stone-ink">Fuel surcharge</div>
+        <div className="text-[11.5px] text-stone-muted mt-0.5">
           Flat fee added to every order. Set to 0 to waive.
         </div>
       </div>
-      <div style={{ position: "relative" }}>
-        <span
-          style={{
-            position: "absolute",
-            left: 10,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "#78716c",
-            fontSize: 12,
-            fontFamily: "var(--font-geist-mono, monospace)",
-            pointerEvents: "none",
-          }}
-        >
-          $
-        </span>
-        <input
+      <InputGroup className="w-20 bg-white" data-disabled={saving ? "true" : undefined}>
+        <InputGroupAddon align="inline-start">$</InputGroupAddon>
+        <InputGroupInput
           type="number"
           step={0.5}
           min={0}
@@ -571,35 +337,21 @@ function FuelCard({
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
           disabled={saving}
-          style={{
-            width: 80,
-            padding: "6px 10px 6px 22px",
-            border: "1px solid #e7e5e4",
-            borderRadius: 6,
-            background: "#fff",
-            fontFamily: "var(--font-geist-mono, monospace)",
-            fontVariantNumeric: "tabular-nums",
-            fontWeight: 500,
-            textAlign: "right",
-            fontSize: 13,
-            outline: "none",
-          }}
+          className="text-right font-mono tabular-nums font-medium text-[13px]"
         />
-      </div>
-    </div>
+      </InputGroup>
+    </Card>
   );
 }
 
 // ── VendorSubRows ─────────────────────────────────────────────────────────────
 
 function VendorSubRows({
-  prod,
   vendors,
   onPromote,
   promoting,
   promotingId,
 }: {
-  prod: Product;
   vendors: Vendor[];
   onPromote: (supplierId: string) => void;
   promoting: boolean;
@@ -617,53 +369,26 @@ function VendorSubRows({
         const isPromoting = promoting && promotingId === v.supplier_id;
 
         return (
-          <tr
-            key={v.supplier_id}
-            style={{ background: "oklch(98.5% 0 0)", borderBottom: "1px solid #f5f5f4" }}
-          >
-            {/* indent in product col */}
-            <td style={{ padding: "8px 16px 8px 32px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <TableRow key={v.supplier_id} className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2">
+            <TableCell className="py-2 pl-8 pr-4">
+              <div className="flex items-center gap-2">
                 <div
-                  style={{
-                    width: 3,
-                    alignSelf: "stretch",
-                    borderRadius: 2,
-                    background: isPrimary ? "oklch(48% 0.16 265)" : "#e7e5e4",
-                    flexShrink: 0,
-                    marginRight: 4,
-                  }}
+                  className={cn(
+                    "w-0.5 self-stretch rounded-sm shrink-0 mr-1",
+                    isPrimary ? "bg-primary" : "bg-stone-line",
+                  )}
                 />
                 <div>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12.5,
-                      fontWeight: 500,
-                      color: "#0c0a09",
-                    }}
-                  >
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
                     {v.supplier_name}
                     {isPrimary && (
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          color: "oklch(48% 0.16 265)",
-                          background: "oklch(96% 0.02 265)",
-                          padding: "1px 6px",
-                          borderRadius: 100,
-                          border: "1px solid oklch(90% 0.04 265)",
-                        }}
-                      >
+                      <Badge className="bg-primary/10 text-primary border-primary/25 font-semibold text-[10.5px] h-4.5">
                         Primary
-                      </span>
+                      </Badge>
                     )}
                   </div>
                   {v.last_received_at && (
-                    <div style={{ fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
+                    <div className="text-[11px] text-stone-muted/70 mt-0.5">
                       Last received{" "}
                       {new Date(v.last_received_at).toLocaleDateString(undefined, {
                         month: "short",
@@ -673,70 +398,47 @@ function VendorSubRows({
                   )}
                 </div>
               </div>
-            </td>
+            </TableCell>
 
-            {/* cost */}
-            <td style={{ padding: "8px 16px", textAlign: "right" }}>
+            <TableCell className="py-2 text-right">
               <span
-                style={{
-                  fontFamily: "var(--font-geist-mono, monospace)",
-                  fontSize: 13,
-                  fontVariantNumeric: "tabular-nums",
-                  fontWeight: isPrimary ? 600 : 500,
-                  color: isPrimary ? "#0c0a09" : "#78716c",
-                }}
+                className={cn(
+                  "font-mono tabular-nums text-[13px]",
+                  isPrimary ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                )}
               >
                 ${fmt(v.cost_per_lb)}
               </span>
               {!isPrimary && Math.abs(delta) > 0.001 && (
                 <div
-                  style={{
-                    fontSize: 10.5,
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontVariantNumeric: "tabular-nums",
-                    color: delta > 0 ? "oklch(58% 0.18 25)" : "oklch(58% 0.13 155)",
-                    marginTop: 1,
-                  }}
+                  className={cn(
+                    "text-[10.5px] font-mono tabular-nums mt-0.5",
+                    delta > 0 ? "text-destructive" : "text-status-good",
+                  )}
                 >
                   {delta > 0 ? "+" : ""}${Math.abs(delta).toFixed(2)} ({deltaPct > 0 ? "+" : ""}
                   {deltaPct.toFixed(1)}%)
                 </div>
               )}
-            </td>
+            </TableCell>
 
-            {/* default — empty for vendor rows */}
-            <td />
+            <TableCell />
+            <TableCell />
+            <TableCell />
 
-            {/* their price — empty */}
-            <td />
-
-            {/* margin — empty */}
-            <td />
-
-            {/* action */}
-            <td style={{ padding: "8px 16px", textAlign: "center" }}>
+            <TableCell className="py-2 text-center">
               {!isPrimary && (
-                <button
+                <Button
+                  variant="outline"
+                  size="xs"
                   onClick={() => onPromote(v.supplier_id)}
                   disabled={promoting}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: 11.5,
-                    fontWeight: 500,
-                    border: "1px solid #e7e5e4",
-                    borderRadius: 5,
-                    background: "#fff",
-                    color: "#44403c",
-                    cursor: promoting ? "not-allowed" : "pointer",
-                    opacity: promoting ? 0.6 : 1,
-                    whiteSpace: "nowrap",
-                  }}
                 >
                   {isPromoting ? "Promoting…" : "Make primary"}
-                </button>
+                </Button>
               )}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         );
       })}
     </>
@@ -759,7 +461,7 @@ function ProductRow({
   promoting,
   promotingId,
 }: {
-  prod: Product;
+  prod: CustomerProductRow;
   customer: Customer;
   markup: number;
   priceMap: Map<string, string>;
@@ -794,156 +496,85 @@ function ProductRow({
         : ((def - Number(prod.cost)) / Number(prod.cost)) * 100
       : null;
 
-  const marginColor =
+  const marginClass =
     displayMargin == null
-      ? "#a8a29e"
+      ? "text-stone-muted/60"
       : displayMargin >= 5
-        ? "oklch(58% 0.13 155)"
+        ? "text-status-good"
         : displayMargin < 0
-          ? "oklch(58% 0.18 25)"
-          : "#78716c";
+          ? "text-destructive"
+          : "text-stone-muted";
 
   const multiVendor = prod.vendors.length > 1;
   const primaryVendor = prod.vendors.find(v => v.is_primary) ?? prod.vendors[0] ?? null;
 
   return (
     <>
-      <tr style={{ borderBottom: expanded ? "none" : "1px solid #f5f5f4" }}>
-        {/* product */}
-        <td style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 10.5,
-                color: "#78716c",
-                padding: "2px 6px",
-                background: "#f5f5f4",
-                borderRadius: 4,
-                minWidth: 86,
-                textAlign: "center",
-                letterSpacing: "0.02em",
-                flexShrink: 0,
-              }}
-            >
+      <TableRow className={expanded ? "border-0" : undefined}>
+        <TableCell className="py-3 px-4">
+          <div className="flex items-center gap-3.5">
+            <div className="font-mono text-[10.5px] text-stone-muted bg-muted px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
               {prod.sku}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{prod.name}</div>
+              <div className="text-[13px] font-medium text-stone-ink">{prod.name}</div>
               {multiVendor && primaryVendor && (
-                <div style={{ fontSize: 11, color: "#a8a29e", marginTop: 2 }}>
+                <div className="text-[11px] text-stone-muted/70 mt-0.5">
                   {primaryVendor.supplier_name}
                 </div>
               )}
             </div>
           </div>
-        </td>
+        </TableCell>
 
-        {/* cost — clickable when multi-vendor */}
-        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+        <TableCell className="py-3 px-4 text-right">
           {prod.cost ? (
             multiVendor ? (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={onToggleExpand}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  background: expanded ? "#f5f5f4" : "transparent",
-                  border: "none",
-                  borderRadius: 5,
-                  padding: "3px 6px 3px 3px",
-                  cursor: "pointer",
-                  textAlign: "right",
-                }}
+                className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
               >
-                <span style={{ color: "#a8a29e", display: "grid", placeItems: "center" }}>
+                <span className="text-stone-muted">
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: 500,
-                    color: "#44403c",
-                  }}
-                >
+                <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
                   ${fmt(prod.cost)}
                 </span>
-                <span
-                  style={{
-                    fontSize: 10.5,
-                    color: "oklch(48% 0.16 265)",
-                    background: "oklch(96% 0.02 265)",
-                    padding: "1px 5px",
-                    borderRadius: 100,
-                    fontWeight: 500,
-                  }}
-                >
+                <Badge className="bg-primary/10 text-primary text-[10.5px] h-4.5 font-medium">
                   of {prod.vendors.length}
-                </span>
-              </button>
+                </Badge>
+              </Button>
             ) : (
-              <>
-                <span
-                  style={{
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: 500,
-                    color: "#44403c",
-                  }}
-                >
-                  ${fmt(prod.cost)}
-                </span>
-                <span style={{ fontSize: 11, color: "#a8a29e", marginLeft: 2 }}>/lb</span>
-              </>
+              <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+                ${fmt(prod.cost)}
+                <span className="text-[11px] text-stone-muted ml-0.5">/lb</span>
+              </span>
             )
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>No vendors</span>
+            <span className="text-[12px] text-stone-muted/60">No vendors</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* default */}
-        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+        <TableCell className="py-3 px-4 text-right">
           {def != null ? (
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 13,
-                fontVariantNumeric: "tabular-nums",
-                color: "#78716c",
-                fontWeight: 500,
-              }}
-            >
+            <span className="font-mono tabular-nums text-[13px] font-medium text-stone-muted">
               ${def.toFixed(2)}
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* their price */}
-        <td style={{ padding: "8px 16px" }}>
+        <TableCell className="py-2 px-4">
           {def != null ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-                <span
-                  style={{
-                    position: "absolute",
-                    left: 9,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    color: "#a8a29e",
-                    fontSize: 12,
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    pointerEvents: "none",
-                  }}
-                >
+            <div className="inline-flex items-center gap-2">
+              <div className="relative inline-flex items-center">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
                   $
                 </span>
-                <input
+                <Input
                   type="number"
                   step={0.01}
                   min={0}
@@ -964,238 +595,132 @@ function ProductRow({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
-                  style={{
-                    width: 110,
-                    padding: "7px 10px 7px 22px",
-                    borderRadius: 6,
-                    border: focused
-                      ? "1px solid oklch(48% 0.16 265)"
+                  className={cn(
+                    "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
+                    "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+                    focused
+                      ? "border-ring bg-white ring-3 ring-ring/50"
                       : isOverride
-                        ? "1px solid oklch(92% 0.03 265)"
-                        : "1px solid transparent",
-                    background: focused
-                      ? "#fff"
-                      : isOverride
-                        ? "oklch(98% 0.015 265)"
-                        : "transparent",
-                    boxShadow: focused ? "0 0 0 3px oklch(96% 0.02 265)" : "none",
-                    fontFamily: "var(--font-geist-mono, monospace)",
-                    fontSize: 13,
-                    fontVariantNumeric: "tabular-nums",
-                    fontWeight: isOverride && !focused ? 600 : 500,
-                    color: focused
-                      ? "#0c0a09"
-                      : isOverride
-                        ? "oklch(50% 0.15 265)"
-                        : "#78716c",
-                    textAlign: "right",
-                    outline: "none",
-                    transition: "background 0.1s, border-color 0.1s",
-                  }}
+                        ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                        : "border-transparent bg-transparent shadow-none",
+                  )}
                 />
               </div>
               {isOverride && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    padding: "1px 6px",
-                    borderRadius: 100,
-                    fontSize: 10.5,
-                    fontWeight: 500,
-                    background: "oklch(98% 0.015 265)",
-                    color: "oklch(50% 0.15 265)",
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: "50%",
-                      background: "oklch(50% 0.15 265)",
-                      display: "inline-block",
-                    }}
-                  />
+                <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   Override
-                </span>
+                </Badge>
               )}
             </div>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* margin */}
-        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+        <TableCell className="py-3 px-4 text-right">
           {displayMargin != null ? (
-            <span
-              style={{
-                fontFamily: "var(--font-geist-mono, monospace)",
-                fontSize: 12,
-                fontVariantNumeric: "tabular-nums",
-                color: marginColor,
-              }}
-            >
+            <span className={cn("font-mono tabular-nums text-[12px]", marginClass)}>
               {displayMargin >= 0 ? "+" : ""}
               {displayMargin.toFixed(1)}%
             </span>
           ) : (
-            <span style={{ fontSize: 12, color: "#a8a29e" }}>—</span>
+            <span className="text-[12px] text-stone-muted/60">—</span>
           )}
-        </td>
+        </TableCell>
 
-        {/* reset */}
-        <td style={{ padding: "12px 16px", textAlign: "center" }}>
+        <TableCell className="py-3 px-4 text-center">
           {isOverride && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onReset}
               disabled={deleting}
               title="Reset to default"
-              style={{
-                width: 24,
-                height: 24,
-                display: "grid",
-                placeItems: "center",
-                borderRadius: 4,
-                border: "none",
-                background: "transparent",
-                color: "#78716c",
-                cursor: deleting ? "not-allowed" : "pointer",
-                opacity: deleting ? 0.5 : 1,
-              }}
             >
               <RotateCcw size={13} />
-            </button>
+            </Button>
           )}
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
 
-      {/* vendor expand rows */}
       {expanded && prod.vendors.length > 0 && (
         <VendorSubRows
-          prod={prod}
           vendors={prod.vendors}
           onPromote={onPromote}
           promoting={promoting}
           promotingId={promotingId}
         />
       )}
-      {/* separator after vendor rows */}
       {expanded && (
-        <tr>
-          <td
-            colSpan={6}
-            style={{ height: 1, background: "#e7e5e4", padding: 0 }}
-          />
-        </tr>
+        <TableRow className="hover:bg-transparent border-0">
+          <TableCell colSpan={6} className="h-px bg-stone-line p-0" />
+        </TableRow>
       )}
     </>
-  );
-}
-
-// ── SegControl ────────────────────────────────────────────────────────────────
-
-function SegControl<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "inline-flex",
-        padding: 2,
-        background: "#f5f5f4",
-        borderRadius: 6,
-      }}
-    >
-      {options.map(opt => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          style={{
-            background: value === opt.value ? "#fff" : "transparent",
-            border: "none",
-            padding: "5px 10px",
-            fontSize: 12,
-            fontWeight: 500,
-            color: value === opt.value ? "#0c0a09" : "#78716c",
-            borderRadius: 4,
-            cursor: "pointer",
-            boxShadow: value === opt.value ? "0 1px 2px rgba(0,0,0,0.05)" : "none",
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
   );
 }
 
 // ── ProductTable ──────────────────────────────────────────────────────────────
 
 function ProductTable({
-  products,
   customer,
-  prices,
   markup,
 }: {
-  products: Product[];
   customer: Customer;
-  prices: PriceChartData["prices"];
   markup: number;
 }) {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState<"all" | "overrides">("all");
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const setPrice = useSetCustomerPrice();
   const deletePrice = useDeleteCustomerPrice();
   const promote = usePromoteProductVendor();
   const onError = useCallback((e: Error) => toast.error(e.message), []);
 
+  useEffect(() => {
+    setPage(1);
+    setExpandedProductId(null);
+  }, [search, catFilter, modeFilter, customer.id]);
+
+  const { data: pageData } = useCustomerProductPricesPage(customer.id, {
+    page,
+    pageSize,
+    search: search || undefined,
+    filters: {
+      category: catFilter === "all" ? undefined : catFilter,
+      overridesOnly: modeFilter === "overrides" ? "true" : undefined,
+    },
+  });
+
   const priceMap = useMemo(() => {
     const m = new Map<string, string>();
-    for (const p of prices) {
-      m.set(`${p.customer_id}:${p.product_id}`, fmt(p.price_per_lb));
+    for (const row of pageData?.data ?? []) {
+      if (row.customerPrice != null) {
+        m.set(`${customer.id}:${row.id}`, fmt(row.customerPrice));
+      }
     }
     return m;
-  }, [prices]);
+  }, [pageData, customer.id]);
 
-  const categories = useMemo(() => {
-    const seen = new Set<string>();
-    for (const p of products) seen.add(p.category ?? "Other");
-    return Array.from(seen).sort();
-  }, [products]);
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return products.filter(p => {
-      if (catFilter !== "all" && (p.category ?? "Other") !== catFilter) return false;
-      if (q && !p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false;
-      if (modeFilter === "overrides" && !priceMap.has(`${customer.id}:${p.id}`)) return false;
-      return true;
-    });
-  }, [products, catFilter, search, modeFilter, priceMap, customer.id]);
+  const categories = pageData?.allCategories ?? [];
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Product[]>();
-    for (const p of filtered) {
+    const map = new Map<string, CustomerProductRow[]>();
+    for (const p of pageData?.data ?? []) {
       const cat = p.category ?? "Other";
       if (!map.has(cat)) map.set(cat, []);
       map.get(cat)!.push(p);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filtered]);
+  }, [pageData]);
 
   function handleCommit(productId: string, rawValue: string) {
-    const prod = products.find(p => p.id === productId);
+    const prod = pageData?.data.find(p => p.id === productId);
     if (!prod?.cost) return;
     const def = defaultPrice(prod.cost, markup);
     if (!rawValue.trim()) {
@@ -1223,189 +748,144 @@ function ProductTable({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <Card className="gap-0 p-0 rounded-[10px] overflow-hidden">
       {/* toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexWrap: "wrap",
-          padding: "12px 16px",
-          background: "#fff",
-          border: "1px solid #e7e5e4",
-          borderBottom: "none",
-          borderRadius: "10px 10px 0 0",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-        }}
-      >
-        <div style={{ position: "relative", flex: "0 1 280px", minWidth: 200 }}>
-          <Search
-            size={14}
-            style={{
-              position: "absolute",
-              left: 10,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#78716c",
-              pointerEvents: "none",
-            }}
-          />
-          <input
+      <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-stone-line bg-stone-line2/40">
+        <InputGroup className="flex-none w-70 min-w-50">
+          <InputGroupAddon align="inline-start">
+            <Search size={14} />
+          </InputGroupAddon>
+          <InputGroupInput
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search product or SKU…"
-            style={{
-              width: "100%",
-              padding: "7px 10px 7px 32px",
-              border: "1px solid #e7e5e4",
-              borderRadius: 6,
-              background: "#fff",
-              fontSize: 13,
-              outline: "none",
-            }}
+            className="text-[13px]"
           />
-        </div>
+        </InputGroup>
 
-        <SegControl
-          options={[
-            { value: "all", label: "All" },
-            ...categories.map(c => ({ value: c, label: c })),
-          ]}
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          spacing={0}
           value={catFilter}
-          onChange={setCatFilter}
-        />
+          onValueChange={v => v && setCatFilter(v)}
+        >
+          <ToggleGroupItem value="all" size="sm">All</ToggleGroupItem>
+          {categories.map(c => (
+            <ToggleGroupItem key={c} value={c} size="sm">{c}</ToggleGroupItem>
+          ))}
+        </ToggleGroup>
 
-        <SegControl
-          options={[
-            { value: "all", label: "All products" },
-            { value: "overrides", label: "Overrides only" },
-          ]}
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          spacing={0}
           value={modeFilter}
-          onChange={setModeFilter}
-        />
+          onValueChange={v => v && setModeFilter(v as "all" | "overrides")}
+        >
+          <ToggleGroupItem value="all" size="sm">All products</ToggleGroupItem>
+          <ToggleGroupItem value="overrides" size="sm">Overrides only</ToggleGroupItem>
+        </ToggleGroup>
 
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: "#78716c" }}>{filtered.length} products</span>
+        <div className="flex-1" />
+        <span className="text-[12px] text-stone-muted">{pageData?.total ?? 0} products</span>
       </div>
 
-      {/* table */}
-      <div
-        style={{
-          background: "#fff",
-          border: "1px solid #e7e5e4",
-          borderRadius: "0 0 10px 10px",
-          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-          overflow: "hidden",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {(
-                [
-                  ["Product", "38%", "left"],
-                  ["Cost", 120, "right"],
-                  ["Default", 130, "right"],
-                  ["Their price", 200, "left"],
-                  ["Margin", 110, "right"],
-                  ["", 120, "center"],
-                ] as const
-              ).map(([label, w, align], i) => (
-                <th
-                  key={i}
-                  style={{
-                    textAlign: align,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "#78716c",
-                    padding: "10px 16px",
-                    borderBottom: "1px solid #e7e5e4",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.04em",
-                    background: "#fafaf9",
-                    width: typeof w === "number" ? w : w,
-                  }}
-                >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {grouped.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  style={{
-                    padding: "60px 20px",
-                    textAlign: "center",
-                    color: "#78716c",
-                    fontSize: 13,
-                  }}
-                >
-                  No products match.
-                </td>
-              </tr>
-            )}
-            {grouped.map(([cat, prods], gi) => (
-              <React.Fragment key={cat}>
-                <tr>
-                  <td
-                    colSpan={6}
-                    style={{
-                      background: "#fafaf9",
-                      padding: "14px 16px 6px",
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "#78716c",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                      borderTop: gi > 0 ? "1px solid #e7e5e4" : undefined,
-                    }}
-                  >
-                    {cat}
-                    <span style={{ color: "#a8a29e", marginLeft: 8, fontWeight: 500 }}>
-                      {prods.length}
-                    </span>
-                  </td>
-                </tr>
-                {prods.map(prod => (
-                  <ProductRow
-                    key={prod.id}
-                    prod={prod}
-                    customer={customer}
-                    markup={markup}
-                    priceMap={priceMap}
-                    onCommit={handleCommit}
-                    onReset={() =>
-                      deletePrice.mutate(
-                        { customerId: customer.id, productId: prod.id },
-                        { onError },
-                      )
-                    }
-                    deleting={
-                      deletePrice.isPending &&
-                      deletePrice.variables?.productId === prod.id &&
-                      deletePrice.variables?.customerId === customer.id
-                    }
-                    expanded={expandedProductId === prod.id}
-                    onToggleExpand={() =>
-                      setExpandedProductId(id => (id === prod.id ? null : prod.id))
-                    }
-                    onPromote={(supplierId) =>
-                      handlePromote(prod.id, supplierId, prod.vendors.find(v => v.supplier_id === supplierId)?.supplier_name ?? "", prod.name)
-                    }
-                    promoting={promote.isPending}
-                    promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
-                  />
-                ))}
-              </React.Fragment>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            {(
+              [
+                ["Product", "38%", "text-left"],
+                ["Cost", "120px", "text-right"],
+                ["Default", "130px", "text-right"],
+                ["Their price", "200px", "text-left"],
+                ["Margin", "110px", "text-right"],
+                ["", "120px", "text-center"],
+              ] as const
+            ).map(([label, w, align], i) => (
+              <TableHead
+                key={i}
+                className={cn(
+                  align,
+                  "text-[11px] font-semibold text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
+                )}
+                style={{ width: w }}
+              >
+                {label}
+              </TableHead>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {grouped.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={6} className="py-16 text-center text-[13px] text-stone-muted">
+                No products match.
+              </TableCell>
+            </TableRow>
+          )}
+          {grouped.map(([cat, prods], gi) => (
+            <React.Fragment key={cat}>
+              <TableRow className="hover:bg-transparent">
+                <TableCell
+                  colSpan={6}
+                  className={cn(
+                    "bg-stone-line2/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-stone-muted uppercase tracking-widest",
+                    gi > 0 && "border-t border-stone-line",
+                  )}
+                >
+                  {cat}
+                  <span className="text-stone-muted/60 ml-2 font-medium">{prods.length}</span>
+                </TableCell>
+              </TableRow>
+              {prods.map(prod => (
+                <ProductRow
+                  key={prod.id}
+                  prod={prod}
+                  customer={customer}
+                  markup={markup}
+                  priceMap={priceMap}
+                  onCommit={handleCommit}
+                  onReset={() =>
+                    deletePrice.mutate(
+                      { customerId: customer.id, productId: prod.id },
+                      { onError },
+                    )
+                  }
+                  deleting={
+                    deletePrice.isPending &&
+                    deletePrice.variables?.productId === prod.id &&
+                    deletePrice.variables?.customerId === customer.id
+                  }
+                  expanded={expandedProductId === prod.id}
+                  onToggleExpand={() =>
+                    setExpandedProductId(id => (id === prod.id ? null : prod.id))
+                  }
+                  onPromote={supplierId =>
+                    handlePromote(
+                      prod.id,
+                      supplierId,
+                      prod.vendors.find(v => v.supplier_id === supplierId)?.supplier_name ?? "",
+                      prod.name,
+                    )
+                  }
+                  promoting={promote.isPending}
+                  promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
+                />
+              ))}
+            </React.Fragment>
+          ))}
+        </TableBody>
+      </Table>
+      <TablePager
+        total={pageData?.total ?? 0}
+        perPage={pageSize}
+        page={page}
+        onPageChange={p => { setPage(p); setExpandedProductId(null); }}
+        onPerPageChange={ps => { setPageSize(ps); setPage(1); setExpandedProductId(null); }}
+      />
+    </Card>
   );
 }
 
@@ -1431,21 +911,14 @@ export function PriceChartClient() {
   if (error) return <PageError message={(error as Error).message} />;
   if (!customer) {
     return (
-      <div
-        style={{
-          padding: "60px 20px",
-          textAlign: "center",
-          color: "#78716c",
-          fontSize: 13,
-        }}
-      >
+      <p className="py-16 text-center text-[13px] text-stone-muted">
         No customers yet. Add a customer to get started.
-      </div>
+      </p>
     );
   }
 
   return (
-    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+    <div className="flex gap-4 items-start">
       <CustomerList
         customers={customers}
         prices={prices}
@@ -1453,7 +926,7 @@ export function PriceChartClient() {
         onSelect={id => setSelectedId(id)}
       />
 
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="flex-1 min-w-0 flex flex-col gap-3.5">
         <CustomerCard
           customer={customer}
           prices={prices}
@@ -1482,9 +955,7 @@ export function PriceChartClient() {
         />
 
         <ProductTable
-          products={products}
           customer={customer}
-          prices={prices}
           markup={markup}
         />
       </div>

@@ -29,6 +29,8 @@ export const queryKeys = {
     detail: (id: string) => ["customers", id] as const,
     portfolio: (id: string) => ["customers", id, "portfolio"] as const,
     prices: (id: string) => ["customers", id, "prices"] as const,
+    ordersPage: (id: string, params: unknown) => ["customers", id, "orders", params] as const,
+    invoicesPage: (id: string, params: unknown) => ["customers", id, "invoices", params] as const,
   },
   suppliers: {
     all: ["suppliers"] as const,
@@ -87,5 +89,7 @@ export const queryKeys = {
   },
   priceChart: {
     all: ["price-chart"] as const,
+    customerProducts: (id: string, params: unknown) =>
+      ["price-chart", "customer-products", id, params] as const,
   },
 } as const;

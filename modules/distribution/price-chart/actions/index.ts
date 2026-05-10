@@ -5,12 +5,14 @@ import {
   applyMarkupToCustomer,
   deleteCustomerProductPrice,
   deleteProductSupplierCost,
+  getCustomerProductPricesPage,
   getPriceChartData,
   promoteProductVendor,
   setCustomerProductPrice,
   setProductDefaultCost,
   setProductSupplierCost,
   updateCustomerFuelSurcharge,
+  type CustomerProductsParams,
 } from "../services/price-chart";
 
 export async function getPriceChartAction() {
@@ -59,4 +61,11 @@ export async function deleteProductSupplierCostAction(productId: string, supplie
 
 export async function promoteProductVendorAction(productId: string, supplierId: string) {
   return await promoteProductVendor(productId, supplierId);
+}
+
+export async function getCustomerProductPricesPageAction(
+  customerId: string,
+  input?: CustomerProductsParams,
+) {
+  return await getCustomerProductPricesPage(customerId, input);
 }

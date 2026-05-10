@@ -5,6 +5,7 @@ import {
   applyMarkupToCustomerAction,
   deleteCustomerProductPriceAction,
   deleteProductSupplierCostAction,
+  getCustomerProductPricesPageAction,
   getPriceChartAction,
   promoteProductVendorAction,
   setCustomerProductPriceAction,
@@ -13,6 +14,7 @@ import {
   updateCustomerFuelSurchargeAction,
 } from "@/modules/distribution/price-chart/actions";
 import { queryKeys } from "@/lib/query/keys";
+import type { CustomerProductsParams } from "@/modules/distribution/price-chart/services/price-chart";
 
 function invalidatePriceChart(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
@@ -94,5 +96,15 @@ export function usePromoteProductVendor() {
     mutationFn: (input: { productId: string; supplierId: string }) =>
       promoteProductVendorAction(input.productId, input.supplierId),
     onSuccess: () => invalidatePriceChart(queryClient),
+  });
+}
+
+export function useCustomerProductPricesPage(customerId: string, params: CustomerProductsParams) {
+  return useQuery({
+    queryKey: queryKeys.priceChart.customerProducts(customerId, params),
+    queryFn: () => getCustomerProductPricesPageAction(customerId, params),
+    enabled: !!customerId,
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 2,
   });
 }

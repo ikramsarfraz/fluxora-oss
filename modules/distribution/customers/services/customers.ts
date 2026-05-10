@@ -6,6 +6,7 @@ import {
   customers,
   products,
   salesInvoices,
+  salesOrderLines,
   salesOrders,
 } from "@/db/schema";
 import type { NewCustomer, NewCustomerAddress } from "@/db/types";
@@ -372,3 +373,100 @@ export async function deleteCustomerPrice(customerId: string, productId: string)
 }
 
 export type CustomerPriceRow = Awaited<ReturnType<typeof getCustomerPrices>>[number];
+
+export type CustomerOrdersSort = "orderDate";
+export type CustomerOrdersParams = PaginatedQueryInput<CustomerOrdersSort>;
+
+export async function getCustomerOrdersPage(customerId: string, input?: CustomerOrdersParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "orderDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+
+  const where = and(
+    eq(salesOrders.customerId, customerId),
+    eq(salesOrders.tenantId, tenant.id),
+  );
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(salesOrders)
+    .where(where);
+
+  const rows = await db
+    .select({
+      id: salesOrders.id,
+      orderNumber: salesOrders.orderNumber,
+      orderDate: salesOrders.orderDate,
+      dueDate: salesOrders.dueDate,
+      status: salesOrders.status,
+      itemsCount: sql<number>`count(distinct ${salesOrderLines.id})::int`,
+      total: sql<string>`coalesce(sum(${salesInvoices.totalAmount}), '0')`,
+    })
+    .from(salesOrders)
+    .leftJoin(salesOrderLines, eq(salesOrderLines.salesOrderId, salesOrders.id))
+    .leftJoin(salesInvoices, eq(salesInvoices.salesOrderId, salesOrders.id))
+    .where(where)
+    .groupBy(salesOrders.id)
+    .orderBy(desc(salesOrders.orderDate), desc(salesOrders.createdAt))
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+
+  return createPaginatedResult({
+    data: rows,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
+}
+
+export type CustomerOrderRow = Awaited<ReturnType<typeof getCustomerOrdersPage>>["data"][number];
+
+export type CustomerInvoicesSort = "invoiceDate";
+export type CustomerInvoicesParams = PaginatedQueryInput<CustomerInvoicesSort>;
+
+export async function getCustomerInvoicesPage(customerId: string, input?: CustomerInvoicesParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "invoiceDate",
+    defaultDirection: "desc",
+    defaultFilters: {},
+  });
+
+  const where = and(
+    eq(salesInvoices.customerId, customerId),
+    eq(salesInvoices.tenantId, tenant.id),
+  );
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(salesInvoices)
+    .where(where);
+
+  const result = await db.query.salesInvoices.findMany({
+    where,
+    columns: {
+      id: true,
+      invoiceNumber: true,
+      invoiceDate: true,
+      dueDate: true,
+      status: true,
+      totalAmount: true,
+      balanceDue: true,
+    },
+    orderBy: [desc(salesInvoices.invoiceDate)],
+    limit: query.pageSize,
+    offset: getPaginationOffset(query.page, query.pageSize),
+  });
+
+  return createPaginatedResult({
+    data: result,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
+}
+
+export type CustomerInvoiceRow = Awaited<ReturnType<typeof getCustomerInvoicesPage>>["data"][number];
