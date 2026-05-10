@@ -56,7 +56,7 @@ import {
   parsePersistedCaseWeights,
   summarizePersistedCaseWeights,
 } from "@/modules/distribution/supplier-invoices/utils/case-weights";
-import { formatMoney } from "@/lib/utils/currency";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/utils/payment-summary";
 
@@ -470,11 +470,11 @@ export function SupplierInvoiceDetailPage({
                               </div>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {line.quantityCases}
+                              {line.quantityCases.toLocaleString()}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               <div className="flex flex-col items-end">
-                                <span>{Number(line.weightLbs).toFixed(2)}</span>
+                                <span>{formatWeightLbs(line.weightLbs)}</span>
                                 {summary ? (
                                   <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
                                     {summary}
@@ -499,7 +499,7 @@ export function SupplierInvoiceDetailPage({
                                       {caseWeights.length === 1 ? "" : "s"}
                                     </Badge>
                                     <span className="text-muted-foreground">
-                                      {Number(line.weightLbs).toFixed(2)} lb total
+                                      {formatWeightLbs(line.weightLbs)} lb total
                                     </span>
                                   </div>
                                   <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -562,10 +562,10 @@ export function SupplierInvoiceDetailPage({
                   {[
                     { label: "Lots created", value: allLots.length },
                     { label: "Inventory items", value: allItems.length },
-                    { label: "Total cases", value: totalCases },
+                    { label: "Total cases", value: totalCases.toLocaleString() },
                     {
                       label: "Total weight",
-                      value: `${totalWeight.toFixed(2)} lbs`,
+                      value: `${formatWeightLbs(totalWeight)} lbs`,
                     },
                   ].map(({ label, value }) => (
                     <div
@@ -627,10 +627,10 @@ export function SupplierInvoiceDetailPage({
                                 </span>
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                {item.cases}
+                                {item.cases.toLocaleString()}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">
-                                {Number(item.exactWeightLbs).toFixed(2)}
+                                {formatWeightLbs(item.exactWeightLbs)}
                               </TableCell>
                               <TableCell>
                                 <Badge variant="outline" className="capitalize">

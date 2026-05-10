@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useReverseSalesOrderFulfillment } from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
+import { formatWeightLbs } from "@/lib/utils/currency";
 
 import { formatFulfillmentTimestamp } from "./order-fulfillment-utils";
 
@@ -131,9 +132,9 @@ function ReversalBody({
           <div className="rounded-lg border bg-muted/20 p-3 text-sm">
             <div className="font-medium">{fulfillment.productLabel}</div>
             <div className="mt-1 text-muted-foreground">
-              {fulfillment.quantityFulfilled} qty
+              {fulfillment.quantityFulfilled.toLocaleString()} qty
               {fulfillment.weightLbs
-                ? ` · ${Number(fulfillment.weightLbs).toFixed(2)} lbs`
+                ? ` · ${formatWeightLbs(fulfillment.weightLbs)} lbs`
                 : ""}
               {" · "}
               {formatFulfillmentTimestamp(fulfillment.fulfilledAt)}

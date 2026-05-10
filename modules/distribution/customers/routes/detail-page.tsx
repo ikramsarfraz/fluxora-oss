@@ -168,7 +168,7 @@ export default function CustomerPortfolioPage() {
           </DetailField>
           <DetailField label="Fuel surcharge">
             {customer.fuelSurchargeAmount != null
-              ? `$${Number(customer.fuelSurchargeAmount).toFixed(2)}/lb`
+              ? `${formatMoney(customer.fuelSurchargeAmount)}/lb`
               : "—"}
           </DetailField>
         </DetailGrid>

@@ -22,17 +22,10 @@ import { useCustomersPage } from "../hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { formatPhone } from "@/lib/utils/phone";
 import type { CustomerListItem, CustomerListSort } from "../services/customers";
 
 type CustomerRow = CustomerListItem;
-
-function formatPhone(phone: string) {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-  return phone;
-}
 
 const COLUMNS: ListingColumn<CustomerRow>[] = [
   {

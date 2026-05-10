@@ -1,4 +1,11 @@
 /**
+ * Format a weight value to 2 decimal places: "12.50"
+ */
+export function formatWeightLbs(value: string | number | null | undefined): string {
+  return (Number(value) || 0).toFixed(2);
+}
+
+/**
  * Format a number or string as USD with exactly 2 decimal places: $0.00
  */
 export function formatMoney(value: string | number | null | undefined): string {

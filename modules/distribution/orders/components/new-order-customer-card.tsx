@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { formatMoney } from "@/lib/utils/currency";
 import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
 import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
 
@@ -242,7 +243,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                           }}
                         >
                           <b style={{ fontWeight: 500 }}>Fuel surcharge</b> ·{" "}
-                          ${Number(selected.fuelSurchargeAmount).toFixed(2)}
+                          {formatMoney(selected.fuelSurchargeAmount)}
                         </span>
                       )}
                     {selected.abbreviation && (

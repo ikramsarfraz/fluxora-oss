@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { formatPhone } from "@/lib/utils/phone";
 
 import type { SalesOrderDetail } from "../services/orders";
 import type { OrderActionAvailability } from "./order-action-rules";
@@ -117,7 +118,7 @@ export function OrderSidebar({
             <>
               <dt style={{ color: C.muted }}>Phone</dt>
               <dd style={{ margin: 0, color: C.ink, fontWeight: 500, fontFamily: C.mono }}>
-                {customer.phoneNumber}
+                {formatPhone(customer.phoneNumber)}
               </dd>
             </>
           )}

@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 
 import type { SalesOrderDetail } from "../services/orders";
@@ -336,7 +337,7 @@ export function OrderFulfillmentSection({
           <SummaryStat label="Remaining" value={`${stats.remainingCases}`} />
           <SummaryStat
             label="Weight captured"
-            value={`${stats.weightLbs.toFixed(2)} lbs`}
+            value={`${formatWeightLbs(stats.weightLbs)} lbs`}
           />
         </div>
       </div>
@@ -370,7 +371,7 @@ export function OrderFulfillmentSection({
           value={String(stats.catchWeightCount)}
           detail={
             stats.catchWeightCount > 0
-              ? `${stats.weightLbs.toFixed(2)} lbs recorded`
+              ? `${formatWeightLbs(stats.weightLbs)} lbs recorded`
               : "No catch-weight rows recorded"
           }
         />
@@ -380,7 +381,7 @@ export function OrderFulfillmentSection({
           value={String(stats.allocationCount)}
           detail={
             stats.allocationCount > 0
-              ? `${stats.allocatedWeightLbs.toFixed(2)} lbs allocated`
+              ? `${formatWeightLbs(stats.allocatedWeightLbs)} lbs allocated`
               : "No inventory linked yet"
           }
         />
@@ -504,7 +505,7 @@ export function OrderFulfillmentSection({
                     {remaining}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {lineWeight.toFixed(2)}
+                    {formatWeightLbs(lineWeight)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {records > 0 ? (
@@ -603,11 +604,11 @@ export function OrderFulfillmentSection({
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fulfillment.quantityFulfilled}
+                      {fulfillment.quantityFulfilled.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fulfillment.weightLbs
-                        ? Number(fulfillment.weightLbs).toFixed(2)
+                        ? formatWeightLbs(fulfillment.weightLbs)
                         : "—"}
                     </TableCell>
                     <TableCell>

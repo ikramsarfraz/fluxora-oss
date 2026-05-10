@@ -10,8 +10,9 @@ import { PageError } from "@/components/page-error";
 import { useSalesInvoice } from "../hooks/use-invoices";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
-import { formatMoney } from "@/lib/utils/currency";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { formatPhone } from "@/lib/utils/phone";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -271,7 +272,7 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
                 </div>
               ) : null}
               {invoice.customer?.phoneNumber ? (
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{invoice.customer.phoneNumber}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{formatPhone(invoice.customer.phoneNumber)}</div>
               ) : null}
             </div>
 
@@ -336,10 +337,10 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
                     ) : null}
                   </td>
                   <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {line.quantityCases}
+                    {line.quantityCases.toLocaleString()}
                   </td>
                   <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {Number(line.billedWeightLbs ?? 0).toFixed(2)}
+                    {formatWeightLbs(line.billedWeightLbs)}
                   </td>
                   <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
                     {formatMoney(line.unitPrice)}
@@ -408,7 +409,7 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
                 {invoice.customer.name}
               </Link>
               {invoice.customer.phoneNumber ? (
-                <div style={{ fontSize: 12, color: C.muted }}>{invoice.customer.phoneNumber}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{formatPhone(invoice.customer.phoneNumber)}</div>
               ) : null}
             </SidebarCard>
           ) : null}

@@ -579,7 +579,7 @@ function LotDisclosure({
           <DisclosureRow borderBottom={!!firstFulfillment.fulfilledBy?.fullName}>
             <span>Fulfilled</span>
             <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
-              {firstFulfillment.quantityFulfilled} cases
+              {firstFulfillment.quantityFulfilled.toLocaleString()} cases
               {firstFulfillment.weightLbs
                 ? ` · ${Number(firstFulfillment.weightLbs).toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`
                 : ""}
@@ -890,7 +890,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               <SelectContent>
                 {lotOptions.map(l => (
                   <SelectItem key={l.id} value={l.id}>
-                    {l.lotNumber} · {l.cases} cs
+                    {l.lotNumber} · {l.cases.toLocaleString()} cs
                     {l.expirationDate
                       ? ` · exp ${formatDisplayDate(l.expirationDate)}`
                       : ""}

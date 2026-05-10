@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatMoney } from "@/lib/utils/currency";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { getInventoryStatusLabel } from "../utils/inventory-status";
 
@@ -514,7 +514,7 @@ function LineBreakdown({
           </span>
           {caseWeights.length > 0 ? (
             <span className="text-xs tabular-nums text-muted-foreground">
-              Total {totalCaseWeight.toFixed(2)} lbs
+              Total {formatWeightLbs(totalCaseWeight)} lbs
             </span>
           ) : null}
         </div>
@@ -633,7 +633,7 @@ function LineBreakdown({
                 variant="secondary"
                 className="font-mono text-xs tabular-nums"
               >
-                {w.toFixed(2)} lbs
+                {formatWeightLbs(w)} lbs
               </Badge>
             ))}
           </div>
@@ -663,7 +663,7 @@ function LineBreakdown({
             </span>
             {allocations.length > 0 && (
               <span className="text-xs tabular-nums text-muted-foreground">
-                {reconciliation.allocatedQuantity} qty · {totalAllocated.toFixed(2)} lbs
+                {reconciliation.allocatedQuantity.toLocaleString()} qty · {formatWeightLbs(totalAllocated)} lbs
               </span>
             )}
           </div>
@@ -704,7 +704,7 @@ function LineBreakdown({
                   ) : null}
                 </span>
                 <span className="text-right tabular-nums">
-                  {Number(a.allocatedWeightLbs ?? 0).toFixed(2)} lbs
+                  {formatWeightLbs(a.allocatedWeightLbs)} lbs
                   {a.inventoryItem?.lot?.receiveDate ? (
                     <span className="block text-[11px] text-muted-foreground">
                       Rec {formatDisplayDate(a.inventoryItem.lot.receiveDate)}

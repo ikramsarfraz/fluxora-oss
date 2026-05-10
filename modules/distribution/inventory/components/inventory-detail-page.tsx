@@ -262,7 +262,7 @@ export function InventoryDetailPage({
           <DetailField label="Receipt line">
             {sourceReceiptLine ? (
               <span>
-                {sourceReceiptLine.quantityCases} cases /{" "}
+                {sourceReceiptLine.quantityCases.toLocaleString()} cases /{" "}
                 {formatWeightLbs(sourceReceiptLine.weightLbs)} lb
               </span>
             ) : (
@@ -387,7 +387,7 @@ export function InventoryDetailPage({
                       {fulfillment.salesOrder.customer?.name ?? "-"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {fulfillment.quantityFulfilled}
+                      {fulfillment.quantityFulfilled.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatWeightLbs(fulfillment.weightLbs)}
