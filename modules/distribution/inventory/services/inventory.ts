@@ -1015,3 +1015,79 @@ export type InventoryListItem = Awaited<ReturnType<typeof getInventoryItems>>[nu
 export type InventoryDetail = NonNullable<
   Awaited<ReturnType<typeof getInventoryItemById>>
 >;
+
+export async function getFifoAllocationForProduct(
+  productId: string,
+  requestedCases: number,
+) {
+  if (!productId || requestedCases <= 0) {
+    return { rows: [], shortBy: 0, totalWeight: 0, lotsUsed: 0 };
+  }
+
+  const tenant = await getCurrentTenant();
+
+  const items = await db
+    .select({
+      id: inventoryItems.id,
+      exactWeightLbs: inventoryItems.exactWeightLbs,
+      lotId: inventoryItems.lotId,
+      lotNumber: lots.lotNumber,
+      receiveDate: lots.receiveDate,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .where(
+      and(
+        eq(lots.tenantId, tenant.id),
+        eq(inventoryItems.productId, productId),
+        eq(inventoryItems.status, "in_stock"),
+      ),
+    )
+    .orderBy(lots.receiveDate, inventoryItems.createdAt)
+    .limit(requestedCases);
+
+  const lotColorMap = new Map<string, number>();
+  let colorIdx = 0;
+
+  const rows = items.map((item, i) => {
+    if (!lotColorMap.has(item.lotId)) {
+      lotColorMap.set(item.lotId, colorIdx++);
+    }
+    return {
+      caseIdx: i + 1,
+      inventoryItemId: item.id,
+      lotId: item.lotId,
+      lotNumber: item.lotNumber,
+      receivedDate: item.receiveDate,
+      weight: Number(item.exactWeightLbs),
+      lotColorIdx: lotColorMap.get(item.lotId)!,
+    };
+  });
+
+  const shortBy = Math.max(0, requestedCases - rows.length);
+  const totalWeight = rows.reduce((s, r) => s + r.weight, 0);
+  const lotsUsed = new Set(rows.map(r => r.lotId)).size;
+
+  return { rows, shortBy, totalWeight, lotsUsed };
+}
+
+export type FifoAllocationResult = Awaited<ReturnType<typeof getFifoAllocationForProduct>>;
+export type FifoAllocationRow = FifoAllocationResult["rows"][number];
+
+export async function getProductCasesOnHand(): Promise<{ productId: string; cases: number }[]> {
+  const tenant = await getCurrentTenant();
+  return await db
+    .select({
+      productId: inventoryItems.productId,
+      cases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
+    })
+    .from(inventoryItems)
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .where(
+      and(
+        eq(products.tenantId, tenant.id),
+        inArray(inventoryItems.status, ["in_stock", "allocated", "picked", "packed"]),
+      ),
+    )
+    .groupBy(inventoryItems.productId);
+}

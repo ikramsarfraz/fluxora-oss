@@ -50,6 +50,9 @@ export const queryKeys = {
     all: ["inventory"] as const,
     list: (params: unknown) => ["inventory", "list", params] as const,
     detail: (id: string) => ["inventory", id] as const,
+    casesOnHand: ["inventory", "cases-on-hand"] as const,
+    fifoAllocation: (productId: string, cases: number) =>
+      ["inventory", "fifo-allocation", productId, cases] as const,
   },
   lots: {
     all: ["lots"] as const,

@@ -5,9 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adjustInventoryItemAction,
   bulkAdjustLotInventoryAction,
+  getFifoAllocationForProductAction,
   getInventoryItemByIdAction,
   getInventoryItemsAction,
   getInventoryItemsPageAction,
+  getProductCasesOnHandAction,
 } from "@/modules/distribution/inventory/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -56,6 +58,23 @@ export function useAdjustInventoryItem() {
         });
       }
     },
+  });
+}
+
+export function useProductCasesOnHand() {
+  return useQuery({
+    queryKey: queryKeys.inventory.casesOnHand,
+    queryFn: getProductCasesOnHandAction,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useFifoAllocation(productId: string | null, requestedCases: number) {
+  return useQuery({
+    queryKey: queryKeys.inventory.fifoAllocation(productId ?? "", requestedCases),
+    queryFn: () => getFifoAllocationForProductAction(productId!, requestedCases),
+    enabled: !!productId && requestedCases > 0,
+    staleTime: 1000 * 60 * 2,
   });
 }
 

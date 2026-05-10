@@ -73,7 +73,7 @@ function makeDefaultValues(): NewOrderFormValues {
   };
 }
 
-export function NewOrderForm() {
+export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: string }) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -97,7 +97,11 @@ export function NewOrderForm() {
 
   const form = useForm<NewOrderFormValues>({
     resolver: zodResolver(newOrderFormSchema),
-    defaultValues: useMemo(() => makeDefaultValues(), []),
+    defaultValues: useMemo(
+      () => ({ ...makeDefaultValues(), customerId: initialCustomerId }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [],
+    ),
     mode: "onBlur",
   });
 

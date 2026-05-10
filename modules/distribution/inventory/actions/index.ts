@@ -3,9 +3,11 @@
 import {
   adjustInventoryItem,
   bulkAdjustLotInventory,
+  getFifoAllocationForProduct,
   getInventoryItemById,
   getInventoryItems,
   getInventoryItemsPage,
+  getProductCasesOnHand,
 } from "../services/inventory";
 
 export async function getInventoryItemsAction() {
@@ -39,4 +41,15 @@ export async function bulkAdjustLotInventoryAction(input: {
   notes?: string | null;
 }) {
   return await bulkAdjustLotInventory(input);
+}
+
+export async function getProductCasesOnHandAction() {
+  return await getProductCasesOnHand();
+}
+
+export async function getFifoAllocationForProductAction(
+  productId: string,
+  requestedCases: number,
+) {
+  return await getFifoAllocationForProduct(productId, requestedCases);
 }

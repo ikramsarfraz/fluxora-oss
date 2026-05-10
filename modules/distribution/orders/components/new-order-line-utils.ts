@@ -88,6 +88,16 @@ export function getLinePriceLabel(
   return `$ / ${formatSalesUnitShortLabel(salesUnit)}`;
 }
 
+export function calculateLineTotalFromWeight(
+  totalWeightLbs: number,
+  pricePerLb: string | undefined,
+): number | null {
+  const price = Number(pricePerLb ?? "");
+  if (!Number.isFinite(price) || price < 0) return null;
+  if (totalWeightLbs <= 0) return null;
+  return totalWeightLbs * price;
+}
+
 export function calculateLineTotal(
   line: Pick<
     NewOrderLineValues,

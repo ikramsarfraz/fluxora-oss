@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useEffect, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -39,13 +39,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import {
+  useFifoAllocation,
+  useProductCasesOnHand,
+} from "@/modules/distribution/inventory/hooks/use-inventory";
 import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
+import type { FifoAllocationResult } from "@/modules/distribution/inventory/services/inventory";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 import {
   calculateLineTotal,
+  calculateLineTotalFromWeight,
   formatSalesUnitLabel,
   getDefaultSalesUnit,
   getSalesUnits,
@@ -61,10 +67,14 @@ const C = {
   line2: "#f5f5f4",
   accent: "oklch(48% 0.16 265)",
   good: "oklch(58% 0.13 155)",
+  info: "oklch(60% 0.15 240)",
+  infoSoft: "oklch(96% 0.03 240)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface NewOrderLinesTableProps {
   control: Control<NewOrderFormValues>;
@@ -85,6 +95,8 @@ function newLineDefaults(): NewOrderFormValues["lines"][number] {
   };
 }
 
+// ─── Main table ───────────────────────────────────────────────────────────────
+
 export function NewOrderLinesTable({
   control,
   setValue,
@@ -102,9 +114,10 @@ export function NewOrderLinesTable({
 
   const { data: products } = useProducts();
   const { data: customers } = useCustomers();
+  const { data: casesOnHandData } = useProductCasesOnHand();
 
   const customer: CustomerListItem | null = useMemo(
-    () => customers?.find(c => c.id === customerId) ?? null,
+    () => customers?.find((c) => c.id === customerId) ?? null,
     [customers, customerId],
   );
 
@@ -114,17 +127,49 @@ export function NewOrderLinesTable({
     return map;
   }, [products]);
 
+  const casesOnHandMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of casesOnHandData ?? []) map.set(row.productId, row.cases);
+    return map;
+  }, [casesOnHandData]);
+
   const takenProductIds = useMemo(
-    () => new Set((lines ?? []).map(l => l.productId).filter(Boolean)),
+    () => new Set((lines ?? []).map((l) => l.productId).filter(Boolean)),
     [lines],
   );
 
-  const filledCount = (lines ?? []).filter(l => l.productId).length;
-  const isStep2Done = filledCount > 0;
+  // Section aside: "N items · N cs · X lb est."
+  const sectionAside = useMemo(() => {
+    const filled = (lines ?? []).filter((l) => l.productId);
+    if (filled.length === 0) return "No items";
+    const totalCases = filled.reduce(
+      (s, l) => s + (Number(l.quantity) || 0),
+      0,
+    );
+    let totalWeightEst = 0;
+    for (const l of filled) {
+      if (!l.productId || !l.salesUnitId) continue;
+      const prod = productsById.get(l.productId);
+      const unit = getSalesUnits(prod).find((u) => u.unitId === l.salesUnitId);
+      const conv = Number(unit?.conversionToBase ?? 0);
+      if (l.unitType === "catch_weight" && conv > 0) {
+        totalWeightEst += (Number(l.quantity) || 0) * conv;
+      }
+    }
+    const weightStr =
+      totalWeightEst > 0
+        ? ` · ${totalWeightEst.toLocaleString("en-US", { maximumFractionDigits: 1 })} lb est.`
+        : "";
+    return `${filled.length} ${filled.length === 1 ? "item" : "items"} · ${totalCases} cs${weightStr}`;
+  }, [lines, productsById]);
+
+  const isStep2Done = (lines ?? []).some((l) => l.productId);
 
   function resolvePricePerLb(productId: string): string {
     if (!productId) return "";
-    const contract = customer?.productPrices?.find(p => p.productId === productId);
+    const contract = customer?.productPrices?.find(
+      (p) => p.productId === productId,
+    );
     if (contract?.pricePerLb) return contract.pricePerLb;
     return productsById.get(productId)?.defaultPricePerLb ?? "";
   }
@@ -189,11 +234,7 @@ export function NewOrderLinesTable({
           </span>
           Products
         </div>
-        <span style={{ fontSize: "12px", color: C.muted }}>
-          {filledCount === 0
-            ? "No items"
-            : `${filledCount} ${filledCount === 1 ? "item" : "items"}`}
-        </span>
+        <span style={{ fontSize: "12px", color: C.muted }}>{sectionAside}</span>
       </div>
 
       {/* Line items table */}
@@ -201,22 +242,25 @@ export function NewOrderLinesTable({
         <Table className="text-[13px]">
           <TableHeader>
             <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className="h-auto w-[40%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Product
               </TableHead>
-              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Unit
               </TableHead>
-              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
-                Qty
+              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+                Cases
               </TableHead>
-              <TableHead className="h-auto w-[14%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+                Weight (lbs)
+              </TableHead>
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Price
               </TableHead>
-              <TableHead className="h-auto w-[14%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Total
               </TableHead>
-              <TableHead className="h-auto w-[30px] px-2.5 pt-0 pb-2" />
+              <TableHead className="h-auto w-7.5 px-2.5 pt-0 pb-2" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -227,8 +271,11 @@ export function NewOrderLinesTable({
                 control={control}
                 products={products ?? []}
                 productsById={productsById}
+                casesOnHandMap={casesOnHandMap}
                 takenProductIds={takenProductIds}
-                onProductSelected={product => handleProductSelected(index, product)}
+                onProductSelected={(product) =>
+                  handleProductSelected(index, product)
+                }
                 onRemove={() => remove(index)}
               />
             ))}
@@ -256,11 +303,11 @@ export function NewOrderLinesTable({
           + Add product
         </Button>
         <span style={{ fontSize: "12px", color: C.muted }}>
-          ⚖ Totals for weight-based items are estimates — actual weights are recorded at fulfillment
+          ⚖ Catch-weight cases capture final lbs at fulfillment — estimates shown here
         </span>
       </div>
 
-      {/* Notes toggle + row */}
+      {/* Notes */}
       <div
         style={{
           paddingTop: "12px",
@@ -278,13 +325,27 @@ export function NewOrderLinesTable({
             + Add note
           </Button>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}
+          >
             <Controller
               control={control}
               name="customerNotes"
               render={({ field }) => (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: C.muted,
+                      fontWeight: 500,
+                    }}
+                  >
                     Customer note{" "}
                     <span style={{ color: C.muted, fontWeight: 400 }}>
                       — shown on invoice
@@ -294,7 +355,7 @@ export function NewOrderLinesTable({
                     {...field}
                     placeholder="Delivery instructions, packing requests…"
                     rows={2}
-                    className="min-h-[60px] resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
+                    className="min-h-15 resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
                   />
                 </div>
               )}
@@ -303,8 +364,20 @@ export function NewOrderLinesTable({
               control={control}
               name="internalNotes"
               render={({ field }) => (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "12px", color: C.muted, fontWeight: 500 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  <label
+                    style={{
+                      fontSize: "12px",
+                      color: C.muted,
+                      fontWeight: 500,
+                    }}
+                  >
                     Internal note{" "}
                     <span style={{ color: C.muted, fontWeight: 400 }}>
                       — staff only
@@ -314,7 +387,7 @@ export function NewOrderLinesTable({
                     {...field}
                     placeholder="Notes for warehouse and office staff…"
                     rows={2}
-                    className="min-h-[60px] resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
+                    className="min-h-15 resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
                   />
                 </div>
               )}
@@ -326,11 +399,14 @@ export function NewOrderLinesTable({
   );
 }
 
+// ─── LineRow ──────────────────────────────────────────────────────────────────
+
 interface LineRowProps {
   index: number;
   control: Control<NewOrderFormValues>;
   products: ProductListItem[];
   productsById: Map<string, ProductListItem>;
+  casesOnHandMap: Map<string, number>;
   takenProductIds: Set<string>;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
@@ -341,6 +417,7 @@ function LineRow({
   control,
   products,
   productsById,
+  casesOnHandMap,
   takenProductIds,
   onProductSelected,
   onRemove,
@@ -349,206 +426,848 @@ function LineRow({
 
   const product = row?.productId ? productsById.get(row.productId) : undefined;
   const salesUnits = getSalesUnits(product);
-  const lineTotal = row ? calculateLineTotal(row, product) : null;
+  const selectedUnit =
+    salesUnits.find((u) => u.unitId === row?.salesUnitId) ?? null;
 
-  const availableProducts = products.filter(
-    p => p.id === row?.productId || !takenProductIds.has(p.id),
+  const isCW = row?.unitType === "catch_weight";
+  const caseCount = Math.max(0, parseInt(row?.quantity ?? "0") || 0);
+  const avgLbsPerCase = Number(selectedUnit?.conversionToBase ?? 0);
+
+  const casesOnHand = row?.productId
+    ? casesOnHandMap.get(row.productId)
+    : undefined;
+
+  // ── FIFO allocation ──────────────────────────────────────────────────────
+  const { data: fifoAlloc, isLoading: fifoLoading } = useFifoAllocation(
+    isCW ? (row?.productId ?? null) : null,
+    caseCount,
   );
 
-  const cellClassName = "border-t border-stone-line2 px-2.5 py-1.5 align-top";
-  const inputClassName =
+  // ── Tray expand state ────────────────────────────────────────────────────
+  const [expanded, setExpanded] = useState(false);
+  const casesPositive = caseCount > 0;
+
+  // Auto-open when cases first go positive; auto-close when not applicable
+  useEffect(() => {
+    if (isCW && casesPositive) {
+      setExpanded(true);
+    } else {
+      setExpanded(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCW, casesPositive]);
+
+  // ── Effective weight for line total ──────────────────────────────────────
+  const effectiveTotalWeight =
+    fifoAlloc && fifoAlloc.rows.length > 0
+      ? fifoAlloc.totalWeight
+      : caseCount * avgLbsPerCase;
+
+  // Row-level total
+  const lineTotal =
+    isCW && effectiveTotalWeight > 0
+      ? calculateLineTotalFromWeight(effectiveTotalWeight, row?.pricePerLb)
+      : calculateLineTotal(
+          row ?? {
+            quantity: "",
+            pricePerLb: "",
+            unitType: "catch_weight",
+            salesUnitId: "",
+          },
+          product,
+        );
+
+  const availableProducts = products.filter(
+    (p) => p.id === row?.productId || !takenProductIds.has(p.id),
+  );
+
+  const cellCn = "border-t border-stone-line2 px-2.5 py-1.5 align-top";
+  const inputCn =
     "h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none";
 
+  // ── Weight cell ──────────────────────────────────────────────────────────
+  function WeightCell() {
+    if (!isCW) {
+      return (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            padding: "9px 12px",
+            color: C.muted,
+            fontFamily: C.mono,
+            fontSize: "13px",
+          }}
+        >
+          —
+        </div>
+      );
+    }
+
+    const hasCases = caseCount > 0;
+    const allocatedCount = fifoAlloc?.rows.length ?? 0;
+    const totalWt = fifoAlloc ? fifoAlloc.totalWeight : effectiveTotalWeight;
+    const lotsUsed = fifoAlloc?.lotsUsed ?? 0;
+
+    const weightLabel = totalWt.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    return (
+      <button
+        type="button"
+        onClick={() => hasCases && setExpanded((prev) => !prev)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          width: "100%",
+          padding: "9px 10px",
+          borderRadius: C.radiusSm,
+          border: "1px solid transparent",
+          background: hasCases ? C.infoSoft : C.line2,
+          borderColor: hasCases
+            ? "color-mix(in oklch, oklch(60% 0.15 240) 25%, transparent)"
+            : "transparent",
+          cursor: hasCases ? "pointer" : "default",
+          minHeight: "36px",
+          textAlign: "left",
+          fontSize: "12px",
+          color: hasCases ? C.info : C.muted,
+          fontFamily: hasCases ? C.mono : "inherit",
+          transition: "background 0.1s",
+        }}
+        disabled={!hasCases}
+        aria-expanded={expanded}
+      >
+        {hasCases ? (
+          <>
+            <span style={{ flex: 1, fontSize: "11px", fontFamily: "inherit" }}>
+              {allocatedCount}/{caseCount} cs
+              {lotsUsed > 1 ? ` · ${lotsUsed} lots` : ""}
+            </span>
+            <span style={{ fontWeight: 500 }}>{weightLabel}</span>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              style={{
+                flexShrink: 0,
+                transition: "transform 0.15s",
+                transform: expanded ? "rotate(180deg)" : "none",
+              }}
+            >
+              <path
+                d="M2 4l3 3 3-3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </>
+        ) : (
+          <span style={{ fontSize: "11px", flex: 1, textAlign: "right" }}>
+            Set cases →
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
-    <TableRow className="border-0 hover:bg-transparent">
-      {/* Product */}
-      <TableCell className={cellClassName}>
-        <Controller
-          control={control}
-          name={`lines.${index}.productId`}
-          render={({ fieldState }) => (
-            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-              <Combobox
-                items={availableProducts}
-                itemToStringValue={(p: ProductListItem) => `${p.sku} ${p.name}`}
-                value={product ?? null}
-                onValueChange={(p: ProductListItem | null) => {
-                  if (p) onProductSelected(p);
+    <>
+      <TableRow className="border-0 hover:bg-transparent">
+        {/* Product */}
+        <TableCell className={cellCn}>
+          <Controller
+            control={control}
+            name={`lines.${index}.productId`}
+            render={({ fieldState }) => (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "3px" }}
+              >
+                <Combobox
+                  items={availableProducts}
+                  itemToStringValue={(p: ProductListItem) =>
+                    `${p.sku} ${p.name}`
+                  }
+                  value={product ?? null}
+                  onValueChange={(p: ProductListItem | null) => {
+                    if (p) onProductSelected(p);
+                  }}
+                >
+                  <ComboboxTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        aria-invalid={fieldState.invalid}
+                        className="h-auto w-full justify-start border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] font-normal text-stone-ink shadow-none hover:bg-stone-line2 data-[placeholder=true]:text-stone-muted"
+                      >
+                        <ComboboxValue>
+                          {product ? (
+                            <span
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontFamily: C.mono,
+                                  fontSize: "11px",
+                                  color: C.muted,
+                                }}
+                              >
+                                {product.sku}
+                              </span>
+                              <span>{product.name}</span>
+                            </span>
+                          ) : (
+                            "Search product…"
+                          )}
+                        </ComboboxValue>
+                      </Button>
+                    }
+                  />
+                  <ComboboxContent>
+                    <ComboboxInput
+                      showTrigger={false}
+                      placeholder="Search by SKU or name…"
+                    />
+                    <ComboboxEmpty>No products found.</ComboboxEmpty>
+                    <ComboboxList>
+                      {(p: ProductListItem) => (
+                        <ComboboxItem key={p.id} value={p}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              width: "100%",
+                              gap: "8px",
+                            }}
+                          >
+                            <div>
+                              <div>{p.name}</div>
+                              <div
+                                style={{
+                                  fontFamily: C.mono,
+                                  fontSize: "11px",
+                                  color: C.muted,
+                                }}
+                              >
+                                {p.sku}
+                              </div>
+                            </div>
+                            <span style={{ fontSize: "12px", color: C.muted }}>
+                              {formatMoney(p.defaultPricePerLb)}
+                            </span>
+                          </div>
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+                {fieldState.invalid && (
+                  <span
+                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                  >
+                    {fieldState.error?.message}
+                  </span>
+                )}
+                {!fieldState.invalid && casesOnHand !== undefined && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color:
+                        casesOnHand === 0 ? "oklch(55% 0.22 25)" : C.muted,
+                    }}
+                  >
+                    {casesOnHand === 0
+                      ? "No stock"
+                      : `${casesOnHand} ${casesOnHand === 1 ? "case" : "cases"} on hand`}
+                  </span>
+                )}
+              </div>
+            )}
+          />
+        </TableCell>
+
+        {/* Unit */}
+        <TableCell className={cellCn}>
+          <Controller
+            control={control}
+            name={`lines.${index}.salesUnitId`}
+            render={({ field, fieldState }) => {
+              const selectedU =
+                salesUnits.find((u) => u.unitId === field.value) ?? null;
+              return (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "3px",
+                  }}
+                >
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={!product || salesUnits.length === 0}
+                  >
+                    <SelectTrigger
+                      className="h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none"
+                      aria-invalid={fieldState.invalid}
+                    >
+                      <SelectValue placeholder={!product ? "—" : "Unit…"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {salesUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.unitId}>
+                          {formatSalesUnitLabel(unit)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {product && !selectedU && salesUnits.length === 0 && (
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "oklch(55% 0.22 25)",
+                      }}
+                    >
+                      No sales units configured
+                    </span>
+                  )}
+                </div>
+              );
+            }}
+          />
+        </TableCell>
+
+        {/* Cases */}
+        <TableCell className={`${cellCn} text-right`}>
+          <Controller
+            control={control}
+            name={`lines.${index}.quantity`}
+            render={({ field, fieldState }) => (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: "3px",
                 }}
               >
-                <ComboboxTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      aria-invalid={fieldState.invalid}
-                      className="h-auto w-full justify-start border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] font-normal text-stone-ink shadow-none hover:bg-stone-line2 data-[placeholder=true]:text-stone-muted"
-                    >
-                      <ComboboxValue>
-                        {product ? (
-                          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontFamily: C.mono, fontSize: "11px", color: C.muted }}>
-                              {product.sku}
-                            </span>
-                            <span>{product.name}</span>
-                          </span>
-                        ) : (
-                          "Search product…"
-                        )}
-                      </ComboboxValue>
-                    </Button>
-                  }
+                <Input
+                  {...field}
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  placeholder="0"
+                  aria-invalid={fieldState.invalid}
+                  className={`${inputCn} text-right font-mono`}
                 />
-                <ComboboxContent>
-                  <ComboboxInput showTrigger={false} placeholder="Search by SKU or name…" />
-                  <ComboboxEmpty>No products found.</ComboboxEmpty>
-                  <ComboboxList>
-                    {(p: ProductListItem) => (
-                      <ComboboxItem key={p.id} value={p}>
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            width: "100%",
-                            gap: "8px",
-                          }}
-                        >
-                          <div>
-                            <div>{p.name}</div>
-                            <div style={{ fontFamily: C.mono, fontSize: "11px", color: C.muted }}>
-                              {p.sku}
-                            </div>
-                          </div>
-                          <span style={{ fontSize: "12px", color: C.muted }}>
-                            {formatMoney(p.defaultPricePerLb)}
-                          </span>
-                        </div>
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
-              {fieldState.invalid && (
-                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
-                  {fieldState.error?.message}
-                </span>
-              )}
-            </div>
-          )}
-        />
-      </TableCell>
+                {fieldState.invalid && (
+                  <span
+                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                  >
+                    {fieldState.error?.message}
+                  </span>
+                )}
+              </div>
+            )}
+          />
+        </TableCell>
 
-      {/* Unit */}
-      <TableCell className={cellClassName}>
-        <Controller
-          control={control}
-          name={`lines.${index}.salesUnitId`}
-          render={({ field, fieldState }) => (
-            <Select
-              value={field.value}
-              onValueChange={field.onChange}
-              disabled={!product || salesUnits.length === 0}
-            >
-              <SelectTrigger
-                className="h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none"
-                aria-invalid={fieldState.invalid}
+        {/* Weight (lbs) */}
+        <TableCell className={`${cellCn} text-right`}>
+          <WeightCell />
+        </TableCell>
+
+        {/* Price */}
+        <TableCell className={`${cellCn} text-right`}>
+          <Controller
+            control={control}
+            name={`lines.${index}.pricePerLb`}
+            render={({ field, fieldState }) => (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: "3px",
+                }}
               >
-                <SelectValue placeholder="Unit…" />
-              </SelectTrigger>
-              <SelectContent>
-                {salesUnits.map(unit => (
-                  <SelectItem key={unit.id} value={unit.unitId}>
-                    {formatSalesUnitLabel(unit)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </TableCell>
+                <Input
+                  {...field}
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  aria-invalid={fieldState.invalid}
+                  className={`${inputCn} text-right font-mono`}
+                />
+                {product && !fieldState.invalid && (
+                  <span style={{ fontSize: "11px", color: C.muted }}>
+                    $ /{" "}
+                    {product.baseUnit?.abbreviation ||
+                      product.baseUnit?.name ||
+                      "unit"}
+                  </span>
+                )}
+                {fieldState.invalid && (
+                  <span
+                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                  >
+                    {fieldState.error?.message}
+                  </span>
+                )}
+              </div>
+            )}
+          />
+        </TableCell>
 
-      {/* Qty */}
-      <TableCell className={`${cellClassName} text-right`}>
-        <Controller
-          control={control}
-          name={`lines.${index}.quantity`}
-          render={({ field, fieldState }) => (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-              <Input
-                {...field}
-                type="number"
-                min="1"
-                step="1"
-                inputMode="numeric"
-                placeholder="0"
-                aria-invalid={fieldState.invalid}
-                className={`${inputClassName} text-right font-mono`}
-              />
-              {fieldState.invalid && (
-                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
-                  {fieldState.error?.message}
-                </span>
-              )}
-            </div>
-          )}
-        />
-      </TableCell>
-
-      {/* Price */}
-      <TableCell className={`${cellClassName} text-right`}>
-        <Controller
-          control={control}
-          name={`lines.${index}.pricePerLb`}
-          render={({ field, fieldState }) => (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "3px" }}>
-              <Input
-                {...field}
-                type="number"
-                min="0"
-                step="0.0001"
-                inputMode="decimal"
-                placeholder="0.00"
-                aria-invalid={fieldState.invalid}
-                className={`${inputClassName} text-right font-mono`}
-              />
-              {product && !fieldState.invalid && (
-                <span style={{ fontSize: "11px", color: C.muted }}>
-                  $ / {product.baseUnit?.abbreviation || product.baseUnit?.name || "unit"}
-                </span>
-              )}
-              {fieldState.invalid && (
-                <span style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}>
-                  {fieldState.error?.message}
-                </span>
-              )}
-            </div>
-          )}
-        />
-      </TableCell>
-
-      {/* Total */}
-      <TableCell
-        className={`${cellClassName} whitespace-nowrap text-right font-mono text-[13px] ${
-          lineTotal !== null ? "font-medium text-stone-ink" : "font-normal text-stone-muted"
-        }`}
-      >
-        {lineTotal !== null ? formatMoney(lineTotal) : "—"}
-      </TableCell>
-
-      {/* Delete */}
-      <TableCell className={`${cellClassName} text-center`}>
-        <Button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remove line ${index + 1}`}
-          variant="ghost"
-          size="icon-xs"
-          className="size-7 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
+        {/* Total */}
+        <TableCell
+          className={`${cellCn} whitespace-nowrap text-right text-[13px] ${
+            lineTotal !== null
+              ? "font-medium text-stone-ink"
+              : "font-normal text-stone-muted"
+          }`}
         >
-          ✕
-        </Button>
-      </TableCell>
-    </TableRow>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "2px",
+            }}
+          >
+            <span style={{ fontFamily: C.mono }}>
+              {lineTotal !== null ? formatMoney(lineTotal) : "—"}
+            </span>
+            {isCW && caseCount > 0 && effectiveTotalWeight > 0 && (
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: C.muted,
+                  fontWeight: 400,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  fontFamily: C.mono,
+                }}
+              >
+                est ·{" "}
+                {effectiveTotalWeight.toLocaleString("en-US", {
+                  maximumFractionDigits: 1,
+                })}{" "}
+                lb
+              </span>
+            )}
+          </div>
+        </TableCell>
+
+        {/* Delete */}
+        <TableCell className={`${cellCn} text-center`}>
+          <Button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove line ${index + 1}`}
+            variant="ghost"
+            size="icon-xs"
+            className="size-7 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
+          >
+            ✕
+          </Button>
+        </TableCell>
+      </TableRow>
+
+      {/* FIFO allocation tray */}
+      {isCW && expanded && caseCount > 0 && (
+        <TableRow className="border-0 hover:bg-transparent">
+          <TableCell colSpan={7} className="p-0">
+            <FifoAllocationTray
+              rows={fifoAlloc?.rows ?? []}
+              shortBy={fifoAlloc?.shortBy ?? 0}
+              totalWeight={fifoAlloc?.totalWeight ?? 0}
+              lotsUsed={fifoAlloc?.lotsUsed ?? 0}
+              requestedCases={caseCount}
+              isLoading={fifoLoading}
+            />
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
+// ─── FIFO Allocation Tray ─────────────────────────────────────────────────────
+
+const LOT_DOT_COLORS = [
+  "oklch(70% 0.12 220)",
+  "oklch(68% 0.13 150)",
+  "oklch(72% 0.13 60)",
+  "oklch(68% 0.14 320)",
+  "oklch(70% 0.13 25)",
+];
+
+function ageStr(dateStr: string): string {
+  if (!dateStr) return "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  const days = Math.floor((today.getTime() - d.getTime()) / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function fmt2(n: number): string {
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+interface FifoAllocationTrayProps {
+  rows: FifoAllocationResult["rows"];
+  shortBy: number;
+  totalWeight: number;
+  lotsUsed: number;
+  requestedCases: number;
+  isLoading: boolean;
+}
+
+function FifoAllocationTray({
+  rows,
+  shortBy,
+  totalWeight,
+  lotsUsed,
+  requestedCases,
+  isLoading,
+}: FifoAllocationTrayProps) {
+  const allocatedCount = rows.length;
+  const avg = allocatedCount > 0 ? totalWeight / allocatedCount : 0;
+
+  return (
+    <div
+      style={{
+        background: "#f9f8f6",
+        borderTop: "1px dashed #e7e5e4",
+        padding: "16px 22px 18px",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "16px",
+          flexWrap: "wrap",
+          marginBottom: "14px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: C.ink,
+            }}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke={C.info}
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            >
+              <path d="M2 5l6-3 6 3-6 3-6-3z" />
+              <path d="M2 5v6l6 3 6-3V5" />
+            </svg>
+            FIFO allocation
+          </div>
+          <span style={{ fontSize: "11px", color: C.muted }}>
+            Auto-assigned from oldest inventory first. Read-only.
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: "22px", alignItems: "baseline" }}>
+          <AllocStat
+            label="Cases"
+            value={
+              shortBy > 0
+                ? `${allocatedCount} / ${requestedCases}`
+                : String(allocatedCount)
+            }
+          />
+          <AllocStat label="Avg / case" value={`${fmt2(avg)} lb`} />
+          <AllocStat label="Total weight" value={`${fmt2(totalWeight)} lb`} bold />
+        </div>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div
+          style={{
+            padding: "20px",
+            textAlign: "center",
+            fontSize: "12px",
+            color: C.muted,
+          }}
+        >
+          Loading…
+        </div>
+      ) : rows.length === 0 ? (
+        <div
+          style={{
+            padding: "28px 16px",
+            textAlign: "center",
+            color: C.muted,
+            fontSize: "12px",
+            background: C.surface,
+            border: `1px dashed ${C.line}`,
+            borderRadius: C.radiusSm,
+          }}
+        >
+          No inventory available for this product.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "56px minmax(0,1fr) minmax(0,1fr) 1fr 96px",
+            background: C.surface,
+            border: `1px solid ${C.line}`,
+            borderRadius: C.radiusSm,
+            overflow: "hidden",
+          }}
+        >
+          {/* Column headers */}
+          {(["Case", "Lot #", "Received", "", "Weight"] as const).map(
+            (h, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: "8px 12px",
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  color: C.muted,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  background: C.line2,
+                  borderBottom: `1px solid ${C.line}`,
+                  textAlign: i === 4 ? ("right" as const) : ("left" as const),
+                }}
+              >
+                {h}
+              </div>
+            ),
+          )}
+
+          {/* Data rows — display:contents grid pattern */}
+          {rows.map((row, i) => {
+            const prev = i > 0 ? rows[i - 1] : null;
+            const isLotBreak = !!prev && prev.lotId !== row.lotId;
+            const borderTop = isLotBreak
+              ? `1px solid ${C.line}`
+              : i === 0
+                ? "none"
+                : `1px solid ${C.line2}`;
+            const dotColor = LOT_DOT_COLORS[row.lotColorIdx % 5];
+            const cellStyle: React.CSSProperties = {
+              padding: "9px 12px",
+              fontSize: "13px",
+              borderTop,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            };
+
+            return (
+              <Fragment key={row.inventoryItemId}>
+                {/* Case # */}
+                <div
+                  style={{
+                    ...cellStyle,
+                    fontFamily: C.mono,
+                    color: C.muted,
+                    fontSize: "12px",
+                  }}
+                >
+                  #{row.caseIdx}
+                </div>
+                {/* Lot # */}
+                <div style={cellStyle}>
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      background: dotColor,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: C.mono,
+                      fontSize: "12px",
+                      color: C.ink,
+                    }}
+                  >
+                    {row.lotNumber}
+                  </span>
+                </div>
+                {/* Received */}
+                <div style={cellStyle}>
+                  <span style={{ color: C.ink2, fontSize: "12px" }}>
+                    {row.receivedDate}
+                  </span>
+                  <span
+                    style={{
+                      color: C.muted,
+                      fontSize: "11px",
+                      marginLeft: "6px",
+                    }}
+                  >
+                    {ageStr(row.receivedDate)}
+                  </span>
+                </div>
+                {/* Spacer */}
+                <div style={cellStyle} />
+                {/* Weight */}
+                <div
+                  style={{
+                    ...cellStyle,
+                    justifyContent: "flex-end",
+                    fontFamily: C.mono,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {fmt2(row.weight)} lb
+                </div>
+              </Fragment>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Short-stock warning */}
+      {shortBy > 0 && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "8px",
+            padding: "10px 12px",
+            marginTop: "10px",
+            background: "oklch(96% 0.04 70)",
+            color: "oklch(40% 0.10 70)",
+            border: "1px solid oklch(85% 0.10 70)",
+            borderRadius: C.radiusSm,
+            fontSize: "12px",
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            style={{ flexShrink: 0, marginTop: "1px" }}
+          >
+            <path d="M8 2l6.5 11h-13L8 2z" strokeLinejoin="round" />
+            <path d="M8 6.5v3.5M8 11.7v.1" strokeLinecap="round" />
+          </svg>
+          <div>
+            <b>Short {shortBy} {shortBy === 1 ? "case" : "cases"}.</b>{" "}
+            Only {rows.length} of {requestedCases} requested{" "}
+            {requestedCases === 1 ? "case is" : "cases are"} in stock. Reduce
+            quantity or back-order.
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      {rows.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            alignItems: "center",
+            marginTop: "12px",
+            fontSize: "11px",
+            color: C.muted,
+          }}
+        >
+          <span>
+            Pulled from{" "}
+            <b style={{ color: C.ink2, fontWeight: 500 }}>{lotsUsed}</b>{" "}
+            {lotsUsed === 1 ? "lot" : "lots"} · oldest first.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AllocStat ────────────────────────────────────────────────────────────────
+
+function AllocStat({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: string;
+  bold?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+      <span
+        style={{
+          fontSize: "10px",
+          fontWeight: 600,
+          color: C.muted,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontFamily: C.mono,
+          fontSize: "13px",
+          fontWeight: bold ? 600 : 500,
+          color: bold ? C.ink : C.ink2,
+        }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
