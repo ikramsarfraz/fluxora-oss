@@ -53,7 +53,6 @@ export function InventoryAdjustmentDialog({
   const [targetStatus, setTargetStatus] = useState<
     "unchanged" | "in_stock" | "damaged" | "expired"
   >("unchanged");
-  const [correctedCases, setCorrectedCases] = useState("");
   const [correctedWeightLbs, setCorrectedWeightLbs] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -62,7 +61,6 @@ export function InventoryAdjustmentDialog({
   const cost = Number(item.costPerUnitSnapshot ?? 0);
   const isCatchWeight = item.costUnitTypeSnapshot === "catch_weight";
   const nextStatusResolved = targetStatus === "unchanged" ? item.status : targetStatus;
-  const nextCasesResolved = correctedCases.trim() !== "" ? Number.parseInt(correctedCases, 10) : item.cases;
   const nextWeightResolved = correctedWeightLbs.trim() !== "" ? Number(correctedWeightLbs) : Number(item.exactWeightLbs);
 
   const writeOffLoss = (() => {
@@ -71,18 +69,16 @@ export function InventoryAdjustmentDialog({
     const isRestore = nextStatusResolved === "in_stock";
     if (isRestore) return 0;
     if (isWriteOff) {
-      return isCatchWeight ? cost * Number(item.exactWeightLbs) : cost * item.cases;
+      return isCatchWeight ? cost * Number(item.exactWeightLbs) : cost;
     }
-    const delta = isCatchWeight
-      ? Number(item.exactWeightLbs) - (Number.isFinite(nextWeightResolved) ? nextWeightResolved : Number(item.exactWeightLbs))
-      : item.cases - (Number.isInteger(nextCasesResolved) ? nextCasesResolved : item.cases);
-    return delta > 0 ? cost * delta : 0;
+    // Weight correction without status change (catch-weight only)
+    const weightDelta = Number(item.exactWeightLbs) - (Number.isFinite(nextWeightResolved) ? nextWeightResolved : Number(item.exactWeightLbs));
+    return isCatchWeight && weightDelta > 0 ? cost * weightDelta : 0;
   })();
 
   useEffect(() => {
     if (open) {
       setTargetStatus("unchanged");
-      setCorrectedCases("");
       setCorrectedWeightLbs("");
       setReason("");
       setNotes("");
@@ -101,10 +97,6 @@ export function InventoryAdjustmentDialog({
       await adjustInventory.mutateAsync({
         inventoryItemId: item.id,
         targetStatus: targetStatus === "unchanged" ? null : targetStatus,
-        correctedCases:
-          correctedCases.trim().length > 0
-            ? Number.parseInt(correctedCases, 10)
-            : null,
         correctedWeightLbs:
           correctedWeightLbs.trim().length > 0 ? correctedWeightLbs.trim() : null,
         reason,
@@ -150,14 +142,10 @@ export function InventoryAdjustmentDialog({
         ) : null}
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 sm:grid-cols-3">
+          <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2">
             <div>
               <p className="text-sm text-muted-foreground">Current status</p>
               <p className="font-medium">{getInventoryStatusLabel(item.status)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Current cases</p>
-              <p className="font-medium">{item.cases}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Current weight</p>
@@ -206,40 +194,22 @@ export function InventoryAdjustmentDialog({
             </FieldDescription>
           </Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="inventory-adjustment-cases">
-                Corrected cases
-              </FieldLabel>
-              <Input
-                id="inventory-adjustment-cases"
-                inputMode="numeric"
-                placeholder={String(item.cases)}
-                value={correctedCases}
-                onChange={event => setCorrectedCases(event.target.value)}
-                disabled={Boolean(disabledReason) || adjustInventory.isPending}
-              />
-              <FieldDescription>
-                Leave blank to keep the current case count.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="inventory-adjustment-weight">
-                Corrected weight lbs
-              </FieldLabel>
-              <Input
-                id="inventory-adjustment-weight"
-                inputMode="decimal"
-                placeholder={formatWeightLbs(item.exactWeightLbs)}
-                value={correctedWeightLbs}
-                onChange={event => setCorrectedWeightLbs(event.target.value)}
-                disabled={Boolean(disabledReason) || adjustInventory.isPending}
-              />
-              <FieldDescription>
-                Leave blank to keep the current exact weight.
-              </FieldDescription>
-            </Field>
-          </div>
+          <Field>
+            <FieldLabel htmlFor="inventory-adjustment-weight">
+              Corrected weight lbs
+            </FieldLabel>
+            <Input
+              id="inventory-adjustment-weight"
+              inputMode="decimal"
+              placeholder={formatWeightLbs(item.exactWeightLbs)}
+              value={correctedWeightLbs}
+              onChange={event => setCorrectedWeightLbs(event.target.value)}
+              disabled={Boolean(disabledReason) || adjustInventory.isPending}
+            />
+            <FieldDescription>
+              Leave blank to keep the current exact weight.
+            </FieldDescription>
+          </Field>
 
           <Field>
             <FieldLabel htmlFor="inventory-adjustment-reason">Reason</FieldLabel>

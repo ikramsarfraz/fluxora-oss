@@ -81,13 +81,6 @@ const COLUMNS: ListingColumn<InventoryRow>[] = [
     }),
   },
   {
-    key: "cases",
-    header: "Cases",
-    sortKey: "cases",
-    align: "right",
-    render: row => ({ primary: <span style={{ color: "#44403c" }}>{row.cases}</span> }),
-  },
-  {
     key: "weight",
     header: "Weight (lb)",
     sortKey: "weight",
@@ -179,7 +172,6 @@ export function InventoryPage() {
       }
       kpis={summary ? [
         { label: "Items", value: summary.totalItems },
-        { label: "Cases", value: summary.totalCases },
         { label: "Weight (lb)", value: Number(summary.totalWeight ?? 0).toFixed(0) },
         { label: "Expiring soon", value: summary.expiringCount },
       ] : undefined}

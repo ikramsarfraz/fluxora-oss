@@ -64,13 +64,13 @@ const COLUMNS: ListingColumn<LotRow>[] = [
     },
   },
   {
-    key: "cases",
-    header: "Cases",
-    sortKey: "cases",
+    key: "items",
+    header: "Items",
+    sortKey: "items",
     align: "right",
     render: row => {
       const totals = getLotTotals(row);
-      return { primary: <span style={{ color: "#44403c" }}>{totals.totalCases}</span> };
+      return { primary: <span style={{ color: "#44403c" }}>{totals.inventoryItemCount}</span> };
     },
   },
   {
@@ -134,7 +134,7 @@ export default function Lots() {
       else if (sortKey === "product") v = (pa?.name ?? "").localeCompare(pb?.name ?? "");
       else if (sortKey === "receive") v = a.receiveDate.localeCompare(b.receiveDate);
       else if (sortKey === "expiration") v = a.expirationDate.localeCompare(b.expirationDate);
-      else if (sortKey === "cases") v = ta.totalCases - tb.totalCases;
+      else if (sortKey === "items") v = ta.inventoryItemCount - tb.inventoryItemCount;
       else if (sortKey === "weight") v = ta.totalWeight - tb.totalWeight;
       return sortDir === "asc" ? v : -v;
     });

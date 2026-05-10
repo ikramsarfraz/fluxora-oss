@@ -698,17 +698,34 @@ async function postSupplierInvoiceInternal(args: {
       supplierInvoiceLineId: line.id,
     });
 
-    await tx.insert(inventoryItems).values({
-      productId: line.productId,
-      lotId: lot.id,
-      barcodeId: generateBarcode(),
-      exactWeightLbs: line.weightLbs,
-      cases: Math.max(1, line.quantityCases || 1),
-      costPerUnitSnapshot: line.unitPrice,
-      costUnitTypeSnapshot: line.unitType,
-      status: "in_stock",
+    const caseCount = Math.max(1, line.quantityCases || 1);
+    const perCaseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
+    const totalWeight = Number(line.weightLbs ?? 0);
+    const fallbackWeight = caseCount > 0 ? totalWeight / caseCount : totalWeight;
+
+    const itemRows = Array.from({ length: caseCount }, (_, i) => {
+      const caseWeightLbs = perCaseWeights[i] != null
+        ? String(perCaseWeights[i])
+        : String(fallbackWeight);
+      return {
+        productId: line.productId,
+        lotId: lot.id,
+        barcodeId: generateBarcode(),
+        exactWeightLbs: caseWeightLbs,
+        cases: 1,
+        costPerUnitSnapshot: line.unitPrice,
+        costUnitTypeSnapshot: line.unitType,
+        status: "in_stock" as const,
+      };
     });
+
+    await tx.insert(inventoryItems).values(itemRows);
   }
+
+  const totalInventoryItemsCreated = invoice.lines.reduce(
+    (sum, line) => sum + Math.max(1, line.quantityCases || 1),
+    0,
+  );
 
   await tx
     .update(supplierInvoices)
@@ -734,7 +751,7 @@ async function postSupplierInvoiceInternal(args: {
     contextJson: JSON.stringify({
       action: "complete_receipt",
       lotsCreated: invoice.lines.length,
-      inventoryItemsCreated: invoice.lines.length,
+      inventoryItemsCreated: totalInventoryItemsCreated,
     }),
   });
 }

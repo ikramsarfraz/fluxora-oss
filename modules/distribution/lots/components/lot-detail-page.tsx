@@ -160,7 +160,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         <ExpirationStateBadge state={expirationState} />
       </DetailPageHeader>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -169,16 +169,6 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
             {totals.inventoryItemCount}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total cases
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {totals.totalCases}
           </CardContent>
         </Card>
         <Card>
@@ -344,7 +334,6 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
                 <TableRow>
                   <TableHead>Barcode</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Cases</TableHead>
                   <TableHead className="text-right">Weight lbs</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Allocations</TableHead>
@@ -360,9 +349,6 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
                       </Link>
                     </TableCell>
                     <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item.cases}
-                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatWeightLbs(item.exactWeightLbs)}
                     </TableCell>

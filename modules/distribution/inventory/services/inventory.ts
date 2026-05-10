@@ -729,8 +729,6 @@ function calculateWriteOffLoss(args: {
   costUnitTypeSnapshot: "catch_weight" | "fixed_case" | null;
   statusBefore: InventoryLifecycleState;
   statusAfter: InventoryLifecycleState;
-  casesBefore: number;
-  casesAfter: number;
   weightBefore: number;
   weightAfter: number;
 }): number {
@@ -744,21 +742,17 @@ function calculateWriteOffLoss(args: {
   const isCatchWeight = args.costUnitTypeSnapshot === "catch_weight";
 
   if (isWriteOff) {
-    return isCatchWeight
-      ? cost * args.weightBefore
-      : cost * args.casesBefore;
+    return isCatchWeight ? cost * args.weightBefore : cost;
   }
 
-  const delta = isCatchWeight
-    ? args.weightBefore - args.weightAfter
-    : args.casesBefore - args.casesAfter;
-  return delta > 0 ? cost * delta : 0;
+  // Weight correction without status change (catch-weight only)
+  const weightDelta = args.weightBefore - args.weightAfter;
+  return isCatchWeight && weightDelta > 0 ? cost * weightDelta : 0;
 }
 
 export async function adjustInventoryItem(input: {
   inventoryItemId: string;
   targetStatus?: InventoryLifecycleState | null;
-  correctedCases?: number | null;
   correctedWeightLbs?: string | null;
   reason: string;
   notes?: string | null;
@@ -776,16 +770,10 @@ export async function adjustInventoryItem(input: {
 
   const reason = normalizeAdjustmentReason(input.reason);
   const nextStatus = input.targetStatus ?? inventoryItem.status;
-  const nextCases =
-    input.correctedCases == null ? inventoryItem.cases : input.correctedCases;
   const nextWeight =
     input.correctedWeightLbs == null
       ? Number(inventoryItem.exactWeightLbs)
       : Number(input.correctedWeightLbs);
-
-  if (!Number.isInteger(nextCases) || nextCases < 0) {
-    throw new Error("Corrected cases must be zero or a positive whole number.");
-  }
 
   if (!Number.isFinite(nextWeight) || nextWeight < 0) {
     throw new Error("Corrected weight must be zero or a positive number.");
@@ -799,7 +787,7 @@ export async function adjustInventoryItem(input: {
     statusBefore: inventoryItem.status,
     statusAfter: nextStatus,
     casesBefore: inventoryItem.cases,
-    casesAfter: nextCases,
+    casesAfter: inventoryItem.cases,
     weightBefore: inventoryItem.exactWeightLbs,
     weightAfter: roundInventoryWeight(nextWeight),
   });
@@ -824,8 +812,6 @@ export async function adjustInventoryItem(input: {
     costUnitTypeSnapshot: inventoryItem.costUnitTypeSnapshot,
     statusBefore: inventoryItem.status,
     statusAfter: nextStatus,
-    casesBefore: inventoryItem.cases,
-    casesAfter: nextCases,
     weightBefore: Number(inventoryItem.exactWeightLbs),
     weightAfter: nextWeight,
   });
@@ -837,7 +823,6 @@ export async function adjustInventoryItem(input: {
       .update(inventoryItems)
       .set({
         status: nextStatus,
-        cases: nextCases,
         exactWeightLbs: roundInventoryWeight(nextWeight),
         updatedAt: new Date(),
       })
@@ -855,7 +840,7 @@ export async function adjustInventoryItem(input: {
         statusBefore: inventoryItem.status,
         statusAfter: nextStatus,
         casesBefore: inventoryItem.cases,
-        casesAfter: nextCases,
+        casesAfter: inventoryItem.cases,
         weightLbsBefore: inventoryItem.exactWeightLbs,
         weightLbsAfter: roundInventoryWeight(nextWeight),
         createdByUserId: currentUser.id,
@@ -878,7 +863,7 @@ export async function adjustInventoryItem(input: {
       }),
       afterJson: JSON.stringify({
         status: nextStatus,
-        cases: nextCases,
+        cases: inventoryItem.cases,
         exactWeightLbs: roundInventoryWeight(nextWeight),
       }),
       contextJson: JSON.stringify({
@@ -896,7 +881,7 @@ export async function adjustInventoryItem(input: {
         category: "Inventory write-off",
         amount: writeOffLoss.toFixed(2),
         note: [
-          `${inventoryItem.barcodeId} — ${nextStatus === inventoryItem.status ? `${inventoryItem.cases - nextCases} case(s) written off` : `item marked ${nextStatus}`}.`,
+          `${inventoryItem.barcodeId} — item marked ${nextStatus}.`,
           input.notes?.trim(),
         ].filter(Boolean).join(" "),
         createdByUserId: currentUser.id,

@@ -136,7 +136,7 @@ export function InventoryDetailPage({
         <div className="space-y-2 text-sm text-muted-foreground">
           <p>
             Use this workflow to mark inventory damaged or expired, return it to
-            stock, or correct case and weight counts with a recorded reason.
+            stock, or correct the weight with a recorded reason.
           </p>
           {adjustDisabledReason ? (
             <p className="font-medium text-destructive">{adjustDisabledReason}</p>
@@ -149,17 +149,7 @@ export function InventoryDetailPage({
         </div>
       </DetailSection>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Cases
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-semibold">
-            {item.cases}
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -208,7 +198,6 @@ export function InventoryDetailPage({
           <DetailField label="Barcode / inventory ID">
             <span className="font-mono text-sm">{item.barcodeId}</span>
           </DetailField>
-          <DetailField label="Cases">{item.cases}</DetailField>
           <DetailField label="Exact weight">
             {formatWeightLbs(item.exactWeightLbs)} lb
           </DetailField>

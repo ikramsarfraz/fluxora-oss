@@ -114,7 +114,7 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
       <CardHeader className="border-b border-stone-line pb-3">
         <CardTitle className="text-sm font-semibold text-stone-ink">Inventory by status</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
-          Item counts and case totals across all lots.
+          Item counts across all lots by lifecycle status.
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
@@ -135,8 +135,7 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="font-medium text-stone-ink">{statusLabel(row.status)}</span>
                     <span className="tabular-nums text-stone-muted text-xs">
-                      {row.itemCount.toLocaleString()} items ·{" "}
-                      {row.totalCases.toLocaleString()} cases
+                      {row.itemCount.toLocaleString()} items
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-stone-line2">
@@ -173,7 +172,6 @@ function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead className="text-right">Items</TableHead>
-                <TableHead className="text-right">Cases</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -192,9 +190,6 @@ function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {row.activeItemCount.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {row.totalCases.toLocaleString()}
                   </TableCell>
                 </TableRow>
               ))}

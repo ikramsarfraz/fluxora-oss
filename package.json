@@ -12,6 +12,7 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset-db.ts",
     "db:seed": "tsx db/seed.ts",
+    "db:split-multicases": "tsx db/split-multicases.ts",
     "check:boundaries": "node scripts/check-module-boundaries.mjs"
   },
   "overrides": {

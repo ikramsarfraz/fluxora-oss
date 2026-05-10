@@ -31,7 +31,6 @@ export function getLotSourceInvoices(lot: LotLike) {
 export function getLotTotals(lot: LotLike) {
   return {
     inventoryItemCount: lot.inventoryItems.length,
-    totalCases: lot.inventoryItems.reduce((sum, item) => sum + (item.cases ?? 0), 0),
     totalWeight: lot.inventoryItems.reduce(
       (sum, item) => sum + (Number(item.exactWeightLbs) || 0),
       0,

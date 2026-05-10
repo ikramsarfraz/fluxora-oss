@@ -25,7 +25,6 @@ export async function getInventoryItemByIdAction(id: string) {
 export async function adjustInventoryItemAction(input: {
   inventoryItemId: string;
   targetStatus?: "in_stock" | "damaged" | "expired" | null;
-  correctedCases?: number | null;
   correctedWeightLbs?: string | null;
   reason: string;
   notes?: string | null;
