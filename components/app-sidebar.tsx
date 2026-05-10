@@ -305,7 +305,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {visibleGroups.map(group => (
-          <SidebarGroup key={group.title}>
+          <SidebarGroup key={group.title} className="py-1">
             {!group.hideLabel && (
               <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
                 {group.title}
