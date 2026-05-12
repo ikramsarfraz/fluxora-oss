@@ -20,14 +20,15 @@ import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire"
 import { decryptToken } from "@/lib/crypto/token-encryption";
 
 export async function confirmPaymentMatch(matchId: string) {
-  const [user] = await Promise.all([getCurrentPortalUser()]);
-  await confirmMatch(matchId, user.id);
+  const [user, tenant] = await Promise.all([getCurrentPortalUser(), getCurrentTenant()]);
+  await confirmMatch(matchId, user.id, tenant.id);
   revalidatePath("/bank-activity");
   revalidatePath("/supplier-invoices", "layout");
 }
 
 export async function rejectPaymentMatch(matchId: string) {
-  await rejectMatch(matchId);
+  const tenant = await getCurrentTenant();
+  await rejectMatch(matchId, tenant.id);
   revalidatePath("/bank-activity");
 }
 
@@ -44,7 +45,7 @@ export async function linkToDifferentBill(matchId: string, newInvoiceId: string)
   if (!existing) throw new Error("Match not found");
 
   // Reject old match, create new one with max confidence (user chose it)
-  await rejectMatch(matchId);
+  await rejectMatch(matchId, tenant.id);
   await db.insert(paymentMatches).values({
     tenantId: tenant.id,
     bankTransactionId: existing.bankTransactionId,
@@ -59,7 +60,7 @@ export async function linkToDifferentBill(matchId: string, newInvoiceId: string)
     confirmedAt: new Date(),
   });
 
-  await confirmMatch(matchId, user.id);
+  await confirmMatch(matchId, user.id, tenant.id);
   revalidatePath("/bank-activity");
   revalidatePath("/supplier-invoices", "layout");
 }
@@ -128,7 +129,7 @@ export async function linkTransactionToBillAction(txnId: string, invoiceId: stri
     ),
   });
   if (existing) {
-    await rejectMatch(existing.id);
+    await rejectMatch(existing.id, tenant.id);
   }
 
   // Create confirmed match at max confidence — user explicitly chose it

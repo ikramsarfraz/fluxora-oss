@@ -41,9 +41,12 @@ function isTenantAdminPath(pathname: string) {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const requestHeaders = new Headers(request.headers);
+  // Prevent clients from forging tenant identity — slug is derived
+  // exclusively from the hostname and re-set below.
+  requestHeaders.delete("x-tenant-slug");
   /** Passed to tenant RSC layout for subscription guards (see `app/(app)/layout.tsx`). */
   requestHeaders.set(TENANT_ROUTE_PATH_HEADER, pathname);
-  const hostContext = getRequestTenantHostContextFromHeaders(request.headers);
+  const hostContext = getRequestTenantHostContextFromHeaders(requestHeaders);
   const tenantSlug = hostContext.tenantSlug;
   const isTenantHost = hostContext.isTenantHost;
   const isPlatformAdminHost = hostContext.isPlatformAdminHost;
@@ -51,8 +54,6 @@ export function proxy(request: NextRequest) {
 
   if (tenantSlug) {
     requestHeaders.set("x-tenant-slug", tenantSlug);
-  } else {
-    requestHeaders.delete("x-tenant-slug");
   }
 
   if (isPlatformAdminHost) {

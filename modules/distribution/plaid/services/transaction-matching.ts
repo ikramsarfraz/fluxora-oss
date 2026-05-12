@@ -110,9 +110,10 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
 export async function confirmMatch(
   matchId: string,
   confirmedByUserId: string,
+  tenantId: string,
 ): Promise<void> {
   const match = await db.query.paymentMatches.findFirst({
-    where: eq(paymentMatches.id, matchId),
+    where: and(eq(paymentMatches.id, matchId), eq(paymentMatches.tenantId, tenantId)),
     with: {
       bankTransaction: true,
       supplierInvoice: { with: { supplier: true } },
@@ -128,12 +129,12 @@ export async function confirmMatch(
       confirmedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(paymentMatches.id, matchId));
+    .where(and(eq(paymentMatches.id, matchId), eq(paymentMatches.tenantId, tenantId)));
 
   await db
     .update(supplierInvoices)
     .set({ status: "paid", updatedAt: new Date() })
-    .where(eq(supplierInvoices.id, match.supplierInvoiceId));
+    .where(and(eq(supplierInvoices.id, match.supplierInvoiceId), eq(supplierInvoices.tenantId, tenantId)));
 
   // Learn channel-scoped payee alias (never for checks — no reliable payee signal)
   const txnMethod = match.bankTransaction?.paymentMethod ?? "ach";
@@ -161,11 +162,11 @@ export async function confirmMatch(
   }
 }
 
-export async function rejectMatch(matchId: string): Promise<void> {
+export async function rejectMatch(matchId: string, tenantId: string): Promise<void> {
   await db
     .update(paymentMatches)
     .set({ status: "rejected", updatedAt: new Date() })
-    .where(eq(paymentMatches.id, matchId));
+    .where(and(eq(paymentMatches.id, matchId), eq(paymentMatches.tenantId, tenantId)));
 }
 
 // ── Channel-specific matchers ──────────────────────────────────────────────

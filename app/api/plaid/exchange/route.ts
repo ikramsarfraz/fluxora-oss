@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { plaidConnections } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
@@ -25,9 +25,9 @@ export async function POST(req: NextRequest) {
     const exchangeResponse = await client.itemPublicTokenExchange({ public_token });
     const { access_token, item_id } = exchangeResponse.data;
 
-    // Check if this item is already connected
+    // Check if this item is already connected for THIS tenant
     const existing = await db.query.plaidConnections.findFirst({
-      where: eq(plaidConnections.plaidItemId, item_id),
+      where: and(eq(plaidConnections.plaidItemId, item_id), eq(plaidConnections.tenantId, tenant.id)),
     });
 
     let connectionId: string;

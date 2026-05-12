@@ -140,11 +140,10 @@ export function getRequestTenantHostContextFromHeaders(
     requestHeaders.get("host") ?? requestHeaders.get("x-forwarded-host") ?? "";
   const { hostname, port } = splitHostAndPort(host);
   const rootDomain = getRootDomain();
-  const xTenantSlugHeader = requestHeaders.get("x-tenant-slug");
   const isPlatformAdminHost = isPlatformAdminHostname(hostname, rootDomain);
   const tenantSlug = isPlatformAdminHost
     ? null
-    : (xTenantSlugHeader ?? parseTenantSlugFromHostname(hostname, rootDomain));
+    : parseTenantSlugFromHostname(hostname, rootDomain);
   const protocol = getProtocolFromHeaders(requestHeaders);
   const hostType = isPlatformAdminHost
     ? "platform-admin"
