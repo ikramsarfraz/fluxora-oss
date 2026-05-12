@@ -6,6 +6,12 @@ import { billForwards, supplierInvoices } from "@/db/schema";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { resend } from "@/lib/email";
+import {
+  applyRateLimit,
+  rateLimiters,
+  RateLimitError,
+} from "@/lib/rate-limit";
+import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
 
 export type ForwardBillInput = {
   supplierInvoiceId: string;
@@ -21,6 +27,16 @@ export async function forwardBillAction(input: ForwardBillInput) {
     getCurrentPortalUser(),
     getCurrentTenant(),
   ]);
+
+  if (!(await isPlatformAdminAuthUser(user.authUserId))) {
+    const result = await applyRateLimit(
+      rateLimiters.emailForward,
+      `tenant:${tenant.id}`,
+    );
+    if (!result.success) {
+      throw new RateLimitError(result.retryAfterSeconds);
+    }
+  }
 
   const invoice = await db.query.supplierInvoices.findFirst({
     where: and(

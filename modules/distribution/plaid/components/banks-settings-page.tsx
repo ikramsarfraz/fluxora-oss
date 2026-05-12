@@ -158,6 +158,15 @@ export function BanksSettingsPage({ initialBanks }: { initialBanks: Bank[] }) {
     setSyncing(connectionId);
     try {
       const res = await fetch(`/api/plaid/connections/${connectionId}/sync`, { method: "POST" });
+      if (res.status === 429) {
+        const retryAfter = Number(res.headers.get("Retry-After") ?? "0");
+        toast.error(
+          retryAfter > 0
+            ? `Too many requests · try again in ${retryAfter}s`
+            : "Too many requests · try again later",
+        );
+        return;
+      }
       const data = await res.json() as { added?: number; error?: string };
       if (data.error) throw new Error(data.error);
       toast.success(`Synced. ${data.added ?? 0} new transactions.`);
