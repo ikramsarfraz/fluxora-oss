@@ -3,12 +3,15 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, lt, lte, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  bankAccountBalanceSnapshots,
   bankAccounts,
   bankTransactions,
+  customers,
   lots,
   inventoryItems,
   plaidConnections,
   products,
+  salesOrders,
   supplierInvoices,
   supplierInvoiceLines,
   suppliers,
@@ -24,6 +27,7 @@ import type {
   InboxStats,
   ActiveSession,
   ReauthBanner,
+  TodayScheduleEntry,
 } from "../types";
 
 // ── Date helpers ───────────────────────────────────────────────────────────
@@ -211,6 +215,87 @@ export async function getInboxData(): Promise<InboxData> {
   movers.sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
   const topMovers = movers.slice(0, 3);
 
+  // ── 5. Today's schedule: bills due/overdue + sales orders due today ────────
+
+  const todayStr = now.toISOString().split("T")[0]!;
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0]!;
+
+  const [billsDue, ordersDueToday] = await Promise.all([
+    // Bills where computed due date (invoice_date + net_days) is today or overdue
+    // (limited to 30 days back so ancient unpaid bills don't flood the list)
+    db
+      .select({
+        id: supplierInvoices.id,
+        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceDate: supplierInvoices.invoiceDate,
+        totalAmount: supplierInvoices.totalAmount,
+        supplierName: suppliers.name,
+        netDays: suppliers.netDays,
+      })
+      .from(supplierInvoices)
+      .innerJoin(suppliers, eq(supplierInvoices.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(supplierInvoices.tenantId, tenantId),
+          sql`${supplierInvoices.status} IN ('posted', 'receiving', 'reconciled', 'completed')`,
+          // due date = invoice_date + net_days ≤ today
+          sql`(${supplierInvoices.invoiceDate}::date + COALESCE(${suppliers.netDays}, 0)) <= ${todayStr}::date`,
+          // don't show bills older than 30 days overdue
+          sql`(${supplierInvoices.invoiceDate}::date + COALESCE(${suppliers.netDays}, 0)) >= ${thirtyDaysAgoStr}::date`,
+        ),
+      )
+      .orderBy(sql`(${supplierInvoices.invoiceDate}::date + COALESCE(${suppliers.netDays}, 0))`)
+      .limit(10),
+
+    // Sales orders with dueDate = today that haven't shipped
+    db
+      .select({
+        id: salesOrders.id,
+        orderNumber: salesOrders.orderNumber,
+        dueDate: salesOrders.dueDate,
+        customerName: customers.name,
+      })
+      .from(salesOrders)
+      .innerJoin(customers, eq(salesOrders.customerId, customers.id))
+      .where(
+        and(
+          eq(salesOrders.tenantId, tenantId),
+          eq(salesOrders.dueDate, todayStr),
+          sql`${salesOrders.status} NOT IN ('fulfilled', 'cancelled')`,
+        ),
+      )
+      .orderBy(salesOrders.orderNumber)
+      .limit(10),
+  ]);
+
+  const todaySchedule: TodayScheduleEntry[] = [
+    ...billsDue.map(b => {
+      const dueDate = new Date(b.invoiceDate + "T00:00:00");
+      dueDate.setDate(dueDate.getDate() + (b.netDays ?? 0));
+      const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / 86_400_000);
+      return {
+        id: b.id,
+        type: "bill_due" as const,
+        entityLabel: b.supplierName,
+        reference: b.invoiceNumber,
+        amount: parseFloat(b.totalAmount),
+        route: `/supplier-invoices/${b.id}`,
+        daysOverdue: Math.max(0, daysOverdue),
+      };
+    }),
+    ...ordersDueToday.map(o => ({
+      id: o.id,
+      type: "order_to_ship" as const,
+      entityLabel: o.customerName,
+      reference: o.orderNumber ?? o.id.slice(0, 8),
+      amount: 0, // order total not aggregated here
+      route: `/orders/${o.id}`,
+      daysOverdue: 0,
+    })),
+  ];
+
   // ── Build inbox items ────────────────────────────────────────────────────
 
   const actionItems: InboxItem[] = [];
@@ -296,8 +381,8 @@ export async function getInboxData(): Promise<InboxData> {
 
   const stats: InboxStats = {
     billsToReview: draftBills.length,
-    receivingNow: 0, // would need real-time receiving session tracking
-    expectedToday: 0,
+    receivingNow: 0,
+    expectedToday: ordersDueToday.length,
     creditsOpenAmount: 0,
     creditsOpenCount: 0,
     creditsOverdue: 0,
@@ -396,9 +481,20 @@ export async function getInboxData(): Promise<InboxData> {
         lte(supplierInvoices.invoiceDate, future7d),
       ));
 
+    // 7-day balance change from snapshots
+    const [snapshotRow] = await db
+      .select({ total: sql<string>`coalesce(sum(${bankAccountBalanceSnapshots.balance}), 0)` })
+      .from(bankAccountBalanceSnapshots)
+      .where(and(
+        eq(bankAccountBalanceSnapshots.tenantId, tenantId),
+        eq(bankAccountBalanceSnapshots.snapshotDate, cutoff7d),
+      ));
+    const balance7dAgo = parseFloat(snapshotRow?.total ?? "0");
+    const balanceChange7d = balance7dAgo > 0 ? totalBalance - balance7dAgo : 0;
+
     cashFlow = {
       totalBalance,
-      balanceChange7d: 0, // Would need historical balance snapshots — set to 0 for v1
+      balanceChange7d,
       last7dOut: parseFloat(outRow?.total ?? "0"),
       last7dIn: parseFloat(inRow?.total ?? "0"),
       next7dScheduled: parseFloat(scheduledRow?.total ?? "0"),
@@ -417,5 +513,6 @@ export async function getInboxData(): Promise<InboxData> {
     dayCount,
     cashFlow,
     reauthBanners,
+    todaySchedule,
   };
 }

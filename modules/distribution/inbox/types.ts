@@ -103,6 +103,18 @@ export interface PriceMover {
   sparkData: number[]; // 6-7 relative price points for sparkline
 }
 
+// ── Today's schedule ─────────────────────────────────────────────────────
+
+export interface TodayScheduleEntry {
+  id: string;
+  type: "bill_due" | "order_to_ship";
+  entityLabel: string; // supplier name for bills, customer name for orders
+  reference: string;   // invoice number or order number
+  amount: number;
+  route: string;
+  daysOverdue: number; // 0 = due today, positive = overdue
+}
+
 // ── Cash flow summary (Plaid) ─────────────────────────────────────────────
 
 export interface CashFlowSummary {
@@ -139,4 +151,6 @@ export interface InboxData {
   cashFlow: CashFlowSummary | null;
   /** Connections requiring re-auth */
   reauthBanners: ReauthBanner[];
+  /** Bills due/overdue + sales orders due today */
+  todaySchedule: TodayScheduleEntry[];
 }

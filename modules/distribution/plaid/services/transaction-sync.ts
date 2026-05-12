@@ -11,6 +11,7 @@ import {
 import { decryptToken } from "@/lib/crypto/token-encryption";
 import { getPlaidClient } from "./plaid-client";
 import { runMatchingForTransaction } from "./transaction-matching";
+import { snapshotBalancesForConnection } from "./balance-snapshot";
 
 export async function syncConnection(connectionId: string): Promise<{
   added: number;
@@ -134,6 +135,9 @@ export async function syncConnection(connectionId: string): Promise<{
     .update(plaidConnections)
     .set({ transactionCursor: cursor, lastSyncAt: new Date(), updatedAt: new Date() })
     .where(eq(plaidConnections.id, connectionId));
+
+  // Snapshot current balances so the inbox can compute 7-day balance change
+  await snapshotBalancesForConnection(connectionId).catch(() => {});
 
   return { added, modified, removed };
 }

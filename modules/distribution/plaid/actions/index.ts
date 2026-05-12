@@ -8,6 +8,7 @@ import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getPlaidClient } from "../services/plaid-client";
 import { confirmMatch, rejectMatch } from "../services/transaction-matching";
+import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire";
 import { decryptToken } from "@/lib/crypto/token-encryption";
 
 export async function confirmPaymentMatch(matchId: string) {
@@ -53,6 +54,16 @@ export async function linkToDifferentBill(matchId: string, newInvoiceId: string)
   await confirmMatch(matchId, user.id);
   revalidatePath("/bank-activity");
   revalidatePath("/supplier-invoices", "layout");
+}
+
+export async function fireSandboxTransactionAction(invoiceId: string) {
+  const tenant = await getCurrentTenant();
+  const result = await fireSandboxTransactionForInvoice(invoiceId, tenant.id);
+  if (result.fired) {
+    revalidatePath("/bank-activity");
+    revalidatePath("/supplier-invoices", "layout");
+  }
+  return result;
 }
 
 export async function disconnectBank(connectionId: string) {

@@ -2347,4 +2347,25 @@ export const billForwards = pgTable(
   ],
 );
 
+export const bankAccountBalanceSnapshots = pgTable(
+  "bank_account_balance_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "cascade" }),
+    snapshotDate: date("snapshot_date").notNull(),
+    balance: numeric("balance", { precision: 14, scale: 2 }).notNull(),
+    availableBalance: numeric("available_balance", { precision: 14, scale: 2 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex("balance_snapshots_account_date_unique").on(table.bankAccountId, table.snapshotDate),
+    index("balance_snapshots_tenant_date_idx").on(table.tenantId, table.snapshotDate),
+  ],
+);
+
 export * from "./auth-schema";

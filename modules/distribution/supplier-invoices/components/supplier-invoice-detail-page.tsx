@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useTransition } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -66,6 +66,7 @@ import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-en
 import { ForwardBillModal } from "./forward-bill-modal";
 import { PaymentEvidenceCard } from "./payment-evidence-card";
 import { ForwardHistoryCard } from "./forward-history-card";
+import { fireSandboxTransactionAction } from "@/modules/distribution/plaid/actions";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -250,6 +251,7 @@ export function SupplierInvoiceDetailPage({
   const [reverseOpen, setReverseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [forwardOpen, setForwardOpen] = useState(false);
+  const [isSandboxFiring, startSandboxFire] = useTransition();
   const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<Set<string>>(
     new Set(),
   );
@@ -467,6 +469,23 @@ export function SupplierInvoiceDetailPage({
                 >
                   Record payment
                 </PrimaryBtn>
+              )}
+              {process.env.NEXT_PUBLIC_PLAID_ENV === "sandbox" && invoice.status !== "paid" && (
+                <SecondaryBtn
+                  onClick={() => {
+                    startSandboxFire(async () => {
+                      const result = await fireSandboxTransactionAction(invoice.id);
+                      if (result.fired) {
+                        toast.info(`[Sandbox] Transaction synced — refresh to see the match.`);
+                      } else {
+                        toast.warning(`[Sandbox] Auto-fire skipped: ${result.reason}`);
+                      }
+                    });
+                  }}
+                  disabled={isSandboxFiring}
+                >
+                  {isSandboxFiring ? "Firing…" : "Simulate payment [Sandbox]"}
+                </SecondaryBtn>
               )}
             </>
           )}

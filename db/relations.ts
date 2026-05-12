@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import { user } from "./auth-schema";
 import {
   auditLogs,
+  bankAccountBalanceSnapshots,
   bankAccounts,
   bankTransactions,
   billForwards,
@@ -963,6 +964,18 @@ export const bankAccountsRelations = relations(bankAccounts, ({ one, many }) => 
     references: [plaidConnections.id],
   }),
   bankTransactions: many(bankTransactions),
+  balanceSnapshots: many(bankAccountBalanceSnapshots),
+}));
+
+export const bankAccountBalanceSnapshotsRelations = relations(bankAccountBalanceSnapshots, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [bankAccountBalanceSnapshots.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccount: one(bankAccounts, {
+    fields: [bankAccountBalanceSnapshots.bankAccountId],
+    references: [bankAccounts.id],
+  }),
 }));
 
 export const bankTransactionsRelations = relations(bankTransactions, ({ one, many }) => ({

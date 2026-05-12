@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, PriceMover, ReauthBanner } from "../types";
+import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
 
 // ── Design tokens (mockup exact values) ───────────────────────────────────
@@ -507,6 +507,102 @@ function PriceMoverRow({ mover }: { mover: PriceMover }) {
   );
 }
 
+// ── Today's schedule card ─────────────────────────────────────────────────
+
+function TodayScheduleCard({ entries }: { entries: TodayScheduleEntry[] }) {
+  const router = useRouter();
+  const bills = entries.filter(e => e.type === "bill_due");
+  const orders = entries.filter(e => e.type === "order_to_ship");
+
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+  return (
+    <Card>
+      <CardHead
+        left={
+          <CardTitle
+            title="Today's schedule"
+            count={entries.length || undefined}
+            countTone={bills.some(b => b.daysOverdue > 0) ? "red" : "default"}
+          />
+        }
+      />
+      {entries.length === 0 ? (
+        <div style={{ padding: "12px 16px", fontSize: 13, color: C.text3, textAlign: "center" }}>
+          No deliveries or bills due today
+        </div>
+      ) : (
+        <>
+          {bills.length > 0 && (
+            <div>
+              <div style={{ padding: "6px 14px 2px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.text3 }}>
+                Bills due
+              </div>
+              {bills.map(entry => (
+                <div
+                  key={entry.id}
+                  onClick={() => router.push(entry.route)}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    padding: "8px 14px",
+                    borderBottom: `1px solid ${C.border}`,
+                    cursor: "pointer",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{entry.entityLabel}</div>
+                    <div style={{ fontSize: 11, color: C.text3, fontFamily: C.mono }}>{entry.reference}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, fontFamily: C.mono }}>{fmt(entry.amount)}</div>
+                    {entry.daysOverdue > 0 ? (
+                      <div style={{ fontSize: 10.5, color: C.red, fontWeight: 600 }}>{entry.daysOverdue}d overdue</div>
+                    ) : (
+                      <div style={{ fontSize: 10.5, color: C.amber, fontWeight: 600 }}>Due today</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {orders.length > 0 && (
+            <div>
+              <div style={{ padding: "6px 14px 2px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.text3 }}>
+                Orders to ship
+              </div>
+              {orders.map(entry => (
+                <div
+                  key={entry.id}
+                  onClick={() => router.push(entry.route)}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    padding: "8px 14px",
+                    borderBottom: `1px solid ${C.border}`,
+                    cursor: "pointer",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 500 }}>{entry.entityLabel}</div>
+                    <div style={{ fontSize: 11, color: C.text3, fontFamily: C.mono }}>{entry.reference}</div>
+                  </div>
+                  <Pill label="Ship today" tone="blue" />
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 // ── Main InboxShell ───────────────────────────────────────────────────────
 
 interface InboxShellProps {
@@ -981,16 +1077,8 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             <ConnectBankPromptCard />
           )}
 
-          {/* Today's schedule (placeholder) */}
-          <Card>
-            <CardHead
-              left={<CardTitle title="Today&apos;s schedule" />}
-              right={<Btn variant="ghost" size="sm">+ Add</Btn>}
-            />
-            <div style={{ padding: "12px 16px", fontSize: 13, color: C.text3, textAlign: "center" }}>
-              No scheduled deliveries today
-            </div>
-          </Card>
+          {/* Today's schedule */}
+          <TodayScheduleCard entries={data.todaySchedule} />
 
           {/* Expiring this week */}
           {data.expiringLots.length > 0 && (
