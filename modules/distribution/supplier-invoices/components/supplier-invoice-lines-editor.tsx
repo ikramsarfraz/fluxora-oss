@@ -401,6 +401,7 @@ function LineRow({
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
   const [expanded, setExpanded] = useState(false);
+  const [lotOpen, setLotOpen] = useState(false);
 
   const productId = line?.productId ?? "";
   const unitType = line?.unitType ?? "catch_weight";
@@ -759,7 +760,7 @@ function LineRow({
                   transition: "transform 0.15s",
                 }}
               />
-              Lot · expires
+              Weight
             </button>
           </div>
         )}
@@ -809,19 +810,49 @@ function LineRow({
           </span>
         </div>
 
-        {/* 6. Line total */}
-        <div
-          style={{
-            textAlign: "right",
-            fontFamily: T.mono,
-            fontSize: 15,
-            fontWeight: 600,
-            color: T.text,
-            fontVariantNumeric: "tabular-nums",
-            marginTop: 8,
-          }}
-        >
-          <LineRowTotal control={control} index={index} />
+        {/* 6. Line total + lot toggle */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <div
+            style={{
+              fontFamily: T.mono,
+              fontSize: 15,
+              fontWeight: 600,
+              color: T.text,
+              fontVariantNumeric: "tabular-nums",
+              marginTop: 8,
+            }}
+          >
+            <LineRowTotal control={control} index={index} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setLotOpen(o => !o)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color: lotOpen ? T.accent : T.mutedSoft,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              fontFamily: "inherit",
+            }}
+          >
+            <ChevronDown
+              style={{
+                width: 9,
+                height: 9,
+                transform: lotOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.12s",
+              }}
+            />
+            Lot
+          </button>
         </div>
 
         {/* 7. Delete */}
@@ -849,8 +880,8 @@ function LineRow({
         </button>
       </div>
 
-      {/* Expanded tray */}
-      {expanded ? (
+      {/* Weight entry tray (catch-weight only) */}
+      {expanded && isCatchWeight && (
         <div
           style={{
             background: T.surfaceAlt,
@@ -858,29 +889,56 @@ function LineRow({
             borderTop: `1px dashed ${T.borderStrong}`,
           }}
         >
-          {isCatchWeight ? (
-            <CatchWeightTray
-              control={control}
-              register={register}
-              setValue={setValue}
-              index={index}
-              line={line}
-              quantityCases={quantityCases}
-              totalWeightLbs={totalWeightLbs}
-              weightEntryMode={weightEntryMode}
-              onModeChange={handleModeChange}
-              disabled={disabled}
-            />
-          ) : (
-            <LotExpiresTray
-              control={control}
-              register={register}
-              index={index}
-              disabled={disabled}
-            />
-          )}
+          <CatchWeightTray
+            control={control}
+            register={register}
+            setValue={setValue}
+            index={index}
+            line={line}
+            quantityCases={quantityCases}
+            totalWeightLbs={totalWeightLbs}
+            weightEntryMode={weightEntryMode}
+            onModeChange={handleModeChange}
+            disabled={disabled}
+          />
         </div>
-      ) : null}
+      )}
+
+      {/* Fixed-case weight tray (lot+expires) */}
+      {expanded && !isCatchWeight && (
+        <div
+          style={{
+            background: T.surfaceAlt,
+            padding: "20px 28px 22px",
+            borderTop: `1px dashed ${T.borderStrong}`,
+          }}
+        >
+          <LotExpiresTray
+            control={control}
+            register={register}
+            index={index}
+            disabled={disabled}
+          />
+        </div>
+      )}
+
+      {/* Lot drawer (separate toggle, all line types) */}
+      {lotOpen && (
+        <div
+          style={{
+            background: "oklch(98% 0.01 240)",
+            padding: "16px 28px 18px",
+            borderTop: `1px solid ${T.border}`,
+          }}
+        >
+          <LotExpiresTray
+            control={control}
+            register={register}
+            index={index}
+            disabled={disabled}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1145,7 +1203,7 @@ function CatchWeightTray({
           </div>
         ))}
 
-      {/* Lot + Expires + Pricing type */}
+      {/* Pricing type */}
       <div
         style={{
           display: "flex",
@@ -1153,57 +1211,9 @@ function CatchWeightTray({
           marginTop: 18,
           paddingTop: 16,
           borderTop: `1px dashed ${T.borderStrong}`,
-          flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-          <label style={lbl}>
-            Lot #{" "}
-            <span
-              style={{
-                color: T.mutedSoft,
-                fontWeight: 400,
-                textTransform: "none",
-                letterSpacing: 0,
-              }}
-            >
-              (optional)
-            </span>
-          </label>
-          <Input
-            placeholder="auto-generated"
-            disabled={disabled}
-            style={{
-              height: 38,
-              borderRadius: 8,
-              fontFamily: T.mono,
-              fontSize: 13,
-            }}
-            {...register(`lines.${index}.lotNumberOverride`)}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-          <label style={lbl}>
-            Expires{" "}
-            <span
-              style={{
-                color: T.mutedSoft,
-                fontWeight: 400,
-                textTransform: "none",
-                letterSpacing: 0,
-              }}
-            >
-              (optional)
-            </span>
-          </label>
-          <Input
-            type="date"
-            disabled={disabled}
-            style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-            {...register(`lines.${index}.expirationDateOverride`)}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
+        <div style={{ minWidth: 180, maxWidth: 220 }}>
           <label style={lbl}>Pricing type</label>
           <Controller
             control={control}
@@ -1234,7 +1244,7 @@ function CatchWeightTray({
   );
 }
 
-// ── Fixed-case tray (lot / expires / type) ─────────────────────────────────
+// ── Lot & expiry drawer ────────────────────────────────────────────────────
 function LotExpiresTray({
   control,
   register,
@@ -1246,78 +1256,80 @@ function LotExpiresTray({
   index: number;
   disabled: boolean;
 }) {
+  const lotValue = useWatch({ control, name: `lines.${index}.lotNumberOverride` });
+  const expiryValue = useWatch({ control, name: `lines.${index}.expirationDateOverride` });
+
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-        <label style={lbl}>
-          Lot #{" "}
-          <span
-            style={{
-              color: T.mutedSoft,
-              fontWeight: 400,
-              textTransform: "none",
-              letterSpacing: 0,
-            }}
-          >
-            (optional)
-          </span>
-        </label>
-        <Input
-          placeholder="auto-generated"
-          disabled={disabled}
-          style={{
-            height: 38,
-            borderRadius: 8,
-            fontFamily: T.mono,
-            fontSize: 13,
-          }}
-          {...register(`lines.${index}.lotNumberOverride`)}
-        />
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: T.muted,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          marginBottom: 12,
+        }}
+      >
+        Lot & expiry
       </div>
-      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-        <label style={lbl}>
-          Expires{" "}
-          <span
-            style={{
-              color: T.mutedSoft,
-              fontWeight: 400,
-              textTransform: "none",
-              letterSpacing: 0,
-            }}
-          >
-            (optional)
-          </span>
-        </label>
-        <Input
-          type="date"
-          disabled={disabled}
-          style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-          {...register(`lines.${index}.expirationDateOverride`)}
-        />
-      </div>
-      <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
-        <label style={lbl}>Pricing type</label>
-        <Controller
-          control={control}
-          name={`lines.${index}.unitType`}
-          render={({ field }) => (
-            <Select
-              value={field.value}
-              onValueChange={field.onChange}
-              disabled={disabled}
-            >
-              <SelectTrigger
-                style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="catch_weight">Variable weight</SelectItem>
-                <SelectItem value="fixed_case">Fixed case</SelectItem>
-              </SelectContent>
-            </Select>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 320 }}>
+          <label style={lbl}>
+            Lot number{" "}
+            <span style={{ color: T.mutedSoft, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              (optional)
+            </span>
+          </label>
+          <Input
+            placeholder="auto-generated on receive"
+            disabled={disabled}
+            style={{ height: 36, borderRadius: 7, fontFamily: T.mono, fontSize: 12 }}
+            {...register(`lines.${index}.lotNumberOverride`)}
+          />
+          {!lotValue && (
+            <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 3, paddingLeft: 2 }}>
+              Format: SUPP-YYYYMMDD-SKU
+            </div>
           )}
-        />
+        </div>
+        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+          <label style={lbl}>
+            Expiration date{" "}
+            <span style={{ color: T.mutedSoft, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              (optional)
+            </span>
+          </label>
+          <Input
+            type="date"
+            disabled={disabled}
+            style={{ height: 36, borderRadius: 7, fontSize: 12 }}
+            {...register(`lines.${index}.expirationDateOverride`)}
+          />
+          {expiryValue && new Date(expiryValue) < new Date(Date.now() + 30 * 86400_000) && (
+            <div style={{ fontSize: 10, color: "oklch(60% 0.14 65)", marginTop: 3, paddingLeft: 2, fontWeight: 600 }}>
+              Expires within 30 days
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 160, maxWidth: 200 }}>
+          <label style={lbl}>Pricing type</label>
+          <Controller
+            control={control}
+            name={`lines.${index}.unitType`}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
+                <SelectTrigger style={{ height: 36, borderRadius: 7, fontSize: 12 }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="catch_weight">Variable weight</SelectItem>
+                  <SelectItem value="fixed_case">Fixed case</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
       </div>
     </div>
   );

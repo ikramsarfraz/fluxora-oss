@@ -63,6 +63,9 @@ import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
 import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
+import { ForwardBillModal } from "./forward-bill-modal";
+import { PaymentEvidenceCard } from "./payment-evidence-card";
+import { ForwardHistoryCard } from "./forward-history-card";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -83,6 +86,121 @@ const C = {
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
+
+// ── Lifecycle stepper ─────────────────────────────────────────────────────
+
+type LifecycleStatus = "draft" | "posted" | "receiving" | "reconciled" | "completed" | "paid";
+
+const LIFECYCLE_STEPS: { key: LifecycleStatus; label: string }[] = [
+  { key: "draft", label: "Draft" },
+  { key: "posted", label: "Posted" },
+  { key: "receiving", label: "Receiving" },
+  { key: "reconciled", label: "Reconciled" },
+  { key: "completed", label: "Received" },
+  { key: "paid", label: "Paid" },
+];
+
+function LifecycleStepper({ status }: { status: string }) {
+  const currentIdx = LIFECYCLE_STEPS.findIndex(s => s.key === status);
+  const effectiveIdx = currentIdx === -1 ? 0 : currentIdx;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        marginBottom: "24px",
+        padding: "12px 20px",
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: "10px",
+        overflowX: "auto",
+      }}
+    >
+      {LIFECYCLE_STEPS.map((step, i) => {
+        const isDone = i < effectiveIdx;
+        const isActive = i === effectiveIdx;
+        const isPending = i > effectiveIdx;
+
+        return (
+          <Fragment key={step.key}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                position: "relative",
+                flex: "0 0 auto",
+              }}
+            >
+              {/* Circle */}
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background: isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.line2,
+                  border: `2px solid ${isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.line}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: isActive && step.key === "paid"
+                    ? `0 0 0 3px ${C.good}44`
+                    : isActive
+                      ? `0 0 0 3px ${C.ink}22`
+                      : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {isDone ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <div
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: isActive ? "#fff" : C.line,
+                    }}
+                  />
+                )}
+              </div>
+              {/* Label */}
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.muted,
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.01em",
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+            {/* Connector */}
+            {i < LIFECYCLE_STEPS.length - 1 && (
+              <div
+                style={{
+                  flex: "1 1 40px",
+                  height: 2,
+                  background: isDone ? C.good : C.line,
+                  minWidth: 24,
+                  marginBottom: 18,
+                  transition: "background 0.15s",
+                }}
+              />
+            )}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -131,6 +249,7 @@ export function SupplierInvoiceDetailPage({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<Set<string>>(
     new Set(),
   );
@@ -311,16 +430,28 @@ export function SupplierInvoiceDetailPage({
                 </svg>
                 Edit
               </SecondaryBtn>
+              <SecondaryBtn
+                onClick={() => router.push(`/supplier-invoices/${invoiceId}/receive`)}
+                disabled={!canCompleteByRole}
+                title={completeDisabledReason}
+              >
+                Receive goods
+              </SecondaryBtn>
               <PrimaryBtn
                 onClick={() => setCompleteOpen(true)}
                 disabled={!canCompleteByRole}
                 title={completeDisabledReason}
               >
-                Complete &amp; receive
+                Quick receive
               </PrimaryBtn>
             </>
           ) : (
             <>
+              <SecondaryBtn
+                onClick={() => setForwardOpen(true)}
+              >
+                Forward
+              </SecondaryBtn>
               <SecondaryBtn
                 onClick={() => setReverseOpen(true)}
                 disabled={!canReverse || reverseMutation.isPending}
@@ -328,13 +459,15 @@ export function SupplierInvoiceDetailPage({
               >
                 Reverse receipt
               </SecondaryBtn>
-              <PrimaryBtn
-                onClick={() => setPaymentOpen(true)}
-                disabled={!canRecordPayment}
-                title={recordPaymentDisabledReason}
-              >
-                Record payment
-              </PrimaryBtn>
+              {invoice.status !== "paid" && (
+                <PrimaryBtn
+                  onClick={() => setPaymentOpen(true)}
+                  disabled={!canRecordPayment}
+                  title={recordPaymentDisabledReason}
+                >
+                  Record payment
+                </PrimaryBtn>
+              )}
             </>
           )}
 
@@ -366,6 +499,14 @@ export function SupplierInvoiceDetailPage({
           )}
         </div>
       </div>
+
+      {/* ── LIFECYCLE STEPPER ── */}
+      <LifecycleStepper status={invoice.status} />
+
+      {/* ── PAYMENT EVIDENCE (Plaid) ── */}
+      {invoice.status === "paid" && invoice.paymentMatches?.[0] && (
+        <PaymentEvidenceCard match={invoice.paymentMatches[0]} />
+      )}
 
       {/* ── BODY GRID ── */}
       <div
@@ -712,6 +853,11 @@ export function SupplierInvoiceDetailPage({
             removeDisabledReason={editDisabledReason}
           />
 
+          {/* Forward history */}
+          {invoice.billForwards && invoice.billForwards.length > 0 && (
+            <ForwardHistoryCard forwards={invoice.billForwards} />
+          )}
+
           {/* Activity */}
           <Section title="Activity" description="Who touched this bill and when.">
             <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
@@ -1008,6 +1154,20 @@ export function SupplierInvoiceDetailPage({
         invoiceNumber={invoice.invoiceNumber}
         balanceDue={paymentSummary.balanceDue}
         defaultPaymentMethod={invoice.paymentMethod ?? undefined}
+      />
+
+      <ForwardBillModal
+        open={forwardOpen}
+        onOpenChange={setForwardOpen}
+        invoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate,
+          totalAmount: invoice.totalAmount,
+          supplierName: invoice.supplier?.name ?? null,
+          status: invoice.status,
+          paidAt: invoice.paymentMatches?.[0]?.bankTransaction?.date ?? null,
+        }}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -9,6 +9,7 @@ import {
   lots,
   suppliers,
   supplierInvoiceAttachments,
+  supplierInvoiceCharges,
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
@@ -71,8 +72,17 @@ export type SupplierInvoiceHeaderInput = {
   notes?: string | null;
 };
 
+export type SupplierInvoiceChargeInput = {
+  description: string;
+  chargeType?: string;
+  rate?: string | null;
+  includeInInventoryCost?: boolean;
+  amount: string;
+};
+
 export type CreateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
   lines: SupplierInvoiceLineInput[];
+  charges?: SupplierInvoiceChargeInput[];
   /** When true, immediately post the invoice and create lots + inventory. */
   complete?: boolean;
 };
@@ -80,6 +90,7 @@ export type CreateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
 export type UpdateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
   id: string;
   lines: SupplierInvoiceLineInput[];
+  charges?: SupplierInvoiceChargeInput[];
 };
 
 // -------------------- Helpers --------------------
@@ -310,6 +321,10 @@ export async function getSupplierInvoiceById(id: string) {
       createdBy: true,
       updatedBy: true,
       completedBy: true,
+      charges: {
+        columns: { id: true, description: true, chargeType: true, rate: true, includeInInventoryCost: true, amount: true },
+        orderBy: (t, { asc }) => [asc(t.createdAt)],
+      },
       lines: {
         with: {
           product: true,
@@ -335,6 +350,22 @@ export async function getSupplierInvoiceById(id: string) {
       payments: {
         with: { createdBy: true },
         orderBy: [desc(supplierInvoicePayments.paymentDate)],
+      },
+      paymentMatches: {
+        where: (pm, { or, eq }) =>
+          or(eq(pm.status, "auto_applied"), eq(pm.status, "confirmed")),
+        with: {
+          bankTransaction: {
+            with: { bankAccount: { with: { plaidConnection: true } } },
+          },
+          confirmedBy: true,
+        },
+        orderBy: (pm, { desc }) => [desc(pm.confirmedAt)],
+        limit: 1,
+      },
+      billForwards: {
+        with: { sentBy: true },
+        orderBy: (bf, { desc }) => [desc(bf.sentAt)],
       },
     },
   });
@@ -374,7 +405,11 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       lineTotal: computeLineTotal(normalizedLine),
     };
   });
-  const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
+  const charges = (input.charges ?? []).filter(c => c.description.trim() && Number(c.amount) > 0);
+  const totalAmount = sumTotals([
+    ...normalizedLines.map(l => l.lineTotal),
+    ...charges.map(c => c.amount),
+  ]);
 
   const invoiceId = await db.transaction(async tx => {
     const [invoice] = await tx
@@ -409,6 +444,7 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       contextJson: JSON.stringify({
         supplierId: input.supplierId,
         lines: normalizedLines.length,
+        charges: charges.length,
         createdAsComplete: Boolean(input.complete),
       }),
     });
@@ -428,6 +464,20 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
         })),
       )
       .returning();
+
+    if (charges.length > 0) {
+      await tx.insert(supplierInvoiceCharges).values(
+        charges.map(c => ({
+          tenantId: tenant.id,
+          supplierInvoiceId: invoice.id,
+          description: c.description.trim(),
+          chargeType: c.chargeType ?? "other",
+          rate: c.rate ? c.rate : null,
+          includeInInventoryCost: c.includeInInventoryCost ?? false,
+          amount: c.amount,
+        })),
+      );
+    }
 
     if (input.complete) {
       await postSupplierInvoiceInternal({
@@ -479,7 +529,11 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       lineTotal: computeLineTotal(normalizedLine),
     };
   });
-  const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
+  const charges = (input.charges ?? []).filter(c => c.description.trim() && Number(c.amount) > 0);
+  const totalAmount = sumTotals([
+    ...normalizedLines.map(l => l.lineTotal),
+    ...charges.map(c => c.amount),
+  ]);
 
   await db.transaction(async tx => {
     await tx
@@ -496,7 +550,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       })
       .where(eq(supplierInvoices.id, input.id));
 
-    // Simple reconciliation strategy: delete all existing lines then re-insert.
+    // Simple reconciliation strategy: delete all existing lines/charges then re-insert.
     // Draft invoices have no lot_receipts or inventory_items yet, so cascade
     // delete is safe. This keeps the v1 write path simple.
     await tx
@@ -516,6 +570,24 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       })),
     );
 
+    await tx
+      .delete(supplierInvoiceCharges)
+      .where(eq(supplierInvoiceCharges.supplierInvoiceId, input.id));
+
+    if (charges.length > 0) {
+      await tx.insert(supplierInvoiceCharges).values(
+        charges.map(c => ({
+          tenantId: tenant.id,
+          supplierInvoiceId: input.id,
+          description: c.description.trim(),
+          chargeType: c.chargeType ?? "other",
+          rate: c.rate ? c.rate : null,
+          includeInInventoryCost: c.includeInInventoryCost ?? false,
+          amount: c.amount,
+        })),
+      );
+    }
+
     await tx.insert(auditLogs).values({
       tenantId: tenant.id,
       actorType: "portal_user",
@@ -532,10 +604,12 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
         "paymentMethod",
         "notes",
         "lines",
+        "charges",
         "totalAmount",
       ]),
       contextJson: JSON.stringify({
         lines: normalizedLines.length,
+        charges: charges.length,
         totalAmount,
       }),
     });
