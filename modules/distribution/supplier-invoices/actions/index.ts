@@ -11,6 +11,7 @@ import {
   tenants,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
+import { validatePdfUpload } from "@/lib/file-validation";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { normalizeProductName } from "../utils/normalization";
@@ -102,9 +103,13 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
   if (!(file instanceof File)) {
     throw new Error("Missing PDF file.");
   }
+  const validation = await validatePdfUpload(file);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
   const bytes = Buffer.from(await file.arrayBuffer());
   return await parseSupplierInvoicePdf({
-    originalFilename: file.name,
+    originalFilename: validation.safeName,
     mimeType: file.type || null,
     bytes,
   });
@@ -121,10 +126,14 @@ export async function uploadSupplierInvoiceAttachmentAction(
   if (!(file instanceof File)) {
     throw new Error("Missing file.");
   }
+  const validation = await validatePdfUpload(file);
+  if (!validation.ok) {
+    throw new Error(validation.error);
+  }
   const bytes = Buffer.from(await file.arrayBuffer());
   return await uploadSupplierInvoiceAttachment({
     supplierInvoiceId,
-    originalFilename: file.name,
+    originalFilename: validation.safeName,
     mimeType: file.type || null,
     bytes,
   });
