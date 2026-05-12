@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { logAuditEvent } from "@/lib/audit-log";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+
 import {
   createProduct,
   deleteProduct,
@@ -66,5 +69,19 @@ export async function updateProductAction(input: {
 }
 
 export async function deleteProductAction(id: string) {
-  return await deleteProduct(id);
+  const [user, product] = await Promise.all([
+    getCurrentPortalUser(),
+    getProductById(id),
+  ]);
+  const result = await deleteProduct(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "product.delete",
+    resourceType: "product",
+    resourceId: id,
+    metadata: product ? { name: product.name, sku: product.sku } : {},
+  });
+  return result;
 }

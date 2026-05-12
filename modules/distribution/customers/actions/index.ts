@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { logAuditEvent } from "@/lib/audit-log";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+
 import {
   createCustomer,
   deleteCustomer,
@@ -68,7 +71,21 @@ export async function updateCustomerAction(
 }
 
 export async function deleteCustomerAction(customerId: string) {
-  return await deleteCustomer(customerId);
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await deleteCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.delete",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  return result;
 }
 
 export async function getCustomerPortfolioAction(customerId: string) {

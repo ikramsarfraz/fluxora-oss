@@ -11,6 +11,7 @@ import {
   tenants,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { normalizeProductName } from "../utils/normalization";
@@ -90,11 +91,42 @@ export async function reverseSupplierInvoiceAction(
 export async function recordSupplierInvoicePaymentAction(
   input: Parameters<typeof recordSupplierInvoicePayment>[0],
 ) {
-  return await recordSupplierInvoicePayment(input);
+  const user = await getCurrentPortalUser();
+  const result = await recordSupplierInvoicePayment(input);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bill.mark_paid_manually",
+    resourceType: "supplier_invoice",
+    resourceId: input.supplierInvoiceId,
+    metadata: { amount: input.amount, paymentDate: input.paymentDate },
+  });
+  return result;
 }
 
 export async function deleteSupplierInvoiceAction(id: string) {
-  return await deleteSupplierInvoice(id);
+  const [user, invoice] = await Promise.all([
+    getCurrentPortalUser(),
+    getSupplierInvoiceById(id),
+  ]);
+  const result = await deleteSupplierInvoice(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bill.delete",
+    resourceType: "supplier_invoice",
+    resourceId: id,
+    metadata: invoice
+      ? {
+          invoiceNumber: invoice.invoiceNumber,
+          totalAmount: invoice.totalAmount,
+          invoiceDate: invoice.invoiceDate,
+        }
+      : {},
+  });
+  return result;
 }
 
 export async function parseSupplierInvoicePdfAction(formData: FormData) {

@@ -12,6 +12,7 @@ import {
   supplierInvoices,
   suppliers,
 } from "@/db/schema";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getPlaidClient } from "../services/plaid-client";
@@ -22,13 +23,32 @@ import { decryptToken } from "@/lib/crypto/token-encryption";
 export async function confirmPaymentMatch(matchId: string) {
   const [user, tenant] = await Promise.all([getCurrentPortalUser(), getCurrentTenant()]);
   await confirmMatch(matchId, user.id, tenant.id);
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "payment_match.confirmed",
+    resourceType: "payment_match",
+    resourceId: matchId,
+  });
   revalidatePath("/bank-activity");
   revalidatePath("/supplier-invoices", "layout");
 }
 
 export async function rejectPaymentMatch(matchId: string) {
-  const tenant = await getCurrentTenant();
+  const [user, tenant] = await Promise.all([
+    getCurrentPortalUser(),
+    getCurrentTenant(),
+  ]);
   await rejectMatch(matchId, tenant.id);
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "payment_match.unmatched",
+    resourceType: "payment_match",
+    resourceId: matchId,
+  });
   revalidatePath("/bank-activity");
 }
 
@@ -76,7 +96,10 @@ export async function fireSandboxTransactionAction(invoiceId: string) {
 }
 
 export async function disconnectBank(connectionId: string) {
-  const tenant = await getCurrentTenant();
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
   const connection = await db.query.plaidConnections.findFirst({
     where: and(
       eq(plaidConnections.id, connectionId),
@@ -98,6 +121,19 @@ export async function disconnectBank(connectionId: string) {
     .update(plaidConnections)
     .set({ status: "disconnected", updatedAt: new Date() })
     .where(eq(plaidConnections.id, connectionId));
+
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "plaid.connection_removed",
+    resourceType: "plaid_connection",
+    resourceId: connectionId,
+    metadata: {
+      institutionName: connection.institutionName,
+      institutionId: connection.institutionId,
+    },
+  });
 
   revalidatePath("/settings/banks");
   revalidatePath("/bank-activity");

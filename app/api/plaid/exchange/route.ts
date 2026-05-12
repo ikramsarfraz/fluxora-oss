@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { plaidConnections } from "@/db/schema";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getPlaidClient } from "@/modules/distribution/plaid/services/plaid-client";
 import { encryptToken } from "@/lib/crypto/token-encryption";
 import { initialSync } from "@/modules/distribution/plaid/services/transaction-sync";
@@ -19,7 +21,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "public_token required" }, { status: 400 });
     }
 
-    const tenant = await getCurrentTenant();
+    const [tenant, user] = await Promise.all([
+      getCurrentTenant(),
+      getCurrentPortalUser(),
+    ]);
     const client = getPlaidClient();
 
     const exchangeResponse = await client.itemPublicTokenExchange({ public_token });
@@ -58,6 +63,21 @@ export async function POST(req: NextRequest) {
         })
         .returning({ id: plaidConnections.id });
       connectionId = inserted.id;
+    }
+
+    if (!existing) {
+      await logAuditEvent({
+        tenantId: tenant.id,
+        actorUserId: user.id,
+        actorEmail: user.email,
+        action: "plaid.connection_added",
+        resourceType: "plaid_connection",
+        resourceId: connectionId,
+        metadata: {
+          institutionId: institution_id ?? null,
+          institutionName: institution_name ?? null,
+        },
+      });
     }
 
     // Kick off initial sync in the background (don't await — respond fast)

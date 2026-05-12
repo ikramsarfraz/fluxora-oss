@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { productSupplierCosts } from "@/db/schema";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
   createSupplier,
@@ -31,7 +33,21 @@ export async function getSupplierByIdAction(id: string) {
 }
 
 export async function deleteSupplierAction(id: string) {
-  return await deleteSupplier(id);
+  const [user, supplier] = await Promise.all([
+    getCurrentPortalUser(),
+    getSupplierById(id),
+  ]);
+  const result = await deleteSupplier(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "supplier.delete",
+    resourceType: "supplier",
+    resourceId: id,
+    metadata: supplier ? { name: supplier.name } : {},
+  });
+  return result;
 }
 
 export async function createSupplierAction(input: CreateSupplierInput) {
@@ -58,7 +74,11 @@ export async function switchPrimarySupplierAction(
   productIds: string[],
 ) {
   if (!productIds.length) return;
-  const tenant = await getCurrentTenant();
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
+  void tenant;
 
   await db.transaction(async tx => {
     // Clear primary flag for all suppliers on the affected products.
@@ -81,6 +101,16 @@ export async function switchPrimarySupplierAction(
           inArray(productSupplierCosts.productId, productIds),
         ),
       );
+  });
+
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "supplier.switch_primary",
+    resourceType: "supplier",
+    resourceId: newSupplierId,
+    metadata: { productIds, productCount: productIds.length },
   });
 
   revalidatePath("/suppliers");

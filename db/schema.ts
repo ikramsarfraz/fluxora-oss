@@ -2375,4 +2375,44 @@ export const bankAccountBalanceSnapshots = pgTable(
   ],
 );
 
+// -------------------- Audit log --------------------
+
+/**
+ * Append-only record of destructive / sensitive actions. The `actor_user_id`
+ * intentionally has no foreign key — audit rows must survive user deletion,
+ * and the `actor_email` is denormalized for the same reason.
+ *
+ * UPDATE / DELETE are revoked at the DB level by migration 0034.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    actorUserId: uuid("actor_user_id").notNull(),
+    actorEmail: text("actor_email"),
+    action: varchar("action", { length: 64 }).notNull(),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: text("resource_id"),
+    metadata: jsonb("metadata").notNull().default({}),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("audit_log_tenant_idx").on(table.tenantId, table.occurredAt),
+    index("audit_log_actor_idx").on(table.actorUserId, table.occurredAt),
+    index("audit_log_resource_idx").on(table.resourceType, table.resourceId),
+    index("audit_log_action_idx").on(
+      table.tenantId,
+      table.action,
+      table.occurredAt,
+    ),
+  ],
+);
+
 export * from "./auth-schema";
