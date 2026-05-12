@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { plaidConnections } from "@/db/schema";
+import { captureException } from "@/lib/sentry-scope";
 import { syncConnection } from "@/modules/distribution/plaid/services/transaction-sync";
 import {
   PlaidWebhookVerificationError,
@@ -22,9 +23,11 @@ export async function POST(req: NextRequest) {
     await verifyPlaidWebhook({ rawBody, jwtHeaderValue });
   } catch (err) {
     if (err instanceof PlaidWebhookVerificationError) {
+      // Rejection is the design — don't pollute Sentry with attacker spam.
       console.warn("[plaid/webhook] verification rejected", err.code);
     } else {
       console.error("[plaid/webhook] verification error", err);
+      captureException(err, { stage: "verification" });
     }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -49,9 +52,10 @@ export async function POST(req: NextRequest) {
         });
         if (connection && connection.status === "active") {
           // Sync in background — webhook must respond quickly
-          syncConnection(connection.id).catch(err =>
-            console.error("[plaid/webhook] sync failed", err),
-          );
+          syncConnection(connection.id).catch(err => {
+            console.error("[plaid/webhook] sync failed", err);
+            captureException(err, { stage: "background_sync", connectionId: connection.id });
+          });
         }
       }
     }
@@ -72,6 +76,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ acknowledged: true });
   } catch (err) {
     console.error("[plaid/webhook]", err);
+    captureException(err, { stage: "processing" });
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }
