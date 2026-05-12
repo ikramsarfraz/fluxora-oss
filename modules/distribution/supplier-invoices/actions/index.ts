@@ -11,6 +11,12 @@ import {
   tenants,
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  applyRateLimit,
+  rateLimiters,
+  RateLimitError,
+} from "@/lib/rate-limit";
+import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { normalizeProductName } from "../utils/normalization";
@@ -101,6 +107,19 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
   const file = formData.get("file");
   if (!(file instanceof File)) {
     throw new Error("Missing PDF file.");
+  }
+  const user = await getCurrentPortalUser();
+  if (!(await isPlatformAdminAuthUser(user.authUserId))) {
+    const [userResult, tenantResult] = await Promise.all([
+      applyRateLimit(rateLimiters.pdfParse, `user:${user.id}`),
+      applyRateLimit(rateLimiters.pdfParseTenant, `tenant:${user.tenantId}`),
+    ]);
+    if (!userResult.success) {
+      throw new RateLimitError(userResult.retryAfterSeconds);
+    }
+    if (!tenantResult.success) {
+      throw new RateLimitError(tenantResult.retryAfterSeconds);
+    }
   }
   const bytes = Buffer.from(await file.arrayBuffer());
   return await parseSupplierInvoicePdf({

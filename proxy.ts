@@ -1,7 +1,71 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/lib/client-ip";
+import {
+  applyRateLimit,
+  rateLimiters,
+  rateLimitResponseHeaders,
+} from "@/lib/rate-limit";
 import { TENANT_ROUTE_PATH_HEADER } from "@/lib/subscription-guard-constants";
 import { getRequestTenantHostContextFromHeaders } from "@/lib/tenant-host";
+
+const MAGIC_LINK_PATH = "/api/auth/sign-in/magic-link";
+
+/** Paths the generic API rate limiter should NOT apply to. */
+function isRateLimitExempt(pathname: string): boolean {
+  return (
+    pathname === "/api/plaid/webhook" ||
+    pathname === "/api/stripe/webhook" ||
+    pathname.startsWith("/api/cron/") ||
+    pathname.startsWith("/api/auth/")
+  );
+}
+
+async function rateLimitApiRequest(
+  request: NextRequest,
+): Promise<NextResponse | null> {
+  const { pathname } = request.nextUrl;
+  if (!pathname.startsWith("/api/")) return null;
+
+  if (pathname === MAGIC_LINK_PATH && request.method === "POST") {
+    let email: string | null = null;
+    try {
+      const body = (await request.clone().json()) as { email?: unknown };
+      if (typeof body.email === "string") {
+        email = body.email.trim().toLowerCase();
+      }
+    } catch {
+      // non-JSON body or unreadable — fall through to deny with generic IP limit
+    }
+    if (email) {
+      const result = await applyRateLimit(
+        rateLimiters.magicLink,
+        `email:${email}`,
+      );
+      if (!result.success) {
+        return NextResponse.json(
+          { error: "Too many requests" },
+          { status: 429, headers: rateLimitResponseHeaders(result) },
+        );
+      }
+    }
+    // intentionally fall through — magic link is in /api/auth/, also exempt
+    // from the generic limiter, so no double-limit.
+    return null;
+  }
+
+  if (isRateLimitExempt(pathname)) return null;
+
+  const ip = getClientIp(request.headers);
+  const result = await applyRateLimit(rateLimiters.genericApi, `ip:${ip}`);
+  if (!result.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: rateLimitResponseHeaders(result) },
+    );
+  }
+  return null;
+}
 
 function isSharedAuthPath(pathname: string) {
   return (
@@ -38,8 +102,12 @@ function isTenantAdminPath(pathname: string) {
   );
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const rateLimitResponse = await rateLimitApiRequest(request);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const requestHeaders = new Headers(request.headers);
   // Prevent clients from forging tenant identity — slug is derived
   // exclusively from the hostname and re-set below.
