@@ -7,6 +7,7 @@ import {
   inventoryItems,
   lotReceipts,
   lots,
+  productSupplierCosts,
   suppliers,
   supplierInvoiceAttachments,
   supplierInvoiceCharges,
@@ -164,6 +165,31 @@ function generateBarcode(): string {
   return `INV-${safeLotSuffix()}${safeLotSuffix()}`;
 }
 
+function receiptTimestamp(receiveDate: string): Date {
+  const date = new Date(`${receiveDate}T12:00:00Z`);
+  return Number.isFinite(date.getTime()) ? date : new Date();
+}
+
+function supplierInvoiceLineCostPerLb(line: {
+  quantityCases: number;
+  weightLbs: string;
+  unitType: "catch_weight" | "fixed_case";
+  unitPrice: string;
+}): string | null {
+  const unitPrice = Number(line.unitPrice);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
+
+  if (line.unitType === "catch_weight") {
+    return roundTo(unitPrice, 4);
+  }
+
+  const cases = Number(line.quantityCases) || 0;
+  const weightLbs = Number(line.weightLbs) || 0;
+  if (cases <= 0 || weightLbs <= 0) return null;
+
+  return roundTo((unitPrice * cases) / weightLbs, 4);
+}
+
 /**
  * Reserve a unique lot number for the current tenant. If `override` is
  * provided we use it as-is (and fail fast on collision). Otherwise we try
@@ -189,6 +215,61 @@ async function reserveLotNumber(args: {
   });
   if (!existing) return base;
   return `${base}-${safeLotSuffix()}`;
+}
+
+async function syncSupplierInvoiceLineCost(args: {
+  tx: Tx;
+  supplierId: string;
+  receiveDate: string;
+  line: {
+    productId: string;
+    quantityCases: number;
+    weightLbs: string;
+    unitType: "catch_weight" | "fixed_case";
+    unitPrice: string;
+  };
+}) {
+  const costPerLb = supplierInvoiceLineCostPerLb(args.line);
+  if (costPerLb == null) return;
+
+  const existing = await args.tx.query.productSupplierCosts.findFirst({
+    where: and(
+      eq(productSupplierCosts.productId, args.line.productId),
+      eq(productSupplierCosts.supplierId, args.supplierId),
+    ),
+    columns: { id: true, isPrimary: true },
+  });
+
+  const existingPrimary = await args.tx.query.productSupplierCosts.findFirst({
+    where: and(
+      eq(productSupplierCosts.productId, args.line.productId),
+      eq(productSupplierCosts.isPrimary, true),
+    ),
+    columns: { id: true },
+  });
+
+  const shouldBePrimary = existing?.isPrimary ?? !existingPrimary;
+  const receivedAt = receiptTimestamp(args.receiveDate);
+
+  if (existing) {
+    await args.tx
+      .update(productSupplierCosts)
+      .set({
+        costPerLb,
+        isPrimary: shouldBePrimary,
+        lastReceivedAt: receivedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(productSupplierCosts.id, existing.id));
+  } else {
+    await args.tx.insert(productSupplierCosts).values({
+      productId: args.line.productId,
+      supplierId: args.supplierId,
+      costPerLb,
+      isPrimary: shouldBePrimary,
+      lastReceivedAt: receivedAt,
+    });
+  }
 }
 
 // -------------------- Reads --------------------
@@ -794,6 +875,15 @@ async function postSupplierInvoiceInternal(args: {
     });
 
     await tx.insert(inventoryItems).values(itemRows);
+  }
+
+  for (const line of invoice.lines) {
+    await syncSupplierInvoiceLineCost({
+      tx,
+      supplierId: invoice.supplierId,
+      receiveDate: invoice.receiveDate,
+      line,
+    });
   }
 
   const totalInventoryItemsCreated = invoice.lines.reduce(

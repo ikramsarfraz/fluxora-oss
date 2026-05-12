@@ -66,6 +66,7 @@ function makeDefaultValues(): NewOrderFormValues {
         productId: "",
         salesUnitId: "",
         unitType: "catch_weight",
+        inventoryItemIds: [],
         quantity: "",
         pricePerLb: "",
       },
@@ -158,6 +159,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           salesUnitId: l.salesUnitId,
           expectedCases: Number(l.quantity),
           unitType: l.unitType,
+          inventoryItemIds: l.inventoryItemIds ?? [],
           pricePerLbOverride: l.pricePerLb || undefined,
         }));
 
@@ -216,6 +218,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
         salesUnitId: l.salesUnitId,
         expectedCases: Number(l.quantity),
         unitType: l.unitType,
+        inventoryItemIds: l.inventoryItemIds ?? [],
         pricePerLbOverride: l.pricePerLb || undefined,
       }));
 

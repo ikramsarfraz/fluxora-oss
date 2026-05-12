@@ -22,6 +22,7 @@ export const newOrderLineSchema = z.object({
   productId: z.string().uuid({ message: "Select a product" }),
   salesUnitId: z.string().uuid({ message: "Select a sales unit" }),
   unitType: z.enum(lineUnitTypeValues),
+  inventoryItemIds: z.array(z.string().uuid()).optional(),
   quantity: z
     .string()
     .min(1, "Required")

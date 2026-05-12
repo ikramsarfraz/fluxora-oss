@@ -299,6 +299,7 @@ async function assertSalesOrderLinesCanAutoAllocateInventory(input: {
   lines: Array<{
     productId: string;
     expectedCases: number;
+    inventoryItemIds?: string[];
   }>;
   validProducts: ValidSalesOrderProduct[];
   includeSalesOrderLineIds?: string[];
@@ -351,6 +352,9 @@ async function assertSalesOrderLinesCanAutoAllocateInventory(input: {
     candidates.sort(compareInventoryByOldestLot);
   }
 
+  const candidatesById = new Map(
+    [...candidatesByProduct.values()].flat().map(item => [item.id, item]),
+  );
   const selectedInventoryItemIds = new Set<string>();
 
   for (const line of input.lines) {
@@ -360,6 +364,42 @@ async function assertSalesOrderLinesCanAutoAllocateInventory(input: {
     }
 
     const candidates = candidatesByProduct.get(line.productId) ?? [];
+    const manualInventoryItemIds = line.inventoryItemIds ?? [];
+    if (manualInventoryItemIds.length > 0) {
+      if (new Set(manualInventoryItemIds).size !== manualInventoryItemIds.length) {
+        throw new Error("Manual inventory selections contain a duplicate item.");
+      }
+
+      let selectedQuantity = 0;
+      for (const inventoryItemId of manualInventoryItemIds) {
+        if (selectedInventoryItemIds.has(inventoryItemId)) {
+          throw new Error("The same inventory item cannot be allocated to multiple order lines.");
+        }
+
+        const item = candidatesById.get(inventoryItemId);
+        if (!item || item.productId !== line.productId) {
+          throw new Error("One or more manually selected inventory items are unavailable for this product.");
+        }
+
+        selectedQuantity += getInventoryItemCases(item);
+        selectedInventoryItemIds.add(inventoryItemId);
+      }
+
+      if (selectedQuantity < requiredQuantity) {
+        const product = input.validProducts.find(
+          candidate => candidate.id === line.productId,
+        );
+        const productLabel = product
+          ? `${product.sku} · ${product.name}`
+          : "this product";
+        throw new Error(
+          `Manual inventory selection for ${productLabel} only covers ${selectedQuantity} case${selectedQuantity === 1 ? "" : "s"} of ${requiredQuantity} requested.`,
+        );
+      }
+
+      continue;
+    }
+
     let remainingQuantity = requiredQuantity;
     const selectedForLine: string[] = [];
 
@@ -866,6 +906,63 @@ async function autoAllocateOldestInventoryToSalesOrderLine(input: {
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
+async function allocateSelectedInventoryToSalesOrderLine(input: {
+  tenantId: string;
+  salesOrderLineId: string;
+  productId: string;
+  inventoryItemIds: string[];
+}) {
+  const inventoryItemIds = [...new Set(input.inventoryItemIds)];
+  if (inventoryItemIds.length === 0) return;
+
+  const inventory = await db.query.inventoryItems.findMany({
+    where: inArray(inventoryItems.id, inventoryItemIds),
+    with: {
+      lot: {
+        columns: {
+          tenantId: true,
+          expirationDate: true,
+        },
+      },
+      allocations: {
+        columns: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  if (inventory.length !== inventoryItemIds.length) {
+    throw new Error("One or more manually selected inventory items could not be found.");
+  }
+
+  const selectedById = new Map(inventory.map(item => [item.id, item]));
+  const selected = inventoryItemIds.map(id => selectedById.get(id)!);
+
+  for (const item of selected) {
+    if (
+      item.productId !== input.productId ||
+      item.lot?.tenantId !== input.tenantId ||
+      isLotExpired(item.lot.expirationDate) ||
+      item.status !== "in_stock" ||
+      (item.allocations ?? []).length > 0
+    ) {
+      throw new Error("One or more manually selected inventory items are no longer available.");
+    }
+  }
+
+  await db.insert(salesOrderLineAllocations).values(
+    selected.map(item => ({
+      salesOrderLineId: input.salesOrderLineId,
+      inventoryItemId: item.id,
+      allocatedWeightLbs: item.exactWeightLbs,
+    })),
+  );
+
+  await markInventoryItemsAllocated(selected.map(item => item.id));
+  await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
+}
+
 export async function getSalesOrders() {
   const tenant = await getCurrentTenant();
   return await db.query.salesOrders.findMany({
@@ -1348,6 +1445,7 @@ export async function updateSalesOrder(input: {
     salesUnitId: string;
     expectedCases: number;
     unitType?: "catch_weight" | "fixed_case";
+    inventoryItemIds?: string[];
     pricePerLbOverride?: string | null;
   }>;
 }) {
@@ -1514,12 +1612,21 @@ export async function updateSalesOrder(input: {
       })
       .returning();
 
-    await autoAllocateOldestInventoryToSalesOrderLine({
-      tenantId: tenant.id,
-      salesOrderLineId: createdLine.id,
-      productId: line.productId,
-      targetQuantity: line.expectedCases,
-    });
+    if ((line.inventoryItemIds ?? []).length > 0) {
+      await allocateSelectedInventoryToSalesOrderLine({
+        tenantId: tenant.id,
+        salesOrderLineId: createdLine.id,
+        productId: line.productId,
+        inventoryItemIds: line.inventoryItemIds ?? [],
+      });
+    } else {
+      await autoAllocateOldestInventoryToSalesOrderLine({
+        tenantId: tenant.id,
+        salesOrderLineId: createdLine.id,
+        productId: line.productId,
+        targetQuantity: line.expectedCases,
+      });
+    }
   }
 
   return getSalesOrderById(input.id);
@@ -1538,6 +1645,7 @@ export async function createSalesOrder(input: {
     salesUnitId: string;
     expectedCases: number;
     unitType?: "catch_weight" | "fixed_case";
+    inventoryItemIds?: string[];
     pricePerLbOverride?: string;
   }>;
 }) {
@@ -1641,12 +1749,21 @@ export async function createSalesOrder(input: {
       })
       .returning();
 
-    await autoAllocateOldestInventoryToSalesOrderLine({
-      tenantId: tenant.id,
-      salesOrderLineId: createdLine.id,
-      productId: line.productId,
-      targetQuantity: line.expectedCases,
-    });
+    if ((line.inventoryItemIds ?? []).length > 0) {
+      await allocateSelectedInventoryToSalesOrderLine({
+        tenantId: tenant.id,
+        salesOrderLineId: createdLine.id,
+        productId: line.productId,
+        inventoryItemIds: line.inventoryItemIds ?? [],
+      });
+    } else {
+      await autoAllocateOldestInventoryToSalesOrderLine({
+        tenantId: tenant.id,
+        salesOrderLineId: createdLine.id,
+        productId: line.productId,
+        targetQuantity: line.expectedCases,
+      });
+    }
   }
 
   return db.query.salesOrders.findFirst({

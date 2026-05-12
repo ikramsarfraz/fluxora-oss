@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useEffect, useState } from "react";
+import { Fragment, useMemo, useEffect, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -56,6 +57,7 @@ import {
   getDefaultSalesUnit,
   getSalesUnits,
   inferLineUnitType,
+  isWeightSalesUnit,
 } from "./new-order-line-utils";
 
 const C = {
@@ -90,6 +92,7 @@ function newLineDefaults(): NewOrderFormValues["lines"][number] {
     productId: "",
     salesUnitId: "",
     unitType: "catch_weight",
+    inventoryItemIds: [],
     quantity: "",
     pricePerLb: "",
   };
@@ -183,6 +186,9 @@ export function NewOrderLinesTable({
     setValue(`lines.${index}.unitType`, inferLineUnitType(product), {
       shouldValidate: true,
     });
+    setValue(`lines.${index}.inventoryItemIds`, [], {
+      shouldValidate: true,
+    });
     setValue(`lines.${index}.pricePerLb`, resolvePricePerLb(product.id), {
       shouldValidate: true,
     });
@@ -249,7 +255,7 @@ export function NewOrderLinesTable({
                 Unit
               </TableHead>
               <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
-                Cases
+                Qty
               </TableHead>
               <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
                 Weight (lbs)
@@ -273,6 +279,7 @@ export function NewOrderLinesTable({
                 productsById={productsById}
                 casesOnHandMap={casesOnHandMap}
                 takenProductIds={takenProductIds}
+                setValue={setValue}
                 onProductSelected={(product) =>
                   handleProductSelected(index, product)
                 }
@@ -408,6 +415,7 @@ interface LineRowProps {
   productsById: Map<string, ProductListItem>;
   casesOnHandMap: Map<string, number>;
   takenProductIds: Set<string>;
+  setValue: UseFormSetValue<NewOrderFormValues>;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
 }
@@ -419,6 +427,7 @@ function LineRow({
   productsById,
   casesOnHandMap,
   takenProductIds,
+  setValue,
   onProductSelected,
   onRemove,
 }: LineRowProps) {
@@ -430,8 +439,16 @@ function LineRow({
     salesUnits.find((u) => u.unitId === row?.salesUnitId) ?? null;
 
   const isCW = row?.unitType === "catch_weight";
+  const isWeightUnit = isWeightSalesUnit(selectedUnit);
   const caseCount = Math.max(0, parseInt(row?.quantity ?? "0") || 0);
+  const quantity = Math.max(0, Number(row?.quantity ?? "") || 0);
   const avgLbsPerCase = Number(selectedUnit?.conversionToBase ?? 0);
+  const selectedInventoryItemIds = useMemo(
+    () => row?.inventoryItemIds ?? [],
+    [row?.inventoryItemIds],
+  );
+  const shouldAllocateInventory =
+    !!row?.productId && caseCount > 0 && !isWeightUnit;
 
   const casesOnHand = row?.productId
     ? casesOnHandMap.get(row.productId)
@@ -439,29 +456,58 @@ function LineRow({
 
   // ── FIFO allocation ──────────────────────────────────────────────────────
   const { data: fifoAlloc, isLoading: fifoLoading } = useFifoAllocation(
-    isCW ? (row?.productId ?? null) : null,
+    shouldAllocateInventory ? (row?.productId ?? null) : null,
     caseCount,
   );
 
   // ── Tray expand state ────────────────────────────────────────────────────
   const [expanded, setExpanded] = useState(false);
-  const casesPositive = caseCount > 0;
 
-  // Auto-open when cases first go positive; auto-close when not applicable
   useEffect(() => {
-    if (isCW && casesPositive) {
-      setExpanded(true);
-    } else {
-      setExpanded(false);
+    if (!shouldAllocateInventory && selectedInventoryItemIds.length > 0) {
+      setValue(`lines.${index}.inventoryItemIds`, [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isCW, casesPositive]);
+
+    if (
+      shouldAllocateInventory &&
+      caseCount > 0 &&
+      selectedInventoryItemIds.length > caseCount
+    ) {
+      setValue(
+        `lines.${index}.inventoryItemIds`,
+        selectedInventoryItemIds.slice(0, caseCount),
+        { shouldDirty: true, shouldValidate: true },
+      );
+    }
+  }, [
+    caseCount,
+    index,
+    selectedInventoryItemIds,
+    setValue,
+    shouldAllocateInventory,
+  ]);
 
   // ── Effective weight for line total ──────────────────────────────────────
+  const manualAllocationRows =
+    selectedInventoryItemIds.length > 0
+      ? (fifoAlloc?.candidates ?? []).filter(item =>
+          selectedInventoryItemIds.includes(item.inventoryItemId),
+        )
+      : [];
+  const allocationRows =
+    manualAllocationRows.length > 0
+      ? manualAllocationRows
+      : (fifoAlloc?.rows ?? []);
   const effectiveTotalWeight =
-    fifoAlloc && fifoAlloc.rows.length > 0
-      ? fifoAlloc.totalWeight
-      : caseCount * avgLbsPerCase;
+    isWeightUnit
+      ? quantity * Math.max(1, avgLbsPerCase || 1)
+      : allocationRows.length > 0
+        ? allocationRows.reduce((sum, item) => sum + item.weight, 0)
+        : caseCount * avgLbsPerCase;
 
   // Row-level total
   const lineTotal =
@@ -486,7 +532,7 @@ function LineRow({
     "h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none";
 
   // ── Weight cell ──────────────────────────────────────────────────────────
-  function WeightCell() {
+  function renderWeightCell() {
     if (!isCW) {
       return (
         <div
@@ -505,10 +551,35 @@ function LineRow({
       );
     }
 
+    if (isWeightUnit) {
+      const requestedWeight = effectiveTotalWeight.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      return (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            padding: "9px 12px",
+            color: quantity > 0 ? C.info : C.muted,
+            fontFamily: C.mono,
+            fontSize: "13px",
+          }}
+        >
+          {quantity > 0 ? `${requestedWeight} lb` : "—"}
+        </div>
+      );
+    }
+
     const hasCases = caseCount > 0;
-    const allocatedCount = fifoAlloc?.rows.length ?? 0;
-    const totalWt = fifoAlloc ? fifoAlloc.totalWeight : effectiveTotalWeight;
-    const lotsUsed = fifoAlloc?.lotsUsed ?? 0;
+    const allocatedCount = allocationRows.length;
+    const totalWt = allocationRows.length > 0
+      ? allocationRows.reduce((sum, item) => sum + item.weight, 0)
+      : effectiveTotalWeight;
+    const lotsUsed = new Set(allocationRows.map(item => item.lotId)).size;
 
     const weightLabel = totalWt.toLocaleString("en-US", {
       minimumFractionDigits: 2,
@@ -717,7 +788,19 @@ function LineRow({
                 >
                   <Select
                     value={field.value}
-                    onValueChange={field.onChange}
+                    onValueChange={value => {
+                      field.onChange(value);
+                      const newUnit = salesUnits.find(u => u.unitId === value) ?? null;
+                      setValue(
+                        `lines.${index}.unitType`,
+                        isWeightSalesUnit(newUnit) ? "catch_weight" : inferLineUnitType(product),
+                        { shouldDirty: true, shouldValidate: true },
+                      );
+                      setValue(`lines.${index}.inventoryItemIds`, [], {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
                     disabled={!product || salesUnits.length === 0}
                   >
                     <SelectTrigger
@@ -781,6 +864,13 @@ function LineRow({
                     {fieldState.error?.message}
                   </span>
                 )}
+                {!fieldState.invalid && selectedUnit && (
+                  <span style={{ fontSize: "11px", color: C.muted }}>
+                    {isWeightUnit
+                      ? "lb requested"
+                      : selectedUnit.unit.abbreviation || selectedUnit.unit.name}
+                  </span>
+                )}
               </div>
             )}
           />
@@ -788,7 +878,7 @@ function LineRow({
 
         {/* Weight (lbs) */}
         <TableCell className={`${cellCn} text-right`}>
-          <WeightCell />
+          {renderWeightCell()}
         </TableCell>
 
         {/* Price */}
@@ -891,14 +981,19 @@ function LineRow({
       </TableRow>
 
       {/* FIFO allocation tray */}
-      {isCW && expanded && caseCount > 0 && (
+      {shouldAllocateInventory && expanded && caseCount > 0 && (
         <TableRow className="border-0 hover:bg-transparent">
           <TableCell colSpan={7} className="p-0">
             <FifoAllocationTray
               rows={fifoAlloc?.rows ?? []}
-              shortBy={fifoAlloc?.shortBy ?? 0}
-              totalWeight={fifoAlloc?.totalWeight ?? 0}
-              lotsUsed={fifoAlloc?.lotsUsed ?? 0}
+              candidates={fifoAlloc?.candidates ?? []}
+              selectedInventoryItemIds={selectedInventoryItemIds}
+              onSelectedInventoryItemIdsChange={ids =>
+                setValue(`lines.${index}.inventoryItemIds`, ids, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
               requestedCases={caseCount}
               isLoading={fifoLoading}
             />
@@ -940,23 +1035,55 @@ function fmt2(n: number): string {
 
 interface FifoAllocationTrayProps {
   rows: FifoAllocationResult["rows"];
-  shortBy: number;
-  totalWeight: number;
-  lotsUsed: number;
+  candidates: FifoAllocationResult["candidates"];
+  selectedInventoryItemIds: string[];
+  onSelectedInventoryItemIdsChange: (ids: string[]) => void;
   requestedCases: number;
   isLoading: boolean;
 }
 
 function FifoAllocationTray({
   rows,
-  shortBy,
-  totalWeight,
-  lotsUsed,
+  candidates,
+  selectedInventoryItemIds,
+  onSelectedInventoryItemIdsChange,
   requestedCases,
   isLoading,
 }: FifoAllocationTrayProps) {
-  const allocatedCount = rows.length;
+  const manualMode = selectedInventoryItemIds.length > 0;
+  const selectedSet = new Set(selectedInventoryItemIds);
+  const selectedRows = candidates.filter(row =>
+    selectedSet.has(row.inventoryItemId),
+  );
+  const displayRows = manualMode ? candidates : rows;
+  const allocatedRows = manualMode ? selectedRows : rows;
+  const allocatedCount = allocatedRows.length;
+  const totalWeight = allocatedRows.reduce((sum, row) => sum + row.weight, 0);
+  const lotsUsed = new Set(allocatedRows.map(row => row.lotId)).size;
+  const shortBy = Math.max(0, requestedCases - allocatedCount);
   const avg = allocatedCount > 0 ? totalWeight / allocatedCount : 0;
+
+  function startManualSelection() {
+    onSelectedInventoryItemIdsChange(
+      rows.slice(0, requestedCases).map(row => row.inventoryItemId),
+    );
+  }
+
+  function toggleInventoryItem(inventoryItemId: string, checked: boolean) {
+    if (checked) {
+      if (selectedSet.has(inventoryItemId)) return;
+      if (selectedInventoryItemIds.length >= requestedCases) return;
+      onSelectedInventoryItemIdsChange([
+        ...selectedInventoryItemIds,
+        inventoryItemId,
+      ]);
+      return;
+    }
+
+    onSelectedInventoryItemIdsChange(
+      selectedInventoryItemIds.filter(id => id !== inventoryItemId),
+    );
+  }
 
   return (
     <div
@@ -1007,13 +1134,15 @@ function FifoAllocationTray({
               <path d="M2 5l6-3 6 3-6 3-6-3z" />
               <path d="M2 5v6l6 3 6-3V5" />
             </svg>
-            FIFO allocation
+            Inventory allocation
           </div>
           <span style={{ fontSize: "11px", color: C.muted }}>
-            Auto-assigned from oldest inventory first. Read-only.
+            {manualMode
+              ? "Manual lot selection overrides oldest-first assignment."
+              : "Oldest inventory is selected first."}
           </span>
         </div>
-        <div style={{ display: "flex", gap: "22px", alignItems: "baseline" }}>
+        <div style={{ display: "flex", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
           <AllocStat
             label="Cases"
             value={
@@ -1024,6 +1153,26 @@ function FifoAllocationTray({
           />
           <AllocStat label="Avg / case" value={`${fmt2(avg)} lb`} />
           <AllocStat label="Total weight" value={`${fmt2(totalWeight)} lb`} bold />
+          {manualMode ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => onSelectedInventoryItemIdsChange([])}
+            >
+              Use FIFO
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={startManualSelection}
+              disabled={rows.length === 0}
+            >
+              Manual pick
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1039,7 +1188,7 @@ function FifoAllocationTray({
         >
           Loading…
         </div>
-      ) : rows.length === 0 ? (
+      ) : displayRows.length === 0 ? (
         <div
           style={{
             padding: "28px 16px",
@@ -1057,7 +1206,9 @@ function FifoAllocationTray({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "56px minmax(0,1fr) minmax(0,1fr) 1fr 96px",
+            gridTemplateColumns: manualMode
+              ? "72px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 96px"
+              : "56px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 96px",
             background: C.surface,
             border: `1px solid ${C.line}`,
             borderRadius: C.radiusSm,
@@ -1065,7 +1216,7 @@ function FifoAllocationTray({
           }}
         >
           {/* Column headers */}
-          {(["Case", "Lot #", "Received", "", "Weight"] as const).map(
+          {([manualMode ? "Pick" : "Case", "Lot #", "Received", "Supplier", "Weight"] as const).map(
             (h, i) => (
               <div
                 key={i}
@@ -1087,8 +1238,8 @@ function FifoAllocationTray({
           )}
 
           {/* Data rows — display:contents grid pattern */}
-          {rows.map((row, i) => {
-            const prev = i > 0 ? rows[i - 1] : null;
+          {displayRows.map((row, i) => {
+            const prev = i > 0 ? displayRows[i - 1] : null;
             const isLotBreak = !!prev && prev.lotId !== row.lotId;
             const borderTop = isLotBreak
               ? `1px solid ${C.line}`
@@ -1104,6 +1255,11 @@ function FifoAllocationTray({
               alignItems: "center",
               gap: "6px",
             };
+            const isSelected = selectedSet.has(row.inventoryItemId);
+            const isDisabled =
+              manualMode &&
+              !isSelected &&
+              selectedInventoryItemIds.length >= requestedCases;
 
             return (
               <Fragment key={row.inventoryItemId}>
@@ -1116,7 +1272,18 @@ function FifoAllocationTray({
                     fontSize: "12px",
                   }}
                 >
-                  #{row.caseIdx}
+                  {manualMode ? (
+                    <Checkbox
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onCheckedChange={checked =>
+                        toggleInventoryItem(row.inventoryItemId, checked === true)
+                      }
+                      aria-label={`Select inventory item ${row.caseIdx}`}
+                    />
+                  ) : (
+                    `#${row.caseIdx}`
+                  )}
                 </div>
                 {/* Lot # */}
                 <div style={cellStyle}>
@@ -1154,8 +1321,10 @@ function FifoAllocationTray({
                     {ageStr(row.receivedDate)}
                   </span>
                 </div>
-                {/* Spacer */}
-                <div style={cellStyle} />
+                {/* Supplier */}
+                <div style={{ ...cellStyle, color: C.muted, fontSize: "12px" }}>
+                  {row.supplierName}
+                </div>
                 {/* Weight */}
                 <div
                   style={{
@@ -1204,15 +1373,16 @@ function FifoAllocationTray({
           </svg>
           <div>
             <b>Short {shortBy} {shortBy === 1 ? "case" : "cases"}.</b>{" "}
-            Only {rows.length} of {requestedCases} requested{" "}
-            {requestedCases === 1 ? "case is" : "cases are"} in stock. Reduce
-            quantity or back-order.
+            Only {allocatedCount} of {requestedCases} requested{" "}
+            {requestedCases === 1 ? "case is" : "cases are"}{" "}
+            {manualMode ? "selected" : "in stock"}.{" "}
+            {manualMode ? "Select more inventory or reduce quantity." : "Reduce quantity or back-order."}
           </div>
         </div>
       )}
 
       {/* Footer */}
-      {rows.length > 0 && (
+      {allocatedCount > 0 && (
         <div
           style={{
             display: "flex",
@@ -1226,7 +1396,8 @@ function FifoAllocationTray({
           <span>
             Pulled from{" "}
             <b style={{ color: C.ink2, fontWeight: 500 }}>{lotsUsed}</b>{" "}
-            {lotsUsed === 1 ? "lot" : "lots"} · oldest first.
+            {lotsUsed === 1 ? "lot" : "lots"}
+            {manualMode ? " · manually selected." : " · oldest first."}
           </span>
         </div>
       )}

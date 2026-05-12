@@ -7,8 +7,6 @@ import {
   productCategories,
   products,
   productSupplierCosts,
-  supplierInvoiceLines,
-  supplierInvoices,
   suppliers,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
@@ -30,7 +28,7 @@ export async function getPriceChartData() {
     await Promise.all([
       db.query.products.findMany({
         where: eq(products.tenantId, tid),
-        columns: { id: true, sku: true, name: true, defaultPricePerLb: true },
+        columns: { id: true, sku: true, name: true },
       }),
       db.query.customers.findMany({
         where: eq(customers.tenantId, tid),
@@ -70,24 +68,6 @@ export async function getPriceChartData() {
         .where(eq(products.tenantId, tid)),
     ]);
 
-  const invoiceCostRows = await db
-    .selectDistinctOn([supplierInvoiceLines.productId, supplierInvoices.supplierId], {
-      productId: supplierInvoiceLines.productId,
-      supplierId: supplierInvoices.supplierId,
-      supplierName: suppliers.name,
-      costPerLb: supplierInvoiceLines.unitPrice,
-      invoiceDate: supplierInvoices.invoiceDate,
-    })
-    .from(supplierInvoiceLines)
-    .innerJoin(supplierInvoices, eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id))
-    .innerJoin(suppliers, eq(supplierInvoices.supplierId, suppliers.id))
-    .where(eq(supplierInvoices.tenantId, tid))
-    .orderBy(
-      supplierInvoiceLines.productId,
-      supplierInvoices.supplierId,
-      supplierInvoices.invoiceDate,
-    );
-
   const categoryByProduct = new Map<string, string>();
   for (const pc of allProductCategories) {
     if (!categoryByProduct.has(pc.productId)) {
@@ -126,34 +106,17 @@ export async function getPriceChartData() {
     });
   }
 
-  const invoiceCostsByProduct = new Map<
-    string,
-    { supplier_id: string; supplier_name: string; cost_per_lb: string; invoice_date: string | null }[]
-  >();
-  for (const r of invoiceCostRows) {
-    if (!invoiceCostsByProduct.has(r.productId)) invoiceCostsByProduct.set(r.productId, []);
-    invoiceCostsByProduct.get(r.productId)!.push({
-      supplier_id: r.supplierId,
-      supplier_name: r.supplierName,
-      cost_per_lb: r.costPerLb,
-      invoice_date: r.invoiceDate ?? null,
-    });
-  }
-
   return {
     products: allProducts.map(p => {
       const vendors = vendorsByProduct.get(p.id) ?? [];
       const primaryVendor = vendors.find(v => v.is_primary) ?? vendors[0] ?? null;
-      // Use primary vendor cost if available, otherwise fall back to defaultPricePerLb
-      const cost = primaryVendor ? primaryVendor.cost_per_lb : p.defaultPricePerLb;
       return {
         id: p.id,
         sku: p.sku,
         name: p.name,
-        cost,
+        cost: primaryVendor?.cost_per_lb ?? null,
         category: categoryByProduct.get(p.id) ?? null,
         vendors,
-        costs_from_invoices: invoiceCostsByProduct.get(p.id) ?? [],
       };
     }),
     customers: allCustomers.map(c => ({
@@ -194,42 +157,56 @@ export async function deleteCustomerProductPrice(customerId: string, productId: 
     );
 }
 
-export async function setProductDefaultCost(productId: string, costPerLb: string) {
+export async function applyMarkupToCustomer(customerId: string, markupPercent = 7) {
   const tenant = await getCurrentTenant();
-  await db
-    .update(products)
-    .set({ defaultPricePerLb: costPerLb })
-    .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));
-}
+  const markup = Number(markupPercent);
+  if (!Number.isFinite(markup) || markup < 0) {
+    throw new Error("Markup must be a non-negative number.");
+  }
 
-export async function applyMarkupToAllCustomers(productId: string, costPerLb: string) {
-  const tenant = await getCurrentTenant();
-  const markup = (parseFloat(costPerLb) * 1.07).toFixed(2);
-  const allCustomers = await db.query.customers.findMany({
-    where: eq(customers.tenantId, tenant.id),
-    columns: { id: true },
-  });
-  if (allCustomers.length === 0) return;
-  await db
-    .insert(customerProductPrices)
-    .values(allCustomers.map(c => ({ customerId: c.id, productId, pricePerLb: markup })))
-    .onConflictDoUpdate({
-      target: [customerProductPrices.customerId, customerProductPrices.productId],
-      set: { pricePerLb: markup, updatedAt: new Date() },
+  const [allProducts, vendorRows] = await Promise.all([
+    db.query.products.findMany({
+      where: eq(products.tenantId, tenant.id),
+      columns: { id: true },
+    }),
+    db
+      .select({
+        productId: productSupplierCosts.productId,
+        costPerLb: productSupplierCosts.costPerLb,
+        isPrimary: productSupplierCosts.isPrimary,
+      })
+      .from(productSupplierCosts)
+      .innerJoin(products, eq(productSupplierCosts.productId, products.id))
+      .where(eq(products.tenantId, tenant.id)),
+  ]);
+
+  const vendorsByProduct = new Map<
+    string,
+    { costPerLb: string; isPrimary: boolean }[]
+  >();
+  for (const row of vendorRows) {
+    if (!vendorsByProduct.has(row.productId)) vendorsByProduct.set(row.productId, []);
+    vendorsByProduct.get(row.productId)!.push({
+      costPerLb: row.costPerLb,
+      isPrimary: row.isPrimary,
     });
-}
+  }
+  for (const [, vendors] of vendorsByProduct) {
+    vendors.sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      return Number(a.costPerLb) - Number(b.costPerLb);
+    });
+  }
 
-export async function applyMarkupToCustomer(customerId: string) {
-  const tenant = await getCurrentTenant();
-  const allProducts = await db.query.products.findMany({
-    where: eq(products.tenantId, tenant.id),
-    columns: { id: true, defaultPricePerLb: true },
-  });
+  const multiplier = 1 + markup / 100;
   const rows = allProducts
     .map(p => {
-      const cost = parseFloat(p.defaultPricePerLb);
-      if (!Number.isFinite(cost) || cost < 0) return null;
-      return { customerId, productId: p.id, pricePerLb: (cost * 1.07).toFixed(2) };
+      const vendors = vendorsByProduct.get(p.id) ?? [];
+      const primaryVendor = vendors.find(v => v.isPrimary) ?? vendors[0] ?? null;
+      if (!primaryVendor) return null;
+      const cost = parseFloat(primaryVendor.costPerLb);
+      if (!Number.isFinite(cost) || cost <= 0) return null;
+      return { customerId, productId: p.id, pricePerLb: (cost * multiplier).toFixed(2) };
     })
     .filter(Boolean) as { customerId: string; productId: string; pricePerLb: string }[];
   if (rows.length === 0) return;
@@ -238,7 +215,10 @@ export async function applyMarkupToCustomer(customerId: string) {
     .values(rows)
     .onConflictDoUpdate({
       target: [customerProductPrices.customerId, customerProductPrices.productId],
-      set: { pricePerLb: customerProductPrices.pricePerLb, updatedAt: new Date() },
+      set: {
+        pricePerLb: sql`excluded.price_per_lb`,
+        updatedAt: new Date(),
+      },
     });
 }
 
@@ -258,31 +238,39 @@ export async function setProductSupplierCost(
   supplierId: string,
   costPerLb: string,
 ) {
-  // Check if this product already has any vendor rows; if not, make this one primary
-  const existing = await db
-    .select({ id: productSupplierCosts.id })
-    .from(productSupplierCosts)
-    .where(eq(productSupplierCosts.productId, productId))
-    .limit(1);
+  const [existingVendor, existingPrimary] = await Promise.all([
+    db
+      .select({ id: productSupplierCosts.id, isPrimary: productSupplierCosts.isPrimary })
+      .from(productSupplierCosts)
+      .where(
+        and(
+          eq(productSupplierCosts.productId, productId),
+          eq(productSupplierCosts.supplierId, supplierId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ id: productSupplierCosts.id })
+      .from(productSupplierCosts)
+      .where(
+        and(
+          eq(productSupplierCosts.productId, productId),
+          eq(productSupplierCosts.isPrimary, true),
+        ),
+      )
+      .limit(1),
+  ]);
 
-  const isFirst = existing.length === 0;
+  const shouldBePrimary =
+    existingVendor[0]?.isPrimary ?? existingPrimary.length === 0;
 
   await db
     .insert(productSupplierCosts)
-    .values({ productId, supplierId, costPerLb, isPrimary: isFirst })
+    .values({ productId, supplierId, costPerLb, isPrimary: shouldBePrimary })
     .onConflictDoUpdate({
       target: [productSupplierCosts.productId, productSupplierCosts.supplierId],
-      set: { costPerLb, updatedAt: new Date() },
+      set: { costPerLb, isPrimary: shouldBePrimary, updatedAt: new Date() },
     });
-
-  // If this is the first vendor, also update the product's defaultPricePerLb
-  if (isFirst) {
-    const tenant = await getCurrentTenant();
-    await db
-      .update(products)
-      .set({ defaultPricePerLb: costPerLb })
-      .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));
-  }
 }
 
 export async function deleteProductSupplierCost(productId: string, supplierId: string) {
@@ -297,10 +285,8 @@ export async function deleteProductSupplierCost(productId: string, supplierId: s
 }
 
 // Promote a vendor to primary for this product (atomic transaction).
-// Unsets any existing primary, sets the new one, and syncs product.defaultPricePerLb.
+// Unsets any existing primary, then sets the selected vendor.
 export async function promoteProductVendor(productId: string, supplierId: string) {
-  const tenant = await getCurrentTenant();
-
   await db.transaction(async tx => {
     // Unset existing primary
     await tx
@@ -313,7 +299,6 @@ export async function promoteProductVendor(productId: string, supplierId: string
         ),
       );
 
-    // Set new primary and fetch the cost
     const [updated] = await tx
       .update(productSupplierCosts)
       .set({ isPrimary: true, updatedAt: new Date() })
@@ -323,15 +308,9 @@ export async function promoteProductVendor(productId: string, supplierId: string
           eq(productSupplierCosts.supplierId, supplierId),
         ),
       )
-      .returning({ costPerLb: productSupplierCosts.costPerLb });
+      .returning({ id: productSupplierCosts.id });
 
     if (!updated) throw new Error("Vendor not found for this product");
-
-    // Sync product.defaultPricePerLb to the new primary's cost
-    await tx
-      .update(products)
-      .set({ defaultPricePerLb: updated.costPerLb })
-      .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));
   });
 }
 
@@ -345,7 +324,7 @@ export type CustomerProductRow = {
   id: string;
   sku: string;
   name: string;
-  cost: string;
+  cost: string | null;
   category: string | null;
   customerPrice: string | null;
   vendors: {
@@ -435,7 +414,6 @@ export async function getCustomerProductPricesPage(
       id: products.id,
       sku: products.sku,
       name: products.name,
-      defaultPricePerLb: products.defaultPricePerLb,
     })
     .from(products)
     .where(where)
@@ -527,7 +505,7 @@ export async function getCustomerProductPricesPage(
       id: p.id,
       sku: p.sku,
       name: p.name,
-      cost: primaryVendor ? primaryVendor.cost_per_lb : p.defaultPricePerLb,
+      cost: primaryVendor?.cost_per_lb ?? null,
       category: categoryByProduct.get(p.id) ?? null,
       customerPrice: priceByProduct.get(p.id) ?? null,
       vendors,

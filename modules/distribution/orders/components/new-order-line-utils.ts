@@ -14,6 +14,14 @@ function isWeightUnitLabel(value?: string | null): boolean {
   return WEIGHT_UNIT_NAMES.has(normalizeUnitToken(value));
 }
 
+export function isWeightSalesUnit(unit?: ProductSalesUnit | null): boolean {
+  if (!unit) return false;
+  return (
+    isWeightUnitLabel(unit.unit.abbreviation) ||
+    isWeightUnitLabel(unit.unit.name)
+  );
+}
+
 function sortSalesUnits(a: ProductSalesUnit, b: ProductSalesUnit): number {
   if (a.isDefault !== b.isDefault) {
     return a.isDefault ? -1 : 1;

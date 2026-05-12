@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useMemo, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
@@ -54,8 +54,9 @@ function initials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-function defaultPrice(cost: string, markup: number): number {
-  return Number(cost) * (1 + markup / 100);
+function marginPct(price: number, cost: number): number | null {
+  if (!Number.isFinite(price) || !Number.isFinite(cost) || cost <= 0) return null;
+  return ((price - cost) / cost) * 100;
 }
 
 function overrideCount(prices: PriceChartData["prices"], customerId: string): number {
@@ -175,26 +176,31 @@ function CustomerCard({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const ovr = overrideCount(prices, customer.id);
-  const totalOverrides = prices.length;
+  const totalProducts = allProducts.length;
 
   const avgMargin = useMemo(() => {
-    if (!allProducts.length) return 0;
     let sum = 0;
+    let count = 0;
     for (const p of allProducts) {
+      const cost = Number(p.cost);
+      if (!Number.isFinite(cost) || cost <= 0) continue;
       const custPrice = prices.find(
         pr => pr.customer_id === customer.id && pr.product_id === p.id,
       );
-      const price = custPrice ? Number(custPrice.price_per_lb) : defaultPrice(p.cost, markup);
-      sum += ((price - Number(p.cost)) / Number(p.cost)) * 100;
+      if (!custPrice) continue;
+      const margin = marginPct(Number(custPrice.price_per_lb), cost);
+      if (margin == null) continue;
+      sum += margin;
+      count += 1;
     }
-    return sum / allProducts.length;
-  }, [allProducts, prices, customer.id, markup]);
+    return count > 0 ? sum / count : null;
+  }, [allProducts, prices, customer.id]);
 
   function commitMarkup() {
     const v = parseFloat(markupDraft);
     if (Number.isFinite(v) && v >= 0) {
       onMarkupChange(v);
-      toast.success(`Default markup set to ${v}%`);
+      toast.success(`Markup set to ${v}%`);
     }
     setEditingMarkup(false);
   }
@@ -217,11 +223,11 @@ function CustomerCard({
             setMarkupDraft(String(markup));
             setTimeout(() => inputRef.current?.select(), 0);
           }}
-          title="Click to edit default markup"
+          title="Click to edit bulk markup"
           className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-stone-line px-3.5 py-2.5 hover:bg-muted/60"
         >
           <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
-            Markup
+            Bulk markup
           </span>
           {editingMarkup ? (
             <div className="flex items-baseline gap-1">
@@ -253,11 +259,11 @@ function CustomerCard({
 
         <div className="px-3.5 py-2.5 min-w-32.5 border-r border-stone-line flex flex-col gap-0.5">
           <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
-            Overrides
+            Customer prices
           </span>
           <div className="text-base font-semibold tracking-tight text-stone-ink">
             {ovr}
-            <span className="text-xs text-stone-muted font-medium ml-0.5">/ {totalOverrides}</span>
+            <span className="text-xs text-stone-muted font-medium ml-0.5">/ {totalProducts}</span>
           </div>
         </div>
 
@@ -266,9 +272,15 @@ function CustomerCard({
             Avg margin
           </span>
           <div className="text-base font-semibold tracking-tight text-stone-ink">
-            {avgMargin >= 0 ? "+" : ""}
-            {avgMargin.toFixed(1)}
-            <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+            {avgMargin == null ? (
+              <span className="text-stone-muted/60 text-sm font-normal">—</span>
+            ) : (
+              <>
+                {avgMargin >= 0 ? "+" : ""}
+                {avgMargin.toFixed(1)}
+                <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -278,7 +290,7 @@ function CustomerCard({
         size="sm"
         onClick={onApplyMarkup}
         disabled={applyingMarkup}
-        title={`Set all prices to cost × ${markup}%`}
+        title={`Set this customer's prices from supplier cost plus ${markup}%`}
       >
         {applyingMarkup ? "Applying…" : `Apply ${markup}% markup`}
       </Button>
@@ -300,14 +312,6 @@ function FuelCard({
   const current =
     customer.fuel_surcharge_amount != null ? fmt(customer.fuel_surcharge_amount) : "0.00";
   const [val, setVal] = useState(current);
-
-  const prevId = useRef(customer.id);
-  if (prevId.current !== customer.id) {
-    prevId.current = customer.id;
-    setVal(
-      customer.fuel_surcharge_amount != null ? fmt(customer.fuel_surcharge_amount) : "0.00",
-    );
-  }
 
   return (
     <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-status-warn-soft ring-status-warn/20">
@@ -424,7 +428,6 @@ function VendorSubRows({
 
             <TableCell />
             <TableCell />
-            <TableCell />
 
             <TableCell className="py-2 text-center">
               {!isPrimary && (
@@ -450,7 +453,6 @@ function VendorSubRows({
 function ProductRow({
   prod,
   customer,
-  markup,
   priceMap,
   onCommit,
   onReset,
@@ -463,7 +465,6 @@ function ProductRow({
 }: {
   prod: CustomerProductRow;
   customer: Customer;
-  markup: number;
   priceMap: Map<string, string>;
   onCommit: (productId: string, value: string) => void;
   onReset: () => void;
@@ -477,24 +478,10 @@ function ProductRow({
   const key = `${customer.id}:${prod.id}`;
   const storedOverride = priceMap.get(key);
   const isOverride = storedOverride !== undefined;
-  const def = prod.cost ? defaultPrice(prod.cost, markup) : null;
+  const cost = Number(prod.cost);
+  const displayMargin = isOverride ? marginPct(Number(storedOverride), cost) : null;
   const [inputVal, setInputVal] = useState(storedOverride ?? "");
   const [focused, setFocused] = useState(false);
-
-  const prevKey = useRef(key);
-  const prevOverride = useRef(storedOverride);
-  if (prevKey.current !== key || prevOverride.current !== storedOverride) {
-    prevKey.current = key;
-    prevOverride.current = storedOverride;
-    setInputVal(storedOverride ?? "");
-  }
-
-  const displayMargin =
-    def != null
-      ? isOverride
-        ? ((Number(storedOverride) - Number(prod.cost)) / Number(prod.cost)) * 100
-        : ((def - Number(prod.cost)) / Number(prod.cost)) * 100
-      : null;
 
   const marginClass =
     displayMargin == null
@@ -553,69 +540,60 @@ function ProductRow({
               </span>
             )
           ) : (
-            <span className="text-[12px] text-stone-muted/60">No vendors</span>
-          )}
-        </TableCell>
-
-        <TableCell className="py-3 px-4 text-right">
-          {def != null ? (
-            <span className="font-mono tabular-nums text-[13px] font-medium text-stone-muted">
-              ${def.toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-stone-muted/60">No cost</span>
           )}
         </TableCell>
 
         <TableCell className="py-2 px-4">
-          {def != null ? (
-            <div className="inline-flex items-center gap-2">
-              <div className="relative inline-flex items-center">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
-                  $
-                </span>
-                <Input
-                  type="number"
-                  step={0.01}
-                  min={0}
-                  value={inputVal}
-                  placeholder={def.toFixed(2)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={e => {
-                    setFocused(false);
-                    onCommit(prod.id, e.target.value);
-                  }}
-                  onChange={e => setInputVal(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      (e.target as HTMLInputElement).blur();
-                    }
-                    if (e.key === "Escape") {
-                      setInputVal(storedOverride ?? "");
-                      (e.target as HTMLInputElement).blur();
-                    }
-                  }}
-                  className={cn(
-                    "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
-                    "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
-                    focused
-                      ? "border-ring bg-white ring-3 ring-ring/50"
-                      : isOverride
-                        ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
-                        : "border-transparent bg-transparent shadow-none",
-                  )}
-                />
-              </div>
-              {isOverride && (
-                <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  Override
-                </Badge>
-              )}
+          <div className="inline-flex items-center gap-2">
+            <div className="relative inline-flex items-center">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
+                $
+              </span>
+              <Input
+                type="number"
+                step={0.01}
+                min={0}
+                value={inputVal}
+                placeholder="—"
+                onFocus={() => setFocused(true)}
+                onBlur={e => {
+                  const rawValue = e.target.value;
+                  const parsedValue = parseFloat(rawValue);
+                  setFocused(false);
+                  if (!rawValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+                    setInputVal(storedOverride ?? "");
+                  }
+                  onCommit(prod.id, rawValue);
+                }}
+                onChange={e => setInputVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") {
+                    setInputVal(storedOverride ?? "");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                className={cn(
+                  "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
+                  "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+                  focused
+                    ? "border-ring bg-white ring-3 ring-ring/50"
+                    : isOverride
+                      ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                      : "border-transparent bg-transparent shadow-none",
+                )}
+              />
             </div>
-          ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
-          )}
+            {isOverride && (
+              <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                Set
+              </Badge>
+            )}
+          </div>
         </TableCell>
 
         <TableCell className="py-3 px-4 text-right">
@@ -636,7 +614,7 @@ function ProductRow({
               size="icon-xs"
               onClick={onReset}
               disabled={deleting}
-              title="Reset to default"
+              title="Clear customer price"
             >
               <RotateCcw size={13} />
             </Button>
@@ -654,7 +632,7 @@ function ProductRow({
       )}
       {expanded && (
         <TableRow className="hover:bg-transparent border-0">
-          <TableCell colSpan={6} className="h-px bg-stone-line p-0" />
+          <TableCell colSpan={5} className="h-px bg-stone-line p-0" />
         </TableRow>
       )}
     </>
@@ -665,10 +643,8 @@ function ProductRow({
 
 function ProductTable({
   customer,
-  markup,
 }: {
   customer: Customer;
-  markup: number;
 }) {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("all");
@@ -682,10 +658,10 @@ function ProductTable({
   const promote = usePromoteProductVendor();
   const onError = useCallback((e: Error) => toast.error(e.message), []);
 
-  useEffect(() => {
+  function resetListPosition() {
     setPage(1);
     setExpandedProductId(null);
-  }, [search, catFilter, modeFilter, customer.id]);
+  }
 
   const { data: pageData } = useCustomerProductPricesPage(customer.id, {
     page,
@@ -720,20 +696,12 @@ function ProductTable({
   }, [pageData]);
 
   function handleCommit(productId: string, rawValue: string) {
-    const prod = pageData?.data.find(p => p.id === productId);
-    if (!prod?.cost) return;
-    const def = defaultPrice(prod.cost, markup);
     if (!rawValue.trim()) {
       deletePrice.mutate({ customerId: customer.id, productId }, { onError });
       return;
     }
     const v = parseFloat(rawValue);
     if (!Number.isFinite(v) || v < 0) return;
-    if (Math.abs(v - def) < 0.005) {
-      deletePrice.mutate({ customerId: customer.id, productId }, { onError });
-      toast.success(`Matches default — no override stored`);
-      return;
-    }
     setPrice.mutate({ customerId: customer.id, productId, pricePerLb: v.toFixed(2) }, { onError });
   }
 
@@ -757,7 +725,10 @@ function ProductTable({
           </InputGroupAddon>
           <InputGroupInput
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => {
+              setSearch(e.target.value);
+              resetListPosition();
+            }}
             placeholder="Search product or SKU…"
             className="text-[13px]"
           />
@@ -768,7 +739,11 @@ function ProductTable({
           variant="outline"
           spacing={0}
           value={catFilter}
-          onValueChange={v => v && setCatFilter(v)}
+          onValueChange={v => {
+            if (!v) return;
+            setCatFilter(v);
+            resetListPosition();
+          }}
         >
           <ToggleGroupItem value="all" size="sm">All</ToggleGroupItem>
           {categories.map(c => (
@@ -781,10 +756,14 @@ function ProductTable({
           variant="outline"
           spacing={0}
           value={modeFilter}
-          onValueChange={v => v && setModeFilter(v as "all" | "overrides")}
+          onValueChange={v => {
+            if (!v) return;
+            setModeFilter(v as "all" | "overrides");
+            resetListPosition();
+          }}
         >
           <ToggleGroupItem value="all" size="sm">All products</ToggleGroupItem>
-          <ToggleGroupItem value="overrides" size="sm">Overrides only</ToggleGroupItem>
+          <ToggleGroupItem value="overrides" size="sm">Customer prices</ToggleGroupItem>
         </ToggleGroup>
 
         <div className="flex-1" />
@@ -796,10 +775,9 @@ function ProductTable({
           <TableRow className="hover:bg-transparent">
             {(
               [
-                ["Product", "38%", "text-left"],
+                ["Product", "40%", "text-left"],
                 ["Cost", "120px", "text-right"],
-                ["Default", "130px", "text-right"],
-                ["Their price", "200px", "text-left"],
+                ["Price", "210px", "text-left"],
                 ["Margin", "110px", "text-right"],
                 ["", "120px", "text-center"],
               ] as const
@@ -820,7 +798,7 @@ function ProductTable({
         <TableBody>
           {grouped.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={6} className="py-16 text-center text-[13px] text-stone-muted">
+              <TableCell colSpan={5} className="py-16 text-center text-[13px] text-stone-muted">
                 No products match.
               </TableCell>
             </TableRow>
@@ -829,7 +807,7 @@ function ProductTable({
             <React.Fragment key={cat}>
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={6}
+                  colSpan={5}
                   className={cn(
                     "bg-stone-line2/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-stone-muted uppercase tracking-widest",
                     gi > 0 && "border-t border-stone-line",
@@ -841,10 +819,9 @@ function ProductTable({
               </TableRow>
               {prods.map(prod => (
                 <ProductRow
-                  key={prod.id}
+                  key={`${prod.id}:${priceMap.get(`${customer.id}:${prod.id}`) ?? ""}`}
                   prod={prod}
                   customer={customer}
-                  markup={markup}
                   priceMap={priceMap}
                   onCommit={handleCommit}
                   onReset={() =>
@@ -933,11 +910,16 @@ export function PriceChartClient() {
           allProducts={products}
           markup={markup}
           onMarkupChange={setMarkup}
-          onApplyMarkup={() => applyMarkup.mutate(customer.id, { onError })}
-          applyingMarkup={applyMarkup.isPending && applyMarkup.variables === customer.id}
+          onApplyMarkup={() =>
+            applyMarkup.mutate({ customerId: customer.id, markupPercent: markup }, { onError })
+          }
+          applyingMarkup={
+            applyMarkup.isPending && applyMarkup.variables?.customerId === customer.id
+          }
         />
 
         <FuelCard
+          key={customer.id}
           customer={customer}
           onSave={amount =>
             updateFuelSurcharge.mutate(
@@ -955,8 +937,8 @@ export function PriceChartClient() {
         />
 
         <ProductTable
+          key={customer.id}
           customer={customer}
-          markup={markup}
         />
       </div>
     </div>

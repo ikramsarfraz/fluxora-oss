@@ -123,6 +123,9 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
             productId: line.productId,
             salesUnitId: line.salesUnitId ?? defaultSalesUnit?.unitId ?? "",
             unitType: line.unitType ?? inferLineUnitType(product),
+            inventoryItemIds: (line.allocations ?? [])
+              .map(allocation => allocation.inventoryItemId)
+              .filter((id): id is string => Boolean(id)),
             quantity: String(line.expectedCases),
             pricePerLb: resolvePricePerLbForEditor(line, product),
           };
@@ -155,6 +158,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
           salesUnitId: line.salesUnitId,
           expectedCases: Number(line.quantity),
           unitType: line.unitType,
+          inventoryItemIds: line.inventoryItemIds ?? [],
           pricePerLbOverride: line.pricePerLb || null,
         })),
       });

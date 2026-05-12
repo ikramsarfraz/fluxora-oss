@@ -1,7 +1,6 @@
 "use server";
 
 import {
-  applyMarkupToAllCustomers,
   applyMarkupToCustomer,
   deleteCustomerProductPrice,
   deleteProductSupplierCost,
@@ -9,7 +8,6 @@ import {
   getPriceChartData,
   promoteProductVendor,
   setCustomerProductPrice,
-  setProductDefaultCost,
   setProductSupplierCost,
   updateCustomerFuelSurcharge,
   type CustomerProductsParams,
@@ -31,13 +29,8 @@ export async function deleteCustomerProductPriceAction(customerId: string, produ
   return await deleteCustomerProductPrice(customerId, productId);
 }
 
-export async function setProductDefaultCostAction(productId: string, costPerLb: string) {
-  await setProductDefaultCost(productId, costPerLb);
-  await applyMarkupToAllCustomers(productId, costPerLb);
-}
-
-export async function applyMarkupToCustomerAction(customerId: string) {
-  return await applyMarkupToCustomer(customerId);
+export async function applyMarkupToCustomerAction(customerId: string, markupPercent?: number) {
+  return await applyMarkupToCustomer(customerId, markupPercent);
 }
 
 export async function updateCustomerFuelSurchargeAction(
