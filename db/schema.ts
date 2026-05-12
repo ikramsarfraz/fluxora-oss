@@ -2235,6 +2235,10 @@ export const bankTransactions = pgTable(
     pending: boolean("pending").notNull().default(false),
     isoCurrencyCode: varchar("iso_currency_code", { length: 8 }).default("USD"),
     plaidCategory: jsonb("plaid_category").default([]),
+    paymentMethod: varchar("payment_method", { length: 20 }).notNull().default("other"),
+    checkNumber: integer("check_number"),
+    isMysteryOutflow: boolean("is_mystery_outflow").notNull().default(false),
+    mysteryDismissedAt: timestamp("mystery_dismissed_at", { withTimezone: true }),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -2247,6 +2251,7 @@ export const bankTransactions = pgTable(
     index("bank_transactions_account_id_idx").on(table.bankAccountId),
     index("bank_transactions_date_idx").on(table.date),
     uniqueIndex("bank_transactions_plaid_txn_id_unique").on(table.plaidTransactionId),
+    index("bank_transactions_mystery_idx").on(table.tenantId, table.isMysteryOutflow),
   ],
 );
 
@@ -2302,6 +2307,7 @@ export const payeeAliases = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: "cascade" }),
     source: aliasSourceEnum("source").notNull().default("confirmed"),
+    channel: varchar("channel", { length: 20 }).notNull().default("ach"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -2311,8 +2317,9 @@ export const payeeAliases = pgTable(
   table => [
     index("payee_aliases_tenant_id_idx").on(table.tenantId),
     index("payee_aliases_supplier_id_idx").on(table.supplierId),
-    uniqueIndex("payee_aliases_tenant_normalized_unique").on(
+    uniqueIndex("payee_aliases_tenant_channel_normalized_unique").on(
       table.tenantId,
+      table.channel,
       table.normalizedText,
     ),
   ],

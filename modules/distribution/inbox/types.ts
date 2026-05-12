@@ -133,6 +133,20 @@ export interface ReauthBanner {
   lastSyncAt: Date | null;
 }
 
+// ── Mystery outflow ───────────────────────────────────────────────────────
+
+export interface MysteryOutflow {
+  id: string;
+  date: string;
+  amount: number;
+  merchantName: string | null;
+  rawDescription: string;
+  paymentMethod: string;
+  accountName: string;
+  accountMask: string | null;
+  institutionName: string | null;
+}
+
 // ── Full inbox data ───────────────────────────────────────────────────────
 
 export interface InboxData {
@@ -153,4 +167,6 @@ export interface InboxData {
   reauthBanners: ReauthBanner[];
   /** Bills due/overdue + sales orders due today */
   todaySchedule: TodayScheduleEntry[];
+  /** Large unmatched outflows that don't correspond to any open bill */
+  mysteryOutflows: MysteryOutflow[];
 }

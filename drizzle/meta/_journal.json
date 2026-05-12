@@ -225,6 +225,13 @@
       "when": 1778836600000,
       "tag": "0031_balance_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1778836700000,
+      "tag": "0032_payment_method_channels",
+      "breakpoints": true
     }
   ]
 }

@@ -522,9 +522,12 @@ export function SupplierInvoiceDetailPage({
       {/* ── LIFECYCLE STEPPER ── */}
       <LifecycleStepper status={invoice.status} />
 
-      {/* ── PAYMENT EVIDENCE (Plaid) ── */}
-      {invoice.status === "paid" && invoice.paymentMatches?.[0] && (
-        <PaymentEvidenceCard match={invoice.paymentMatches[0]} />
+      {/* ── PAYMENT EVIDENCE ── */}
+      {invoice.status === "paid" && (
+        <PaymentEvidenceCard
+          match={invoice.paymentMatches?.[0] ?? null}
+          payment={invoice.payments?.[0] ?? null}
+        />
       )}
 
       {/* ── BODY GRID ── */}

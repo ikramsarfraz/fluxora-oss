@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, lt, lte, sql, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, lt, lte, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bankAccountBalanceSnapshots,
@@ -23,6 +23,7 @@ import type {
   InboxData,
   InboxItem,
   ExpiringLotEntry,
+  MysteryOutflow,
   PriceMover,
   InboxStats,
   ActiveSession,
@@ -501,6 +502,42 @@ export async function getInboxData(): Promise<InboxData> {
     };
   }
 
+  // ── Mystery outflows (flagged unmatched outflows above threshold) ──────────
+  let mysteryOutflows: MysteryOutflow[] = [];
+
+  if (activeConns.length > 0) {
+    const last30d = new Date();
+    last30d.setDate(last30d.getDate() - 30);
+    const cutoff30d = last30d.toISOString().split("T")[0];
+
+    const rawMysteries = await db.query.bankTransactions.findMany({
+      where: and(
+        eq(bankTransactions.tenantId, tenantId),
+        eq(bankTransactions.isMysteryOutflow, true),
+        isNull(bankTransactions.mysteryDismissedAt),
+        eq(bankTransactions.pending, false),
+        gte(bankTransactions.date, cutoff30d),
+      ),
+      with: {
+        bankAccount: { with: { plaidConnection: true } },
+      },
+      orderBy: (t, { desc }) => [desc(t.amount)],
+      limit: 5,
+    });
+
+    mysteryOutflows = rawMysteries.map(t => ({
+      id: t.id,
+      date: t.date,
+      amount: Number(t.amount),
+      merchantName: t.merchantName,
+      rawDescription: t.rawDescription,
+      paymentMethod: t.paymentMethod ?? "other",
+      accountName: t.bankAccount?.name ?? "Bank account",
+      accountMask: t.bankAccount?.mask ?? null,
+      institutionName: t.bankAccount?.plaidConnection?.institutionName ?? null,
+    }));
+  }
+
   return {
     stats,
     blockingItems,
@@ -514,5 +551,6 @@ export async function getInboxData(): Promise<InboxData> {
     cashFlow,
     reauthBanners,
     todaySchedule,
+    mysteryOutflows,
   };
 }

@@ -216,6 +216,29 @@ async function buildAccountIdMap(
   return new Map(accounts.map(a => [a.plaidAccountId, a.id]));
 }
 
+type InferredPaymentMethod = "ach" | "wire" | "zelle" | "check" | "card" | "bill_pay" | "other";
+
+function inferPaymentMethod(txn: Transaction): InferredPaymentMethod {
+  const desc = (txn.original_description ?? txn.name ?? "").toUpperCase();
+  if (/\bZELLE\b/.test(desc)) return "zelle";
+  if (/CHECK\s*(PAID\s*)?#?\s*\d+/.test(desc)) return "check";
+  if (/\bACH\b/.test(desc)) return "ach";
+  if (/\bWIRE\b/.test(desc)) return "wire";
+  if (/BILLPAY|\bBILL\s+PAY\b/.test(desc)) return "bill_pay";
+  // Fall back to Plaid channel when description has no signal
+  const rawChannel = String(txn.payment_channel ?? "").toLowerCase();
+  if (rawChannel === "in store") return "card";
+  if (rawChannel === "ach") return "ach";
+  if (rawChannel === "wire") return "wire";
+  if (rawChannel === "check") return "check";
+  return "other";
+}
+
+function extractCheckNumber(desc: string): number | null {
+  const m = desc.match(/CHECK\s*(?:PAID\s*)?#?\s*(\d+)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function transactionToRow(
   tenantId: string,
   bankAccountId: string,
@@ -228,6 +251,9 @@ function transactionToRow(
     | "wire"
     | "check"
     | "other";
+  const rawDesc = txn.original_description ?? txn.name;
+  const paymentMethod = inferPaymentMethod(txn);
+  const checkNumber = paymentMethod === "check" ? extractCheckNumber(rawDesc) : null;
   return {
     tenantId,
     bankAccountId,
@@ -235,8 +261,10 @@ function transactionToRow(
     date: txn.date,
     amount: txn.amount.toString(),
     merchantName: txn.merchant_name ?? null,
-    rawDescription: txn.original_description ?? txn.name,
+    rawDescription: rawDesc,
     paymentChannel: channel,
+    paymentMethod,
+    checkNumber,
     pending: txn.pending,
     isoCurrencyCode: txn.iso_currency_code ?? "USD",
     plaidCategory: txn.category ?? [],

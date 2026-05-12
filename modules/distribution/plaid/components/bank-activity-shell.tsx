@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmPaymentMatch, rejectPaymentMatch } from "../actions";
+import { LinkToBillSheet } from "./link-to-bill-sheet";
 import type { getBankActivity } from "../services/bank-activity";
 
 type Data = Awaited<ReturnType<typeof getBankActivity>>;
@@ -257,11 +258,13 @@ function TransactionRow({
 }) {
   const [confirming, startConfirm] = useTransition();
   const [rejecting, startReject] = useTransition();
+  const [linkSheetOpen, setLinkSheetOpen] = useState(false);
   const router = useRouter();
 
   const isOutflow = txn.amount > 0;
   const amountStr = `${isOutflow ? "-" : "+"}$${Math.abs(txn.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
   const isPendingReview = txn.state === "pending_review" && txn.match;
+  const isUnmatched = txn.state === "unmatched" && isOutflow && !txn.pending;
 
   const handleConfirm = () => {
     if (!txn.match) return;
@@ -319,18 +322,21 @@ function TransactionRow({
               </span>
             )}
           </div>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
-            {txn.rawDescription.substring(0, 50)}
-            {txn.rawDescription.length > 50 ? "…" : ""}
-            {" · "}
-            {txn.accountName}
-            {txn.accountMask ? ` ···${txn.accountMask}` : ""}
-            {" · "}
-            {txn.paymentChannel.toUpperCase()}
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 1, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            <span>{txn.rawDescription.substring(0, 40)}{txn.rawDescription.length > 40 ? "…" : ""}</span>
+            <span>·</span>
+            <span>{txn.accountName}{txn.accountMask ? ` ···${txn.accountMask}` : ""}</span>
+            <span>·</span>
+            <span style={{ fontWeight: 600, textTransform: "uppercase" }}>{txn.paymentMethod}</span>
+            {txn.isMysteryOutflow && (
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#dc2626", background: "#fef2f2", padding: "1px 5px", borderRadius: 4 }}>
+                Mystery
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Match reference */}
+        {/* Match reference / channel note */}
         <div style={{ textAlign: "right", minWidth: 140 }}>
           {txn.match ? (
             <div>
@@ -342,9 +348,21 @@ function TransactionRow({
                 {txn.match.invoice.invoiceNumber}
               </Link>
               <div style={{ fontSize: 11, marginTop: 1 }}>
-                <ConfidenceBadge confidence={txn.match.confidence} autoApplied={txn.match.autoApplied} />
+                <ConfidenceBadge
+                  confidence={txn.match.confidence}
+                  autoApplied={txn.match.autoApplied}
+                  paymentMethod={txn.paymentMethod}
+                />
               </div>
             </div>
+          ) : isUnmatched ? (
+            <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>
+              {txn.paymentMethod === "check"
+                ? "Banks don't include payee info on check transactions."
+                : txn.paymentMethod === "zelle"
+                  ? "No payee in Zelle record."
+                  : "No match found."}
+            </span>
           ) : (
             <span style={{ fontSize: 12, color: C.muted }}>—</span>
           )}
@@ -364,7 +382,7 @@ function TransactionRow({
         </div>
 
         {/* Action */}
-        <div style={{ minWidth: 80, textAlign: "right" }}>
+        <div style={{ minWidth: 96, textAlign: "right" }} onClick={e => e.stopPropagation()}>
           {isPendingReview ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 11, color: C.warn }}>
@@ -384,12 +402,24 @@ function TransactionRow({
               </span>
             </div>
           ) : txn.match ? (
-            <Link href={`/supplier-invoices/${txn.match.invoice.id}`} onClick={e => e.stopPropagation()}>
+            <Link href={`/supplier-invoices/${txn.match.invoice.id}`}>
               <span style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 3 }}>
                 <ExternalLink size={11} />
                 View
               </span>
             </Link>
+          ) : isUnmatched ? (
+            <button
+              type="button"
+              onClick={() => setLinkSheetOpen(true)}
+              style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                background: C.ink, color: "#fff", border: "none", cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Link to bill
+            </button>
           ) : (
             <span style={{ fontSize: 12, color: C.muted }}>—</span>
           )}
@@ -406,6 +436,13 @@ function TransactionRow({
           rejecting={rejecting}
         />
       )}
+
+      {/* Link-to-bill sheet */}
+      <LinkToBillSheet
+        txn={txn}
+        open={linkSheetOpen}
+        onClose={() => setLinkSheetOpen(false)}
+      />
     </>
   );
 }
@@ -569,12 +606,17 @@ function StateIcon({ state, pending }: { state: string; pending: boolean }) {
   );
 }
 
-function ConfidenceBadge({ confidence, autoApplied }: { confidence: number; autoApplied: boolean }) {
+function ConfidenceBadge({ confidence, autoApplied, paymentMethod }: { confidence: number; autoApplied: boolean; paymentMethod?: string }) {
   const pct = Math.round(confidence * 100);
   const color = confidence >= 0.95 ? C.good : confidence >= 0.6 ? C.warn : C.muted;
+  const noPayeeLabel = paymentMethod === "check"
+    ? " · no payee"
+    : paymentMethod === "zelle"
+      ? " · amount only"
+      : "";
   return (
     <span style={{ fontSize: 11, color, fontWeight: 500 }}>
-      {pct}% · {autoApplied ? "auto-applied" : "needs review"}
+      {pct}%{noPayeeLabel} · {autoApplied ? "auto-applied" : "needs review"}
     </span>
   );
 }

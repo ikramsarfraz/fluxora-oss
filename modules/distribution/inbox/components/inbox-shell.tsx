@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
+import { toast } from "sonner";
+import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOutflow, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
+import { dismissMysteryOutflowAction, markAsNonBillExpenseAction } from "@/modules/distribution/plaid/actions";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
 
 // ── Design tokens (mockup exact values) ───────────────────────────────────
@@ -603,6 +605,146 @@ function TodayScheduleCard({ entries }: { entries: TodayScheduleEntry[] }) {
   );
 }
 
+// ── Mystery outflow card ──────────────────────────────────────────────────
+
+function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
+  const router = useRouter();
+  const [dismissing, startDismiss] = useTransition();
+  const [marking, startMark] = useTransition();
+
+  if (outflows.length === 0) return null;
+
+  // Show the largest by absolute amount
+  const txn = [...outflows].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0];
+
+  const fmtAmount = (n: number) =>
+    `−$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+
+  const fmtDate = (d: string) =>
+    new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const accountLabel = [txn.institutionName, txn.accountMask ? `···${txn.accountMask}` : null]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <div
+      style={{
+        background: `linear-gradient(135deg, ${C.redBg} 0%, #fff5f5 100%)`,
+        border: `1px solid ${C.redBorder}`,
+        borderRadius: 12,
+        padding: "16px 18px",
+        marginBottom: 14,
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+        <span
+          style={{
+            width: 8, height: 8, borderRadius: "50%",
+            background: C.red, animation: "loading-pulse-dot 1.6s infinite", flexShrink: 0,
+          }}
+        />
+        <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: C.red }}>
+          Mystery outflow
+        </span>
+        {outflows.length > 1 && (
+          <span style={{ fontSize: 10.5, color: C.red, marginLeft: "auto" }}>
+            +{outflows.length - 1} more
+          </span>
+        )}
+      </div>
+
+      {/* Payee + amount */}
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 2 }}>
+        {txn.merchantName ?? txn.rawDescription.substring(0, 28)}
+      </div>
+      <div
+        style={{
+          fontSize: 22, fontWeight: 700, fontFamily: C.mono,
+          color: C.red, letterSpacing: "-0.02em", marginBottom: 8,
+        }}
+      >
+        {fmtAmount(txn.amount)}
+      </div>
+
+      {/* Explanation */}
+      <div style={{ fontSize: 12, color: C.text2, marginBottom: 8, lineHeight: 1.5 }}>
+        Left your {accountLabel || "bank account"} on {fmtDate(txn.date)}.
+        No open bill matches this amount
+        {txn.merchantName ? `, and ${txn.merchantName.split(" ")[0]} isn't in your supplier list.` : "."}
+      </div>
+
+      {/* Raw bank string */}
+      <div
+        style={{
+          fontSize: 11, fontFamily: C.mono, color: C.text3,
+          background: "rgba(0,0,0,0.04)", borderRadius: 4, padding: "3px 7px",
+          display: "inline-block", marginBottom: 12,
+        }}
+      >
+        {txn.rawDescription.substring(0, 40)}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <button
+          onClick={() => router.push(`/supplier-invoices/new?fromTxn=${txn.id}`)}
+          style={{
+            padding: "7px 12px", borderRadius: 7, fontSize: 12.5, fontWeight: 600,
+            background: C.red, color: "#fff", border: "none", cursor: "pointer",
+            fontFamily: "inherit", textAlign: "left",
+          }}
+        >
+          Create bill for this payment
+        </button>
+        <button
+          disabled={marking}
+          onClick={() => {
+            startMark(async () => {
+              try {
+                await markAsNonBillExpenseAction(txn.id);
+                toast.success("Marked as non-bill expense.");
+                router.refresh();
+              } catch {
+                toast.error("Failed to update.");
+              }
+            });
+          }}
+          style={{
+            padding: "7px 12px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
+            background: "rgba(0,0,0,0.05)", color: C.text, border: `1px solid ${C.redBorder}`,
+            cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          }}
+        >
+          Mark as non-bill expense
+        </button>
+        <button
+          disabled={dismissing}
+          onClick={() => {
+            startDismiss(async () => {
+              try {
+                await dismissMysteryOutflowAction(txn.id);
+                toast.info("Hidden. It won't appear here again.");
+                router.refresh();
+              } catch {
+                toast.error("Failed to dismiss.");
+              }
+            });
+          }}
+          style={{
+            padding: "5px 0", fontSize: 11.5, fontWeight: 400,
+            background: "none", color: C.text3, border: "none",
+            cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+          }}
+        >
+          Hide · I know what this is
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main InboxShell ───────────────────────────────────────────────────────
 
 interface InboxShellProps {
@@ -1079,6 +1221,9 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
 
           {/* Today's schedule */}
           <TodayScheduleCard entries={data.todaySchedule} />
+
+          {/* Mystery outflows */}
+          <MysteryOutflowCard outflows={data.mysteryOutflows} />
 
           {/* Expiring this week */}
           {data.expiringLots.length > 0 && (

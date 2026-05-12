@@ -21,6 +21,9 @@ export type ActivityTransaction = {
   merchantName: string | null;
   rawDescription: string;
   paymentChannel: string;
+  paymentMethod: string;
+  checkNumber: number | null;
+  isMysteryOutflow: boolean;
   pending: boolean;
   accountName: string;
   accountMask: string | null;
@@ -156,6 +159,9 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
       merchantName: txn.merchantName,
       rawDescription: txn.rawDescription,
       paymentChannel: txn.paymentChannel ?? "other",
+      paymentMethod: txn.paymentMethod ?? "other",
+      checkNumber: txn.checkNumber ?? null,
+      isMysteryOutflow: txn.isMysteryOutflow ?? false,
       pending: txn.pending,
       accountName: txn.bankAccount?.name ?? "Unknown",
       accountMask: txn.bankAccount?.mask ?? null,
