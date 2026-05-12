@@ -2375,4 +2375,25 @@ export const bankAccountBalanceSnapshots = pgTable(
   ],
 );
 
+// -------------------- Webhook idempotency --------------------
+
+/**
+ * Dedupe table for inbound Plaid webhooks. The primary key is the SHA-256
+ * hex digest of the `Plaid-Verification` JWT — unique per delivery attempt
+ * and produced only after signature verification succeeds, so attacker
+ * spam can never bloat this table.
+ */
+export const plaidWebhookSeen = pgTable(
+  "plaid_webhook_seen",
+  {
+    webhookId: varchar("webhook_id", { length: 64 }).primaryKey(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("plaid_webhook_seen_received_at_idx").on(table.receivedAt),
+  ],
+);
+
 export * from "./auth-schema";

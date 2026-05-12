@@ -1,12 +1,28 @@
+import { createHash } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { plaidConnections } from "@/db/schema";
+import { plaidConnections, plaidWebhookSeen } from "@/db/schema";
+import { captureException } from "@/lib/sentry-scope";
 import { syncConnection } from "@/modules/distribution/plaid/services/transaction-sync";
 import {
   PlaidWebhookVerificationError,
   verifyPlaidWebhook,
 } from "@/modules/distribution/plaid/services/webhook-verification";
+
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input, "utf8").digest("hex");
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
 
 export async function POST(req: NextRequest) {
   let rawBody: string;
@@ -22,11 +38,31 @@ export async function POST(req: NextRequest) {
     await verifyPlaidWebhook({ rawBody, jwtHeaderValue });
   } catch (err) {
     if (err instanceof PlaidWebhookVerificationError) {
+      // Rejection is the design — don't pollute Sentry with attacker spam.
       console.warn("[plaid/webhook] verification rejected", err.code);
     } else {
       console.error("[plaid/webhook] verification error", err);
+      captureException(err, { stage: "verification" });
     }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Idempotency: dedup on the verified JWT itself, hashed for compact storage.
+  // The non-null assertion is safe because verifyPlaidWebhook would have
+  // rejected a missing header above.
+  const webhookId = sha256Hex(jwtHeaderValue!);
+  try {
+    await db.insert(plaidWebhookSeen).values({ webhookId });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ acknowledged: true, deduped: true });
+    }
+    console.error("[plaid/webhook] idempotency insert failed", err);
+    captureException(err, { stage: "idempotency_insert" });
+    return NextResponse.json(
+      { error: "Webhook processing failed" },
+      { status: 500 },
+    );
   }
 
   try {
@@ -49,9 +85,10 @@ export async function POST(req: NextRequest) {
         });
         if (connection && connection.status === "active") {
           // Sync in background — webhook must respond quickly
-          syncConnection(connection.id).catch(err =>
-            console.error("[plaid/webhook] sync failed", err),
-          );
+          syncConnection(connection.id).catch(err => {
+            console.error("[plaid/webhook] sync failed", err);
+            captureException(err, { stage: "background_sync", connectionId: connection.id });
+          });
         }
       }
     }
@@ -72,6 +109,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ acknowledged: true });
   } catch (err) {
     console.error("[plaid/webhook]", err);
+    captureException(err, { stage: "processing" });
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }
