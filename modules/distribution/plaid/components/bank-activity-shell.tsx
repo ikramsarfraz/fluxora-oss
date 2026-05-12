@@ -1,0 +1,590 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { confirmPaymentMatch, rejectPaymentMatch } from "../actions";
+import type { getBankActivity } from "../services/bank-activity";
+
+type Data = Awaited<ReturnType<typeof getBankActivity>>;
+type Transaction = Data["transactions"][number];
+
+const C = {
+  ink: "#0c0a09",
+  ink2: "#44403c",
+  muted: "#78716c",
+  surface: "#ffffff",
+  line: "#e7e5e4",
+  line2: "#f5f5f4",
+  good: "oklch(58% 0.13 155)",
+  goodSoft: "oklch(96% 0.04 155)",
+  warn: "oklch(70% 0.13 70)",
+  warnSoft: "oklch(97% 0.04 70)",
+  info: "oklch(60% 0.15 240)",
+  infoSoft: "oklch(96% 0.03 240)",
+  radius: "10px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
+
+type Filter = "all" | "matched" | "pending_review" | "unmatched";
+
+export function BankActivityShell({ data }: { data: Data }) {
+  const [filter, setFilter] = useState<Filter>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
+  const [syncing, startSync] = useTransition();
+
+  const handleSync = () => {
+    startSync(async () => {
+      // Trigger all active connections to sync
+      router.refresh();
+    });
+  };
+
+  const visible = filter === "all"
+    ? data.transactions
+    : data.transactions.filter(t => t.state === filter);
+
+  const lastSync = data.lastSyncAt
+    ? timeSince(new Date(data.lastSyncAt))
+    : "never";
+
+  const totalBalance = data.accounts.reduce((s, a) => s + a.currentBalance, 0);
+
+  return (
+    <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Bank activity</h1>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+            Synced {lastSync}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing}
+            className="h-8 px-3 text-[13px]"
+          >
+            <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
+            {syncing ? "Syncing…" : "Refresh"}
+          </Button>
+          <Link href="/settings/banks">
+            <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]">
+              Manage banks
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Accounts strip */}
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 24, paddingBottom: 4 }}>
+        {/* Total cash card */}
+        <div
+          style={{
+            flexShrink: 0,
+            background: "#1c1917",
+            borderRadius: C.radius,
+            padding: "14px 18px",
+            minWidth: 160,
+          }}
+        >
+          <div style={{ fontSize: 11, color: "#a8a29e", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+            Total cash
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", fontFamily: C.mono }}>
+            ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+          <div style={{ fontSize: 11, color: "#78716c", marginTop: 4 }}>
+            {data.accounts.length} account{data.accounts.length !== 1 ? "s" : ""}
+          </div>
+        </div>
+
+        {data.accounts.map(account => (
+          <div
+            key={account.id}
+            style={{
+              flexShrink: 0,
+              border: `1px solid ${C.line}`,
+              borderRadius: C.radius,
+              padding: "14px 18px",
+              background: C.surface,
+              minWidth: 150,
+            }}
+          >
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 500, marginBottom: 4 }}>
+              {account.institutionName ?? "Bank"}
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, fontFamily: C.mono }}>
+              ${account.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              {account.name}
+              {account.mask ? ` ···${account.mask}` : ""}
+            </div>
+          </div>
+        ))}
+
+        <Link href="/settings/banks" style={{ textDecoration: "none" }}>
+          <div
+            style={{
+              flexShrink: 0,
+              border: `1px dashed ${C.line}`,
+              borderRadius: C.radius,
+              padding: "14px 18px",
+              background: C.surface,
+              minWidth: 120,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: C.muted,
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            + Add another
+          </div>
+        </Link>
+      </div>
+
+      {/* Filter chips */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {(
+          [
+            { key: "all", label: "All", count: data.transactions.length },
+            { key: "matched", label: "Matched", count: data.counts.matched },
+            { key: "pending_review", label: "Pending review", count: data.counts.pending_review },
+            { key: "unmatched", label: "Unmatched", count: data.counts.unmatched },
+          ] as const
+        ).map(({ key, label, count }) => {
+          const isActive = filter === key;
+          const isPending = key === "pending_review" && count > 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 100,
+                fontSize: 13,
+                fontWeight: isActive ? 600 : 400,
+                border: `1px solid ${isActive ? (isPending ? C.warn : C.ink) : C.line}`,
+                background: isActive
+                  ? isPending ? C.warnSoft : C.ink
+                  : C.surface,
+                color: isActive
+                  ? isPending ? C.warn : "#fff"
+                  : isPending ? C.warn : C.ink2,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              {label}
+              <span
+                style={{
+                  fontSize: 11,
+                  background: isActive
+                    ? "rgba(255,255,255,0.2)"
+                    : isPending ? C.warn + "22" : C.line2,
+                  padding: "1px 6px",
+                  borderRadius: 100,
+                }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Transaction list */}
+      {visible.length === 0 ? (
+        <div
+          style={{
+            border: `1px dashed ${C.line}`,
+            borderRadius: C.radius,
+            padding: "40px",
+            textAlign: "center",
+            color: C.muted,
+            fontSize: 13,
+          }}
+        >
+          No transactions in this view.
+        </div>
+      ) : (
+        <div
+          style={{
+            border: `1px solid ${C.line}`,
+            borderRadius: C.radius,
+            overflow: "hidden",
+          }}
+        >
+          {visible.map((txn, i) => (
+            <TransactionRow
+              key={txn.id}
+              txn={txn}
+              isLast={i === visible.length - 1}
+              expanded={expandedId === txn.id}
+              onToggle={() => setExpandedId(expandedId === txn.id ? null : txn.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TransactionRow({
+  txn,
+  isLast,
+  expanded,
+  onToggle,
+}: {
+  txn: Transaction;
+  isLast: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [confirming, startConfirm] = useTransition();
+  const [rejecting, startReject] = useTransition();
+  const router = useRouter();
+
+  const isOutflow = txn.amount > 0;
+  const amountStr = `${isOutflow ? "-" : "+"}$${Math.abs(txn.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const isPendingReview = txn.state === "pending_review" && txn.match;
+
+  const handleConfirm = () => {
+    if (!txn.match) return;
+    startConfirm(async () => {
+      try {
+        await confirmPaymentMatch(txn.match!.id);
+        toast.success("Match confirmed. Bill marked as paid.");
+        router.refresh();
+      } catch {
+        toast.error("Failed to confirm match.");
+      }
+    });
+  };
+
+  const handleReject = () => {
+    if (!txn.match) return;
+    startReject(async () => {
+      try {
+        await rejectPaymentMatch(txn.match!.id);
+        toast.success("Match dismissed.");
+        router.refresh();
+      } catch {
+        toast.error("Failed to dismiss match.");
+      }
+    });
+  };
+
+  return (
+    <>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "28px 1fr auto auto auto",
+          gap: 12,
+          alignItems: "center",
+          padding: "12px 16px",
+          borderBottom: isLast && !expanded ? "none" : `1px solid ${C.line2}`,
+          background: expanded ? "#fafaf9" : C.surface,
+          cursor: isPendingReview ? "pointer" : undefined,
+        }}
+        onClick={isPendingReview ? onToggle : undefined}
+      >
+        {/* Status icon */}
+        <StateIcon state={txn.state} pending={txn.pending} />
+
+        {/* Payee + meta */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: C.ink, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {txn.merchantName ?? txn.rawDescription.substring(0, 40)}
+            </span>
+            {txn.pending && (
+              <span style={{ fontSize: 11, color: C.muted, background: C.line2, padding: "1px 6px", borderRadius: 100 }}>
+                Pending settlement
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>
+            {txn.rawDescription.substring(0, 50)}
+            {txn.rawDescription.length > 50 ? "…" : ""}
+            {" · "}
+            {txn.accountName}
+            {txn.accountMask ? ` ···${txn.accountMask}` : ""}
+            {" · "}
+            {txn.paymentChannel.toUpperCase()}
+          </div>
+        </div>
+
+        {/* Match reference */}
+        <div style={{ textAlign: "right", minWidth: 140 }}>
+          {txn.match ? (
+            <div>
+              <Link
+                href={`/supplier-invoices/${txn.match.invoice.id}`}
+                style={{ fontSize: 12, color: C.info, textDecoration: "none", fontFamily: C.mono }}
+                onClick={e => e.stopPropagation()}
+              >
+                {txn.match.invoice.invoiceNumber}
+              </Link>
+              <div style={{ fontSize: 11, marginTop: 1 }}>
+                <ConfidenceBadge confidence={txn.match.confidence} autoApplied={txn.match.autoApplied} />
+              </div>
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: C.muted }}>—</span>
+          )}
+        </div>
+
+        {/* Amount */}
+        <div
+          style={{
+            fontFamily: C.mono,
+            fontSize: 13,
+            fontWeight: 600,
+            color: isOutflow ? C.ink : C.good,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {amountStr}
+        </div>
+
+        {/* Action */}
+        <div style={{ minWidth: 80, textAlign: "right" }}>
+          {isPendingReview ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 11, color: C.warn }}>
+                {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: C.warn,
+                  border: `1px solid ${C.warn}`,
+                  borderRadius: 100,
+                  padding: "2px 8px",
+                  fontWeight: 500,
+                }}
+              >
+                Review
+              </span>
+            </div>
+          ) : txn.match ? (
+            <Link href={`/supplier-invoices/${txn.match.invoice.id}`} onClick={e => e.stopPropagation()}>
+              <span style={{ fontSize: 12, color: C.muted, display: "flex", alignItems: "center", gap: 3 }}>
+                <ExternalLink size={11} />
+                View
+              </span>
+            </Link>
+          ) : (
+            <span style={{ fontSize: 12, color: C.muted }}>—</span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded match detail */}
+      {expanded && txn.match && (
+        <MatchDetailBlock
+          txn={txn}
+          onConfirm={handleConfirm}
+          onReject={handleReject}
+          confirming={confirming}
+          rejecting={rejecting}
+        />
+      )}
+    </>
+  );
+}
+
+function MatchDetailBlock({
+  txn,
+  onConfirm,
+  onReject,
+  confirming,
+  rejecting,
+}: {
+  txn: Transaction;
+  onConfirm: () => void;
+  onReject: () => void;
+  confirming: boolean;
+  rejecting: boolean;
+}) {
+  const match = txn.match!;
+  const factors = [
+    {
+      label: "Amount",
+      score: match.amountScore,
+      detail: match.amountScore >= 0.99 ? "Exact match" : match.amountScore >= 0.9 ? "Near match (fees)" : "Approximate",
+      icon: match.amountScore >= 0.9 ? "✓" : "⚠",
+      good: match.amountScore >= 0.9,
+    },
+    {
+      label: "Payee",
+      score: match.payeeScore,
+      detail: match.payeeScore >= 0.95 ? "Known alias" : match.payeeScore >= 0.8 ? "Likely match" : "Fuzzy match",
+      icon: match.payeeScore >= 0.8 ? "✓" : "⚠",
+      good: match.payeeScore >= 0.8,
+    },
+    {
+      label: "Timing",
+      score: match.timingScore,
+      detail: match.timingScore >= 0.95
+        ? "On due date"
+        : match.timingScore >= 0.6
+          ? "Within 30 days"
+          : "Late payment",
+      icon: match.timingScore >= 0.6 ? "✓" : "⚠",
+      good: match.timingScore >= 0.6,
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        background: C.warnSoft,
+        borderBottom: `1px solid ${C.line}`,
+        padding: "16px 20px 20px",
+      }}
+    >
+      {/* Factor grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
+        {factors.map(f => (
+          <div
+            key={f.label}
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.line}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {f.label}
+              </span>
+              <span style={{ fontSize: 13, color: f.good ? C.good : C.warn }}>
+                {f.icon}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{f.detail}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+              Score: {(f.score * 100).toFixed(0)}%
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Copy */}
+      <div
+        style={{
+          fontSize: 12,
+          color: C.ink2,
+          background: C.surface,
+          border: `1px solid ${C.line}`,
+          borderRadius: 8,
+          padding: "10px 12px",
+          marginBottom: 14,
+          lineHeight: 1.6,
+        }}
+      >
+        Confirming will mark <strong>{match.invoice.invoiceNumber}</strong> as paid
+        {match.invoice.supplierName
+          ? ` and remember "${txn.rawDescription.substring(0, 30)}${txn.rawDescription.length > 30 ? "…" : ""}" as an alias for ${match.invoice.supplierName} — next time we'll auto-apply.`
+          : "."}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onConfirm}
+          disabled={confirming}
+          className="h-8 bg-stone-ink px-4 text-[13px] text-white hover:bg-stone-ink/90"
+        >
+          {confirming ? "Confirming…" : "Confirm match"}
+        </Button>
+        <Link href={`/supplier-invoices/${match.invoice.id}`}>
+          <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]">
+            Link to different bill
+          </Button>
+        </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onReject}
+          disabled={rejecting}
+          className="h-8 px-3 text-[13px] text-stone-muted"
+        >
+          {rejecting ? "…" : "Not a bill payment"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StateIcon({ state, pending }: { state: string; pending: boolean }) {
+  if (pending) {
+    return (
+      <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #a8a29e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8a29e" }} />
+      </div>
+    );
+  }
+  if (state === "matched") {
+    return (
+      <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.good, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M2 5l2.5 2.5 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    );
+  }
+  if (state === "pending_review") {
+    return (
+      <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.warn, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>?</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.line }} />
+    </div>
+  );
+}
+
+function ConfidenceBadge({ confidence, autoApplied }: { confidence: number; autoApplied: boolean }) {
+  const pct = Math.round(confidence * 100);
+  const color = confidence >= 0.95 ? C.good : confidence >= 0.6 ? C.warn : C.muted;
+  return (
+    <span style={{ fontSize: 11, color, fontWeight: 500 }}>
+      {pct}% · {autoApplied ? "auto-applied" : "needs review"}
+    </span>
+  );
+}
+
+function timeSince(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
