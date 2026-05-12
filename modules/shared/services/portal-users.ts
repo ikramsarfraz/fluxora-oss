@@ -394,7 +394,12 @@ export async function setPortalUserActiveByAdmin(
       isActive,
       updatedAt: new Date(),
     })
-    .where(eq(portalUsers.id, targetUserId));
+    .where(
+      and(
+        eq(portalUsers.id, targetUserId),
+        eq(portalUsers.tenantId, current.tenantId),
+      ),
+    );
 
   const updated = await getUserById(targetUserId);
   if (!updated) {
@@ -437,7 +442,12 @@ export async function setPortalUserRoleByAdmin(
       role,
       updatedAt: new Date(),
     })
-    .where(eq(portalUsers.id, targetUserId));
+    .where(
+      and(
+        eq(portalUsers.id, targetUserId),
+        eq(portalUsers.tenantId, current.tenantId),
+      ),
+    );
 
   const updated = await getUserById(targetUserId);
   if (!updated) {
