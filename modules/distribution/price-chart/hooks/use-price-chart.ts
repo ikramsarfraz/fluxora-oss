@@ -9,7 +9,6 @@ import {
   getPriceChartAction,
   promoteProductVendorAction,
   setCustomerProductPriceAction,
-  setProductDefaultCostAction,
   setProductSupplierCostAction,
   updateCustomerFuelSurchargeAction,
 } from "@/modules/distribution/price-chart/actions";
@@ -46,19 +45,11 @@ export function useDeleteCustomerPrice() {
   });
 }
 
-export function useSetProductCost() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { productId: string; costPerLb: string }) =>
-      setProductDefaultCostAction(input.productId, input.costPerLb),
-    onSuccess: () => invalidatePriceChart(queryClient),
-  });
-}
-
 export function useApplyMarkupToCustomer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (customerId: string) => applyMarkupToCustomerAction(customerId),
+    mutationFn: (input: { customerId: string; markupPercent: number }) =>
+      applyMarkupToCustomerAction(input.customerId, input.markupPercent),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
 }

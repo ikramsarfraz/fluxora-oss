@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
@@ -36,8 +36,9 @@ function fmt(raw: string | number | undefined | null): string {
   return Number.isFinite(n) ? n.toFixed(2) : String(raw);
 }
 
-function defPrice(cost: string, markup: number) {
-  return Number(cost) * (1 + markup / 100);
+function marginPct(price: number, cost: number): number | null {
+  if (!Number.isFinite(price) || !Number.isFinite(cost) || cost <= 0) return null;
+  return ((price - cost) / cost) * 100;
 }
 
 // ── VendorSubRows ─────────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ function VendorSubRows({
               )}
             </TableCell>
 
-            <TableCell /><TableCell /><TableCell />
+            <TableCell /><TableCell />
 
             <TableCell className="py-2 text-center">
               {!v.is_primary && (
@@ -145,7 +146,6 @@ function VendorSubRows({
 function ProductRow({
   prod,
   customerId,
-  markup,
   priceMap,
   onCommit,
   onReset,
@@ -158,7 +158,6 @@ function ProductRow({
 }: {
   prod: CustomerProductRow;
   customerId: string;
-  markup: number;
   priceMap: Map<string, string>;
   onCommit: (productId: string, value: string) => void;
   onReset: () => void;
@@ -172,24 +171,10 @@ function ProductRow({
   const key = `${customerId}:${prod.id}`;
   const storedOverride = priceMap.get(key);
   const isOverride = storedOverride !== undefined;
-  const def = prod.cost ? defPrice(prod.cost, markup) : null;
+  const cost = Number(prod.cost);
+  const displayMargin = isOverride ? marginPct(Number(storedOverride), cost) : null;
   const [inputVal, setInputVal] = useState(storedOverride ?? "");
   const [focused, setFocused] = useState(false);
-
-  const prevKey = useRef(key);
-  const prevOverride = useRef(storedOverride);
-  if (prevKey.current !== key || prevOverride.current !== storedOverride) {
-    prevKey.current = key;
-    prevOverride.current = storedOverride;
-    setInputVal(storedOverride ?? "");
-  }
-
-  const displayMargin =
-    def != null
-      ? isOverride
-        ? ((Number(storedOverride) - Number(prod.cost)) / Number(prod.cost)) * 100
-        : ((def - Number(prod.cost)) / Number(prod.cost)) * 100
-      : null;
 
   const marginClass =
     displayMargin == null
@@ -248,69 +233,60 @@ function ProductRow({
               </span>
             )
           ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
-          )}
-        </TableCell>
-
-        <TableCell className="py-3 px-4 text-right">
-          {def != null ? (
-            <span className="font-mono tabular-nums text-[13px] font-medium text-stone-muted">
-              ${def.toFixed(2)}
-            </span>
-          ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-stone-muted/60">No cost</span>
           )}
         </TableCell>
 
         <TableCell className="py-2 px-4">
-          {def != null ? (
-            <div className="inline-flex items-center gap-2">
-              <div className="relative inline-flex items-center">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
-                  $
-                </span>
-                <Input
-                  type="number"
-                  step={0.01}
-                  min={0}
-                  value={inputVal}
-                  placeholder={def.toFixed(2)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={e => {
-                    setFocused(false);
-                    onCommit(prod.id, e.target.value);
-                  }}
-                  onChange={e => setInputVal(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      (e.target as HTMLInputElement).blur();
-                    }
-                    if (e.key === "Escape") {
-                      setInputVal(storedOverride ?? "");
-                      (e.target as HTMLInputElement).blur();
-                    }
-                  }}
-                  className={cn(
-                    "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
-                    "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
-                    focused
-                      ? "border-ring bg-white ring-3 ring-ring/50"
-                      : isOverride
-                        ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
-                        : "border-transparent bg-transparent shadow-none",
-                  )}
-                />
-              </div>
-              {isOverride && (
-                <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  Override
-                </Badge>
-              )}
+          <div className="inline-flex items-center gap-2">
+            <div className="relative inline-flex items-center">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
+                $
+              </span>
+              <Input
+                type="number"
+                step={0.01}
+                min={0}
+                value={inputVal}
+                placeholder="—"
+                onFocus={() => setFocused(true)}
+                onBlur={e => {
+                  const rawValue = e.target.value;
+                  const parsedValue = parseFloat(rawValue);
+                  setFocused(false);
+                  if (!rawValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+                    setInputVal(storedOverride ?? "");
+                  }
+                  onCommit(prod.id, rawValue);
+                }}
+                onChange={e => setInputVal(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") {
+                    setInputVal(storedOverride ?? "");
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                className={cn(
+                  "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
+                  "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+                  focused
+                    ? "border-ring bg-white ring-3 ring-ring/50"
+                    : isOverride
+                      ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                      : "border-transparent bg-transparent shadow-none",
+                )}
+              />
             </div>
-          ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
-          )}
+            {isOverride && (
+              <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                Set
+              </Badge>
+            )}
+          </div>
         </TableCell>
 
         <TableCell className="py-3 px-4 text-right">
@@ -331,7 +307,7 @@ function ProductRow({
               size="icon-xs"
               onClick={onReset}
               disabled={deleting}
-              title="Reset to default"
+              title="Clear customer price"
             >
               <RotateCcw size={13} />
             </Button>
@@ -349,7 +325,7 @@ function ProductRow({
       )}
       {expanded && (
         <TableRow className="hover:bg-transparent border-0">
-          <TableCell colSpan={6} className="h-px bg-stone-line p-0" />
+          <TableCell colSpan={5} className="h-px bg-stone-line p-0" />
         </TableRow>
       )}
     </>
@@ -364,20 +340,9 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
   const promote = usePromoteProductVendor();
   const onError = useCallback((e: Error) => toast.error(e.message), []);
 
-  const [markup, setMarkup] = useState(7);
-  const [editingMarkup, setEditingMarkup] = useState(false);
-  const [markupDraft, setMarkupDraft] = useState("7");
-  const markupInputRef = useRef<HTMLInputElement>(null);
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
-  const prevCustomerId = useRef(customerId);
-  if (prevCustomerId.current !== customerId) {
-    prevCustomerId.current = customerId;
-    setPage(1);
-    setExpandedProductId(null);
-  }
 
   const { data: pageData, isLoading } = useCustomerProductPricesPage(customerId, {
     page,
@@ -394,27 +359,13 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
     return m;
   }, [pageData, customerId]);
 
-  function commitMarkup() {
-    const v = parseFloat(markupDraft);
-    if (Number.isFinite(v) && v >= 0) setMarkup(v);
-    setEditingMarkup(false);
-  }
-
   function handleCommit(productId: string, rawValue: string) {
-    const prod = pageData?.data.find(p => p.id === productId);
-    if (!prod?.cost) return;
-    const def = defPrice(prod.cost, markup);
     if (!rawValue.trim()) {
       deletePrice.mutate({ customerId, productId }, { onError });
       return;
     }
     const v = parseFloat(rawValue);
     if (!Number.isFinite(v) || v < 0) return;
-    if (Math.abs(v - def) < 0.005) {
-      deletePrice.mutate({ customerId, productId }, { onError });
-      toast.success("Matches default — no override stored");
-      return;
-    }
     setPrice.mutate({ customerId, productId, pricePerLb: v.toFixed(2) }, { onError });
   }
 
@@ -433,7 +384,7 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
 
   const description = isLoading
     ? "Loading prices…"
-    : `${totalProducts} products · ${overrideCount} override${overrideCount !== 1 ? "s" : ""}. Empty = cost × markup. Type a value to override; clear to revert.`;
+    : `${totalProducts} products · ${overrideCount} customer price${overrideCount !== 1 ? "s" : ""}`;
 
   return (
     <DetailSection title="Prices" description={description}>
@@ -441,46 +392,6 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
         <p className="text-sm text-muted-foreground">No products yet.</p>
       ) : (
         <div className="mt-1">
-          {/* markup control */}
-          <div className="flex items-center gap-1.5 mb-3 text-xs text-stone-muted">
-            <span>Default markup:</span>
-            {editingMarkup ? (
-              <Input
-                ref={markupInputRef}
-                autoFocus
-                type="number"
-                min={0}
-                max={100}
-                step={0.5}
-                value={markupDraft}
-                onChange={e => setMarkupDraft(e.target.value)}
-                onBlur={commitMarkup}
-                onKeyDown={e => {
-                  if (e.key === "Enter") commitMarkup();
-                  if (e.key === "Escape") setEditingMarkup(false);
-                }}
-                className="w-14 h-6 text-xs font-semibold px-2"
-              />
-            ) : (
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => {
-                  setMarkupDraft(String(markup));
-                  setEditingMarkup(true);
-                  setTimeout(() => markupInputRef.current?.select(), 0);
-                }}
-                className="h-5 px-1 text-xs font-semibold text-stone-ink underline decoration-dotted underline-offset-2 hover:no-underline"
-              >
-                {markup}%
-              </Button>
-            )}
-            <span className="text-stone-muted/60 text-[11px]">
-              (used to compute Default column · not stored)
-            </span>
-          </div>
-
-          {/* table */}
           <div className="border border-stone-line rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
@@ -489,8 +400,7 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                     [
                       ["Product", "auto", "text-left"],
                       ["Cost", "110px", "text-right"],
-                      ["Default", "120px", "text-right"],
-                      ["Their price", "190px", "text-left"],
+                      ["Price", "190px", "text-left"],
                       ["Margin", "90px", "text-right"],
                       ["", "44px", "text-center"],
                     ] as const
@@ -511,10 +421,9 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
               <TableBody>
                 {(pageData?.data ?? []).map(prod => (
                   <ProductRow
-                    key={prod.id}
+                    key={`${prod.id}:${priceMap.get(`${customerId}:${prod.id}`) ?? ""}`}
                     prod={prod}
                     customerId={customerId}
-                    markup={markup}
                     priceMap={priceMap}
                     onCommit={handleCommit}
                     onReset={() =>

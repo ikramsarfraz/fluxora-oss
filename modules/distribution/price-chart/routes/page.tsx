@@ -6,7 +6,7 @@ export default async function PriceChartPage() {
     <section className="flex flex-col gap-6">
       <PageHeader
         title="Price Chart"
-        description="Pick a customer on the left and edit their pricing on the right. Empty fields mean they pay the default — cost × markup. Type a number to override; clear it to fall back."
+        description="Pick a customer on the left and edit customer-specific prices on the right. Empty fields use the product default price."
       />
       <PriceChartClient />
     </section>

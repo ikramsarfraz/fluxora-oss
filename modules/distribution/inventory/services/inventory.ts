@@ -1021,7 +1021,7 @@ export async function getFifoAllocationForProduct(
   requestedCases: number,
 ) {
   if (!productId || requestedCases <= 0) {
-    return { rows: [], shortBy: 0, totalWeight: 0, lotsUsed: 0 };
+    return { rows: [], candidates: [], shortBy: 0, totalWeight: 0, lotsUsed: 0 };
   }
 
   const tenant = await getCurrentTenant();
@@ -1033,23 +1033,25 @@ export async function getFifoAllocationForProduct(
       lotId: inventoryItems.lotId,
       lotNumber: lots.lotNumber,
       receiveDate: lots.receiveDate,
+      supplierName: suppliers.name,
     })
     .from(inventoryItems)
     .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(suppliers, eq(suppliers.id, lots.supplierId))
     .where(
       and(
         eq(lots.tenantId, tenant.id),
         eq(inventoryItems.productId, productId),
         eq(inventoryItems.status, "in_stock"),
+        sql`${lots.expirationDate} >= current_date`,
       ),
     )
-    .orderBy(lots.receiveDate, inventoryItems.createdAt)
-    .limit(requestedCases);
+    .orderBy(lots.receiveDate, lots.createdAt, inventoryItems.createdAt);
 
   const lotColorMap = new Map<string, number>();
   let colorIdx = 0;
 
-  const rows = items.map((item, i) => {
+  const candidates = items.map((item, i) => {
     if (!lotColorMap.has(item.lotId)) {
       lotColorMap.set(item.lotId, colorIdx++);
     }
@@ -1061,14 +1063,16 @@ export async function getFifoAllocationForProduct(
       receivedDate: item.receiveDate,
       weight: Number(item.exactWeightLbs),
       lotColorIdx: lotColorMap.get(item.lotId)!,
+      supplierName: item.supplierName,
     };
   });
 
+  const rows = candidates.slice(0, requestedCases);
   const shortBy = Math.max(0, requestedCases - rows.length);
   const totalWeight = rows.reduce((s, r) => s + r.weight, 0);
   const lotsUsed = new Set(rows.map(r => r.lotId)).size;
 
-  return { rows, shortBy, totalWeight, lotsUsed };
+  return { rows, candidates, shortBy, totalWeight, lotsUsed };
 }
 
 export type FifoAllocationResult = Awaited<ReturnType<typeof getFifoAllocationForProduct>>;

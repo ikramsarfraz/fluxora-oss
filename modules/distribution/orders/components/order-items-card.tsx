@@ -665,7 +665,6 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
 
   const [casesValue, setCasesValue] = useState(String(remaining || ""));
   const [weightValue, setWeightValue] = useState("");
-  const [printPackingSlip, setPrintPackingSlip] = useState(false);
   const [generateInvoiceOnSave, setGenerateInvoiceOnSave] = useState(true);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -946,15 +945,6 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             flexWrap: "wrap",
           }}
         >
-          <label
-            style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
-          >
-            <Checkbox
-              checked={printPackingSlip}
-              onCheckedChange={checked => setPrintPackingSlip(checked === true)}
-            />
-            Print packing slip
-          </label>
           <label
             style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
           >
