@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -76,6 +77,7 @@ export default function Customers() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [deletingCustomer, setDeletingCustomer] = useState<CustomerRow | null>(null);
+  const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("customers");
 
   const pagination = useUrlPaginationState<CustomerListSort>({
     defaultSort: "createdAt",
@@ -103,9 +105,19 @@ export default function Customers() {
 
   return (
     <>
+      <CsvImportModal importType="customers" open={importOpen} onClose={closeImport} />
       <ListingPage
         title="Customers"
         subtitle="Manage your customer accounts and contact information."
+        secondaryActions={
+          <button onClick={openImport} style={{
+            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+            borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
+            background: "#fff", color: "#52525b", border: "1px solid #d4d4d8", fontFamily: "inherit",
+          }}>
+            <Upload size={13} /> Import CSV
+          </button>
+        }
         primaryAction={
           <ListingAction href="/customers/new">
             <Plus className="size-3.5" />

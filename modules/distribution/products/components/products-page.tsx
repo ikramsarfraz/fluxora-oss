@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
 
 import {
   AlertDialog,
@@ -54,6 +55,7 @@ const COLUMNS: ListingColumn<ProductRow>[] = [
 export default function Products() {
   const router = useRouter();
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
+  const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("products");
 
   const pagination = useUrlPaginationState<ProductListSort>({
     defaultSort: "createdAt",
@@ -83,9 +85,19 @@ export default function Products() {
 
   return (
     <>
+      <CsvImportModal importType="products" open={importOpen} onClose={closeImport} />
       <ListingPage
         title="Products"
         subtitle="Manage your product catalog."
+        secondaryActions={
+          <button onClick={openImport} style={{
+            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+            borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
+            background: "#fff", color: "#52525b", border: "1px solid #d4d4d8", fontFamily: "inherit",
+          }}>
+            <Upload size={13} /> Import CSV
+          </button>
+        }
         primaryAction={
           <ListingAction href="/products/new">
             <Plus className="size-3.5" />

@@ -88,6 +88,7 @@ export interface ListingPageProps<TRow> {
   subtitle?: string;
   primaryAction?: React.ReactNode;
   secondaryActions?: React.ReactNode;
+  belowHeader?: React.ReactNode;
   savedViews?: SavedView[];
   activeView?: string;
   onViewChange?: (id: string) => void;
@@ -195,6 +196,7 @@ export function ListingPage<TRow>({
   subtitle,
   primaryAction,
   secondaryActions,
+  belowHeader,
   savedViews,
   activeView,
   onViewChange,
@@ -261,6 +263,7 @@ export function ListingPage<TRow>({
           </div>
         )}
       </div>
+      {belowHeader}
 
       {savedViews && savedViews.length > 0 ? (
         <ToggleGroup

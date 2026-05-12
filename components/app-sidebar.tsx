@@ -21,6 +21,7 @@ import {
   Building2,
   ChevronsUpDown,
   LayoutDashboard,
+  Inbox,
   Users,
   Package,
   Boxes,
@@ -38,6 +39,10 @@ import {
   UserCog,
   SlidersHorizontal,
   TableProperties,
+  Upload,
+  Compass,
+  Landmark,
+  Activity,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -78,6 +83,11 @@ const navMain: NavGroup[] = [
     title: "Overview",
     hideLabel: true,
     items: [
+      {
+        title: "Inbox",
+        url: "/inbox",
+        icon: Inbox,
+      },
       {
         title: "Dashboard",
         url: "/",
@@ -147,8 +157,28 @@ const navMain: NavGroup[] = [
     ],
   },
   {
+    title: "Tools",
+    items: [
+      {
+        title: "Bulk import",
+        url: "/import",
+        icon: Upload,
+      },
+      {
+        title: "What unlocks next?",
+        url: "/whats-next",
+        icon: Compass,
+      },
+    ],
+  },
+  {
     title: "Finance",
     items: [
+      {
+        title: "Bank activity",
+        url: "/bank-activity",
+        icon: Activity,
+      },
       {
         title: "Payments",
         url: "/payments",
@@ -164,6 +194,11 @@ const navMain: NavGroup[] = [
   {
     title: "Settings",
     items: [
+      {
+        title: "Bank connections",
+        url: "/settings/banks",
+        icon: Landmark,
+      },
       {
         title: "User Management",
         url: "/user-management",
@@ -444,6 +479,15 @@ export function AppSidebar({
               className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               Terms
+            </Link>
+            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
+              ·
+            </span>
+            <Link
+              href="/whats-next"
+              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              What unlocks next?
             </Link>
           </div>
         </SidebarFooter>
