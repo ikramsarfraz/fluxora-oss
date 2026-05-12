@@ -1,12 +1,27 @@
+import { createHash } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { plaidConnections } from "@/db/schema";
+import { plaidConnections, plaidWebhookSeen } from "@/db/schema";
 import { syncConnection } from "@/modules/distribution/plaid/services/transaction-sync";
 import {
   PlaidWebhookVerificationError,
   verifyPlaidWebhook,
 } from "@/modules/distribution/plaid/services/webhook-verification";
+
+function sha256Hex(input: string): string {
+  return createHash("sha256").update(input, "utf8").digest("hex");
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
 
 export async function POST(req: NextRequest) {
   let rawBody: string;
@@ -27,6 +42,23 @@ export async function POST(req: NextRequest) {
       console.error("[plaid/webhook] verification error", err);
     }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Idempotency: dedup on the verified JWT itself, hashed for compact storage.
+  // The non-null assertion is safe because verifyPlaidWebhook would have
+  // rejected a missing header above.
+  const webhookId = sha256Hex(jwtHeaderValue!);
+  try {
+    await db.insert(plaidWebhookSeen).values({ webhookId });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      return NextResponse.json({ acknowledged: true, deduped: true });
+    }
+    console.error("[plaid/webhook] idempotency insert failed", err);
+    return NextResponse.json(
+      { error: "Webhook processing failed" },
+      { status: 500 },
+    );
   }
 
   try {
