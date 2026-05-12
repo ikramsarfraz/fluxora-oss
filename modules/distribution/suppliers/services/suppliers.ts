@@ -1,6 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { suppliers } from "@/db/schema";
+import { suppliers, supplierInvoices } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   buildTextSearchCondition,
@@ -13,11 +13,23 @@ import {
 
 export async function getSupplierById(supplierId: string) {
   const tenant = await getCurrentTenant();
-  const result = await db.query.suppliers.findFirst({
-    where: and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenant.id)),
-  });
+  const [result, [invoiceCountRow]] = await Promise.all([
+    db.query.suppliers.findFirst({
+      where: and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenant.id)),
+    }),
+    db
+      .select({ count: count() })
+      .from(supplierInvoices)
+      .where(
+        and(
+          eq(supplierInvoices.supplierId, supplierId),
+          eq(supplierInvoices.tenantId, tenant.id),
+        ),
+      ),
+  ]);
 
-  return result ?? null;
+  if (!result) return null;
+  return { ...result, _invoiceCount: invoiceCountRow?.count ?? 0 };
 }
 
 export type SupplierDetail = NonNullable<

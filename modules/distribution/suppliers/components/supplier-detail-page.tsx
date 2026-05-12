@@ -30,6 +30,7 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
 import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-dialog";
+import { SupplierReliabilityEmptyState } from "@/modules/distribution/components/empty-states";
 
 function formatPaymentTerms(netDays: number | null | undefined): string {
   if (netDays == null) return "Net-0 (not set)";
@@ -130,6 +131,18 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         open={editTermsOpen}
         onOpenChange={setEditTermsOpen}
       />
+
+      {supplier._invoiceCount < 5 && (
+        <DetailSection
+          title="Reliability scoring"
+          description="Unlocks after 5 completed invoices with this supplier."
+        >
+          <SupplierReliabilityEmptyState
+            invoiceCount={supplier._invoiceCount}
+            supplierName={supplier.name}
+          />
+        </DetailSection>
+      )}
 
       <DetailSection
         title="Danger Zone"
