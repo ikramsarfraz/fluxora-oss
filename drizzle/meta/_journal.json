@@ -166,7 +166,7 @@
     {
       "idx": 23,
       "version": "7",
-      "when": 1778214561924,
+      "when": 1778480000000,
       "tag": "0023_zippy_sway",
       "breakpoints": true
     },
@@ -182,6 +182,41 @@
       "version": "7",
       "when": 1778304026165,
       "tag": "0025_supplier_import_profiles_and_aliases",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778570000000,
+      "tag": "0026_supplier_invoice_charges",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1778660000000,
+      "tag": "0027_supplier_invoice_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1778750000000,
+      "tag": "0028_lot_lifecycle_and_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1778836400000,
+      "tag": "0029_welcome_skipped_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1778836500000,
+      "tag": "0030_married_the_call",
       "breakpoints": true
     }
   ]

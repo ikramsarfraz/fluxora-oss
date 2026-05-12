@@ -2,17 +2,25 @@ import { relations } from "drizzle-orm";
 import { user } from "./auth-schema";
 import {
   auditLogs,
+  bankAccounts,
+  bankTransactions,
+  billForwards,
   categories,
   customerAddresses,
   customerProductPrices,
   customers,
+  dispositionDecisions,
   expenses,
   files,
   inventoryAdjustments,
   inventoryItems,
   lotReceipts,
   lots,
+  markdownHistories,
+  payeeAliases,
   payments,
+  paymentMatches,
+  plaidConnections,
   platformUsers,
   portalUsers,
   productCategories,
@@ -33,6 +41,7 @@ import {
   supportTicketUpdates,
   supportTickets,
   supplierInvoiceAttachments,
+  supplierInvoiceCharges,
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
@@ -85,6 +94,12 @@ export const tenantsRelations = relations(tenants, ({ many, one }) => ({
     references: [tenantBranding.tenantId],
   }),
   auditLogs: many(auditLogs),
+  plaidConnections: many(plaidConnections),
+  bankAccounts: many(bankAccounts),
+  bankTransactions: many(bankTransactions),
+  paymentMatches: many(paymentMatches),
+  payeeAliases: many(payeeAliases),
+  billForwards: many(billForwards),
 }));
 
 export const tenantFeaturesRelations = relations(tenantFeatures, ({ one }) => ({
@@ -369,6 +384,7 @@ export const suppliersRelations = relations(suppliers, ({ many, one }) => ({
   productCosts: many(productSupplierCosts),
   supplierInvoices: many(supplierInvoices),
   lots: many(lots),
+  payeeAliases: many(payeeAliases),
   tenant: one(tenants, {
     fields: [suppliers.tenantId],
     references: [tenants.id],
@@ -427,12 +443,29 @@ export const supplierInvoicesRelations = relations(
       relationName: "supplier_invoices_completed_by",
     }),
     lines: many(supplierInvoiceLines),
+    charges: many(supplierInvoiceCharges),
     tenant: one(tenants, {
       fields: [supplierInvoices.tenantId],
       references: [tenants.id],
     }),
     attachments: many(supplierInvoiceAttachments),
     payments: many(supplierInvoicePayments),
+    paymentMatches: many(paymentMatches),
+    billForwards: many(billForwards),
+  }),
+);
+
+export const supplierInvoiceChargesRelations = relations(
+  supplierInvoiceCharges,
+  ({ one }) => ({
+    supplierInvoice: one(supplierInvoices, {
+      fields: [supplierInvoiceCharges.supplierInvoiceId],
+      references: [supplierInvoices.id],
+    }),
+    tenant: one(tenants, {
+      fields: [supplierInvoiceCharges.tenantId],
+      references: [tenants.id],
+    }),
   }),
 );
 
@@ -478,6 +511,8 @@ export const lotsRelations = relations(lots, ({ one, many }) => ({
   lotReceipts: many(lotReceipts),
   inventoryItems: many(inventoryItems),
   salesOrderFulfillments: many(salesOrderFulfillments),
+  dispositionDecisions: many(dispositionDecisions),
+  markdownHistories: many(markdownHistories),
   tenant: one(tenants, {
     fields: [lots.tenantId],
     references: [tenants.id],
@@ -870,5 +905,119 @@ export const stripePricesRelations = relations(stripePrices, ({ one }) => ({
   product: one(stripeProducts, {
     fields: [stripePrices.stripeProductId],
     references: [stripeProducts.stripeProductId],
+  }),
+}));
+
+export const dispositionDecisionsRelations = relations(
+  dispositionDecisions,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [dispositionDecisions.tenantId],
+      references: [tenants.id],
+    }),
+    lot: one(lots, {
+      fields: [dispositionDecisions.lotId],
+      references: [lots.id],
+    }),
+    decidedBy: one(portalUsers, {
+      fields: [dispositionDecisions.decidedByUserId],
+      references: [portalUsers.id],
+    }),
+    markdownHistories: many(markdownHistories),
+  }),
+);
+
+export const markdownHistoriesRelations = relations(
+  markdownHistories,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [markdownHistories.tenantId],
+      references: [tenants.id],
+    }),
+    lot: one(lots, {
+      fields: [markdownHistories.lotId],
+      references: [lots.id],
+    }),
+    dispositionDecision: one(dispositionDecisions, {
+      fields: [markdownHistories.dispositionDecisionId],
+      references: [dispositionDecisions.id],
+    }),
+  }),
+);
+
+export const plaidConnectionsRelations = relations(plaidConnections, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [plaidConnections.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccounts: many(bankAccounts),
+}));
+
+export const bankAccountsRelations = relations(bankAccounts, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [bankAccounts.tenantId],
+    references: [tenants.id],
+  }),
+  plaidConnection: one(plaidConnections, {
+    fields: [bankAccounts.plaidConnectionId],
+    references: [plaidConnections.id],
+  }),
+  bankTransactions: many(bankTransactions),
+}));
+
+export const bankTransactionsRelations = relations(bankTransactions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [bankTransactions.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccount: one(bankAccounts, {
+    fields: [bankTransactions.bankAccountId],
+    references: [bankAccounts.id],
+  }),
+  paymentMatches: many(paymentMatches),
+}));
+
+export const paymentMatchesRelations = relations(paymentMatches, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [paymentMatches.tenantId],
+    references: [tenants.id],
+  }),
+  bankTransaction: one(bankTransactions, {
+    fields: [paymentMatches.bankTransactionId],
+    references: [bankTransactions.id],
+  }),
+  supplierInvoice: one(supplierInvoices, {
+    fields: [paymentMatches.supplierInvoiceId],
+    references: [supplierInvoices.id],
+  }),
+  confirmedBy: one(portalUsers, {
+    fields: [paymentMatches.confirmedByUserId],
+    references: [portalUsers.id],
+  }),
+}));
+
+export const payeeAliasesRelations = relations(payeeAliases, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [payeeAliases.tenantId],
+    references: [tenants.id],
+  }),
+  supplier: one(suppliers, {
+    fields: [payeeAliases.supplierId],
+    references: [suppliers.id],
+  }),
+}));
+
+export const billForwardsRelations = relations(billForwards, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [billForwards.tenantId],
+    references: [tenants.id],
+  }),
+  supplierInvoice: one(supplierInvoices, {
+    fields: [billForwards.supplierInvoiceId],
+    references: [supplierInvoices.id],
+  }),
+  sentBy: one(portalUsers, {
+    fields: [billForwards.sentByUserId],
+    references: [portalUsers.id],
   }),
 }));
