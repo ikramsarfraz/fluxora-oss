@@ -74,10 +74,30 @@ export type AiProductMatchResult = {
   matches: AiProductMatch[];
 };
 
+// ---------------------------------------------------------------------------
+// Vision extraction types — defined here so VisionProvider can extend AiProvider
+// without introducing a circular import between ai-provider and ai-vision.
+// ---------------------------------------------------------------------------
+
+export type VisionExtractionInput = {
+  pdfBuffer: Buffer;
+  filename: string;
+  extractedText?: string;
+  supplierHints?: string[];
+  candidateSuppliers?: Array<{ id: string; name: string }>;
+  debug?: boolean;
+};
+
 export interface AiProvider {
   extractSupplierInvoice(input: AiExtractionInput): Promise<AiExtractionResult>;
   suggestProductMatches(input: AiProductMatchInput): Promise<AiProductMatchResult>;
   isAvailable(): boolean;
+  /** Whether this provider can process raw PDF bytes via vision. */
+  isVisionCapable(): boolean;
+  /** Extract invoice data from a PDF buffer using vision. Returns rawJson for debug. */
+  extractInvoiceFromPdf(
+    input: VisionExtractionInput,
+  ): Promise<AiExtractionResult & { rawJson: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +106,10 @@ export interface AiProvider {
 
 class MockAiProvider implements AiProvider {
   isAvailable(): boolean {
+    return false;
+  }
+
+  isVisionCapable(): boolean {
     return false;
   }
 
@@ -114,6 +138,26 @@ class MockAiProvider implements AiProvider {
         confidence: 0,
         reasoning: "Mock provider — no AI matching performed.",
       })),
+    };
+  }
+
+  async extractInvoiceFromPdf(
+    _input: VisionExtractionInput,
+  ): Promise<AiExtractionResult & { rawJson: string }> {
+    return {
+      supplierName: null,
+      invoiceNumber: null,
+      invoiceDate: null,
+      totalAmount: null,
+      subtotal: null,
+      fees: [],
+      lines: [],
+      confidence: 0,
+      warnings: [
+        "Vision extraction is not available — no vision-capable AI provider is configured. Set AI_PROVIDER=openai and OPENAI_API_KEY to enable.",
+      ],
+      reasoning: "Mock provider — vision not available.",
+      rawJson: "",
     };
   }
 }
@@ -155,6 +199,7 @@ export function createAiProvider(): AiProvider {
       apiKey: openaiKey,
       invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o-mini",
       productMatchModel: process.env.OPENAI_PRODUCT_MATCH_MODEL ?? "gpt-4o-mini",
+      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o",
       maxInvoiceTextChars: resolveMaxInt(
         process.env.AI_MAX_INVOICE_TEXT_CHARS,
         30_000,

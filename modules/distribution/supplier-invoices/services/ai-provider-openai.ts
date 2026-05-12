@@ -4,6 +4,10 @@ import OpenAI from "openai";
 
 import { INVOICE_EXTRACTION_SYSTEM_PROMPT, PRODUCT_MATCH_SYSTEM_PROMPT } from "../utils/ai-prompts";
 import {
+  VISION_INVOICE_EXTRACTION_SYSTEM_PROMPT,
+  buildVisionInvoiceUserMessage,
+} from "../utils/vision-prompts";
+import {
   truncateInvoiceText,
   limitProductCandidates,
   validateExtractionResult,
@@ -11,7 +15,6 @@ import {
   safeParseJson,
   buildInvoiceExtractionUserMessage,
   buildProductMatchUserMessage,
-  type ValidatedExtractionResult,
 } from "../utils/ai-validation";
 import type {
   AiProvider,
@@ -19,21 +22,8 @@ import type {
   AiExtractionResult,
   AiProductMatchInput,
   AiProductMatchResult,
+  VisionExtractionInput,
 } from "./ai-provider";
-
-// ---------------------------------------------------------------------------
-// Token usage — surfaced in warnings for cost visibility
-// ---------------------------------------------------------------------------
-
-type TokenUsage = {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-};
-
-function formatTokenUsage(usage: TokenUsage): string {
-  return `OpenAI tokens used: ${usage.totalTokens} (prompt: ${usage.promptTokens}, completion: ${usage.completionTokens})`;
-}
 
 // ---------------------------------------------------------------------------
 // Safe failure builders
@@ -76,6 +66,7 @@ export class OpenAiProvider implements AiProvider {
   private readonly client: OpenAI;
   private readonly invoiceModel: string;
   private readonly productMatchModel: string;
+  private readonly visionModel: string;
   private readonly maxInvoiceTextChars: number;
   private readonly maxProductCandidates: number;
 
@@ -83,17 +74,23 @@ export class OpenAiProvider implements AiProvider {
     apiKey: string;
     invoiceModel: string;
     productMatchModel: string;
+    visionModel: string;
     maxInvoiceTextChars: number;
     maxProductCandidates: number;
   }) {
     this.client = new OpenAI({ apiKey: args.apiKey });
     this.invoiceModel = args.invoiceModel;
     this.productMatchModel = args.productMatchModel;
+    this.visionModel = args.visionModel;
     this.maxInvoiceTextChars = args.maxInvoiceTextChars;
     this.maxProductCandidates = args.maxProductCandidates;
   }
 
   isAvailable(): boolean {
+    return true;
+  }
+
+  isVisionCapable(): boolean {
     return true;
   }
 
@@ -113,7 +110,6 @@ export class OpenAiProvider implements AiProvider {
     });
 
     let rawContent: string;
-    let tokenUsage: TokenUsage | undefined;
 
     try {
       const response = await this.client.chat.completions.create({
@@ -127,13 +123,6 @@ export class OpenAiProvider implements AiProvider {
       });
 
       rawContent = response.choices[0]?.message?.content ?? "";
-      if (response.usage) {
-        tokenUsage = {
-          promptTokens: response.usage.prompt_tokens,
-          completionTokens: response.usage.completion_tokens,
-          totalTokens: response.usage.total_tokens,
-        };
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return buildFailureExtractionResult(`OpenAI API error: ${message}`);
@@ -149,15 +138,7 @@ export class OpenAiProvider implements AiProvider {
       return buildFailureExtractionResult("OpenAI response did not match the expected schema.");
     }
 
-    // Append token usage to warnings for cost visibility.
-    const result: AiExtractionResult = {
-      ...validated,
-      warnings: tokenUsage
-        ? [...validated.warnings, formatTokenUsage(tokenUsage)]
-        : validated.warnings,
-    };
-
-    return result;
+    return validated;
   }
 
   async suggestProductMatches(input: AiProductMatchInput): Promise<AiProductMatchResult> {
@@ -228,6 +209,132 @@ export class OpenAiProvider implements AiProvider {
             ? 0
             : m.confidence,
       })),
+    };
+  }
+
+  async extractInvoiceFromPdf(
+    input: VisionExtractionInput,
+  ): Promise<AiExtractionResult & { rawJson: string }> {
+    const pdfDataUrl = `data:application/pdf;base64,${input.pdfBuffer.toString("base64")}`;
+
+    const textHint = buildVisionInvoiceUserMessage({
+      filename: input.filename,
+      extractedText: input.extractedText,
+      supplierHints: input.supplierHints,
+      candidateSuppliers: input.candidateSuppliers,
+    });
+
+    const fileContentPart: OpenAI.Chat.Completions.ChatCompletionContentPart.File = {
+      type: "file",
+      file: {
+        filename: input.filename,
+        file_data: pdfDataUrl,
+      },
+    };
+
+    if (input.debug) {
+      console.log("[vision debug] sending request", {
+        model: this.visionModel,
+        pdfBytes: input.pdfBuffer.byteLength,
+        filename: input.filename,
+        contentParts: ["file", "text"],
+        textHintLength: textHint.length,
+      });
+    }
+
+    let rawContent: string;
+    let finishReason: string | null = null;
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.visionModel,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: VISION_INVOICE_EXTRACTION_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [fileContentPart, { type: "text", text: textHint }],
+          },
+        ],
+        temperature: 0,
+      });
+
+      rawContent = response.choices[0]?.message?.content ?? "";
+      finishReason = response.choices[0]?.finish_reason ?? null;
+
+      if (input.debug) {
+        const promptTokens = response.usage?.prompt_tokens ?? 0;
+        const completionTokens = response.usage?.completion_tokens ?? 0;
+        console.log("[vision debug] response received", {
+          finishReason,
+          promptTokens,
+          completionTokens,
+          rawContentLength: rawContent.length,
+          rawContentPreview: rawContent.slice(0, 500),
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (input.debug) {
+        console.error("[vision debug] API error", err);
+      }
+      return this.buildVisionFailureResult(`OpenAI API error: ${message}`);
+    }
+
+    if (!rawContent) {
+      return this.buildVisionFailureResult(
+        `Vision model returned empty content (finish_reason: ${finishReason}).`,
+        rawContent,
+      );
+    }
+
+    const parsed = safeParseJson(rawContent);
+    if (parsed === null) {
+      if (input.debug) {
+        console.log("[vision debug] JSON parse failed, raw:", rawContent.slice(0, 1000));
+      }
+      return this.buildVisionFailureResult("Vision model returned a non-JSON response.", rawContent);
+    }
+
+    const validated = validateExtractionResult(parsed);
+    if (!validated) {
+      if (input.debug) {
+        console.log("[vision debug] schema validation failed, parsed:", JSON.stringify(parsed).slice(0, 1000));
+      }
+      return this.buildVisionFailureResult(
+        "Vision model response did not match the expected schema.",
+        rawContent,
+      );
+    }
+
+    if (input.debug) {
+      console.log("[vision debug] extraction succeeded", {
+        lines: validated.lines.length,
+        firstLine: validated.lines[0] ?? null,
+        totalAmount: validated.totalAmount,
+        confidence: validated.confidence,
+      });
+    }
+
+    return { ...validated, rawJson: rawContent };
+  }
+
+  private buildVisionFailureResult(
+    reason: string,
+    rawJson = "",
+  ): AiExtractionResult & { rawJson: string } {
+    return {
+      supplierName: null,
+      invoiceNumber: null,
+      invoiceDate: null,
+      totalAmount: null,
+      subtotal: null,
+      fees: [],
+      lines: [],
+      confidence: 0,
+      warnings: [`Vision extraction failed: ${reason}`],
+      reasoning: reason,
+      rawJson,
     };
   }
 }

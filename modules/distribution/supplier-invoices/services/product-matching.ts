@@ -318,7 +318,7 @@ function matchProductDeterministic(
 ): ProductMatchResult {
   const normalized = normalizeProductName(vendorName);
 
-  // Stage 1: exact alias match
+  // Stage 1: alias match on normalised vendor name
   const exactAlias = aliasMap.get(normalized);
   if (exactAlias) {
     return {
@@ -331,22 +331,7 @@ function matchProductDeterministic(
     };
   }
 
-  // Stage 2: normalized alias match (handles minor normalization differences)
-  if (normalized) {
-    const normalizedAlias = aliasMap.get(normalized);
-    if (normalizedAlias) {
-      return {
-        vendorProductName: vendorName,
-        productId: normalizedAlias.internalProductId,
-        confidence: Math.min(normalizedAlias.confidence, 90),
-        stage: "normalized_alias",
-        reasoning: "Matched normalized alias.",
-        aiSuggestionPending: false,
-      };
-    }
-  }
-
-  // Stage 3: exact product name/sku match
+  // Stage 2: exact product name/sku match
   for (const product of candidates) {
     if (
       normalizeProductName(product.name) === normalized ||
@@ -363,32 +348,55 @@ function matchProductDeterministic(
     }
   }
 
-  // Stage 4: fuzzy match
-  let bestScore = 0;
-  let bestProduct: ProductMatchCandidate | null = null;
-  for (const product of candidates) {
-    const score = Math.max(
-      fuzzyScore(vendorName, product.name),
-      product.sku ? fuzzyScore(vendorName, product.sku) : 0,
-    );
-    if (score > bestScore) {
-      bestScore = score;
-      bestProduct = product;
-    }
-  }
+  // Stage 3: fuzzy match — score every candidate, keep top 5
+  const scored = candidates
+    .map(p => ({
+      product: p,
+      score: Math.max(
+        fuzzyScore(vendorName, p.name),
+        p.sku ? fuzzyScore(vendorName, p.sku) : 0,
+      ),
+    }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score);
 
-  if (bestProduct && bestScore >= 60) {
+  const best = scored[0];
+
+  if (best && best.score >= 60) {
     return {
       vendorProductName: vendorName,
-      productId: bestProduct.id,
-      confidence: bestScore,
+      productId: best.product.id,
+      confidence: best.score,
       stage: "fuzzy_product",
-      reasoning: `Fuzzy match (score ${bestScore}) — review before confirming.`,
+      reasoning: `Fuzzy match (score ${best.score}).`,
       aiSuggestionPending: false,
+      topCandidates: scored.slice(0, 5).map(x => ({
+        id: x.product.id,
+        name: x.product.name,
+        score: x.score,
+      })),
     };
   }
 
-  // Stage 5: unresolved
+  // Low-confidence suggestion (20–59): surface in the review panel for human
+  // confirmation without auto-filling the form. Both top candidates are shown
+  // as one-click chips so the user can pick the right one.
+  if (best && best.score >= 20) {
+    return {
+      vendorProductName: vendorName,
+      productId: best.product.id,
+      confidence: best.score,
+      stage: "fuzzy_product",
+      reasoning: `Low-confidence fuzzy match (score ${best.score}) — select the correct product.`,
+      aiSuggestionPending: true,
+      topCandidates: scored.slice(0, 5).map(x => ({
+        id: x.product.id,
+        name: x.product.name,
+        score: x.score,
+      })),
+    };
+  }
+
   return {
     vendorProductName: vendorName,
     productId: null,

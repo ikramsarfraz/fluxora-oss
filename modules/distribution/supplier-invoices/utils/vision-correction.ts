@@ -38,12 +38,15 @@ function isColumnSwapPattern(lines: AiInvoiceLine[], hasQtyWeightHeader: boolean
   const decimalCaseCount = lines.filter(hasDecimalCases).length;
   if (decimalCaseCount > 0) return true;
 
-  // Header + every line missing weight → full column swap
-  if (
-    hasQtyWeightHeader &&
-    lines.every(l => l.quantityWeight === null && l.quantityCases !== null)
-  ) {
-    return true;
+  // Header + majority of lines missing weight → full or partial column swap.
+  // "every" is too strict: on mixed invoices where some lines were extracted
+  // correctly, one remaining swapped integer-cases line would never be fixed.
+  // 50% threshold is enough evidence without over-triggering on fixed-case invoices.
+  if (hasQtyWeightHeader && lines.length > 0) {
+    const swappedCount = lines.filter(
+      l => l.quantityWeight === null && l.quantityCases !== null,
+    ).length;
+    if (swappedCount / lines.length >= 0.5) return true;
   }
 
   return false;

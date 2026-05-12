@@ -335,6 +335,9 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
         const catchDelta = Math.abs(weightCandidate.value * rate - amount);
         const fixedDelta = Math.abs(quantity.quantityCases * rate - amount);
         if (catchDelta <= tolerance && fixedDelta <= tolerance) {
+          // Both interpretations fit the math (weight ≈ qty numerically).
+          // Fixed-case wins: when weight equals the case count the product
+          // is almost certainly sold per case, not by catch-weight.
           parsedCandidates.push({
             line: {
               description: quantity.description,

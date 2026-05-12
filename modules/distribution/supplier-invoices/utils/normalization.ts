@@ -53,6 +53,21 @@ const PRODUCT_ABBREVIATIONS: Array<[RegExp, string]> = [
 const BUSINESS_SUFFIXES =
   /\b(llc|inc|co|company|ltd|corp|corporation)\b/gi;
 
+const PLURAL_EXCEPTIONS = new Set([
+  "boneless", "skinless", "weightless", "priceless", "endless",
+  "express", "cross", "class", "grass", "mass", "pass", "bass",
+]);
+
+function stemToken(token: string): string {
+  if (token.length <= 3) return token;
+  if (PLURAL_EXCEPTIONS.has(token)) return token;
+  if (token.endsWith("ies") && token.length > 4) return token.slice(0, -3) + "y";
+  if (token.endsWith("ves") && token.length > 4) return token.slice(0, -3) + "f";
+  if (token.endsWith("ses") || token.endsWith("xes") || token.endsWith("zes")) return token.slice(0, -2);
+  if (token.endsWith("s") && !token.endsWith("ss")) return token.slice(0, -1);
+  return token;
+}
+
 export function normalizeProductName(name: string): string {
   if (!name) return "";
   let result = name.toLowerCase().trim();
@@ -62,7 +77,11 @@ export function normalizeProductName(name: string): string {
   return result
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map(stemToken)
+    .join(" ");
 }
 
 export function normalizeSupplierName(name: string): string {
@@ -123,11 +142,17 @@ export function fuzzyScore(candidate: string, target: string): number {
 
   const aTokens = new Set(a.split(" ").filter(Boolean));
   const bTokens = b.split(" ").filter(Boolean);
-  if (bTokens.length > 0) {
+  const aTokenArr = [...aTokens];
+  if (bTokens.length > 0 && aTokenArr.length > 0) {
     const overlap = bTokens.filter(t => aTokens.has(t)).length;
-    const ratio = overlap / bTokens.length;
+    const ratioB = overlap / bTokens.length;
+    const ratioA = overlap / aTokenArr.length;
+    const ratio = Math.max(ratioA, ratioB);
     if (ratio === 1) return 75;
     if (ratio >= 0.6) return Math.round(60 * ratio);
+    // Partial overlap (40–59%): return a low-confidence score so the match surfaces
+    // in the review panel for human confirmation without auto-filling the form.
+    if (ratio >= 0.4) return Math.round(48 * ratio);
   }
 
   const maxLen = Math.max(a.length, b.length);

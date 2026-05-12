@@ -1,7 +1,10 @@
 import "server-only";
 
 import pdfParse from "pdf-parse";
+import { and, count, isNull, eq } from "drizzle-orm";
 
+import { db } from "@/db";
+import { products } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   parseSupplierInvoicePdfText,
@@ -57,9 +60,17 @@ export async function parseSupplierInvoicePdf(input: {
     );
   }
 
-  const parsed = await pdfParse(input.bytes);
+  const [parsed, [productCountRow]] = await Promise.all([
+    pdfParse(input.bytes),
+    db
+      .select({ n: count() })
+      .from(products)
+      .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
+  ]);
+
   const text = parsed.text?.trim() ?? "";
   const pageCount = parsed.numpages ?? 1;
+  const productCount = Number(productCountRow?.n ?? 0);
 
   return runParsingPipeline({
     extractedText: text,
@@ -68,6 +79,7 @@ export async function parseSupplierInvoicePdf(input: {
     pdfPageCount: pageCount,
     pdfBytes: input.bytes,
     debug: process.env.NODE_ENV === "development",
+    firstBillMode: productCount === 0,
   });
 }
 

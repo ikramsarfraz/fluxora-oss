@@ -216,3 +216,38 @@ test("mixed invoice: only swapped lines are corrected, intact lines left alone",
   assert.equal(out[1].quantityWeight, null);
   assert.equal(out[1].unitType, "fixed_case");
 });
+
+// ---------------------------------------------------------------------------
+// Partial column swap: header present, only SOME lines have null weight
+// ---------------------------------------------------------------------------
+
+test("partial swap: one integer-cases line corrected when header present and 50%+ lines swapped", () => {
+  // Simulates: vision correctly extracted weight on line 1, but line 2 had integer weight
+  // read into cases instead. The "every" gate would miss line 2; majority gate catches it.
+  const lines: AiInvoiceLine[] = [
+    makeLine({ vendorProductName: "CHICKEN BREAST", quantityCases: 4,   quantityWeight: 92.5, unitPrice: 2.10, lineTotal: 194.25, unitType: "catch_weight" }),
+    makeLine({ vendorProductName: "BEEF BRISKET",   quantityCases: 116, quantityWeight: null, unitPrice: 4.20, lineTotal: 487.20, unitType: "fixed_case" }),
+  ];
+  const extractedText = "Qty Description Qty/Weight Rate Amount";
+  const { lines: out, correctedCount } = correctVisionColumnSwap(lines, extractedText);
+  // Line 1 already correct → untouched
+  assert.equal(out[0].quantityCases, 4);
+  assert.equal(out[0].quantityWeight, 92.5);
+  // Line 2 swapped → corrected
+  assert.equal(correctedCount, 1);
+  assert.equal(out[1].quantityWeight, 116);
+  assert.equal(out[1].quantityCases, 1);
+  assert.equal(out[1].unitType, "catch_weight");
+});
+
+test("partial swap: no correction when header present but <50% lines are swapped", () => {
+  // 1 swapped out of 4 = 25% — below threshold, don't risk false-positive correction
+  const lines: AiInvoiceLine[] = [
+    makeLine({ vendorProductName: "A", quantityCases: 2, quantityWeight: 40.0, unitPrice: 3.00, lineTotal: 120.0, unitType: "catch_weight" }),
+    makeLine({ vendorProductName: "B", quantityCases: 3, quantityWeight: 60.0, unitPrice: 2.50, lineTotal: 150.0, unitType: "catch_weight" }),
+    makeLine({ vendorProductName: "C", quantityCases: 4, quantityWeight: 80.0, unitPrice: 2.00, lineTotal: 160.0, unitType: "catch_weight" }),
+    makeLine({ vendorProductName: "D", quantityCases: 75, quantityWeight: null, unitPrice: 1.50, lineTotal: 112.5, unitType: "fixed_case" }),
+  ];
+  const { correctedCount } = correctVisionColumnSwap(lines, "Qty Description Qty/Weight Rate Amount");
+  assert.equal(correctedCount, 0);
+});

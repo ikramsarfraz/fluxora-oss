@@ -112,7 +112,10 @@ test("scoreParseResult: null totals gives partial credit", () => {
   assert.ok(breakdown.score > 80 && breakdown.score <= 100);
 });
 
-test("scoreParseResult: unmatched product lines reduces score", () => {
+test("scoreParseResult: unmatched product lines — linesExtracted true, score penalised via unmatchedProductRatio", () => {
+  // linesExtracted means "we found vendor lines", not "first line has a productId".
+  // Product resolution is tracked by unmatchedProductRatio; unmatched lines still
+  // count as extracted lines.
   const result = makeResult({
     values: {
       ...makeResult().values,
@@ -134,8 +137,51 @@ test("scoreParseResult: unmatched product lines reduces score", () => {
     unmatchedLineDescriptions: ["MYSTERY PRODUCT"],
   });
   const breakdown = scoreParseResult(result);
-  assert.equal(breakdown.linesExtracted, false);
-  assert.ok(breakdown.score < 100);
+  assert.equal(breakdown.linesExtracted, true, "vendor line found → linesExtracted must be true");
+  assert.equal(breakdown.unmatchedProductRatio, 1, "all lines unmatched → ratio = 1");
+  assert.ok(breakdown.score < 100, "score reduced by unmatchedProductRatio");
+});
+
+test("scoreParseResult: AI-path unmatched lines count as linesExtracted", () => {
+  // After AI extraction all lines have productId="" but vendor names are in unmatchedLineDescriptions.
+  const result = makeResult({
+    values: {
+      ...makeResult().values,
+      lines: [
+        { productId: "", unitType: "catch_weight", weightEntryMode: "total_weight",
+          quantityCases: "2", weightLbs: "50", defaultCaseWeightLbs: "",
+          caseWeightEntries: ["", ""], unitPrice: "3.50",
+          lotNumberOverride: "", expirationDateOverride: "" },
+        { productId: "", unitType: "catch_weight", weightEntryMode: "total_weight",
+          quantityCases: "1", weightLbs: "25", defaultCaseWeightLbs: "",
+          caseWeightEntries: [""], unitPrice: "5.00",
+          lotNumberOverride: "", expirationDateOverride: "" },
+      ],
+    },
+    unmatchedLineDescriptions: ["CHICKEN BREAST", "LAMB RACK"],
+  });
+  const breakdown = scoreParseResult(result);
+  assert.equal(breakdown.linesExtracted, true,
+    "AI-path lines with vendor names but no productId must count as linesExtracted");
+});
+
+test("scoreParseResult: empty placeholder line with no vendor names is not linesExtracted", () => {
+  // Scanned PDF or empty result: one placeholder line, no vendor descriptions.
+  const result = makeResult({
+    values: {
+      ...makeResult().values,
+      lines: [
+        { productId: "", unitType: "catch_weight", weightEntryMode: "total_weight",
+          quantityCases: "1", weightLbs: "0", defaultCaseWeightLbs: "",
+          caseWeightEntries: [""], unitPrice: "0",
+          lotNumberOverride: "", expirationDateOverride: "" },
+      ],
+    },
+    unmatchedLineDescriptions: [],
+  });
+  const breakdown = scoreParseResult(result);
+  assert.equal(breakdown.linesExtracted, false,
+    "placeholder line with no vendor names must not count as linesExtracted");
 });
 
 test("scoreParseResult: score never exceeds 100 or drops below 0", () => {
@@ -240,7 +286,10 @@ test("scoreParseResult: successful parse scores high confidence", () => {
   assert.equal(breakdown.totalsMatch, true);
 });
 
-test("scoreParseResult: no supplier match lowers confidence below threshold", () => {
+test("scoreParseResult: no supplier match — supplierMatched false and unmatchedProductRatio = 1", () => {
+  // Since linesExtracted now means "vendor lines were found" (not "first line has productId"),
+  // a no-supplier parse WITH extracted lines can score > 60. The pipeline gate guards against
+  // this explicitly using unmatchedProductRatio < 1, not by relying on the score alone.
   const result = parseSupplierInvoicePdfText({
     text: SAMPLE_INVOICE_TEXT,
     sourceFilename: "Invoice 57876.pdf",
@@ -248,8 +297,10 @@ test("scoreParseResult: no supplier match lowers confidence below threshold", ()
     products: [],
   });
   const breakdown = scoreParseResult(result);
-  assert.ok(breakdown.score < 60, `Expected < 60 for no-supplier parse, got ${breakdown.score}`);
-  assert.equal(breakdown.supplierMatched, false);
+  assert.equal(breakdown.supplierMatched, false, "supplier must not be matched");
+  assert.equal(breakdown.unmatchedProductRatio, 1, "all products unmatched — ratio must be 1");
+  // Pipeline gate uses unmatchedProductRatio < 1 to block early return, not this score.
+  assert.ok(breakdown.score > 0, "score is non-zero (lines and header fields parsed)");
 });
 
 // ---------------------------------------------------------------------------

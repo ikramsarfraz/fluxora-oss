@@ -228,6 +228,30 @@ function perfectScore(): VisionExtractionScore {
   };
 }
 
+test("isVisionExtractionUseful: returns false when vision score is below minimum quality gate (< 40)", () => {
+  // The scorer can't produce a score below 55 for a result with lines (worst case:
+  // −20 amounts, −15 names, −10 empty rows = 55). Construct the score directly to
+  // test that the gate threshold itself works.
+  const lowScore: VisionExtractionScore = {
+    lineCountValid: true,
+    totalsReconcile: null,
+    rowAmountsPresent: false,
+    productNamesPresent: false,
+    noEmptyRows: false,
+    score: 35,
+    penaltyReasons: ["No amounts", "No names", "Empty rows"],
+  };
+  // Even though visionLineCount > currentLineCount, the low score must block adoption.
+  assert.equal(isVisionExtractionUseful(lowScore, 0, 3), false,
+    "low-quality vision result (score < 40) must not be considered useful regardless of line count");
+});
+
+test("isVisionExtractionUseful: returns true when score >= 40 and vision has more lines", () => {
+  const score = scoreVisionExtraction(acmeDistributionSampleResult());
+  assert.ok(score.score >= 40, `sample should score >= 40, got ${score.score}`);
+  assert.equal(isVisionExtractionUseful(score, 0, 10), true);
+});
+
 test("isVisionExtractionUseful: returns false when vision found 0 lines", () => {
   const score: VisionExtractionScore = { ...perfectScore(), lineCountValid: false, score: 60 };
   assert.equal(isVisionExtractionUseful(score, 0, 0), false);
@@ -247,6 +271,59 @@ test("isVisionExtractionUseful: returns false when vision found same count as cu
 
 test("isVisionExtractionUseful: returns false when vision found fewer lines than current", () => {
   assert.equal(isVisionExtractionUseful(perfectScore(), 10, 5), false);
+});
+
+// ---------------------------------------------------------------------------
+// Fix: null lineTotal — substitute unitPrice × quantityWeight for scoring
+// ---------------------------------------------------------------------------
+
+test("scoreVisionExtraction: null lineTotal with unitPrice × quantityWeight reconciles correctly", () => {
+  // 2 lines: no lineTotal, but unitPrice=2.00 and quantityWeight=50/30 → computed=160
+  const lines = [
+    makeLine({ lineTotal: null, unitPrice: 2.00, quantityWeight: 50, quantityCases: 1 }),
+    makeLine({ lineTotal: null, unitPrice: 2.00, quantityWeight: 30, quantityCases: 1 }),
+  ];
+  // totalAmount=160 matches computed 80+60=160 exactly
+  const score = scoreVisionExtraction({ lines, totalAmount: 160 });
+  assert.equal(score.totalsReconcile, true, "should reconcile using unitPrice × quantityWeight substitute");
+  assert.ok(!score.penaltyReasons.some(r => r.includes("don't match")));
+});
+
+test("scoreVisionExtraction: null lineTotal with unitPrice × quantityCases when weight absent", () => {
+  // fixed_case lines: 3 cases × $45.00 = $135
+  const lines = [
+    makeLine({ lineTotal: null, unitPrice: 45.00, quantityWeight: null, quantityCases: 3 }),
+  ];
+  const score = scoreVisionExtraction({ lines, totalAmount: 135 });
+  assert.equal(score.totalsReconcile, true, "should reconcile using unitPrice × quantityCases substitute");
+});
+
+test("scoreVisionExtraction: null lineTotal with no unitPrice → totalsReconcile stays null (no penalty)", () => {
+  // Can't compute anything without unitPrice — should not produce NaN or false
+  const lines = [
+    makeLine({ lineTotal: null, unitPrice: null, quantityWeight: null, quantityCases: null }),
+  ];
+  const score = scoreVisionExtraction({ lines, totalAmount: 100 });
+  assert.equal(score.totalsReconcile, null, "no computable total → totalsReconcile must be null, not false");
+  assert.ok(!Number.isNaN(score.score), "score must never be NaN");
+});
+
+// ---------------------------------------------------------------------------
+// Fix: division-by-zero — invoice total of 0 or null must not produce NaN
+// ---------------------------------------------------------------------------
+
+test("scoreVisionExtraction: invoice totalAmount of 0 does not produce NaN", () => {
+  const lines = [makeLine({ lineTotal: 100, unitPrice: 2.0, quantityWeight: 50 })];
+  const score = scoreVisionExtraction({ lines, totalAmount: 0 });
+  assert.ok(!Number.isNaN(score.score), "score must not be NaN when totalAmount=0");
+  assert.equal(score.totalsReconcile, null, "totalAmount=0 skips reconciliation — totalsReconcile must be null");
+});
+
+test("scoreVisionExtraction: null invoice totalAmount does not produce NaN", () => {
+  const lines = [makeLine({ lineTotal: 100, unitPrice: 2.0, quantityWeight: 50 })];
+  const score = scoreVisionExtraction({ lines, totalAmount: null });
+  assert.ok(!Number.isNaN(score.score), "score must not be NaN when totalAmount=null");
+  assert.equal(score.totalsReconcile, null);
 });
 
 // ---------------------------------------------------------------------------

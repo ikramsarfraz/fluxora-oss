@@ -30,7 +30,16 @@ export function scoreVisionExtraction(
   // Total reconciliation — computed line totals should match the declared invoice total
   let totalsReconcile: boolean | null = null;
   if (result.totalAmount !== null && result.totalAmount > 0 && lines.length > 0) {
-    const computed = lines.reduce((sum, l) => sum + (l.lineTotal ?? 0), 0);
+    // When lineTotal is absent, substitute unitPrice × quantityWeight (or × quantityCases).
+    // The original line is never mutated — the computed value is for scoring only.
+    const computed = lines.reduce((sum, l) => {
+      if (l.lineTotal != null) return sum + l.lineTotal;
+      if (l.unitPrice != null) {
+        if (l.quantityWeight != null) return sum + l.unitPrice * l.quantityWeight;
+        if (l.quantityCases != null) return sum + l.unitPrice * l.quantityCases;
+      }
+      return sum;
+    }, 0);
     if (computed > 0) {
       const variance = Math.abs(computed - result.totalAmount) / result.totalAmount;
       totalsReconcile = variance <= 0.02;
@@ -94,6 +103,10 @@ export function scoreVisionExtraction(
   };
 }
 
+// Conservative minimum quality threshold — vision results below this score are
+// too likely to have misread columns or product names to be trusted over text.
+const MIN_VISION_SCORE_TO_USE = 40;
+
 // Returns true when a vision result is worth preferring over a text-based result
 // (more lines extracted and basic quality thresholds met).
 export function isVisionExtractionUseful(
@@ -103,6 +116,7 @@ export function isVisionExtractionUseful(
 ): boolean {
   if (visionLineCount === 0) return false;
   if (!score.lineCountValid) return false;
+  if (score.score < MIN_VISION_SCORE_TO_USE) return false;
   // Accept vision if it found more lines than the current result, OR
   // current result has nothing and vision found something.
   return visionLineCount > currentLineCount || currentLineCount === 0;

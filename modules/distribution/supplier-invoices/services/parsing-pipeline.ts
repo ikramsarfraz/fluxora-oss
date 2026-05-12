@@ -1,9 +1,9 @@
 import "server-only";
 
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, inArray, desc, ne } from "drizzle-orm";
 
 import { db } from "@/db";
-import { products, suppliers, productCategories, categories } from "@/db/schema";
+import { products, suppliers, productCategories, categories, supplierInvoices, supplierInvoiceLines } from "@/db/schema";
 import {
   parseSupplierInvoicePdfText,
   type SupplierInvoicePdfPrefillResult,
@@ -24,8 +24,13 @@ import {
   matchProductsMultiStage,
   resolveAliasesForTenant,
   type ProductMatchCandidate,
-  type ProductMatchResult,
 } from "./product-matching";
+import {
+  applyAliasesToLines,
+  applyMatchResultsToLines,
+  buildProfileKeywords,
+  type LineMatchEntry,
+} from "../utils/parsing-pipeline-logic";
 
 export { scoreParseResult, detectScannedPdf };
 export type { ParsedConfidenceBreakdown };
@@ -71,6 +76,26 @@ export type PipelineDebugInfo = {
 
 export type DetectedFee = { description: string; amount: number };
 
+export type PriceDeviation = {
+  productId: string;
+  productName: string;
+  parsedUnitPrice: number;
+  lastUnitPrice: number;
+  deviationPct: number;
+  lastInvoiceDate: string;
+};
+
+const PRICE_DEVIATION_THRESHOLD_PCT = 5;
+
+export type FirstBillLine = {
+  rawVendorText: string;
+  suggestedName: string;
+  quantityCases: string;
+  weightLbs: string;
+  unitPrice: string;
+  unitType: "catch_weight" | "fixed_case";
+};
+
 export type PipelineResult = {
   prefillResult: SupplierInvoicePdfPrefillResult;
   confidence: number;
@@ -81,6 +106,7 @@ export type PipelineResult = {
   warnings: string[];
   unresolvedLines: UnresolvedLine[];
   detectedFees: DetectedFee[];
+  priceDeviations: PriceDeviation[];
   detectedProfileId: string | null;
   proposedProfile: {
     supplierId: string;
@@ -88,6 +114,8 @@ export type PipelineResult = {
   } | null;
   visionUsed: boolean;
   debug?: PipelineDebugInfo;
+  /** Populated only when the tenant catalog is empty (first-bill mode). */
+  firstBillLines?: FirstBillLine[];
 };
 
 // ---------------------------------------------------------------------------
@@ -102,6 +130,8 @@ export async function runParsingPipeline(args: {
   aiConfidenceThreshold?: number;
   pdfBytes?: Buffer;
   debug?: boolean;
+  /** When true (empty catalog), skip all product matching and return firstBillLines. */
+  firstBillMode?: boolean;
 }): Promise<PipelineResult> {
   const {
     extractedText,
@@ -111,6 +141,7 @@ export async function runParsingPipeline(args: {
     aiConfidenceThreshold = 60,
     pdfBytes,
     debug = false,
+    firstBillMode = false,
   } = args;
 
   // Stage 0: scanned PDF detection
@@ -173,11 +204,22 @@ export async function runParsingPipeline(args: {
     ? detectedProfile.confidenceThreshold
     : aiConfidenceThreshold;
 
-  // If deterministic confidence is sufficient AND it actually extracted lines, skip AI/vision.
-  // Require linesExtracted so that invoices where the header parsed but no product rows were
-  // matched (score=60 but linesExtracted=false) still fall through to AI/vision.
-  if (breakdown.score >= threshold && breakdown.linesExtracted) {
-    const enriched = await enrichWithAliases(deterministicResult, tenantId, supplierId);
+  // If deterministic confidence is sufficient AND it extracted matched lines, skip AI/vision.
+  // unmatchedProductRatio < 1 ensures invoices where vendor lines were found but no products
+  // matched still fall through to AI — same effective gate as the original implementation.
+  if (breakdown.score >= threshold && breakdown.linesExtracted && breakdown.unmatchedProductRatio < 1) {
+    // Safety intercept: empty catalog should never reach here, but guard anyway.
+    if (firstBillMode) {
+      return buildFirstBillResult(deterministicResult, "deterministic", false, false);
+    }
+    const enriched = await enrichWithAliases(deterministicResult, tenantId, supplierId, richProductRows);
+    const productNameMap = new Map(richProductRows.map(p => [p.id, p.name]));
+    const priceDeviations = await detectPriceDeviations({
+      tenantId,
+      supplierId,
+      lines: enriched.result.values.lines,
+      productNames: productNameMap,
+    });
     return {
       prefillResult: enriched.result,
       confidence: breakdown.score,
@@ -188,8 +230,9 @@ export async function runParsingPipeline(args: {
       warnings: deterministicResult.warnings,
       unresolvedLines: enriched.unresolvedLines,
       detectedFees: [],
+      priceDeviations,
       detectedProfileId: detectedProfile?.id ?? null,
-      proposedProfile: buildProposedProfile(deterministicResult, extractedText),
+      proposedProfile: buildProposedProfile(deterministicResult, supplierRows),
       visionUsed: false,
     };
   }
@@ -291,12 +334,30 @@ export async function runParsingPipeline(args: {
     });
   }
 
+  // First-bill mode: empty catalog — skip all product matching and return naming scaffolding.
+  if (firstBillMode) {
+    const source: PipelineParseSource = visionUsed
+      ? "vision"
+      : aiResult.lines.length > 0
+        ? "ai_fallback"
+        : "hybrid";
+    return buildFirstBillResult(finalResult, source, true, visionUsed);
+  }
+
   const enriched = await enrichWithAliasesAndAiMatching(
     finalResult,
     tenantId,
     finalResult.values.supplierId || null,
     richProductRows,
   );
+
+  const productNameMap = new Map(richProductRows.map(p => [p.id, p.name]));
+  const priceDeviations = await detectPriceDeviations({
+    tenantId,
+    supplierId: finalResult.values.supplierId || null,
+    lines: enriched.result.values.lines,
+    productNames: productNameMap,
+  });
 
   // Warn when AI text parsed line totals but lost the weight column, and vision either
   // wasn't attempted or returned 0 lines — the form will show $0.00 until user fills weights.
@@ -362,10 +423,11 @@ export async function runParsingPipeline(args: {
     detectedFees: visionUsed
       ? (visionResult?.fees ?? [])
       : aiResult.fees,
+    priceDeviations,
     detectedProfileId: detectedProfile?.id ?? null,
     proposedProfile:
       (visionResult?.confidence ?? aiResult.confidence) >= 70
-        ? buildProposedProfile(finalResult, extractedText)
+        ? buildProposedProfile(finalResult, supplierRows)
         : null,
     visionUsed,
     debug: debugInfo,
@@ -431,7 +493,7 @@ function mergeVisionOverResult(
   }, 0);
   const visionTotal = vision.totalAmount;
   const varianceVision =
-    visionTotal != null && computedSum > 0
+    visionTotal != null && visionTotal > 0 && computedSum > 0
       ? Math.abs(visionTotal - computedSum) / visionTotal
       : null;
   const updatedTotalComparison = {
@@ -477,58 +539,86 @@ async function enrichWithAliases(
   result: SupplierInvoicePdfPrefillResult,
   tenantId: string,
   supplierId: string | null,
+  candidateProducts: ProductMatchCandidate[],
 ): Promise<{ result: SupplierInvoicePdfPrefillResult; unresolvedLines: UnresolvedLine[] }> {
-  if (!supplierId) {
-    return {
-      result,
-      unresolvedLines: result.unmatchedLineDescriptions.map(name => ({
-        vendorProductName: name,
-        suggestedProductId: null,
-        confidence: 0,
-        stage: "unresolved",
-        reasoning: "Supplier not matched — cannot look up aliases.",
-        aiSuggestionPending: false,
-      })),
-    };
+  if (result.unmatchedLineDescriptions.length === 0) {
+    return { result, unresolvedLines: [] };
   }
 
-  const aliasMap = await resolveAliasesForTenant({ tenantId, supplierId });
+  // Alias lookup (requires a known supplier).
+  const aliasMap: ReadonlyMap<string, string> = supplierId
+    ? await resolveAliasesForTenant({ tenantId, supplierId })
+    : new Map();
 
-  const enrichedLines = result.values.lines.map(line => {
-    if (line.productId) return line;
-    const normalized = normalizeProductName(
-      result.unmatchedLineDescriptions.find(d => !line.productId) ?? "",
-    );
-    const aliasProductId = normalized ? aliasMap.get(normalized) : undefined;
-    if (aliasProductId) {
-      return { ...line, productId: aliasProductId };
+  const enrichedByAlias = applyAliasesToLines(
+    result.values.lines,
+    result.unmatchedLineDescriptions,
+    aliasMap,
+  );
+
+  const unmatchedAfterAlias = result.unmatchedLineDescriptions.filter(desc => {
+    return !aliasMap.has(normalizeProductName(desc));
+  });
+
+  // Alias-matched lines — build their unresolvedLine entries directly.
+  const aliasResolvedLines: UnresolvedLine[] = result.unmatchedLineDescriptions
+    .filter(name => aliasMap.has(normalizeProductName(name)))
+    .map(name => ({
+      vendorProductName: name,
+      suggestedProductId: aliasMap.get(normalizeProductName(name)) ?? null,
+      confidence: 95,
+      stage: "normalized_alias" as const,
+      reasoning: "Matched via saved alias.",
+      aiSuggestionPending: false,
+    }));
+
+  // Fuzzy-match still-unmatched products against the full catalog.
+  // No AI in the deterministic path — keeps the fast path fast.
+  let finalLines = enrichedByAlias;
+  let fuzzyLines: UnresolvedLine[] = [];
+
+  if (unmatchedAfterAlias.length > 0 && candidateProducts.length > 0) {
+    const matchResults = await matchProductsMultiStage({
+      tenantId,
+      supplierId,
+      vendorProductNames: unmatchedAfterAlias,
+      candidateProducts,
+      useAiFallback: false,
+    });
+
+    const matchEntries = new Map<string, LineMatchEntry>();
+    for (const m of matchResults) {
+      matchEntries.set(m.vendorProductName, {
+        productId: m.productId,
+        confidence: m.confidence,
+        aiSuggestionPending: m.aiSuggestionPending,
+      });
     }
-    return line;
-  });
 
-  const unmatchedDescriptions = result.unmatchedLineDescriptions.filter(desc => {
-    const norm = normalizeProductName(desc);
-    return !aliasMap.has(norm);
-  });
+    ({ enrichedLines: finalLines } = applyMatchResultsToLines(
+      enrichedByAlias,
+      unmatchedAfterAlias,
+      matchEntries,
+    ));
+
+    fuzzyLines = matchResults.map(m => ({
+      vendorProductName: m.vendorProductName,
+      suggestedProductId: m.productId,
+      confidence: m.confidence,
+      stage: m.stage,
+      reasoning: m.reasoning,
+      aiSuggestionPending: false,
+      topCandidates: m.topCandidates,
+    }));
+  }
 
   return {
     result: {
       ...result,
-      values: { ...result.values, lines: enrichedLines },
-      unmatchedLineDescriptions: unmatchedDescriptions,
+      values: { ...result.values, lines: finalLines },
+      unmatchedLineDescriptions: unmatchedAfterAlias,
     },
-    unresolvedLines: result.unmatchedLineDescriptions.map(name => {
-      const norm = normalizeProductName(name);
-      const matched = aliasMap.has(norm);
-      return {
-        vendorProductName: name,
-        suggestedProductId: matched ? (aliasMap.get(norm) ?? null) : null,
-        confidence: matched ? 95 : 0,
-        stage: matched ? "normalized_alias" : "unresolved",
-        reasoning: matched ? "Matched via saved alias." : "No alias or product match found.",
-        aiSuggestionPending: false,
-      };
-    }),
+    unresolvedLines: [...aliasResolvedLines, ...fuzzyLines],
   };
 }
 
@@ -542,20 +632,12 @@ async function enrichWithAliasesAndAiMatching(
   supplierId: string | null,
   candidateProducts: ProductMatchCandidate[],
 ): Promise<{ result: SupplierInvoicePdfPrefillResult; unresolvedLines: UnresolvedLine[] }> {
-  if (!supplierId || result.unmatchedLineDescriptions.length === 0) {
-    return {
-      result,
-      unresolvedLines: result.unmatchedLineDescriptions.map(name => ({
-        vendorProductName: name,
-        suggestedProductId: null,
-        confidence: 0,
-        stage: "unresolved",
-        reasoning: "No supplier match — cannot resolve aliases.",
-        aiSuggestionPending: false,
-      })),
-    };
+  if (result.unmatchedLineDescriptions.length === 0) {
+    return { result, unresolvedLines: [] };
   }
 
+  // supplierId may be null — matchProductsMultiStage handles that:
+  // aliases return empty, AI is gated internally on supplierId != null.
   const matchResults = await matchProductsMultiStage({
     tenantId,
     supplierId,
@@ -564,9 +646,13 @@ async function enrichWithAliasesAndAiMatching(
     useAiFallback: true,
   });
 
-  const matchByName = new Map<string, ProductMatchResult>();
+  const matchEntries = new Map<string, LineMatchEntry>();
   for (const m of matchResults) {
-    matchByName.set(m.vendorProductName, m);
+    matchEntries.set(m.vendorProductName, {
+      productId: m.productId,
+      confidence: m.confidence,
+      aiSuggestionPending: m.aiSuggestionPending,
+    });
   }
 
   const unresolvedLines: UnresolvedLine[] = matchResults.map(m => ({
@@ -580,21 +666,13 @@ async function enrichWithAliasesAndAiMatching(
     aiSuggestion: m.aiSuggestion,
   }));
 
-  // Patch lines with newly resolved product IDs (only high-confidence non-AI matches)
-  const enrichedLines = result.values.lines.map(line => {
-    if (line.productId) return line;
-    for (const [name, match] of matchByName) {
-      if (match.productId && match.confidence >= 60 && !match.aiSuggestionPending) {
-        matchByName.delete(name);
-        return { ...line, productId: match.productId };
-      }
-    }
-    return line;
-  });
-
-  const stillUnmatched = enrichedLines
-    .filter(l => !l.productId)
-    .map((_, i) => result.unmatchedLineDescriptions[i] ?? "");
+  // Patch lines with newly resolved product IDs (only high-confidence non-AI matches).
+  // applyMatchResultsToLines looks up each line's own description, not first-available.
+  const { enrichedLines, stillUnmatched } = applyMatchResultsToLines(
+    result.values.lines,
+    result.unmatchedLineDescriptions,
+    matchEntries,
+  );
 
   return {
     result: {
@@ -670,7 +748,7 @@ function mergeAiOverDeterministic(
     }, 0);
     const aiTotal = ai.totalAmount;
     const variance =
-      aiTotal != null && computedSum > 0
+      aiTotal != null && aiTotal > 0 && computedSum > 0
         ? Math.abs(aiTotal - computedSum) / aiTotal
         : null;
     updatedTotalComparison = {
@@ -711,14 +789,85 @@ function mergeAiOverDeterministic(
 
 function buildProposedProfile(
   result: SupplierInvoicePdfPrefillResult,
-  _extractedText: string,
+  supplierRows: Array<{ id: string; name: string }>,
 ): { supplierId: string; keywords: string[] } | null {
   if (!result.values.supplierId) return null;
-  const keywords = result.unmatchedSupplierCandidates
-    .flatMap(c => c.toUpperCase().split(/\s+/))
-    .filter(w => w.length >= 4)
-    .slice(0, 5);
+  const matchedName = supplierRows.find(s => s.id === result.values.supplierId)?.name;
+  const keywords = buildProfileKeywords(matchedName, result.unmatchedSupplierCandidates);
   return { supplierId: result.values.supplierId, keywords };
+}
+
+// ---------------------------------------------------------------------------
+// Price deviation detection
+// ---------------------------------------------------------------------------
+
+async function detectPriceDeviations({
+  tenantId,
+  supplierId,
+  lines,
+  productNames,
+}: {
+  tenantId: string;
+  supplierId: string | null;
+  lines: Array<{ productId: string; unitPrice: string }>;
+  productNames: Map<string, string>;
+}): Promise<PriceDeviation[]> {
+  if (!supplierId) return [];
+
+  const relevant = lines.filter(l => l.productId && Number(l.unitPrice) > 0);
+  if (relevant.length === 0) return [];
+
+  const productIds = [...new Set(relevant.map(l => l.productId))];
+
+  const rows = await db
+    .select({
+      productId: supplierInvoiceLines.productId,
+      unitPrice: supplierInvoiceLines.unitPrice,
+      invoiceDate: supplierInvoices.invoiceDate,
+    })
+    .from(supplierInvoiceLines)
+    .innerJoin(supplierInvoices, eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id))
+    .where(
+      and(
+        eq(supplierInvoices.tenantId, tenantId),
+        eq(supplierInvoices.supplierId, supplierId),
+        inArray(supplierInvoiceLines.productId, productIds),
+        ne(supplierInvoices.status, "draft"),
+      ),
+    )
+    .orderBy(desc(supplierInvoices.invoiceDate));
+
+  // Take the most recent invoice line per product (rows already sorted DESC).
+  const latestByProduct = new Map<string, { unitPrice: string; invoiceDate: string }>();
+  for (const row of rows) {
+    if (!latestByProduct.has(row.productId)) {
+      latestByProduct.set(row.productId, { unitPrice: row.unitPrice, invoiceDate: row.invoiceDate });
+    }
+  }
+
+  const deviations: PriceDeviation[] = [];
+  for (const { productId, unitPrice: parsedStr } of relevant) {
+    const latest = latestByProduct.get(productId);
+    if (!latest) continue;
+
+    const parsedPrice = Number(parsedStr);
+    const lastPrice = Number(latest.unitPrice);
+    if (!parsedPrice || !lastPrice) continue;
+
+    const deviationPct = ((parsedPrice - lastPrice) / lastPrice) * 100;
+    if (Math.abs(deviationPct) < PRICE_DEVIATION_THRESHOLD_PCT) continue;
+
+    deviations.push({
+      productId,
+      productName: productNames.get(productId) ?? productId,
+      parsedUnitPrice: parsedPrice,
+      lastUnitPrice: lastPrice,
+      deviationPct,
+      lastInvoiceDate: latest.invoiceDate,
+    });
+  }
+
+  return deviations;
 }
 
 // ---------------------------------------------------------------------------
@@ -779,9 +928,67 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     warnings: ["Scanned PDF detected — OCR required."],
     unresolvedLines: [],
     detectedFees: [],
+    priceDeviations: [],
     detectedProfileId: null,
     proposedProfile: null,
     visionUsed: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// First-bill mode helpers
+// ---------------------------------------------------------------------------
+
+function suggestProductName(rawVendorText: string): string {
+  // Strip leading product codes like "QH-", "AB123-" (2-6 chars then separator)
+  const stripped = rawVendorText.replace(/^[A-Z0-9]{2,6}[-_ ]/i, "").trim();
+  return stripped
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildFirstBillResult(
+  result: SupplierInvoicePdfPrefillResult,
+  source: PipelineParseSource,
+  aiUsed: boolean,
+  visionUsed: boolean,
+): PipelineResult {
+  const descriptions = result.unmatchedLineDescriptions;
+  const lines = result.values.lines;
+  const count = Math.min(descriptions.length, lines.length);
+
+  const firstBillLines: FirstBillLine[] = Array.from({ length: count }, (_, i) => ({
+    rawVendorText: descriptions[i] ?? "",
+    suggestedName: suggestProductName(descriptions[i] ?? ""),
+    quantityCases: lines[i]?.quantityCases ?? "1",
+    weightLbs: lines[i]?.weightLbs ?? "0",
+    unitPrice: lines[i]?.unitPrice ?? "0",
+    unitType: (lines[i]?.unitType ?? "catch_weight") as "catch_weight" | "fixed_case",
+  }));
+
+  return {
+    prefillResult: result,
+    confidence: 0,
+    confidenceBreakdown: {
+      invoiceNumberFound: !!result.values.invoiceNumber,
+      invoiceDateFound: !!result.values.invoiceDate,
+      supplierMatched: !!result.values.supplierId,
+      linesExtracted: firstBillLines.length > 0,
+      totalsMatch: null,
+      unmatchedProductRatio: 1,
+      score: 0,
+    },
+    source,
+    aiUsed,
+    requiresOcr: false,
+    warnings: result.warnings,
+    unresolvedLines: [],
+    detectedFees: [],
+    priceDeviations: [],
+    detectedProfileId: null,
+    proposedProfile: null,
+    visionUsed,
+    firstBillLines,
   };
 }
 

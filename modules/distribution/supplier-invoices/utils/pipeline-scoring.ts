@@ -28,8 +28,14 @@ export function scoreParseResult(
       !result.warnings.some(w => /invoice date was not found/i.test(w)),
   );
   const supplierMatched = Boolean(result.values.supplierId);
+  // linesExtracted = at least one vendor line was found (matched or unmatched).
+  // Product resolution is a separate dimension scored via unmatchedProductRatio.
   const linesExtracted =
-    result.values.lines.length > 0 && Boolean(result.values.lines[0].productId);
+    result.values.lines.length > 0 &&
+    (
+      result.values.lines.some(l => l.productId !== "") ||
+      result.unmatchedLineDescriptions.length > 0
+    );
   const totalsMatch = result.totalComparison.matches;
 
   const totalLines = result.values.lines.length;

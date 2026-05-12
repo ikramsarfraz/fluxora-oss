@@ -1,16 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp, Eye, Cpu, FileText, Zap } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp, Eye, Cpu, FileText, Keyboard, Zap, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   useSaveConfirmedAiAlias,
   useRecordManualProductSelection,
@@ -18,6 +11,7 @@ import {
 } from "../hooks/use-supplier-invoices";
 import type { PipelineResult, UnresolvedLine } from "../services/parsing-pipeline";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
+import { countBlockingUnresolved, filterProducts } from "../utils/parsing-pipeline-logic";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -49,11 +43,19 @@ const C = {
 
 type RowState = "pending" | "accepted" | "chosen" | "ignored" | "choosing";
 
+type UnresolvedRowHandle = {
+  acceptSuggestion: () => void;
+  chooseByIndex: (n: number) => void;
+  ignore: () => void;
+};
+
 type Props = {
   pipelineResult: PipelineResult;
   products: ProductListItem[];
   supplierId: string | null;
   onVendorNameResolved: (vendorName: string, productId: string) => void;
+  /** Live sum of all charges currently entered in the form — used for reconcile widget. */
+  chargesTotal?: number;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -81,16 +83,6 @@ function SourceIcon({ source }: { source: PipelineResult["source"] }) {
     case "hybrid": return <Zap style={style} />;
     case "vision": return <Eye style={style} />;
   }
-}
-
-function parseFeesFromWarnings(warnings: string[]): string[] {
-  const feeWarnings: string[] = [];
-  for (const w of warnings) {
-    if (w.toLowerCase().includes("fee") || w.toLowerCase().includes("surcharge") || w.toLowerCase().includes("tax")) {
-      feeWarnings.push(w);
-    }
-  }
-  return feeWarnings;
 }
 
 function isInventoryWarning(warning: string): boolean {
@@ -165,25 +157,58 @@ function ConfidenceBadge({ pct }: { pct: number }) {
   );
 }
 
-function UnresolvedRow({
-  line,
-  lineIndex,
-  products,
-  supplierId,
-  onResolved,
-  saveMutation,
-  manualMutation,
-}: {
-  line: UnresolvedLine;
-  lineIndex: number;
-  products: ProductListItem[];
-  supplierId: string | null;
-  onResolved: (productId: string) => void;
-  saveMutation: ReturnType<typeof useSaveConfirmedAiAlias>;
-  manualMutation: ReturnType<typeof useRecordManualProductSelection>;
-}) {
+const STAGE_LABELS: Record<string, string> = {
+  exact_alias: "alias",
+  normalized_alias: "alias",
+  exact_product: "exact",
+  fuzzy_product: "fuzzy",
+  ai_suggested: "AI",
+};
+
+function StageBadge({ stage }: { stage: string }) {
+  const label = STAGE_LABELS[stage];
+  if (!label) return null;
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 500,
+        color: C.mutedSoft,
+        padding: "1px 5px",
+        border: `1px solid ${C.line}`,
+        borderRadius: 4,
+        lineHeight: 1.6,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+const UnresolvedRow = forwardRef<
+  UnresolvedRowHandle,
+  {
+    line: UnresolvedLine;
+    products: ProductListItem[];
+    supplierId: string | null;
+    onResolved: (productId: string, how: "accepted_ai" | "manual") => void;
+    onIgnored: () => void;
+    saveMutation: ReturnType<typeof useSaveConfirmedAiAlias>;
+    manualMutation: ReturnType<typeof useRecordManualProductSelection>;
+    focused?: boolean;
+  }
+>(function UnresolvedRow(
+  { line, products, supplierId, onResolved, onIgnored, saveMutation, manualMutation, focused = false },
+  ref,
+) {
   const [rowState, setRowState] = useState<RowState>("pending");
   const [chosenProductId, setChosenProductId] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+
+  const filteredProducts = useMemo(
+    () => filterProducts(products, query).slice(0, 50),
+    [products, query],
+  );
 
   const hasSuggestion =
     line.suggestedProductId !== null && (line.aiSuggestionPending || line.stage === "ai_suggested");
@@ -201,31 +226,50 @@ function UnresolvedRow({
         internalProductId: line.suggestedProductId,
       });
       setRowState("accepted");
-      onResolved(line.suggestedProductId);
+      onResolved(line.suggestedProductId, "accepted_ai");
       toast.success(`Alias saved: "${line.vendorProductName}" → "${suggestedProduct?.name ?? line.suggestedProductId}"`);
     } catch {
       toast.error("Could not save alias.");
     }
   }
 
-  async function handleChoose() {
-    if (!chosenProductId || !supplierId) return;
+  async function handleChooseById(id: string) {
+    if (!id || !supplierId) return;
     try {
       await manualMutation.mutateAsync({
         supplierId,
         vendorProductName: line.vendorProductName,
-        internalProductId: chosenProductId,
+        internalProductId: id,
       });
+      const prod = products.find(p => p.id === id);
+      setChosenProductId(id);
       setRowState("chosen");
-      onResolved(chosenProductId);
-      const prod = products.find(p => p.id === chosenProductId);
-      toast.success(`Alias saved: "${line.vendorProductName}" → "${prod?.name ?? chosenProductId}"`);
+      onResolved(id, "manual");
+      toast.success(`Alias saved: "${line.vendorProductName}" → "${prod?.name ?? id}"`);
     } catch {
       toast.error("Could not save alias.");
     }
   }
 
+  function cancelChoosing() {
+    setRowState("pending");
+    setQuery("");
+    setChosenProductId("");
+  }
+
   const isBusy = saveMutation.isPending || manualMutation.isPending;
+
+  useImperativeHandle(ref, () => ({
+    acceptSuggestion: handleAccept,
+    chooseByIndex: (n: number) => {
+      const candidate = line.topCandidates?.[n];
+      if (candidate) handleChooseById(candidate.id);
+    },
+    ignore: () => {
+      setRowState("ignored");
+      onIgnored();
+    },
+  }));
 
   if (rowState === "accepted" || rowState === "chosen") {
     const finalProductId = rowState === "accepted" ? line.suggestedProductId! : chosenProductId;
@@ -267,7 +311,8 @@ function UnresolvedRow({
       >
         <XCircle style={{ width: 14, height: 14, color: C.mutedSoft, flexShrink: 0 }} />
         <span style={{ fontSize: 12, color: C.muted }}>
-          {line.vendorProductName} · ignored
+          <span style={{ fontWeight: 500 }}>{line.vendorProductName}</span>
+          {" · ignored — select a product in the line editor below, or remove this line"}
         </span>
       </div>
     );
@@ -317,6 +362,7 @@ function UnresolvedRow({
               <span style={{ color: C.mutedSoft }}>→</span>
               <span style={{ fontWeight: 500, color: C.ink2 }}>{suggestedProduct.name}</span>
               <ConfidenceBadge pct={line.confidence} />
+              <StageBadge stage={line.stage} />
             </div>
           )}
           {!hasSuggestion && (
@@ -351,7 +397,7 @@ function UnresolvedRow({
           {rowState === "choosing" && (
             <button
               type="button"
-              onClick={() => setRowState("pending")}
+              onClick={cancelChoosing}
               style={smallGhostBtn}
             >
               Cancel
@@ -359,7 +405,7 @@ function UnresolvedRow({
           )}
           <button
             type="button"
-            onClick={() => setRowState("ignored")}
+            onClick={() => { setRowState("ignored"); onIgnored(); }}
             disabled={isBusy}
             style={smallGhostBtn}
           >
@@ -368,40 +414,326 @@ function UnresolvedRow({
         </div>
       </div>
 
-      {/* Choose different row */}
+      {/* Searchable product chooser */}
       {rowState === "choosing" && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ flex: 1 }}>
-            <Select value={chosenProductId} onValueChange={setChosenProductId}>
-              <SelectTrigger
+        <div style={{ marginTop: 8 }}>
+          {/* Top candidates one-click chips */}
+          {line.topCandidates && line.topCandidates.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div
                 style={{
-                  fontSize: 12,
-                  height: 32,
-                  border: `1px solid ${C.lineStrong}`,
-                  borderRadius: 6,
-                  background: C.surface,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: C.mutedSoft,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  marginBottom: 5,
                 }}
               >
-                <SelectValue placeholder="Select internal product…" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.map(p => (
-                  <SelectItem key={p.id} value={p.id} style={{ fontSize: 13 }}>
-                    {p.name}
-                    {p.sku ? ` · ${p.sku}` : ""}
-                  </SelectItem>
+                AI suggestions — click to save immediately
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {line.topCandidates.map((c, ci) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => handleChooseById(c.id)}
+                    style={{
+                      position: "relative",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      fontWeight: 500,
+                      fontFamily: "inherit",
+                      cursor: isBusy ? "not-allowed" : "pointer",
+                      opacity: isBusy ? 0.6 : 1,
+                      background: C.accentBg,
+                      color: C.ink,
+                      border: `1px solid ${C.accent}44`,
+                    }}
+                  >
+                    {focused && ci < 3 && (
+                      <span style={{
+                        position: "absolute",
+                        top: -7,
+                        left: 6,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: C.accent,
+                        background: C.surface,
+                        padding: "0 2px",
+                        borderRadius: 2,
+                        lineHeight: 1.4,
+                        pointerEvents: "none",
+                      }}>
+                        {ci + 1}
+                      </span>
+                    )}
+                    {c.name}
+                    <ConfidenceBadge pct={c.score} />
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            </div>
+          )}
+
+          {/* Search input */}
+          <div style={{ position: "relative", marginBottom: 4 }}>
+            <Search
+              style={{
+                position: "absolute",
+                left: 9,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 12,
+                height: 12,
+                color: C.mutedSoft,
+                pointerEvents: "none",
+                flexShrink: 0,
+              }}
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search by name or SKU…"
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "6px 8px 6px 28px",
+                fontSize: 12,
+                border: `1px solid ${C.lineStrong}`,
+                borderRadius: 6,
+                background: C.surface,
+                color: C.ink,
+                outline: "none",
+                fontFamily: "inherit",
+              }}
+            />
           </div>
-          <button
-            type="button"
-            onClick={handleChoose}
-            disabled={!chosenProductId || isBusy}
-            style={smallPrimaryBtn(!chosenProductId || isBusy)}
+
+          {/* Filtered product list */}
+          <div
+            style={{
+              maxHeight: 180,
+              overflowY: "auto",
+              border: `1px solid ${C.line}`,
+              borderRadius: 6,
+              marginBottom: 8,
+            }}
           >
-            Save alias
-          </button>
+            {filteredProducts.length === 0 ? (
+              <div
+                style={{
+                  padding: "10px 12px",
+                  fontSize: 12,
+                  color: C.mutedSoft,
+                  textAlign: "center",
+                }}
+              >
+                No products found
+              </div>
+            ) : (
+              filteredProducts.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setChosenProductId(p.id)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    width: "100%",
+                    padding: "7px 12px",
+                    background: chosenProductId === p.id ? C.accentBg : "transparent",
+                    border: "none",
+                    borderBottom: `1px solid ${C.line}`,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontFamily: "inherit",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: C.ink,
+                      fontWeight: chosenProductId === p.id ? 600 : 400,
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {p.name}
+                  </span>
+                  {p.sku && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: C.mutedSoft,
+                        fontFamily: C.mono,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {p.sku}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Save action */}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => handleChooseById(chosenProductId)}
+              disabled={!chosenProductId || isBusy}
+              style={smallPrimaryBtn(!chosenProductId || isBusy)}
+            >
+              Save alias
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ── Reconcile widget ───────────────────────────────────────────────────────
+
+function ReconcileWidget({
+  pdfTotal,
+  lineTotal,
+  chargesTotal,
+  detectedFeeCount,
+}: {
+  pdfTotal: number;
+  lineTotal: number;
+  chargesTotal: number;
+  detectedFeeCount: number;
+}) {
+  const fmt = (n: number) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const formTotal = lineTotal + chargesTotal;
+  const gap = pdfTotal - formTotal;
+  const isBalanced = Math.abs(gap) < 0.02;
+
+  const TokMono = ({ v, color }: { v: string; color?: string }) => (
+    <span
+      style={{
+        fontFamily: C.mono,
+        fontSize: 12,
+        fontWeight: 600,
+        padding: "2px 7px",
+        borderRadius: 5,
+        background: color ? `${color}18` : "#f5f5f4",
+        border: `1px solid ${color ? `${color}40` : "#e7e5e4"}`,
+        color: color ?? C.ink,
+      }}
+    >
+      {v}
+    </span>
+  );
+
+  const Op = ({ c }: { c: string }) => (
+    <span style={{ fontSize: 12, color: C.mutedSoft, fontWeight: 600, margin: "0 2px" }}>{c}</span>
+  );
+
+  return (
+    <div
+      style={{
+        margin: "0 0",
+        padding: "12px 20px",
+        borderBottom: `1px solid ${C.line}`,
+        background: isBalanced ? "oklch(98% 0.012 155)" : "oklch(98% 0.018 75)",
+      }}
+    >
+      {/* Title row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: isBalanced ? C.good : C.warn,
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+          }}
+        >
+          {isBalanced ? (
+            <CheckCircle2 style={{ width: 13, height: 13 }} />
+          ) : (
+            <AlertTriangle style={{ width: 13, height: 13 }} />
+          )}
+          {isBalanced ? "Totals balanced — charges account for the gap" : "Totals mismatch"}
+        </span>
+        {!isBalanced && (
+          <span
+            style={{
+              fontFamily: C.mono,
+              fontSize: 12,
+              fontWeight: 700,
+              color: C.warn,
+            }}
+          >
+            Gap: {fmt(gap)}
+          </span>
+        )}
+      </div>
+
+      {/* Math equation */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+          fontSize: 12,
+        }}
+      >
+        <span style={{ fontSize: 11, color: C.muted }}>PDF total</span>
+        <TokMono v={fmt(pdfTotal)} />
+        <Op c="=" />
+        <span style={{ fontSize: 11, color: C.muted }}>Lines</span>
+        <TokMono v={fmt(lineTotal)} />
+        <Op c="+" />
+        <span style={{ fontSize: 11, color: C.muted }}>Charges</span>
+        <TokMono
+          v={fmt(chargesTotal)}
+          color={chargesTotal > 0 ? C.good : undefined}
+        />
+        <Op c="=" />
+        <TokMono
+          v={fmt(formTotal)}
+          color={isBalanced ? C.good : C.warn}
+        />
+        {isBalanced && (
+          <span style={{ fontSize: 11, color: C.good, fontWeight: 600 }}>✓</span>
+        )}
+      </div>
+
+      {/* Hint when still unbalanced */}
+      {!isBalanced && (
+        <div style={{ marginTop: 8, fontSize: 11, color: C.ink2, lineHeight: 1.5 }}>
+          {detectedFeeCount > 0
+            ? `${detectedFeeCount} fee${detectedFeeCount !== 1 ? "s" : ""} were detected and pre-filled in the charges section below — adjust or add charges to close the ${fmt(gap)} gap.`
+            : `The remaining ${fmt(gap)} may be a delivery charge, fee, or missing line. Add it in the charges section below.`}
         </div>
       )}
     </div>
@@ -415,22 +747,48 @@ export function ImportReviewPanel({
   products,
   supplierId,
   onVendorNameResolved,
+  chargesTotal = 0,
 }: Props) {
   const [warningsExpanded, setWarningsExpanded] = useState(true);
   const [unresolvedExpanded, setUnresolvedExpanded] = useState(true);
+  const [breakdownExpanded, setBreakdownExpanded] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileDismissed, setProfileDismissed] = useState(false);
+  const [resolvedCount, setResolvedCount] = useState(0);
+  const [resolutionSummary, setResolutionSummary] = useState({
+    acceptedAiSuggestion: 0,
+    manuallyMatched: 0,
+    ignoredByUser: 0,
+  });
 
   const saveAliasMutation = useSaveConfirmedAiAlias();
   const manualMutation = useRecordManualProductSelection();
   const createProfileMutation = useCreateImportProfile();
+
+  const [priceChangesExpanded, setPriceChangesExpanded] = useState(true);
+  const [focusedIndex, setFocusedIndexState] = useState<number | null>(null);
+  const [shortcutsVisible, setShortcutsVisible] = useState(false);
+
+  // Refs so the keydown handler always sees fresh values without re-registering
+  const focusedIndexRef = useRef<number | null>(null);
+  const rowRefs = useRef<(UnresolvedRowHandle | null)[]>([]);
+  const rowElRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const actionableUnresolvedLenRef = useRef(0);
+
+  function setFocusedIndex(v: number | null) {
+    focusedIndexRef.current = v;
+    setFocusedIndexState(v);
+  }
 
   const {
     prefillResult,
     confidence,
     source,
     visionUsed,
+    aiUsed,
     unresolvedLines,
     detectedFees,
+    priceDeviations,
     proposedProfile,
     warnings,
     confidenceBreakdown,
@@ -446,6 +804,10 @@ export function ImportReviewPanel({
     l => l.stage !== "unresolved" && !l.aiSuggestionPending,
   ).length;
 
+  // Option B: ignored rows still count as blocking — they need manual product
+  // selection in the line editor or removal before the invoice can be posted.
+  const blockingCount = countBlockingUnresolved(actionableUnresolved.length, resolvedCount, 0);
+
   const inventoryWarnings = warnings.filter(isInventoryWarning);
 
   const totalsMatch = totalComparison.matches;
@@ -453,6 +815,76 @@ export function ImportReviewPanel({
   const totalsMismatch = totalsMatch === false;
 
   const hasFees = detectedFees.length > 0;
+
+  // Keep len ref in sync so the single keydown handler always reads the current length
+  actionableUnresolvedLenRef.current = actionableUnresolved.length;
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as Element;
+      // Don't intercept when user is typing
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT"
+      ) return;
+
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsVisible(v => !v);
+        return;
+      }
+
+      const len = actionableUnresolvedLenRef.current;
+      if (len === 0) return;
+
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        const next = focusedIndexRef.current === null ? 0 : Math.min(focusedIndexRef.current + 1, len - 1);
+        setFocusedIndex(next);
+        setUnresolvedExpanded(true);
+        rowElRefs.current[next]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
+      if (e.key === "k" || e.key === "K") {
+        e.preventDefault();
+        if (focusedIndexRef.current === null) return;
+        const prev = Math.max(0, focusedIndexRef.current - 1);
+        setFocusedIndex(prev);
+        rowElRefs.current[prev]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
+
+      const idx = focusedIndexRef.current;
+      if (idx === null) return;
+
+      if (e.key === "1" || e.key === "2" || e.key === "3") {
+        e.preventDefault();
+        rowRefs.current[idx]?.chooseByIndex(Number(e.key) - 1);
+        // Advance focus to next pending row
+        if (idx + 1 < len) setFocusedIndex(idx + 1);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        rowRefs.current[idx]?.acceptSuggestion();
+        if (idx + 1 < len) setFocusedIndex(idx + 1);
+        return;
+      }
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault();
+        rowRefs.current[idx]?.ignore();
+        if (idx + 1 < len) setFocusedIndex(idx + 1);
+        return;
+      }
+      if (e.key === "Escape") {
+        setFocusedIndex(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSaveProfile() {
     if (!proposedProfile || profileSaved) return;
@@ -542,7 +974,85 @@ export function ImportReviewPanel({
             Vision
           </span>
         )}
+        {aiUsed && !visionUsed && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 7px",
+              borderRadius: 99,
+              fontSize: 11,
+              fontWeight: 500,
+              background: C.surfaceAlt,
+              color: C.muted,
+              border: `1px solid ${C.line}`,
+            }}
+          >
+            <Cpu style={{ width: 10, height: 10 }} />
+            AI
+          </span>
+        )}
+        {/* Spacer + keyboard shortcut toggle */}
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          title="Keyboard shortcuts (?)"
+          onClick={() => setShortcutsVisible(v => !v)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "3px 8px",
+            borderRadius: 5,
+            fontSize: 11,
+            fontWeight: 500,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            background: shortcutsVisible ? C.ink : "transparent",
+            color: shortcutsVisible ? "#fff" : C.muted,
+            border: `1px solid ${shortcutsVisible ? C.ink : C.line}`,
+          }}
+        >
+          <Keyboard style={{ width: 11, height: 11 }} />
+          ?
+        </button>
       </div>
+
+      {/* ── Keyboard shortcut strip ─────────────────────────────────────── */}
+      {shortcutsVisible && (
+        <div
+          style={{
+            padding: "10px 20px",
+            background: "#18181b",
+            borderBottom: `1px solid #3f3f46`,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px 20px",
+            alignItems: "center",
+          }}
+        >
+          {([
+            ["J / K", "navigate rows"],
+            ["1 2 3", "pick suggestion"],
+            ["Enter", "accept top match"],
+            ["I", "ignore row"],
+            ["Esc", "clear focus"],
+          ] as [string, string][]).map(([keys, desc]) => (
+            <span key={keys} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 11, fontWeight: 600, color: "#e4e4e7", background: "#27272a", border: "1px solid #3f3f46", borderBottomWidth: 2, borderRadius: 4, padding: "1px 6px" }}>
+                {keys}
+              </span>
+              <span style={{ fontSize: 11, color: "#71717a" }}>{desc}</span>
+            </span>
+          ))}
+          {focusedIndex !== null && (
+            <span style={{ marginLeft: "auto", fontSize: 11, color: "#52525b" }}>
+              row {focusedIndex + 1} of {actionableUnresolved.length} focused
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Summary stats row ───────────────────────────────────────────── */}
       <div
@@ -566,8 +1076,8 @@ export function ImportReviewPanel({
           },
           {
             label: "Unresolved",
-            value: actionableUnresolved.length,
-            color: actionableUnresolved.length > 0 ? C.warn : C.good,
+            value: blockingCount,
+            color: blockingCount > 0 ? C.warn : C.good,
           },
           ...(totalComparison.extractedTotal
             ? [
@@ -592,6 +1102,15 @@ export function ImportReviewPanel({
                 },
               ]
             : []),
+          ...(priceDeviations.length > 0
+            ? [
+                {
+                  label: "Price changes",
+                  value: priceDeviations.length,
+                  color: C.warn,
+                },
+              ]
+            : []),
         ].map((stat, i) => (
           <div
             key={i}
@@ -603,6 +1122,117 @@ export function ImportReviewPanel({
             <StatCell label={stat.label} value={stat.value} color={stat.color} />
           </div>
         ))}
+      </div>
+
+      {/* ── Reconcile widget (totals mismatch only) ───────────────────── */}
+      {totalComparison.extractedTotal && totalsMismatch && (
+        <ReconcileWidget
+          pdfTotal={Number(totalComparison.extractedTotal)}
+          lineTotal={Number(totalComparison.computedLineTotal)}
+          chargesTotal={chargesTotal}
+          detectedFeeCount={detectedFees.length}
+        />
+      )}
+
+      {/* ── Confidence breakdown ───────────────────────────────────────── */}
+      <div style={{ borderBottom: `1px solid ${C.line}` }}>
+        <button
+          type="button"
+          onClick={() => setBreakdownExpanded(v => !v)}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 20px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 600, color: C.mutedSoft, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            Confidence breakdown
+          </span>
+          {breakdownExpanded
+            ? <ChevronUp style={{ width: 14, height: 14, color: C.mutedSoft }} />
+            : <ChevronDown style={{ width: 14, height: 14, color: C.mutedSoft }} />}
+        </button>
+        {breakdownExpanded && (
+          <div style={{ padding: "0 20px 14px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", rowGap: 5, columnGap: 16 }}>
+              {([
+                ["Invoice number", confidenceBreakdown.invoiceNumberFound],
+                ["Invoice date", confidenceBreakdown.invoiceDateFound],
+                ["Supplier matched", confidenceBreakdown.supplierMatched],
+                ["Lines extracted", confidenceBreakdown.linesExtracted],
+                ["Totals match", confidenceBreakdown.totalsMatch],
+              ] as [string, boolean | null][]).map(([label, val]) => (
+                <>
+                  <span style={{ fontSize: 12, color: C.ink2 }}>{label}</span>
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: val === true ? C.good : val === false ? C.error : C.muted,
+                  }}>
+                    {val === true ? "✓" : val === false ? "✗" : "—"}
+                  </span>
+                </>
+              ))}
+              <span style={{ fontSize: 12, color: C.ink2 }}>Unmatched product ratio</span>
+              <span style={{
+                fontSize: 12,
+                fontWeight: 600,
+                fontFamily: C.mono,
+                color: confidenceBreakdown.unmatchedProductRatio === 0 ? C.good : C.warn,
+              }}>
+                {Math.round(confidenceBreakdown.unmatchedProductRatio * 100)}%
+              </span>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: C.mutedSoft }}>
+              Fallback path: <span style={{ fontWeight: 500, color: C.ink2 }}>{sourceLabel(source)}</span>
+              {aiUsed && " · AI product matching applied"}
+              {confidenceBreakdown.unmatchedProductRatio > 0 && " · some products unresolved"}
+            </div>
+            {(resolutionSummary.acceptedAiSuggestion > 0 ||
+              resolutionSummary.manuallyMatched > 0 ||
+              resolutionSummary.ignoredByUser > 0) && (
+              <div
+                style={{
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: `1px solid ${C.line}`,
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  rowGap: 5,
+                  columnGap: 16,
+                }}
+              >
+                <span style={{ fontSize: 11, fontWeight: 600, color: C.mutedSoft, letterSpacing: "0.04em", textTransform: "uppercase", gridColumn: "1 / -1", marginBottom: 2 }}>
+                  Resolution summary
+                </span>
+                {resolutionSummary.acceptedAiSuggestion > 0 && (
+                  <>
+                    <span style={{ fontSize: 12, color: C.ink2 }}>AI suggestions accepted</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.good }}>{resolutionSummary.acceptedAiSuggestion}</span>
+                  </>
+                )}
+                {resolutionSummary.manuallyMatched > 0 && (
+                  <>
+                    <span style={{ fontSize: 12, color: C.ink2 }}>Manually matched</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>{resolutionSummary.manuallyMatched}</span>
+                  </>
+                )}
+                {resolutionSummary.ignoredByUser > 0 && (
+                  <>
+                    <span style={{ fontSize: 12, color: C.ink2 }}>Ignored (need attention)</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.warn }}>{resolutionSummary.ignoredByUser}</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Inventory warnings ──────────────────────────────────────────── */}
@@ -702,11 +1332,15 @@ export function ImportReviewPanel({
                 gap: 7,
                 fontSize: 12,
                 fontWeight: 600,
-                color: C.ink,
+                color: blockingCount === 0 ? C.good : C.ink,
               }}
             >
-              <AlertTriangle style={{ width: 13, height: 13, color: C.warn }} />
-              {actionableUnresolved.length} product{actionableUnresolved.length !== 1 ? "s" : ""} need review
+              {blockingCount === 0
+                ? <CheckCircle2 style={{ width: 13, height: 13, color: C.good }} />
+                : <AlertTriangle style={{ width: 13, height: 13, color: C.warn }} />}
+              {blockingCount === 0
+                ? `All ${actionableUnresolved.length} product${actionableUnresolved.length !== 1 ? "s" : ""} handled`
+                : `${blockingCount} product${blockingCount !== 1 ? "s" : ""} still need${blockingCount === 1 ? "s" : ""} review`}
             </span>
             {unresolvedExpanded ? (
               <ChevronUp style={{ width: 14, height: 14, color: C.mutedSoft }} />
@@ -752,17 +1386,124 @@ export function ImportReviewPanel({
                 </span>
               </div>
               {actionableUnresolved.map((line, i) => (
-                <UnresolvedRow
+                <div
                   key={`${line.vendorProductName}-${i}`}
-                  line={line}
-                  lineIndex={i}
-                  products={products}
-                  supplierId={supplierId}
-                  onResolved={productId => onVendorNameResolved(line.vendorProductName, productId)}
-                  saveMutation={saveAliasMutation}
-                  manualMutation={manualMutation}
-                />
+                  ref={el => { rowElRefs.current[i] = el; }}
+                  style={focusedIndex === i ? {
+                    marginLeft: -20,
+                    marginRight: -20,
+                    paddingLeft: 17,
+                    paddingRight: 20,
+                    borderLeft: `3px solid ${C.accent}`,
+                    background: C.accentBg,
+                  } : undefined}
+                >
+                  <UnresolvedRow
+                    ref={el => { rowRefs.current[i] = el; }}
+                    focused={focusedIndex === i}
+                    line={line}
+                    products={products}
+                    supplierId={supplierId}
+                    onResolved={(productId, how) => {
+                      setResolvedCount(c => c + 1);
+                      setResolutionSummary(s => ({
+                        ...s,
+                        acceptedAiSuggestion: s.acceptedAiSuggestion + (how === "accepted_ai" ? 1 : 0),
+                        manuallyMatched: s.manuallyMatched + (how === "manual" ? 1 : 0),
+                      }));
+                      onVendorNameResolved(line.vendorProductName, productId);
+                    }}
+                    onIgnored={() =>
+                      setResolutionSummary(s => ({ ...s, ignoredByUser: s.ignoredByUser + 1 }))
+                    }
+                    saveMutation={saveAliasMutation}
+                    manualMutation={manualMutation}
+                  />
+                </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Price change alerts ─────────────────────────────────────────── */}
+      {priceDeviations.length > 0 && (
+        <div style={{ borderBottom: `1px solid ${C.line}` }}>
+          <button
+            type="button"
+            onClick={() => setPriceChangesExpanded(v => !v)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 20px",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: C.warn }}>
+              <AlertTriangle style={{ width: 13, height: 13 }} />
+              {priceDeviations.length} price change{priceDeviations.length !== 1 ? "s" : ""} vs last invoice
+            </span>
+            {priceChangesExpanded
+              ? <ChevronUp style={{ width: 14, height: 14, color: C.mutedSoft }} />
+              : <ChevronDown style={{ width: 14, height: 14, color: C.mutedSoft }} />}
+          </button>
+          {priceChangesExpanded && (
+            <div style={{ padding: "0 20px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {priceDeviations.map(d => {
+                const up = d.deviationPct > 0;
+                const pct = Math.abs(d.deviationPct).toFixed(1);
+                const color = up ? C.error : C.good;
+                const fmt = (v: number) =>
+                  `$${v.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+                return (
+                  <div
+                    key={d.productId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 7,
+                      background: up ? C.errorBg : C.goodBg,
+                      border: `1px solid ${up ? C.errorBorder : C.goodBorder}`,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {d.productName}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                        Last: {fmt(d.lastUnitPrice)} · {d.lastInvoiceDate}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, fontFamily: C.mono, color: C.ink2 }}>
+                        {fmt(d.lastUnitPrice)} → {fmt(d.parsedUnitPrice)}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fontFamily: C.mono,
+                          color,
+                          background: color + "22",
+                          border: `1px solid ${color}44`,
+                          borderRadius: 99,
+                          padding: "1px 7px",
+                        }}
+                      >
+                        {up ? "+" : "−"}{pct}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -820,38 +1561,78 @@ export function ImportReviewPanel({
       )}
 
       {/* ── Save import profile ─────────────────────────────────────────── */}
-      {proposedProfile && !profileSaved && (
+      {proposedProfile && !profileSaved && !profileDismissed && blockingCount === 0 && (
         <div
           style={{
-            padding: "12px 20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
+            padding: "14px 20px",
+            borderTop: `1px solid ${C.line}`,
+            background: C.surfaceGood,
           }}
         >
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>
-              Save import profile for this supplier?
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.ink, marginBottom: 3 }}>
+                Save import profile for this supplier?
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>
+                Future invoices will use this profile to skip AI parsing steps.
+              </div>
+              {proposedProfile.keywords.length > 0 && (
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: C.mutedSoft, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Detection keywords:
+                  </span>
+                  {proposedProfile.keywords.map(kw => (
+                    <span
+                      key={kw}
+                      style={{
+                        fontSize: 11,
+                        fontFamily: C.mono,
+                        color: C.ink2,
+                        background: C.surfaceAlt,
+                        border: `1px solid ${C.line}`,
+                        padding: "1px 6px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-              Future invoices will use this profile to skip AI parsing steps.
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setProfileDismissed(true)}
+                style={smallGhostBtn}
+              >
+                No thanks
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={createProfileMutation.isPending || !supplierId}
+                style={smallSecondaryBtn(createProfileMutation.isPending || !supplierId)}
+              >
+                {createProfileMutation.isPending ? "Saving…" : "Save profile"}
+              </button>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleSaveProfile}
-            disabled={createProfileMutation.isPending || !supplierId}
-            style={smallSecondaryBtn(createProfileMutation.isPending || !supplierId)}
-          >
-            {createProfileMutation.isPending ? "Saving…" : "Save profile"}
-          </button>
         </div>
       )}
       {proposedProfile && profileSaved && (
         <div
           style={{
             padding: "10px 20px",
+            borderTop: `1px solid ${C.line}`,
             display: "flex",
             alignItems: "center",
             gap: 7,
