@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
@@ -565,18 +565,14 @@ async function resolveLineSupplierContext(input: {
     .limit(1);
   if (fifo[0]?.supplierId) return fifo[0].supplierId;
 
-  // Last resort: product's primary vendor.
-  const primary = await db
+  // Last resort: cheapest supplier for the product.
+  const cheapest = await db
     .select({ supplierId: productSupplierCosts.supplierId })
     .from(productSupplierCosts)
-    .where(
-      and(
-        eq(productSupplierCosts.productId, input.productId),
-        eq(productSupplierCosts.isPrimary, true),
-      ),
-    )
+    .where(eq(productSupplierCosts.productId, input.productId))
+    .orderBy(asc(productSupplierCosts.costPerLb))
     .limit(1);
-  return primary[0]?.supplierId ?? null;
+  return cheapest[0]?.supplierId ?? null;
 }
 
 function computePricingSnapshot(

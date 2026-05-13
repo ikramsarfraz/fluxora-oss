@@ -46,7 +46,6 @@ import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-
 import {
   useCompleteSupplierInvoice,
   useDeleteSupplierInvoice,
-  useReverseSupplierInvoice,
   useSupplierInvoice,
 } from "../hooks/use-supplier-invoices";
 import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
@@ -63,6 +62,7 @@ import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
 import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
+import { SupplierInvoiceReversalDialog } from "./supplier-invoice-reversal-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -125,7 +125,6 @@ export function SupplierInvoiceDetailPage({
 
   const completeMutation = useCompleteSupplierInvoice();
   const deleteMutation = useDeleteSupplierInvoice();
-  const reverseMutation = useReverseSupplierInvoice();
 
   const [completeOpen, setCompleteOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -323,7 +322,7 @@ export function SupplierInvoiceDetailPage({
             <>
               <SecondaryBtn
                 onClick={() => setReverseOpen(true)}
-                disabled={!canReverse || reverseMutation.isPending}
+                disabled={!canReverse}
                 title={reverseDisabledReason}
               >
                 Reverse receipt
@@ -954,52 +953,13 @@ export function SupplierInvoiceDetailPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={reverseOpen} onOpenChange={setReverseOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reverse receipt?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will un-receive <strong>{invoice.invoiceNumber}</strong>,
-              permanently delete the {allLots.length} lot(s) and{" "}
-              {allItems.length} inventory item(s) it created, and return the
-              invoice to draft so it can be edited or deleted. This cannot be
-              undone and is only allowed while every created item is still in
-              stock.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={reverseMutation.isPending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={reverseMutation.isPending || !canReverse}
-              onClick={event => {
-                event.preventDefault();
-                reverseMutation.mutate(
-                  { id: invoiceId },
-                  {
-                    onSuccess: () => {
-                      toast.success(
-                        `Receipt "${invoice.invoiceNumber}" reversed.`,
-                      );
-                      setReverseOpen(false);
-                    },
-                    onError: err =>
-                      toast.error(
-                        err instanceof Error
-                          ? err.message
-                          : "Could not reverse receipt.",
-                      ),
-                  },
-                );
-              }}
-            >
-              {reverseMutation.isPending ? "Reversing…" : "Reverse receipt"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <SupplierInvoiceReversalDialog
+        open={reverseOpen}
+        onOpenChange={setReverseOpen}
+        invoiceId={invoiceId}
+        invoiceNumber={invoice.invoiceNumber}
+        canReverse={canReverse}
+      />
 
       <SupplierInvoicePaymentEntryDialog
         open={paymentOpen}

@@ -8,7 +8,6 @@ import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import {
   useCustomerProductPricesPage,
   useDeleteCustomerPrice,
-  usePromoteProductVendor,
   useSetCustomerPrice,
 } from "@/modules/distribution/price-chart/hooks/use-price-chart";
 import { DetailSection } from "@/components/detail-section";
@@ -123,9 +122,6 @@ function VendorSubRows({
   onCommitVendor,
   onResetVendor,
   vendorResetState,
-  onPromote,
-  promoting,
-  promotingId,
 }: {
   vendors: Vendor[];
   customerId: string;
@@ -133,21 +129,17 @@ function VendorSubRows({
   onCommitVendor: (supplierId: string, rawValue: string) => void;
   onResetVendor: (supplierId: string) => void;
   vendorResetState: { supplierId: string | null; isPending: boolean };
-  onPromote: (supplierId: string) => void;
-  promoting: boolean;
-  promotingId: string | null;
 }) {
-  const primaryCost = Number(
-    vendors.find(v => v.is_primary)?.cost_per_lb ?? vendors[0]?.cost_per_lb ?? 0,
-  );
+  // Vendors arrive sorted cheapest-first from the service.
+  const cheapestCost = Number(vendors[0]?.cost_per_lb ?? 0);
 
   return (
     <>
-      {vendors.map(v => {
+      {vendors.map((v, i) => {
         const cost = Number(v.cost_per_lb);
-        const delta = cost - primaryCost;
-        const deltaPct = primaryCost > 0 ? (delta / primaryCost) * 100 : 0;
-        const isPromoting = promoting && promotingId === v.supplier_id;
+        const isCheapest = i === 0;
+        const delta = cost - cheapestCost;
+        const deltaPct = cheapestCost > 0 ? (delta / cheapestCost) * 100 : 0;
         const initialPrice = v.customer_price != null ? fmt(v.customer_price) : "";
         const isResettingThis =
           vendorResetState.isPending && vendorResetState.supplierId === v.supplier_id;
@@ -159,20 +151,10 @@ function VendorSubRows({
           >
             <TableCell className="py-2 pl-9 pr-4">
               <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "w-0.5 self-stretch rounded-sm shrink-0 mr-1",
-                    v.is_primary ? "bg-primary" : "bg-stone-line",
-                  )}
-                />
+                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-stone-line" />
                 <div>
                   <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
                     {v.supplier_name}
-                    {v.is_primary && (
-                      <Badge className="bg-primary/10 text-primary border-primary/25 font-semibold text-[10.5px] h-4.5">
-                        Primary
-                      </Badge>
-                    )}
                   </div>
                   {v.last_received_at && (
                     <div className="text-[11px] text-stone-muted/70 mt-0.5">
@@ -191,12 +173,12 @@ function VendorSubRows({
               <span
                 className={cn(
                   "font-mono tabular-nums text-[13px]",
-                  v.is_primary ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                  isCheapest ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
                 )}
               >
                 ${fmt(v.cost_per_lb)}
               </span>
-              {!v.is_primary && Math.abs(delta) > 0.001 && (
+              {!isCheapest && Math.abs(delta) > 0.001 && (
                 <div
                   className={cn(
                     "text-[10.5px] font-mono tabular-nums mt-0.5",
@@ -241,18 +223,7 @@ function VendorSubRows({
               })()}
             </TableCell>
 
-            <TableCell className="py-2 text-center">
-              {!v.is_primary && (
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => onPromote(v.supplier_id)}
-                  disabled={promoting}
-                >
-                  {isPromoting ? "Promoting…" : "Make primary"}
-                </Button>
-              )}
-            </TableCell>
+            <TableCell />
           </TableRow>
         );
       })}
@@ -271,9 +242,6 @@ function ProductRow({
   deleting,
   expanded,
   onToggleExpand,
-  onPromote,
-  promoting,
-  promotingId,
   onCommitVendor,
   onResetVendor,
   vendorResetState,
@@ -286,9 +254,6 @@ function ProductRow({
   deleting: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
-  onPromote: (supplierId: string) => void;
-  promoting: boolean;
-  promotingId: string | null;
   onCommitVendor: (productId: string, supplierId: string, value: string) => void;
   onResetVendor: (productId: string, supplierId: string) => void;
   vendorResetState: { productId: string | null; supplierId: string | null; isPending: boolean };
@@ -472,9 +437,6 @@ function ProductRow({
           vendors={prod.vendors}
           customerId={customerId}
           productId={prod.id}
-          onPromote={onPromote}
-          promoting={promoting}
-          promotingId={promotingId}
           onCommitVendor={(supplierId, raw) => onCommitVendor(prod.id, supplierId, raw)}
           onResetVendor={supplierId => onResetVendor(prod.id, supplierId)}
           vendorResetState={{
@@ -499,7 +461,6 @@ function ProductRow({
 export function CustomerPriceSection({ customerId }: { customerId: string }) {
   const setPrice = useSetCustomerPrice();
   const deletePrice = useDeleteCustomerPrice();
-  const promote = usePromoteProductVendor();
   const onError = useCallback((e: Error) => toast.error(e.message), []);
 
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
@@ -556,16 +517,6 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
 
   function handleResetVendor(productId: string, supplierId: string) {
     deletePrice.mutate({ customerId, productId, supplierId }, { onError });
-  }
-
-  function handlePromote(productId: string, supplierId: string, vendorName: string, productName: string) {
-    promote.mutate(
-      { productId, supplierId },
-      {
-        onError,
-        onSuccess: () => toast.success(`${vendorName} is now primary vendor for ${productName}`),
-      },
-    );
   }
 
   const totalProducts = pageData?.totalProducts ?? 0;
@@ -641,16 +592,6 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                         onToggleExpand={() =>
                           setExpandedProductId(id => (id === prod.id ? null : prod.id))
                         }
-                        onPromote={supplierId =>
-                          handlePromote(
-                            prod.id,
-                            supplierId,
-                            prod.vendors.find(v => v.supplier_id === supplierId)?.supplier_name ?? "",
-                            prod.name,
-                          )
-                        }
-                        promoting={promote.isPending}
-                        promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
                         onCommitVendor={handleCommitVendor}
                         onResetVendor={handleResetVendor}
                         vendorResetState={{

@@ -72,6 +72,9 @@ export const queryKeys = {
     list: (params: unknown) => ["supplier-invoices", "list", params] as const,
     detail: (id: string) => ["supplier-invoices", id] as const,
     activity: (id: string) => ["supplier-invoices", id, "activity"] as const,
+    costDiff: (supplierId: string, productIds: string[]) =>
+      ["supplier-invoices", "cost-diff", supplierId, [...productIds].sort()] as const,
+    reversalPreview: (id: string) => ["supplier-invoices", id, "reversal-preview"] as const,
   },
   salesOrders: {
     all: ["sales-orders"] as const,

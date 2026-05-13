@@ -7,7 +7,6 @@ import {
   deleteProductSupplierCostAction,
   getCustomerProductPricesPageAction,
   getPriceChartAction,
-  promoteProductVendorAction,
   setCustomerProductPriceAction,
   setProductSupplierCostAction,
   updateCustomerFuelSurchargeAction,
@@ -96,15 +95,6 @@ export function useDeleteProductSupplierCost() {
   return useMutation({
     mutationFn: (input: { productId: string; supplierId: string }) =>
       deleteProductSupplierCostAction(input.productId, input.supplierId),
-    onSuccess: () => invalidatePriceChart(queryClient),
-  });
-}
-
-export function usePromoteProductVendor() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { productId: string; supplierId: string }) =>
-      promoteProductVendorAction(input.productId, input.supplierId),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
 }

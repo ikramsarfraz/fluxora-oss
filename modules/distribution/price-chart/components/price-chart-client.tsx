@@ -442,15 +442,16 @@ function VendorSubRows({
   onResetVendor: (supplierId: string) => void;
   vendorResetState: { supplierId: string | null; isPending: boolean };
 }) {
-  const primaryCost = Number(vendors.find(v => v.is_primary)?.cost_per_lb ?? vendors[0]?.cost_per_lb ?? 0);
+  // Vendors arrive sorted cheapest-first from the service.
+  const cheapestCost = Number(vendors[0]?.cost_per_lb ?? 0);
 
   return (
     <>
-      {vendors.map(v => {
+      {vendors.map((v, i) => {
         const cost = Number(v.cost_per_lb);
-        const isPrimary = v.is_primary;
-        const delta = cost - primaryCost;
-        const deltaPct = primaryCost > 0 ? (delta / primaryCost) * 100 : 0;
+        const isCheapest = i === 0;
+        const delta = cost - cheapestCost;
+        const deltaPct = cheapestCost > 0 ? (delta / cheapestCost) * 100 : 0;
         const initialPrice = v.customer_price != null ? fmt(v.customer_price) : "";
         const isResettingThis =
           vendorResetState.isPending && vendorResetState.supplierId === v.supplier_id;
@@ -462,20 +463,10 @@ function VendorSubRows({
           >
             <TableCell className="py-2 pl-8 pr-4">
               <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "w-0.5 self-stretch rounded-sm shrink-0 mr-1",
-                    isPrimary ? "bg-primary" : "bg-stone-line",
-                  )}
-                />
+                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-stone-line" />
                 <div>
                   <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
                     {v.supplier_name}
-                    {isPrimary && (
-                      <Badge className="bg-primary/10 text-primary border-primary/25 font-semibold text-[10.5px] h-4.5">
-                        Primary
-                      </Badge>
-                    )}
                   </div>
                   {v.last_received_at && (
                     <div className="text-[11px] text-stone-muted/70 mt-0.5">
@@ -494,12 +485,12 @@ function VendorSubRows({
               <span
                 className={cn(
                   "font-mono tabular-nums text-[13px]",
-                  isPrimary ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                  isCheapest ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
                 )}
               >
                 ${fmt(v.cost_per_lb)}
               </span>
-              {!isPrimary && Math.abs(delta) > 0.001 && (
+              {!isCheapest && Math.abs(delta) > 0.001 && (
                 <div
                   className={cn(
                     "text-[10.5px] font-mono tabular-nums mt-0.5",

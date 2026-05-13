@@ -190,6 +190,13 @@
       "when": 1778691471791,
       "tag": "0026_even_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1778705091224,
+      "tag": "0027_drop_product_supplier_primary",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,6 @@ import {
   deleteProductSupplierCost,
   getCustomerProductPricesPage,
   getPriceChartData,
-  promoteProductVendor,
   setCustomerProductPrice,
   setProductSupplierCost,
   updateCustomerFuelSurcharge,
@@ -55,10 +54,6 @@ export async function setProductSupplierCostAction(
 
 export async function deleteProductSupplierCostAction(productId: string, supplierId: string) {
   return await deleteProductSupplierCost(productId, supplierId);
-}
-
-export async function promoteProductVendorAction(productId: string, supplierId: string) {
-  return await promoteProductVendor(productId, supplierId);
 }
 
 export async function getCustomerProductPricesPageAction(

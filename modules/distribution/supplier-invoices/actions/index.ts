@@ -4,7 +4,10 @@ import {
   completeSupplierInvoice,
   createSupplierInvoice,
   deleteSupplierInvoice,
+  getNextSupplierInvoiceNumber,
+  getReversalPreview,
   getSupplierInvoiceById,
+  getSupplierInvoiceCostDiffContext,
   getSupplierInvoices,
   getSupplierInvoicesPage,
   recordSupplierInvoicePayment,
@@ -51,6 +54,20 @@ export async function reverseSupplierInvoiceAction(
   input: Parameters<typeof reverseSupplierInvoice>[0],
 ) {
   return await reverseSupplierInvoice(input);
+}
+
+export async function getSupplierInvoiceCostDiffContextAction(
+  input: Parameters<typeof getSupplierInvoiceCostDiffContext>[0],
+) {
+  return await getSupplierInvoiceCostDiffContext(input);
+}
+
+export async function getReversalPreviewAction(invoiceId: string) {
+  return await getReversalPreview(invoiceId);
+}
+
+export async function getNextSupplierInvoiceNumberAction() {
+  return await getNextSupplierInvoiceNumber();
 }
 
 export async function recordSupplierInvoicePaymentAction(
