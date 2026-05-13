@@ -6,6 +6,11 @@ import {
   createSupplier,
   deleteSupplier,
   getSupplierById,
+  getInvoicesForSupplierPage,
+  type SupplierInvoicesParams,
+  getSupplierLotsPage,
+  type SupplierLotsParams,
+  getSupplierPortfolio,
   getSuppliers,
   getSuppliersPage,
   type SupplierListParams,
@@ -41,4 +46,22 @@ export async function updateSupplierAction(input: UpdateSupplierInput) {
   revalidatePath(`/suppliers/${input.id}/edit`);
   revalidatePath("/dashboard");
   return supplier;
+}
+
+export async function getSupplierPortfolioAction(id: string) {
+  return await getSupplierPortfolio(id);
+}
+
+export async function getInvoicesForSupplierPageAction(
+  id: string,
+  params?: SupplierInvoicesParams,
+) {
+  return await getInvoicesForSupplierPage(id, params);
+}
+
+export async function getSupplierLotsPageAction(
+  id: string,
+  params?: SupplierLotsParams,
+) {
+  return await getSupplierLotsPage(id, params);
 }
