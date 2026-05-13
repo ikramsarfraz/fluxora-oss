@@ -20,7 +20,12 @@ import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/comp
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
-import { canManageExpenses, expenseCategoryLabel, expensePaymentMethodLabel } from "@/lib/expenses/metadata";
+import {
+  canManageExpenses,
+  expenseCategoryLabel,
+  expensePaymentMethodLabel,
+  expenseRecurrenceLabel,
+} from "@/lib/expenses/metadata";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { ExpenseListItem, ExpenseListSort } from "../services/expenses";
@@ -43,12 +48,53 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
   {
     key: "description",
     header: "Description",
-    render: row => ({
-      primary: row.note
-        ? <span style={{ fontWeight: 500 }}>{row.note}</span>
-        : <span style={{ color: "#78716c" }}>—</span>,
-      secondary: expenseCategoryLabel(row.category),
-    }),
+    render: row => {
+      const isSchedule =
+        row.recurrenceInterval != null && row.recurrenceInterval !== "none";
+      const isInstance = row.recurrenceParentId != null;
+      return {
+        primary: (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+            {row.note ? row.note : <span style={{ color: "#78716c" }}>—</span>}
+            {isSchedule ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  padding: "1px 6px",
+                  borderRadius: 100,
+                  background: "oklch(96% 0.04 70)",
+                  color: "oklch(50% 0.14 70)",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+                title={`Repeats ${expenseRecurrenceLabel(row.recurrenceInterval).toLowerCase()}`}
+              >
+                Recurring
+              </span>
+            ) : null}
+            {isInstance && !isSchedule ? (
+              <span
+                style={{
+                  fontSize: 10,
+                  padding: "1px 6px",
+                  borderRadius: 100,
+                  background: "#f5f5f4",
+                  color: "#78716c",
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+                title="Auto-generated from a recurring schedule"
+              >
+                Auto
+              </span>
+            ) : null}
+          </span>
+        ),
+        secondary: expenseCategoryLabel(row.category),
+      };
+    },
   },
   {
     key: "amount",

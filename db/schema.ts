@@ -81,6 +81,15 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "credit_card",
 ]);
 
+export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval", [
+  "none",
+  "weekly",
+  "biweekly",
+  "monthly",
+  "quarterly",
+  "annually",
+]);
+
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
@@ -1626,6 +1635,19 @@ export const expenses = pgTable(
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     note: text("note"),
     paymentMethod: paymentMethodEnum("payment_method"),
+    /**
+     * Recurrence fields. A row with `recurrenceInterval != 'none'` is a
+     * SCHEDULE — the cron job (`/api/cron/materialize-recurring-expenses`)
+     * creates new expense rows whose `recurrenceParentId` points back to
+     * the schedule. Materialized instances always carry `recurrenceInterval = 'none'`.
+     */
+    recurrenceInterval: expenseRecurrenceIntervalEnum("recurrence_interval")
+      .notNull()
+      .default("none"),
+    recurrenceStartDate: date("recurrence_start_date"),
+    recurrenceEndDate: date("recurrence_end_date"),
+    recurrenceNextDueDate: date("recurrence_next_due_date"),
+    recurrenceParentId: uuid("recurrence_parent_id"),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1635,7 +1657,16 @@ export const expenses = pgTable(
   },
   table => [
     index("expenses_tenant_id_idx").on(table.tenantId),
+    index("expenses_recurrence_next_due_idx").on(
+      table.tenantId,
+      table.recurrenceNextDueDate,
+    ),
+    index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
+    check(
+      "expenses_recurrence_end_after_start",
+      sql`${table.recurrenceEndDate} IS NULL OR ${table.recurrenceStartDate} IS NULL OR ${table.recurrenceEndDate} >= ${table.recurrenceStartDate}`,
+    ),
   ],
 );
 

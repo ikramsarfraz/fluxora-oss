@@ -31,6 +31,7 @@ import {
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_PAYMENT_METHODS,
+  EXPENSE_RECURRENCE_INTERVALS,
 } from "@/lib/expenses/metadata";
 import type { ExpenseDetail } from "../services/expenses";
 
@@ -60,6 +61,10 @@ export function ExpenseForm(props: ExpenseFormProps) {
             (props.expense.paymentMethod as ExpenseFormValues["paymentMethod"]) ??
             "",
           note: props.expense.note ?? "",
+          recurrenceInterval:
+            (props.expense.recurrenceInterval as ExpenseFormValues["recurrenceInterval"]) ??
+            "none",
+          recurrenceEndDate: props.expense.recurrenceEndDate ?? "",
         }
       : {
           expenseDate: new Date().toISOString().slice(0, 10),
@@ -67,6 +72,8 @@ export function ExpenseForm(props: ExpenseFormProps) {
           amount: "",
           paymentMethod: "",
           note: "",
+          recurrenceInterval: "none",
+          recurrenceEndDate: "",
         };
 
   const form = useForm<ExpenseFormValues, unknown, ExpenseFormParsed>({
@@ -88,6 +95,9 @@ export function ExpenseForm(props: ExpenseFormProps) {
       amount: data.amount,
       paymentMethod: data.paymentMethod,
       note: data.note,
+      recurrenceInterval: data.recurrenceInterval,
+      recurrenceEndDate:
+        data.recurrenceInterval === "none" ? null : data.recurrenceEndDate,
     };
 
     if (props.mode === "create") {
@@ -235,6 +245,55 @@ export function ExpenseForm(props: ExpenseFormProps) {
                 </Field>
               )}
             />
+
+            <Controller
+              name="recurrenceInterval"
+              control={form.control}
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel htmlFor={`${formId}-recurrence`}>Repeats</FieldLabel>
+                  <Select
+                    value={field.value ?? "none"}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger id={`${formId}-recurrence`}>
+                      <SelectValue placeholder="Does not repeat" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXPENSE_RECURRENCE_INTERVALS.map(r => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            />
+
+            {form.watch("recurrenceInterval") !== "none" ? (
+              <Controller
+                name="recurrenceEndDate"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor={`${formId}-recurrence-end`}>
+                      Repeat until (optional)
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      value={field.value ?? ""}
+                      id={`${formId}-recurrence-end`}
+                      type="date"
+                      aria-invalid={fieldState.invalid}
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+            ) : null}
 
             <Controller
               name="note"
