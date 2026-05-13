@@ -36,6 +36,9 @@ export const queryKeys = {
     all: ["suppliers"] as const,
     list: (params: unknown) => ["suppliers", "list", params] as const,
     detail: (id: string) => ["suppliers", id] as const,
+    portfolio: (id: string) => ["suppliers", id, "portfolio"] as const,
+    invoicesPage: (id: string, params: unknown) => ["suppliers", id, "invoices", params] as const,
+    lotsPage: (id: string, params: unknown) => ["suppliers", id, "lots", params] as const,
   },
   products: {
     all: ["products"] as const,
@@ -51,6 +54,7 @@ export const queryKeys = {
     list: (params: unknown) => ["inventory", "list", params] as const,
     detail: (id: string) => ["inventory", id] as const,
     casesOnHand: ["inventory", "cases-on-hand"] as const,
+    productSummary: ["inventory", "product-summary"] as const,
     fifoAllocation: (productId: string, cases: number) =>
       ["inventory", "fifo-allocation", productId, cases] as const,
   },
@@ -68,6 +72,9 @@ export const queryKeys = {
     list: (params: unknown) => ["supplier-invoices", "list", params] as const,
     detail: (id: string) => ["supplier-invoices", id] as const,
     activity: (id: string) => ["supplier-invoices", id, "activity"] as const,
+    costDiff: (supplierId: string, productIds: string[]) =>
+      ["supplier-invoices", "cost-diff", supplierId, [...productIds].sort()] as const,
+    reversalPreview: (id: string) => ["supplier-invoices", id, "reversal-preview"] as const,
   },
   salesOrders: {
     all: ["sales-orders"] as const,

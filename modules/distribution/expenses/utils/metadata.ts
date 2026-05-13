@@ -24,6 +24,72 @@ export const EXPENSE_PAYMENT_METHODS = [
 export type ExpensePaymentMethod =
   (typeof EXPENSE_PAYMENT_METHODS)[number]["value"];
 
+export const EXPENSE_RECURRENCE_INTERVALS = [
+  { value: "none", label: "Does not repeat" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annually", label: "Annually" },
+] as const;
+
+export type ExpenseRecurrenceInterval =
+  (typeof EXPENSE_RECURRENCE_INTERVALS)[number]["value"];
+
+export function expenseRecurrenceLabel(
+  value: ExpenseRecurrenceInterval | null | undefined,
+): string {
+  if (!value || value === "none") return "Does not repeat";
+  const found = EXPENSE_RECURRENCE_INTERVALS.find(r => r.value === value);
+  return found?.label ?? value;
+}
+
+/**
+ * Advance a date by one recurrence period. Returns an ISO date string (YYYY-MM-DD).
+ * Same calendar day per period (e.g. monthly on the 31st rolls to the last day of months that lack it,
+ * because JS Date.setMonth handles the overflow into the next month — which means we clamp explicitly).
+ */
+export function nextRecurrenceDate(
+  fromDateISO: string,
+  interval: ExpenseRecurrenceInterval,
+): string {
+  if (interval === "none") return fromDateISO;
+  const [y, m, d] = fromDateISO.split("-").map(Number);
+  const date = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  switch (interval) {
+    case "weekly":
+      date.setUTCDate(date.getUTCDate() + 7);
+      break;
+    case "biweekly":
+      date.setUTCDate(date.getUTCDate() + 14);
+      break;
+    case "monthly":
+      addCalendarMonths(date, 1);
+      break;
+    case "quarterly":
+      addCalendarMonths(date, 3);
+      break;
+    case "annually":
+      addCalendarMonths(date, 12);
+      break;
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Add `months` to a UTC date, clamping the day-of-month so we don't roll into the next month
+ * when the target month has fewer days (e.g. Jan 31 + 1 month → Feb 28/29, not Mar 3).
+ */
+function addCalendarMonths(date: Date, months: number) {
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const lastDayOfMonth = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  date.setUTCDate(Math.min(day, lastDayOfMonth));
+}
+
 export function expenseCategoryLabel(value: string): string {
   const found = EXPENSE_CATEGORIES.find(c => c.value === value);
   return found?.label ?? value;

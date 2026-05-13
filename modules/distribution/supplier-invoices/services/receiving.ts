@@ -1,12 +1,15 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   auditLogs,
+  customerProductPrices,
+  customers,
   files,
   inventoryItems,
   lotReceipts,
   lots,
+  products,
   productSupplierCosts,
   suppliers,
   supplierInvoiceAttachments,
@@ -32,6 +35,7 @@ import {
 } from "@/lib/uploads/r2";
 import { parsePersistedCaseWeights } from "../utils/case-weights";
 import { computePaymentSummary } from "../utils/payment-summary";
+import { supplierInvoiceLineCostPerLb } from "../utils/cost";
 
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
@@ -159,26 +163,6 @@ function receiptTimestamp(receiveDate: string): Date {
   return Number.isFinite(date.getTime()) ? date : new Date();
 }
 
-function supplierInvoiceLineCostPerLb(line: {
-  quantityCases: number;
-  weightLbs: string;
-  unitType: "catch_weight" | "fixed_case";
-  unitPrice: string;
-}): string | null {
-  const unitPrice = Number(line.unitPrice);
-  if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
-
-  if (line.unitType === "catch_weight") {
-    return roundTo(unitPrice, 4);
-  }
-
-  const cases = Number(line.quantityCases) || 0;
-  const weightLbs = Number(line.weightLbs) || 0;
-  if (cases <= 0 || weightLbs <= 0) return null;
-
-  return roundTo((unitPrice * cases) / weightLbs, 4);
-}
-
 /**
  * Reserve a unique lot number for the current tenant. If `override` is
  * provided we use it as-is (and fail fast on collision). Otherwise we try
@@ -226,18 +210,9 @@ async function syncSupplierInvoiceLineCost(args: {
       eq(productSupplierCosts.productId, args.line.productId),
       eq(productSupplierCosts.supplierId, args.supplierId),
     ),
-    columns: { id: true, isPrimary: true },
-  });
-
-  const existingPrimary = await args.tx.query.productSupplierCosts.findFirst({
-    where: and(
-      eq(productSupplierCosts.productId, args.line.productId),
-      eq(productSupplierCosts.isPrimary, true),
-    ),
     columns: { id: true },
   });
 
-  const shouldBePrimary = existing?.isPrimary ?? !existingPrimary;
   const receivedAt = receiptTimestamp(args.receiveDate);
 
   if (existing) {
@@ -245,7 +220,6 @@ async function syncSupplierInvoiceLineCost(args: {
       .update(productSupplierCosts)
       .set({
         costPerLb,
-        isPrimary: shouldBePrimary,
         lastReceivedAt: receivedAt,
         updatedAt: new Date(),
       })
@@ -255,13 +229,152 @@ async function syncSupplierInvoiceLineCost(args: {
       productId: args.line.productId,
       supplierId: args.supplierId,
       costPerLb,
-      isPrimary: shouldBePrimary,
       lastReceivedAt: receivedAt,
     });
   }
 }
 
+/**
+ * Find the most-recent completed supplier-invoice line for a given
+ * (supplier, product), optionally excluding one invoice. Used by both
+ * `rollbackSupplierInvoiceLineCosts` (to restore the prior cost when an
+ * invoice is reversed) and `getReversalPreview` (to show the user what the
+ * cost will become *before* they confirm).
+ */
+type PriorLineLookupTx = Tx | typeof db;
+
+async function findPriorSupplierInvoiceLine(args: {
+  tx: PriorLineLookupTx;
+  supplierId: string;
+  productId: string;
+  excludeInvoiceId: string;
+}) {
+  const [row] = await args.tx
+    .select({
+      invoiceId: supplierInvoices.id,
+      invoiceNumber: supplierInvoices.invoiceNumber,
+      receiveDate: supplierInvoices.receiveDate,
+      quantityCases: supplierInvoiceLines.quantityCases,
+      weightLbs: supplierInvoiceLines.weightLbs,
+      unitType: supplierInvoiceLines.unitType,
+      unitPrice: supplierInvoiceLines.unitPrice,
+    })
+    .from(supplierInvoiceLines)
+    .innerJoin(
+      supplierInvoices,
+      eq(supplierInvoices.id, supplierInvoiceLines.supplierInvoiceId),
+    )
+    .where(
+      and(
+        eq(supplierInvoiceLines.productId, args.productId),
+        eq(supplierInvoices.supplierId, args.supplierId),
+        eq(supplierInvoices.status, "completed"),
+        sql`${supplierInvoices.id} <> ${args.excludeInvoiceId}`,
+      ),
+    )
+    .orderBy(desc(supplierInvoices.receiveDate), desc(supplierInvoiceLines.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Roll back the per-supplier cost rows that were updated when this invoice
+ * was completed. For each (supplier, product) pair touched by the invoice we
+ * either restore the cost from the most-recent OTHER completed invoice from
+ * the same supplier, or delete the `productSupplierCosts` row entirely if no
+ * prior invoice exists. Without this, reversing an invoice would leave the
+ * price-chart showing a cost that no longer has a source-of-truth invoice
+ * behind it.
+ */
+async function rollbackSupplierInvoiceLineCosts(args: {
+  tx: Tx;
+  invoiceId: string;
+  supplierId: string;
+  productIds: string[];
+}) {
+  const productIds = Array.from(new Set(args.productIds));
+  if (productIds.length === 0) return;
+
+  for (const productId of productIds) {
+    const priorLine = await findPriorSupplierInvoiceLine({
+      tx: args.tx,
+      supplierId: args.supplierId,
+      productId,
+      excludeInvoiceId: args.invoiceId,
+    });
+
+    const restoredCost = priorLine ? supplierInvoiceLineCostPerLb(priorLine) : null;
+
+    if (priorLine && restoredCost != null) {
+      await args.tx
+        .update(productSupplierCosts)
+        .set({
+          costPerLb: restoredCost,
+          lastReceivedAt: receiptTimestamp(priorLine.receiveDate),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(productSupplierCosts.productId, productId),
+            eq(productSupplierCosts.supplierId, args.supplierId),
+          ),
+        );
+    } else {
+      await args.tx
+        .delete(productSupplierCosts)
+        .where(
+          and(
+            eq(productSupplierCosts.productId, productId),
+            eq(productSupplierCosts.supplierId, args.supplierId),
+          ),
+        );
+    }
+  }
+}
+
 // -------------------- Reads --------------------
+
+/**
+ * Generate the next `INV-YYYYMMDD-NN` invoice number for the current tenant.
+ * Scans existing invoice numbers matching today's prefix and returns the
+ * lowest unused suffix. Padding grows past two digits if needed. The result
+ * is a *suggestion* — the bill form pre-fills it but the user can overwrite
+ * with the supplier's real invoice number before saving.
+ */
+export async function getNextSupplierInvoiceNumber(): Promise<string> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  const today = new Date();
+  const yyyymmdd =
+    `${today.getFullYear()}` +
+    `${String(today.getMonth() + 1).padStart(2, "0")}` +
+    `${String(today.getDate()).padStart(2, "0")}`;
+  const prefix = `INV-${yyyymmdd}-`;
+
+  const existing = await db
+    .select({ invoiceNumber: supplierInvoices.invoiceNumber })
+    .from(supplierInvoices)
+    .where(
+      and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        like(supplierInvoices.invoiceNumber, `${prefix}%`),
+      ),
+    );
+
+  const usedSuffixes = new Set<number>();
+  for (const row of existing) {
+    const suffix = row.invoiceNumber.slice(prefix.length);
+    const n = Number(suffix);
+    if (Number.isInteger(n) && n > 0) usedSuffixes.add(n);
+  }
+  let next = 1;
+  while (usedSuffixes.has(next)) next++;
+  const padding = Math.max(2, String(next).length);
+  return `${prefix}${String(next).padStart(padding, "0")}`;
+}
 
 export async function getSupplierInvoices() {
   const tenant = await getCurrentTenant();
@@ -430,6 +543,287 @@ export {
   type SupplierInvoicePaymentStatus,
   type SupplierInvoicePaymentSummary,
 } from "../utils/payment-summary";
+
+export type SupplierCostDiffEntry = {
+  productId: string;
+  currentCostPerLb: string | null;
+  lastReceivedAt: string | null;
+  dependentCustomerCount: number;
+  sampleCustomers: Array<{ id: string; name: string; pricePerLb: string }>;
+};
+
+/**
+ * Read-only: for a given supplier + a set of product IDs the user has on a
+ * draft bill, return the currently-recorded `costPerLb` for each pair and a
+ * count + small sample of customers who have a per-supplier price pinned to
+ * this supplier for this product. The bill form uses this to flag lines
+ * whose live cost differs from the recorded cost and to show downstream
+ * customer impact.
+ */
+export async function getSupplierInvoiceCostDiffContext(args: {
+  supplierId: string;
+  productIds: string[];
+}): Promise<{ costs: SupplierCostDiffEntry[] }> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  const productIds = Array.from(new Set(args.productIds.filter(Boolean)));
+  if (!args.supplierId || productIds.length === 0) return { costs: [] };
+
+  const [costRows, priceRows] = await Promise.all([
+    db
+      .select({
+        productId: productSupplierCosts.productId,
+        costPerLb: productSupplierCosts.costPerLb,
+        lastReceivedAt: productSupplierCosts.lastReceivedAt,
+      })
+      .from(productSupplierCosts)
+      .innerJoin(products, eq(products.id, productSupplierCosts.productId))
+      .where(
+        and(
+          eq(products.tenantId, tenant.id),
+          eq(productSupplierCosts.supplierId, args.supplierId),
+          inArray(productSupplierCosts.productId, productIds),
+        ),
+      ),
+    db
+      .select({
+        productId: customerProductPrices.productId,
+        customerId: customerProductPrices.customerId,
+        customerName: customers.name,
+        pricePerLb: customerProductPrices.pricePerLb,
+      })
+      .from(customerProductPrices)
+      .innerJoin(customers, eq(customers.id, customerProductPrices.customerId))
+      .innerJoin(products, eq(products.id, customerProductPrices.productId))
+      .where(
+        and(
+          eq(products.tenantId, tenant.id),
+          eq(customers.tenantId, tenant.id),
+          eq(customerProductPrices.supplierId, args.supplierId),
+          inArray(customerProductPrices.productId, productIds),
+        ),
+      ),
+  ]);
+
+  const costByProduct = new Map(
+    costRows.map(r => [r.productId, { costPerLb: r.costPerLb, lastReceivedAt: r.lastReceivedAt }] as const),
+  );
+
+  const pricesByProduct = new Map<string, typeof priceRows>();
+  for (const row of priceRows) {
+    const bucket = pricesByProduct.get(row.productId) ?? [];
+    bucket.push(row);
+    pricesByProduct.set(row.productId, bucket);
+  }
+
+  const costs: SupplierCostDiffEntry[] = productIds.map(productId => {
+    const c = costByProduct.get(productId);
+    const dependents = pricesByProduct.get(productId) ?? [];
+    return {
+      productId,
+      currentCostPerLb: c?.costPerLb ?? null,
+      lastReceivedAt: c?.lastReceivedAt?.toISOString() ?? null,
+      dependentCustomerCount: dependents.length,
+      sampleCustomers: dependents.slice(0, 5).map(cu => ({
+        id: cu.customerId,
+        name: cu.customerName,
+        pricePerLb: cu.pricePerLb,
+      })),
+    };
+  });
+
+  return { costs };
+}
+
+export type ReversalCostChange = {
+  productId: string;
+  productName: string;
+  productSku: string | null;
+  currentCostPerLb: string;
+  afterReversal:
+    | { kind: "removed" }
+    | {
+        kind: "restored";
+        costPerLb: string;
+        sourceInvoiceId: string;
+        sourceInvoiceNumber: string;
+        receiveDate: string;
+      }
+    | { kind: "unchanged"; costPerLb: string };
+  dependentCustomerCount: number;
+};
+
+export type ReversalPreview = {
+  invoice: {
+    id: string;
+    invoiceNumber: string;
+    supplierId: string;
+    supplierName: string;
+  };
+  lotsToDelete: number;
+  inventoryItemsToDelete: number;
+  blockedItems: Array<{ barcodeId: string; status: string }>;
+  costChanges: ReversalCostChange[];
+};
+
+/**
+ * Read-only: compute exactly what `reverseSupplierInvoice` would do without
+ * performing it. Drives the reversal confirmation dialog so the user can see
+ * which per-supplier costs will change (and to what) before confirming.
+ */
+export async function getReversalPreview(invoiceId: string): Promise<ReversalPreview> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "view_supplier_invoice");
+
+  const invoice = await db.query.supplierInvoices.findFirst({
+    where: and(
+      eq(supplierInvoices.id, invoiceId),
+      eq(supplierInvoices.tenantId, tenant.id),
+    ),
+    with: {
+      supplier: { columns: { id: true, name: true } },
+      lines: {
+        columns: { id: true, productId: true },
+        with: {
+          lotReceipts: {
+            with: { lot: { with: { inventoryItems: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!invoice) throw new Error("Supplier invoice not found.");
+
+  const supplierId = invoice.supplierId;
+  const supplierName = invoice.supplier?.name ?? "";
+
+  const lotIds = new Set<string>();
+  const blockedItems: Array<{ barcodeId: string; status: string }> = [];
+  let inventoryItemsToDelete = 0;
+  for (const line of invoice.lines) {
+    for (const receipt of line.lotReceipts) {
+      const lot = receipt.lot;
+      if (!lot) continue;
+      lotIds.add(lot.id);
+      for (const item of lot.inventoryItems) {
+        inventoryItemsToDelete++;
+        if (item.status !== "in_stock") {
+          blockedItems.push({ barcodeId: item.barcodeId, status: item.status });
+        }
+      }
+    }
+  }
+
+  const productIds = Array.from(new Set(invoice.lines.map(l => l.productId)));
+  if (productIds.length === 0) {
+    return {
+      invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+      lotsToDelete: lotIds.size,
+      inventoryItemsToDelete,
+      blockedItems,
+      costChanges: [],
+    };
+  }
+
+  const [productRows, currentCostRows, customerPriceRows] = await Promise.all([
+    db
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+      })
+      .from(products)
+      .where(and(eq(products.tenantId, tenant.id), inArray(products.id, productIds))),
+    db
+      .select({
+        productId: productSupplierCosts.productId,
+        costPerLb: productSupplierCosts.costPerLb,
+      })
+      .from(productSupplierCosts)
+      .where(
+        and(
+          eq(productSupplierCosts.supplierId, supplierId),
+          inArray(productSupplierCosts.productId, productIds),
+        ),
+      ),
+    db
+      .select({
+        productId: customerProductPrices.productId,
+        customerId: customerProductPrices.customerId,
+      })
+      .from(customerProductPrices)
+      .where(
+        and(
+          eq(customerProductPrices.supplierId, supplierId),
+          inArray(customerProductPrices.productId, productIds),
+        ),
+      ),
+  ]);
+
+  const productById = new Map(productRows.map(p => [p.id, p] as const));
+  const currentCostByProduct = new Map(currentCostRows.map(r => [r.productId, r.costPerLb] as const));
+  const customerCountByProduct = new Map<string, number>();
+  for (const row of customerPriceRows) {
+    customerCountByProduct.set(
+      row.productId,
+      (customerCountByProduct.get(row.productId) ?? 0) + 1,
+    );
+  }
+
+  const costChanges: ReversalCostChange[] = [];
+  for (const productId of productIds) {
+    const product = productById.get(productId);
+    if (!product) continue;
+    const currentCost = currentCostByProduct.get(productId);
+    if (!currentCost) continue; // no row written by this invoice — nothing to show
+
+    const prior = await findPriorSupplierInvoiceLine({
+      tx: db,
+      supplierId,
+      productId,
+      excludeInvoiceId: invoice.id,
+    });
+    const restoredCost = prior ? supplierInvoiceLineCostPerLb(prior) : null;
+
+    let after: ReversalCostChange["afterReversal"];
+    if (prior && restoredCost != null) {
+      after =
+        restoredCost === currentCost
+          ? { kind: "unchanged", costPerLb: currentCost }
+          : {
+              kind: "restored",
+              costPerLb: restoredCost,
+              sourceInvoiceId: prior.invoiceId,
+              sourceInvoiceNumber: prior.invoiceNumber,
+              receiveDate: prior.receiveDate,
+            };
+    } else {
+      after = { kind: "removed" };
+    }
+
+    costChanges.push({
+      productId,
+      productName: product.name,
+      productSku: product.sku ?? null,
+      currentCostPerLb: currentCost,
+      afterReversal: after,
+      dependentCustomerCount: customerCountByProduct.get(productId) ?? 0,
+    });
+  }
+
+  return {
+    invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+    lotsToDelete: lotIds.size,
+    inventoryItemsToDelete,
+    blockedItems,
+    costChanges,
+  };
+}
 
 // -------------------- Mutations --------------------
 
@@ -956,6 +1350,13 @@ export async function reverseSupplierInvoice(input: {
     if (lotIds.length > 0) {
       await tx.delete(lots).where(inArray(lots.id, lotIds));
     }
+
+    await rollbackSupplierInvoiceLineCosts({
+      tx,
+      invoiceId: input.id,
+      supplierId: invoice.supplierId,
+      productIds: invoice.lines.map(l => l.productId),
+    });
 
     const now = new Date();
     await tx

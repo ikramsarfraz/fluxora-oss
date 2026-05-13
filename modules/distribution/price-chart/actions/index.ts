@@ -6,7 +6,6 @@ import {
   deleteProductSupplierCost,
   getCustomerProductPricesPage,
   getPriceChartData,
-  promoteProductVendor,
   setCustomerProductPrice,
   setProductSupplierCost,
   updateCustomerFuelSurcharge,
@@ -21,12 +20,17 @@ export async function setCustomerProductPriceAction(
   customerId: string,
   productId: string,
   pricePerLb: string,
+  supplierId: string | null = null,
 ) {
-  return await setCustomerProductPrice(customerId, productId, pricePerLb);
+  return await setCustomerProductPrice(customerId, productId, pricePerLb, supplierId);
 }
 
-export async function deleteCustomerProductPriceAction(customerId: string, productId: string) {
-  return await deleteCustomerProductPrice(customerId, productId);
+export async function deleteCustomerProductPriceAction(
+  customerId: string,
+  productId: string,
+  supplierId: string | null = null,
+) {
+  return await deleteCustomerProductPrice(customerId, productId, supplierId);
 }
 
 export async function applyMarkupToCustomerAction(customerId: string, markupPercent?: number) {
@@ -50,10 +54,6 @@ export async function setProductSupplierCostAction(
 
 export async function deleteProductSupplierCostAction(productId: string, supplierId: string) {
   return await deleteProductSupplierCost(productId, supplierId);
-}
-
-export async function promoteProductVendorAction(productId: string, supplierId: string) {
-  return await promoteProductVendor(productId, supplierId);
 }
 
 export async function getCustomerProductPricesPageAction(
