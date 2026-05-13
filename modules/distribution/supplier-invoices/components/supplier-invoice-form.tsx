@@ -20,6 +20,10 @@ import {
   useCompleteSupplierInvoice,
 } from "../hooks/use-supplier-invoices";
 import {
+  createSupplierInvoiceAction,
+  updateSupplierInvoiceAction,
+} from "../actions";
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -272,14 +276,19 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         };
 
         try {
+          // Call the server actions directly here — going through the
+          // useMutation hooks would flip `createMutation.isPending` /
+          // `updateMutation.isPending`, which `isPending` (above) ORs into
+          // every `disabled` prop on the form. Silent autosave must not
+          // disable the inputs the user is actively typing into.
           if (!draftIdRef.current) {
-            const result = await createMutation.mutateAsync({
+            const result = await createSupplierInvoiceAction({
               ...payload,
               complete: false,
             });
             draftIdRef.current = result.id;
           } else {
-            await updateMutation.mutateAsync({
+            await updateSupplierInvoiceAction({
               id: draftIdRef.current,
               ...payload,
             });
