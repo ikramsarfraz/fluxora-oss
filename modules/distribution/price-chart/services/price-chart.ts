@@ -136,23 +136,35 @@ export async function setCustomerProductPrice(
   customerId: string,
   productId: string,
   pricePerLb: string,
+  supplierId: string | null = null,
 ) {
   await db
     .insert(customerProductPrices)
-    .values({ customerId, productId, pricePerLb })
+    .values({ customerId, productId, supplierId, pricePerLb })
     .onConflictDoUpdate({
-      target: [customerProductPrices.customerId, customerProductPrices.productId],
+      target: [
+        customerProductPrices.customerId,
+        customerProductPrices.productId,
+        customerProductPrices.supplierId,
+      ],
       set: { pricePerLb, updatedAt: new Date() },
     });
 }
 
-export async function deleteCustomerProductPrice(customerId: string, productId: string) {
+export async function deleteCustomerProductPrice(
+  customerId: string,
+  productId: string,
+  supplierId: string | null = null,
+) {
   await db
     .delete(customerProductPrices)
     .where(
       and(
         eq(customerProductPrices.customerId, customerId),
         eq(customerProductPrices.productId, productId),
+        supplierId == null
+          ? sql`${customerProductPrices.supplierId} IS NULL`
+          : eq(customerProductPrices.supplierId, supplierId),
       ),
     );
 }
@@ -206,15 +218,30 @@ export async function applyMarkupToCustomer(customerId: string, markupPercent = 
       if (!primaryVendor) return null;
       const cost = parseFloat(primaryVendor.costPerLb);
       if (!Number.isFinite(cost) || cost <= 0) return null;
-      return { customerId, productId: p.id, pricePerLb: (cost * multiplier).toFixed(2) };
+      return {
+        customerId,
+        productId: p.id,
+        supplierId: null,
+        pricePerLb: (cost * multiplier).toFixed(2),
+      };
     })
-    .filter(Boolean) as { customerId: string; productId: string; pricePerLb: string }[];
+    .filter(Boolean) as {
+    customerId: string;
+    productId: string;
+    supplierId: null;
+    pricePerLb: string;
+  }[];
   if (rows.length === 0) return;
+  // Bulk markup updates the customer's DEFAULT price only (supplier_id IS NULL).
   await db
     .insert(customerProductPrices)
     .values(rows)
     .onConflictDoUpdate({
-      target: [customerProductPrices.customerId, customerProductPrices.productId],
+      target: [
+        customerProductPrices.customerId,
+        customerProductPrices.productId,
+        customerProductPrices.supplierId,
+      ],
       set: {
         pricePerLb: sql`excluded.price_per_lb`,
         updatedAt: new Date(),
@@ -326,6 +353,7 @@ export type CustomerProductRow = {
   name: string;
   cost: string | null;
   category: string | null;
+  /** Customer's default price for this product (applies when no per-supplier price is set). */
   customerPrice: string | null;
   vendors: {
     supplier_id: string;
@@ -334,6 +362,8 @@ export type CustomerProductRow = {
     is_primary: boolean;
     last_received_at: string | null;
     updated_at: string | null;
+    /** Per-supplier customer price (overrides the default when the line's lot comes from this supplier). */
+    customer_price: string | null;
   }[];
 };
 
@@ -447,6 +477,7 @@ export async function getCustomerProductPricesPage(
     db
       .select({
         productId: customerProductPrices.productId,
+        supplierId: customerProductPrices.supplierId,
         pricePerLb: customerProductPrices.pricePerLb,
       })
       .from(customerProductPrices)
@@ -476,8 +507,16 @@ export async function getCustomerProductPricesPage(
     if (!categoryByProduct.has(r.productId)) categoryByProduct.set(r.productId, r.categoryName);
   }
 
-  const priceByProduct = new Map<string, string>();
-  for (const r of priceRows) priceByProduct.set(r.productId, r.pricePerLb);
+  const defaultPriceByProduct = new Map<string, string>();
+  // (productId, supplierId) → pricePerLb
+  const priceByProductSupplier = new Map<string, string>();
+  for (const r of priceRows) {
+    if (r.supplierId == null) {
+      defaultPriceByProduct.set(r.productId, r.pricePerLb);
+    } else {
+      priceByProductSupplier.set(`${r.productId}:${r.supplierId}`, r.pricePerLb);
+    }
+  }
 
   const vendorsByProduct = new Map<string, CustomerProductRow["vendors"]>();
   for (const r of vendorRows) {
@@ -489,6 +528,8 @@ export async function getCustomerProductPricesPage(
       is_primary: r.isPrimary,
       last_received_at: r.lastReceivedAt?.toISOString() ?? null,
       updated_at: r.updatedAt?.toISOString() ?? null,
+      customer_price:
+        priceByProductSupplier.get(`${r.productId}:${r.supplierId}`) ?? null,
     });
   }
   for (const [, vendors] of vendorsByProduct) {
@@ -507,7 +548,7 @@ export async function getCustomerProductPricesPage(
       name: p.name,
       cost: primaryVendor?.cost_per_lb ?? null,
       category: categoryByProduct.get(p.id) ?? null,
-      customerPrice: priceByProduct.get(p.id) ?? null,
+      customerPrice: defaultPriceByProduct.get(p.id) ?? null,
       vendors,
     };
   });

@@ -8,7 +8,9 @@ import {
   customers,
   files,
   inventoryItems,
+  lots,
   products,
+  productSupplierCosts,
   productUnits,
   salesOrderAttachments,
   salesOrderLineAllocations,
@@ -475,26 +477,106 @@ type ExistingSnapshotLine = {
   pricingConversionSnapshot: string | null;
 };
 
-/** Returns the effective $/lb price for a line (input override → contract → product default). */
+/**
+ * Returns the effective $/lb price for a line.
+ *
+ * Resolution chain (first match wins):
+ *   1. `providedOverride` — explicit user-set override on the line
+ *   2. customerProductPrices for (customerId, productId, supplierId) — per-supplier price
+ *   3. customerProductPrices for (customerId, productId, NULL) — customer default
+ *   4. products.defaultPricePerLb
+ *
+ * `supplierId` is the supplier whose inventory will fill this line (derived from
+ * the manually-picked lot or the FIFO-first candidate lot). When unknown, the
+ * supplier step is skipped and we fall straight to (3) then (4).
+ */
 async function resolveLinePricePerLb(input: {
   customerId: string;
   productId: string;
+  supplierId?: string | null;
   providedOverride: string | null | undefined;
   validProducts: ValidSalesOrderProduct[];
 }): Promise<string | null> {
   const override = input.providedOverride?.toString().trim();
   if (override) return override;
 
-  const contractPrice = await db.query.customerProductPrices.findFirst({
+  if (input.supplierId) {
+    const supplierPrice = await db.query.customerProductPrices.findFirst({
+      where: and(
+        eq(customerProductPrices.customerId, input.customerId),
+        eq(customerProductPrices.productId, input.productId),
+        eq(customerProductPrices.supplierId, input.supplierId),
+      ),
+    });
+    if (supplierPrice) return supplierPrice.pricePerLb;
+  }
+
+  const defaultPrice = await db.query.customerProductPrices.findFirst({
     where: and(
       eq(customerProductPrices.customerId, input.customerId),
       eq(customerProductPrices.productId, input.productId),
+      sql`${customerProductPrices.supplierId} IS NULL`,
     ),
   });
-  if (contractPrice) return contractPrice.pricePerLb;
+  if (defaultPrice) return defaultPrice.pricePerLb;
 
   const product = input.validProducts.find(p => p.id === input.productId);
   return product?.defaultPricePerLb ?? null;
+}
+
+/**
+ * Determine the supplier whose inventory will fill this line, so the price
+ * resolver can pick the right per-supplier price.
+ *
+ *  1. If the user manually picked specific inventory items, use the first one's lot supplier.
+ *  2. Else use the oldest FIFO candidate lot's supplier (what will actually be allocated).
+ *  3. Else fall back to the product's primary supplier from product_supplier_costs.
+ *  4. Else return null (resolver will fall through to default price).
+ */
+async function resolveLineSupplierContext(input: {
+  tenantId: string;
+  productId: string;
+  manualInventoryItemIds: string[] | undefined;
+}): Promise<string | null> {
+  const ids = input.manualInventoryItemIds ?? [];
+  if (ids.length > 0) {
+    const row = await db
+      .select({ supplierId: lots.supplierId })
+      .from(inventoryItems)
+      .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+      .where(inArray(inventoryItems.id, ids))
+      .limit(1);
+    if (row[0]?.supplierId) return row[0].supplierId;
+  }
+
+  // FIFO candidate: oldest in-stock unit for this product.
+  const fifo = await db
+    .select({ supplierId: lots.supplierId })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .where(
+      and(
+        eq(lots.tenantId, input.tenantId),
+        eq(inventoryItems.productId, input.productId),
+        eq(inventoryItems.status, "in_stock"),
+      ),
+    )
+    .orderBy(lots.receiveDate, lots.createdAt)
+    .limit(1);
+  if (fifo[0]?.supplierId) return fifo[0].supplierId;
+
+  // Last resort: product's primary vendor.
+  const primary = await db
+    .select({ supplierId: productSupplierCosts.supplierId })
+    .from(productSupplierCosts)
+    .where(
+      and(
+        eq(productSupplierCosts.productId, input.productId),
+        eq(productSupplierCosts.isPrimary, true),
+      ),
+    )
+    .limit(1);
+  return primary[0]?.supplierId ?? null;
 }
 
 function computePricingSnapshot(
@@ -1583,9 +1665,16 @@ export async function updateSalesOrder(input: {
   await db.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, input.id));
 
   for (const line of input.lines) {
+    const supplierId = await resolveLineSupplierContext({
+      tenantId: tenant.id,
+      productId: line.productId,
+      manualInventoryItemIds: line.inventoryItemIds,
+    });
+
     const resolvedPricePerLb = await resolveLinePricePerLb({
       customerId: input.customerId,
       productId: line.productId,
+      supplierId,
       providedOverride: line.pricePerLbOverride,
       validProducts,
     });
@@ -1723,9 +1812,16 @@ export async function createSalesOrder(input: {
     .where(eq(salesOrders.id, order.id));
 
   for (const line of input.lines) {
+    const supplierId = await resolveLineSupplierContext({
+      tenantId: tenant.id,
+      productId: line.productId,
+      manualInventoryItemIds: line.inventoryItemIds,
+    });
+
     const resolvedPricePerLb = await resolveLinePricePerLb({
       customerId: input.customerId,
       productId: line.productId,
+      supplierId,
       providedOverride: line.pricePerLbOverride,
       validProducts,
     });

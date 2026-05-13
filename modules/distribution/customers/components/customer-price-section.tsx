@@ -43,13 +43,96 @@ function marginPct(price: number, cost: number): number | null {
 
 // ── VendorSubRows ─────────────────────────────────────────────────────────────
 
+function VendorPriceInput({
+  initialValue,
+  onCommit,
+  onReset,
+  resetting,
+}: {
+  initialValue: string;
+  onCommit: (rawValue: string) => void;
+  onReset: () => void;
+  resetting: boolean;
+}) {
+  const [inputVal, setInputVal] = useState(initialValue);
+  const [focused, setFocused] = useState(false);
+  const hasValue = initialValue !== "";
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <div className="relative inline-flex items-center">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-muted/70 text-[10.5px] font-mono pointer-events-none">
+          $
+        </span>
+        <Input
+          type="number"
+          step={0.01}
+          min={0}
+          value={inputVal}
+          placeholder="—"
+          onFocus={() => setFocused(true)}
+          onBlur={e => {
+            const rawValue = e.target.value;
+            const parsedValue = parseFloat(rawValue);
+            setFocused(false);
+            if (!rawValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+              setInputVal(initialValue);
+            }
+            onCommit(rawValue);
+          }}
+          onChange={e => setInputVal(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === "Tab") {
+              (e.target as HTMLInputElement).blur();
+            }
+            if (e.key === "Escape") {
+              setInputVal(initialValue);
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className={cn(
+            "w-22 pl-5 pr-1.5 text-right font-mono tabular-nums text-[12.5px] h-7",
+            "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+            focused
+              ? "border-ring bg-white ring-2 ring-ring/40"
+              : hasValue
+                ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                : "border-transparent bg-transparent shadow-none",
+          )}
+        />
+      </div>
+      {hasValue ? (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onReset}
+          disabled={resetting}
+          title="Clear supplier-specific price"
+        >
+          <RotateCcw size={11} />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function VendorSubRows({
   vendors,
+  customerId,
+  productId,
+  onCommitVendor,
+  onResetVendor,
+  vendorResetState,
   onPromote,
   promoting,
   promotingId,
 }: {
   vendors: Vendor[];
+  customerId: string;
+  productId: string;
+  onCommitVendor: (supplierId: string, rawValue: string) => void;
+  onResetVendor: (supplierId: string) => void;
+  vendorResetState: { supplierId: string | null; isPending: boolean };
   onPromote: (supplierId: string) => void;
   promoting: boolean;
   promotingId: string | null;
@@ -65,9 +148,15 @@ function VendorSubRows({
         const delta = cost - primaryCost;
         const deltaPct = primaryCost > 0 ? (delta / primaryCost) * 100 : 0;
         const isPromoting = promoting && promotingId === v.supplier_id;
+        const initialPrice = v.customer_price != null ? fmt(v.customer_price) : "";
+        const isResettingThis =
+          vendorResetState.isPending && vendorResetState.supplierId === v.supplier_id;
 
         return (
-          <TableRow key={v.supplier_id} className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2">
+          <TableRow
+            key={`${customerId}:${productId}:${v.supplier_id}`}
+            className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2"
+          >
             <TableCell className="py-2 pl-9 pr-4">
               <div className="flex items-center gap-2">
                 <div
@@ -120,7 +209,37 @@ function VendorSubRows({
               )}
             </TableCell>
 
-            <TableCell /><TableCell />
+            <TableCell className="py-2 px-4">
+              <VendorPriceInput
+                key={`${v.supplier_id}:${initialPrice}`}
+                initialValue={initialPrice}
+                onCommit={raw => onCommitVendor(v.supplier_id, raw)}
+                onReset={() => onResetVendor(v.supplier_id)}
+                resetting={isResettingThis}
+              />
+            </TableCell>
+
+            <TableCell className="py-2 text-right">
+              {(() => {
+                if (v.customer_price == null) {
+                  return <span className="text-[11px] text-stone-muted/60">—</span>;
+                }
+                const m = marginPct(Number(v.customer_price), cost);
+                if (m == null) return <span className="text-[11px] text-stone-muted/60">—</span>;
+                const cls =
+                  m >= 5
+                    ? "text-status-good"
+                    : m < 0
+                      ? "text-destructive"
+                      : "text-stone-muted";
+                return (
+                  <span className={cn("font-mono tabular-nums text-[11.5px]", cls)}>
+                    {m >= 0 ? "+" : ""}
+                    {m.toFixed(1)}%
+                  </span>
+                );
+              })()}
+            </TableCell>
 
             <TableCell className="py-2 text-center">
               {!v.is_primary && (
@@ -155,6 +274,9 @@ function ProductRow({
   onPromote,
   promoting,
   promotingId,
+  onCommitVendor,
+  onResetVendor,
+  vendorResetState,
 }: {
   prod: CustomerProductRow;
   customerId: string;
@@ -167,6 +289,9 @@ function ProductRow({
   onPromote: (supplierId: string) => void;
   promoting: boolean;
   promotingId: string | null;
+  onCommitVendor: (productId: string, supplierId: string, value: string) => void;
+  onResetVendor: (productId: string, supplierId: string) => void;
+  vendorResetState: { productId: string | null; supplierId: string | null; isPending: boolean };
 }) {
   const key = `${customerId}:${prod.id}`;
   const storedOverride = priceMap.get(key);
@@ -318,9 +443,19 @@ function ProductRow({
       {expanded && prod.vendors.length > 0 && (
         <VendorSubRows
           vendors={prod.vendors}
+          customerId={customerId}
+          productId={prod.id}
           onPromote={onPromote}
           promoting={promoting}
           promotingId={promotingId}
+          onCommitVendor={(supplierId, raw) => onCommitVendor(prod.id, supplierId, raw)}
+          onResetVendor={supplierId => onResetVendor(prod.id, supplierId)}
+          vendorResetState={{
+            supplierId:
+              vendorResetState.productId === prod.id ? vendorResetState.supplierId : null,
+            isPending:
+              vendorResetState.isPending && vendorResetState.productId === prod.id,
+          }}
         />
       )}
       {expanded && (
@@ -377,6 +512,23 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
     const v = parseFloat(rawValue);
     if (!Number.isFinite(v) || v < 0) return;
     setPrice.mutate({ customerId, productId, pricePerLb: v.toFixed(2) }, { onError });
+  }
+
+  function handleCommitVendor(productId: string, supplierId: string, rawValue: string) {
+    if (!rawValue.trim()) {
+      deletePrice.mutate({ customerId, productId, supplierId }, { onError });
+      return;
+    }
+    const v = parseFloat(rawValue);
+    if (!Number.isFinite(v) || v < 0) return;
+    setPrice.mutate(
+      { customerId, productId, supplierId, pricePerLb: v.toFixed(2) },
+      { onError },
+    );
+  }
+
+  function handleResetVendor(productId: string, supplierId: string) {
+    deletePrice.mutate({ customerId, productId, supplierId }, { onError });
   }
 
   function handlePromote(productId: string, supplierId: string, vendorName: string, productName: string) {
@@ -472,6 +624,17 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                         }
                         promoting={promote.isPending}
                         promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
+                        onCommitVendor={handleCommitVendor}
+                        onResetVendor={handleResetVendor}
+                        vendorResetState={{
+                          productId: deletePrice.isPending
+                            ? (deletePrice.variables?.productId ?? null)
+                            : null,
+                          supplierId: deletePrice.isPending
+                            ? (deletePrice.variables?.supplierId ?? null)
+                            : null,
+                          isPending: deletePrice.isPending,
+                        }}
                       />
                     ))}
                   </React.Fragment>

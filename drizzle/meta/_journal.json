@@ -183,6 +183,13 @@
       "when": 1778690869925,
       "tag": "0025_bitter_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778691471791,
+      "tag": "0026_even_talisman",
+      "breakpoints": true
     }
   ]
 }

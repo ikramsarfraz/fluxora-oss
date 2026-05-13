@@ -21,12 +21,17 @@ export async function setCustomerProductPriceAction(
   customerId: string,
   productId: string,
   pricePerLb: string,
+  supplierId: string | null = null,
 ) {
-  return await setCustomerProductPrice(customerId, productId, pricePerLb);
+  return await setCustomerProductPrice(customerId, productId, pricePerLb, supplierId);
 }
 
-export async function deleteCustomerProductPriceAction(customerId: string, productId: string) {
-  return await deleteCustomerProductPrice(customerId, productId);
+export async function deleteCustomerProductPriceAction(
+  customerId: string,
+  productId: string,
+  supplierId: string | null = null,
+) {
+  return await deleteCustomerProductPrice(customerId, productId, supplierId);
 }
 
 export async function applyMarkupToCustomerAction(customerId: string, markupPercent?: number) {

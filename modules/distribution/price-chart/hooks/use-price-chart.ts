@@ -30,8 +30,19 @@ export function usePriceChart() {
 export function useSetCustomerPrice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { customerId: string; productId: string; pricePerLb: string }) =>
-      setCustomerProductPriceAction(input.customerId, input.productId, input.pricePerLb),
+    mutationFn: (input: {
+      customerId: string;
+      productId: string;
+      pricePerLb: string;
+      /** Optional: scope the price to a specific supplier (overrides the default for that supplier). */
+      supplierId?: string | null;
+    }) =>
+      setCustomerProductPriceAction(
+        input.customerId,
+        input.productId,
+        input.pricePerLb,
+        input.supplierId ?? null,
+      ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
 }
@@ -39,8 +50,16 @@ export function useSetCustomerPrice() {
 export function useDeleteCustomerPrice() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { customerId: string; productId: string }) =>
-      deleteCustomerProductPriceAction(input.customerId, input.productId),
+    mutationFn: (input: {
+      customerId: string;
+      productId: string;
+      supplierId?: string | null;
+    }) =>
+      deleteCustomerProductPriceAction(
+        input.customerId,
+        input.productId,
+        input.supplierId ?? null,
+      ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
 }

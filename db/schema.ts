@@ -927,13 +927,24 @@ export const customerProductPrices = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /**
+     * Optional supplier scope. When NULL the price is the customer's default
+     * for the product (applies to any supplier). When set the price applies
+     * only when the line's source supplier matches.
+     *
+     * Resolution at order time: (customer, product, supplier) → (customer, product, NULL) → product default.
+     */
+    supplierId: uuid("supplier_id").references(() => suppliers.id, {
+      onDelete: "cascade",
+    }),
     pricePerLb: numeric("price_per_lb", { precision: 10, scale: 4 }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   table => [
-    uniqueIndex("uq_customer_product").on(table.customerId, table.productId),
+    uniqueIndex("uq_customer_product_supplier")
+      .on(table.customerId, table.productId, table.supplierId),
   ],
 );
 
