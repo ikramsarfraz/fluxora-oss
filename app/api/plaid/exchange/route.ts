@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { plaidConnections } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getPlaidClient } from "@/modules/distribution/plaid/services/plaid-client";
@@ -76,6 +77,14 @@ export async function POST(req: NextRequest) {
         metadata: {
           institutionId: institution_id ?? null,
           institutionName: institution_name ?? null,
+        },
+      });
+      await captureServerEvent({
+        userId: user.id,
+        tenantId: tenant.id,
+        event: "bank.connect_succeeded",
+        properties: {
+          institution_name: institution_name ?? "unknown",
         },
       });
     }

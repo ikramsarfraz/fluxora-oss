@@ -13,6 +13,7 @@ import {
 import { requirePermission } from "@/lib/auth/permissions";
 import { logAuditEvent } from "@/lib/audit-log";
 import { validatePdfUpload } from "@/lib/file-validation";
+import { captureServerEvent } from "@/lib/posthog-server";
 import {
   applyRateLimit,
   rateLimiters,
@@ -74,7 +75,17 @@ export async function getSupplierInvoiceByIdAction(id: string) {
 export async function createSupplierInvoiceAction(
   input: Parameters<typeof createSupplierInvoice>[0],
 ) {
-  return await createSupplierInvoice(input);
+  const user = await getCurrentPortalUser();
+  const result = await createSupplierInvoice(input);
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "bill.saved",
+    properties: {
+      line_count: input.lines?.length ?? 0,
+    },
+  });
+  return result;
 }
 
 export async function updateSupplierInvoiceAction(
@@ -86,7 +97,18 @@ export async function updateSupplierInvoiceAction(
 export async function completeSupplierInvoiceAction(
   input: Parameters<typeof completeSupplierInvoice>[0],
 ) {
-  return await completeSupplierInvoice(input);
+  const user = await getCurrentPortalUser();
+  const result = await completeSupplierInvoice(input);
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "bill.received",
+    properties: {
+      bill_id: input.id,
+      line_override_count: input.lineOverrides?.length ?? 0,
+    },
+  });
+  return result;
 }
 
 export async function reverseSupplierInvoiceAction(
@@ -160,11 +182,25 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
     }
   }
   const bytes = Buffer.from(await file.arrayBuffer());
-  return await parseSupplierInvoicePdf({
+  const startedAt = Date.now();
+  const result = await parseSupplierInvoicePdf({
     originalFilename: validation.safeName,
     mimeType: file.type || null,
     bytes,
   });
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "pdf.parsed",
+    properties: {
+      line_count: result.prefillResult.values.lines.length,
+      duration_ms: Date.now() - startedAt,
+      ai_used: result.aiUsed,
+      vision_used: result.visionUsed,
+      first_bill_mode: Boolean(result.firstBillLines),
+    },
+  });
+  return result;
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(
@@ -420,6 +456,16 @@ export async function saveFirstBillAction(input: {
       .where(eq(tenants.id, tenant.id));
 
     return invoice.id;
+  });
+
+  await captureServerEvent({
+    userId: currentUser.id,
+    tenantId: tenant.id,
+    event: "first_bill.saved",
+    properties: {
+      line_count: input.lines.length,
+      as_draft: input.asDraft,
+    },
   });
 
   return { invoiceId };

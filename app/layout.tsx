@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
+import { PostHogProvider } from "@/components/posthog-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -34,7 +35,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppErrorBoundary>
-          <QueryProvider>{children}</QueryProvider>
+          <PostHogProvider>
+            <QueryProvider>{children}</QueryProvider>
+          </PostHogProvider>
         </AppErrorBoundary>
         <Toaster position="top-right" richColors />
       </body>

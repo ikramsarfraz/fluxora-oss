@@ -76,6 +76,7 @@ export async function getCurrentPortalUserAction() {
   const user = await getCurrentPortalUser();
   return {
     id: user.id,
+    tenantId: user.tenantId,
     fullName: user.fullName,
     email: user.email,
     role: user.role as PortalUserRole,

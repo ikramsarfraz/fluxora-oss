@@ -3,14 +3,19 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 export async function completeOnboarding(input: {
   businessName: string;
   businessCategory: "meat_poultry" | "seafood" | "produce" | "bakery_dry";
   billSource: string;
 }) {
-  const tenant = await getCurrentTenant();
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
   const now = new Date();
 
   await db
@@ -22,15 +27,31 @@ export async function completeOnboarding(input: {
       welcomeSkippedAt: now,
     })
     .where(eq(tenants.id, tenant.id));
+
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: tenant.id,
+    event: "welcome.completed",
+    properties: { business_category: input.businessCategory },
+  });
 }
 
 export async function skipWelcome() {
-  const tenant = await getCurrentTenant();
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
 
   await db
     .update(tenants)
     .set({ welcomeSkippedAt: new Date() })
     .where(eq(tenants.id, tenant.id));
+
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: tenant.id,
+    event: "welcome.skipped",
+  });
 }
 
 export async function getOnboardingStatus() {

@@ -10,6 +10,7 @@ import {
   supplierInvoices,
   suppliers,
 } from "@/db/schema";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { levenshteinDistance } from "@/modules/distribution/supplier-invoices/utils/normalization";
 
 type BankTransaction = typeof bankTransactions.$inferSelect;
@@ -97,6 +98,18 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
   });
 
   if (result.autoApply) {
+    // System-driven event: no portal user in scope. Use "system" as the
+    // distinctId; the tenant group attachment keeps tenant-level
+    // analytics correct.
+    await captureServerEvent({
+      userId: "system",
+      tenantId: txn.tenantId,
+      event: "payment_match.auto_applied",
+      properties: {
+        confidence: Number(result.confidence.toFixed(4)),
+        channel: txn.paymentMethod ?? "other",
+      },
+    });
     await db
       .update(supplierInvoices)
       .set({ status: "paid", updatedAt: new Date() })

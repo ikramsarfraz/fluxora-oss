@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { captureClientEvent } from "@/lib/posthog-client";
+
 import {
   completeSupplierInvoiceAction,
   createSupplierInvoiceAction,
@@ -153,6 +155,9 @@ export function useDeleteSupplierInvoice() {
 export function useParseSupplierInvoicePdf() {
   return useMutation({
     mutationFn: async (file: File) => {
+      captureClientEvent("pdf.uploaded", {
+        file_size_kb: Math.round(file.size / 1024),
+      });
       const formData = new FormData();
       formData.set("file", file);
       return await parseSupplierInvoicePdfAction(formData);

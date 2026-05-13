@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeOnboarding, skipWelcome } from "../actions";
+import { captureClientEvent } from "@/lib/posthog-client";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const c = {
@@ -82,6 +83,10 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [businessName, setBusinessName] = useState(defaultName);
+
+  useEffect(() => {
+    captureClientEvent("welcome.started");
+  }, []);
   const [location, setLocation] = useState("");
   const [employeeRange, setEmployeeRange] = useState("");
   const [category, setCategory] = useState<BusinessCategory | null>(null);
@@ -104,6 +109,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
   }
 
   function handleNext() {
+    captureClientEvent("welcome.step_completed", { step });
     if (step < 3) setStep(s => s + 1);
     else handleFinish();
   }

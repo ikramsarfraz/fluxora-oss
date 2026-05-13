@@ -1,3 +1,4 @@
+import { FeatureOpenedBeacon } from "@/components/feature-opened-beacon";
 import {
   humanizeAuditAction,
   listRecentAuditEventsForTenant,
@@ -41,6 +42,7 @@ export default async function AuditLogPage() {
 
   return (
     <div style={{ padding: "32px 40px", maxWidth: 1200, margin: "0 auto" }}>
+      <FeatureOpenedBeacon feature="audit_log" />
       <header style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, color: "#1c1917", margin: 0 }}>
           Activity log
