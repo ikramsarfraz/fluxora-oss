@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { billForwards, supplierInvoices } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { resend } from "@/lib/email";
@@ -108,6 +109,16 @@ export async function forwardBillAction(input: ForwardBillInput) {
       subject: input.subject,
       attachedOriginal: input.attachedOriginal,
       attachedSummary: input.attachedSummary,
+    },
+  });
+
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: tenant.id,
+    event: "bill.forwarded",
+    properties: {
+      recipient_count: input.recipients.length,
+      includes_summary: input.attachedSummary,
     },
   });
 }

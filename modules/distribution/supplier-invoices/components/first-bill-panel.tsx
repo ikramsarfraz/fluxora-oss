@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import type { PipelineResult, FirstBillLine } from "../services/parsing-pipeline";
 import { saveFirstBillAction } from "../actions";
+import { captureClientEvent } from "@/lib/posthog-client";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -237,12 +238,21 @@ export function FirstBillPanel({ pipelineResult, pendingPdfFile }: Props) {
   );
   const [rows, setRows] = useState<RowEntry[]>(() => buildInitialRows(firstBillLines));
   const [isSaving, setIsSaving] = useState(false);
+  const [namesEdited, setNamesEdited] = useState(false);
+
+  useEffect(() => {
+    captureClientEvent("first_bill.viewed", { line_count: firstBillLines.length });
+  }, [firstBillLines.length]);
 
   const productCount = rows.length;
   const aliasCount = rows.length;
 
   function handleNameChange(i: number, v: string) {
     setRows(prev => prev.map((r, idx) => (idx === i ? { ...r, userProductName: v } : r)));
+    if (!namesEdited) {
+      setNamesEdited(true);
+      captureClientEvent("first_bill.names_edited", { line_count: rows.length });
+    }
   }
 
   function handleReviewed(i: number) {

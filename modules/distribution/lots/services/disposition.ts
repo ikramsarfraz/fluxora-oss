@@ -7,6 +7,7 @@ import {
   lots,
   markdownHistories,
 } from "@/db/schema";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import type { DispositionConfig, MarkdownConfig, DonateConfig } from "./disposition-analytics";
@@ -81,7 +82,10 @@ export async function applyMarkdownDecision(input: {
   config: MarkdownConfig;
   expectedNet: number;
 }) {
-  const tenant = await getCurrentTenant();
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
 
   await db.transaction(async tx => {
     await tx
@@ -98,6 +102,16 @@ export async function applyMarkdownDecision(input: {
           eq(dispositionDecisions.tenantId, tenant.id),
         ),
       );
+  });
+
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: tenant.id,
+    event: "markdown.applied",
+    properties: {
+      discount_percent: input.config.discountPercent,
+      channel_count: input.config.channels.length,
+    },
   });
 }
 

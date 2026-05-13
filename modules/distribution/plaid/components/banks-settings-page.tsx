@@ -5,6 +5,7 @@ import { usePlaidLink } from "react-plaid-link";
 import { toast } from "sonner";
 import { Building2, RefreshCw, Trash2, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { captureClientEvent } from "@/lib/posthog-client";
 import { disconnectBank } from "../actions";
 import type { getConnectedBanks } from "../actions";
 
@@ -68,6 +69,7 @@ function ConnectBankButton({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const handleClick = useCallback(async () => {
+    captureClientEvent("bank.connect_started");
     if (!linkToken) {
       await fetchLinkToken();
     } else if (ready) {

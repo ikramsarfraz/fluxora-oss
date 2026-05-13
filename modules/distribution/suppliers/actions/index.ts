@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { productSupplierCosts } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
@@ -111,6 +112,12 @@ export async function switchPrimarySupplierAction(
     resourceType: "supplier",
     resourceId: newSupplierId,
     metadata: { productIds, productCount: productIds.length },
+  });
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "supplier.switched_primary",
+    properties: { product_count_affected: productIds.length },
   });
 
   revalidatePath("/suppliers");

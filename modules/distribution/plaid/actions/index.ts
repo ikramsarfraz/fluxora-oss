@@ -13,6 +13,7 @@ import {
   suppliers,
 } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getPlaidClient } from "../services/plaid-client";
@@ -30,6 +31,11 @@ export async function confirmPaymentMatch(matchId: string) {
     action: "payment_match.confirmed",
     resourceType: "payment_match",
     resourceId: matchId,
+  });
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: tenant.id,
+    event: "payment_match.confirmed",
   });
   revalidatePath("/bank-activity");
   revalidatePath("/supplier-invoices", "layout");
