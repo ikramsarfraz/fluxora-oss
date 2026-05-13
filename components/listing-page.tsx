@@ -92,6 +92,7 @@ export interface ListingPageProps<TRow> {
   activeView?: string;
   onViewChange?: (id: string) => void;
   kpis?: ListingKPI[];
+  headerExtra?: React.ReactNode;
   searchPlaceholder?: string;
   statusSegments?: StatusSegment[];
   activeSegment?: string;
@@ -199,6 +200,7 @@ export function ListingPage<TRow>({
   activeView,
   onViewChange,
   kpis,
+  headerExtra,
   searchPlaceholder = "Search...",
   statusSegments,
   activeSegment,
@@ -318,6 +320,8 @@ export function ListingPage<TRow>({
           ))}
         </div>
       ) : null}
+
+      {headerExtra ? <div className="mb-4">{headerExtra}</div> : null}
 
       <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
         <div className="flex flex-wrap items-center gap-2.5 border-b border-stone-line2 px-4 py-3">

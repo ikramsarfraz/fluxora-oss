@@ -1095,3 +1095,36 @@ export async function getProductCasesOnHand(): Promise<{ productId: string; case
     )
     .groupBy(inventoryItems.productId);
 }
+
+export type InventoryProductSummaryRow = {
+  productId: string;
+  sku: string;
+  name: string;
+  totalCases: number;
+  totalWeightLbs: string;
+  itemCount: number;
+};
+
+export async function getInventoryProductSummary(): Promise<InventoryProductSummaryRow[]> {
+  const tenant = await getCurrentTenant();
+  const rows = await db
+    .select({
+      productId: products.id,
+      sku: products.sku,
+      name: products.name,
+      totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
+      totalWeightLbs: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      itemCount: sql<number>`count(distinct ${inventoryItems.id})::int`,
+    })
+    .from(inventoryItems)
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .where(
+      and(
+        eq(products.tenantId, tenant.id),
+        inArray(inventoryItems.status, ["in_stock", "allocated", "picked", "packed"]),
+      ),
+    )
+    .groupBy(products.id, products.sku, products.name)
+    .orderBy(products.name);
+  return rows;
+}
