@@ -311,7 +311,14 @@ function ProductRow({
           : "text-stone-muted";
 
   const multiVendor = prod.vendors.length > 1;
-  const primaryVendor = prod.vendors.find(v => v.is_primary) ?? prod.vendors[0] ?? null;
+
+  const vendorCosts = prod.vendors
+    .map(v => Number(v.cost_per_lb))
+    .filter(n => Number.isFinite(n) && n > 0);
+  const minCost = vendorCosts.length ? Math.min(...vendorCosts) : null;
+  const maxCost = vendorCosts.length ? Math.max(...vendorCosts) : null;
+  const costsDiffer =
+    minCost != null && maxCost != null && Math.abs(maxCost - minCost) > 0.001;
 
   return (
     <>
@@ -323,9 +330,9 @@ function ProductRow({
             </div>
             <div>
               <div className="text-[13px] font-medium text-stone-ink">{prod.name}</div>
-              {multiVendor && primaryVendor && (
+              {multiVendor && (
                 <div className="text-[11px] text-stone-muted/70 mt-px">
-                  {primaryVendor.supplier_name}
+                  {prod.vendors.length} suppliers
                 </div>
               )}
             </div>
@@ -340,16 +347,22 @@ function ProductRow({
                 size="sm"
                 onClick={onToggleExpand}
                 className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
+                title="Expand to see each supplier"
               >
                 <span className="text-stone-muted">
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
                 <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
-                  ${fmt(prod.cost)}
+                  {costsDiffer && minCost != null && maxCost != null ? (
+                    <>
+                      <span className="text-[11px] text-stone-muted font-normal mr-0.5">from</span>
+                      ${fmt(minCost)}
+                      <span className="text-stone-muted/60 mx-0.5">–</span>${fmt(maxCost)}
+                    </>
+                  ) : (
+                    <>${fmt(minCost ?? prod.cost)}</>
+                  )}
                 </span>
-                <Badge className="bg-primary/10 text-primary text-[10.5px] h-4.5 font-medium">
-                  of {prod.vendors.length}
-                </Badge>
               </Button>
             ) : (
               <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
@@ -363,59 +376,73 @@ function ProductRow({
         </TableCell>
 
         <TableCell className="py-2 px-4">
-          <div className="inline-flex items-center gap-2">
-            <div className="relative inline-flex items-center">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
-                $
-              </span>
-              <Input
-                type="number"
-                step={0.01}
-                min={0}
-                value={inputVal}
-                placeholder="—"
-                onFocus={() => setFocused(true)}
-                onBlur={e => {
-                  const rawValue = e.target.value;
-                  const parsedValue = parseFloat(rawValue);
-                  setFocused(false);
-                  if (!rawValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
-                    setInputVal(storedOverride ?? "");
-                  }
-                  onCommit(prod.id, rawValue);
-                }}
-                onChange={e => setInputVal(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    (e.target as HTMLInputElement).blur();
-                  }
-                  if (e.key === "Escape") {
-                    setInputVal(storedOverride ?? "");
-                    (e.target as HTMLInputElement).blur();
-                  }
-                }}
-                className={cn(
-                  "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
-                  "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
-                  focused
-                    ? "border-ring bg-white ring-3 ring-ring/50"
-                    : isOverride
-                      ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
-                      : "border-transparent bg-transparent shadow-none",
-                )}
-              />
+          {multiVendor ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpand}
+              className="h-8 px-2 text-[12px] font-normal text-stone-muted hover:text-stone-ink gap-1"
+            >
+              {expanded ? "Hide suppliers" : "Set per supplier"}
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </Button>
+          ) : (
+            <div className="inline-flex items-center gap-2">
+              <div className="relative inline-flex items-center">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
+                  $
+                </span>
+                <Input
+                  type="number"
+                  step={0.01}
+                  min={0}
+                  value={inputVal}
+                  placeholder="—"
+                  onFocus={() => setFocused(true)}
+                  onBlur={e => {
+                    const rawValue = e.target.value;
+                    const parsedValue = parseFloat(rawValue);
+                    setFocused(false);
+                    if (!rawValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+                      setInputVal(storedOverride ?? "");
+                    }
+                    onCommit(prod.id, rawValue);
+                  }}
+                  onChange={e => setInputVal(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      (e.target as HTMLInputElement).blur();
+                    }
+                    if (e.key === "Escape") {
+                      setInputVal(storedOverride ?? "");
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  className={cn(
+                    "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
+                    "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
+                    focused
+                      ? "border-ring bg-white ring-3 ring-ring/50"
+                      : isOverride
+                        ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
+                        : "border-transparent bg-transparent shadow-none",
+                  )}
+                />
+              </div>
+              {isOverride && (
+                <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  Set
+                </Badge>
+              )}
             </div>
-            {isOverride && (
-              <Badge className="bg-primary/5 text-primary text-[10.5px] h-4.5 gap-1 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                Set
-              </Badge>
-            )}
-          </div>
+          )}
         </TableCell>
 
         <TableCell className="py-3 px-4 text-right">
-          {displayMargin != null ? (
+          {multiVendor ? (
+            <span className="text-[12px] text-stone-muted/60">—</span>
+          ) : displayMargin != null ? (
             <span className={cn("font-mono tabular-nums text-[12px]", marginClass)}>
               {displayMargin >= 0 ? "+" : ""}
               {displayMargin.toFixed(1)}%
@@ -426,7 +453,7 @@ function ProductRow({
         </TableCell>
 
         <TableCell className="py-3 px-4 text-center">
-          {isOverride && (
+          {!multiVendor && isOverride && (
             <Button
               variant="ghost"
               size="icon-xs"

@@ -261,6 +261,78 @@ async function syncSupplierInvoiceLineCost(args: {
   }
 }
 
+/**
+ * Roll back the per-supplier cost rows that were updated when this invoice
+ * was completed. For each (supplier, product) pair touched by the invoice we
+ * either restore the cost from the most-recent OTHER completed invoice from
+ * the same supplier, or delete the `productSupplierCosts` row entirely if no
+ * prior invoice exists. Without this, reversing an invoice would leave the
+ * price-chart showing a cost that no longer has a source-of-truth invoice
+ * behind it.
+ */
+async function rollbackSupplierInvoiceLineCosts(args: {
+  tx: Tx;
+  invoiceId: string;
+  supplierId: string;
+  productIds: string[];
+}) {
+  const productIds = Array.from(new Set(args.productIds));
+  if (productIds.length === 0) return;
+
+  for (const productId of productIds) {
+    const [priorLine] = await args.tx
+      .select({
+        quantityCases: supplierInvoiceLines.quantityCases,
+        weightLbs: supplierInvoiceLines.weightLbs,
+        unitType: supplierInvoiceLines.unitType,
+        unitPrice: supplierInvoiceLines.unitPrice,
+        receiveDate: supplierInvoices.receiveDate,
+      })
+      .from(supplierInvoiceLines)
+      .innerJoin(
+        supplierInvoices,
+        eq(supplierInvoices.id, supplierInvoiceLines.supplierInvoiceId),
+      )
+      .where(
+        and(
+          eq(supplierInvoiceLines.productId, productId),
+          eq(supplierInvoices.supplierId, args.supplierId),
+          eq(supplierInvoices.status, "completed"),
+          sql`${supplierInvoices.id} <> ${args.invoiceId}`,
+        ),
+      )
+      .orderBy(desc(supplierInvoices.receiveDate), desc(supplierInvoiceLines.createdAt))
+      .limit(1);
+
+    const restoredCost = priorLine ? supplierInvoiceLineCostPerLb(priorLine) : null;
+
+    if (priorLine && restoredCost != null) {
+      await args.tx
+        .update(productSupplierCosts)
+        .set({
+          costPerLb: restoredCost,
+          lastReceivedAt: receiptTimestamp(priorLine.receiveDate),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(productSupplierCosts.productId, productId),
+            eq(productSupplierCosts.supplierId, args.supplierId),
+          ),
+        );
+    } else {
+      await args.tx
+        .delete(productSupplierCosts)
+        .where(
+          and(
+            eq(productSupplierCosts.productId, productId),
+            eq(productSupplierCosts.supplierId, args.supplierId),
+          ),
+        );
+    }
+  }
+}
+
 // -------------------- Reads --------------------
 
 export async function getSupplierInvoices() {
@@ -956,6 +1028,13 @@ export async function reverseSupplierInvoice(input: {
     if (lotIds.length > 0) {
       await tx.delete(lots).where(inArray(lots.id, lotIds));
     }
+
+    await rollbackSupplierInvoiceLineCosts({
+      tx,
+      invoiceId: input.id,
+      supplierId: invoice.supplierId,
+      productIds: invoice.lines.map(l => l.productId),
+    });
 
     const now = new Date();
     await tx
