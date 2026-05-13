@@ -43,6 +43,7 @@ import {
   Compass,
   Landmark,
   Activity,
+  ScrollText,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -208,6 +209,11 @@ const navMain: NavGroup[] = [
         title: "Configuration",
         url: "/configuration",
         icon: SlidersHorizontal,
+      },
+      {
+        title: "Activity log",
+        url: "/settings/audit-log",
+        icon: ScrollText,
       },
     ],
   },
