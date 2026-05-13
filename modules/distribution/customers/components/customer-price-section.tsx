@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
@@ -359,6 +359,16 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
     return m;
   }, [pageData, customerId]);
 
+  const grouped = useMemo(() => {
+    const map = new Map<string, CustomerProductRow[]>();
+    for (const p of pageData?.data ?? []) {
+      const cat = p.category ?? "Other";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(p);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [pageData]);
+
   function handleCommit(productId: string, rawValue: string) {
     if (!rawValue.trim()) {
       deletePrice.mutate({ customerId, productId }, { onError });
@@ -419,36 +429,52 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(pageData?.data ?? []).map(prod => (
-                  <ProductRow
-                    key={`${prod.id}:${priceMap.get(`${customerId}:${prod.id}`) ?? ""}`}
-                    prod={prod}
-                    customerId={customerId}
-                    priceMap={priceMap}
-                    onCommit={handleCommit}
-                    onReset={() =>
-                      deletePrice.mutate({ customerId, productId: prod.id }, { onError })
-                    }
-                    deleting={
-                      deletePrice.isPending &&
-                      deletePrice.variables?.productId === prod.id &&
-                      deletePrice.variables?.customerId === customerId
-                    }
-                    expanded={expandedProductId === prod.id}
-                    onToggleExpand={() =>
-                      setExpandedProductId(id => (id === prod.id ? null : prod.id))
-                    }
-                    onPromote={supplierId =>
-                      handlePromote(
-                        prod.id,
-                        supplierId,
-                        prod.vendors.find(v => v.supplier_id === supplierId)?.supplier_name ?? "",
-                        prod.name,
-                      )
-                    }
-                    promoting={promote.isPending}
-                    promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
-                  />
+                {grouped.map(([cat, prods], gi) => (
+                  <React.Fragment key={cat}>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={5}
+                        className={cn(
+                          "bg-stone-line2/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-stone-muted uppercase tracking-widest",
+                          gi > 0 && "border-t border-stone-line",
+                        )}
+                      >
+                        {cat}
+                        <span className="text-stone-muted/60 ml-2 font-medium">{prods.length}</span>
+                      </TableCell>
+                    </TableRow>
+                    {prods.map(prod => (
+                      <ProductRow
+                        key={`${prod.id}:${priceMap.get(`${customerId}:${prod.id}`) ?? ""}`}
+                        prod={prod}
+                        customerId={customerId}
+                        priceMap={priceMap}
+                        onCommit={handleCommit}
+                        onReset={() =>
+                          deletePrice.mutate({ customerId, productId: prod.id }, { onError })
+                        }
+                        deleting={
+                          deletePrice.isPending &&
+                          deletePrice.variables?.productId === prod.id &&
+                          deletePrice.variables?.customerId === customerId
+                        }
+                        expanded={expandedProductId === prod.id}
+                        onToggleExpand={() =>
+                          setExpandedProductId(id => (id === prod.id ? null : prod.id))
+                        }
+                        onPromote={supplierId =>
+                          handlePromote(
+                            prod.id,
+                            supplierId,
+                            prod.vendors.find(v => v.supplier_id === supplierId)?.supplier_name ?? "",
+                            prod.name,
+                          )
+                        }
+                        promoting={promote.isPending}
+                        promotingId={promote.isPending ? (promote.variables?.supplierId ?? null) : null}
+                      />
+                    ))}
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
