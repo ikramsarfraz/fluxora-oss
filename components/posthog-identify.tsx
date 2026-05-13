@@ -8,7 +8,7 @@ import { getCurrentPortalUserAction } from "@/modules/core/workspace-settings/ac
 export function PostHogIdentify() {
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return;
+    if (!process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
 
     getCurrentPortalUserAction().then((user) => {
       if (!user) return;
