@@ -3,6 +3,7 @@ import { lt } from "drizzle-orm";
 
 import { db } from "@/db";
 import { plaidWebhookSeen } from "@/db/schema";
+import { pingHeartbeat } from "@/lib/heartbeat";
 
 const RETENTION_DAYS = 30;
 
@@ -30,6 +31,15 @@ export async function GET(req: NextRequest) {
     .delete(plaidWebhookSeen)
     .where(lt(plaidWebhookSeen.receivedAt, cutoff))
     .returning({ webhookId: plaidWebhookSeen.webhookId });
+
+  // Ping after success. No-op when env var is unset (Better Stack not
+  // yet provisioned). Failure must NOT prevent the cron from reporting
+  // success — Better Stack will detect a genuinely-missed heartbeat next
+  // window if the cron itself is broken.
+  await pingHeartbeat(
+    process.env.BETTER_STACK_HEARTBEAT_URL_WEBHOOK_DEDUPE_CLEANUP,
+    "webhook-dedupe-cleanup",
+  );
 
   return NextResponse.json({
     ok: true,
