@@ -187,12 +187,12 @@ export function PriceAlertsEmptyState({ dayCount }: { dayCount: number }) {
         {
           label: "Adjust thresholds early",
           kind: "secondary",
-          handler: () => router.push("/configuration"),
+          handler: () => router.push("/settings/workspace/general"),
         },
         {
           label: "Set up email digest",
           kind: "secondary",
-          handler: () => router.push("/configuration"),
+          handler: () => router.push("/settings/workspace/general"),
         },
       ]}
     />

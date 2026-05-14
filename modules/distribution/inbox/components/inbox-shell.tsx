@@ -1362,7 +1362,7 @@ function ConnectBankPromptCard() {
       <div style={{ fontWeight: 600, color: C.text2, marginBottom: 4 }}>Live cash position</div>
       <div style={{ marginBottom: 10 }}>Connect your bank to see real balances here.</div>
       <a
-        href="/settings/banks"
+        href="/settings/integrations/banks"
         style={{ fontSize: 12, color: "#2563eb", textDecoration: "none", fontWeight: 500 }}
       >
         Connect your bank →
@@ -1403,7 +1403,7 @@ function ReauthBannerComponent({ banner }: { banner: ReauthBanner }) {
         {" · "}Bills paid in the meantime aren&apos;t auto-matched yet. Takes about 30 seconds.
       </div>
       <a
-        href="/settings/banks"
+        href="/settings/integrations/banks"
         style={{
           flexShrink: 0,
           padding: "6px 14px",

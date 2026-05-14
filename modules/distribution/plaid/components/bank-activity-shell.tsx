@@ -77,7 +77,7 @@ export function BankActivityShell({ data }: { data: Data }) {
             <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
             {syncing ? "Syncing…" : "Refresh"}
           </Button>
-          <Link href="/settings/banks">
+          <Link href="/settings/integrations/banks">
             <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]">
               Manage banks
             </Button>
@@ -133,7 +133,7 @@ export function BankActivityShell({ data }: { data: Data }) {
           </div>
         ))}
 
-        <Link href="/settings/banks" style={{ textDecoration: "none" }}>
+        <Link href="/settings/integrations/banks" style={{ textDecoration: "none" }}>
           <div
             style={{
               flexShrink: 0,

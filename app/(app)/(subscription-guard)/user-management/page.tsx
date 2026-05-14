@@ -1,35 +1,16 @@
-import { Suspense } from "react";
-import {
-  dehydrate,
-  HydrationBoundary,
-  QueryClient,
-} from "@tanstack/react-query";
+import { permanentRedirect } from "next/navigation";
 
-import { queryKeys } from "@/lib/query/keys";
-import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
-import { getUsers, requireAdminPortalUser } from "@/modules/shared/services/portal-users";
-import UserManagementTabs from "./components/user-management-tabs";
+const TAB_MAP: Record<string, string> = {
+  users: "/settings/team/members",
+  roles: "/settings/team/roles",
+};
 
-export default async function UserManagementPage() {
-  const currentUser = await requireAdminPortalUser();
-
-  const queryClient = new QueryClient();
-  await Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.users.all,
-      queryFn: () => getUsers(),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.users.invitations,
-      queryFn: () => listPendingInvitationsForAdmin(),
-    }),
-  ]);
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <UserManagementTabs currentUserRole={currentUser.role} />
-      </Suspense>
-    </HydrationBoundary>
-  );
+export default async function LegacyUserManagementRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const tab = typeof params.tab === "string" ? params.tab : undefined;
+  permanentRedirect(TAB_MAP[tab ?? ""] ?? "/settings/team/members");
 }

@@ -141,7 +141,7 @@ export async function disconnectBank(connectionId: string) {
     },
   });
 
-  revalidatePath("/settings/banks");
+  revalidatePath("/settings/integrations/banks");
   revalidatePath("/bank-activity");
   revalidatePath("/inbox");
 }

@@ -36,12 +36,9 @@ import {
   BadgeCheck,
   CircleDollarSign,
   LogOut,
-  UserCog,
-  SlidersHorizontal,
   TableProperties,
-  Landmark,
   Activity,
-  ScrollText,
+  Settings,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -176,27 +173,12 @@ const navMain: NavGroup[] = [
     ],
   },
   {
-    title: "Settings",
+    title: "Workspace",
     items: [
       {
-        title: "Bank connections",
-        url: "/settings/banks",
-        icon: Landmark,
-      },
-      {
-        title: "User Management",
-        url: "/user-management",
-        icon: UserCog,
-      },
-      {
-        title: "Configuration",
-        url: "/configuration",
-        icon: SlidersHorizontal,
-      },
-      {
-        title: "Activity log",
-        url: "/settings/audit-log",
-        icon: ScrollText,
+        title: "Settings",
+        url: "/settings",
+        icon: Settings,
       },
     ],
   },
