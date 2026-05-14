@@ -23,7 +23,7 @@ const COLUMNS: ListingColumn<LotRow>[] = [
     width: "120px",
     render: row => ({
       primary: (
-        <Link href={`/lots/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+        <Link href={`/inventory/lots/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
           <MonoText>{row.lotNumber}</MonoText>
         </Link>
       ),

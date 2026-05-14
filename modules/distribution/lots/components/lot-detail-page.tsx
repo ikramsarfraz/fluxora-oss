@@ -159,7 +159,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
       >
         <ExpirationStateBadge state={expirationState} />
         {(expirationState === "expiring_soon" || expirationState === "expired") && (
-          <Link href={`/lots/${lot.id}/decide`}>
+          <Link href={`/inventory/lots/${lot.id}/decide`}>
             <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white gap-1">
               Make disposition decision
             </Button>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import type { SettingsGroup } from "./settings-sub-nav";
+import type { SettingsGroup } from "./settings-groups";
 
 export function SettingsBreadcrumb({ groups }: { groups: SettingsGroup[] }) {
   const pathname = usePathname() ?? "";

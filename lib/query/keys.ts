@@ -118,6 +118,9 @@ export const queryKeys = {
   onboarding: {
     status: ["onboarding", "status"] as const,
   },
+  inbox: {
+    bellSummary: ["inbox", "bell-summary"] as const,
+  },
   bankConnections: {
     all: ["bank-connections"] as const,
     detail: (id: string) => ["bank-connections", id] as const,

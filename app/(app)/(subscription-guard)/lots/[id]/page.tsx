@@ -1,1 +1,10 @@
-export { default } from "@/modules/distribution/lots/routes/detail-page";
+import { permanentRedirect } from "next/navigation";
+
+export default async function LegacyLotDetailRedirect({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  permanentRedirect(`/inventory/lots/${id}`);
+}

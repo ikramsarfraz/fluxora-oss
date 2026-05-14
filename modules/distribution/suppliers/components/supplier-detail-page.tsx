@@ -506,7 +506,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                             size="xs"
                             className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
                           >
-                            <Link href={`/lots/${lot.id}`} onClick={e => e.stopPropagation()}>
+                            <Link href={`/inventory/lots/${lot.id}`} onClick={e => e.stopPropagation()}>
                               View
                             </Link>
                           </Button>

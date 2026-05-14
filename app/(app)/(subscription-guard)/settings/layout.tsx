@@ -4,10 +4,8 @@ import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
 import { getConnectedBanks } from "@/modules/distribution/plaid/actions";
 import { SettingsBreadcrumb } from "@/modules/core/workspace-settings/components/settings-hub/settings-breadcrumb";
-import {
-  SettingsSubNav,
-  buildSettingsGroups,
-} from "@/modules/core/workspace-settings/components/settings-hub/settings-sub-nav";
+import { buildSettingsGroups } from "@/modules/core/workspace-settings/components/settings-hub/settings-groups";
+import { SettingsSubNav } from "@/modules/core/workspace-settings/components/settings-hub/settings-sub-nav";
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
   const current = await getCurrentPortalUser();

@@ -554,3 +554,64 @@ export async function getInboxData(): Promise<InboxData> {
     mysteryOutflows,
   };
 }
+
+// ── Inbox bell summary ─────────────────────────────────────────────────────
+// Used by the bell popover next to the user card. Slim digest of the same
+// inbox dataset, capped at 5 items, with a derived count for the unread dot.
+
+export type InboxBellItem = {
+  id: string;
+  title: string;
+  meta: string;
+  href: string;
+  createdAt: Date;
+  /**
+   * Urgency from the underlying inbox item — drives the small accent dot in the
+   * popover row. `blocking_others` and `today` are surfaced visibly.
+   */
+  urgency: InboxItem["urgency"];
+};
+
+export type InboxBellSummary = {
+  /** Items the user hasn't acted on. Drives the green dot on the bell. */
+  unreadCount: number;
+  /** Top 5 most-recent blocking + action items. */
+  items: InboxBellItem[];
+};
+
+function relatedEntityHref(entity: InboxItem["relatedEntity"]): string {
+  switch (entity.type) {
+    case "bill":
+      return `/supplier-invoices/${entity.id}`;
+    case "lot":
+      // After the catalog redesign, lots live under inventory.
+      return `/inventory/lots/${entity.id}`;
+    case "memo":
+      return `/inbox`;
+    case "sku":
+      return `/products/${entity.id}`;
+    default:
+      return "/inbox";
+  }
+}
+
+export async function getInboxBellSummary(): Promise<InboxBellSummary> {
+  const data = await getInboxData();
+  const all = [...data.blockingItems, ...data.actionItems];
+  const items = all
+    .slice()
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 5)
+    .map<InboxBellItem>(item => ({
+      id: item.id,
+      title: item.title,
+      meta: item.meta,
+      href: relatedEntityHref(item.relatedEntity),
+      createdAt: item.createdAt,
+      urgency: item.urgency,
+    }));
+  return {
+    unreadCount: all.length,
+    items,
+  };
+}

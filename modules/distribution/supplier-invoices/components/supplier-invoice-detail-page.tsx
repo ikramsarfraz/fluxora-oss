@@ -768,7 +768,7 @@ export function SupplierInvoiceDetailPage({
                             <TableRow key={item.id}>
                               <TableCell>
                                 <Link
-                                  href={`/lots/${lot.id}`}
+                                  href={`/inventory/lots/${lot.id}`}
                                   style={{
                                     fontFamily: C.mono,
                                     fontSize: "13px",

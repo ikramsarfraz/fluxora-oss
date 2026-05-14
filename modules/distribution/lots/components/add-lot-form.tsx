@@ -52,7 +52,7 @@ export default function AddLotForm() {
       await createLot.mutateAsync(data);
       form.reset(defaultForm);
       toast.success(`Lot "${data.lotNumber}" created.`);
-      router.push("/lots");
+      router.push("/inventory/lots");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to create lot.",
@@ -181,7 +181,7 @@ export default function AddLotForm() {
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/lots")}
+          onClick={() => router.push("/inventory/lots")}
         >
           Cancel
         </Button>
