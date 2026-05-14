@@ -28,6 +28,7 @@ import {
   completeSupplierInvoice,
   createSupplierInvoice,
   deleteSupplierInvoice,
+  generateSupplierInvoiceReferenceNumber,
   getNextSupplierInvoiceNumber,
   getReversalPreview,
   getSupplierInvoiceById,
@@ -438,11 +439,13 @@ export async function saveFirstBillAction(input: {
       .reduce((sum, l) => sum + Number(computeLineTotal(l)), 0)
       .toFixed(2);
 
+    const referenceNumber = await generateSupplierInvoiceReferenceNumber(tx, tenant.id);
     const [invoice] = await tx
       .insert(supplierInvoices)
       .values({
         tenantId: tenant.id,
         supplierId: supplier.id,
+        referenceNumber,
         invoiceNumber: input.invoiceNumber || "BILL-1",
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,

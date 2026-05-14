@@ -140,13 +140,13 @@ export function createColumns(
 ): ColumnDef<SupplierInvoiceListItem>[] {
   return [
     {
-      accessorKey: "invoiceNumber",
+      accessorKey: "referenceNumber",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Invoice #
+          Reference
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -155,8 +155,25 @@ export function createColumns(
           href={`/supplier-invoices/${row.original.id}`}
           className="font-medium hover:underline"
         >
-          {row.getValue("invoiceNumber")}
+          {row.original.referenceNumber}
         </Link>
+      ),
+    },
+    {
+      accessorKey: "invoiceNumber",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Supplier inv #
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.getValue("invoiceNumber") || "—"}
+        </span>
       ),
     },
     {
