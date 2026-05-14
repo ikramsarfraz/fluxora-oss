@@ -18,7 +18,8 @@ import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants"
  * pathname headers are missing (fail closed below).
  *
  * Also enforces the cold-start onboarding redirect: tenants with no posted bills and no
- * explicit skip are sent to /welcome until they post their first bill or dismiss the flow.
+ * explicit skip are sent to /get-started until they post their first bill or dismiss the
+ * flow. Fails closed when the pathname header is missing, matching the subscription gate.
  */
 export default async function TenantSubscriptionGuardLayout({
   children,
@@ -50,11 +51,16 @@ export default async function TenantSubscriptionGuardLayout({
     return children;
   }
 
-  // Cold-start onboarding gate — redirect to /welcome until first bill is posted or skipped.
+  // Cold-start onboarding gate — redirect to /get-started until first bill is posted or
+  // skipped. Fail closed when the proxy didn't set the pathname header.
   if (tenant.billCount === 0 && !tenant.welcomeSkippedAt) {
     const pathname = resolveTenantAppPathname(headerList);
-    if (pathname && pathname !== "/welcome") {
-      redirect("/welcome");
+    if (!pathname) {
+      logSubscriptionGuardMissingPathname({ nodeEnv: process.env.NODE_ENV });
+      redirect("/get-started");
+    }
+    if (pathname !== "/get-started") {
+      redirect("/get-started");
     }
   }
 

@@ -216,7 +216,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
               margin: "0 0 8px",
             }}
           >
-            {step === 1 ? "Welcome. Let's get started." : step === 2 ? "What do you sell?" : "How do bills reach you?"}
+            {step === 1 ? "Let's get started." : step === 2 ? "What do you sell?" : "How do bills reach you?"}
           </h1>
           <p style={{ color: c.text2, fontSize: 14, marginBottom: 28, maxWidth: 420 }}>
             {step === 1 && "Tell us about your business. We'll set sensible defaults from day one."}

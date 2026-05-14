@@ -2,10 +2,9 @@ import { WelcomePage } from "@/modules/distribution/onboarding/components/welcom
 import { getOnboardingStatus } from "@/modules/distribution/onboarding/actions";
 import { redirect } from "next/navigation";
 
-export default async function WelcomeRoutePage() {
+export default async function GetStartedRoutePage() {
   const status = await getOnboardingStatus();
 
-  // Skip welcome if onboarding already done
   if (status.onboardingCompleted) {
     redirect("/inbox");
   }
