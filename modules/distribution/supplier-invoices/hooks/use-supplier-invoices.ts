@@ -2,12 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { captureClientEvent } from "@/lib/posthog-client";
-
 import {
   completeSupplierInvoiceAction,
   createSupplierInvoiceAction,
-  createImportProfileAction,
   deleteSupplierInvoiceAction,
   getNextSupplierInvoiceNumberAction,
   getReversalPreviewAction,
@@ -17,10 +14,8 @@ import {
   getSupplierInvoicesPageAction,
   parseSupplierInvoicePdfAction,
   recordSupplierInvoicePaymentAction,
-  recordManualProductSelectionAction,
   removeSupplierInvoiceAttachmentAction,
   reverseSupplierInvoiceAction,
-  saveConfirmedAiAliasAction,
   updateSupplierInvoiceAction,
   uploadSupplierInvoiceAttachmentAction,
 } from "@/modules/distribution/supplier-invoices/actions";
@@ -194,9 +189,6 @@ export function useDeleteSupplierInvoice() {
 export function useParseSupplierInvoicePdf() {
   return useMutation({
     mutationFn: async (file: File) => {
-      captureClientEvent("pdf.uploaded", {
-        file_size_kb: Math.round(file.size / 1024),
-      });
       const formData = new FormData();
       formData.set("file", file);
       return await parseSupplierInvoicePdfAction(formData);
@@ -247,24 +239,6 @@ export function useUploadSupplierInvoiceAttachmentToInvoice() {
         queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
       });
     },
-  });
-}
-
-export function useSaveConfirmedAiAlias() {
-  return useMutation({
-    mutationFn: saveConfirmedAiAliasAction,
-  });
-}
-
-export function useRecordManualProductSelection() {
-  return useMutation({
-    mutationFn: recordManualProductSelectionAction,
-  });
-}
-
-export function useCreateImportProfile() {
-  return useMutation({
-    mutationFn: createImportProfileAction,
   });
 }
 

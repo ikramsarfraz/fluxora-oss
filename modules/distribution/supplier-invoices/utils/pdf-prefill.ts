@@ -321,8 +321,6 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
     const amount = parseMoney(amountText);
     if (amount == null) continue;
     const beforeAmount = compact.slice(0, amountStart).trim();
-    // 0.5% of amount, minimum $0.02 — handles catch-weight rounding on large lines
-    const tolerance = Math.max(0.02, amount * 0.005);
 
     for (const rateCandidate of numericSuffixCandidates(beforeAmount)) {
       const rate = rateCandidate.value;
@@ -334,10 +332,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
         if (!quantity) continue;
         const catchDelta = Math.abs(weightCandidate.value * rate - amount);
         const fixedDelta = Math.abs(quantity.quantityCases * rate - amount);
-        if (catchDelta <= tolerance && fixedDelta <= tolerance) {
-          // Both interpretations fit the math (weight ≈ qty numerically).
-          // Fixed-case wins: when weight equals the case count the product
-          // is almost certainly sold per case, not by catch-weight.
+        if (catchDelta <= 0.02 && fixedDelta <= 0.02) {
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -349,7 +344,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
             },
             score: 120,
           });
-        } else if (catchDelta <= tolerance) {
+        } else if (catchDelta <= 0.02) {
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -361,7 +356,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
             },
             score: 110,
           });
-        } else if (fixedDelta <= tolerance) {
+        } else if (fixedDelta <= 0.02) {
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -377,7 +372,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
       }
 
       const fixedQuantity = parseQuantityFromEnd(beforeRate);
-      if (fixedQuantity && Math.abs(fixedQuantity.quantityCases * rate - amount) <= tolerance) {
+      if (fixedQuantity && Math.abs(fixedQuantity.quantityCases * rate - amount) <= 0.02) {
         parsedCandidates.push({
           line: {
             description: fixedQuantity.description,
@@ -439,90 +434,25 @@ function extractBoxInvoiceLines(lines: string[]): ParsedPdfLine[] {
   return parsedLines;
 }
 
-// Column keyword groups for generic header detection (need 3+ groups to match)
-const TABLE_HEADER_COLUMN_PATTERNS: RegExp[] = [
-  /\b(DESCRIPTION|ITEM|PRODUCT|DETAIL)\b/i,
-  /\b(QTY|QUANTITY|CASES?|NO\.?|COUNT|PCS|BOXES?)\b/i,
-  /\b(WEIGHT|LBS?|WT)\b/i,
-  /\b(RATE|PRICE|UNIT[\s-]?PRICE|PER[\s]?LB|COST)\b/i,
-  /\b(AMOUNT|TOTAL|SUBTOTAL|EXTENDED)\b/i,
-];
-
-function detectTableHeaderLine(lines: string[]): number {
-  // Strategy 1: exact known compact formats (fastest path)
-  const exactIndex = lines.findIndex(line =>
+function extractPackedInvoiceLines(lines: string[]): ExtractedPdfLines {
+  const parsedLines: ParsedPdfLine[] = [];
+  const skippedChargeDescriptions: string[] = [];
+  const tableStart = lines.findIndex(line =>
     /(?:DESCRIPTIONQUANTITYWEIGHTPRICEAMOUNT|ITEMDESCRIPTIONQTYQTY\/WEIGHTRATEAMOUNT)/i.test(
       line.replace(/\s+/g, ""),
     ),
   );
-  if (exactIndex >= 0) return exactIndex;
-
-  // Strategy 2: generic — any line matching 3+ column keyword groups
-  return lines.findIndex(line => {
-    // Skip lines that contain monetary amounts — those are data rows, not headers
-    if (/\d+\.\d{2}/.test(line)) return false;
-    return TABLE_HEADER_COLUMN_PATTERNS.filter(p => p.test(line)).length >= 3;
-  });
-}
-
-function tryParseWithJoin(
-  lines: string[],
-  i: number,
-): { parsed: ParsedPdfLine; consumed: number } | null {
-  const parsed = parsePackedWeightedRow(lines[i]);
-  if (parsed) return { parsed, consumed: 1 };
-
-  // Two-line joining: description on one line, numbers on the next
-  if (i + 1 < lines.length && !isStopAfterPackedTable(lines[i + 1])) {
-    const joined = lines[i] + " " + lines[i + 1];
-    const joinedParsed = parsePackedWeightedRow(joined);
-    if (joinedParsed) return { parsed: joinedParsed, consumed: 2 };
-  }
-
-  return null;
-}
-
-function extractPackedInvoiceLines(lines: string[]): ExtractedPdfLines {
-  const parsedLines: ParsedPdfLine[] = [];
-  const skippedChargeDescriptions: string[] = [];
-  const tableStart = detectTableHeaderLine(lines);
   if (tableStart < 0) return { lines: parsedLines, skippedChargeDescriptions };
 
-  const tableLines = lines.slice(tableStart + 1);
-  for (let i = 0; i < tableLines.length; i++) {
-    if (isStopAfterPackedTable(tableLines[i])) break;
-    const result = tryParseWithJoin(tableLines, i);
-    if (!result) continue;
-    i += result.consumed - 1;
-    if (isNonInventoryCharge(result.parsed.description)) {
-      skippedChargeDescriptions.push(result.parsed.description);
+  for (const line of lines.slice(tableStart + 1)) {
+    if (isStopAfterPackedTable(line)) break;
+    const parsed = parsePackedWeightedRow(line);
+    if (!parsed) continue;
+    if (isNonInventoryCharge(parsed.description)) {
+      skippedChargeDescriptions.push(parsed.description);
       continue;
     }
-    parsedLines.push(result.parsed);
-  }
-
-  return {
-    lines: parsedLines,
-    skippedChargeDescriptions: uniqueStrings(skippedChargeDescriptions),
-  };
-}
-
-// Generic fallback — scans all lines without requiring a header row.
-// Used when neither box format nor any recognizable table header is found.
-function extractGenericNumericLines(lines: string[]): ExtractedPdfLines {
-  const parsedLines: ParsedPdfLine[] = [];
-  const skippedChargeDescriptions: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    if (isStopAfterPackedTable(lines[i])) break;
-    const result = tryParseWithJoin(lines, i);
-    if (!result) continue;
-    i += result.consumed - 1;
-    if (isNonInventoryCharge(result.parsed.description)) {
-      skippedChargeDescriptions.push(result.parsed.description);
-      continue;
-    }
-    parsedLines.push(result.parsed);
+    parsedLines.push(parsed);
   }
 
   return {
@@ -534,12 +464,12 @@ function extractGenericNumericLines(lines: string[]): ExtractedPdfLines {
 function extractInvoiceLines(lines: string[]): ExtractedPdfLines {
   const boxLines = extractBoxInvoiceLines(lines);
   if (boxLines.length > 0) {
-    return { lines: boxLines, skippedChargeDescriptions: [] };
+    return {
+      lines: boxLines,
+      skippedChargeDescriptions: [],
+    };
   }
-  const packedResult = extractPackedInvoiceLines(lines);
-  if (packedResult.lines.length > 0) return packedResult;
-  // Generic fallback: no header required — pure numeric pattern matching
-  return extractGenericNumericLines(lines);
+  return extractPackedInvoiceLines(lines);
 }
 
 function parseRateAndAmount(

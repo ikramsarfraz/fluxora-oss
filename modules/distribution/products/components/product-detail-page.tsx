@@ -28,7 +28,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-import { SkuIntelligenceEmptyState } from "@/modules/distribution/components/empty-states";
 
 const PURPOSE_LABELS: Record<string, string> = {
   stock: "Stock",
@@ -177,18 +176,6 @@ export function ProductDetailPage({ productId }: { productId: string }) {
           <p className="text-sm text-muted-foreground">No units configured.</p>
         )}
       </DetailSection>
-
-      {product._purchaseCount < 3 && (
-        <DetailSection
-          title="Price intelligence"
-          description="Unlocks after 3 purchases — enough to establish a baseline average and flag drift."
-        >
-          <SkuIntelligenceEmptyState
-            purchaseCount={product._purchaseCount}
-            productName={product.name}
-          />
-        </DetailSection>
-      )}
 
       {/* Danger zone */}
       <DetailSection

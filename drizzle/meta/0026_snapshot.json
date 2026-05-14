@@ -1,6 +1,6 @@
 {
-  "id": "1fc83c2a-4e48-4fdb-9090-285423dca4db",
-  "prevId": "66661f37-44b3-4dcc-b909-835efd4abe48",
+  "id": "2bd0b55c-f7bb-4813-b955-0d81b3c31134",
+  "prevId": "1fc83c2a-4e48-4fdb-9090-285423dca4db",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -619,6 +619,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "supplier_id": {
+          "name": "supplier_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "price_per_lb": {
           "name": "price_per_lb",
           "type": "numeric(10, 4)",
@@ -634,8 +640,8 @@
         }
       },
       "indexes": {
-        "uq_customer_product": {
-          "name": "uq_customer_product",
+        "uq_customer_product_supplier": {
+          "name": "uq_customer_product_supplier",
           "columns": [
             {
               "expression": "customer_id",
@@ -645,6 +651,12 @@
             },
             {
               "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "supplier_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -676,6 +688,19 @@
           "tableTo": "products",
           "columnsFrom": [
             "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "customer_product_prices_supplier_id_suppliers_id_fk": {
+          "name": "customer_product_prices_supplier_id_suppliers_id_fk",
+          "tableFrom": "customer_product_prices",
+          "tableTo": "suppliers",
+          "columnsFrom": [
+            "supplier_id"
           ],
           "columnsTo": [
             "id"

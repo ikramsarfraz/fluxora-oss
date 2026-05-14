@@ -23,7 +23,6 @@ import {
   getCurrentRequestTenant,
   getCurrentTenant,
 } from "@/modules/core/tenants/services/tenants";
-import { setSentryUserScope } from "@/lib/sentry-scope";
 
 export type PortalUserRole =
   | "owner"
@@ -351,7 +350,6 @@ export async function getCurrentPortalUser() {
   if (!portalUser) {
     throw new Error("Portal user not found");
   }
-  setSentryUserScope({ userId: portalUser.id, tenantId: portalUser.tenantId });
   return portalUser;
 }
 
@@ -370,7 +368,6 @@ export async function requireAdminPortalUser() {
   if (!current || (current.role !== "admin" && current.role !== "owner")) {
     throw new Error("Forbidden");
   }
-  setSentryUserScope({ userId: current.id, tenantId: current.tenantId });
   return current;
 }
 
@@ -397,12 +394,7 @@ export async function setPortalUserActiveByAdmin(
       isActive,
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(portalUsers.id, targetUserId),
-        eq(portalUsers.tenantId, current.tenantId),
-      ),
-    );
+    .where(eq(portalUsers.id, targetUserId));
 
   const updated = await getUserById(targetUserId);
   if (!updated) {
@@ -445,12 +437,7 @@ export async function setPortalUserRoleByAdmin(
       role,
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(portalUsers.id, targetUserId),
-        eq(portalUsers.tenantId, current.tenantId),
-      ),
-    );
+    .where(eq(portalUsers.id, targetUserId));
 
   const updated = await getUserById(targetUserId);
   if (!updated) {

@@ -222,7 +222,7 @@ export function InventoryDetailPage({
       >
         <DetailGrid className="lg:grid-cols-3">
           <DetailField label="Lot number">
-            <Link href={`/inventory/lots/${item.lot.id}`} className="hover:underline">
+            <Link href={`/lots/${item.lot.id}`} className="hover:underline">
               {item.lot.lotNumber}
             </Link>
           </DetailField>

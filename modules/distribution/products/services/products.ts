@@ -1,11 +1,10 @@
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
   productCategories,
   products,
   productUnits,
-  supplierInvoiceLines,
 } from "@/db/schema";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import {
@@ -34,27 +33,20 @@ type ProductUnitInput = {
 
 export async function getProductById(productId: string) {
   const tenant = await getCurrentTenant();
-  const [result, [purchaseCountRow]] = await Promise.all([
-    db.query.products.findFirst({
-      where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
-      with: {
-        productCategories: {
-          with: { category: true },
-        },
-        productUnits: {
-          with: { unit: true },
-        },
-        baseUnit: true,
+  const result = await db.query.products.findFirst({
+    where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
+    with: {
+      productCategories: {
+        with: { category: true },
       },
-    }),
-    db
-      .select({ count: count() })
-      .from(supplierInvoiceLines)
-      .where(eq(supplierInvoiceLines.productId, productId)),
-  ]);
+      productUnits: {
+        with: { unit: true },
+      },
+      baseUnit: true,
+    },
+  });
 
-  if (!result) return null;
-  return { ...result, _purchaseCount: purchaseCountRow?.count ?? 0 };
+  return result ?? null;
 }
 
 export type ProductDetail = NonNullable<

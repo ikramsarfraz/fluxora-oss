@@ -240,7 +240,7 @@ function LotsTableCard({
                 <TableRow key={row.id}>
                   <TableCell>
                     <Link
-                      href={`/inventory/lots/${row.id}`}
+                      href={`/lots/${row.id}`}
                       className="font-medium hover:underline"
                     >
                       {row.lotNumber}
