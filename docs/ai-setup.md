@@ -57,7 +57,7 @@ node --import tsx --test modules/distribution/supplier-invoices/utils/ai-validat
 Or run the full unit suite:
 
 ```
-npm run test:unit
+pnpm test:unit
 ```
 
 No real API calls are made in tests — the test file covers `truncateInvoiceText`, `limitProductCandidates`, `safeParseJson`, `validateExtractionResult`, `validateProductMatchResult`, `buildInvoiceExtractionUserMessage`, and `buildProductMatchUserMessage`.

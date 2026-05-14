@@ -2,11 +2,11 @@
 
 ## Quick start
 
-1. **Install dependencies:** `npm install`
+1. **Install dependencies:** `pnpm install`
 2. **Environment:** copy `.env.local.example` to `.env.local` and set required vars (see the **Required environment** section above and [Stripe subscriptions](./stripe-subscriptions.md) for billing).
 
-3. **Migrations:** `npm run db:migrate`
-4. **Dev server:** `npm run dev`
+3. **Migrations:** `pnpm db:migrate`
+4. **Dev server:** `pnpm dev`
 
 ## Required environment (core)
 

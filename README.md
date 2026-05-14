@@ -39,10 +39,10 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 
 See **[docs/local-development.md](docs/local-development.md)** for host routing (`localtest.me`, `admin.` subdomain behavior) and UAT URLs.
 
-1. **`npm install`**
+1. **`pnpm install`**
 2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing. For Subscription Checkout use `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`; configure `STRIPE_PRICE_*` ids or populate the Stripe catalog with metadata **`plan=starter`**, **`growth`**, or **`enterprise`** (**[stripe subscriptions](docs/stripe-subscriptions.md)**).
-3. **`npm run db:migrate`**
-4. **`npm run dev`**
+3. **`pnpm db:migrate`**
+4. **`pnpm dev`**
 
 ## Billing in brief
 

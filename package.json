@@ -2,6 +2,7 @@
   "name": "fluxora",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,8 +16,19 @@
     "db:split-multicases": "tsx db/split-multicases.ts",
     "check:boundaries": "node scripts/check-module-boundaries.mjs"
   },
-  "overrides": {
-    "lightningcss": "1.32.0"
+  "pnpm": {
+    "overrides": {
+      "lightningcss": "1.32.0"
+    },
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "core-js",
+      "esbuild",
+      "msw",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
+    ]
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1035.0",
