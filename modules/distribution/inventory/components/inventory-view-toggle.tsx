@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Box, Layers } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { rememberInventoryView } from "../utils/view-preference";
 
 /**
  * Items / Lots segmented toggle for the Inventory hub.
@@ -21,6 +23,12 @@ export function InventoryViewToggle({
 }) {
   const pathname = usePathname() ?? "";
   const view: "items" | "lots" = pathname.startsWith("/inventory/lots") ? "lots" : "items";
+
+  // Persist the current view so `/inventory` returns the user here next time.
+  // Effect runs on mount + whenever the view changes (e.g. clicked the other tab).
+  useEffect(() => {
+    rememberInventoryView(view);
+  }, [view]);
 
   const hint =
     view === "items"
