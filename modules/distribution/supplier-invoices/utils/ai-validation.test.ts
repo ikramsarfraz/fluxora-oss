@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   truncateInvoiceText,
   limitProductCandidates,
+  sanitizeSupplierName,
   validateExtractionResult,
   validateProductMatchResult,
   safeParseJson,
@@ -392,6 +393,135 @@ test("mock provider is not available", async () => {
   // (it has lines=[], fees=[], confidence=0 → validateExtractionResult returns null
   //  because all empty + confidence=0 is treated as failed call)
   assert.equal(validateExtractionResult(mockResult), null);
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeSupplierName
+// ---------------------------------------------------------------------------
+
+test("sanitizeSupplierName: passes through a real business name", () => {
+  assert.equal(sanitizeSupplierName("SUMMIT TRADING"), "SUMMIT TRADING");
+  assert.equal(sanitizeSupplierName("  Brewer Livestock  "), "Brewer Livestock");
+});
+
+test("sanitizeSupplierName: rejects pure numeric values", () => {
+  assert.equal(sanitizeSupplierName("12.50"), null);
+  assert.equal(sanitizeSupplierName("160.00"), null);
+  assert.equal(sanitizeSupplierName("57876"), null);
+});
+
+test("sanitizeSupplierName: rejects money / weight tokens", () => {
+  assert.equal(sanitizeSupplierName("$45.00"), null);
+  assert.equal(sanitizeSupplierName("160.00 lbs"), null);
+  assert.equal(sanitizeSupplierName("3 cs"), null);
+  assert.equal(sanitizeSupplierName("12 pcs"), null);
+});
+
+test("sanitizeSupplierName: rejects empty / whitespace / single-letter values", () => {
+  assert.equal(sanitizeSupplierName(""), null);
+  assert.equal(sanitizeSupplierName("   "), null);
+  assert.equal(sanitizeSupplierName("A"), null);
+  assert.equal(sanitizeSupplierName(null), null);
+});
+
+test("sanitizeSupplierName: accepts names containing numbers and punctuation", () => {
+  assert.equal(sanitizeSupplierName("3M Meat Co."), "3M Meat Co.");
+  assert.equal(sanitizeSupplierName("AB-123 Trading"), "AB-123 Trading");
+});
+
+// ---------------------------------------------------------------------------
+// validateExtractionResult — supplier-name sanitization
+// ---------------------------------------------------------------------------
+
+test("validateExtractionResult: nullifies numeric supplierName values", () => {
+  const payload = { ...validExtractionPayload(), supplierName: "12.50" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.supplierName, null);
+});
+
+test("validateExtractionResult: nullifies money supplierName values", () => {
+  const payload = { ...validExtractionPayload(), supplierName: "$160.00" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.supplierName, null);
+});
+
+// ---------------------------------------------------------------------------
+// validateExtractionResult — caseWeights normalization
+// ---------------------------------------------------------------------------
+
+test("validateExtractionResult: passes caseWeights through when length matches quantityCases", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        quantityCases: 3,
+        caseWeights: [22.5, 23.1, 22.8],
+        quantityWeight: 68.4,
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.deepEqual(result!.lines[0].caseWeights, [22.5, 23.1, 22.8]);
+});
+
+test("validateExtractionResult: drops caseWeights when length disagrees with quantityCases", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        quantityCases: 5,
+        caseWeights: [22.5, 23.1],
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].caseWeights, null);
+});
+
+test("validateExtractionResult: drops caseWeights when all values are non-positive", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        quantityCases: 2,
+        caseWeights: [0, -1],
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].caseWeights, null);
+});
+
+test("validateExtractionResult: normalizes missing caseWeights to null", () => {
+  // Payload without the field — older models / prompts.
+  const payload = validExtractionPayload();
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].caseWeights, null);
+});
+
+test("validateExtractionResult: keeps caseWeights when quantityCases is null (merge will derive)", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        quantityCases: null,
+        caseWeights: [22.5, 23.1, 22.8],
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.deepEqual(result!.lines[0].caseWeights, [22.5, 23.1, 22.8]);
 });
 
 test("AI extraction output with real lines passes validation even when supplier is null", () => {

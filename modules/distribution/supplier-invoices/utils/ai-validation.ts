@@ -11,6 +11,9 @@ const AiInvoiceLineSchema = z.object({
   vendorProductName: z.string(),
   quantityCases: z.number().nullable(),
   quantityWeight: z.number().nullable(),
+  // Optional in the schema so older prompt variants and tests keep working;
+  // post-parse we always coerce `undefined` → `null` for downstream code.
+  caseWeights: z.array(z.number()).nullable().optional(),
   unitPrice: z.number().nullable(),
   lineTotal: z.number().nullable(),
   unitType: z.enum(["catch_weight", "fixed_case"]).nullable(),
@@ -56,6 +59,26 @@ export type ValidatedProductMatch = z.infer<typeof AiProductMatchSchema>;
 // Validation helpers
 // ---------------------------------------------------------------------------
 
+// A "supplier name" is a business identity, not a number, weight, or money
+// amount. The model occasionally pulls a value from a weight or amount column
+// into this field; reject anything that doesn't look like a business name.
+export function sanitizeSupplierName(value: string | null): string | null {
+  if (value === null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Pure numeric / weight / money tokens (e.g. "12.50", "$45.00", "160.00 lbs").
+  if (/^[\s$£€]*-?\d[\d.,\s]*(?:\s*(?:lb|lbs|kg|oz|ea|each|cs|case|cases|pcs?))?[\s$]*$/i.test(trimmed)) {
+    return null;
+  }
+
+  // Must contain at least two alphabetic characters — otherwise it's not a name.
+  const letterCount = (trimmed.match(/[A-Za-z]/g) ?? []).length;
+  if (letterCount < 2) return null;
+
+  return trimmed;
+}
+
 export function validateExtractionResult(raw: unknown): ValidatedExtractionResult | null {
   const result = AiExtractionResultSchema.safeParse(raw);
   if (!result.success) return null;
@@ -65,6 +88,27 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
   // Post-parse sanity checks beyond Zod's type system:
   // Confidence must be a whole-number-ish value (model sometimes returns floats).
   data.confidence = Math.round(Math.min(100, Math.max(0, data.confidence)));
+
+  // Drop garbage supplier names (numeric values picked from the table).
+  data.supplierName = sanitizeSupplierName(data.supplierName);
+
+  // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
+  // whose length disagrees with quantityCases (likely a model misread).
+  data.lines = data.lines.map(line => {
+    const raw = line.caseWeights ?? null;
+    if (raw === null) return { ...line, caseWeights: null };
+
+    const filtered = raw.filter(w => Number.isFinite(w) && w > 0);
+    if (filtered.length === 0) return { ...line, caseWeights: null };
+
+    // Tolerate caseWeights even when quantityCases is null — the merge step
+    // can adopt the array length as the case count.
+    if (line.quantityCases !== null && filtered.length !== line.quantityCases) {
+      return { ...line, caseWeights: null };
+    }
+
+    return { ...line, caseWeights: filtered };
+  });
 
   // Reject completely empty extractions — if lines and fees are both empty and
   // confidence is 0, it's probably a failed call rather than a valid "no items" invoice.

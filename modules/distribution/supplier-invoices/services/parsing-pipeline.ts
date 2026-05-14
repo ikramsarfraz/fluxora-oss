@@ -31,6 +31,10 @@ import {
   buildProfileKeywords,
   type LineMatchEntry,
 } from "../utils/parsing-pipeline-logic";
+import {
+  mergeAiOverDeterministic as mergeAiOverDeterministicPure,
+  mergeVisionOverResult as mergeVisionOverResultPure,
+} from "../utils/ai-merge";
 
 export { scoreParseResult, detectScannedPdf };
 export type { ParsedConfidenceBreakdown };
@@ -246,7 +250,7 @@ export async function runParsingPipeline(args: {
     candidateProducts: richProductRows,
   });
 
-  const mergedResult = mergeAiOverDeterministic(deterministicResult, aiResult, supplierRows);
+  const mergedResult = mergeAiOverDeterministicPure(deterministicResult, aiResult, supplierRows).result;
   const mergedBreakdown = scoreParseResult(mergedResult);
 
   // Stage 4: Vision fallback — triggered when AI text extraction produced no line items,
@@ -305,7 +309,7 @@ export async function runParsingPipeline(args: {
       );
 
     if (visionWorthUsing) {
-      finalResult = mergeVisionOverResult(mergedResult, visionResult, supplierRows);
+      finalResult = mergeVisionOverResultPure(mergedResult, visionResult, supplierRows).result;
       finalBreakdown = scoreParseResult(finalResult);
       visionUsed = true;
     }
@@ -359,14 +363,21 @@ export async function runParsingPipeline(args: {
     productNames: productNameMap,
   });
 
-  // Warn when AI text parsed line totals but lost the weight column, and vision either
-  // wasn't attempted or returned 0 lines — the form will show $0.00 until user fills weights.
-  const aiHasNullWeights =
-    aiResult.lines.length > 0 &&
-    aiResult.lines.every(l => l.quantityWeight === null);
+  // Warn when AI text parsed line totals but lost the weight column, vision
+  // didn't recover anything, AND back-calc couldn't fill in weights either —
+  // the form will show $0.00 until user fills weights manually.
+  const finalCatchWeightLinesHaveZero =
+    finalResult.values.lines.length > 0 &&
+    finalResult.values.lines.every(
+      l => l.unitType !== "catch_weight" || (Number(l.weightLbs) || 0) === 0,
+    );
   const visionFailed = needsVision && (visionResult === null || visionResult.lines.length === 0);
   const nullWeightWarning =
-    aiHasNullWeights && mergedBreakdown.totalsMatch === false && visionFailed
+    aiResult.lines.length > 0 &&
+    aiResult.lines.every(l => (l.quantityWeight ?? 0) <= 0) &&
+    finalCatchWeightLinesHaveZero &&
+    mergedBreakdown.totalsMatch === false &&
+    visionFailed
       ? "Weight column could not be recovered from this PDF — all line weights are 0. Enter weights manually before saving."
       : null;
 
@@ -442,93 +453,6 @@ function countMeaningfulLines(result: SupplierInvoicePdfPrefillResult): number {
   return result.values.lines.filter(
     l => Number(l.unitPrice) > 0 || (l.weightLbs && Number(l.weightLbs) > 0),
   ).length;
-}
-
-// ---------------------------------------------------------------------------
-// Merge vision result over existing merged result
-// ---------------------------------------------------------------------------
-
-function mergeVisionOverResult(
-  current: SupplierInvoicePdfPrefillResult,
-  vision: VisionExtractionResult,
-  supplierRows: Array<{ id: string; name: string }>,
-): SupplierInvoicePdfPrefillResult {
-  // Build lines from vision extraction
-  const lines = vision.lines.map(vl => ({
-    productId: "",
-    unitType: vl.unitType ?? "catch_weight",
-    weightEntryMode: "total_weight" as const,
-    quantityCases: String(vl.quantityCases ?? 1),
-    weightLbs: String(vl.quantityWeight ?? 0),
-    defaultCaseWeightLbs: "",
-    caseWeightEntries: Array.from(
-      { length: Math.max(1, vl.quantityCases ?? 1) },
-      () => "",
-    ),
-    unitPrice: String(vl.unitPrice ?? 0),
-    lotNumberOverride: "",
-    expirationDateOverride: "",
-  }));
-
-  const unmatchedLineDescriptions = vision.lines.map(l => l.vendorProductName);
-
-  // Resolve supplier from vision if not already matched
-  let supplierId = current.values.supplierId;
-  if (!supplierId && vision.supplierName) {
-    const normalized = vision.supplierName.toUpperCase();
-    const match = supplierRows.find(s => s.name.toUpperCase() === normalized);
-    if (match) supplierId = match.id;
-  }
-
-  const invoiceNumber = current.values.invoiceNumber || vision.invoiceNumber || "";
-  const invoiceDate =
-    current.values.invoiceDate || vision.invoiceDate || new Date().toISOString().slice(0, 10);
-
-  // Recompute totalComparison from vision line totals so scoreParseResult sees current data.
-  const computedSum = vision.lines.reduce((s, l) => {
-    if (l.lineTotal != null) return s + l.lineTotal;
-    const price = l.unitPrice ?? 0;
-    if (l.unitType === "catch_weight") return s + (l.quantityWeight ?? 0) * price;
-    return s + (l.quantityCases ?? 1) * price;
-  }, 0);
-  const visionTotal = vision.totalAmount;
-  const varianceVision =
-    visionTotal != null && visionTotal > 0 && computedSum > 0
-      ? Math.abs(visionTotal - computedSum) / visionTotal
-      : null;
-  const updatedTotalComparison = {
-    extractedTotal: visionTotal != null ? String(visionTotal) : current.totalComparison.extractedTotal,
-    computedLineTotal: computedSum.toFixed(2),
-    variance: varianceVision != null ? varianceVision.toFixed(4) : null,
-    matches: varianceVision != null ? varianceVision <= 0.02 : null,
-  };
-
-  const warnings = dedupeStrings([
-    ...current.warnings,
-    ...vision.warnings,
-    `Vision-based table extraction used — ${vision.lines.length} row(s) extracted visually.`,
-  ]);
-
-  if (vision.fees.length > 0) {
-    warnings.push(
-      `Non-inventory fees detected by vision AI: ${vision.fees.map(f => f.description).join(", ")}.`,
-    );
-  }
-
-  return {
-    ...current,
-    values: {
-      ...current.values,
-      supplierId,
-      invoiceNumber,
-      invoiceDate,
-      receiveDate: invoiceDate,
-      lines,
-    },
-    totalComparison: updatedTotalComparison,
-    warnings,
-    unmatchedLineDescriptions,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -681,105 +605,6 @@ async function enrichWithAliasesAndAiMatching(
       unmatchedLineDescriptions: stillUnmatched.filter(Boolean),
     },
     unresolvedLines,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Merge AI result over deterministic result
-// ---------------------------------------------------------------------------
-
-function mergeAiOverDeterministic(
-  det: SupplierInvoicePdfPrefillResult,
-  ai: Awaited<ReturnType<typeof extractSupplierInvoiceWithAi>>,
-  supplierRows: Array<{ id: string; name: string }>,
-): SupplierInvoicePdfPrefillResult {
-  let supplierId = det.values.supplierId;
-  if (!supplierId && ai.supplierName) {
-    const normalized = ai.supplierName.toUpperCase();
-    const match = supplierRows.find(s => s.name.toUpperCase() === normalized);
-    if (match) supplierId = match.id;
-  }
-
-  const invoiceNumber = det.values.invoiceNumber || ai.invoiceNumber || "";
-  const invoiceDate =
-    det.values.invoiceDate || ai.invoiceDate || new Date().toISOString().slice(0, 10);
-
-  let lines = det.values.lines;
-  let unmatchedLineDescriptions = det.unmatchedLineDescriptions;
-  let updatedTotalComparison = det.totalComparison;
-
-  // Replace det lines with AI lines when:
-  //  (a) det found nothing real (no descriptions + no priced/weighted lines), OR
-  //  (b) AI found more lines than det AND det totals don't reconcile — the det parser
-  //      likely captured noise rows (e.g. a stray number matched as a unit price)
-  //      rather than the real table, while AI read the column structure correctly.
-  const detHasRealLines =
-    det.unmatchedLineDescriptions.length > 0 ||
-    det.values.lines.some(
-      l => Number(l.unitPrice) > 0 || (l.weightLbs && Number(l.weightLbs) > 0),
-    );
-  const aiHasMoreLines = ai.lines.length > det.values.lines.length;
-  const detTotalsOk = det.totalComparison.matches === true;
-
-  if ((!detHasRealLines || (aiHasMoreLines && !detTotalsOk)) && ai.lines.length > 0) {
-    lines = ai.lines.map(aiLine => ({
-      productId: "",
-      unitType: aiLine.unitType ?? "catch_weight",
-      weightEntryMode: "total_weight" as const,
-      quantityCases: String(aiLine.quantityCases ?? 1),
-      weightLbs: String(aiLine.quantityWeight ?? 0),
-      defaultCaseWeightLbs: "",
-      caseWeightEntries: Array.from(
-        { length: Math.max(1, aiLine.quantityCases ?? 1) },
-        () => "",
-      ),
-      unitPrice: String(aiLine.unitPrice ?? 0),
-      lotNumberOverride: "",
-      expirationDateOverride: "",
-    }));
-    unmatchedLineDescriptions = ai.lines.map(l => l.vendorProductName);
-
-    // Recompute totalComparison so scoreParseResult sees current line totals, not stale det values.
-    const computedSum = ai.lines.reduce((s, l) => {
-      if (l.lineTotal != null) return s + l.lineTotal;
-      const price = l.unitPrice ?? 0;
-      if (l.unitType === "catch_weight") return s + (l.quantityWeight ?? 0) * price;
-      return s + (l.quantityCases ?? 1) * price;
-    }, 0);
-    const aiTotal = ai.totalAmount;
-    const variance =
-      aiTotal != null && aiTotal > 0 && computedSum > 0
-        ? Math.abs(aiTotal - computedSum) / aiTotal
-        : null;
-    updatedTotalComparison = {
-      extractedTotal: aiTotal != null ? String(aiTotal) : det.totalComparison.extractedTotal,
-      computedLineTotal: computedSum.toFixed(2),
-      variance: variance != null ? variance.toFixed(4) : null,
-      matches: variance != null ? variance <= 0.02 : null,
-    };
-  }
-
-  const warnings = [...det.warnings];
-  if (ai.warnings.length > 0) warnings.push(...ai.warnings);
-  if (ai.fees.length > 0) {
-    warnings.push(
-      `Non-inventory fees detected by AI: ${ai.fees.map(f => f.description).join(", ")}.`,
-    );
-  }
-
-  return {
-    ...det,
-    values: {
-      ...det.values,
-      supplierId,
-      invoiceNumber,
-      invoiceDate,
-      receiveDate: invoiceDate,
-      lines,
-    },
-    totalComparison: updatedTotalComparison,
-    warnings: dedupeStrings(warnings),
-    unmatchedLineDescriptions,
   };
 }
 
