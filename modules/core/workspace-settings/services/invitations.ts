@@ -369,13 +369,13 @@ export async function revokeUserInvitationByAdmin(input: {
   return { success: true };
 }
 
-/** All pending row invitations (admin-only), scoped to the current tenant. */
+/** All pending row invitations (admin-only), including past `expiresAt`. */
 export async function listPendingInvitationsForAdmin() {
-  const current = await requireAdminPortalUser();
+  await requireAdminPortalUser();
   return await db
     .select()
     .from(userInvitations)
-    .where(and(eq(userInvitations.tenantId, current.tenantId), eq(userInvitations.status, "pending")))
+    .where(eq(userInvitations.status, "pending"))
     .orderBy(desc(userInvitations.createdAt));
 }
 

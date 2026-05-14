@@ -80,7 +80,7 @@ function ActionsCell({
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
-            <Link href={`/inventory/lots/${lot.id}`}>View lot</Link>
+            <Link href={`/lots/${lot.id}`}>View lot</Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -138,7 +138,7 @@ export function createColumns(
       ),
       cell: ({ row }) => (
         <Link
-          href={`/inventory/lots/${row.original.id}`}
+          href={`/lots/${row.original.id}`}
           className="font-medium hover:underline"
         >
           {row.getValue("lotNumber")}

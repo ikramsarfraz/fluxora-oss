@@ -75,7 +75,7 @@ const COLUMNS: ListingColumn<InventoryRow>[] = [
     sortKey: "lot",
     render: row => ({
       primary: (
-        <Link href={`/inventory/lots/${row.lot.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+        <Link href={`/lots/${row.lot.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
           <MonoText>{row.lot.lotNumber}</MonoText>
         </Link>
       ),

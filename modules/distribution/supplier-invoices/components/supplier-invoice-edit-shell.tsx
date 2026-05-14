@@ -42,13 +42,6 @@ export function SupplierInvoiceEditShell({
         lotNumberOverride: "",
         expirationDateOverride: "",
       })),
-      charges: (invoice.charges ?? []).map(c => ({
-        description: c.description,
-        chargeType: (c.chargeType as "freight" | "fuel" | "tax" | "discount" | "other") ?? "other",
-        rate: c.rate ? String(c.rate) : "",
-        includeInInventoryCost: c.includeInInventoryCost ?? false,
-        amount: String(c.amount ?? "0"),
-      })),
     };
   }, [invoice]);
 

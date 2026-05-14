@@ -1,7 +1,6 @@
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BreadcrumbLabelProvider } from "@/components/breadcrumb-label-provider";
-import { PostHogIdentify } from "@/components/posthog-identify";
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
@@ -40,7 +39,6 @@ export default async function AppGroupLayout({
 
   return (
     <TooltipProvider>
-      <PostHogIdentify />
       <BreadcrumbLabelProvider>
         <SidebarProvider>
           <AppSidebar
