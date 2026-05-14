@@ -1,17 +1,5 @@
-import { PageHeader } from "@/components/page-header";
-import { RolesPermissionsCard } from "@/modules/core/workspace-settings/components/tenant-admin/roles-permissions-card";
-import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
+import { permanentRedirect } from "next/navigation";
 
-export default async function TenantRolesPage() {
-  const currentUser = await requireAdminPortalUser();
-
-  return (
-    <section className="flex flex-col gap-6">
-      <PageHeader
-        title="Roles & Permissions"
-        description="Reference descriptions and the fixed permission matrix for your tenant team roles."
-      />
-      <RolesPermissionsCard highlightRole={currentUser.role} />
-    </section>
-  );
+export default function LegacyTenantAdminRolesRedirect() {
+  permanentRedirect("/settings/team/roles");
 }
