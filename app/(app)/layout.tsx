@@ -12,8 +12,17 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { resolveTenantAppPathname } from "@/lib/subscription-guard-pathname";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 import { getAccessibleDestinationsForAuthUser } from "@/modules/shared/services/auth";
+
+/**
+ * Routes that render full-screen without the tenant sidebar — onboarding
+ * screens that the subscription-guard layout forces users onto. Letting the
+ * sidebar render here lets users click links the guard immediately redirects
+ * back to /get-started, which Next.js prefetching turns into a tight loop.
+ */
+const SIDEBAR_HIDDEN_PATHS: ReadonlySet<string> = new Set(["/get-started"]);
 
 export default async function AppGroupLayout({
   children,
@@ -36,6 +45,16 @@ export default async function AppGroupLayout({
     destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
   } catch {
     redirect("/login");
+  }
+
+  const pathname = resolveTenantAppPathname(headerList);
+  if (SIDEBAR_HIDDEN_PATHS.has(pathname)) {
+    return (
+      <TooltipProvider>
+        <PostHogIdentify />
+        {children}
+      </TooltipProvider>
+    );
   }
 
   return (
