@@ -972,7 +972,7 @@ available = SUM(cases) WHERE status = in_stock
 - Large line counts handled by @react-pdf pagination
 - Reverse a fulfillment after invoice generated → invoice still references old fulfillment (COGS may become stale; verify behavior)
 
-**Observability**: tests in [`lib/invoices/sales-invoice-pdf.test.ts`](lib/invoices/sales-invoice-pdf.test.ts) (unit-test suite via `npm run test:unit`).
+**Observability**: tests in [`lib/invoices/sales-invoice-pdf.test.ts`](lib/invoices/sales-invoice-pdf.test.ts) (unit-test suite via `pnpm test:unit`).
 
 **QA checklist**:
 - [ ] Generate invoice with all lines fulfilled → succeeds

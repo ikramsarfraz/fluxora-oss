@@ -76,7 +76,7 @@ This is the lightweight V1 release checklist for subscription billing and plan e
 
 ## Local test flow
 
-1. Start the app with `npm run dev`.
+1. Start the app with `pnpm dev`.
 2. Run Stripe CLI forwarding:
    `stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook`
 3. Sign in as a tenant owner or admin.

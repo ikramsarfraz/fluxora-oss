@@ -38,7 +38,7 @@ Set in `.env.local` (see `.env.local.example` in the repo root):
    stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook
   ```
    Or with localhost:
-4. Copy the `**whsec_...**` printed by `**stripe listen**` into `**STRIPE_WEBHOOK_SECRET**` in `.env.local`. Restart `npm run dev` after changing secrets.
+4. Copy the `**whsec_...**` printed by `**stripe listen**` into `**STRIPE_WEBHOOK_SECRET**` in `.env.local`. Restart `pnpm dev` after changing secrets.
 5. Sign in as a tenant user → `**/account` → Billing** (or `**/account/billing`**) → start Checkout as owner/admin. Use [Stripe test cards](https://docs.stripe.com/testing#cards) (e.g. `4242424242424242`). After Checkout, redirects include `session_id`; the Billing UI can confirm the session while webhooks update the tenant row.
 
 A **platform admin** can open `**/admin/subscriptions`** on the internal admin host and use **Sync Stripe catalog** to pull active Products and Prices from Stripe into the database (also possible via `syncStripeCatalogFullFromStripeApi` in server code).
@@ -51,7 +51,7 @@ The Checkout return flow aligns with Next’s Stripe sample pattern (`with-strip
 
 If webhook requests return `**400 Invalid signature`** / `No signatures found matching…`:
 
-- While using `**stripe listen**`, `**STRIPE_WEBHOOK_SECRET` must equal the `whsec_` printed in that CLI session.** Restart `**stripe listen`** → new secret → update `.env.local` → restart `**npm run dev**`.
+- While using `**stripe listen**`, `**STRIPE_WEBHOOK_SECRET` must equal the `whsec_` printed in that CLI session.** Restart `**stripe listen`** → new secret → update `.env.local` → restart `**pnpm dev**`.
 - Do **not** paste the Dashboard endpoint signing secret into local env while testing forwarded events via the CLI (and vice versa for production). See Stripe’s docs: [Resolve webhook signature errors](https://docs.stripe.com/webhooks/signature).
 
 Common mistakes: forgetting `**:3000`** in the forward URL (hits port 80 and fails), wrong path (`**/api/stripe/webhook**` vs `/api/webhooks`), or stale secret after restarting `stripe listen`.
@@ -76,7 +76,7 @@ Stripe `product.deleted` / `price.deleted` events **archive** local rows (`activ
 
 The **Stripe catalog** screen (`/admin/stripe-catalog`) is a read-only view of cached Products and grouped Prices plus the last full-sync audit entry.
 
-After schema changes, run `**npm run db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.
+After schema changes, run `**pnpm db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.
 
 ## Subscription access guard (canceled / expired tenants)
 
