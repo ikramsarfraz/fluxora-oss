@@ -58,8 +58,9 @@ export function mergeAiOverDeterministic(
   }
 
   const invoiceNumber = det.values.invoiceNumber || ai.invoiceNumber || "";
-  const invoiceDate =
-    det.values.invoiceDate || ai.invoiceDate || new Date().toISOString().slice(0, 10);
+  // Stay empty when no date was extracted — buildFormStateWarnings backfills
+  // today's date as a final UX fallback once the pipeline finishes.
+  const invoiceDate = det.values.invoiceDate || ai.invoiceDate || "";
 
   let lines: SupplierInvoicePdfPrefillLine[] = det.values.lines;
   let unmatchedLineDescriptions = det.unmatchedLineDescriptions;
@@ -168,8 +169,9 @@ export function mergeVisionOverResult(
   }
 
   const invoiceNumber = current.values.invoiceNumber || vision.invoiceNumber || "";
-  const invoiceDate =
-    current.values.invoiceDate || vision.invoiceDate || new Date().toISOString().slice(0, 10);
+  // Stay empty when no date was extracted — buildFormStateWarnings backfills
+  // today's date once the pipeline finishes.
+  const invoiceDate = current.values.invoiceDate || vision.invoiceDate || "";
 
   // Recompute totalComparison from vision line totals.
   const computedSum = vision.lines.reduce((s, l) => {

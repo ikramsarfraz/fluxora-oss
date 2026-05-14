@@ -35,6 +35,7 @@ import {
   mergeAiOverDeterministic as mergeAiOverDeterministicPure,
   mergeVisionOverResult as mergeVisionOverResultPure,
 } from "../utils/ai-merge";
+import { buildFormStateWarnings } from "../utils/form-state-warnings";
 
 export { scoreParseResult, detectScannedPdf };
 export type { ParsedConfidenceBreakdown };
@@ -224,14 +225,15 @@ export async function runParsingPipeline(args: {
       lines: enriched.result.values.lines,
       productNames: productNameMap,
     });
+    const finalized = applyFormStateWarnings(enriched.result, deterministicResult.warnings);
     return {
-      prefillResult: enriched.result,
+      prefillResult: finalized.result,
       confidence: breakdown.score,
       confidenceBreakdown: breakdown,
       source: "deterministic",
       aiUsed: false,
       requiresOcr: false,
-      warnings: deterministicResult.warnings,
+      warnings: finalized.warnings,
       unresolvedLines: enriched.unresolvedLines,
       detectedFees: [],
       priceDeviations,
@@ -381,12 +383,13 @@ export async function runParsingPipeline(args: {
       ? "Weight column could not be recovered from this PDF — all line weights are 0. Enter weights manually before saving."
       : null;
 
-  const allWarnings = [
+  const sourceStageWarnings = [
     ...finalResult.warnings,
     ...(visionUsed ? [] : aiResult.warnings),
     ...(nullWeightWarning ? [nullWeightWarning] : []),
     "AI extraction was used — review all fields before saving.",
   ];
+  const finalized = applyFormStateWarnings(enriched.result, sourceStageWarnings);
 
   const source: PipelineParseSource = visionUsed
     ? "vision"
@@ -423,13 +426,13 @@ export async function runParsingPipeline(args: {
     : undefined;
 
   return {
-    prefillResult: enriched.result,
+    prefillResult: finalized.result,
     confidence: finalBreakdown.score,
     confidenceBreakdown: finalBreakdown,
     source,
     aiUsed: true,
     requiresOcr: false,
-    warnings: dedupeStrings(allWarnings),
+    warnings: finalized.warnings,
     unresolvedLines: enriched.unresolvedLines,
     detectedFees: visionUsed
       ? (visionResult?.fees ?? [])
@@ -442,6 +445,47 @@ export async function runParsingPipeline(args: {
         : null,
     visionUsed,
     debug: debugInfo,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Final state finalizer — backfill date and append form-state warnings.
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply form-state warnings to the final prefill result. Backfills today's
+ * date if the pipeline couldn't extract one, and returns a deduped warnings
+ * list combining the source-stage warnings with the freshly evaluated
+ * final-state warnings (so messages like "Supplier was not matched" only
+ * appear when the FINAL result is actually missing a supplier).
+ */
+function applyFormStateWarnings(
+  result: SupplierInvoicePdfPrefillResult,
+  sourceStageWarnings: string[],
+): { result: SupplierInvoicePdfPrefillResult; warnings: string[] } {
+  const stateCheck = buildFormStateWarnings(result);
+
+  const adjustedResult: SupplierInvoicePdfPrefillResult = stateCheck.invoiceDateUsedFallback
+    ? {
+        ...result,
+        values: {
+          ...result.values,
+          invoiceDate: stateCheck.resolvedInvoiceDate,
+          receiveDate: result.values.receiveDate || stateCheck.resolvedInvoiceDate,
+        },
+      }
+    : {
+        ...result,
+        values: {
+          ...result.values,
+          // Make sure receiveDate is at least populated when we have a date.
+          receiveDate: result.values.receiveDate || result.values.invoiceDate,
+        },
+      };
+
+  return {
+    result: adjustedResult,
+    warnings: dedupeStrings([...sourceStageWarnings, ...stateCheck.warnings]),
   };
 }
 

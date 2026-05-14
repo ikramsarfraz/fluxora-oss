@@ -156,11 +156,11 @@ test("leaves unresolved suppliers and products for the user", () => {
     "JUMBO CHICKEN TENDER",
     "JUMBO CHICKEN BREAST",
   ]);
-  assert.match(result.warnings.join(" "), /Supplier was not matched/);
-  assert.match(result.warnings.join(" "), /Some product lines were not matched/);
+  // Final-state warnings are evaluated by buildFormStateWarnings in the
+  // pipeline (see form-state-warnings.test.ts), not by the parser itself.
 });
 
-test("warns when parsed line totals do not match the PDF balance", () => {
+test("flags total-balance mismatches in totalComparison", () => {
   const result = parseSupplierInvoicePdfText({
     text: SAMPLE_INVOICE_TEXT.replace(/\$1,536\.80/g, "$1,500.00"),
     sourceFilename: "Invoice 57876.pdf",
@@ -175,7 +175,6 @@ test("warns when parsed line totals do not match the PDF balance", () => {
   assert.equal(result.totalComparison.computedLineTotal, "1536.80");
   assert.equal(result.totalComparison.variance, "36.80");
   assert.equal(result.totalComparison.matches, false);
-  assert.match(result.warnings.join(" "), /line totals do not match/i);
 });
 
 test("returns an editable placeholder when no line items can be read", () => {
@@ -188,7 +187,18 @@ test("returns an editable placeholder when no line items can be read", () => {
 
   assert.equal(result.values.lines.length, 1);
   assert.equal(result.values.lines[0].productId, "");
-  assert.match(result.warnings.join(" "), /No invoice line items/);
+});
+
+test("leaves invoiceDate empty when no date is found in the text", () => {
+  const result = parseSupplierInvoicePdfText({
+    text: "Invoice 12345 Balance Due $12.00",
+    sourceFilename: "empty.pdf",
+    suppliers: [],
+    products: [],
+  });
+
+  assert.equal(result.values.invoiceDate, "");
+  assert.equal(result.values.receiveDate, "");
 });
 
 test("parses Brewer Livestock packed invoice rows", () => {
