@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { completeOnboarding, skipWelcome } from "../actions";
+import { completeOnboarding } from "../actions";
 import { captureClientEvent } from "@/lib/posthog-client";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
@@ -431,22 +431,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
               justifyContent: "space-between",
             }}
           >
-            <button
-              onClick={async () => {
-                await skipWelcome();
-                router.push("/import");
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                color: c.text3,
-                fontSize: 12.5,
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              Have existing data? Skip to bulk import →
-            </button>
+            <div />
             <div style={{ display: "flex", gap: 8 }}>
               {step > 1 && (
                 <button

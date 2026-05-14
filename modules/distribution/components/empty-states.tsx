@@ -20,11 +20,6 @@ export function InboxEmptyState() {
             kind: "primary",
             handler: () => router.push("/supplier-invoices/new"),
           },
-          {
-            label: "Import from CSV",
-            kind: "secondary",
-            handler: () => router.push("/import"),
-          },
         ]}
       />
 

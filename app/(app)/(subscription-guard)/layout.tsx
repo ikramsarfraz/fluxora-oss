@@ -53,7 +53,7 @@ export default async function TenantSubscriptionGuardLayout({
   // Cold-start onboarding gate — redirect to /welcome until first bill is posted or skipped.
   if (tenant.billCount === 0 && !tenant.welcomeSkippedAt) {
     const pathname = resolveTenantAppPathname(headerList);
-    if (pathname && pathname !== "/welcome" && !pathname.startsWith("/import")) {
+    if (pathname && pathname !== "/welcome") {
       redirect("/welcome");
     }
   }

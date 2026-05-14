@@ -39,8 +39,6 @@ import {
   UserCog,
   SlidersHorizontal,
   TableProperties,
-  Upload,
-  Compass,
   Landmark,
   Activity,
   ScrollText,
@@ -154,21 +152,6 @@ const navMain: NavGroup[] = [
         title: "Suppliers",
         url: "/suppliers",
         icon: Truck,
-      },
-    ],
-  },
-  {
-    title: "Tools",
-    items: [
-      {
-        title: "Bulk import",
-        url: "/import",
-        icon: Upload,
-      },
-      {
-        title: "What unlocks next?",
-        url: "/whats-next",
-        icon: Compass,
       },
     ],
   },
@@ -485,15 +468,6 @@ export function AppSidebar({
               className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
               Terms
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/whats-next"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              What unlocks next?
             </Link>
           </div>
         </SidebarFooter>
