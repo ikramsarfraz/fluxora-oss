@@ -39,6 +39,13 @@ Correct extraction:
 SELF-CHECK: If quantityCases is a decimal (e.g. 69.05, 76.90, 21.94), you have misread the columns.
 The Qty/cases column always contains whole integers. Go back and re-read the table.
 
+INVOICE DATE FORMAT — CRITICAL:
+- "invoiceDate" MUST be returned in ISO YYYY-MM-DD format (e.g. "2026-05-14").
+- If the date on the page shows another format ("5/14/2026", "5-14-26",
+  "May 14, 2026", "14 May 2026"), CONVERT it to YYYY-MM-DD before returning.
+- Assume US M/D/Y ordering when ambiguous (e.g. "5/4/2026" → "2026-05-04").
+- If no date is visible, return null. Never invent a date.
+
 SUPPLIER NAME — CRITICAL:
 - "supplierName" is the BUSINESS / COMPANY name of the supplier (e.g.
   "SUMMIT TRADING", "Brewer Livestock"). It is found in the document header,

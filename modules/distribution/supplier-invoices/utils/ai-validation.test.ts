@@ -448,6 +448,45 @@ test("validateExtractionResult: nullifies money supplierName values", () => {
 });
 
 // ---------------------------------------------------------------------------
+// validateExtractionResult — invoiceDate normalization
+// ---------------------------------------------------------------------------
+
+test("validateExtractionResult: normalizes US M/D/YYYY date to ISO", () => {
+  const payload = { ...validExtractionPayload(), invoiceDate: "5/14/2026" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.invoiceDate, "2026-05-14");
+});
+
+test("validateExtractionResult: normalizes 2-digit year date to ISO", () => {
+  const payload = { ...validExtractionPayload(), invoiceDate: "4/20/26" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.invoiceDate, "2026-04-20");
+});
+
+test("validateExtractionResult: normalizes written-month date to ISO", () => {
+  const payload = { ...validExtractionPayload(), invoiceDate: "April 20, 2026" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.invoiceDate, "2026-04-20");
+});
+
+test("validateExtractionResult: drops unparseable invoiceDate to null", () => {
+  const payload = { ...validExtractionPayload(), invoiceDate: "not a date" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.invoiceDate, null);
+});
+
+test("validateExtractionResult: keeps valid ISO date unchanged", () => {
+  const payload = { ...validExtractionPayload(), invoiceDate: "2026-05-14" };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.invoiceDate, "2026-05-14");
+});
+
+// ---------------------------------------------------------------------------
 // validateExtractionResult — caseWeights normalization
 // ---------------------------------------------------------------------------
 

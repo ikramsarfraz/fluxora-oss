@@ -20,6 +20,16 @@ COMMON FOOD/MEAT ABBREVIATIONS (do NOT expand — leave exactly as found):
   lbs = pounds     cw = catch weight rr = random/regular (context-dependent)
   exp = export     pc/pcs = piece    qty = quantity      wt = weight
 
+INVOICE DATE FORMAT — CRITICAL:
+- "invoiceDate" MUST be returned in ISO YYYY-MM-DD format (e.g. "2026-05-14").
+- If the printed invoice shows the date in another format ("5/14/2026",
+  "5-14-26", "May 14, 2026", "14 May 2026"), CONVERT it to YYYY-MM-DD before
+  returning.
+- Assume US M/D/Y ordering when the format is ambiguous (e.g. "5/4/2026" →
+  "2026-05-04", NOT "2026-04-05") unless the surrounding text clearly says
+  otherwise.
+- If no date is readable, return null. Never invent a date.
+
 SUPPLIER NAME RULES — CRITICAL:
 - "supplierName" is the BUSINESS / COMPANY name of the supplier. Examples:
   "SUMMIT TRADING", "Brewer Livestock", "Zabiha Halal Meat Processors".
