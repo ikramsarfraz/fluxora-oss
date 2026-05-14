@@ -81,6 +81,15 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "credit_card",
 ]);
 
+export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval", [
+  "none",
+  "weekly",
+  "biweekly",
+  "monthly",
+  "quarterly",
+  "annually",
+]);
+
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
@@ -1006,13 +1015,24 @@ export const customerProductPrices = pgTable(
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /**
+     * Optional supplier scope. When NULL the price is the customer's default
+     * for the product (applies to any supplier). When set the price applies
+     * only when the line's source supplier matches.
+     *
+     * Resolution at order time: (customer, product, supplier) → (customer, product, NULL) → product default.
+     */
+    supplierId: uuid("supplier_id").references(() => suppliers.id, {
+      onDelete: "cascade",
+    }),
     pricePerLb: numeric("price_per_lb", { precision: 10, scale: 4 }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   table => [
-    uniqueIndex("uq_customer_product").on(table.customerId, table.productId),
+    uniqueIndex("uq_customer_product_supplier")
+      .on(table.customerId, table.productId, table.supplierId),
   ],
 );
 
@@ -1027,7 +1047,6 @@ export const productSupplierCosts = pgTable(
       .notNull()
       .references(() => suppliers.id, { onDelete: "cascade" }),
     costPerLb: numeric("cost_per_lb", { precision: 10, scale: 4 }).notNull(),
-    isPrimary: boolean("is_primary").notNull().default(false),
     lastReceivedAt: timestamp("last_received_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
@@ -1741,6 +1760,19 @@ export const expenses = pgTable(
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     note: text("note"),
     paymentMethod: paymentMethodEnum("payment_method"),
+    /**
+     * Recurrence fields. A row with `recurrenceInterval != 'none'` is a
+     * SCHEDULE — the cron job (`/api/cron/materialize-recurring-expenses`)
+     * creates new expense rows whose `recurrenceParentId` points back to
+     * the schedule. Materialized instances always carry `recurrenceInterval = 'none'`.
+     */
+    recurrenceInterval: expenseRecurrenceIntervalEnum("recurrence_interval")
+      .notNull()
+      .default("none"),
+    recurrenceStartDate: date("recurrence_start_date"),
+    recurrenceEndDate: date("recurrence_end_date"),
+    recurrenceNextDueDate: date("recurrence_next_due_date"),
+    recurrenceParentId: uuid("recurrence_parent_id"),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1750,7 +1782,16 @@ export const expenses = pgTable(
   },
   table => [
     index("expenses_tenant_id_idx").on(table.tenantId),
+    index("expenses_recurrence_next_due_idx").on(
+      table.tenantId,
+      table.recurrenceNextDueDate,
+    ),
+    index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
+    check(
+      "expenses_recurrence_end_after_start",
+      sql`${table.recurrenceEndDate} IS NULL OR ${table.recurrenceStartDate} IS NULL OR ${table.recurrenceEndDate} >= ${table.recurrenceStartDate}`,
+    ),
   ],
 );
 

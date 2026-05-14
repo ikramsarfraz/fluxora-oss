@@ -11,6 +11,7 @@ import {
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
 import { Plus } from "lucide-react";
 import { useInventoryItemsPage } from "../hooks/use-inventory";
+import { InventoryProductSummary } from "./inventory-product-summary";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatWeightLbs, getExpirationState, getInventoryStatusLabel } from "../utils/insights";
@@ -175,6 +176,7 @@ export function InventoryPage() {
         { label: "Weight (lb)", value: Number(summary.totalWeight ?? 0).toFixed(0) },
         { label: "Expiring soon", value: summary.expiringCount },
       ] : undefined}
+      headerExtra={<InventoryProductSummary />}
       statusSegments={EXPIRATION_SEGMENTS}
       activeSegment={pagination.filters.expiration ?? "all"}
       onSegmentChange={value => pagination.setFilter("expiration", value as Required<InventoryListFilters>["expiration"])}

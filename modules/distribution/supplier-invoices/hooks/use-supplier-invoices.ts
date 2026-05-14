@@ -9,7 +9,10 @@ import {
   createSupplierInvoiceAction,
   createImportProfileAction,
   deleteSupplierInvoiceAction,
+  getNextSupplierInvoiceNumberAction,
+  getReversalPreviewAction,
   getSupplierInvoiceByIdAction,
+  getSupplierInvoiceCostDiffContextAction,
   getSupplierInvoicesAction,
   getSupplierInvoicesPageAction,
   parseSupplierInvoicePdfAction,
@@ -105,6 +108,42 @@ export function useCompleteSupplierInvoice() {
         queryKey: queryKeys.supplierInvoices.activity(variables.id),
       });
     },
+  });
+}
+
+export function useSupplierCostDiffContext(
+  supplierId: string,
+  productIds: string[],
+) {
+  const cleanIds = productIds.filter(Boolean);
+  return useQuery({
+    queryKey: queryKeys.supplierInvoices.costDiff(supplierId, cleanIds),
+    queryFn: () =>
+      getSupplierInvoiceCostDiffContextAction({
+        supplierId,
+        productIds: cleanIds,
+      }),
+    enabled: !!supplierId && cleanIds.length > 0,
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useNextSupplierInvoiceNumber(opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["supplier-invoices", "next-number"] as const,
+    queryFn: () => getNextSupplierInvoiceNumberAction(),
+    enabled: opts?.enabled ?? true,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+export function useReversalPreview(invoiceId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.supplierInvoices.reversalPreview(invoiceId),
+    queryFn: () => getReversalPreviewAction(invoiceId),
+    enabled: (opts?.enabled ?? true) && !!invoiceId && isUuid(invoiceId),
+    staleTime: 0,
   });
 }
 

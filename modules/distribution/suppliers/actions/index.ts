@@ -1,18 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
-import { db } from "@/db";
-import { productSupplierCosts } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
-import { captureServerEvent } from "@/lib/posthog-server";
-import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
   createSupplier,
   deleteSupplier,
   getSupplierById,
+  getInvoicesForSupplierPage,
+  type SupplierInvoicesParams,
+  getSupplierLotsPage,
+  type SupplierLotsParams,
+  getSupplierPortfolio,
   getSuppliers,
   getSuppliersPage,
   type SupplierListParams,
@@ -64,62 +64,36 @@ export async function updateSupplierAction(input: UpdateSupplierInput) {
   return supplier;
 }
 
+export async function getSupplierPortfolioAction(id: string) {
+  return await getSupplierPortfolio(id);
+}
+
+export async function getInvoicesForSupplierPageAction(
+  id: string,
+  params?: SupplierInvoicesParams,
+) {
+  return await getInvoicesForSupplierPage(id, params);
+}
+
+export async function getSupplierLotsPageAction(
+  id: string,
+  params?: SupplierLotsParams,
+) {
+  return await getSupplierLotsPage(id, params);
+}
+
 /**
- * Switches the primary supplier for one or more products.
- * Clears isPrimary on all suppliers for each affected product, then sets it
- * on newSupplierId. Safe to call with a list (category-wide promote) or single
- * productId (per-product opportunity apply).
+ * @deprecated The "primary vendor" concept was removed on develop (see
+ * `0037_drop_product_supplier_primary`). The comparison-page UI that calls
+ * this still exists on feature/ai-invoice-import; this stub keeps it
+ * compiling, but the click handler throws so it's obvious the feature is
+ * gone. Remove the comparison-page promote UI in a follow-up.
  */
 export async function switchPrimarySupplierAction(
-  newSupplierId: string,
-  productIds: string[],
+  _newSupplierId: string,
+  _productIds: string[],
 ) {
-  if (!productIds.length) return;
-  const [tenant, user] = await Promise.all([
-    getCurrentTenant(),
-    getCurrentPortalUser(),
-  ]);
-  void tenant;
-
-  await db.transaction(async tx => {
-    // Clear primary flag for all suppliers on the affected products.
-    await tx
-      .update(productSupplierCosts)
-      .set({ isPrimary: false })
-      .where(
-        and(
-          inArray(productSupplierCosts.productId, productIds),
-        ),
-      );
-
-    // Set primary for the chosen supplier on products it actually carries.
-    await tx
-      .update(productSupplierCosts)
-      .set({ isPrimary: true })
-      .where(
-        and(
-          eq(productSupplierCosts.supplierId, newSupplierId),
-          inArray(productSupplierCosts.productId, productIds),
-        ),
-      );
-  });
-
-  await logAuditEvent({
-    tenantId: user.tenantId,
-    actorUserId: user.id,
-    actorEmail: user.email,
-    action: "supplier.switch_primary",
-    resourceType: "supplier",
-    resourceId: newSupplierId,
-    metadata: { productIds, productCount: productIds.length },
-  });
-  await captureServerEvent({
-    userId: user.id,
-    tenantId: user.tenantId,
-    event: "supplier.switched_primary",
-    properties: { product_count_affected: productIds.length },
-  });
-
-  revalidatePath("/suppliers");
-  revalidatePath("/price-chart");
+  throw new Error(
+    "Primary vendor switching has been removed. Each supplier carries its own cost and per-customer price.",
+  );
 }

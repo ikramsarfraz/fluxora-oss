@@ -85,7 +85,8 @@ function isSharedAuthPath(pathname: string) {
     pathname === "/terms" ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/invitations") ||
-    pathname === "/api/stripe/webhook"
+    pathname === "/api/stripe/webhook" ||
+    pathname.startsWith("/api/cron/")
   );
 }
 

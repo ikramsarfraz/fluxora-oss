@@ -9,6 +9,7 @@ import {
   getInventoryItemByIdAction,
   getInventoryItemsAction,
   getInventoryItemsPageAction,
+  getInventoryProductSummaryAction,
   getProductCasesOnHandAction,
 } from "@/modules/distribution/inventory/actions";
 import { queryKeys } from "@/lib/query/keys";
@@ -65,6 +66,14 @@ export function useProductCasesOnHand() {
   return useQuery({
     queryKey: queryKeys.inventory.casesOnHand,
     queryFn: getProductCasesOnHandAction,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useInventoryProductSummary() {
+  return useQuery({
+    queryKey: queryKeys.inventory.productSummary,
+    queryFn: getInventoryProductSummaryAction,
     staleTime: 1000 * 60 * 2,
   });
 }

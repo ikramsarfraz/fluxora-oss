@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Controller,
   useFieldArray,
@@ -9,7 +10,7 @@ import {
   type UseFormRegister,
   type UseFormSetValue,
 } from "react-hook-form";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -26,6 +27,8 @@ import {
 } from "@/modules/distribution/supplier-invoices/utils/case-weights";
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
+import { supplierInvoiceLineCostPerLb } from "@/modules/distribution/supplier-invoices/utils/cost";
+import type { SupplierCostDiffEntry } from "@/modules/distribution/supplier-invoices/services/receiving";
 
 import {
   computeLineTotal,
@@ -63,6 +66,11 @@ function getPositiveInteger(value: string | undefined): number {
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
+export type LineCostAckKey = string;
+export function ackKey(productId: string, supplierId: string, newCostPerLb: string): LineCostAckKey {
+  return `${productId}::${supplierId}::${newCostPerLb}`;
+}
+
 type Props = {
   control: Control<SupplierInvoiceFormValues>;
   register: UseFormRegister<SupplierInvoiceFormValues>;
@@ -72,6 +80,14 @@ type Props = {
   disabled?: boolean;
   /** Per-line vendor product names from PDF import, indexed to match form lines array. */
   vendorProductNames?: (string | null)[];
+  /** Selected supplier for the bill (form-level value). */
+  supplierId: string;
+  /** Currently-recorded cost + customer dependents, keyed by productId. */
+  costDiffByProductId: Map<string, SupplierCostDiffEntry>;
+  /** Acknowledged keys (productId::supplierId::newCost). */
+  acknowledgedKeys: Set<LineCostAckKey>;
+  /** Toggle an acknowledgement. */
+  onToggleAck: (key: LineCostAckKey) => void;
 };
 
 // ── Invoice total for card header (exported) ───────────────────────────────
@@ -267,6 +283,10 @@ export function SupplierInvoiceLinesEditor({
   productsLoading,
   disabled = false,
   vendorProductNames,
+  supplierId,
+  costDiffByProductId,
+  acknowledgedKeys,
+  onToggleAck,
 }: Props) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -277,6 +297,7 @@ export function SupplierInvoiceLinesEditor({
     label: p.name,
     sku: p.sku,
   }));
+  const productNameById = new Map(products.map(p => [p.id, p.name] as const));
 
   return (
     <div>
@@ -331,6 +352,11 @@ export function SupplierInvoiceLinesEditor({
             onRemove={() => remove(index)}
             canRemove={fields.length > 1}
             vendorProductName={vendorProductNames?.[index] ?? null}
+            supplierId={supplierId}
+            costDiffByProductId={costDiffByProductId}
+            productNameById={productNameById}
+            acknowledgedKeys={acknowledgedKeys}
+            onToggleAck={onToggleAck}
           />
         ))
       )}
@@ -375,6 +401,173 @@ export function SupplierInvoiceLinesEditor({
   );
 }
 
+// ── Cost diff callout (per-line sub-strip) ─────────────────────────────────
+function CostDiffCallout({
+  variant,
+  recordedCostPerLb,
+  liveCostPerLb,
+  productName,
+  dependentCustomerCount,
+  acknowledged,
+  onToggleAck,
+}: {
+  variant: "changed" | "new";
+  recordedCostPerLb: string | null;
+  liveCostPerLb: string;
+  productName: string;
+  dependentCustomerCount: number;
+  acknowledged: boolean;
+  onToggleAck: () => void;
+}) {
+  const recordedNum = recordedCostPerLb ? Number(recordedCostPerLb) : null;
+  const liveNum = Number(liveCostPerLb);
+  const deltaPct =
+    recordedNum != null && recordedNum > 0
+      ? ((liveNum - recordedNum) / recordedNum) * 100
+      : null;
+  const accent =
+    variant === "new"
+      ? "oklch(58% 0.13 155)"
+      : "oklch(60% 0.16 35)";
+  const accentSoft =
+    variant === "new" ? "oklch(95% 0.04 155 / 0.55)" : "oklch(95% 0.05 60 / 0.6)";
+  const accentBorder =
+    variant === "new" ? "oklch(58% 0.13 155 / 0.3)" : "oklch(60% 0.16 35 / 0.3)";
+
+  return (
+    <div
+      style={{
+        background: accentSoft,
+        borderTop: `1px solid ${accentBorder}`,
+        borderBottom: `1px solid ${accentBorder}`,
+        padding: "10px 28px",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        flexWrap: "wrap",
+      }}
+    >
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 12.5,
+          color: T.text,
+          fontWeight: 500,
+        }}
+      >
+        {variant === "new" ? (
+          <Sparkles style={{ width: 13, height: 13, color: accent, flexShrink: 0 }} />
+        ) : (
+          <AlertTriangle
+            style={{ width: 13, height: 13, color: accent, flexShrink: 0 }}
+          />
+        )}
+        <span style={{ color: T.text }}>
+          {variant === "new"
+            ? "New cost for this supplier"
+            : "Cost changed for this supplier"}
+          {productName ? (
+            <span style={{ color: T.mutedSoft, fontWeight: 400 }}> · {productName}</span>
+          ) : null}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontFamily: T.mono,
+          fontVariantNumeric: "tabular-nums",
+          fontSize: 12.5,
+          color: T.text,
+        }}
+      >
+        {variant === "new" ? (
+          <>
+            <span style={{ color: T.mutedSoft }}>—</span>
+            <span style={{ color: T.mutedSoft }}>→</span>
+            <span style={{ fontWeight: 600 }}>${liveNum.toFixed(4)}</span>
+          </>
+        ) : (
+          <>
+            <span style={{ color: T.muted }}>${recordedNum!.toFixed(4)}</span>
+            <span style={{ color: T.mutedSoft }}>→</span>
+            <span style={{ fontWeight: 600 }}>${liveNum.toFixed(4)}</span>
+            {deltaPct != null ? (
+              <span
+                style={{
+                  color: deltaPct >= 0 ? accent : "oklch(58% 0.13 155)",
+                  fontWeight: 500,
+                }}
+              >
+                ({deltaPct >= 0 ? "+" : ""}
+                {deltaPct.toFixed(1)}%)
+              </span>
+            ) : null}
+          </>
+        )}
+      </div>
+
+      {dependentCustomerCount > 0 ? (
+        <div style={{ fontSize: 11.5, color: T.muted }}>
+          Affects{" "}
+          <span style={{ fontWeight: 600, color: T.text }}>
+            {dependentCustomerCount} customer{dependentCustomerCount === 1 ? "" : "s"}
+          </span>{" "}
+          ·{" "}
+          <Link
+            href="/price-chart"
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: accent, fontWeight: 500 }}
+          >
+            view in price chart
+          </Link>
+        </div>
+      ) : (
+        <div style={{ fontSize: 11.5, color: T.mutedSoft }}>
+          No customer prices pinned to this supplier yet.
+        </div>
+      )}
+
+      <div style={{ marginLeft: "auto" }}>
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            fontSize: 12,
+            color: acknowledged ? accent : T.text,
+            fontWeight: 500,
+            cursor: "pointer",
+            userSelect: "none",
+            background: acknowledged ? "rgba(255,255,255,0.6)" : "transparent",
+            border: `1px solid ${acknowledged ? accentBorder : "transparent"}`,
+            padding: "4px 10px",
+            borderRadius: 6,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={acknowledged}
+            onChange={onToggleAck}
+            style={{
+              accentColor: accent,
+              cursor: "pointer",
+              width: 13,
+              height: 13,
+            }}
+          />
+          {acknowledged ? "Acknowledged" : "Acknowledge"}
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // ── LineRow ────────────────────────────────────────────────────────────────
 function LineRow({
   control,
@@ -387,6 +580,11 @@ function LineRow({
   onRemove,
   canRemove,
   vendorProductName,
+  supplierId,
+  costDiffByProductId,
+  productNameById,
+  acknowledgedKeys,
+  onToggleAck,
 }: {
   control: Control<SupplierInvoiceFormValues>;
   register: UseFormRegister<SupplierInvoiceFormValues>;
@@ -398,6 +596,11 @@ function LineRow({
   onRemove: () => void;
   canRemove: boolean;
   vendorProductName?: string | null;
+  supplierId: string;
+  costDiffByProductId: Map<string, SupplierCostDiffEntry>;
+  productNameById: Map<string, string>;
+  acknowledgedKeys: Set<LineCostAckKey>;
+  onToggleAck: (key: LineCostAckKey) => void;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
   const [expanded, setExpanded] = useState(false);
@@ -460,6 +663,36 @@ function LineRow({
   const totalWeightLbs = isCatchWeight
     ? computeDraftLineWeight(line ?? {})
     : Number(line?.weightLbs ?? "0") || 0;
+
+  // Live per-lb cost recomputed as the user types. Matches what the server
+  // would write into productSupplierCosts at completion.
+  const liveCostPerLb = (() => {
+    if (!supplierId || !productId) return null;
+    return supplierInvoiceLineCostPerLb({
+      quantityCases,
+      weightLbs: isCatchWeight ? totalWeightLbs.toFixed(4) : line?.weightLbs ?? "0",
+      unitType,
+      unitPrice: line?.unitPrice ?? "0",
+    });
+  })();
+  const diffEntry = productId ? costDiffByProductId.get(productId) : undefined;
+  const recordedCostPerLb = diffEntry?.currentCostPerLb ?? null;
+  const liveVsRecorded: "same" | "changed" | "new" | "incomplete" = (() => {
+    if (!liveCostPerLb) return "incomplete";
+    if (recordedCostPerLb == null) return "new";
+    return liveCostPerLb === recordedCostPerLb ? "same" : "changed";
+  })();
+  const calloutAckKey =
+    supplierId && productId && liveCostPerLb
+      ? ackKey(productId, supplierId, liveCostPerLb)
+      : null;
+  const calloutAcknowledged = calloutAckKey
+    ? acknowledgedKeys.has(calloutAckKey)
+    : false;
+  const showCostCallout =
+    !!supplierId &&
+    !!productId &&
+    (liveVsRecorded === "changed" || liveVsRecorded === "new");
 
   // How many cases have weights entered (for the button indicator)
   const filled = (() => {
@@ -879,6 +1112,19 @@ function LineRow({
           <Trash2 style={{ width: 14, height: 14 }} />
         </button>
       </div>
+
+      {/* Cost-change callout */}
+      {showCostCallout && calloutAckKey ? (
+        <CostDiffCallout
+          variant={liveVsRecorded === "new" ? "new" : "changed"}
+          recordedCostPerLb={recordedCostPerLb}
+          liveCostPerLb={liveCostPerLb!}
+          productName={productNameById.get(productId) ?? ""}
+          dependentCustomerCount={diffEntry?.dependentCustomerCount ?? 0}
+          acknowledged={calloutAcknowledged}
+          onToggleAck={() => onToggleAck(calloutAckKey)}
+        />
+      ) : null}
 
       {/* Weight entry tray (catch-weight only) */}
       {expanded && isCatchWeight && (

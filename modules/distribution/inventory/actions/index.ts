@@ -7,6 +7,7 @@ import {
   getInventoryItemById,
   getInventoryItems,
   getInventoryItemsPage,
+  getInventoryProductSummary,
   getProductCasesOnHand,
 } from "../services/inventory";
 
@@ -45,6 +46,10 @@ export async function bulkAdjustLotInventoryAction(input: {
 
 export async function getProductCasesOnHandAction() {
   return await getProductCasesOnHand();
+}
+
+export async function getInventoryProductSummaryAction() {
+  return await getInventoryProductSummary();
 }
 
 export async function getFifoAllocationForProductAction(

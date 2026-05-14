@@ -5,6 +5,9 @@ import {
   createSupplierAction,
   deleteSupplierAction,
   getSupplierByIdAction,
+  getInvoicesForSupplierPageAction,
+  getSupplierLotsPageAction,
+  getSupplierPortfolioAction,
   getSuppliersAction,
   getSuppliersPageAction,
   updateSupplierAction,
@@ -12,7 +15,11 @@ import {
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SupplierListParams } from "@/modules/distribution/suppliers/services/suppliers";
+import type {
+  SupplierInvoicesParams,
+  SupplierListParams,
+  SupplierLotsParams,
+} from "@/modules/distribution/suppliers/services/suppliers";
 
 export function useSuppliers() {
   return useQuery({
@@ -84,5 +91,34 @@ export function useUpdateSupplier() {
         queryKey: queryKeys.dashboard.apAging,
       });
     },
+  });
+}
+
+export function useSupplierPortfolio(id: string) {
+  return useQuery({
+    queryKey: queryKeys.suppliers.portfolio(id),
+    queryFn: () => getSupplierPortfolioAction(id),
+    enabled: isUuid(id),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSupplierInvoicesPage(id: string, params: SupplierInvoicesParams) {
+  return useQuery({
+    queryKey: queryKeys.suppliers.invoicesPage(id, params),
+    queryFn: () => getInvoicesForSupplierPageAction(id, params),
+    enabled: isUuid(id),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSupplierLotsPage(id: string, params: SupplierLotsParams) {
+  return useQuery({
+    queryKey: queryKeys.suppliers.lotsPage(id, params),
+    queryFn: () => getSupplierLotsPageAction(id, params),
+    enabled: isUuid(id),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60 * 5,
   });
 }

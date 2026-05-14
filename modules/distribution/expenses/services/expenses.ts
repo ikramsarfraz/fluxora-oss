@@ -1,10 +1,12 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { expenses, portalUsers } from "@/db/schema";
 import {
   canManageExpenses,
+  nextRecurrenceDate,
   type ExpensePaymentMethod,
+  type ExpenseRecurrenceInterval,
 } from "@/lib/expenses/metadata";
 
 import { getCurrentPortalUser, type PortalUserRole } from "@/modules/shared/services/portal-users";
@@ -161,6 +163,10 @@ export type CreateExpenseInput = {
   amount: string;
   paymentMethod?: ExpensePaymentMethod | null;
   note?: string | null;
+  /** When set and != 'none', the row is a recurring schedule. */
+  recurrenceInterval?: ExpenseRecurrenceInterval | null;
+  /** Optional end-of-recurrence date (inclusive). */
+  recurrenceEndDate?: string | null;
 };
 
 export type UpdateExpenseInput = Partial<CreateExpenseInput> & { id: string };
@@ -192,15 +198,27 @@ function normalizeDate(value: string): string {
 
 export async function createExpense(input: CreateExpenseInput) {
   const current = await requireExpenseManager();
+  const expenseDate = normalizeDate(input.expenseDate);
+  const recurrenceInterval = input.recurrenceInterval ?? "none";
+  const isSchedule = recurrenceInterval !== "none";
+  const recurrenceEndDate = input.recurrenceEndDate?.trim() || null;
+  const recurrenceNextDueDate = isSchedule
+    ? nextRecurrenceDate(expenseDate, recurrenceInterval)
+    : null;
+
   const [row] = await db
     .insert(expenses)
     .values({
       tenantId: current.tenantId,
-      expenseDate: normalizeDate(input.expenseDate),
+      expenseDate,
       category: normalizeCategory(input.category),
       amount: normalizeAmount(input.amount),
       paymentMethod: input.paymentMethod ?? null,
       note: input.note?.trim() || null,
+      recurrenceInterval,
+      recurrenceStartDate: isSchedule ? expenseDate : null,
+      recurrenceEndDate: isSchedule ? recurrenceEndDate : null,
+      recurrenceNextDueDate,
       createdByUserId: current.id,
     })
     .returning({ id: expenses.id });
@@ -233,6 +251,19 @@ export async function updateExpense(input: UpdateExpenseInput) {
   if (input.note !== undefined) {
     patch.note = input.note?.trim() || null;
   }
+  if (input.recurrenceInterval !== undefined) {
+    const recurrenceInterval = input.recurrenceInterval ?? "none";
+    const expenseDate = (patch.expenseDate as string | undefined) ?? existing.expenseDate;
+    const isSchedule = recurrenceInterval !== "none";
+    patch.recurrenceInterval = recurrenceInterval;
+    patch.recurrenceStartDate = isSchedule ? expenseDate : null;
+    patch.recurrenceNextDueDate = isSchedule
+      ? nextRecurrenceDate(expenseDate, recurrenceInterval)
+      : null;
+  }
+  if (input.recurrenceEndDate !== undefined) {
+    patch.recurrenceEndDate = input.recurrenceEndDate?.trim() || null;
+  }
 
   if (Object.keys(patch).length === 0) {
     return existing;
@@ -254,4 +285,93 @@ export async function deleteExpense(id: string) {
     .delete(expenses)
     .where(and(eq(expenses.id, id), eq(expenses.tenantId, current.tenantId)));
   return { success: true as const };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cron — materialize recurring schedules                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * For every recurring schedule whose `recurrenceNextDueDate` is on or before today,
+ * create the missing instance(s) up to today (or up to `recurrenceEndDate` if set).
+ *
+ * Each instance is a normal expense row with:
+ *   - expenseDate = the due date being materialized
+ *   - recurrenceInterval = 'none' (instances are not themselves recurring)
+ *   - recurrenceParentId = the schedule's id
+ *
+ * After materializing, the schedule's `recurrenceNextDueDate` is advanced.
+ * When the next due date moves past `recurrenceEndDate`, the schedule is
+ * considered exhausted and `recurrenceNextDueDate` is set to NULL.
+ *
+ * Tenant-agnostic — runs across every tenant. Cron is the only caller.
+ */
+export async function materializeRecurringExpenses(options?: {
+  /** Override today's date (UTC ISO date). Used by tests. */
+  today?: string;
+  /** Safety cap on how many instances to create per schedule per run. */
+  maxInstancesPerSchedule?: number;
+}): Promise<{ schedulesProcessed: number; instancesCreated: number }> {
+  const todayISO = options?.today ?? new Date().toISOString().slice(0, 10);
+  const cap = options?.maxInstancesPerSchedule ?? 36;
+
+  const schedules = await db
+    .select()
+    .from(expenses)
+    .where(
+      and(
+        ne(expenses.recurrenceInterval, "none"),
+        isNotNull(expenses.recurrenceNextDueDate),
+        lte(expenses.recurrenceNextDueDate, todayISO),
+        or(
+          sql`${expenses.recurrenceEndDate} IS NULL`,
+          sql`${expenses.recurrenceNextDueDate} <= ${expenses.recurrenceEndDate}`,
+        ),
+      ),
+    );
+
+  let instancesCreated = 0;
+
+  for (const schedule of schedules) {
+    let dueDate = schedule.recurrenceNextDueDate;
+    let safetyCounter = 0;
+
+    while (
+      dueDate != null &&
+      dueDate <= todayISO &&
+      (schedule.recurrenceEndDate == null || dueDate <= schedule.recurrenceEndDate) &&
+      safetyCounter < cap
+    ) {
+      await db.insert(expenses).values({
+        tenantId: schedule.tenantId,
+        expenseDate: dueDate,
+        category: schedule.category,
+        amount: schedule.amount,
+        paymentMethod: schedule.paymentMethod,
+        note: schedule.note,
+        recurrenceInterval: "none",
+        recurrenceParentId: schedule.id,
+        createdByUserId: schedule.createdByUserId,
+      });
+      instancesCreated += 1;
+      safetyCounter += 1;
+      dueDate = nextRecurrenceDate(
+        dueDate,
+        schedule.recurrenceInterval as ExpenseRecurrenceInterval,
+      );
+    }
+
+    // Advance the schedule. If we've passed the end date, null out next due.
+    const exhausted =
+      schedule.recurrenceEndDate != null &&
+      (dueDate == null || dueDate > schedule.recurrenceEndDate);
+    await db
+      .update(expenses)
+      .set({
+        recurrenceNextDueDate: exhausted ? null : dueDate,
+      })
+      .where(eq(expenses.id, schedule.id));
+  }
+
+  return { schedulesProcessed: schedules.length, instancesCreated };
 }

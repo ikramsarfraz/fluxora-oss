@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
@@ -14,14 +13,21 @@ import {
   computeDraftLineWeight,
   serializeDraftCaseWeights,
 } from "@/modules/distribution/supplier-invoices/utils/case-weights";
+import { supplierInvoiceLineCostPerLb } from "@/modules/distribution/supplier-invoices/utils/cost";
 import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
   useParseSupplierInvoicePdf,
   useUploadSupplierInvoiceAttachmentToInvoice,
+  useNextSupplierInvoiceNumber,
+  useSupplierCostDiffContext,
 } from "../hooks/use-supplier-invoices";
 import { saveImportAliasesBatchAction } from "../actions";
+import {
+  createSupplierInvoiceAction,
+  updateSupplierInvoiceAction,
+} from "../actions";
 import {
   Field,
   FieldDescription,
@@ -48,8 +54,10 @@ import {
   type SupplierInvoiceFormValues,
 } from "./supplier-invoice-form.schema";
 import {
+  ackKey as makeAckKey,
   LineItemsInvoiceTotal,
   SupplierInvoiceLinesEditor,
+  type LineCostAckKey,
 } from "./supplier-invoice-lines-editor";
 import { AlertTriangle, FileText, Plus, Trash2 } from "lucide-react";
 import type { PipelineResult } from "@/modules/distribution/supplier-invoices/services/parsing-pipeline";
@@ -487,6 +495,29 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const { fields: chargeFields, append: appendCharge, remove: removeCharge, replace: replaceCharges } =
     useFieldArray({ control: form.control, name: "charges" });
 
+  // Auto-suggest a fresh `INV-YYYYMMDD-NN` for new bills. Only runs in create
+  // mode, and only fills the field if the user hasn't already typed anything
+  // (e.g. PDF-prefill or supplier's real invoice number takes precedence).
+  const shouldSuggestInvoiceNumber =
+    mode === "create" && !initialValues?.invoiceNumber;
+  const nextNumberQuery = useNextSupplierInvoiceNumber({
+    enabled: shouldSuggestInvoiceNumber,
+  });
+  const invoiceNumberPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (!shouldSuggestInvoiceNumber) return;
+    if (invoiceNumberPrefilledRef.current) return;
+    const suggested = nextNumberQuery.data;
+    if (!suggested) return;
+    const current = form.getValues("invoiceNumber");
+    if (current && current.trim()) {
+      invoiceNumberPrefilledRef.current = true;
+      return;
+    }
+    form.setValue("invoiceNumber", suggested, { shouldDirty: false });
+    invoiceNumberPrefilledRef.current = true;
+  }, [shouldSuggestInvoiceNumber, nextNumberQuery.data, form]);
+
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -507,12 +538,76 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const savedAliasNamesRef = useRef<Set<string>>(new Set());
   // Vendor names where no product could be auto-filled — drive the footer warning counter.
   const [trulyUnresolvedNames, setTrulyUnresolvedNames] = useState<Set<string>>(new Set());
-  const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" });
+  const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" }) ?? "";
   const watchedCharges = useWatch({ control: form.control, name: "charges" });
   const chargesTotal = (watchedCharges ?? []).reduce(
     (sum: number, c: SupplierInvoiceChargeValues) => sum + (parseFloat(c.amount) || 0),
     0,
   );
+
+  // ── Live cost-diff context (drives the per-line callout + Complete gate) ──
+  const watchedLinesRaw = useWatch({ control: form.control, name: "lines" });
+  const watchedLines = useMemo(() => watchedLinesRaw ?? [], [watchedLinesRaw]);
+  const productIdsOnForm = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          watchedLines.map(l => l?.productId).filter((v): v is string => !!v),
+        ),
+      ),
+    [watchedLines],
+  );
+  const { data: costDiffData } = useSupplierCostDiffContext(
+    watchedSupplierId,
+    productIdsOnForm,
+  );
+  const costDiffByProductId = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof costDiffData>["costs"][number]>();
+    for (const entry of costDiffData?.costs ?? []) {
+      map.set(entry.productId, entry);
+    }
+    return map;
+  }, [costDiffData]);
+
+  const [acknowledgedKeys, setAcknowledgedKeys] = useState<Set<LineCostAckKey>>(
+    () => new Set(),
+  );
+  const toggleAck = (key: LineCostAckKey) => {
+    setAcknowledgedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // Unacknowledged supplier-cost changes that should block "Complete & receive".
+  const blockingChangesCount = useMemo(() => {
+    if (!watchedSupplierId) return 0;
+    let count = 0;
+    for (const line of watchedLines) {
+      if (!line?.productId) continue;
+      const liveCost = supplierInvoiceLineCostPerLb({
+        quantityCases: Number(line.quantityCases) || 0,
+        weightLbs:
+          line.unitType === "catch_weight"
+            ? computeDraftLineWeight(line).toFixed(4)
+            : line.weightLbs || "0",
+        unitType: line.unitType,
+        unitPrice: line.unitPrice || "0",
+      });
+      if (!liveCost) continue;
+      const entry = costDiffByProductId.get(line.productId);
+      const recorded = entry?.currentCostPerLb ?? null;
+      // No change → not blocking.
+      if (recorded && recorded === liveCost) continue;
+      // Unchanged "new" lines (no recorded) still require an ack so the user
+      // explicitly accepts the first-time cost.
+      const key = makeAckKey(line.productId, watchedSupplierId, liveCost);
+      if (!acknowledgedKeys.has(key)) count++;
+    }
+    return count;
+  }, [watchedSupplierId, watchedLines, costDiffByProductId, acknowledgedKeys]);
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const [autoSaveStatus, setAutoSaveStatus] = useState<
@@ -575,14 +670,19 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         };
 
         try {
+          // Call the server actions directly here — going through the
+          // useMutation hooks would flip `createMutation.isPending` /
+          // `updateMutation.isPending`, which `isPending` (above) ORs into
+          // every `disabled` prop on the form. Silent autosave must not
+          // disable the inputs the user is actively typing into.
           if (!draftIdRef.current) {
-            const result = await createMutation.mutateAsync({
+            const result = await createSupplierInvoiceAction({
               ...payload,
               complete: false,
             });
             draftIdRef.current = result.id;
           } else {
-            await updateMutation.mutateAsync({
+            await updateSupplierInvoiceAction({
               id: draftIdRef.current,
               ...payload,
             });
@@ -1251,6 +1351,10 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               productsLoading={productsLoading}
               disabled={isPending}
               vendorProductNames={lineVendorNames.length > 0 ? lineVendorNames : undefined}
+              supplierId={watchedSupplierId}
+              costDiffByProductId={costDiffByProductId}
+              acknowledgedKeys={acknowledgedKeys}
+              onToggleAck={toggleAck}
             />
 
             {form.formState.errors.lines?.message && (
@@ -1376,15 +1480,48 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           right: 0,
           background: C.surface,
           borderTop: `1px solid ${C.line}`,
-          padding: "14px 32px",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
           zIndex: 10,
           transition: "left 0.2s ease-linear",
         }}
       >
-        {/* Auto-save indicator + unresolved warning */}
+        {blockingChangesCount > 0 ? (
+          <div
+            style={{
+              background: "oklch(95% 0.05 60 / 0.65)",
+              borderBottom: `1px solid oklch(60% 0.16 35 / 0.25)`,
+              padding: "9px 32px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12.5,
+              color: C.ink,
+            }}
+          >
+            <AlertTriangle
+              style={{
+                width: 13,
+                height: 13,
+                color: "oklch(60% 0.16 35)",
+                flexShrink: 0,
+              }}
+            />
+            <span>
+              <strong>{blockingChangesCount}</strong> line
+              {blockingChangesCount === 1 ? "" : "s"} change recorded supplier
+              costs. Acknowledge {blockingChangesCount === 1 ? "it" : "them"} to
+              receive.
+            </span>
+          </div>
+        ) : null}
+        <div
+          style={{
+            padding: "14px 32px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+        {/* Auto-save indicator + unresolved PDF warning */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 16 }}>
           {pdfPrefill && pdfUnresolvedCount > 0 && (
             <span
@@ -1471,12 +1608,21 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         <button
           type="button"
           onClick={form.handleSubmit((values) => submit(values, true))}
-          disabled={isPending || !canEdit || !canComplete}
-          title={editDeniedReason ?? completeDeniedReason}
-          style={primaryBtn(isPending || !canEdit || !canComplete)}
+          disabled={
+            isPending || !canEdit || !canComplete || blockingChangesCount > 0
+          }
+          title={
+            blockingChangesCount > 0
+              ? `Acknowledge ${blockingChangesCount} line${blockingChangesCount === 1 ? "" : "s"} with changed supplier cost first.`
+              : (editDeniedReason ?? completeDeniedReason)
+          }
+          style={primaryBtn(
+            isPending || !canEdit || !canComplete || blockingChangesCount > 0,
+          )}
         >
           {isPending ? "Posting…" : "Complete & receive"}
         </button>
+        </div>
       </div>
     </>
   );

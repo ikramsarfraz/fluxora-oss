@@ -48,7 +48,6 @@ export async function getPriceChartData() {
           productId: productSupplierCosts.productId,
           supplierId: productSupplierCosts.supplierId,
           costPerLb: productSupplierCosts.costPerLb,
-          isPrimary: productSupplierCosts.isPrimary,
           lastReceivedAt: productSupplierCosts.lastReceivedAt,
           updatedAt: productSupplierCosts.updatedAt,
           supplierName: suppliers.name,
@@ -75,14 +74,13 @@ export async function getPriceChartData() {
     }
   }
 
-  // Build vendor list per product (primary first, then by cost asc)
+  // Build vendor list per product, sorted by cost ascending.
   const vendorsByProduct = new Map<
     string,
     {
       supplier_id: string;
       supplier_name: string;
       cost_per_lb: string;
-      is_primary: boolean;
       last_received_at: string | null;
       updated_at: string | null;
     }[]
@@ -93,28 +91,23 @@ export async function getPriceChartData() {
       supplier_id: c.supplierId,
       supplier_name: c.supplierName,
       cost_per_lb: c.costPerLb,
-      is_primary: c.isPrimary,
       last_received_at: c.lastReceivedAt?.toISOString() ?? null,
       updated_at: c.updatedAt?.toISOString() ?? null,
     });
   }
-  // Sort: primary first, then by cost asc
   for (const [, vendors] of vendorsByProduct) {
-    vendors.sort((a, b) => {
-      if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
-      return Number(a.cost_per_lb) - Number(b.cost_per_lb);
-    });
+    vendors.sort((a, b) => Number(a.cost_per_lb) - Number(b.cost_per_lb));
   }
 
   return {
     products: allProducts.map(p => {
       const vendors = vendorsByProduct.get(p.id) ?? [];
-      const primaryVendor = vendors.find(v => v.is_primary) ?? vendors[0] ?? null;
+      const cheapestVendor = vendors[0] ?? null;
       return {
         id: p.id,
         sku: p.sku,
         name: p.name,
-        cost: primaryVendor?.cost_per_lb ?? null,
+        cost: cheapestVendor?.cost_per_lb ?? null,
         category: categoryByProduct.get(p.id) ?? null,
         vendors,
       };
@@ -136,23 +129,35 @@ export async function setCustomerProductPrice(
   customerId: string,
   productId: string,
   pricePerLb: string,
+  supplierId: string | null = null,
 ) {
   await db
     .insert(customerProductPrices)
-    .values({ customerId, productId, pricePerLb })
+    .values({ customerId, productId, supplierId, pricePerLb })
     .onConflictDoUpdate({
-      target: [customerProductPrices.customerId, customerProductPrices.productId],
+      target: [
+        customerProductPrices.customerId,
+        customerProductPrices.productId,
+        customerProductPrices.supplierId,
+      ],
       set: { pricePerLb, updatedAt: new Date() },
     });
 }
 
-export async function deleteCustomerProductPrice(customerId: string, productId: string) {
+export async function deleteCustomerProductPrice(
+  customerId: string,
+  productId: string,
+  supplierId: string | null = null,
+) {
   await db
     .delete(customerProductPrices)
     .where(
       and(
         eq(customerProductPrices.customerId, customerId),
         eq(customerProductPrices.productId, productId),
+        supplierId == null
+          ? sql`${customerProductPrices.supplierId} IS NULL`
+          : eq(customerProductPrices.supplierId, supplierId),
       ),
     );
 }
@@ -173,48 +178,53 @@ export async function applyMarkupToCustomer(customerId: string, markupPercent = 
       .select({
         productId: productSupplierCosts.productId,
         costPerLb: productSupplierCosts.costPerLb,
-        isPrimary: productSupplierCosts.isPrimary,
       })
       .from(productSupplierCosts)
       .innerJoin(products, eq(productSupplierCosts.productId, products.id))
       .where(eq(products.tenantId, tenant.id)),
   ]);
 
-  const vendorsByProduct = new Map<
-    string,
-    { costPerLb: string; isPrimary: boolean }[]
-  >();
+  const vendorsByProduct = new Map<string, { costPerLb: string }[]>();
   for (const row of vendorRows) {
     if (!vendorsByProduct.has(row.productId)) vendorsByProduct.set(row.productId, []);
-    vendorsByProduct.get(row.productId)!.push({
-      costPerLb: row.costPerLb,
-      isPrimary: row.isPrimary,
-    });
+    vendorsByProduct.get(row.productId)!.push({ costPerLb: row.costPerLb });
   }
   for (const [, vendors] of vendorsByProduct) {
-    vendors.sort((a, b) => {
-      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
-      return Number(a.costPerLb) - Number(b.costPerLb);
-    });
+    vendors.sort((a, b) => Number(a.costPerLb) - Number(b.costPerLb));
   }
 
   const multiplier = 1 + markup / 100;
   const rows = allProducts
     .map(p => {
       const vendors = vendorsByProduct.get(p.id) ?? [];
-      const primaryVendor = vendors.find(v => v.isPrimary) ?? vendors[0] ?? null;
-      if (!primaryVendor) return null;
-      const cost = parseFloat(primaryVendor.costPerLb);
+      const cheapestVendor = vendors[0] ?? null;
+      if (!cheapestVendor) return null;
+      const cost = parseFloat(cheapestVendor.costPerLb);
       if (!Number.isFinite(cost) || cost <= 0) return null;
-      return { customerId, productId: p.id, pricePerLb: (cost * multiplier).toFixed(2) };
+      return {
+        customerId,
+        productId: p.id,
+        supplierId: null,
+        pricePerLb: (cost * multiplier).toFixed(2),
+      };
     })
-    .filter(Boolean) as { customerId: string; productId: string; pricePerLb: string }[];
+    .filter(Boolean) as {
+    customerId: string;
+    productId: string;
+    supplierId: null;
+    pricePerLb: string;
+  }[];
   if (rows.length === 0) return;
+  // Bulk markup updates the customer's DEFAULT price only (supplier_id IS NULL).
   await db
     .insert(customerProductPrices)
     .values(rows)
     .onConflictDoUpdate({
-      target: [customerProductPrices.customerId, customerProductPrices.productId],
+      target: [
+        customerProductPrices.customerId,
+        customerProductPrices.productId,
+        customerProductPrices.supplierId,
+      ],
       set: {
         pricePerLb: sql`excluded.price_per_lb`,
         updatedAt: new Date(),
@@ -238,38 +248,12 @@ export async function setProductSupplierCost(
   supplierId: string,
   costPerLb: string,
 ) {
-  const [existingVendor, existingPrimary] = await Promise.all([
-    db
-      .select({ id: productSupplierCosts.id, isPrimary: productSupplierCosts.isPrimary })
-      .from(productSupplierCosts)
-      .where(
-        and(
-          eq(productSupplierCosts.productId, productId),
-          eq(productSupplierCosts.supplierId, supplierId),
-        ),
-      )
-      .limit(1),
-    db
-      .select({ id: productSupplierCosts.id })
-      .from(productSupplierCosts)
-      .where(
-        and(
-          eq(productSupplierCosts.productId, productId),
-          eq(productSupplierCosts.isPrimary, true),
-        ),
-      )
-      .limit(1),
-  ]);
-
-  const shouldBePrimary =
-    existingVendor[0]?.isPrimary ?? existingPrimary.length === 0;
-
   await db
     .insert(productSupplierCosts)
-    .values({ productId, supplierId, costPerLb, isPrimary: shouldBePrimary })
+    .values({ productId, supplierId, costPerLb })
     .onConflictDoUpdate({
       target: [productSupplierCosts.productId, productSupplierCosts.supplierId],
-      set: { costPerLb, isPrimary: shouldBePrimary, updatedAt: new Date() },
+      set: { costPerLb, updatedAt: new Date() },
     });
 }
 
@@ -284,36 +268,6 @@ export async function deleteProductSupplierCost(productId: string, supplierId: s
     );
 }
 
-// Promote a vendor to primary for this product (atomic transaction).
-// Unsets any existing primary, then sets the selected vendor.
-export async function promoteProductVendor(productId: string, supplierId: string) {
-  await db.transaction(async tx => {
-    // Unset existing primary
-    await tx
-      .update(productSupplierCosts)
-      .set({ isPrimary: false })
-      .where(
-        and(
-          eq(productSupplierCosts.productId, productId),
-          eq(productSupplierCosts.isPrimary, true),
-        ),
-      );
-
-    const [updated] = await tx
-      .update(productSupplierCosts)
-      .set({ isPrimary: true, updatedAt: new Date() })
-      .where(
-        and(
-          eq(productSupplierCosts.productId, productId),
-          eq(productSupplierCosts.supplierId, supplierId),
-        ),
-      )
-      .returning({ id: productSupplierCosts.id });
-
-    if (!updated) throw new Error("Vendor not found for this product");
-  });
-}
-
 export type PriceChartData = Awaited<ReturnType<typeof getPriceChartData>>;
 
 export type CustomerProductSort = "name" | "sku";
@@ -326,14 +280,16 @@ export type CustomerProductRow = {
   name: string;
   cost: string | null;
   category: string | null;
+  /** Customer's default price for this product (applies when no per-supplier price is set). */
   customerPrice: string | null;
   vendors: {
     supplier_id: string;
     supplier_name: string;
     cost_per_lb: string;
-    is_primary: boolean;
     last_received_at: string | null;
     updated_at: string | null;
+    /** Per-supplier customer price (overrides the default when the line's lot comes from this supplier). */
+    customer_price: string | null;
   }[];
 };
 
@@ -447,6 +403,7 @@ export async function getCustomerProductPricesPage(
     db
       .select({
         productId: customerProductPrices.productId,
+        supplierId: customerProductPrices.supplierId,
         pricePerLb: customerProductPrices.pricePerLb,
       })
       .from(customerProductPrices)
@@ -461,7 +418,6 @@ export async function getCustomerProductPricesPage(
         productId: productSupplierCosts.productId,
         supplierId: productSupplierCosts.supplierId,
         costPerLb: productSupplierCosts.costPerLb,
-        isPrimary: productSupplierCosts.isPrimary,
         lastReceivedAt: productSupplierCosts.lastReceivedAt,
         updatedAt: productSupplierCosts.updatedAt,
         supplierName: suppliers.name,
@@ -476,8 +432,16 @@ export async function getCustomerProductPricesPage(
     if (!categoryByProduct.has(r.productId)) categoryByProduct.set(r.productId, r.categoryName);
   }
 
-  const priceByProduct = new Map<string, string>();
-  for (const r of priceRows) priceByProduct.set(r.productId, r.pricePerLb);
+  const defaultPriceByProduct = new Map<string, string>();
+  // (productId, supplierId) → pricePerLb
+  const priceByProductSupplier = new Map<string, string>();
+  for (const r of priceRows) {
+    if (r.supplierId == null) {
+      defaultPriceByProduct.set(r.productId, r.pricePerLb);
+    } else {
+      priceByProductSupplier.set(`${r.productId}:${r.supplierId}`, r.pricePerLb);
+    }
+  }
 
   const vendorsByProduct = new Map<string, CustomerProductRow["vendors"]>();
   for (const r of vendorRows) {
@@ -486,28 +450,26 @@ export async function getCustomerProductPricesPage(
       supplier_id: r.supplierId,
       supplier_name: r.supplierName,
       cost_per_lb: r.costPerLb,
-      is_primary: r.isPrimary,
       last_received_at: r.lastReceivedAt?.toISOString() ?? null,
       updated_at: r.updatedAt?.toISOString() ?? null,
+      customer_price:
+        priceByProductSupplier.get(`${r.productId}:${r.supplierId}`) ?? null,
     });
   }
   for (const [, vendors] of vendorsByProduct) {
-    vendors.sort((a, b) => {
-      if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1;
-      return Number(a.cost_per_lb) - Number(b.cost_per_lb);
-    });
+    vendors.sort((a, b) => Number(a.cost_per_lb) - Number(b.cost_per_lb));
   }
 
   const data: CustomerProductRow[] = pagedProducts.map(p => {
     const vendors = vendorsByProduct.get(p.id) ?? [];
-    const primaryVendor = vendors.find(v => v.is_primary) ?? vendors[0] ?? null;
+    const cheapestVendor = vendors[0] ?? null;
     return {
       id: p.id,
       sku: p.sku,
       name: p.name,
-      cost: primaryVendor?.cost_per_lb ?? null,
+      cost: cheapestVendor?.cost_per_lb ?? null,
       category: categoryByProduct.get(p.id) ?? null,
-      customerPrice: priceByProduct.get(p.id) ?? null,
+      customerPrice: defaultPriceByProduct.get(p.id) ?? null,
       vendors,
     };
   });
