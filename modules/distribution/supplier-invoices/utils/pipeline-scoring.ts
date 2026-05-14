@@ -23,10 +23,10 @@ export function scoreParseResult(
   result: SupplierInvoicePdfPrefillResult,
 ): ParsedConfidenceBreakdown {
   const invoiceNumberFound = Boolean(result.values.invoiceNumber);
-  const invoiceDateFound = Boolean(
-    result.values.invoiceDate &&
-      !result.warnings.some(w => /invoice date was not found/i.test(w)),
-  );
+  // The deterministic parser and AI merge now leave invoiceDate as an empty
+  // string when no date could be extracted, so a direct truthiness check is
+  // sufficient — no need to grep warnings.
+  const invoiceDateFound = Boolean(result.values.invoiceDate);
   const supplierMatched = Boolean(result.values.supplierId);
   // linesExtracted = at least one vendor line was found (matched or unmatched).
   // Product resolution is a separate dimension scored via unmatchedProductRatio.

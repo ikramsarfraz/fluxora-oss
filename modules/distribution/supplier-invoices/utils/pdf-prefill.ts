@@ -681,7 +681,10 @@ export function parseSupplierInvoicePdfText(args: {
   const lines = normalizePdfLines(args.text);
   const supplierCandidates = extractSupplierCandidates(lines, args.sourceFilename);
   const header = extractInvoiceHeader(lines, args.sourceFilename);
-  const invoiceDate = header.invoiceDate ?? new Date().toISOString().slice(0, 10);
+  // Leave invoiceDate empty when not found so downstream callers can tell the
+  // difference between "extracted" and "missing"; pipeline backfills today's
+  // date as a final fallback via buildFormStateWarnings.
+  const invoiceDate = header.invoiceDate ?? "";
   const extractedInvoiceLines = extractInvoiceLines(lines);
   const parsedInvoiceLines = extractedInvoiceLines.lines;
   const supplierId = matchSupplierId(supplierCandidates, args.suppliers);
@@ -703,23 +706,9 @@ export function parseSupplierInvoicePdfText(args: {
     };
   });
 
-  if (!supplierId) {
-    warnings.push("Supplier was not matched. Choose a supplier before saving.");
-  }
-  if (!header.invoiceNumber) {
-    warnings.push("Invoice number was not found. Enter it before saving.");
-  }
-  if (!header.invoiceDate) {
-    warnings.push("Invoice date was not found. Today was used as a placeholder.");
-  } else {
-    warnings.push("Receive date defaulted to the invoice date. Adjust it if the shipment arrived later.");
-  }
-  if (unmatchedLineDescriptions.length > 0) {
-    warnings.push("Some product lines were not matched. Choose products before saving.");
-  }
-  if (prefillLines.length === 0) {
-    warnings.push("No invoice line items could be read from this PDF.");
-  }
+  // State warnings (supplier/invoice#/date/products/lines/totals) are now
+  // emitted by buildFormStateWarnings against the FINAL pipeline result, so
+  // AI/alias resolution can resolve fields before warnings are evaluated.
   if (extractedInvoiceLines.skippedChargeDescriptions.length > 0) {
     warnings.push(
       `Non-inventory charges were not imported: ${extractedInvoiceLines.skippedChargeDescriptions.join(", ")}.`,
@@ -735,10 +724,6 @@ export function parseSupplierInvoicePdfText(args: {
     extractedTotal == null ? null : Number((computedLineTotal - extractedTotal).toFixed(2));
   const totalMatches =
     extractedTotal == null ? null : Math.abs((variance ?? 0)) <= 0.01;
-
-  if (totalMatches === false) {
-    warnings.push("Parsed line totals do not match the PDF balance due. Review amounts before saving.");
-  }
 
   return {
     values: {
