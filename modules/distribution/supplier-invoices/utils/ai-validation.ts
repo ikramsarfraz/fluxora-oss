@@ -3,6 +3,8 @@
 
 import { z } from "zod";
 
+import { parseInvoiceDate } from "./invoice-date-parsing";
+
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------
@@ -91,6 +93,11 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
 
   // Drop garbage supplier names (numeric values picked from the table).
   data.supplierName = sanitizeSupplierName(data.supplierName);
+
+  // The form requires strict ISO YYYY-MM-DD but the model often echoes the
+  // invoice's printed format ("5/14/2026", "May 14, 2026"). Normalize here
+  // so both text-AI and vision flows yield ISO before reaching the form.
+  data.invoiceDate = parseInvoiceDate(data.invoiceDate);
 
   // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
   // whose length disagrees with quantityCases (likely a model misread).
