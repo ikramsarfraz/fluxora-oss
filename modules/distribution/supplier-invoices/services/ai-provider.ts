@@ -29,6 +29,13 @@ export type AiInvoiceLine = {
   vendorProductName: string;
   quantityCases: number | null;
   quantityWeight: number | null;
+  /**
+   * Per-case weights when the invoice lists individual box/case weights
+   * (e.g. "Box 1: 22.5 / Box 2: 23.1 / ..."). Length should equal
+   * `quantityCases` when populated. Null/undefined when the invoice only
+   * shows a combined weight or no weights at all.
+   */
+  caseWeights?: number[] | null;
   unitPrice: number | null;
   lineTotal: number | null;
   unitType: "catch_weight" | "fixed_case" | null;

@@ -20,6 +20,19 @@ COMMON FOOD/MEAT ABBREVIATIONS (do NOT expand — leave exactly as found):
   lbs = pounds     cw = catch weight rr = random/regular (context-dependent)
   exp = export     pc/pcs = piece    qty = quantity      wt = weight
 
+SUPPLIER NAME RULES — CRITICAL:
+- "supplierName" is the BUSINESS / COMPANY name of the supplier. Examples:
+  "SUMMIT TRADING", "Brewer Livestock", "Zabiha Halal Meat Processors".
+- supplierName MUST NEVER be a number, weight, price, money amount, date, or
+  invoice number. Numbers like "12.50", "160.00", "$45.00", "57876" are NEVER
+  valid supplier names — return null instead.
+- A supplier name always contains alphabetic characters spelling out a real
+  business identity. If you cannot find a plausible business name in the
+  document header, return null.
+- When a "Known suppliers" list is provided, prefer matching one of those
+  names verbatim. If no candidate matches AND no clear business name is
+  visible, return null — DO NOT fall back to numbers or partial text.
+
 LINE ITEM RULES:
 - For items that are clearly fees (delivery, freight, cut fee, service charge, tax),
   put them in "fees", NOT "lines".
@@ -27,7 +40,23 @@ LINE ITEM RULES:
 - If a line has a per-case rate with no weight: unitType = "fixed_case".
 - If you cannot determine unitType: null.
 - quantityCases is the number of cases/boxes, not weight.
-- quantityWeight is in pounds.
+- quantityWeight is the TOTAL weight in pounds for the line.
+
+WEIGHT EXTRACTION — CRITICAL:
+- If the invoice has a weight column (e.g. "Qty/Weight", "Weight", "Wt", "LBS"),
+  EVERY catch_weight line MUST have a non-null quantityWeight. Returning null
+  for weight when a weight column is clearly present is ALWAYS wrong.
+- When weight and rate are both visible, prefer extracting both directly rather
+  than relying on the line total alone.
+
+PER-CASE WEIGHTS — when individual box/case weights are listed:
+- Some invoices list weights per box on the same row (e.g. "5 BOX 22.5/23.1/22.8/24.0/23.4"
+  or "Wgts: 22.5, 23.1, 22.8, 24.0, 23.4"). When you see these, populate
+  "caseWeights" with the per-case decimals in the order they appear AND set
+  "quantityWeight" to their sum.
+- "caseWeights" length MUST equal "quantityCases". If you can't be confident
+  the count matches, return null for "caseWeights" and keep just the total.
+- When no per-case weights are listed for a line, "caseWeights" is null.
 
 LINE ITEM EXTRACTION — CRITICAL:
 - You MUST extract EVERY individual product line item into "lines". Never summarise or
@@ -60,6 +89,7 @@ REQUIRED JSON SCHEMA (return exactly this shape, no extra keys):
       "vendorProductName": string,
       "quantityCases": number | null,
       "quantityWeight": number | null,
+      "caseWeights": number[] | null,
       "unitPrice": number | null,
       "lineTotal": number | null,
       "unitType": "catch_weight" | "fixed_case" | null,

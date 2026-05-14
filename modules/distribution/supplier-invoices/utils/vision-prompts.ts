@@ -39,14 +39,36 @@ Correct extraction:
 SELF-CHECK: If quantityCases is a decimal (e.g. 69.05, 76.90, 21.94), you have misread the columns.
 The Qty/cases column always contains whole integers. Go back and re-read the table.
 
+SUPPLIER NAME — CRITICAL:
+- "supplierName" is the BUSINESS / COMPANY name of the supplier (e.g.
+  "SUMMIT TRADING", "Brewer Livestock"). It is found in the document header,
+  letterhead, or "Bill From" / "Vendor" / "Payable To" area — NEVER inside the
+  line-item table.
+- supplierName MUST NEVER be a number, weight, price, money amount, date, or
+  invoice number. If you cannot read a real business name from the document
+  header, return null. Do NOT fall back to numbers from the table.
+- When a "Known suppliers" list is provided, prefer the matching name verbatim.
+
 LINE ITEM RULES:
 - Items that are clearly fees (delivery, freight, cut fee, service charge, tax):
   put them in "fees" NOT "lines". Example: { "description": "Tax", "amount": 45.00 }
 - If a row has weight + per-lb rate: unitType = "catch_weight"  (variable / catch weight pricing)
 - If a row has a per-case rate and no weight column: unitType = "fixed_case"
 - quantityCases = INTEGER number of cases/boxes from the "Qty" column — NEVER a decimal
-- quantityWeight = total weight in pounds from "Qty/Weight" or "Weight" column
+- quantityWeight = TOTAL weight in pounds from the "Qty/Weight" or "Weight" column
+- If the table has a weight column, EVERY catch_weight line MUST have a non-null
+  quantityWeight. Returning null while a weight value is visually present is ALWAYS wrong —
+  re-read the row.
 - Use null for any field you cannot read clearly — do NOT omit the line
+
+PER-CASE WEIGHTS:
+- Some invoices show individual box/case weights for a single line item
+  (e.g. "5 BOX  22.5 / 23.1 / 22.8 / 24.0 / 23.4" or a small per-box weight
+  list under the row). When these are visible, populate "caseWeights" with the
+  per-case decimals in order AND set "quantityWeight" to their sum.
+- "caseWeights" length MUST equal "quantityCases" — if you can't be confident
+  the count matches, return null for "caseWeights".
+- When a line has only a single total weight (no per-box breakdown), "caseWeights" is null.
 
 MULTI-PAGE INVOICES:
 - Combine line items from ALL pages in order
@@ -81,6 +103,7 @@ REQUIRED JSON SCHEMA (return exactly this shape, no extra top-level keys):
       "vendorProductName": string,
       "quantityCases": number | null,
       "quantityWeight": number | null,
+      "caseWeights": number[] | null,
       "unitPrice": number | null,
       "lineTotal": number | null,
       "unitType": "catch_weight" | "fixed_case" | null,
