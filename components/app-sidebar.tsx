@@ -27,7 +27,6 @@ import {
   Truck,
   type LucideIcon,
   ShoppingCart,
-  Layers,
   Receipt,
   Wallet,
   CreditCard,
@@ -35,9 +34,9 @@ import {
   BadgeCheck,
   CircleDollarSign,
   LogOut,
-  UserCog,
-  SlidersHorizontal,
   TableProperties,
+  Activity,
+  Settings,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -58,6 +57,7 @@ import { authClient } from "@/lib/auth-client";
 import { getAvatarColor } from "@/lib/utils/get-avatar-color";
 import { getInitials } from "@/lib/utils/get-initials";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
+import { InboxBell } from "@/components/inbox-bell";
 import type { User } from "better-auth";
 
 type NavItem = {
@@ -104,7 +104,7 @@ const navMain: NavGroup[] = [
         icon: Receipt,
       },
       {
-        title: "Price Chart",
+        title: "Prices",
         url: "/price-chart",
         icon: TableProperties,
       },
@@ -114,19 +114,14 @@ const navMain: NavGroup[] = [
     title: "Catalog",
     items: [
       {
-        title: "Inventory",
-        url: "/inventory",
-        icon: Boxes,
-      },
-      {
         title: "Products",
         url: "/products",
         icon: Package,
       },
       {
-        title: "Lots",
-        url: "/lots",
-        icon: Layers,
+        title: "Inventory",
+        url: "/inventory",
+        icon: Boxes,
       },
     ],
   },
@@ -144,15 +139,20 @@ const navMain: NavGroup[] = [
         url: "/suppliers",
         icon: Truck,
       },
+      {
+        title: "Payments",
+        url: "/payments",
+        icon: Wallet,
+      },
     ],
   },
   {
     title: "Finance",
     items: [
       {
-        title: "Payments",
-        url: "/payments",
-        icon: Wallet,
+        title: "Bank feed",
+        url: "/bank-activity",
+        icon: Activity,
       },
       {
         title: "Expenses",
@@ -161,22 +161,19 @@ const navMain: NavGroup[] = [
       },
     ],
   },
-  {
-    title: "Settings",
-    items: [
-      {
-        title: "User Management",
-        url: "/user-management",
-        icon: UserCog,
-      },
-      {
-        title: "Configuration",
-        url: "/configuration",
-        icon: SlidersHorizontal,
-      },
-    ],
-  },
 ];
+
+const navFooter: NavGroup = {
+  title: "Settings",
+  hideLabel: true,
+  items: [
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings,
+    },
+  ],
+};
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   tenantName?: string;
@@ -335,16 +332,38 @@ export function AppSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+
+        {/* Standalone Settings entry, pinned just above the user card. */}
+        <SidebarGroup className="mt-auto border-t border-sidebar-border py-1">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navFooter.items.map(item => {
+                const Icon = item.icon;
+                const active = isActive(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton isActive={active} asChild tooltip={item.title}>
+                      <Link href={item.url}>
+                        <Icon className="size-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       {user && (
         <SidebarFooter>
           <SidebarMenu>
-            <SidebarMenuItem>
+            <SidebarMenuItem className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
+                    className="flex-1 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage src={user.image ?? ""} alt={userDisplayName} />
@@ -409,6 +428,7 @@ export function AppSidebar({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <InboxBell />
             </SidebarMenuItem>
           </SidebarMenu>
           <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">

@@ -99,6 +99,37 @@ export type SupplierInvoiceLineValues = z.infer<
   typeof supplierInvoiceLineSchema
 >;
 
+export const supplierInvoiceChargeTypes = [
+  "freight",
+  "fuel",
+  "tax",
+  "discount",
+  "other",
+] as const;
+export type SupplierInvoiceChargeType = (typeof supplierInvoiceChargeTypes)[number];
+
+export const supplierInvoiceChargeSchema = z.object({
+  description: z.string().trim().min(1, "Description is required.").max(256),
+  chargeType: z.enum(supplierInvoiceChargeTypes),
+  rate: z.string().trim().refine(v => v === "" || /^\d+(\.\d{1,4})?$/.test(v), {
+    message: "Must be a valid percentage.",
+  }),
+  includeInInventoryCost: z.boolean(),
+  amount: moneyString,
+});
+
+export type SupplierInvoiceChargeValues = z.infer<typeof supplierInvoiceChargeSchema>;
+
+export function emptyCharge(): SupplierInvoiceChargeValues {
+  return {
+    description: "",
+    chargeType: "other",
+    rate: "",
+    includeInInventoryCost: false,
+    amount: "",
+  };
+}
+
 export const supplierInvoiceFormSchema = z
   .object({
     supplierId: z.string().uuid("Supplier is required."),
@@ -122,6 +153,7 @@ export const supplierInvoiceFormSchema = z
     lines: z
       .array(supplierInvoiceLineSchema)
       .min(1, "Add at least one line."),
+    charges: z.array(supplierInvoiceChargeSchema),
   })
   .refine(data => data.receiveDate >= data.invoiceDate, {
     path: ["receiveDate"],

@@ -1,5 +1,5 @@
 {
-  "id": "1fc83c2a-4e48-4fdb-9090-285423dca4db",
+  "id": "a26d194a-915d-4fb7-a4e3-1ffb276d0c01",
   "prevId": "66661f37-44b3-4dcc-b909-835efd4abe48",
   "version": "7",
   "dialect": "postgresql",
@@ -931,38 +931,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "recurrence_interval": {
-          "name": "recurrence_interval",
-          "type": "expense_recurrence_interval",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'none'"
-        },
-        "recurrence_start_date": {
-          "name": "recurrence_start_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recurrence_end_date": {
-          "name": "recurrence_end_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recurrence_next_due_date": {
-          "name": "recurrence_next_due_date",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recurrence_parent_id": {
-          "name": "recurrence_parent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by_user_id": {
           "name": "created_by_user_id",
           "type": "uuid",
@@ -983,42 +951,6 @@
           "columns": [
             {
               "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "expenses_recurrence_next_due_idx": {
-          "name": "expenses_recurrence_next_due_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "recurrence_next_due_date",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "expenses_recurrence_parent_idx": {
-          "name": "expenses_recurrence_parent_idx",
-          "columns": [
-            {
-              "expression": "recurrence_parent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1065,10 +997,6 @@
         "expenses_amount_nonnegative": {
           "name": "expenses_amount_nonnegative",
           "value": "\"expenses\".\"amount\" >= 0"
-        },
-        "expenses_recurrence_end_after_start": {
-          "name": "expenses_recurrence_end_after_start",
-          "value": "\"expenses\".\"recurrence_end_date\" IS NULL OR \"expenses\".\"recurrence_start_date\" IS NULL OR \"expenses\".\"recurrence_end_date\" >= \"expenses\".\"recurrence_start_date\""
         }
       },
       "isRLSEnabled": false
@@ -5075,6 +5003,198 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.supplier_import_profiles": {
+      "name": "supplier_import_profiles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplier_id": {
+          "name": "supplier_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "profile_name": {
+          "name": "profile_name",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "detection_keywords": {
+          "name": "detection_keywords",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "parser_type": {
+          "name": "parser_type",
+          "type": "parser_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'deterministic'"
+        },
+        "parsing_rules": {
+          "name": "parsing_rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "confidence_threshold": {
+          "name": "confidence_threshold",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'60'"
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "supplier_import_profiles_tenant_id_idx": {
+          "name": "supplier_import_profiles_tenant_id_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "supplier_import_profiles_supplier_id_idx": {
+          "name": "supplier_import_profiles_supplier_id_idx",
+          "columns": [
+            {
+              "expression": "supplier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "supplier_import_profiles_tenant_supplier_name_unique": {
+          "name": "supplier_import_profiles_tenant_supplier_name_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "supplier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "profile_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "supplier_import_profiles_tenant_id_tenants_id_fk": {
+          "name": "supplier_import_profiles_tenant_id_tenants_id_fk",
+          "tableFrom": "supplier_import_profiles",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "supplier_import_profiles_supplier_id_suppliers_id_fk": {
+          "name": "supplier_import_profiles_supplier_id_suppliers_id_fk",
+          "tableFrom": "supplier_import_profiles",
+          "tableTo": "suppliers",
+          "columnsFrom": [
+            "supplier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "supplier_import_profiles_created_by_user_id_portal_users_id_fk": {
+          "name": "supplier_import_profiles_created_by_user_id_portal_users_id_fk",
+          "tableFrom": "supplier_import_profiles",
+          "tableTo": "portal_users",
+          "columnsFrom": [
+            "created_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.supplier_invoice_attachments": {
       "name": "supplier_invoice_attachments",
       "schema": "",
@@ -5738,6 +5858,217 @@
           "tableTo": "portal_users",
           "columnsFrom": [
             "completed_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.supplier_product_aliases": {
+      "name": "supplier_product_aliases",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplier_id": {
+          "name": "supplier_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "vendor_product_name": {
+          "name": "vendor_product_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "normalized_vendor_product_name": {
+          "name": "normalized_vendor_product_name",
+          "type": "varchar(256)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "internal_product_id": {
+          "name": "internal_product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'100'"
+        },
+        "source": {
+          "name": "source",
+          "type": "alias_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "supplier_product_aliases_tenant_id_idx": {
+          "name": "supplier_product_aliases_tenant_id_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "supplier_product_aliases_supplier_id_idx": {
+          "name": "supplier_product_aliases_supplier_id_idx",
+          "columns": [
+            {
+              "expression": "supplier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "supplier_product_aliases_product_id_idx": {
+          "name": "supplier_product_aliases_product_id_idx",
+          "columns": [
+            {
+              "expression": "internal_product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "supplier_product_aliases_tenant_supplier_name_unique": {
+          "name": "supplier_product_aliases_tenant_supplier_name_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "supplier_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "normalized_vendor_product_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "supplier_product_aliases_tenant_id_tenants_id_fk": {
+          "name": "supplier_product_aliases_tenant_id_tenants_id_fk",
+          "tableFrom": "supplier_product_aliases",
+          "tableTo": "tenants",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "supplier_product_aliases_supplier_id_suppliers_id_fk": {
+          "name": "supplier_product_aliases_supplier_id_suppliers_id_fk",
+          "tableFrom": "supplier_product_aliases",
+          "tableTo": "suppliers",
+          "columnsFrom": [
+            "supplier_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "supplier_product_aliases_internal_product_id_products_id_fk": {
+          "name": "supplier_product_aliases_internal_product_id_products_id_fk",
+          "tableFrom": "supplier_product_aliases",
+          "tableTo": "products",
+          "columnsFrom": [
+            "internal_product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "supplier_product_aliases_created_by_user_id_portal_users_id_fk": {
+          "name": "supplier_product_aliases_created_by_user_id_portal_users_id_fk",
+          "tableFrom": "supplier_product_aliases",
+          "tableTo": "portal_users",
+          "columnsFrom": [
+            "created_by_user_id"
           ],
           "columnsTo": [
             "id"
@@ -7849,6 +8180,16 @@
         "other"
       ]
     },
+    "public.alias_source": {
+      "name": "alias_source",
+      "schema": "public",
+      "values": [
+        "manual",
+        "ai_suggested",
+        "confirmed",
+        "parser"
+      ]
+    },
     "public.audit_action": {
       "name": "audit_action",
       "schema": "public",
@@ -7882,18 +8223,6 @@
       "values": [
         "fixed",
         "percentage"
-      ]
-    },
-    "public.expense_recurrence_interval": {
-      "name": "expense_recurrence_interval",
-      "schema": "public",
-      "values": [
-        "none",
-        "weekly",
-        "biweekly",
-        "monthly",
-        "quarterly",
-        "annually"
       ]
     },
     "public.file_category": {
@@ -7986,6 +8315,15 @@
         "confirmed",
         "fulfilled",
         "cancelled"
+      ]
+    },
+    "public.parser_type": {
+      "name": "parser_type",
+      "schema": "public",
+      "values": [
+        "deterministic",
+        "ai_fallback",
+        "hybrid"
       ]
     },
     "public.payment_method": {

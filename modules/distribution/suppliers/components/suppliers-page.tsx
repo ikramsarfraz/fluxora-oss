@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
 
 import {
   AlertDialog,
@@ -58,9 +59,10 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
   },
 ];
 
-export default function Suppliers() {
+export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) {
   const router = useRouter();
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierRow | null>(null);
+  const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("suppliers");
 
   const pagination = useUrlPaginationState<SupplierListSort>({
     defaultSort: "createdAt",
@@ -90,9 +92,20 @@ export default function Suppliers() {
 
   return (
     <>
+      <CsvImportModal importType="suppliers" open={importOpen} onClose={closeImport} />
       <ListingPage
         title="Suppliers"
         subtitle="Manage your supplier accounts."
+        belowHeader={belowHeader}
+        secondaryActions={
+          <button onClick={openImport} style={{
+            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+            borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
+            background: "#fff", color: "#52525b", border: "1px solid #d4d4d8", fontFamily: "inherit",
+          }}>
+            <Upload size={13} /> Import CSV
+          </button>
+        }
         primaryAction={
           <ListingAction href="/suppliers/new">
             <Plus className="size-3.5" />

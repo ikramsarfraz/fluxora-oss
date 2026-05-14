@@ -138,7 +138,50 @@ export const fileStorageProviderEnum = pgEnum("file_storage_provider", ["r2"]);
 
 export const supplierInvoiceStatusEnum = pgEnum("supplier_invoice_status", [
   "draft",
+  "posted",
+  "receiving",
+  "reconciled",
   "completed",
+  "paid",
+]);
+
+export const plaidConnectionStatusEnum = pgEnum("plaid_connection_status", [
+  "active",
+  "requires_reauth",
+  "disconnected",
+]);
+
+export const bankTransactionChannelEnum = pgEnum("bank_transaction_channel", [
+  "ach",
+  "wire",
+  "check",
+  "other",
+]);
+
+export const paymentMatchStatusEnum = pgEnum("payment_match_status", [
+  "pending_review",
+  "confirmed",
+  "auto_applied",
+  "rejected",
+]);
+
+export const billForwardDeliveryStatusEnum = pgEnum("bill_forward_delivery_status", [
+  "sent",
+  "bounced",
+  "delivered",
+]);
+
+export const aliasSourceEnum = pgEnum("alias_source", [
+  "manual",
+  "ai_suggested",
+  "confirmed",
+  "parser",
+]);
+
+export const parserTypeEnum = pgEnum("parser_type", [
+  "deterministic",
+  "ai_fallback",
+  "hybrid",
 ]);
 
 export const auditActionEnum = pgEnum("audit_action", [
@@ -199,6 +242,43 @@ export const productUnitPurposeEnum = pgEnum("product_unit_purpose", [
   "display",
 ]);
 
+// -------------------- Lot lifecycle --------------------
+
+export const lotStateEnum = pgEnum("lot_state", [
+  "active",
+  "expiring",
+  "marked_down",
+  "reserved",
+  "donated",
+  "repurposed",
+  "discarded",
+]);
+
+export const dispositionOptionEnum = pgEnum("disposition_option", [
+  "markdown",
+  "outreach",
+  "donate",
+  "repurpose",
+  "discard",
+]);
+
+export const dispositionStatusEnum = pgEnum("disposition_status", [
+  "draft",
+  "scheduled",
+  "applied",
+  "completed",
+  "cancelled",
+]);
+
+// -------------------- Tenant onboarding --------------------
+
+export const businessCategoryEnum = pgEnum("business_category", [
+  "meat_poultry",
+  "seafood",
+  "produce",
+  "bakery_dry",
+]);
+
 /** Product / billing plan for a tenant (Stripe product mapping comes later). */
 export const tenantSubscriptionPlanEnum = pgEnum("tenant_subscription_plan", [
   "free",
@@ -254,6 +334,14 @@ export const tenants = pgTable(
     currentPeriodEndsAt: timestamp("current_period_ends_at", { withTimezone: true }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+    /** Primary business category set during onboarding (drives category-specific defaults). */
+    businessCategory: businessCategoryEnum("business_category"),
+    /** Running count of supplier invoices posted; drives first-bill-mode and data-readiness gates. */
+    billCount: integer("bill_count").notNull().default(0),
+    /** Whether the onboarding welcome flow has been completed. */
+    onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+    /** Set when the user explicitly skips or finishes the welcome flow; stops the cold-start redirect. */
+    welcomeSkippedAt: timestamp("welcome_skipped_at", { withTimezone: true }),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),
@@ -1108,6 +1196,32 @@ export const supplierInvoicePayments = pgTable(
   ],
 );
 
+export const supplierInvoiceCharges = pgTable(
+  "supplier_invoice_charges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "cascade" }),
+    description: varchar("description", { length: 256 }).notNull(),
+    chargeType: varchar("charge_type", { length: 32 }).notNull().default("other"),
+    rate: numeric("rate", { precision: 8, scale: 4 }),
+    includeInInventoryCost: boolean("include_in_inventory_cost").notNull().default(false),
+    amount: numeric("amount", { precision: 12, scale: 4 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("supplier_invoice_charges_invoice_id_idx").on(table.supplierInvoiceId),
+    check(
+      "supplier_invoice_charges_charge_type_check",
+      sql`${table.chargeType} IN ('freight','fuel','tax','discount','other')`,
+    ),
+  ],
+);
+
 export const lots = pgTable(
   "lots",
   {
@@ -1121,6 +1235,7 @@ export const lots = pgTable(
       .references(() => suppliers.id, { onDelete: "restrict" }),
     receiveDate: date("receive_date").notNull(),
     expirationDate: date("expiration_date").notNull(),
+    state: lotStateEnum("state").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1911,6 +2026,454 @@ export const auditLogs = pgTable(
     index("audit_logs_actor_portal_user_idx").on(table.actorPortalUserId),
     index("audit_logs_actor_platform_user_idx").on(table.actorPlatformUserId),
     index("audit_logs_action_created_at_idx").on(table.action, table.createdAt),
+  ],
+);
+
+// -------------------- Supplier import profiles + aliases --------------------
+
+export const supplierImportProfiles = pgTable(
+  "supplier_import_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    profileName: varchar("profile_name", { length: 128 }).notNull(),
+    detectionKeywords: jsonb("detection_keywords").$type<string[]>().notNull().default([]),
+    parserType: parserTypeEnum("parser_type").notNull().default("deterministic"),
+    parsingRules: jsonb("parsing_rules")
+      .$type<{
+        headerFields?: Record<string, string>;
+        lineParsing?: Record<string, unknown>;
+        exclusions?: string[];
+        feePatterns?: string[];
+        totalsPattern?: string;
+      }>()
+      .notNull()
+      .default({}),
+    confidenceThreshold: numeric("confidence_threshold", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("60"),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_import_profiles_tenant_id_idx").on(table.tenantId),
+    index("supplier_import_profiles_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("supplier_import_profiles_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.profileName,
+    ),
+  ],
+);
+
+export const supplierProductAliases = pgTable(
+  "supplier_product_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    vendorProductName: varchar("vendor_product_name", { length: 256 }).notNull(),
+    normalizedVendorProductName: varchar("normalized_vendor_product_name", {
+      length: 256,
+    }).notNull(),
+    internalProductId: uuid("internal_product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    confidence: numeric("confidence", { precision: 5, scale: 2 }).notNull().default("100"),
+    source: aliasSourceEnum("source").notNull().default("manual"),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_product_aliases_tenant_id_idx").on(table.tenantId),
+    index("supplier_product_aliases_supplier_id_idx").on(table.supplierId),
+    index("supplier_product_aliases_product_id_idx").on(table.internalProductId),
+    uniqueIndex("supplier_product_aliases_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.normalizedVendorProductName,
+    ),
+  ],
+);
+
+// -------------------- Lot disposition decisions --------------------
+
+export const dispositionDecisions = pgTable(
+  "disposition_decisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    lotId: uuid("lot_id")
+      .notNull()
+      .references(() => lots.id, { onDelete: "restrict" }),
+    decidedByUserId: uuid("decided_by_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "restrict" }),
+    option: dispositionOptionEnum("option").notNull(),
+    status: dispositionStatusEnum("status").notNull().default("draft"),
+    expectedNet: numeric("expected_net", { precision: 12, scale: 2 }),
+    actualNet: numeric("actual_net", { precision: 12, scale: 2 }),
+    /** JSONB config blob — shape depends on option (MarkdownConfig | DonateConfig | etc.) */
+    config: jsonb("config").notNull().default({}),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("disposition_decisions_tenant_id_idx").on(table.tenantId),
+    index("disposition_decisions_lot_id_idx").on(table.lotId),
+    index("disposition_decisions_status_idx").on(table.status),
+    index("disposition_decisions_option_idx").on(table.option),
+  ],
+);
+
+/**
+ * Records the outcome of completed markdowns so the recommendation algorithm
+ * can learn category-level sell-through rates over time.
+ */
+export const markdownHistories = pgTable(
+  "markdown_histories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    lotId: uuid("lot_id").references(() => lots.id, { onDelete: "set null" }),
+    dispositionDecisionId: uuid("disposition_decision_id").references(
+      () => dispositionDecisions.id,
+      { onDelete: "set null" },
+    ),
+    /** Category of the product (beef, chicken, etc.) drives the prior pool. */
+    productCategory: varchar("product_category", { length: 128 }).notNull(),
+    discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull(),
+    quantityOfferedLbs: numeric("quantity_offered_lbs", { precision: 12, scale: 4 }).notNull(),
+    actualSellThroughPct: numeric("actual_sell_through_pct", { precision: 5, scale: 2 }),
+    expectedNet: numeric("expected_net", { precision: 12, scale: 2 }),
+    actualNet: numeric("actual_net", { precision: 12, scale: 2 }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("markdown_histories_tenant_id_idx").on(table.tenantId),
+    index("markdown_histories_product_category_idx").on(table.productCategory),
+    index("markdown_histories_completed_at_idx").on(table.completedAt),
+  ],
+);
+
+// -------------------- Plaid connections --------------------
+
+export const plaidConnections = pgTable(
+  "plaid_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    plaidItemId: varchar("plaid_item_id", { length: 256 }).notNull(),
+    encryptedAccessToken: text("encrypted_access_token").notNull(),
+    institutionId: varchar("institution_id", { length: 128 }),
+    institutionName: varchar("institution_name", { length: 256 }),
+    status: plaidConnectionStatusEnum("status").notNull().default("active"),
+    transactionCursor: text("transaction_cursor"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("plaid_connections_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("plaid_connections_plaid_item_id_unique").on(table.plaidItemId),
+  ],
+);
+
+export const bankAccounts = pgTable(
+  "bank_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    plaidConnectionId: uuid("plaid_connection_id")
+      .notNull()
+      .references(() => plaidConnections.id, { onDelete: "cascade" }),
+    plaidAccountId: varchar("plaid_account_id", { length: 256 }).notNull(),
+    name: varchar("name", { length: 256 }).notNull(),
+    officialName: varchar("official_name", { length: 256 }),
+    mask: varchar("mask", { length: 8 }),
+    type: varchar("type", { length: 64 }).notNull(),
+    subtype: varchar("subtype", { length: 64 }),
+    currentBalance: numeric("current_balance", { precision: 14, scale: 2 }),
+    availableBalance: numeric("available_balance", { precision: 14, scale: 2 }),
+    isoCurrencyCode: varchar("iso_currency_code", { length: 8 }).default("USD"),
+    balanceUpdatedAt: timestamp("balance_updated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("bank_accounts_tenant_id_idx").on(table.tenantId),
+    index("bank_accounts_connection_id_idx").on(table.plaidConnectionId),
+    uniqueIndex("bank_accounts_plaid_account_id_unique").on(table.plaidAccountId),
+  ],
+);
+
+export const bankTransactions = pgTable(
+  "bank_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "cascade" }),
+    plaidTransactionId: varchar("plaid_transaction_id", { length: 256 }).notNull(),
+    date: date("date").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    merchantName: varchar("merchant_name", { length: 256 }),
+    rawDescription: text("raw_description").notNull(),
+    paymentChannel: bankTransactionChannelEnum("payment_channel").default("other"),
+    pending: boolean("pending").notNull().default(false),
+    isoCurrencyCode: varchar("iso_currency_code", { length: 8 }).default("USD"),
+    plaidCategory: jsonb("plaid_category").default([]),
+    paymentMethod: varchar("payment_method", { length: 20 }).notNull().default("other"),
+    checkNumber: integer("check_number"),
+    isMysteryOutflow: boolean("is_mystery_outflow").notNull().default(false),
+    mysteryDismissedAt: timestamp("mystery_dismissed_at", { withTimezone: true }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("bank_transactions_tenant_id_idx").on(table.tenantId),
+    index("bank_transactions_account_id_idx").on(table.bankAccountId),
+    index("bank_transactions_date_idx").on(table.date),
+    uniqueIndex("bank_transactions_plaid_txn_id_unique").on(table.plaidTransactionId),
+    index("bank_transactions_mystery_idx").on(table.tenantId, table.isMysteryOutflow),
+  ],
+);
+
+export const paymentMatches = pgTable(
+  "payment_matches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankTransactionId: uuid("bank_transaction_id")
+      .notNull()
+      .references(() => bankTransactions.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "restrict" }),
+    status: paymentMatchStatusEnum("status").notNull().default("pending_review"),
+    confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
+    autoApplied: boolean("auto_applied").notNull().default(false),
+    amountScore: numeric("amount_score", { precision: 5, scale: 4 }),
+    payeeScore: numeric("payee_score", { precision: 5, scale: 4 }),
+    timingScore: numeric("timing_score", { precision: 5, scale: 4 }),
+    confirmedByUserId: uuid("confirmed_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("payment_matches_tenant_id_idx").on(table.tenantId),
+    index("payment_matches_txn_id_idx").on(table.bankTransactionId),
+    index("payment_matches_invoice_id_idx").on(table.supplierInvoiceId),
+    index("payment_matches_status_idx").on(table.status),
+  ],
+);
+
+// Payee aliases: bank raw description strings → supplier records
+// Separate from supplier_product_aliases (which map vendor product names → internal products)
+export const payeeAliases = pgTable(
+  "payee_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    rawText: text("raw_text").notNull(),
+    normalizedText: varchar("normalized_text", { length: 512 }).notNull(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    source: aliasSourceEnum("source").notNull().default("confirmed"),
+    channel: varchar("channel", { length: 20 }).notNull().default("ach"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("payee_aliases_tenant_id_idx").on(table.tenantId),
+    index("payee_aliases_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("payee_aliases_tenant_channel_normalized_unique").on(
+      table.tenantId,
+      table.channel,
+      table.normalizedText,
+    ),
+  ],
+);
+
+export const billForwards = pgTable(
+  "bill_forwards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "restrict" }),
+    sentByUserId: uuid("sent_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    recipients: jsonb("recipients").notNull().default([]),
+    subject: text("subject").notNull(),
+    messageBody: text("message_body").notNull(),
+    attachedOriginal: boolean("attached_original").notNull().default(true),
+    attachedSummary: boolean("attached_summary").notNull().default(false),
+    deliveryStatus: billForwardDeliveryStatusEnum("delivery_status").notNull().default("sent"),
+    deliveryEvents: jsonb("delivery_events").notNull().default([]),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("bill_forwards_tenant_id_idx").on(table.tenantId),
+    index("bill_forwards_invoice_id_idx").on(table.supplierInvoiceId),
+  ],
+);
+
+export const bankAccountBalanceSnapshots = pgTable(
+  "bank_account_balance_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "cascade" }),
+    snapshotDate: date("snapshot_date").notNull(),
+    balance: numeric("balance", { precision: 14, scale: 2 }).notNull(),
+    availableBalance: numeric("available_balance", { precision: 14, scale: 2 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex("balance_snapshots_account_date_unique").on(table.bankAccountId, table.snapshotDate),
+    index("balance_snapshots_tenant_date_idx").on(table.tenantId, table.snapshotDate),
+  ],
+);
+
+// -------------------- Webhook idempotency --------------------
+
+/**
+ * Dedupe table for inbound Plaid webhooks. The primary key is the SHA-256
+ * hex digest of the `Plaid-Verification` JWT — unique per delivery attempt
+ * and produced only after signature verification succeeds, so attacker
+ * spam can never bloat this table.
+ */
+export const plaidWebhookSeen = pgTable(
+  "plaid_webhook_seen",
+  {
+    webhookId: varchar("webhook_id", { length: 64 }).primaryKey(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("plaid_webhook_seen_received_at_idx").on(table.receivedAt),
+  ],
+);
+
+// -------------------- Audit log --------------------
+
+/**
+ * Append-only record of destructive / sensitive actions. The `actor_user_id`
+ * intentionally has no foreign key — audit rows must survive user deletion,
+ * and the `actor_email` is denormalized for the same reason.
+ *
+ * UPDATE / DELETE are revoked at the DB level by migration 0034.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    actorUserId: uuid("actor_user_id").notNull(),
+    actorEmail: text("actor_email"),
+    action: varchar("action", { length: 64 }).notNull(),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: text("resource_id"),
+    metadata: jsonb("metadata").notNull().default({}),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("audit_log_tenant_idx").on(table.tenantId, table.occurredAt),
+    index("audit_log_actor_idx").on(table.actorUserId, table.occurredAt),
+    index("audit_log_resource_idx").on(table.resourceType, table.resourceId),
+    index("audit_log_action_idx").on(
+      table.tenantId,
+      table.action,
+      table.occurredAt,
+    ),
   ],
 );
 

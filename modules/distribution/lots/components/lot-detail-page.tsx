@@ -158,6 +158,13 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         badge={<LotOperationalStatusBadge status={lotStatus} />}
       >
         <ExpirationStateBadge state={expirationState} />
+        {(expirationState === "expiring_soon" || expirationState === "expired") && (
+          <Link href={`/inventory/lots/${lot.id}/decide`}>
+            <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white gap-1">
+              Make disposition decision
+            </Button>
+          </Link>
+        )}
       </DetailPageHeader>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -411,6 +418,76 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           emptyMessage="No lot-related inventory adjustments recorded yet."
         />
       </DetailSection>
+
+      {lot.markdownHistories.length > 0 && (
+        <DetailSection
+          title="Markdown outcomes"
+          description="Recorded sell-through results for markdowns applied to this lot."
+        >
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader className="bg-muted">
+                <TableRow>
+                  <TableHead>Completed</TableHead>
+                  <TableHead className="text-right">Discount</TableHead>
+                  <TableHead className="text-right">Qty offered</TableHead>
+                  <TableHead className="text-right">Sell-through</TableHead>
+                  <TableHead className="text-right">Expected net</TableHead>
+                  <TableHead className="text-right">Actual net</TableHead>
+                  <TableHead className="text-right">Variance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lot.markdownHistories.map(mh => {
+                  const expected = Number(mh.expectedNet ?? 0);
+                  const actual = Number(mh.actualNet ?? 0);
+                  const variance = actual - expected;
+                  const fmt = (n: number) =>
+                    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+                  return (
+                    <TableRow key={mh.id}>
+                      <TableCell className="text-muted-foreground">
+                        {mh.completedAt ? formatDisplayDate(mh.completedAt) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {Number(mh.discountPercent).toFixed(1)}%
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {Number(mh.quantityOfferedLbs).toLocaleString("en-US", { maximumFractionDigits: 0 })} lb
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.actualSellThroughPct != null
+                          ? `${Number(mh.actualSellThroughPct).toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.expectedNet != null ? fmt(expected) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.actualNet != null ? fmt(actual) : "—"}
+                      </TableCell>
+                      <TableCell
+                        className={[
+                          "text-right tabular-nums font-medium",
+                          variance > 0
+                            ? "text-green-600"
+                            : variance < 0
+                              ? "text-destructive"
+                              : "text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        {mh.expectedNet != null && mh.actualNet != null
+                          ? `${variance >= 0 ? "+" : ""}${fmt(variance)}`
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </DetailSection>
+      )}
 
       <DetailSection
         title="Write off as loss"

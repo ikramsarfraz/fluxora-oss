@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { APIError } from "@better-auth/core/error";
+import { APIError } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
 
@@ -10,6 +10,7 @@ import * as authSchema from "@/db/auth-schema";
 import { platformUsers, portalUsers, tenants } from "@/db/schema";
 import { MagicLinkEmail } from "@/emails/magic-link";
 import { emailFrom, resend } from "./email";
+import { captureServerEvent } from "@/lib/posthog-server";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import { claimApprovedTenantJoinRequestForSession } from "@/modules/core/workspace-settings/services/tenant-join-requests-core";
 import { bootstrapAuthUserIdentityOnCreate } from "@/modules/shared/services/signup-profile";
@@ -160,6 +161,13 @@ export const auth = betterAuth({
             userId: createdUser.id,
             emailLower: createdUser.email,
             initialName: createdUser.name ?? "",
+          });
+          // No tenantId yet at this point — the user signs up before a
+          // portal_users row exists. The next group() call from the
+          // client (after they land on a tenant) attaches the tenant.
+          await captureServerEvent({
+            userId: createdUser.id,
+            event: "user.signed_up",
           });
         },
       },

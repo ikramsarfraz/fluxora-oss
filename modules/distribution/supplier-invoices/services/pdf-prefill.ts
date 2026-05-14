@@ -1,10 +1,10 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
 import pdfParse from "pdf-parse";
+import { and, count, isNull, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { products, suppliers } from "@/db/schema";
+import { products } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   parseSupplierInvoicePdfText,
@@ -12,8 +12,14 @@ import {
 } from "../utils/pdf-prefill";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import {
+  runParsingPipeline,
+  scoreParseResult,
+  type PipelineResult,
+} from "./parsing-pipeline";
 
 export type { SupplierInvoicePdfPrefillResult };
+export type { PipelineResult };
 
 const MAX_PDF_PREFILL_BYTES = 25 * 1024 * 1024;
 
@@ -30,7 +36,7 @@ export async function parseSupplierInvoicePdf(input: {
   originalFilename: string;
   mimeType: string | null;
   bytes: Buffer;
-}): Promise<SupplierInvoicePdfPrefillResult> {
+}): Promise<PipelineResult> {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
@@ -54,29 +60,41 @@ export async function parseSupplierInvoicePdf(input: {
     );
   }
 
-  const parsed = await pdfParse(input.bytes);
-  const text = parsed.text?.trim() ?? "";
-  if (text.length < 20) {
-    throw new Error(
-      "This PDF does not contain readable text yet. Scanned/image invoices are not supported in this first version.",
-    );
-  }
-
-  const [supplierRows, productRows] = await Promise.all([
+  const [parsed, [productCountRow]] = await Promise.all([
+    pdfParse(input.bytes),
     db
-      .select({ id: suppliers.id, name: suppliers.name })
-      .from(suppliers)
-      .where(eq(suppliers.tenantId, tenant.id)),
-    db
-      .select({ id: products.id, name: products.name, sku: products.sku })
+      .select({ n: count() })
       .from(products)
-      .where(eq(products.tenantId, tenant.id)),
+      .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
   ]);
 
-  return parseSupplierInvoicePdfText({
-    text,
+  const text = parsed.text?.trim() ?? "";
+  const pageCount = parsed.numpages ?? 1;
+  const productCount = Number(productCountRow?.n ?? 0);
+
+  return runParsingPipeline({
+    extractedText: text,
     sourceFilename: originalFilename,
-    suppliers: supplierRows,
-    products: productRows,
+    tenantId: tenant.id,
+    pdfPageCount: pageCount,
+    pdfBytes: input.bytes,
+    debug: process.env.NODE_ENV === "development",
+    firstBillMode: productCount === 0,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Legacy entry point — returns the same shape as before for backward compat.
+// Callers that haven't migrated to PipelineResult can use this.
+// ---------------------------------------------------------------------------
+
+export async function parseSupplierInvoicePdfLegacy(input: {
+  originalFilename: string;
+  mimeType: string | null;
+  bytes: Buffer;
+}): Promise<SupplierInvoicePdfPrefillResult> {
+  const result = await parseSupplierInvoicePdf(input);
+  return result.prefillResult;
+}
+
+export { scoreParseResult, parseSupplierInvoicePdfText };

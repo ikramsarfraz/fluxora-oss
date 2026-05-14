@@ -36,6 +36,7 @@ export const queryKeys = {
     all: ["suppliers"] as const,
     list: (params: unknown) => ["suppliers", "list", params] as const,
     detail: (id: string) => ["suppliers", id] as const,
+    comparison: (categoryId?: string | null) => ["suppliers", "comparison", categoryId ?? null] as const,
     portfolio: (id: string) => ["suppliers", id, "portfolio"] as const,
     invoicesPage: (id: string, params: unknown) => ["suppliers", id, "invoices", params] as const,
     lotsPage: (id: string, params: unknown) => ["suppliers", id, "lots", params] as const,
@@ -101,5 +102,34 @@ export const queryKeys = {
     all: ["price-chart"] as const,
     customerProducts: (id: string, params: unknown) =>
       ["price-chart", "customer-products", id, params] as const,
+  },
+  disposition: {
+    forLot: (lotId: string) => ["disposition", "lot", lotId] as const,
+    detail: (id: string) => ["disposition", id] as const,
+  },
+  dataReadiness: {
+    all: (context?: Record<string, string>) => ["data-readiness", context] as const,
+    flag: (flag: string, context?: Record<string, string>) =>
+      ["data-readiness", flag, context] as const,
+  },
+  markdownHistories: {
+    byCategory: (category: string) => ["markdown-histories", "category", category] as const,
+  },
+  onboarding: {
+    status: ["onboarding", "status"] as const,
+  },
+  inbox: {
+    bellSummary: ["inbox", "bell-summary"] as const,
+  },
+  bankConnections: {
+    all: ["bank-connections"] as const,
+    detail: (id: string) => ["bank-connections", id] as const,
+  },
+  bankActivity: {
+    all: (filter?: string) => ["bank-activity", filter ?? "all"] as const,
+  },
+  paymentMatches: {
+    all: ["payment-matches"] as const,
+    forInvoice: (invoiceId: string) => ["payment-matches", "invoice", invoiceId] as const,
   },
 } as const;

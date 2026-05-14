@@ -10,6 +10,18 @@ export async function getLotById(lotId: string) {
     where: and(eq(lots.id, lotId), eq(lots.tenantId, tenant.id)),
     with: {
       supplier: true,
+      markdownHistories: {
+        columns: {
+          id: true,
+          discountPercent: true,
+          quantityOfferedLbs: true,
+          actualSellThroughPct: true,
+          expectedNet: true,
+          actualNet: true,
+          completedAt: true,
+        },
+        orderBy: (mh, { desc }) => [desc(mh.completedAt)],
+      },
       lotReceipts: {
         with: {
           supplierInvoiceLine: {
