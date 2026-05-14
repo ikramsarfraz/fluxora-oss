@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { APIError } from "@better-auth/core/error";
+import { APIError } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { and, eq } from "drizzle-orm";
 
