@@ -50,11 +50,19 @@ export function ParsingProgressLive({
   const parseStartedRef = useRef(false);
 
   // Mount: load the PDF from IndexedDB and start the parse.
+  //
+  // Cancellation is intentionally tracked only via `cancelledRef`, which only
+  // ever flips to true when the user clicks "Cancel parse". We deliberately
+  // avoid a local `cancelled` boolean tied to the effect's cleanup — under
+  // React strict mode (and any other effect-re-run), the cleanup of the
+  // first run would set that flag to true before the second run sees the
+  // `parseStartedRef` short-circuit, leaving the in-flight parse stuck:
+  // resolved but bailed out of the success branch. Progress would freeze at
+  // 90% with no redirect. React 18+ already no-ops setState on unmounted
+  // components, so dropping the cleanup-driven cancellation is safe.
   useEffect(() => {
     if (parseStartedRef.current) return;
     parseStartedRef.current = true;
-
-    let cancelled = false;
 
     async function go() {
       // If we already parsed this key (back navigation), short-circuit to
@@ -68,7 +76,7 @@ export function ParsingProgressLive({
       }
 
       const pdfFile = await readPendingPdf(storageKey);
-      if (cancelled) return;
+      if (cancelledRef.current) return;
       if (!pdfFile) {
         setError(
           "We couldn't find the PDF for this parse — it may have been cleared. Upload it again from the bulk-import screen.",
@@ -82,7 +90,7 @@ export function ParsingProgressLive({
 
       try {
         const pipelineResult = await parseSupplierInvoicePdfAction(formData);
-        if (cancelledRef.current || cancelled) return;
+        if (cancelledRef.current) return;
         storePendingBulkImport(
           {
             filename: pdfFile.name,
@@ -105,21 +113,18 @@ export function ParsingProgressLive({
         // Brief beat so the user sees the "done" state flash before we
         // navigate. Keep it short — under 350ms feels instant.
         setTimeout(() => {
-          if (cancelledRef.current || cancelled) return;
+          if (cancelledRef.current) return;
           router.replace(
             `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(storageKey)}`,
           );
         }, 250);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelledRef.current) return;
         setError(err instanceof Error ? err.message : "Parse failed.");
       }
     }
 
     void go();
-    return () => {
-      cancelled = true;
-    };
   }, [storageKey, router]);
 
   // Tick: drive elapsed time + faux stage progression while the parse runs.
