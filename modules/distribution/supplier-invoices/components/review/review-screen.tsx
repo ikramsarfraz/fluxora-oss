@@ -92,6 +92,36 @@ export function ReviewScreen({
   const setRememberAliases = onRememberAliasesChange ?? setRememberAliasesLocal;
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
+  // The bill-total bar needs two things at once: pinned to the viewport bottom
+  // (position: fixed) AND width matched to the right pane (which changes when
+  // the app sidebar collapses/expands). Pure CSS can't do both — `width: 52%`
+  // on a fixed element is 52% of viewport, not 52% of any container. So we
+  // measure the right pane's bounding rect and pass it as inline styles to
+  // the fixed bar below.
+  const rightPaneRef = useRef<HTMLDivElement | null>(null);
+  const [footerGeometry, setFooterGeometry] = useState<{ left: number; width: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    const el = rightPaneRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setFooterGeometry({ left: rect.left, width: rect.width });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    // Also re-measure on viewport resize — ResizeObserver fires on element
+    // size changes but not on viewport changes that don't resize the element
+    // (e.g. zoom).
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   const counts: ReviewCounts = useMemo(() => {
     const matched = data.lines.filter(l => l.match.status === "matched" && !l.match.warning).length;
     const needsReview = data.lines.filter(l => lineNeedsReview(l.match)).length;
@@ -141,7 +171,7 @@ export function ReviewScreen({
   };
 
   return (
-    <main className="relative -m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
       <ReviewHeaderStrip
         fileName={data.fileName}
         counts={counts}
@@ -166,6 +196,7 @@ export function ReviewScreen({
         />
 
         <div
+          ref={rightPaneRef}
           className="flex min-h-0 flex-col bg-stone-bg"
           style={{ width: "52%", minWidth: 600 }}
         >
@@ -251,23 +282,26 @@ export function ReviewScreen({
         </div>
       </div>
 
-      {/* Bill-total bar — `position: absolute` scoped to <main> (which is
-          height-locked to the viewport via h-[calc(100dvh-4rem)]). Using
-          absolute instead of fixed means the bar's geometry tracks <main>'s
-          width and right edge, so when the app sidebar collapses or expands
-          the bar stays correctly aligned to the right pane (also 52% / 600px
-          of <main>). z-20 keeps it under Radix dialogs (z-50) so modals can
-          still cover it. */}
-      <div
-        className="absolute bottom-0 right-0 z-20"
-        style={{ width: "52%", minWidth: 600 }}
-      >
-        <ReviewFooterStrip
-          rememberAliases={rememberAliasesValue}
-          onRememberAliasesChange={setRememberAliases}
-          billTotal={data.parsed.total.value}
-        />
-      </div>
+      {/* Bill-total bar — `position: fixed` so it stays pinned to the viewport
+          bottom regardless of any scroll or layout overflow above. The bar's
+          left edge + width are measured from the right pane (see the
+          ResizeObserver above), so it tracks the right pane exactly when the
+          app sidebar collapses/expands — solving both requirements at once.
+          Renders nothing on the first paint while the measurement is pending;
+          appears as soon as the ref resolves. z-20 keeps it under Radix
+          dialogs (z-50) so modals still cover it. */}
+      {footerGeometry ? (
+        <div
+          className="fixed bottom-0 z-20"
+          style={{ left: footerGeometry.left, width: footerGeometry.width }}
+        >
+          <ReviewFooterStrip
+            rememberAliases={rememberAliasesValue}
+            onRememberAliasesChange={setRememberAliases}
+            billTotal={data.parsed.total.value}
+          />
+        </div>
+      ) : null}
     </main>
   );
 }
