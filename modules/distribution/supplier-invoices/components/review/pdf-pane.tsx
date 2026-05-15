@@ -10,10 +10,10 @@ import { PdfCanvas } from "./pdf-canvas";
 import type { ParsedLine } from "./types";
 
 /**
- * PDF preview pane. When `pdfUrl` is provided the inner canvas is rendered by
+ * PDF preview pane. When `pdfFile` is provided the inner canvas is rendered by
  * `pdfjs-dist` and the `BboxOverlay` sits on top as clickable line targets.
- * When `pdfUrl` is null/undefined the fake-invoice fallback renders so the
- * surrounding chrome is reviewable before phase 5 wires a real URL — the
+ * When `pdfFile` is null/undefined the fake-invoice fallback renders so the
+ * surrounding chrome is reviewable before phase 5 wires a real source — the
  * fake invoice keeps its tr-based highlight in that mode.
  */
 export function PdfPane({
@@ -25,7 +25,7 @@ export function PdfPane({
   lines,
   activeLineId,
   onLineClick,
-  pdfUrl,
+  pdfFile,
   lineBboxes,
 }: {
   fileName: string;
@@ -36,8 +36,8 @@ export function PdfPane({
   lines: ParsedLine[];
   activeLineId: number | null;
   onLineClick: (id: number) => void;
-  /** Real PDF URL. When omitted, the fake-invoice fallback renders. */
-  pdfUrl?: string | null;
+  /** Original PDF bytes. When omitted, the fake-invoice fallback renders. */
+  pdfFile?: Blob | null;
   /** Per-line bounding boxes — required for clickable overlays on the real PDF. */
   lineBboxes?: LineBbox[];
 }) {
@@ -45,7 +45,7 @@ export function PdfPane({
   // bboxes (in PDF user-space points) need `zoom/100` to align with the canvas.
   // The fake-invoice fallback wraps its content in an outer transform, so
   // bboxes inside that transform stay at 1.0.
-  const overlayScale = pdfUrl ? zoom / 100 : 1;
+  const overlayScale = pdfFile ? zoom / 100 : 1;
 
   return (
     <div
@@ -63,8 +63,8 @@ export function PdfPane({
         className="flex flex-1 justify-center overflow-y-auto p-6"
         style={{ alignItems: "flex-start" }}
       >
-        {pdfUrl ? (
-          <PdfCanvas pdfUrl={pdfUrl} pageNumber={page} zoom={zoom}>
+        {pdfFile ? (
+          <PdfCanvas pdfFile={pdfFile} pageNumber={page} zoom={zoom}>
             {lineBboxes ? (
               <BboxOverlay
                 bboxes={lineBboxes}

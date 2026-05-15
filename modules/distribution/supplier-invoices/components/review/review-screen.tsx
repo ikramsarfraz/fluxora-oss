@@ -24,7 +24,7 @@ import {
 
 export function ReviewScreen({
   data,
-  pdfUrl,
+  pdfFile,
   lineBboxes,
   onSubmit,
   submitDisabled,
@@ -46,8 +46,8 @@ export function ReviewScreen({
   onRememberAliasesChange,
 }: {
   data: ReviewData;
-  /** Real PDF URL — supplied by phase 5; omit for the demo placeholder. */
-  pdfUrl?: string | null;
+  /** Original PDF bytes — supplied by phase 5; omit for the demo placeholder. */
+  pdfFile?: Blob | null;
   /** Per-line bounding boxes for the clickable overlay on the rasterized page. */
   lineBboxes?: LineBbox[];
   /** Primary CTA handler. Omit when the host wants the demo's no-op behavior. */
@@ -132,7 +132,7 @@ export function ReviewScreen({
           lines={data.lines}
           activeLineId={activeLineId}
           onLineClick={setActiveLineId}
-          pdfUrl={pdfUrl}
+          pdfFile={pdfFile}
           lineBboxes={lineBboxes}
         />
 

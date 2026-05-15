@@ -24,22 +24,22 @@ type RenderResult =
  * positions an absolute-positioned overlay container above the canvas;
  * children (typically <BboxOverlay />) sit in that overlay.
  *
- * Falls back to rendering `fallback` when no `pdfUrl` is provided — used in
- * the demo so the screen is still meaningful before phase 5 wires a real URL.
+ * Falls back to rendering `fallback` when no `pdfFile` is provided — used in
+ * the demo so the screen is still meaningful before phase 5 wires a real source.
  */
 export function PdfCanvas({
-  pdfUrl,
+  pdfFile,
   pageNumber,
   zoom,
   fallback,
   children,
   onPageSize,
 }: {
-  pdfUrl?: string | null;
+  pdfFile?: Blob | null;
   pageNumber: number;
   /** Percentage, e.g. 85 → 0.85x. */
   zoom: number;
-  /** Rendered when no `pdfUrl` is provided. */
+  /** Rendered when no `pdfFile` is provided. */
   fallback?: React.ReactNode;
   /** Overlay content (bboxes). */
   children?: React.ReactNode;
@@ -53,11 +53,11 @@ export function PdfCanvas({
   const [result, setResult] = useState<RenderResult | null>(null);
 
   useEffect(() => {
-    if (!pdfUrl) return;
+    if (!pdfFile) return;
     let cancelled = false;
 
     void renderPdfPage({
-      pdfUrl,
+      pdfFile,
       pageNumber,
       zoom,
       canvas: canvasRef.current,
@@ -79,9 +79,9 @@ export function PdfCanvas({
     return () => {
       cancelled = true;
     };
-  }, [pdfUrl, pageNumber, zoom, onPageSize]);
+  }, [pdfFile, pageNumber, zoom, onPageSize]);
 
-  if (!pdfUrl) {
+  if (!pdfFile) {
     return (
       <div ref={wrapperRef} className="relative inline-block">
         {fallback}
@@ -128,12 +128,12 @@ export function PdfCanvas({
 let workerConfigured = false;
 
 async function renderPdfPage({
-  pdfUrl,
+  pdfFile,
   pageNumber,
   zoom,
   canvas,
 }: {
-  pdfUrl: string;
+  pdfFile: Blob;
   pageNumber: number;
   zoom: number;
   canvas: HTMLCanvasElement | null;
@@ -158,19 +158,14 @@ async function renderPdfPage({
     workerConfigured = true;
   }
 
-  // Pull the PDF bytes ourselves and feed them to pdfjs via `data:` instead
-  // of letting pdfjs try to fetch the URL. The string form (`getDocument(url)`)
-  // routes through pdfjs's network stack, which trips up on blob: URLs in
-  // some environments — the symptom is
-  //   "Unexpected server response (0) while retrieving PDF blob:…"
-  // Passing raw bytes also matches the pattern the server-side extractor
-  // already uses (services/extract-pdf-text.ts), so blob URLs and HTTP URLs
-  // travel through one code path.
-  const response = await fetch(pdfUrl);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
-  }
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  // Read the bytes straight from the Blob and feed them to pdfjs as `data`.
+  // We deliberately do NOT route through an object URL: pdfjs's URL path
+  // (and `fetch()` of a `blob:` URL) is flaky across browsers/Turbopack —
+  // the symptoms range from "Unexpected server response (0) while retrieving
+  // PDF blob:…" to a generic `TypeError: Failed to fetch`. Going Blob →
+  // arrayBuffer keeps everything in-process and matches the server-side
+  // extractor (services/extract-pdf-text.ts).
+  const bytes = new Uint8Array(await pdfFile.arrayBuffer());
 
   const loadingTask = pdfjs.getDocument({
     data: bytes,

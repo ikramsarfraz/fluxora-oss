@@ -133,24 +133,6 @@ function ReviewBulkImport({
   result: PipelineResult;
   bulkImportKey: string;
 }) {
-  // Build the blob URL once. URL.createObjectURL is browser-only and lazy —
-  // useMemo gives us a stable URL across rerenders and an effect releases it
-  // on unmount so the blob can be GC'd.
-  const pdfUrl = useMemo(() => {
-    if (!pdfFile) return null;
-    if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
-      return null;
-    }
-    return URL.createObjectURL(pdfFile);
-  }, [pdfFile]);
-
-  useEffect(() => {
-    if (!pdfUrl) return;
-    return () => {
-      URL.revokeObjectURL(pdfUrl);
-    };
-  }, [pdfUrl]);
-
   const fileSize = useMemo(() => formatFileSize(pdfFile?.size), [pdfFile?.size]);
 
   return (
@@ -158,7 +140,7 @@ function ReviewBulkImport({
       fileName={fileName}
       fileSize={fileSize}
       pipelineResult={result}
-      pdfUrl={pdfUrl}
+      pdfFile={pdfFile}
       bulkImportKey={bulkImportKey}
     />
   );

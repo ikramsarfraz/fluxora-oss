@@ -50,15 +50,15 @@ export function ReviewContainer({
   fileSize,
   pages,
   pipelineResult,
-  pdfUrl,
+  pdfFile,
   bulkImportKey,
 }: {
   fileName: string;
   fileSize?: string;
   pages?: number;
   pipelineResult: PipelineResult;
-  /** Object URL for the original PDF, when the bulk-import handoff had one. */
-  pdfUrl?: string | null;
+  /** Original PDF bytes from the bulk-import handoff, if any. */
+  pdfFile?: Blob | null;
   /**
    * Optional localStorage key the parse was loaded from. When set, a successful
    * submit marks the corresponding entry as `reviewed` so the bulk-landing
@@ -363,7 +363,7 @@ export function ReviewContainer({
     <>
       <ReviewScreen
         data={enriched}
-        pdfUrl={pdfUrl}
+        pdfFile={pdfFile}
         lineBboxes={lineBboxes.length > 0 ? lineBboxes : undefined}
         onSubmit={submit}
         submitDisabled={submitting}
