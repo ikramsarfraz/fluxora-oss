@@ -84,7 +84,7 @@ export function ReviewScreen({
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
   const [supplier, setSupplier] = useState(data.parsed.supplier.value);
-  const [filter, setFilter] = useState<ReviewFilter>("needs");
+  const [filter, setFilter] = useState<ReviewFilter>("all");
   // When `rememberAliases` is uncontrolled, fall back to local state so the
   // demo path keeps working without the host wiring anything.
   const [rememberAliasesLocal, setRememberAliasesLocal] = useState(true);
@@ -186,8 +186,12 @@ export function ReviewScreen({
             onCreateSupplier={onCreateSupplier}
           />
 
+          {/* Line items section — header + scroll area only. The footer is
+              promoted to a direct child of the right pane below so it stays
+              pinned at the bottom regardless of how much the line list
+              scrolls or how short the pane gets. */}
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
+            <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-[15px] font-semibold text-stone-ink">Line items</h2>
                 {/* Show only the product-line count here. Fees are surfaced
@@ -240,7 +244,12 @@ export function ReviewScreen({
                 ))
               )}
             </div>
+          </div>
 
+          {/* Bill-total footer — direct child of the right pane with shrink-0
+              so the bill total stays visible even if the inner line-items
+              section collapses or scrolls. */}
+          <div className="shrink-0">
             <ReviewFooterStrip
               rememberAliases={rememberAliasesValue}
               onRememberAliasesChange={setRememberAliases}
