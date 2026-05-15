@@ -204,7 +204,10 @@ export function ReviewScreen({
               <FilterSegmented filter={filter} counts={counts} onChange={handleFilterChange} />
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-stone-bg">
+            {/* pb matches the fixed footer's height (≈56px including border)
+                + a few px of breathing room so the last row isn't hidden
+                behind the bill-total bar. */}
+            <div className="min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-[64px]">
               {filteredLines.length === 0 ? (
                 <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
                   No lines match this filter.
@@ -245,18 +248,23 @@ export function ReviewScreen({
               )}
             </div>
           </div>
-
-          {/* Bill-total footer — direct child of the right pane with shrink-0
-              so the bill total stays visible even if the inner line-items
-              section collapses or scrolls. */}
-          <div className="shrink-0">
-            <ReviewFooterStrip
-              rememberAliases={rememberAliasesValue}
-              onRememberAliasesChange={setRememberAliases}
-              billTotal={data.parsed.total.value}
-            />
-          </div>
         </div>
+      </div>
+
+      {/* Bill-total bar — `position: fixed` to the viewport so it stays visible
+          regardless of any scroll or layout overflow above. `right-0` + width
+          anchor it under the right pane (matching its 52% / 600px clamp);
+          PdfPane on the left stays uncovered. z-20 keeps it under Radix
+          dialogs (z-50) so modals still cover it. */}
+      <div
+        className="fixed bottom-0 right-0 z-20"
+        style={{ width: "52%", minWidth: 600 }}
+      >
+        <ReviewFooterStrip
+          rememberAliases={rememberAliasesValue}
+          onRememberAliasesChange={setRememberAliases}
+          billTotal={data.parsed.total.value}
+        />
       </div>
     </main>
   );
