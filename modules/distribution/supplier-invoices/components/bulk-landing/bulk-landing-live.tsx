@@ -1,6 +1,10 @@
 "use client";
 
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+import { clearPendingBulkImport } from "../../utils/bulk-import-storage";
 
 import { BulkLandingScreen } from "./bulk-landing-screen";
 import type { BatchFile } from "./types";
@@ -20,7 +24,27 @@ import { useBulkBatchView } from "./use-bulk-batch-view";
  */
 export function BulkLandingLive() {
   const router = useRouter();
-  const { view } = useBulkBatchView();
+  const { view, refresh } = useBulkBatchView();
+
+  const dismissFile = useCallback(
+    (file: BatchFile) => {
+      clearPendingBulkImport(file.id);
+      refresh();
+    },
+    [refresh],
+  );
+
+  const clearReviewed = useCallback(() => {
+    const reviewed = (view?.files ?? []).filter(f => f.status === "reviewed");
+    if (reviewed.length === 0) return;
+    for (const file of reviewed) {
+      clearPendingBulkImport(file.id);
+    }
+    refresh();
+    toast.success(
+      `Cleared ${reviewed.length} reviewed ${reviewed.length === 1 ? "file" : "files"} from the batch.`,
+    );
+  }, [view, refresh]);
 
   // Pre-mount flash: localStorage hasn't been read yet. Keep silent.
   if (view === null) return null;
@@ -57,6 +81,8 @@ export function BulkLandingLive() {
         `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(file.id)}`
       }
       onImportMore={() => router.push("/supplier-invoices/bulk-import")}
+      onDismissFile={dismissFile}
+      onClearReviewed={clearReviewed}
     />
   );
 }
