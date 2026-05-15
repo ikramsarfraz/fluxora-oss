@@ -7,6 +7,9 @@ import { toast } from "sonner";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
 
+import { CreateProductDialog } from "../create-product-dialog";
+import { CreateSupplierDialog } from "../create-supplier-dialog";
+
 import { createSupplierInvoiceAction } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
@@ -103,6 +106,9 @@ export function ReviewContainer({
   >({});
   const [skippedLines, setSkippedLines] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
+  /** Which line is opening the Create Product dialog, or null when closed. */
+  const [createProductForLine, setCreateProductForLine] = useState<number | null>(null);
 
   const enriched = useMemo(() => {
     return enrichData({
@@ -159,6 +165,62 @@ export function ReviewContainer({
       return next;
     });
   }, []);
+
+  /** Direct pick from the line's product autocomplete. */
+  const handleSelectLineProduct = useCallback(
+    (lineId: number, product: ProductLookup) => {
+      setLineProductOverrides(prev => ({
+        ...prev,
+        [lineId]: { productId: product.id, productName: product.name, sku: product.sku },
+      }));
+      setSkippedLines(prev => {
+        if (!prev.has(lineId)) return prev;
+        const next = new Set(prev);
+        next.delete(lineId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleSelectSupplier = useCallback(
+    (supplier: SupplierLookup | null) => {
+      setSupplierIdOverride(supplier?.id ?? null);
+      setSupplierNameOverride(supplier?.name ?? null);
+    },
+    [],
+  );
+
+  const handleSupplierCreated = useCallback(
+    (supplier: { id: string; name: string }) => {
+      setSupplierIdOverride(supplier.id);
+      setSupplierNameOverride(supplier.name);
+      toast.success(`Supplier "${supplier.name}" created and applied to the bill.`);
+    },
+    [],
+  );
+
+  /** Look up a freshly-created product (by id) and apply it to the originating line. */
+  const handleProductCreated = useCallback(
+    (productId: string) => {
+      const lineId = createProductForLine;
+      if (lineId == null) return;
+      const product = products.find(p => p.id === productId);
+      if (!product) {
+        // The hook hasn't refetched yet — set a minimal override using the id,
+        // and let the next React Query revalidation fill in the rest.
+        setLineProductOverrides(prev => ({
+          ...prev,
+          [lineId]: { productId, productName: "New product", sku: null },
+        }));
+      } else {
+        handleSelectLineProduct(lineId, product);
+      }
+      setCreateProductForLine(null);
+      toast.success("Product created and applied to this line.");
+    },
+    [createProductForLine, products, handleSelectLineProduct],
+  );
 
   const submit = useCallback(async () => {
     if (submitting) return;
@@ -238,18 +300,63 @@ export function ReviewContainer({
     router,
   ]);
 
+  const lineMatchedProductIds = useMemo(() => {
+    const map: Record<number, string | null> = {};
+    for (const line of baseData.lines) {
+      const override = lineProductOverrides[line.id];
+      if (override) {
+        map[line.id] = override.productId;
+        continue;
+      }
+      // Fall back to the prefill row's productId so already-matched lines
+      // start with their picker selected.
+      const prefillIndex = line.id - 1;
+      const prefillLine = pipelineResult.prefillResult.values.lines[prefillIndex];
+      map[line.id] = prefillLine?.productId || null;
+    }
+    return map;
+  }, [baseData.lines, lineProductOverrides, pipelineResult]);
+
   return (
-    <ReviewScreen
-      data={enriched}
-      pdfUrl={pdfUrl}
-      lineBboxes={undefined}
-      onSubmit={submit}
-      submitDisabled={submitting}
-      onCancel={() => router.push("/supplier-invoices/bulk")}
-      onSelectLineCandidate={handleLineCandidate}
-      onSkipLine={handleSkipLine}
-      onSelectSupplierCandidate={handleSupplierCandidate}
-    />
+    <>
+      <ReviewScreen
+        data={enriched}
+        pdfUrl={pdfUrl}
+        lineBboxes={undefined}
+        onSubmit={submit}
+        submitDisabled={submitting}
+        onCancel={() => router.push("/supplier-invoices/bulk")}
+        onSelectLineCandidate={handleLineCandidate}
+        onSelectLineProduct={handleSelectLineProduct}
+        onSkipLine={handleSkipLine}
+        onCreateLineProduct={lineId => setCreateProductForLine(lineId)}
+        onSelectSupplierCandidate={handleSupplierCandidate}
+        onCreateSupplier={() => setCreateSupplierOpen(true)}
+        onSelectSupplier={handleSelectSupplier}
+        suppliers={suppliers}
+        products={products}
+        supplierSelectedId={supplierIdOverride}
+        lineMatchedProductIds={lineMatchedProductIds}
+      />
+      <CreateSupplierDialog
+        open={createSupplierOpen}
+        onOpenChange={setCreateSupplierOpen}
+        initialName={supplierNameOverride ?? baseData.parsed.supplier.value}
+        onCreated={handleSupplierCreated}
+      />
+      <CreateProductDialog
+        open={createProductForLine != null}
+        onOpenChange={open => {
+          if (!open) setCreateProductForLine(null);
+        }}
+        initialName={
+          createProductForLine != null
+            ? baseData.lines.find(l => l.id === createProductForLine)?.raw ?? ""
+            : ""
+        }
+        onCreated={handleProductCreated}
+      />
+    </>
   );
 }
 

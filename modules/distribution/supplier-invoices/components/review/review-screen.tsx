@@ -6,6 +6,10 @@ import { FilterSegmented } from "./filter-segmented";
 import { HeaderCard } from "./header-card";
 import type { LineBbox } from "./line-bbox";
 import { LineRow } from "./line-row";
+import type {
+  ProductLookup,
+  SupplierLookup,
+} from "./map-pipeline-to-review-data";
 import { PdfPane } from "./pdf-pane";
 import { ReviewFooterStrip } from "./review-footer-strip";
 import { ReviewHeaderStrip } from "./review-header-strip";
@@ -27,8 +31,17 @@ export function ReviewScreen({
   onCancel,
   onReparse,
   onSelectLineCandidate,
+  onSelectLineProduct,
   onSkipLine,
+  onCreateLineProduct,
   onSelectSupplierCandidate,
+  onCreateSupplier,
+  onSelectSupplier,
+  onSupplierTypedNameChange,
+  suppliers = [],
+  products = [],
+  supplierSelectedId,
+  lineMatchedProductIds,
 }: {
   data: ReviewData;
   /** Real PDF URL — supplied by phase 5; omit for the demo placeholder. */
@@ -43,10 +56,25 @@ export function ReviewScreen({
   onReparse?: () => void;
   /** Called when the user clicks an AI candidate chip on a line. */
   onSelectLineCandidate?: (lineId: number, candidate: ProductCandidate) => void;
+  /** Called when the user picks a product from the line's autocomplete. */
+  onSelectLineProduct?: (lineId: number, product: ProductLookup) => void;
   /** Called when the user clicks "Skip this line". */
   onSkipLine?: (lineId: number) => void;
+  /** Called when the user clicks "+ Create new" on a line. */
+  onCreateLineProduct?: (lineId: number) => void;
   /** Called when the user clicks a supplier candidate chip. */
   onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
+  /** Called when the user clicks "+ Create supplier" on the header card. */
+  onCreateSupplier?: () => void;
+  /** Called when the user picks a supplier from the autocomplete. */
+  onSelectSupplier?: (supplier: SupplierLookup | null) => void;
+  /** Called as the user types into the supplier picker's search input. */
+  onSupplierTypedNameChange?: (name: string) => void;
+  suppliers?: SupplierLookup[];
+  products?: ProductLookup[];
+  supplierSelectedId?: string | null;
+  /** Per-line matched product id, used to drive each row's picker selected state. */
+  lineMatchedProductIds?: Record<number, string | null>;
 }) {
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
@@ -106,8 +134,18 @@ export function ReviewScreen({
           <HeaderCard
             parsed={data.parsed}
             supplierValue={supplier}
-            onSupplierChange={setSupplier}
+            suppliers={suppliers}
+            supplierSelectedId={supplierSelectedId ?? null}
+            onSupplierSelect={s => {
+              setSupplier(s?.name ?? "");
+              onSelectSupplier?.(s);
+            }}
+            onSupplierTypedNameChange={name => {
+              setSupplier(name);
+              onSupplierTypedNameChange?.(name);
+            }}
             onSupplierCandidate={onSelectSupplierCandidate}
+            onCreateSupplier={onCreateSupplier}
           />
 
           <div className="flex min-h-0 flex-1 flex-col">
@@ -138,12 +176,24 @@ export function ReviewScreen({
                       line={line}
                       isActive={activeLineId === line.id}
                       onClick={() => setActiveLineId(line.id)}
+                      products={products}
+                      matchedProductId={lineMatchedProductIds?.[line.id] ?? null}
+                      onSelectProduct={
+                        onSelectLineProduct
+                          ? p => onSelectLineProduct(line.id, p)
+                          : undefined
+                      }
                       onSelectCandidate={
                         onSelectLineCandidate
                           ? c => onSelectLineCandidate(line.id, c)
                           : undefined
                       }
                       onSkip={onSkipLine ? () => onSkipLine(line.id) : undefined}
+                      onCreateNew={
+                        onCreateLineProduct
+                          ? () => onCreateLineProduct(line.id)
+                          : undefined
+                      }
                     />
                   </div>
                 ))
