@@ -1,19 +1,19 @@
 import "server-only";
 
 import { parseSupplierInvoicePdf } from "./pdf-prefill";
-import {
-  createSupplierInvoice,
-  type SupplierInvoiceLineInput,
-} from "./receiving";
-import { computeDraftLineWeight } from "../utils/case-weights";
+import type { PipelineResult } from "./parsing-pipeline";
 
 // ---------------------------------------------------------------------------
-// Bulk import — accept N supplier-invoice PDFs in one upload, run each
-// through the existing parse pipeline, and auto-create a draft invoice for
-// every file we can safely match end-to-end. Anything ambiguous (no
-// supplier match, unmatched products, parse failure) is returned to the
-// caller as a "needs_review" or "error" entry so they can be resolved
-// individually via the single-import flow.
+// Bulk import — parse N supplier-invoice PDFs in one upload and return the
+// parsed result for each, leaving the *create draft* decision to the human.
+// Each file becomes a pending "needs review" item that the bulk-import panel
+// hands off to the single-import flow (one new tab per item) so the user can
+// confirm or correct extracted fields before any draft is written to the DB.
+//
+// Earlier versions of this service auto-created drafts when supplier and all
+// products matched cleanly. That broke the "review every bill" expectation —
+// silent drafts could be missed entirely — so the auto-create step has been
+// removed.
 // ---------------------------------------------------------------------------
 
 export type BulkImportFileInput = {
@@ -25,19 +25,16 @@ export type BulkImportFileInput = {
 export type BulkImportItemResult =
   | {
       filename: string;
-      status: "created";
-      invoiceId: string;
+      status: "parsed";
+      /** Full pipeline result the client persists so the review form can be pre-filled. */
+      pipelineResult: PipelineResult;
+      /** Summary fields surfaced on the bulk results screen without unpacking pipelineResult. */
       supplierName: string | null;
+      supplierMatched: boolean;
       lineCount: number;
-      totalAmount: string;
+      unmatchedLineCount: number;
+      computedLineTotal: string;
       warnings: string[];
-    }
-  | {
-      filename: string;
-      status: "needs_review";
-      reason: string;
-      detectedSupplierName?: string | null;
-      lineCount?: number;
     }
   | {
       filename: string;
@@ -49,8 +46,7 @@ export type BulkImportResult = {
   items: BulkImportItemResult[];
   summary: {
     total: number;
-    created: number;
-    needsReview: number;
+    parsed: number;
     errored: number;
   };
 };
@@ -61,21 +57,15 @@ export const BULK_IMPORT_MAX_FILES = 10;
 function summarize(items: BulkImportItemResult[]): BulkImportResult["summary"] {
   return {
     total: items.length,
-    created: items.filter(i => i.status === "created").length,
-    needsReview: items.filter(i => i.status === "needs_review").length,
+    parsed: items.filter(i => i.status === "parsed").length,
     errored: items.filter(i => i.status === "error").length,
   };
 }
 
-/**
- * Process a single file through the parse pipeline and either create a draft
- * invoice or surface the reason it can't be auto-created. Run inside the
- * tenant + permission scope already established by the calling action.
- */
 async function processOneFile(
   file: BulkImportFileInput,
 ): Promise<BulkImportItemResult> {
-  let pipeline;
+  let pipeline: PipelineResult;
   try {
     pipeline = await parseSupplierInvoicePdf({
       originalFilename: file.originalFilename,
@@ -94,108 +84,17 @@ async function processOneFile(
   const detectedSupplierName =
     prefill.unmatchedSupplierCandidates[0] ?? null;
 
-  // First-bill mode means the catalog is empty — there's nothing to match
-  // products against, so every line needs human attention. We can't usefully
-  // auto-create a draft here; the user should run each through the
-  // single-import flow to seed products.
-  if (pipeline.firstBillLines !== undefined) {
-    return {
-      filename: file.originalFilename,
-      status: "needs_review",
-      reason:
-        "Catalog is empty — import this PDF individually so each line can be mapped to a new product.",
-      detectedSupplierName,
-      lineCount: prefill.values.lines.length,
-    };
-  }
-
-  if (pipeline.requiresOcr) {
-    return {
-      filename: file.originalFilename,
-      status: "needs_review",
-      reason:
-        "PDF appears to be a scanned image — no readable text. Re-import individually so it can be reviewed.",
-    };
-  }
-
-  if (!prefill.values.supplierId) {
-    return {
-      filename: file.originalFilename,
-      status: "needs_review",
-      reason: detectedSupplierName
-        ? `Supplier "${detectedSupplierName}" wasn't matched — pick it manually in single-import.`
-        : "Supplier couldn't be matched — pick it manually in single-import.",
-      detectedSupplierName,
-      lineCount: prefill.values.lines.length,
-    };
-  }
-
-  if (prefill.values.lines.length === 0) {
-    return {
-      filename: file.originalFilename,
-      status: "needs_review",
-      reason: "No line items could be read from this PDF.",
-      detectedSupplierName,
-    };
-  }
-
-  const unmatched = prefill.values.lines.filter(l => !l.productId).length;
-  if (unmatched > 0) {
-    return {
-      filename: file.originalFilename,
-      status: "needs_review",
-      reason: `${unmatched} of ${prefill.values.lines.length} line${prefill.values.lines.length === 1 ? "" : "s"} couldn't be matched to a catalog product — resolve in single-import.`,
-      detectedSupplierName,
-      lineCount: prefill.values.lines.length,
-    };
-  }
-
-  // All gates passed — create the draft invoice.
-  const lineInputs: SupplierInvoiceLineInput[] = prefill.values.lines.map(line => ({
-    productId: line.productId,
-    quantityCases: Number.parseInt(line.quantityCases, 10) || 1,
-    weightLbs:
-      line.unitType === "catch_weight"
-        ? computeDraftLineWeight(line).toFixed(4)
-        : line.weightLbs || "0",
-    unitType: line.unitType,
-    unitPrice: line.unitPrice || "0",
-    caseWeightsLbs: null,
-  }));
-
-  try {
-    const created = await createSupplierInvoice({
-      supplierId: prefill.values.supplierId,
-      invoiceNumber: prefill.values.invoiceNumber || `BILL-${Date.now()}`,
-      invoiceDate: prefill.values.invoiceDate,
-      receiveDate: prefill.values.receiveDate || prefill.values.invoiceDate,
-      paymentMethod: prefill.values.paymentMethod,
-      notes: prefill.values.notes || null,
-      lines: lineInputs,
-      complete: false,
-    });
-
-    return {
-      filename: file.originalFilename,
-      status: "created",
-      invoiceId: created.id,
-      supplierName: detectedSupplierName,
-      lineCount: lineInputs.length,
-      totalAmount: created.totalAmount ?? "0.00",
-      // Pipeline warnings worth surfacing on the summary screen so the user
-      // knows what to double-check on the freshly-created draft.
-      warnings: pipeline.warnings,
-    };
-  } catch (err) {
-    return {
-      filename: file.originalFilename,
-      status: "error",
-      error:
-        err instanceof Error
-          ? err.message
-          : "Failed to save draft invoice.",
-    };
-  }
+  return {
+    filename: file.originalFilename,
+    status: "parsed",
+    pipelineResult: pipeline,
+    supplierName: detectedSupplierName,
+    supplierMatched: Boolean(prefill.values.supplierId),
+    lineCount: prefill.values.lines.length,
+    unmatchedLineCount: prefill.values.lines.filter(l => !l.productId).length,
+    computedLineTotal: prefill.totalComparison.computedLineTotal ?? "0.00",
+    warnings: pipeline.warnings,
+  };
 }
 
 export async function bulkImportSupplierInvoices(

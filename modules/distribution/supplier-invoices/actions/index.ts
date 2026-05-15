@@ -295,8 +295,7 @@ export async function bulkImportSupplierInvoicesAction(
     event: "bulk_import.processed",
     properties: {
       file_count: result.summary.total,
-      created_count: result.summary.created,
-      needs_review_count: result.summary.needsReview,
+      parsed_count: result.summary.parsed,
       errored_count: result.summary.errored,
       duration_ms: Date.now() - startedAt,
     },
