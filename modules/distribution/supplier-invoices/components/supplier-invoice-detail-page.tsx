@@ -60,6 +60,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/utils/payment-summary";
 
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
+import { SupplierInvoicePdfPreviewCard } from "./supplier-invoice-pdf-preview-card";
 import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
 import { ForwardBillModal } from "./forward-bill-modal";
@@ -875,6 +876,12 @@ export function SupplierInvoiceDetailPage({
               </div>
             </Section>
           )}
+
+          {/* Source PDF — renders only when the bill has a PDF attached. */}
+          <SupplierInvoicePdfPreviewCard
+            supplierInvoiceId={invoiceId}
+            attachments={invoice.attachments}
+          />
 
           {/* Attachments */}
           <SupplierInvoiceAttachmentsCard
