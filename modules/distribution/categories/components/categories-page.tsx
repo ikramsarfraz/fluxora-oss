@@ -52,7 +52,13 @@ const COLUMNS: ListingColumn<CategoryRow>[] = [
   },
 ];
 
-export default function Categories() {
+export default function Categories({
+  title = "Categories",
+  subtitle = "Organize your product catalog with categories.",
+}: {
+  title?: string;
+  subtitle?: string;
+} = {}) {
   const router = useRouter();
   const [deletingCategory, setDeletingCategory] = useState<CategoryRow | null>(null);
 
@@ -75,8 +81,8 @@ export default function Categories() {
   return (
     <>
       <ListingPage
-        title="Categories"
-        subtitle="Organize your product catalog with categories."
+        title={title}
+        subtitle={subtitle}
         primaryAction={
           <ListingAction href="/categories/new">
             <Plus className="size-3.5" />

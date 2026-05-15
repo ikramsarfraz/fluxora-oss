@@ -66,7 +66,13 @@ const COLUMNS: ListingColumn<UoMRow>[] = [
   },
 ];
 
-export default function UnitsOfMeasure() {
+export default function UnitsOfMeasure({
+  title = "Units of Measure",
+  subtitle = "Define units for inventory, purchasing, and sales.",
+}: {
+  title?: string;
+  subtitle?: string;
+} = {}) {
   const router = useRouter();
   const [deletingUnit, setDeletingUnit] = useState<UoMRow | null>(null);
 
@@ -89,8 +95,8 @@ export default function UnitsOfMeasure() {
   return (
     <>
       <ListingPage
-        title="Units of Measure"
-        subtitle="Define units for inventory, purchasing, and sales."
+        title={title}
+        subtitle={subtitle}
         primaryAction={
           <ListingAction href="/units-of-measure/new">
             <Plus className="size-3.5" />
