@@ -14,14 +14,16 @@ export function ReviewHeaderStrip({
   onReparse,
   onCancel,
   onSubmit,
+  submitDisabled,
 }: {
   fileName: string;
   counts: ReviewCounts;
   onReparse?: () => void;
   onCancel?: () => void;
   onSubmit?: () => void;
+  submitDisabled?: boolean;
 }) {
-  const blocked = counts.needsReview > 0;
+  const blocked = counts.needsReview > 0 || submitDisabled === true;
   return (
     <div className="flex items-center justify-between gap-[18px] border-b border-stone-line bg-stone-bg px-6 py-3.5">
       <div className="flex min-w-0 items-center gap-3.5">

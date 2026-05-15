@@ -11,21 +11,42 @@ import { ReviewFooterStrip } from "./review-footer-strip";
 import { ReviewHeaderStrip } from "./review-header-strip";
 import {
   lineNeedsReview,
+  type ProductCandidate,
   type ReviewCounts,
   type ReviewData,
   type ReviewFilter,
+  type SupplierCandidate,
 } from "./types";
 
 export function ReviewScreen({
   data,
   pdfUrl,
   lineBboxes,
+  onSubmit,
+  submitDisabled,
+  onCancel,
+  onReparse,
+  onSelectLineCandidate,
+  onSkipLine,
+  onSelectSupplierCandidate,
 }: {
   data: ReviewData;
   /** Real PDF URL — supplied by phase 5; omit for the demo placeholder. */
   pdfUrl?: string | null;
   /** Per-line bounding boxes for the clickable overlay on the rasterized page. */
   lineBboxes?: LineBbox[];
+  /** Primary CTA handler. Omit when the host wants the demo's no-op behavior. */
+  onSubmit?: () => void;
+  /** Force the primary CTA disabled (e.g. while a submit is in flight). */
+  submitDisabled?: boolean;
+  onCancel?: () => void;
+  onReparse?: () => void;
+  /** Called when the user clicks an AI candidate chip on a line. */
+  onSelectLineCandidate?: (lineId: number, candidate: ProductCandidate) => void;
+  /** Called when the user clicks "Skip this line". */
+  onSkipLine?: (lineId: number) => void;
+  /** Called when the user clicks a supplier candidate chip. */
+  onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
 }) {
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
@@ -55,7 +76,14 @@ export function ReviewScreen({
 
   return (
     <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
-      <ReviewHeaderStrip fileName={data.fileName} counts={counts} />
+      <ReviewHeaderStrip
+        fileName={data.fileName}
+        counts={counts}
+        onSubmit={onSubmit}
+        submitDisabled={submitDisabled}
+        onCancel={onCancel}
+        onReparse={onReparse}
+      />
 
       <div className="flex min-h-0 flex-1">
         <PdfPane
@@ -79,6 +107,7 @@ export function ReviewScreen({
             parsed={data.parsed}
             supplierValue={supplier}
             onSupplierChange={setSupplier}
+            onSupplierCandidate={onSelectSupplierCandidate}
           />
 
           <div className="flex min-h-0 flex-1 flex-col">
@@ -109,6 +138,12 @@ export function ReviewScreen({
                       line={line}
                       isActive={activeLineId === line.id}
                       onClick={() => setActiveLineId(line.id)}
+                      onSelectCandidate={
+                        onSelectLineCandidate
+                          ? c => onSelectLineCandidate(line.id, c)
+                          : undefined
+                      }
+                      onSkip={onSkipLine ? () => onSkipLine(line.id) : undefined}
                     />
                   </div>
                 ))
