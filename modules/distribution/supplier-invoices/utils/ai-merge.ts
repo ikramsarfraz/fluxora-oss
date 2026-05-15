@@ -57,7 +57,8 @@ export function mergeAiOverDeterministic(
     supplierId = lookupSupplierByName(ai.supplierName, supplierRows) ?? "";
   }
 
-  const invoiceNumber = det.values.invoiceNumber || ai.invoiceNumber || "";
+  const supplierInvoiceNumber =
+    det.values.supplierInvoiceNumber || ai.supplierInvoiceNumber || "";
   // Stay empty when no date was extracted — buildFormStateWarnings backfills
   // today's date as a final UX fallback once the pipeline finishes.
   const invoiceDate = det.values.invoiceDate || ai.invoiceDate || "";
@@ -133,7 +134,7 @@ export function mergeAiOverDeterministic(
       values: {
         ...det.values,
         supplierId,
-        invoiceNumber,
+        supplierInvoiceNumber,
         invoiceDate,
         receiveDate: invoiceDate,
         lines,
@@ -168,7 +169,8 @@ export function mergeVisionOverResult(
     supplierId = lookupSupplierByName(vision.supplierName, supplierRows) ?? "";
   }
 
-  const invoiceNumber = current.values.invoiceNumber || vision.invoiceNumber || "";
+  const supplierInvoiceNumber =
+    current.values.supplierInvoiceNumber || vision.supplierInvoiceNumber || "";
   // Stay empty when no date was extracted — buildFormStateWarnings backfills
   // today's date once the pipeline finishes.
   const invoiceDate = current.values.invoiceDate || vision.invoiceDate || "";
@@ -220,7 +222,7 @@ export function mergeVisionOverResult(
       values: {
         ...current.values,
         supplierId,
-        invoiceNumber,
+        supplierInvoiceNumber,
         invoiceDate,
         receiveDate: invoiceDate,
         lines,

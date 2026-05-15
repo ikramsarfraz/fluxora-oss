@@ -14,7 +14,7 @@ function emptyDeterministicResult(): SupplierInvoicePdfPrefillResult {
   return {
     values: {
       supplierId: "",
-      invoiceNumber: "",
+      supplierInvoiceNumber: "",
       invoiceDate: "",
       receiveDate: "",
       paymentMethod: null,
@@ -37,7 +37,7 @@ function emptyDeterministicResult(): SupplierInvoicePdfPrefillResult {
 function aiResult(overrides: Partial<AiExtractionResult> = {}): AiExtractionResult {
   return {
     supplierName: null,
-    invoiceNumber: "12345",
+    supplierInvoiceNumber: "12345",
     invoiceDate: "2026-05-01",
     totalAmount: 160,
     subtotal: 160,
@@ -53,7 +53,7 @@ function aiResult(overrides: Partial<AiExtractionResult> = {}): AiExtractionResu
 function visionResult(overrides: Partial<VisionExtractionResult> = {}): VisionExtractionResult {
   return {
     supplierName: null,
-    invoiceNumber: "12345",
+    supplierInvoiceNumber: "12345",
     invoiceDate: "2026-05-01",
     totalAmount: 160,
     subtotal: 160,

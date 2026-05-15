@@ -9,7 +9,6 @@ import {
   createSupplierInvoiceAction,
   createImportProfileAction,
   deleteSupplierInvoiceAction,
-  getNextSupplierInvoiceNumberAction,
   getReversalPreviewAction,
   getSupplierInvoiceByIdAction,
   getSupplierInvoiceCostDiffContextAction,
@@ -125,16 +124,6 @@ export function useSupplierCostDiffContext(
       }),
     enabled: !!supplierId && cleanIds.length > 0,
     staleTime: 1000 * 30,
-  });
-}
-
-export function useNextSupplierInvoiceNumber(opts?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: ["supplier-invoices", "next-number"] as const,
-    queryFn: () => getNextSupplierInvoiceNumberAction(),
-    enabled: opts?.enabled ?? true,
-    staleTime: 0,
-    gcTime: 0,
   });
 }
 

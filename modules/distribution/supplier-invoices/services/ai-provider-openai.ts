@@ -32,7 +32,7 @@ import type {
 function buildFailureExtractionResult(reason: string): AiExtractionResult {
   return {
     supplierName: null,
-    invoiceNumber: null,
+    supplierInvoiceNumber: null,
     invoiceDate: null,
     totalAmount: null,
     subtotal: null,
@@ -325,7 +325,7 @@ export class OpenAiProvider implements AiProvider {
   ): AiExtractionResult & { rawJson: string } {
     return {
       supplierName: null,
-      invoiceNumber: null,
+      supplierInvoiceNumber: null,
       invoiceDate: null,
       totalAmount: null,
       subtotal: null,

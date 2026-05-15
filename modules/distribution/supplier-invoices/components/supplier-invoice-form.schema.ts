@@ -133,11 +133,12 @@ export function emptyCharge(): SupplierInvoiceChargeValues {
 export const supplierInvoiceFormSchema = z
   .object({
     supplierId: z.string().uuid("Supplier is required."),
-    invoiceNumber: z
-      .string()
-      .trim()
-      .min(1, "Invoice number is required.")
-      .max(64),
+    /**
+     * The supplier's printed invoice number, optional because some bills
+     * (hand-written, scanned without OCR, etc.) don't carry one. Stored
+     * verbatim — uniqueness per (tenant, supplier) is enforced at the DB.
+     */
+    supplierInvoiceNumber: z.string().trim().max(64),
     invoiceDate: z
       .string()
       .trim()

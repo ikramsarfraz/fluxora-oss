@@ -20,7 +20,6 @@ import {
   useCompleteSupplierInvoice,
   useParseSupplierInvoicePdf,
   useUploadSupplierInvoiceAttachmentToInvoice,
-  useNextSupplierInvoiceNumber,
   useSupplierCostDiffContext,
 } from "../hooks/use-supplier-invoices";
 import { saveImportAliasesBatchAction } from "../actions";
@@ -363,7 +362,7 @@ function defaultCreateValues(): SupplierInvoiceFormValues {
   const t = today();
   return {
     supplierId: "",
-    invoiceNumber: "",
+    supplierInvoiceNumber: "",
     invoiceDate: t,
     receiveDate: t,
     paymentMethod: null,
@@ -495,28 +494,10 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const { fields: chargeFields, append: appendCharge, remove: removeCharge, replace: replaceCharges } =
     useFieldArray({ control: form.control, name: "charges" });
 
-  // Auto-suggest a fresh `INV-YYYYMMDD-NN` for new bills. Only runs in create
-  // mode, and only fills the field if the user hasn't already typed anything
-  // (e.g. PDF-prefill or supplier's real invoice number takes precedence).
-  const shouldSuggestInvoiceNumber =
-    mode === "create" && !initialValues?.invoiceNumber;
-  const nextNumberQuery = useNextSupplierInvoiceNumber({
-    enabled: shouldSuggestInvoiceNumber,
-  });
-  const invoiceNumberPrefilledRef = useRef(false);
-  useEffect(() => {
-    if (!shouldSuggestInvoiceNumber) return;
-    if (invoiceNumberPrefilledRef.current) return;
-    const suggested = nextNumberQuery.data;
-    if (!suggested) return;
-    const current = form.getValues("invoiceNumber");
-    if (current && current.trim()) {
-      invoiceNumberPrefilledRef.current = true;
-      return;
-    }
-    form.setValue("invoiceNumber", suggested, { shouldDirty: false });
-    invoiceNumberPrefilledRef.current = true;
-  }, [shouldSuggestInvoiceNumber, nextNumberQuery.data, form]);
+  // The system now mints `referenceNumber` server-side at insert time, so
+  // there's no longer a need to auto-suggest an "INV-YYYYMMDD-NN" placeholder
+  // into supplierInvoiceNumber. That field stays blank until the user enters
+  // the supplier's printed invoice number (now optional).
 
   const isPending =
     createMutation.isPending ||
@@ -635,7 +616,6 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         const v = form.getValues();
         const ready =
           !!v.supplierId &&
-          !!v.invoiceNumber &&
           !!v.invoiceDate &&
           !!v.receiveDate &&
           (v.lines ?? []).some((l) => !!l?.productId);
@@ -661,7 +641,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
 
         const payload = {
           supplierId: v.supplierId,
-          invoiceNumber: v.invoiceNumber,
+          invoiceNumber: v.supplierInvoiceNumber || null,
           invoiceDate: v.invoiceDate,
           receiveDate: v.receiveDate,
           paymentMethod: v.paymentMethod ?? null,
@@ -818,7 +798,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
 
     const payload = {
       supplierId: values.supplierId,
-      invoiceNumber: values.invoiceNumber,
+      invoiceNumber: values.supplierInvoiceNumber || null,
       invoiceDate: values.invoiceDate,
       receiveDate: values.receiveDate,
       paymentMethod: values.paymentMethod ?? null,
@@ -848,8 +828,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         targetId = result.id;
         toast.success(
           complete
-            ? `Bill "${values.invoiceNumber}" received. Lots and inventory created.`
-            : `Draft bill "${values.invoiceNumber}" saved.`,
+            ? `Bill received. Lots and inventory created.`
+            : `Draft bill saved.`,
         );
       } else {
         // Auto-save already created a draft (or we're in edit mode) — update
@@ -861,13 +841,13 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             lineOverrides: [],
           });
           toast.success(
-            `Bill "${values.invoiceNumber}" received. Lots and inventory created.`,
+            `Bill received. Lots and inventory created.`,
           );
         } else {
           toast.success(
             mode === "create"
-              ? `Draft bill "${values.invoiceNumber}" saved.`
-              : `Draft bill "${values.invoiceNumber}" updated.`,
+              ? `Draft bill saved.`
+              : `Draft bill updated.`,
           );
         }
       }
@@ -1100,21 +1080,23 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
                 )}
               />
 
-              {/* Invoice number */}
+              {/* Supplier's printed invoice number (optional) */}
               <Controller
-                name="invoiceNumber"
+                name="supplierInvoiceNumber"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <label style={lblStyle}>
-                      Invoice number{" "}
-                      <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
+                      Supplier invoice #{" "}
+                      <span style={{ color: C.muted, fontWeight: 400 }}>
+                        (optional)
+                      </span>
                     </label>
                     <Input
                       {...field}
                       id="si-number"
                       disabled={isPending}
-                      placeholder="e.g. INV-24501"
+                      placeholder="As printed on the bill"
                       aria-invalid={fieldState.invalid}
                       className={`${inputCls} font-mono`}
                     />

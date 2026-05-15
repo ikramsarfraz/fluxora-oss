@@ -30,8 +30,10 @@ export function buildFormStateWarnings(
   if (!result.values.supplierId) {
     warnings.push("Supplier was not matched. Choose a supplier before saving.");
   }
-  if (!result.values.invoiceNumber) {
-    warnings.push("Invoice number was not found. Enter it before saving.");
+  if (!result.values.supplierInvoiceNumber) {
+    warnings.push(
+      "Supplier invoice number was not found. Add it before saving if the bill has one.",
+    );
   }
   if (!invoiceDateFound) {
     warnings.push("Invoice date was not found. Today was used as a placeholder.");

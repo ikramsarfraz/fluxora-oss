@@ -24,7 +24,7 @@ const AiInvoiceLineSchema = z.object({
 
 export const AiExtractionResultSchema = z.object({
   supplierName: z.string().nullable(),
-  invoiceNumber: z.string().nullable(),
+  supplierInvoiceNumber: z.string().nullable(),
   invoiceDate: z.string().nullable(),
   totalAmount: z.number().nullable(),
   subtotal: z.number().nullable(),

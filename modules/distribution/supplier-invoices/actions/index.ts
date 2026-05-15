@@ -29,7 +29,6 @@ import {
   createSupplierInvoice,
   deleteSupplierInvoice,
   generateSupplierInvoiceReferenceNumber,
-  getNextSupplierInvoiceNumber,
   getReversalPreview,
   getSupplierInvoiceById,
   getSupplierInvoiceCostDiffContext,
@@ -129,10 +128,6 @@ export async function getSupplierInvoiceCostDiffContextAction(
 
 export async function getReversalPreviewAction(invoiceId: string) {
   return await getReversalPreview(invoiceId);
-}
-
-export async function getNextSupplierInvoiceNumberAction() {
-  return await getNextSupplierInvoiceNumber();
 }
 
 export async function recordSupplierInvoicePaymentAction(

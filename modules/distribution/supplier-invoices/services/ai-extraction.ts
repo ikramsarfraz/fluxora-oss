@@ -33,7 +33,7 @@ export async function extractSupplierInvoiceWithAi(
   if (!provider.isAvailable()) {
     return {
       supplierName: null,
-      invoiceNumber: null,
+      supplierInvoiceNumber: null,
       invoiceDate: null,
       totalAmount: null,
       subtotal: null,

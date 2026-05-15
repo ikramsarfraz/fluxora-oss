@@ -84,7 +84,9 @@ export async function getInboxData(): Promise<InboxData> {
   const draftBills = await db
     .select({
       id: supplierInvoices.id,
-      invoiceNumber: supplierInvoices.invoiceNumber,
+      // Use reference_number as the canonical identifier; invoice_number is
+      // optional and may be null for bills without a printed supplier number.
+      invoiceNumber: supplierInvoices.referenceNumber,
       invoiceDate: supplierInvoices.invoiceDate,
       totalAmount: supplierInvoices.totalAmount,
       createdAt: supplierInvoices.createdAt,
@@ -229,7 +231,7 @@ export async function getInboxData(): Promise<InboxData> {
     db
       .select({
         id: supplierInvoices.id,
-        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceNumber: supplierInvoices.referenceNumber,
         invoiceDate: supplierInvoices.invoiceDate,
         totalAmount: supplierInvoices.totalAmount,
         supplierName: suppliers.name,

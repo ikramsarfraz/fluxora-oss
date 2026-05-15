@@ -257,7 +257,9 @@ export async function getOpenBillsForLinkingAction(txnId: string, proximity: "ex
   const bills = await db
     .select({
       id: supplierInvoices.id,
-      invoiceNumber: supplierInvoices.invoiceNumber,
+      // Surface the canonical reference number to link-to-bill UI; the
+      // supplier's printed invoice_number is optional and can be null.
+      invoiceNumber: supplierInvoices.referenceNumber,
       invoiceDate: supplierInvoices.invoiceDate,
       totalAmount: supplierInvoices.totalAmount,
       supplierId: supplierInvoices.supplierId,

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -103,7 +103,8 @@ export type SupplierInvoiceLineInput = {
 
 export type SupplierInvoiceHeaderInput = {
   supplierId: string;
-  invoiceNumber: string;
+  /** Supplier's printed invoice number — optional. */
+  invoiceNumber: string | null;
   invoiceDate: string;
   receiveDate: string;
   paymentMethod?: "cash" | "check" | "ach" | "zelle" | "credit_card" | null;
@@ -190,9 +191,9 @@ function safeLotSuffix(): string {
   return Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
-function defaultLotNumber(invoiceNumber: string, lineIndex: number): string {
-  const safeInvoice = invoiceNumber.trim().replace(/\s+/g, "-");
-  return `LOT-${safeInvoice}-${String(lineIndex + 1).padStart(2, "0")}`;
+function defaultLotNumber(referenceNumber: string, lineIndex: number): string {
+  const safeReference = referenceNumber.trim().replace(/\s+/g, "-");
+  return `LOT-${safeReference}-${String(lineIndex + 1).padStart(2, "0")}`;
 }
 
 function generateBarcode(): string {
@@ -216,7 +217,7 @@ function receiptTimestamp(receiveDate: string): Date {
 async function reserveLotNumber(args: {
   tx: Tx;
   tenantId: string;
-  invoiceNumber: string;
+  referenceNumber: string;
   lineIndex: number;
   override?: string | null;
 }): Promise<string> {
@@ -225,7 +226,7 @@ async function reserveLotNumber(args: {
     return trimmedOverride;
   }
 
-  const base = defaultLotNumber(args.invoiceNumber, args.lineIndex);
+  const base = defaultLotNumber(args.referenceNumber, args.lineIndex);
   const existing = await args.tx.query.lots.findFirst({
     where: and(eq(lots.tenantId, args.tenantId), eq(lots.lotNumber, base)),
     columns: { id: true },
@@ -377,48 +378,11 @@ async function rollbackSupplierInvoiceLineCosts(args: {
 }
 
 // -------------------- Reads --------------------
-
-/**
- * Generate the next `INV-YYYYMMDD-NN` invoice number for the current tenant.
- * Scans existing invoice numbers matching today's prefix and returns the
- * lowest unused suffix. Padding grows past two digits if needed. The result
- * is a *suggestion* — the bill form pre-fills it but the user can overwrite
- * with the supplier's real invoice number before saving.
- */
-export async function getNextSupplierInvoiceNumber(): Promise<string> {
-  const tenant = await getCurrentTenant();
-  const currentUser = await getCurrentPortalUser();
-  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
-  requirePermission(currentUser.role, "edit_supplier_invoice");
-
-  const today = new Date();
-  const yyyymmdd =
-    `${today.getFullYear()}` +
-    `${String(today.getMonth() + 1).padStart(2, "0")}` +
-    `${String(today.getDate()).padStart(2, "0")}`;
-  const prefix = `INV-${yyyymmdd}-`;
-
-  const existing = await db
-    .select({ invoiceNumber: supplierInvoices.invoiceNumber })
-    .from(supplierInvoices)
-    .where(
-      and(
-        eq(supplierInvoices.tenantId, tenant.id),
-        like(supplierInvoices.invoiceNumber, `${prefix}%`),
-      ),
-    );
-
-  const usedSuffixes = new Set<number>();
-  for (const row of existing) {
-    const suffix = row.invoiceNumber.slice(prefix.length);
-    const n = Number(suffix);
-    if (Number.isInteger(n) && n > 0) usedSuffixes.add(n);
-  }
-  let next = 1;
-  while (usedSuffixes.has(next)) next++;
-  const padding = Math.max(2, String(next).length);
-  return `${prefix}${String(next).padStart(padding, "0")}`;
-}
+//
+// The legacy `getNextSupplierInvoiceNumber()` auto-suggester was removed when
+// `referenceNumber` became the canonical system identity and
+// `invoiceNumber` (the supplier's printed number) became optional. Callers
+// should rely on `generateSupplierInvoiceReferenceNumber` above.
 
 export async function getSupplierInvoices() {
   const tenant = await getCurrentTenant();
@@ -716,7 +680,7 @@ export type ReversalCostChange = {
         kind: "restored";
         costPerLb: string;
         sourceInvoiceId: string;
-        sourceInvoiceNumber: string;
+        sourceInvoiceNumber: string | null;
         receiveDate: string;
       }
     | { kind: "unchanged"; costPerLb: string };
@@ -726,7 +690,8 @@ export type ReversalCostChange = {
 export type ReversalPreview = {
   invoice: {
     id: string;
-    invoiceNumber: string;
+    referenceNumber: string;
+    invoiceNumber: string | null;
     supplierId: string;
     supplierName: string;
   };
@@ -789,7 +754,13 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   const productIds = Array.from(new Set(invoice.lines.map(l => l.productId)));
   if (productIds.length === 0) {
     return {
-      invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+      invoice: {
+        id: invoice.id,
+        referenceNumber: invoice.referenceNumber,
+        invoiceNumber: invoice.invoiceNumber,
+        supplierId,
+        supplierName,
+      },
       lotsToDelete: lotIds.size,
       inventoryItemsToDelete,
       blockedItems,
@@ -884,7 +855,13 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   }
 
   return {
-    invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+    invoice: {
+      id: invoice.id,
+      referenceNumber: invoice.referenceNumber,
+      invoiceNumber: invoice.invoiceNumber,
+      supplierId,
+      supplierName,
+    },
     lotsToDelete: lotIds.size,
     inventoryItemsToDelete,
     blockedItems,
@@ -930,7 +907,7 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
         tenantId: tenant.id,
         supplierId: input.supplierId,
         referenceNumber,
-        invoiceNumber: input.invoiceNumber.trim(),
+        invoiceNumber: input.invoiceNumber?.trim() || null,
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,
         status: "draft",
@@ -1053,7 +1030,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       .update(supplierInvoices)
       .set({
         supplierId: input.supplierId,
-        invoiceNumber: input.invoiceNumber.trim(),
+        invoiceNumber: input.invoiceNumber?.trim() || null,
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,
         paymentMethod: input.paymentMethod ?? null,
@@ -1108,7 +1085,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       action: "update",
       entityTable: "supplier_invoices",
       entityId: input.id,
-      entityLabel: input.invoiceNumber.trim(),
+      entityLabel: input.invoiceNumber?.trim() || null,
       changedFieldsJson: JSON.stringify([
         "supplierId",
         "invoiceNumber",
@@ -1261,7 +1238,7 @@ async function postSupplierInvoiceInternal(args: {
     const lotNumber = await reserveLotNumber({
       tx,
       tenantId: args.tenantId,
-      invoiceNumber: invoice.invoiceNumber,
+      referenceNumber: invoice.referenceNumber,
       lineIndex: i,
       override: override?.lotNumberOverride,
     });

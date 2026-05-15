@@ -232,7 +232,7 @@ export function FirstBillPanel({ pipelineResult, pendingPdfFile }: Props) {
   const [supplierName, setSupplierName] = useState(
     pipelineResult.prefillResult.unmatchedSupplierCandidates[0] ?? "",
   );
-  const [invoiceNumber, setInvoiceNumber] = useState(prefill.invoiceNumber ?? "");
+  const [invoiceNumber, setInvoiceNumber] = useState(prefill.supplierInvoiceNumber ?? "");
   const [invoiceDate, setInvoiceDate] = useState(
     prefill.invoiceDate || new Date().toISOString().slice(0, 10),
   );
