@@ -415,6 +415,7 @@ export function AddProductForm(props?: {
                       }
                     >
                       <ComboboxTrigger
+                        nativeButton={false}
                         render={
                           <ComboboxChips>
                             <ComboboxValue>
