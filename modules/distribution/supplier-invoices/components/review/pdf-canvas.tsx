@@ -54,21 +54,26 @@ export function PdfCanvas({
 
   useEffect(() => {
     if (!pdfFile) return;
-    let cancelled = false;
+    // The handle captures the in-flight pdfjs tasks so the cleanup below can
+    // actually stop them. Without this, React 19's strict-mode double-invoke
+    // starts two `page.render()` calls on the same canvas and pdfjs throws
+    // "Cannot use the same canvas during multiple render() operations".
+    const handle: RenderHandle = { cancelled: false };
 
     void renderPdfPage({
       pdfFile,
       pageNumber,
       zoom,
       canvas: canvasRef.current,
+      handle,
     })
       .then(size => {
-        if (cancelled) return;
+        if (handle.cancelled) return;
         setResult({ kind: "ready", size });
         onPageSize?.(size);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (handle.cancelled || isCancellationError(err)) return;
         console.error("[pdf-canvas] failed to render", err);
         setResult({
           kind: "error",
@@ -77,7 +82,11 @@ export function PdfCanvas({
       });
 
     return () => {
-      cancelled = true;
+      handle.cancelled = true;
+      handle.renderTask?.cancel();
+      // `destroy()` returns a promise; we don't await it — the cleanup must
+      // be synchronous and pdfjs is happy to be told to tear down in flight.
+      void handle.loadingTask?.destroy();
     };
   }, [pdfFile, pageNumber, zoom, onPageSize]);
 
@@ -127,16 +136,32 @@ export function PdfCanvas({
 
 let workerConfigured = false;
 
+type PdfRenderTask = { cancel: () => void; promise: Promise<void> };
+type PdfLoadingTask = { promise: Promise<unknown>; destroy: () => Promise<void> };
+
+/**
+ * Cancellation surface shared between the effect and `renderPdfPage`. The
+ * effect installs the loading/render tasks on the handle as soon as pdfjs
+ * hands them over so the cleanup can tear them down synchronously.
+ */
+type RenderHandle = {
+  cancelled: boolean;
+  loadingTask?: PdfLoadingTask;
+  renderTask?: PdfRenderTask;
+};
+
 async function renderPdfPage({
   pdfFile,
   pageNumber,
   zoom,
   canvas,
+  handle,
 }: {
   pdfFile: Blob;
   pageNumber: number;
   zoom: number;
   canvas: HTMLCanvasElement | null;
+  handle: RenderHandle;
 }): Promise<RenderedPageSize> {
   if (!canvas) throw new Error("Canvas not mounted");
 
@@ -174,8 +199,11 @@ async function renderPdfPage({
     useWorkerFetch: false,
     useSystemFonts: true,
   });
+  handle.loadingTask = loadingTask as unknown as PdfLoadingTask;
   const pdf = await loadingTask.promise;
+  if (handle.cancelled) throw new RenderCancelled();
   const page = await pdf.getPage(pageNumber);
+  if (handle.cancelled) throw new RenderCancelled();
 
   const dpr = window.devicePixelRatio || 1;
   const scale = zoom / 100;
@@ -190,11 +218,13 @@ async function renderPdfPage({
   if (!context) throw new Error("2d context unavailable");
   context.scale(dpr, dpr);
 
-  await page.render({
+  const renderTask = page.render({
     canvasContext: context,
     canvas,
     viewport,
-  }).promise;
+  });
+  handle.renderTask = renderTask as unknown as PdfRenderTask;
+  await renderTask.promise;
 
   return {
     width: viewport.width,
@@ -202,4 +232,21 @@ async function renderPdfPage({
     viewportWidth: viewport.width,
     viewportHeight: viewport.height,
   };
+}
+
+class RenderCancelled extends Error {
+  constructor() {
+    super("Render cancelled");
+    this.name = "RenderCancelled";
+  }
+}
+
+/** Recognise pdfjs's own cancellation rejection alongside our internal one. */
+function isCancellationError(err: unknown): boolean {
+  if (err instanceof RenderCancelled) return true;
+  if (err && typeof err === "object" && "name" in err) {
+    const name = (err as { name?: unknown }).name;
+    return name === "RenderingCancelledException";
+  }
+  return false;
 }
