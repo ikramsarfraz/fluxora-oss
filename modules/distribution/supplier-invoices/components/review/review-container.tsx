@@ -9,6 +9,7 @@ import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-supplie
 
 import { createSupplierInvoiceAction } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
+import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
 
 import {
   mapPipelineToReviewData,
@@ -43,6 +44,7 @@ export function ReviewContainer({
   pages,
   pipelineResult,
   pdfUrl,
+  bulkImportKey,
 }: {
   fileName: string;
   fileSize?: string;
@@ -50,6 +52,12 @@ export function ReviewContainer({
   pipelineResult: PipelineResult;
   /** Object URL for the original PDF, when the bulk-import handoff had one. */
   pdfUrl?: string | null;
+  /**
+   * Optional localStorage key the parse was loaded from. When set, a successful
+   * submit marks the corresponding entry as `reviewed` so the bulk-landing
+   * row flips to the "Reviewed" status pill without a manual reload.
+   */
+  bulkImportKey?: string | null;
 }) {
   const router = useRouter();
   const productsQuery = useProducts();
@@ -205,6 +213,12 @@ export function ReviewContainer({
         lines,
         complete: false,
       });
+      // Flip the corresponding bulk-import row to "Reviewed" so the landing
+      // tab updates immediately on focus. The entry is intentionally NOT
+      // deleted — it stays around (until TTL) so the user can re-open it.
+      if (bulkImportKey) {
+        markBulkImportReviewed(bulkImportKey, result.id);
+      }
       toast.success("Draft bill saved.");
       router.push(`/supplier-invoices/${result.id}`);
     } catch (err) {
@@ -220,6 +234,7 @@ export function ReviewContainer({
     pipelineResult,
     skippedLines,
     lineProductOverrides,
+    bulkImportKey,
     router,
   ]);
 
