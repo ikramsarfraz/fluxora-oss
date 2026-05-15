@@ -1,22 +1,32 @@
 "use client";
 
-import { Plus, Sparkles, TriangleAlert } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 
 import { FieldChip } from "./field-chip";
+import type { SupplierLookup } from "./map-pipeline-to-review-data";
 import { ParsedField } from "./parsed-field";
+import { SupplierPicker } from "./supplier-picker";
 import { REVIEW_COLORS } from "./tokens";
 import type { ParsedHeader, SupplierCandidate } from "./types";
 
 export function HeaderCard({
   parsed,
   supplierValue,
-  onSupplierChange,
+  suppliers,
+  supplierSelectedId,
+  onSupplierSelect,
+  onSupplierTypedNameChange,
   onSupplierCandidate,
+  onCreateSupplier,
 }: {
   parsed: ParsedHeader;
   supplierValue: string;
-  onSupplierChange: (value: string) => void;
+  suppliers: SupplierLookup[];
+  supplierSelectedId: string | null;
+  onSupplierSelect: (supplier: SupplierLookup | null) => void;
+  onSupplierTypedNameChange?: (name: string) => void;
   onSupplierCandidate?: (candidate: SupplierCandidate) => void;
+  onCreateSupplier?: () => void;
 }) {
   return (
     <div className="border-b border-stone-line bg-stone-surface px-[22px] py-4">
@@ -39,7 +49,9 @@ export function HeaderCard({
           action={
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-[11px] font-medium"
+              onClick={onCreateSupplier}
+              disabled={!onCreateSupplier}
+              className="inline-flex items-center gap-1 text-[11px] font-medium disabled:opacity-50"
               style={{ color: REVIEW_COLORS.accent }}
             >
               <Plus className="size-[12px]" strokeWidth={1.8} />
@@ -47,23 +59,14 @@ export function HeaderCard({
             </button>
           }
         >
-          <div className="relative">
-            <input
-              value={supplierValue}
-              onChange={e => onSupplierChange(e.target.value)}
-              className="block h-[34px] w-full rounded-lg pl-3 pr-9 text-[13px] outline-none transition-shadow focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
-              style={{
-                border: `1px solid ${REVIEW_COLORS.warn}`,
-                background: "#fffdf8",
-                ["--input-focus" as never]: REVIEW_COLORS.accent,
-              }}
-            />
-            <TriangleAlert
-              className="pointer-events-none absolute right-2.5 top-1/2 size-[14px] -translate-y-1/2"
-              strokeWidth={1.6}
-              style={{ color: REVIEW_COLORS.warn }}
-            />
-          </div>
+          <SupplierPicker
+            suppliers={suppliers}
+            value={supplierValue}
+            selectedId={supplierSelectedId}
+            onValueChange={onSupplierSelect}
+            onTypedNameChange={onSupplierTypedNameChange}
+            needsAttention={!supplierSelectedId}
+          />
           {parsed.supplier.candidates.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {parsed.supplier.candidates.map((candidate, i) => (

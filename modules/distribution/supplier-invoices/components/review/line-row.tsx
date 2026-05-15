@@ -1,9 +1,11 @@
 "use client";
 
-import { AlertCircle, Check, Plus, Search, Sparkles, TriangleAlert } from "lucide-react";
+import { AlertCircle, Check, Plus, Sparkles, TriangleAlert } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import type { ProductLookup } from "./map-pipeline-to-review-data";
+import { ProductPicker } from "./product-picker";
 import { REVIEW_COLORS, toneColors } from "./tokens";
 import { lineTone, type ParsedLine, type ProductCandidate } from "./types";
 
@@ -15,15 +17,24 @@ export function LineRow({
   isActive,
   onClick,
   onSelectCandidate,
+  onSelectProduct,
   onSkip,
   onCreateNew,
+  products,
+  matchedProductId,
 }: {
   line: ParsedLine;
   isActive: boolean;
   onClick: () => void;
   onSelectCandidate?: (candidate: ProductCandidate) => void;
+  /** Called when the user picks from the autocomplete dropdown. */
+  onSelectProduct?: (product: ProductLookup) => void;
   onSkip?: () => void;
   onCreateNew?: () => void;
+  /** Catalog products for the autocomplete dropdown. */
+  products?: ProductLookup[];
+  /** Currently matched product id (used to drive the picker's selected state). */
+  matchedProductId?: string | null;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -69,11 +80,16 @@ export function LineRow({
         {!isFee ? (
           <div className="flex flex-wrap items-stretch gap-2">
             <ProductPicker
+              products={products ?? []}
+              selectedId={matchedProductId ?? null}
               placeholder={
                 isMatched && match.status === "matched"
                   ? `Confirmed: ${match.product}`
                   : "Search product or paste SKU…"
               }
+              onValueChange={p => {
+                if (p) onSelectProduct?.(p);
+              }}
             />
             {!isMatched && match.candidates.length > 0
               ? match.candidates.map((candidate, i) => (
@@ -187,24 +203,6 @@ function NumericSnapshot({ line }: { line: ParsedLine }) {
         @ ${line.unitPrice.toFixed(2)}
         {line.weight > 0 ? "/lb" : "/cs"}
       </div>
-    </div>
-  );
-}
-
-function ProductPicker({ placeholder }: { placeholder: string }) {
-  return (
-    <div className="relative min-w-[240px] flex-[1_1_280px]">
-      <Search
-        className="pointer-events-none absolute left-2.5 top-1/2 size-[14px] -translate-y-1/2"
-        strokeWidth={1.6}
-        style={{ color: REVIEW_COLORS.mutedSoft }}
-      />
-      <input
-        placeholder={placeholder}
-        onClick={e => e.stopPropagation()}
-        className="block h-8 w-full rounded-[7px] border border-stone-line bg-stone-surface pl-8 pr-2.5 text-[12.5px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
-        style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
-      />
     </div>
   );
 }
