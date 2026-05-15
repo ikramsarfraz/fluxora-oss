@@ -122,6 +122,22 @@ export function clearPendingBulkImport(key: string): void {
   void clearPendingPdf(key);
 }
 
+/**
+ * Drop the parse-result entry but keep the original PDF blob in IndexedDB.
+ * Used by "Re-parse" affordances on the Review + bulk-landing screens — we
+ * want the parser to run again on the same PDF without forcing the user to
+ * re-upload.
+ */
+export function clearPendingBulkImportResultOnly(key: string): void {
+  if (typeof window === "undefined") return;
+  if (!key.startsWith(BULK_IMPORT_LS_PREFIX)) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
 // ---------------------------------------------------------------------------
 // IndexedDB-backed PDF blob storage
 //

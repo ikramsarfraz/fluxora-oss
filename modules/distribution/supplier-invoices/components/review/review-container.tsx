@@ -15,7 +15,10 @@ import {
   saveImportAliasesBatchAction,
 } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
-import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
+import {
+  clearPendingBulkImportResultOnly,
+  markBulkImportReviewed,
+} from "../../utils/bulk-import-storage";
 
 import {
   mapPipelineToLineBboxes,
@@ -368,6 +371,20 @@ export function ReviewContainer({
         onSubmit={submit}
         submitDisabled={submitting}
         onCancel={() => router.push("/supplier-invoices/bulk")}
+        onReparse={
+          bulkImportKey
+            ? () => {
+                // Drop the cached parse result and walk the user through the
+                // parsing screen, which reads the PDF blob still in IndexedDB
+                // and re-runs the parser. Overrides the user picked here are
+                // discarded — the whole point of re-parsing is to start fresh.
+                clearPendingBulkImportResultOnly(bulkImportKey);
+                router.push(
+                  `/supplier-invoices/parsing/${encodeURIComponent(bulkImportKey)}`,
+                );
+              }
+            : undefined
+        }
         onSelectLineCandidate={handleLineCandidate}
         onSelectLineProduct={handleSelectLineProduct}
         onSkipLine={handleSkipLine}

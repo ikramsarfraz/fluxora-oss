@@ -108,8 +108,34 @@ export function ReviewScreen({
 
   useEffect(() => {
     if (activeLineId == null) return;
-    lineRefs.current[activeLineId]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // Respect the user's reduced-motion preference — scroll-with-behavior is
+    // the most jarring animation on this screen for vestibular sensitivity.
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    lineRefs.current[activeLineId]?.scrollIntoView({
+      block: "nearest",
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
   }, [activeLineId]);
+
+  // Wrap setFilter so flipping the segmented control also retargets the active
+  // line to the first still-visible row when the previous active row gets
+  // filtered out. Doing this in the user-event handler (not an effect) keeps
+  // the React Compiler happy and avoids the cascading-render warning.
+  const handleFilterChange = (next: ReviewFilter) => {
+    setFilter(next);
+    if (activeLineId == null) return;
+    const nextVisible =
+      next === "all"
+        ? data.lines
+        : next === "matched"
+          ? data.lines.filter(l => l.match.status === "matched" && !l.match.warning)
+          : data.lines.filter(l => lineNeedsReview(l.match));
+    if (!nextVisible.some(l => l.id === activeLineId)) {
+      setActiveLineId(nextVisible[0]?.id ?? null);
+    }
+  };
 
   return (
     <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
@@ -165,7 +191,7 @@ export function ReviewScreen({
                   {data.lines.length}
                 </span>
               </div>
-              <FilterSegmented filter={filter} counts={counts} onChange={setFilter} />
+              <FilterSegmented filter={filter} counts={counts} onChange={handleFilterChange} />
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto bg-stone-bg">

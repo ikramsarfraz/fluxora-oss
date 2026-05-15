@@ -39,6 +39,8 @@ export function BulkLandingScreen({
   onImportMore,
   onDismissFile,
   onClearReviewed,
+  onReparseAll,
+  reparseAllPending,
 }: {
   view: BatchView;
   /**
@@ -55,6 +57,10 @@ export function BulkLandingScreen({
   onDismissFile?: (file: BatchFile) => void;
   /** Footer action — drops every row that's already been reviewed. */
   onClearReviewed?: () => void;
+  /** Footer action — re-runs the parser on every file in the batch. */
+  onReparseAll?: () => void;
+  /** True while a "Re-parse all" pass is in flight. */
+  reparseAllPending?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<BatchFilter>("all");
@@ -140,7 +146,10 @@ export function BulkLandingScreen({
         )}
         <CardFooter
           readyToPost={view.summary.readyToPost}
+          totalFiles={view.summary.filesProcessed}
           onClearReviewed={onClearReviewed}
+          onReparseAll={onReparseAll}
+          reparseAllPending={reparseAllPending}
         />
       </div>
     </main>
@@ -249,10 +258,16 @@ function ColumnHeader() {
 
 function CardFooter({
   readyToPost,
+  totalFiles,
   onClearReviewed,
+  onReparseAll,
+  reparseAllPending,
 }: {
   readyToPost: number;
+  totalFiles: number;
   onClearReviewed?: () => void;
+  onReparseAll?: () => void;
+  reparseAllPending?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between bg-stone-bg px-[22px] py-3.5">
@@ -271,16 +286,15 @@ function CardFooter({
         >
           Clear {readyToPost} reviewed
         </Button>
-        <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]">
-          Re-parse all
-        </Button>
         <Button
           type="button"
+          variant="outline"
           size="sm"
-          disabled={readyToPost === 0}
-          className="h-8 border-stone-ink bg-stone-ink text-[12px] text-stone-surface hover:bg-stone-ink/90"
+          disabled={totalFiles === 0 || !onReparseAll || reparseAllPending}
+          onClick={onReparseAll}
+          className="h-8 text-[12px]"
         >
-          Post {readyToPost} reviewed
+          {reparseAllPending ? "Re-parsing…" : `Re-parse all (${totalFiles})`}
         </Button>
       </div>
     </div>
