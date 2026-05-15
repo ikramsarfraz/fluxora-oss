@@ -23,6 +23,7 @@ import {
   useSupplierCostDiffContext,
 } from "../hooks/use-supplier-invoices";
 import { saveImportAliasesBatchAction } from "../actions";
+import { mintBulkImportKey, storePendingPdf } from "../utils/bulk-import-storage";
 import {
   createSupplierInvoiceAction,
   updateSupplierInvoiceAction,
@@ -819,6 +820,23 @@ export function SupplierInvoiceForm({
     if (!file) return;
     if (file.size > MAX_PDF_BYTES) {
       toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+
+    // Create-mode: route through the redesigned parsing screen so the user
+    // gets the new in-flight UI + lands on the new Review screen on success.
+    // Edit-mode keeps the inline `parsePdfMutation` path: editing a draft is
+    // an "augment existing fields with this PDF" affordance, not a fresh
+    // import — there's no draft to seed from scratch.
+    if (mode === "create") {
+      const key = mintBulkImportKey();
+      try {
+        await storePendingPdf(key, file);
+      } catch {
+        toast.error("Couldn't stash the PDF locally — try again.");
+        return;
+      }
+      router.push(`/supplier-invoices/parsing/${encodeURIComponent(key)}`);
       return;
     }
 
