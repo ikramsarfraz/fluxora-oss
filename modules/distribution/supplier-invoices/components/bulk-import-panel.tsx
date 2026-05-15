@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { useBulkImportSupplierInvoices } from "../hooks/use-supplier-invoices";
@@ -67,6 +68,7 @@ type ResultRowState = {
 };
 
 export function BulkImportPanel() {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -131,6 +133,23 @@ export function BulkImportPanel() {
     const usable = pending.filter(p => !p.reason);
     if (usable.length === 0) {
       toast.error("Nothing to import — every file has an issue.");
+      return;
+    }
+
+    // Single-file uploads route through the new parsing screen so the user
+    // gets per-stage feedback during the parse instead of a 1-row results
+    // table. The PDF gets stashed in IndexedDB exactly the same way; the
+    // parsing screen reads it back and runs parseSupplierInvoicePdfAction
+    // itself, then redirects to the new Review screen.
+    if (usable.length === 1) {
+      const key = mintBulkImportKey();
+      try {
+        await storePendingPdf(key, usable[0].file);
+      } catch {
+        toast.error("Couldn't stash the PDF locally — try again.");
+        return;
+      }
+      router.push(`/supplier-invoices/parsing/${encodeURIComponent(key)}`);
       return;
     }
 
