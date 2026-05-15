@@ -12,7 +12,9 @@ import type {
 import {
   BULK_IMPORT_LS_PREFIX,
   clearPendingBulkImport,
+  mintBulkImportKey,
   storePendingBulkImport,
+  storePendingPdf,
 } from "../utils/bulk-import-storage";
 
 // Mirrors the server-side cap; surfaced here so the UI can guide rather than
@@ -131,6 +133,15 @@ export function BulkImportPanel() {
       toast.error("Nothing to import — every file has an issue.");
       return;
     }
+
+    // Mint one storage key per file upfront and stash each PDF in IndexedDB
+    // under that key. Doing it before the parse keeps the order stable: the
+    // i-th key pairs with the i-th file and (later) the i-th parse result.
+    const perFileKeys = usable.map(() => mintBulkImportKey());
+    await Promise.all(
+      usable.map((p, i) => storePendingPdf(perFileKeys[i], p.file)),
+    );
+
     const formData = new FormData();
     for (const p of usable) {
       formData.append("file", p.file);
@@ -138,13 +149,16 @@ export function BulkImportPanel() {
     try {
       const r = await mutation.mutateAsync(formData);
 
-      // Persist each parsed pipeline result to localStorage so the
-      // single-import flow in a new tab can seed from it without re-parsing.
-      const rowStates: ResultRowState[] = r.items.map(item => {
+      // Persist each parsed pipeline result to localStorage under the same
+      // key the PDF blob lives at, so the single-import flow can fetch both
+      // with one identifier.
+      const rowStates: ResultRowState[] = r.items.map((item, i) => {
         if (item.status === "parsed") {
-          const key = storePendingBulkImport(item);
+          const key = storePendingBulkImport(item, perFileKeys[i]);
           return { storageKey: key, reviewed: false };
         }
+        // Errored item — drop the orphaned PDF blob we stashed for it.
+        if (perFileKeys[i]) clearPendingBulkImport(perFileKeys[i]);
         return { storageKey: null, reviewed: false };
       });
       setRowState(rowStates);
@@ -156,6 +170,8 @@ export function BulkImportPanel() {
       if (errored > 0) parts.push(`${errored} failed`);
       toast.success(parts.join(" · ") || "Import finished.");
     } catch (err) {
+      // Clean up any PDFs we already stashed since the parse never completed.
+      for (const key of perFileKeys) clearPendingBulkImport(key);
       toast.error((err as Error).message ?? "Import failed.");
     }
   }

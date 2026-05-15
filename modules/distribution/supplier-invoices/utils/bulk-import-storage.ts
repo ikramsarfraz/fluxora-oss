@@ -40,8 +40,12 @@ function randomKey(): string {
  */
 export function storePendingBulkImport(
   item: BulkImportItemResult & { status: "parsed" },
+  preMintedKey?: string,
 ): string {
-  const key = `${BULK_IMPORT_LS_PREFIX}${randomKey()}`;
+  const key =
+    preMintedKey && preMintedKey.startsWith(BULK_IMPORT_LS_PREFIX)
+      ? preMintedKey
+      : `${BULK_IMPORT_LS_PREFIX}${randomKey()}`;
   const entry: StoredBulkImportEntry = {
     filename: item.filename,
     storedAt: Date.now(),
@@ -108,4 +112,112 @@ export function clearPendingBulkImport(key: string): void {
   } catch {
     /* ignore */
   }
+  // Best-effort cleanup of any matching PDF blob. The IndexedDB call is
+  // fire-and-forget — the localStorage entry is the source of truth for
+  // whether an item has been consumed.
+  void clearPendingPdf(key);
+}
+
+// ---------------------------------------------------------------------------
+// IndexedDB-backed PDF blob storage
+//
+// localStorage is fine for the parsed PipelineResult JSON (low KB), but PDF
+// bytes routinely run into the 5–10 MB quota cap. IndexedDB gives us much
+// more headroom (50%+ of free disk on most browsers), keyed by the same
+// storage key the parse result uses so the review tab can fetch both with
+// one identifier.
+// ---------------------------------------------------------------------------
+
+const PDF_DB_NAME = "fluxora-bulk-import";
+const PDF_DB_VERSION = 1;
+const PDF_STORE = "pdfs";
+
+function openPdfDb(): Promise<IDBDatabase | null> {
+  return new Promise(resolve => {
+    if (typeof indexedDB === "undefined") {
+      resolve(null);
+      return;
+    }
+    const req = indexedDB.open(PDF_DB_NAME, PDF_DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(PDF_STORE)) {
+        db.createObjectStore(PDF_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+    req.onblocked = () => resolve(null);
+  });
+}
+
+type StoredPdf = {
+  filename: string;
+  type: string;
+  storedAt: number;
+  blob: Blob;
+};
+
+export async function storePendingPdf(key: string, file: File): Promise<void> {
+  if (!key.startsWith(BULK_IMPORT_LS_PREFIX)) return;
+  const db = await openPdfDb();
+  if (!db) return;
+  const value: StoredPdf = {
+    filename: file.name,
+    type: file.type,
+    storedAt: Date.now(),
+    blob: file,
+  };
+  await new Promise<void>(resolve => {
+    const tx = db.transaction(PDF_STORE, "readwrite");
+    tx.objectStore(PDF_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+    tx.onabort = () => resolve();
+  });
+  db.close();
+}
+
+export async function readPendingPdf(key: string): Promise<File | null> {
+  if (!key.startsWith(BULK_IMPORT_LS_PREFIX)) return null;
+  const db = await openPdfDb();
+  if (!db) return null;
+  const value = await new Promise<StoredPdf | null>(resolve => {
+    const tx = db.transaction(PDF_STORE, "readonly");
+    const req = tx.objectStore(PDF_STORE).get(key);
+    req.onsuccess = () => resolve((req.result as StoredPdf | undefined) ?? null);
+    req.onerror = () => resolve(null);
+  });
+  db.close();
+  if (!value) return null;
+  if (Date.now() - value.storedAt > ENTRY_TTL_MS) {
+    void clearPendingPdf(key);
+    return null;
+  }
+  // Reconstruct a `File` from the stored blob so downstream code (PDF pane,
+  // attachment upload) gets a familiar shape.
+  return new File([value.blob], value.filename, {
+    type: value.type || "application/pdf",
+  });
+}
+
+export async function clearPendingPdf(key: string): Promise<void> {
+  if (!key.startsWith(BULK_IMPORT_LS_PREFIX)) return;
+  const db = await openPdfDb();
+  if (!db) return;
+  await new Promise<void>(resolve => {
+    const tx = db.transaction(PDF_STORE, "readwrite");
+    tx.objectStore(PDF_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+    tx.onabort = () => resolve();
+  });
+  db.close();
+}
+
+/** Mint a fresh storage key without writing anything yet — useful when the
+ *  caller needs the key value before the data is available (e.g. to set up
+ *  cross-tab links before the parse response returns). */
+export function mintBulkImportKey(): string {
+  return `${BULK_IMPORT_LS_PREFIX}${randomKey()}`;
 }
