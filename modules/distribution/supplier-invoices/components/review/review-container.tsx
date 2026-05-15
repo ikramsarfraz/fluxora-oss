@@ -18,6 +18,7 @@ import type { PipelineResult } from "../../services/parsing-pipeline";
 import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
 
 import {
+  mapPipelineToLineBboxes,
   mapPipelineToReviewData,
   type ProductLookup,
   type SupplierLookup,
@@ -122,6 +123,15 @@ export function ReviewContainer({
       skippedLines,
     });
   }, [baseData, supplierNameOverride, lineProductOverrides, skippedLines]);
+
+  // Bbox data flows through unchanged from the pipeline result. Today this is
+  // always empty (the parser doesn't populate `bbox` on UnresolvedLine yet);
+  // when a future parser does, the bidirectional highlight overlay (built in
+  // phase 4) lights up automatically.
+  const lineBboxes = useMemo(
+    () => mapPipelineToLineBboxes(pipelineResult),
+    [pipelineResult],
+  );
 
   const handleSupplierCandidate = useCallback(
     (candidate: SupplierCandidate) => {
@@ -354,7 +364,7 @@ export function ReviewContainer({
       <ReviewScreen
         data={enriched}
         pdfUrl={pdfUrl}
-        lineBboxes={undefined}
+        lineBboxes={lineBboxes.length > 0 ? lineBboxes : undefined}
         onSubmit={submit}
         submitDisabled={submitting}
         onCancel={() => router.push("/supplier-invoices/bulk")}

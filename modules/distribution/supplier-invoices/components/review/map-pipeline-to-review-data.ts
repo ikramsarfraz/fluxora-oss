@@ -11,6 +11,7 @@
 import type { PipelineResult, UnresolvedLine } from "../../services/parsing-pipeline";
 import type { SupplierInvoicePdfPrefillLine } from "../../utils/pdf-prefill";
 
+import type { LineBbox } from "./line-bbox";
 import type {
   ParsedHeader,
   ParsedLine,
@@ -269,4 +270,26 @@ export function mapPipelineToReviewData(input: MapPipelineInput): ReviewData {
     parsed: buildHeader({ pipeline, suppliers }),
     lines: buildLines({ pipeline, products }),
   };
+}
+
+/**
+ * Extract per-line bounding boxes from a PipelineResult. Returns empty when
+ * the parser hasn't recorded any — the BboxOverlay simply renders nothing in
+ * that case and the fake-invoice fallback's tr-based highlight still works.
+ */
+export function mapPipelineToLineBboxes(pipeline: PipelineResult): LineBbox[] {
+  const out: LineBbox[] = [];
+  for (let i = 0; i < pipeline.unresolvedLines.length; i++) {
+    const u = pipeline.unresolvedLines[i];
+    if (!u.bbox) continue;
+    out.push({
+      lineId: i + 1,
+      page: u.bbox.page,
+      x: u.bbox.x,
+      y: u.bbox.y,
+      width: u.bbox.width,
+      height: u.bbox.height,
+    });
+  }
+  return out;
 }
