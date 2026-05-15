@@ -68,6 +68,13 @@ export type LineMatch =
 export type ParsedLine = {
   id: number;
   raw: string;
+  /**
+   * Optional secondary description shown as muted text under `raw`. Comes from
+   * a separate Description column on the invoice (when present) — kept apart
+   * from the product name so alias keys stay clean. Null/undefined when the
+   * invoice has no description column or the AI didn't surface one.
+   */
+  description?: string | null;
   cases: number;
   weight: number;
   unitPrice: number;
@@ -86,7 +93,7 @@ export type ReviewData = {
   lines: ParsedLine[];
 };
 
-export type ReviewFilter = "needs" | "matched" | "all";
+export type ReviewFilter = "needs" | "matched" | "fees" | "all";
 
 export type ReviewCounts = {
   matched: number;

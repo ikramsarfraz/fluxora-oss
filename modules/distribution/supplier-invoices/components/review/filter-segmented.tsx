@@ -19,7 +19,7 @@ export function FilterSegmented({
   onChange,
 }: {
   filter: ReviewFilter;
-  counts: { needsReview: number; matched: number; total: number };
+  counts: { needsReview: number; matched: number; fees: number; total: number };
   onChange: (filter: ReviewFilter) => void;
 }) {
   return (
@@ -40,6 +40,17 @@ export function FilterSegmented({
       >
         Matched
       </FilterBtn>
+      {/* Hide the Fees tab when no fees were detected — keeps the segmented
+          control compact on the typical case (no extra charges). */}
+      {counts.fees > 0 ? (
+        <FilterBtn
+          active={filter === "fees"}
+          onClick={() => onChange("fees")}
+          count={counts.fees}
+        >
+          Fees
+        </FilterBtn>
+      ) : null}
       <FilterBtn
         active={filter === "all"}
         onClick={() => onChange("all")}

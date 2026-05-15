@@ -15,6 +15,7 @@ import { parseInvoiceDate } from "./invoice-date-parsing";
 // the model emits an array or explicit null, never an omitted key.
 const AiInvoiceLineSchema = z.object({
   vendorProductName: z.string(),
+  vendorProductDescription: z.string().nullable(),
   quantityCases: z.number().nullable(),
   quantityWeight: z.number().nullable(),
   caseWeights: z.array(z.number()).nullable(),
@@ -84,12 +85,12 @@ export function sanitizeSupplierName(value: string | null): string | null {
 }
 
 // OpenAI strict structured outputs require every property to be in `required`,
-// so the schema can't mark caseWeights `.optional()`. To keep the validator
-// permissive — older prompts and unit-test fixtures omit the field entirely —
-// we inject `caseWeights: null` on raw lines before handing them to Zod.
-// Data that already comes through the OpenAI strict path is unaffected because
-// the field is already present.
-function injectMissingCaseWeights(raw: unknown): unknown {
+// so the schema can't mark caseWeights or vendorProductDescription `.optional()`.
+// To keep the validator permissive — older prompts and unit-test fixtures omit
+// these fields entirely — we backfill them as null on raw lines before handing
+// them to Zod. Data from the strict OpenAI path is unaffected because the
+// fields are already present.
+function backfillOptionalLineFields(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const obj = raw as Record<string, unknown>;
   if (!Array.isArray(obj.lines)) return obj;
@@ -98,14 +99,17 @@ function injectMissingCaseWeights(raw: unknown): unknown {
     lines: obj.lines.map(line => {
       if (!line || typeof line !== "object") return line;
       const lineObj = line as Record<string, unknown>;
-      if ("caseWeights" in lineObj) return lineObj;
-      return { ...lineObj, caseWeights: null };
+      const patched: Record<string, unknown> = { ...lineObj };
+      if (!("caseWeights" in patched)) patched.caseWeights = null;
+      if (!("vendorProductDescription" in patched))
+        patched.vendorProductDescription = null;
+      return patched;
     }),
   };
 }
 
 export function validateExtractionResult(raw: unknown): ValidatedExtractionResult | null {
-  const result = AiExtractionResultSchema.safeParse(injectMissingCaseWeights(raw));
+  const result = AiExtractionResultSchema.safeParse(backfillOptionalLineFields(raw));
   if (!result.success) return null;
 
   const data = result.data;
@@ -119,25 +123,51 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
 
   // The form requires strict ISO YYYY-MM-DD but the model often echoes the
   // invoice's printed format ("5/14/2026", "May 14, 2026"). Normalize here
-  // so both text-AI and vision flows yield ISO before reaching the form.
+  // so the AI text flow yields ISO before reaching the form.
   data.invoiceDate = parseInvoiceDate(data.invoiceDate);
+
+  // Drop phantom lines: when the model can't read a row clearly it sometimes
+  // emits a line with an empty / whitespace name. Those propagate downstream
+  // as "Line N" placeholders in the Review UI — block them at the source.
+  data.lines = data.lines.filter(line => line.vendorProductName.trim().length > 0);
 
   // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
   // whose length disagrees with quantityCases (likely a model misread).
+  // Also collapse whitespace-only descriptions to null so the UI never has
+  // to special-case "empty string vs null".
   data.lines = data.lines.map(line => {
+    const description =
+      line.vendorProductDescription && line.vendorProductDescription.trim().length > 0
+        ? line.vendorProductDescription.trim()
+        : null;
+    // A description that just repeats the name is noise — suppress it so we
+    // don't render the same string twice in the Review row.
+    const dedupedDescription =
+      description && description.toLowerCase() === line.vendorProductName.trim().toLowerCase()
+        ? null
+        : description;
+
     const raw = line.caseWeights ?? null;
-    if (raw === null) return { ...line, caseWeights: null };
+    if (raw === null) {
+      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
+    }
 
     const filtered = raw.filter(w => Number.isFinite(w) && w > 0);
-    if (filtered.length === 0) return { ...line, caseWeights: null };
+    if (filtered.length === 0) {
+      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
+    }
 
     // Tolerate caseWeights even when quantityCases is null — the merge step
     // can adopt the array length as the case count.
     if (line.quantityCases !== null && filtered.length !== line.quantityCases) {
-      return { ...line, caseWeights: null };
+      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
     }
 
-    return { ...line, caseWeights: filtered };
+    return {
+      ...line,
+      vendorProductDescription: dedupedDescription,
+      caseWeights: filtered,
+    };
   });
 
   // Reject completely empty extractions — if lines and fees are both empty and

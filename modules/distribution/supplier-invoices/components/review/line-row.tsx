@@ -72,6 +72,7 @@ export function LineRow({
         <div className="flex items-start justify-between gap-3.5">
           <div className="min-w-0 flex-1">
             <RawText id={line.id} raw={line.raw} />
+            {line.description ? <DescriptionText description={line.description} /> : null}
             {!isFee ? (
               isMatched ? (
                 <MatchedStatus match={match} warn={isWarn} />
@@ -124,6 +125,18 @@ function RawText({ id, raw }: { id: number; raw: string }) {
         L{id}
       </span>
       {raw}
+    </div>
+  );
+}
+
+function DescriptionText({ description }: { description: string }) {
+  // Secondary description from the invoice's Description column — rendered as
+  // smaller, muted, non-monospaced text just below the product name so the
+  // user can read it for context without confusing it with the matchable
+  // product name.
+  return (
+    <div className="mb-1 pl-[26px] text-[11.5px] italic leading-[1.4] text-stone-muted">
+      {description}
     </div>
   );
 }
