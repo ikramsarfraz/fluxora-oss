@@ -15,6 +15,7 @@ import {
   getSupplierInvoiceCostDiffContextAction,
   getSupplierInvoicesAction,
   getSupplierInvoicesPageAction,
+  bulkImportSupplierInvoicesAction,
   parseSupplierInvoicePdfAction,
   recordSupplierInvoicePaymentAction,
   recordManualProductSelectionAction,
@@ -60,6 +61,29 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
   // Side effects of completion touch lots + inventory caches.
   queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
   queryClient.invalidateQueries({ queryKey: ["inventory"] });
+}
+
+/**
+ * Mutation hook for the bulk-import flow. Wraps the FormData-based action and
+ * invalidates listing caches when at least one draft was created so the user
+ * sees their new bills in the list without a manual refresh.
+ */
+export function useBulkImportSupplierInvoices() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: bulkImportSupplierInvoicesAction,
+    onSuccess: result => {
+      if (result.summary.created > 0) {
+        invalidateAll(queryClient);
+        invalidateSetupChecklistQuery(queryClient);
+        captureClientEvent("bulk_import.completed", {
+          created: result.summary.created,
+          needs_review: result.summary.needsReview,
+          errored: result.summary.errored,
+        });
+      }
+    },
+  });
 }
 
 export function useCreateSupplierInvoice() {

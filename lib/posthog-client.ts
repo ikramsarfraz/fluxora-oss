@@ -10,6 +10,7 @@ export type ClientAnalyticsEvent =
   | "welcome.started"
   | "welcome.step_completed"
   | "pdf.uploaded"
+  | "bulk_import.completed"
   | "first_bill.viewed"
   | "first_bill.names_edited"
   | "bank.connect_started"
