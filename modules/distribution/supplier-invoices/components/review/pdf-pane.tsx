@@ -4,12 +4,17 @@ import { Link2, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import { BboxOverlay } from "./bbox-overlay";
+import type { LineBbox } from "./line-bbox";
+import { PdfCanvas } from "./pdf-canvas";
 import type { ParsedLine } from "./types";
 
 /**
- * Phase 3 placeholder. Renders a fake invoice in HTML so reviewers can see the
- * surrounding chrome and the bidirectional-highlight wiring. Phase 4 replaces
- * the inner canvas with PDF.js + real bbox overlays.
+ * PDF preview pane. When `pdfUrl` is provided the inner canvas is rendered by
+ * `pdfjs-dist` and the `BboxOverlay` sits on top as clickable line targets.
+ * When `pdfUrl` is null/undefined the fake-invoice fallback renders so the
+ * surrounding chrome is reviewable before phase 5 wires a real URL — the
+ * fake invoice keeps its tr-based highlight in that mode.
  */
 export function PdfPane({
   fileName,
@@ -20,6 +25,8 @@ export function PdfPane({
   lines,
   activeLineId,
   onLineClick,
+  pdfUrl,
+  lineBboxes,
 }: {
   fileName: string;
   page: number;
@@ -29,7 +36,17 @@ export function PdfPane({
   lines: ParsedLine[];
   activeLineId: number | null;
   onLineClick: (id: number) => void;
+  /** Real PDF URL. When omitted, the fake-invoice fallback renders. */
+  pdfUrl?: string | null;
+  /** Per-line bounding boxes — required for clickable overlays on the real PDF. */
+  lineBboxes?: LineBbox[];
 }) {
+  // Real PDF canvases are rendered at native CSS size scaled by zoom, so
+  // bboxes (in PDF user-space points) need `zoom/100` to align with the canvas.
+  // The fake-invoice fallback wraps its content in an outer transform, so
+  // bboxes inside that transform stay at 1.0.
+  const overlayScale = pdfUrl ? zoom / 100 : 1;
+
   return (
     <div
       className="flex min-w-0 flex-1 flex-col"
@@ -46,19 +63,34 @@ export function PdfPane({
         className="flex flex-1 justify-center overflow-y-auto p-6"
         style={{ alignItems: "flex-start" }}
       >
-        <div
-          style={{
-            transform: `scale(${zoom / 100})`,
-            transformOrigin: "top center",
-            transition: "transform .15s",
-          }}
-        >
-          <FakeInvoicePage
-            lines={lines}
-            activeLineId={activeLineId}
-            onLineClick={onLineClick}
-          />
-        </div>
+        {pdfUrl ? (
+          <PdfCanvas pdfUrl={pdfUrl} pageNumber={page} zoom={zoom}>
+            {lineBboxes ? (
+              <BboxOverlay
+                bboxes={lineBboxes}
+                lines={lines}
+                activeLineId={activeLineId}
+                scale={overlayScale}
+                pageNumber={page}
+                onLineClick={onLineClick}
+              />
+            ) : null}
+          </PdfCanvas>
+        ) : (
+          <div
+            style={{
+              transform: `scale(${zoom / 100})`,
+              transformOrigin: "top center",
+              transition: "transform .15s",
+            }}
+          >
+            <FakeInvoicePage
+              lines={lines}
+              activeLineId={activeLineId}
+              onLineClick={onLineClick}
+            />
+          </div>
+        )}
       </div>
       <PdfHint />
     </div>
