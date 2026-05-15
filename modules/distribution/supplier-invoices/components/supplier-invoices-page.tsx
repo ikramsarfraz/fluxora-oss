@@ -29,15 +29,32 @@ type InvoiceRow = SupplierInvoiceListItem;
 
 const COLUMNS: ListingColumn<InvoiceRow>[] = [
   {
-    key: "invoiceNumber",
-    header: "Invoice #",
-    sortKey: "invoiceNumber",
+    key: "referenceNumber",
+    header: "Reference",
+    sortKey: "referenceNumber",
     width: "140px",
     render: row => ({
       primary: (
-        <Link href={`/supplier-invoices/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
-          <MonoText>{row.invoiceNumber}</MonoText>
+        <Link
+          href={`/supplier-invoices/${row.id}`}
+          style={{ textDecoration: "none", color: "inherit" }}
+          onClick={e => e.stopPropagation()}
+        >
+          <MonoText>{row.referenceNumber}</MonoText>
         </Link>
+      ),
+    }),
+  },
+  {
+    key: "invoiceNumber",
+    header: "Supplier inv #",
+    sortKey: "invoiceNumber",
+    width: "140px",
+    render: row => ({
+      primary: row.invoiceNumber ? (
+        <MonoText>{row.invoiceNumber}</MonoText>
+      ) : (
+        <span style={{ color: "#a8a29e" }}>—</span>
       ),
     }),
   },
@@ -170,7 +187,7 @@ export default function SupplierInvoicesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete bill</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete draft bill <strong>{deletingInvoice?.invoiceNumber}</strong>? This removes all
+              Delete draft bill <strong>{deletingInvoice?.referenceNumber}</strong>? This removes all
               associated lines and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
