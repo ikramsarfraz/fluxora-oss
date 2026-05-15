@@ -13,6 +13,7 @@ import { CreateSupplierDialog } from "../create-supplier-dialog";
 import {
   createSupplierInvoiceAction,
   saveImportAliasesBatchAction,
+  uploadSupplierInvoiceAttachmentAction,
 } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
@@ -290,6 +291,32 @@ export function ReviewContainer({
         complete: true, // Complete & receive — creates lots + inventory atomically.
       });
 
+      // Attach the original PDF to the new bill so it shows up in the
+      // supplier-invoice detail page's attachments tab. The legacy form did
+      // this via uploadParsedPdfMutation; the bulk-import flow had been
+      // saving the parse data but losing the source PDF.
+      // Best-effort: a failure leaves the bill itself intact and toasts the
+      // mismatch so the user knows to re-attach manually.
+      if (pdfFile) {
+        try {
+          const file =
+            pdfFile instanceof File
+              ? pdfFile
+              : new File([pdfFile], fileName, {
+                  type: pdfFile.type || "application/pdf",
+                });
+          const formData = new FormData();
+          formData.append("supplierInvoiceId", result.id);
+          formData.append("file", file);
+          await uploadSupplierInvoiceAttachmentAction(formData);
+        } catch (err) {
+          console.warn("[review] pdf attachment upload failed", err);
+          toast(
+            "Bill saved, but the PDF couldn't attach automatically. Open the bill to upload it manually.",
+          );
+        }
+      }
+
       // Remember-aliases: persist the user's confirmed line→product matches
       // for this supplier so future imports auto-resolve. Only the *manual*
       // overrides count — lines that came in already matched by the parser
@@ -339,6 +366,8 @@ export function ReviewContainer({
     rememberAliases,
     baseData.lines,
     bulkImportKey,
+    pdfFile,
+    fileName,
     router,
   ]);
 
