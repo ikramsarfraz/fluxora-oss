@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
+import { ReviewContainer } from "./review/review-container";
 import {
   clearPendingBulkImport,
   readPendingBulkImport,
@@ -42,7 +43,6 @@ export function SupplierInvoiceCreateShell() {
     bulkImportKey ? { state: "loading" } : { state: "none" },
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     // localStorage/IndexedDB aren't available during SSR; this can't run
     // earlier than first client render. The setState calls are intentional —
@@ -80,11 +80,23 @@ export function SupplierInvoiceCreateShell() {
       cancelled = true;
     };
   }, [bulkImportKey]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (load.state === "loading") {
     // Brief flicker before storage reads complete — keep it silent.
     return null;
+  }
+
+  // Bulk-import handoff with a parsed result → render the new Review screen.
+  // The legacy SupplierInvoiceForm path still serves manual-create and the
+  // expired-handoff fallback so users can re-upload a PDF.
+  if (load.state === "ready") {
+    return (
+      <ReviewBulkImport
+        fileName={load.pdfFile?.name ?? load.result.prefillResult.sourceFilename}
+        pdfFile={load.pdfFile}
+        result={load.result}
+      />
+    );
   }
 
   return (
@@ -105,11 +117,55 @@ export function SupplierInvoiceCreateShell() {
           another tab). Upload the PDF here to parse it again.
         </div>
       )}
-      <SupplierInvoiceForm
-        mode="create"
-        prefilledPipelineResult={load.state === "ready" ? load.result : undefined}
-        prefilledPdfFile={load.state === "ready" ? load.pdfFile : null}
-      />
+      <SupplierInvoiceForm mode="create" />
     </>
   );
+}
+
+function ReviewBulkImport({
+  fileName,
+  pdfFile,
+  result,
+}: {
+  fileName: string;
+  pdfFile: File | null;
+  result: PipelineResult;
+}) {
+  // Build the blob URL once. URL.createObjectURL is browser-only and lazy —
+  // useMemo gives us a stable URL across rerenders and an effect releases it
+  // on unmount so the blob can be GC'd.
+  const pdfUrl = useMemo(() => {
+    if (!pdfFile) return null;
+    if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      return null;
+    }
+    return URL.createObjectURL(pdfFile);
+  }, [pdfFile]);
+
+  useEffect(() => {
+    if (!pdfUrl) return;
+    return () => {
+      URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
+
+  const fileSize = useMemo(() => formatFileSize(pdfFile?.size), [pdfFile?.size]);
+
+  return (
+    <ReviewContainer
+      fileName={fileName}
+      fileSize={fileSize}
+      pipelineResult={result}
+      pdfUrl={pdfUrl}
+    />
+  );
+}
+
+function formatFileSize(bytes: number | undefined): string {
+  if (!bytes || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
 }
