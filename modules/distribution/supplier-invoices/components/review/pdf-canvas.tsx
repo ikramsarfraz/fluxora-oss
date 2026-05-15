@@ -158,7 +158,27 @@ async function renderPdfPage({
     workerConfigured = true;
   }
 
-  const loadingTask = pdfjs.getDocument(pdfUrl);
+  // Pull the PDF bytes ourselves and feed them to pdfjs via `data:` instead
+  // of letting pdfjs try to fetch the URL. The string form (`getDocument(url)`)
+  // routes through pdfjs's network stack, which trips up on blob: URLs in
+  // some environments — the symptom is
+  //   "Unexpected server response (0) while retrieving PDF blob:…"
+  // Passing raw bytes also matches the pattern the server-side extractor
+  // already uses (services/extract-pdf-text.ts), so blob URLs and HTTP URLs
+  // travel through one code path.
+  const response = await fetch(pdfUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  const loadingTask = pdfjs.getDocument({
+    data: bytes,
+    // Worker fetch isn't needed when we hand pdfjs the raw bytes, and skipping
+    // it avoids the same blob-URL pitfall in the worker thread.
+    useWorkerFetch: false,
+    useSystemFonts: true,
+  });
   const pdf = await loadingTask.promise;
   const page = await pdf.getPage(pageNumber);
 
