@@ -1,26 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
 import {
   clearPendingBulkImport,
   readPendingBulkImport,
+  readPendingPdf,
 } from "../utils/bulk-import-storage";
 import type { PipelineResult } from "../services/parsing-pipeline";
 
 type BulkImportLoad =
   | { state: "none" }
   | { state: "loading" }
-  | { state: "ready"; result: PipelineResult; key: string }
+  | {
+      state: "ready";
+      result: PipelineResult;
+      pdfFile: File | null;
+      key: string;
+    }
   | { state: "expired" };
 
 /**
  * Client wrapper for the "new bill" route. When the URL carries a
  * `bulk-import-key` query param (handed over by the bulk-import panel), we
- * load the pre-parsed PipelineResult from localStorage and pass it down so
- * the form can seed itself without re-uploading the PDF.
+ * load the pre-parsed PipelineResult from localStorage AND the original PDF
+ * blob from IndexedDB, then pass both down so the form can seed itself
+ * without re-uploading the PDF and still render the PDF preview pane +
+ * attach the file when the draft is saved.
  *
  * The localStorage entry is cleared as soon as we've read it — re-loading
  * the same review tab won't double-consume, and the bulk-import panel
@@ -36,40 +44,46 @@ export function SupplierInvoiceCreateShell() {
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    // Read once on mount. localStorage isn't available during SSR, so this
-    // can't run earlier than the first client render. setState calls are
-    // intentional — we need the parsed result to synchronise to React
-    // state, and the effect doesn't depend on anything that would cause it
-    // to re-run cascading-style.
-    if (!bulkImportKey) {
-      setLoad({ state: "none" });
-      return;
+    // localStorage/IndexedDB aren't available during SSR; this can't run
+    // earlier than first client render. The setState calls are intentional —
+    // we're synchronising external storage into React state once on mount.
+    let cancelled = false;
+
+    async function load() {
+      if (!bulkImportKey) {
+        setLoad({ state: "none" });
+        return;
+      }
+      const entry = readPendingBulkImport(bulkImportKey);
+      if (!entry) {
+        if (!cancelled) setLoad({ state: "expired" });
+        return;
+      }
+      const pdfFile = await readPendingPdf(bulkImportKey);
+      if (cancelled) return;
+      setLoad({
+        state: "ready",
+        result: entry.item.pipelineResult,
+        pdfFile,
+        key: bulkImportKey,
+      });
+      // Clear the localStorage entry so the bulk-import panel can flip the
+      // row to "Reviewed" once the user switches back. The PDF blob in
+      // IndexedDB is cleared by clearPendingBulkImport too (fire-and-forget
+      // inside that helper). We've already captured the parse result and
+      // file in component state, so subsequent rerenders here are safe.
+      clearPendingBulkImport(bulkImportKey);
     }
-    const entry = readPendingBulkImport(bulkImportKey);
-    if (!entry) {
-      setLoad({ state: "expired" });
-      return;
-    }
-    setLoad({
-      state: "ready",
-      result: entry.item.pipelineResult,
-      key: bulkImportKey,
-    });
-    // Clear the entry so the bulk-import panel can mark this row as
-    // reviewed when the user switches back to that tab. We've already
-    // captured the parse result in component state so subsequent rerenders
-    // here are safe.
-    clearPendingBulkImport(bulkImportKey);
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [bulkImportKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const prefilled = useMemo(() => {
-    if (load.state === "ready") return load.result;
-    return undefined;
-  }, [load]);
-
   if (load.state === "loading") {
-    // Brief flicker before localStorage read completes — keep it silent.
+    // Brief flicker before storage reads complete — keep it silent.
     return null;
   }
 
@@ -91,7 +105,11 @@ export function SupplierInvoiceCreateShell() {
           another tab). Upload the PDF here to parse it again.
         </div>
       )}
-      <SupplierInvoiceForm mode="create" prefilledPipelineResult={prefilled} />
+      <SupplierInvoiceForm
+        mode="create"
+        prefilledPipelineResult={load.state === "ready" ? load.result : undefined}
+        prefilledPdfFile={load.state === "ready" ? load.pdfFile : null}
+      />
     </>
   );
 }

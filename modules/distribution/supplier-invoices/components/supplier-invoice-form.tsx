@@ -97,6 +97,13 @@ type Props = {
    * lands on a fully populated review screen without re-uploading the PDF.
    */
   prefilledPipelineResult?: PipelineResult;
+  /**
+   * Original PDF file that produced `prefilledPipelineResult`, pulled from
+   * IndexedDB by the bulk-import handoff. When present, the review screen
+   * shows the PDF preview pane next to the form and the file is uploaded
+   * as an attachment once the draft is saved — matching single-import.
+   */
+  prefilledPdfFile?: File | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -477,6 +484,7 @@ export function SupplierInvoiceForm({
   invoiceId,
   initialValues,
   prefilledPipelineResult,
+  prefilledPdfFile,
 }: Props) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
@@ -805,11 +813,20 @@ export function SupplierInvoiceForm({
     if (!prefilledPipelineResult) return;
     if (hasSeededFromPrefilledRef.current) return;
     hasSeededFromPrefilledRef.current = true;
-    seedFromPipelineResult(prefilledPipelineResult);
+    // Carry the prefilled PDF through so the review pane appears and the
+    // file uploads as an attachment when the draft is saved.
+    seedFromPipelineResult(prefilledPipelineResult, {
+      pdfFile: prefilledPdfFile ?? null,
+    });
     toast.success(
       "Loaded parsed PDF. Review every field before saving the draft.",
     );
-  }, [mode, prefilledPipelineResult, seedFromPipelineResult]);
+  }, [
+    mode,
+    prefilledPipelineResult,
+    prefilledPdfFile,
+    seedFromPipelineResult,
+  ]);
 
   async function handlePdfFileChange(
     event: React.ChangeEvent<HTMLInputElement>,
