@@ -23,11 +23,35 @@ import type { TextItem } from "pdfjs-dist/types/src/display/api";
 // The prompts know to read tabs as column separators.
 // ---------------------------------------------------------------------------
 
+export type PdfRowBbox = {
+  /** 1-based page index. */
+  page: number;
+  /** Top-left x in PDF user-space points (origin top-left). */
+  x: number;
+  /** Top-left y. */
+  y: number;
+  width: number;
+  height: number;
+};
+
+/**
+ * A single visual row of text on the PDF, with the text content joined the
+ * same way `combinedText` joins it (tabs at column breaks). Used downstream to
+ * map a parsed `UnresolvedLine` back to its on-page rectangle so the Review
+ * screen's bidirectional highlight can outline it.
+ */
+export type PdfRow = {
+  text: string;
+  bbox: PdfRowBbox;
+};
+
 export type PdfExtraction = {
   combinedText: string;
   pageCount: number;
   charCount: number;
   hasUsableText: boolean;
+  /** Per-visual-row metadata + bounding box, parallel to `combinedText`'s rows. */
+  rows: PdfRow[];
 };
 
 const MIN_CHARS_FOR_TEXT_MODE = 200;
@@ -39,6 +63,7 @@ type Span = {
   x: number;
   y: number;
   width: number;
+  height: number;
 };
 
 function isTextItem(it: unknown): it is TextItem {
@@ -59,6 +84,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
   }).promise;
 
   const pageTexts: string[] = [];
+  const collectedRows: PdfRow[] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
@@ -67,6 +93,8 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
 
     // pdfjs reports y in PDF coordinates (origin bottom-left). Flip to top-
     // down to make row grouping intuitive: smaller y = nearer the top.
+    // We also carry `height` so each row can produce a real bounding box for
+    // the Review screen's bbox overlay.
     const spans: Span[] = [];
     for (const it of content.items) {
       if (!isTextItem(it)) continue;
@@ -75,8 +103,11 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
       spans.push({
         text: it.str,
         x: it.transform[4],
+        // y is the *baseline* distance from the top after flipping; the top
+        // of the glyph is at `y - height`. We use that when building bboxes.
         y: viewport.height - it.transform[5],
         width: it.width,
+        height: it.height,
       });
     }
     spans.sort((a, b) => a.y - b.y || a.x - b.x);
@@ -108,7 +139,14 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
           const gap = span.x - (prev.x + prev.width);
           line += (gap > COLUMN_GAP ? "\t" : " ") + span.text;
         }
-        return line.trim();
+        const text = line.trim();
+        if (text.length > 0) {
+          collectedRows.push({
+            text,
+            bbox: rowToBbox(sorted, i),
+          });
+        }
+        return text;
       })
       .filter(line => line.length > 0);
 
@@ -121,5 +159,27 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
     pageCount: pdf.numPages,
     charCount: combinedText.length,
     hasUsableText: combinedText.length >= MIN_CHARS_FOR_TEXT_MODE,
+    rows: collectedRows,
+  };
+}
+
+function rowToBbox(sortedSpans: Span[], page: number): PdfRowBbox {
+  let minX = Infinity;
+  let maxRight = -Infinity;
+  let minTop = Infinity;
+  let maxBaseline = -Infinity;
+  for (const span of sortedSpans) {
+    if (span.x < minX) minX = span.x;
+    if (span.x + span.width > maxRight) maxRight = span.x + span.width;
+    const top = span.y - span.height;
+    if (top < minTop) minTop = top;
+    if (span.y > maxBaseline) maxBaseline = span.y;
+  }
+  return {
+    page,
+    x: minX,
+    y: minTop,
+    width: Math.max(0, maxRight - minX),
+    height: Math.max(0, maxBaseline - minTop),
   };
 }

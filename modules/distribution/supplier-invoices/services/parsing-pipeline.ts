@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { PdfRow } from "./extract-pdf-text";
+import { findRowForLine } from "../utils/match-line-to-pdf-row";
+
 import { eq, and, isNull, inArray, desc, ne } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -170,6 +173,14 @@ export type PipelineResult = {
 
 export async function runParsingPipeline(args: {
   extractedText: string;
+  /**
+   * Per-visual-row metadata from the layout-preserving text extractor. Used
+   * after the parse finishes to map each UnresolvedLine back to its on-page
+   * rectangle so the Review screen's bidirectional highlight overlay can
+   * outline the source row. Optional — pdf-parse and vision paths leave this
+   * empty and the bbox-matcher quietly skips bbox attachment.
+   */
+  extractedRows?: PdfRow[];
   sourceFilename: string;
   tenantId: string;
   pdfPageCount?: number;
@@ -181,6 +192,7 @@ export async function runParsingPipeline(args: {
 }): Promise<PipelineResult> {
   const {
     extractedText,
+    extractedRows = [],
     sourceFilename,
     tenantId,
     pdfPageCount = 1,
@@ -275,7 +287,7 @@ export async function runParsingPipeline(args: {
       aiUsed: false,
       requiresOcr: false,
       warnings: finalized.warnings,
-      unresolvedLines: enriched.unresolvedLines,
+      unresolvedLines: attachBboxes(enriched.unresolvedLines, extractedRows),
       detectedFees: [],
       priceDeviations,
       detectedProfileId: detectedProfile?.id ?? null,
@@ -518,7 +530,7 @@ export async function runParsingPipeline(args: {
     aiUsed: true,
     requiresOcr: false,
     warnings: finalized.warnings,
-    unresolvedLines: enriched.unresolvedLines,
+    unresolvedLines: attachBboxes(enriched.unresolvedLines, extractedRows),
     detectedFees: visionUsed
       ? (visionResult?.fees ?? [])
       : aiResult.fees,
@@ -956,4 +968,25 @@ function dedupeStrings(values: string[]): string[] {
     result.push(v.trim());
   }
   return result;
+}
+
+/**
+ * For each parsed line, look up the on-page text row that produced it by
+ * fuzzy-matching the vendor product description, and stamp the row's bbox
+ * onto the line. Used by the Review screen's bidirectional highlight overlay.
+ *
+ * When `rows` is empty (vision-only or pdf-parse fallback) we no-op — the
+ * overlay simply stays dormant for that parse.
+ */
+function attachBboxes(
+  unresolvedLines: UnresolvedLine[],
+  rows: PdfRow[],
+): UnresolvedLine[] {
+  if (rows.length === 0) return unresolvedLines;
+  return unresolvedLines.map(line => {
+    if (line.bbox) return line;
+    const match = findRowForLine(line.vendorProductName, rows);
+    if (!match) return line;
+    return { ...line, bbox: match.bbox };
+  });
 }
