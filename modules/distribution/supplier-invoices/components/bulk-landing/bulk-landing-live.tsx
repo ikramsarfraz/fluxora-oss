@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { clearPendingBulkImport } from "../../utils/bulk-import-storage";
+import { parseSupplierInvoicePdfAction } from "../../actions";
+import {
+  clearPendingBulkImport,
+  clearPendingBulkImportResultOnly,
+  readPendingPdf,
+  storePendingBulkImport,
+} from "../../utils/bulk-import-storage";
 
 import { BulkLandingScreen } from "./bulk-landing-screen";
 import type { BatchFile } from "./types";
@@ -25,6 +31,7 @@ import { useBulkBatchView } from "./use-bulk-batch-view";
 export function BulkLandingLive() {
   const router = useRouter();
   const { view, refresh } = useBulkBatchView();
+  const [reparseAllPending, setReparseAllPending] = useState(false);
 
   const dismissFile = useCallback(
     (file: BatchFile) => {
@@ -45,6 +52,70 @@ export function BulkLandingLive() {
       `Cleared ${reviewed.length} reviewed ${reviewed.length === 1 ? "file" : "files"} from the batch.`,
     );
   }, [view, refresh]);
+
+  const reparseAll = useCallback(async () => {
+    if (!view || reparseAllPending) return;
+    const files = view.files;
+    if (files.length === 0) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Re-parse ${files.length} ${files.length === 1 ? "file" : "files"}? Any manual edits you've made via Review will be reset.`,
+      )
+    ) {
+      return;
+    }
+    setReparseAllPending(true);
+    let succeeded = 0;
+    let failed = 0;
+    // Sequential to keep server load + rate limiting predictable. The toast at
+    // the end summarises rather than spamming one per file.
+    for (const file of files) {
+      try {
+        const pdf = await readPendingPdf(file.id);
+        if (!pdf) {
+          failed++;
+          continue;
+        }
+        clearPendingBulkImportResultOnly(file.id);
+        const formData = new FormData();
+        formData.append("file", pdf);
+        const pipelineResult = await parseSupplierInvoicePdfAction(formData);
+        storePendingBulkImport(
+          {
+            filename: pdf.name,
+            status: "parsed",
+            pipelineResult,
+            supplierName:
+              pipelineResult.proposedProfile?.supplierId
+                ? null
+                : pipelineResult.prefillResult.unmatchedSupplierCandidates[0] ?? null,
+            supplierMatched: Boolean(pipelineResult.prefillResult.values.supplierId),
+            lineCount: pipelineResult.prefillResult.values.lines.length,
+            unmatchedLineCount: pipelineResult.unresolvedLines.length,
+            computedLineTotal: pipelineResult.prefillResult.totalComparison.computedLineTotal,
+            warnings: pipelineResult.warnings,
+          },
+          file.id,
+        );
+        succeeded++;
+      } catch (err) {
+        console.error("[bulk-landing] re-parse failed for", file.id, err);
+        failed++;
+      }
+    }
+    setReparseAllPending(false);
+    refresh();
+    if (failed === 0) {
+      toast.success(`Re-parsed ${succeeded} ${succeeded === 1 ? "file" : "files"}.`);
+    } else if (succeeded === 0) {
+      toast.error(`Re-parse failed for all ${failed} files.`);
+    } else {
+      toast(
+        `Re-parsed ${succeeded} ${succeeded === 1 ? "file" : "files"}, ${failed} failed.`,
+      );
+    }
+  }, [view, reparseAllPending, refresh]);
 
   // Pre-mount flash: localStorage hasn't been read yet. Keep silent.
   if (view === null) return null;
@@ -83,6 +154,8 @@ export function BulkLandingLive() {
       onImportMore={() => router.push("/supplier-invoices/bulk-import")}
       onDismissFile={dismissFile}
       onClearReviewed={clearReviewed}
+      onReparseAll={reparseAll}
+      reparseAllPending={reparseAllPending}
     />
   );
 }

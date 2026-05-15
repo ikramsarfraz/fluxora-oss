@@ -47,6 +47,14 @@ export function LineRow({
     <div
       role="button"
       tabIndex={0}
+      aria-current={isActive ? "true" : undefined}
+      aria-label={
+        match.status === "matched"
+          ? `Line ${line.id}: matched to ${match.product}`
+          : match.status === "fee"
+            ? `Line ${line.id}: non-inventory charge`
+            : `Line ${line.id}: needs product match`
+      }
       onClick={onClick}
       onKeyDown={e => {
         if (e.key === "Enter" || e.key === " ") {
@@ -54,7 +62,7 @@ export function LineRow({
           onClick();
         }
       }}
-      className="flex cursor-pointer border-b border-stone-line transition-colors"
+      className="flex cursor-pointer border-b border-stone-line transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--stone-ink)]"
       style={{
         background: palette.bg,
         borderLeft: `3px solid ${isActive ? palette.bar : "transparent"}`,
