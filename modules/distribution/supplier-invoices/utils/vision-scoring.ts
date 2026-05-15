@@ -1,8 +1,6 @@
 // Pure confidence scoring for vision-based invoice extraction.
 // No server-only import — safe to use in tests.
 
-import type { ValidatedExtractionResult } from "./ai-validation";
-
 export type VisionExtractionScore = {
   lineCountValid: boolean;
   totalsReconcile: boolean | null;
@@ -13,8 +11,19 @@ export type VisionExtractionScore = {
   penaltyReasons: string[];
 };
 
+// Minimal shape this scorer needs — accepts both AiInvoiceLine (optional
+// caseWeights) and the strict Zod-inferred schema (non-optional caseWeights)
+// because caseWeights is not consulted here.
+type ScorableLine = {
+  vendorProductName: string;
+  quantityCases: number | null;
+  quantityWeight: number | null;
+  unitPrice: number | null;
+  lineTotal: number | null;
+};
+
 export function scoreVisionExtraction(
-  result: Pick<ValidatedExtractionResult, "lines" | "totalAmount">,
+  result: { lines: ScorableLine[]; totalAmount: number | null },
 ): VisionExtractionScore {
   const lines = result.lines;
   const penaltyReasons: string[] = [];

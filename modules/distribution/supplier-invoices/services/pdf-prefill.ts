@@ -12,16 +12,64 @@ import {
 } from "../utils/pdf-prefill";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { extractPdfText } from "./extract-pdf-text";
 import {
   runParsingPipeline,
   scoreParseResult,
   type PipelineResult,
+  type PipelineTelemetry,
 } from "./parsing-pipeline";
 
 export type { SupplierInvoicePdfPrefillResult };
 export type { PipelineResult };
 
 const MAX_PDF_PREFILL_BYTES = 25 * 1024 * 1024;
+
+type ParseMode = PipelineTelemetry["mode"];
+type TextExtractor = PipelineTelemetry["textExtractor"];
+
+// PARSE_MODE=text-first activates the pdfjs-dist layout-preserving extractor
+// before pdf-parse. Any other value (including unset) keeps the original
+// pdf-parse → vision-fallback behaviour. The flag is read each call so it
+// can be flipped at runtime without restarting the server.
+function readParseMode(): ParseMode {
+  const raw = (process.env.PARSE_MODE ?? "").toLowerCase().trim();
+  return raw === "text-first" ? "text-first" : "vision-only";
+}
+
+// Extract invoice text under the active parse mode. The text-first branch
+// uses pdfjs-dist to preserve table columns (line items become tab-separated
+// rows) and falls back to pdf-parse if pdfjs throws or produces too few
+// characters to be useful. Returns enough metadata for telemetry plus the
+// raw text the rest of the pipeline expects.
+async function extractTextForPipeline(
+  bytes: Buffer,
+  mode: ParseMode,
+): Promise<{ text: string; pageCount: number; textExtractor: TextExtractor }> {
+  if (mode === "text-first") {
+    try {
+      const layout = await extractPdfText(bytes);
+      if (layout.hasUsableText) {
+        return {
+          text: layout.combinedText,
+          pageCount: layout.pageCount,
+          textExtractor: "pdfjs-dist",
+        };
+      }
+    } catch (err) {
+      // Swallow and fall through — pdfjs-dist occasionally chokes on PDFs
+      // that pdf-parse handles fine; the downstream vision fallback covers
+      // anything pdf-parse can't read either.
+      console.warn("[pdf-prefill] pdfjs-dist extraction failed", err);
+    }
+  }
+  const parsed = await pdfParse(bytes);
+  return {
+    text: parsed.text?.trim() ?? "",
+    pageCount: parsed.numpages ?? 1,
+    textExtractor: "pdf-parse",
+  };
+}
 
 function isPdfFile(args: {
   originalFilename: string;
@@ -60,27 +108,36 @@ export async function parseSupplierInvoicePdf(input: {
     );
   }
 
-  const [parsed, [productCountRow]] = await Promise.all([
-    pdfParse(input.bytes),
+  const mode = readParseMode();
+
+  const [extracted, [productCountRow]] = await Promise.all([
+    extractTextForPipeline(input.bytes, mode),
     db
       .select({ n: count() })
       .from(products)
       .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
   ]);
 
-  const text = parsed.text?.trim() ?? "";
-  const pageCount = parsed.numpages ?? 1;
   const productCount = Number(productCountRow?.n ?? 0);
 
-  return runParsingPipeline({
-    extractedText: text,
+  const result = await runParsingPipeline({
+    extractedText: extracted.text,
     sourceFilename: originalFilename,
     tenantId: tenant.id,
-    pdfPageCount: pageCount,
+    pdfPageCount: extracted.pageCount,
     pdfBytes: input.bytes,
     debug: process.env.NODE_ENV === "development",
     firstBillMode: productCount === 0,
   });
+
+  return {
+    ...result,
+    telemetry: {
+      mode,
+      textExtractor: extracted.textExtractor,
+      textCharCount: extracted.text.length,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ const nextConfig: NextConfig = {
     "@react-pdf/types",
     "fontkit",
     "pdf-parse",
+    "pdfjs-dist",
   ],
 };
 

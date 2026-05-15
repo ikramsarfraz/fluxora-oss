@@ -1,6 +1,7 @@
 import "server-only";
 
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 import { INVOICE_EXTRACTION_SYSTEM_PROMPT, PRODUCT_MATCH_SYSTEM_PROMPT } from "../utils/ai-prompts";
 import {
@@ -12,9 +13,10 @@ import {
   limitProductCandidates,
   validateExtractionResult,
   validateProductMatchResult,
-  safeParseJson,
   buildInvoiceExtractionUserMessage,
   buildProductMatchUserMessage,
+  AiExtractionResultSchema,
+  AiProductMatchResultSchema,
 } from "../utils/ai-validation";
 import type {
   AiProvider,
@@ -109,12 +111,16 @@ export class OpenAiProvider implements AiProvider {
       candidateProducts: limitedProducts,
     });
 
-    let rawContent: string;
+    let parsed: unknown;
 
     try {
-      const response = await this.client.chat.completions.create({
+      // Strict structured outputs: the SDK rejects any response that doesn't
+      // match `AiExtractionResultSchema` shape, so we never need to repair
+      // malformed JSON afterwards. Refusals surface as `parsed === null`
+      // (model declined to answer) which we handle below.
+      const response = await this.client.chat.completions.parse({
         model: this.invoiceModel,
-        response_format: { type: "json_object" },
+        response_format: zodResponseFormat(AiExtractionResultSchema, "invoice_extraction"),
         messages: [
           { role: "system", content: INVOICE_EXTRACTION_SYSTEM_PROMPT },
           { role: "user", content: userMessage },
@@ -122,20 +128,28 @@ export class OpenAiProvider implements AiProvider {
         temperature: 0,
       });
 
-      rawContent = response.choices[0]?.message?.content ?? "";
+      const message = response.choices[0]?.message;
+      if (message?.refusal) {
+        return buildFailureExtractionResult(
+          `OpenAI refused to answer: ${message.refusal}`,
+        );
+      }
+      parsed = message?.parsed;
+      if (parsed == null) {
+        return buildFailureExtractionResult("OpenAI returned no parsed output.");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return buildFailureExtractionResult(`OpenAI API error: ${message}`);
     }
 
-    const parsed = safeParseJson(rawContent);
-    if (parsed === null) {
-      return buildFailureExtractionResult("OpenAI returned a non-JSON response.");
-    }
-
+    // Schema-level validation is already done by structured outputs, but the
+    // post-validation step still does *business* sanitisation: numeric
+    // supplier-name rejection, ISO-date normalisation, per-line caseWeights
+    // length check, and the empty-result guard.
     const validated = validateExtractionResult(parsed);
     if (!validated) {
-      return buildFailureExtractionResult("OpenAI response did not match the expected schema.");
+      return buildFailureExtractionResult("OpenAI response failed post-validation.");
     }
 
     return validated;
@@ -156,12 +170,12 @@ export class OpenAiProvider implements AiProvider {
       candidateProducts: limitedProducts,
     });
 
-    let rawContent: string;
+    let parsed: unknown;
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await this.client.chat.completions.parse({
         model: this.productMatchModel,
-        response_format: { type: "json_object" },
+        response_format: zodResponseFormat(AiProductMatchResultSchema, "product_match"),
         messages: [
           { role: "system", content: PRODUCT_MATCH_SYSTEM_PROMPT },
           { role: "user", content: userMessage },
@@ -169,7 +183,20 @@ export class OpenAiProvider implements AiProvider {
         temperature: 0,
       });
 
-      rawContent = response.choices[0]?.message?.content ?? "";
+      const message = response.choices[0]?.message;
+      if (message?.refusal) {
+        return buildFailureMatchResult(
+          input.vendorProductNames,
+          `OpenAI refused to answer: ${message.refusal}`,
+        );
+      }
+      parsed = message?.parsed;
+      if (parsed == null) {
+        return buildFailureMatchResult(
+          input.vendorProductNames,
+          "OpenAI returned no parsed output.",
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return buildFailureMatchResult(
@@ -178,19 +205,11 @@ export class OpenAiProvider implements AiProvider {
       );
     }
 
-    const parsed = safeParseJson(rawContent);
-    if (parsed === null) {
-      return buildFailureMatchResult(
-        input.vendorProductNames,
-        "OpenAI returned a non-JSON response.",
-      );
-    }
-
     const validated = validateProductMatchResult(parsed, input.vendorProductNames);
     if (!validated) {
       return buildFailureMatchResult(
         input.vendorProductNames,
-        "OpenAI response did not match the expected schema.",
+        "OpenAI response failed post-validation.",
       );
     }
 
@@ -242,13 +261,14 @@ export class OpenAiProvider implements AiProvider {
       });
     }
 
-    let rawContent: string;
+    let parsed: unknown;
+    let rawContent = "";
     let finishReason: string | null = null;
 
     try {
-      const response = await this.client.chat.completions.create({
+      const response = await this.client.chat.completions.parse({
         model: this.visionModel,
-        response_format: { type: "json_object" },
+        response_format: zodResponseFormat(AiExtractionResultSchema, "invoice_extraction"),
         messages: [
           { role: "system", content: VISION_INVOICE_EXTRACTION_SYSTEM_PROMPT },
           {
@@ -259,8 +279,9 @@ export class OpenAiProvider implements AiProvider {
         temperature: 0,
       });
 
-      rawContent = response.choices[0]?.message?.content ?? "";
+      const message = response.choices[0]?.message;
       finishReason = response.choices[0]?.finish_reason ?? null;
+      rawContent = message?.content ?? "";
 
       if (input.debug) {
         const promptTokens = response.usage?.prompt_tokens ?? 0;
@@ -270,8 +291,23 @@ export class OpenAiProvider implements AiProvider {
           promptTokens,
           completionTokens,
           rawContentLength: rawContent.length,
-          rawContentPreview: rawContent.slice(0, 500),
+          parsedPresent: message?.parsed != null,
         });
+      }
+
+      if (message?.refusal) {
+        return this.buildVisionFailureResult(
+          `Vision model refused to answer: ${message.refusal}`,
+          rawContent,
+        );
+      }
+
+      parsed = message?.parsed;
+      if (parsed == null) {
+        return this.buildVisionFailureResult(
+          `Vision model returned no parsed output (finish_reason: ${finishReason}).`,
+          rawContent,
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -281,28 +317,16 @@ export class OpenAiProvider implements AiProvider {
       return this.buildVisionFailureResult(`OpenAI API error: ${message}`);
     }
 
-    if (!rawContent) {
-      return this.buildVisionFailureResult(
-        `Vision model returned empty content (finish_reason: ${finishReason}).`,
-        rawContent,
-      );
-    }
-
-    const parsed = safeParseJson(rawContent);
-    if (parsed === null) {
-      if (input.debug) {
-        console.log("[vision debug] JSON parse failed, raw:", rawContent.slice(0, 1000));
-      }
-      return this.buildVisionFailureResult("Vision model returned a non-JSON response.", rawContent);
-    }
-
     const validated = validateExtractionResult(parsed);
     if (!validated) {
       if (input.debug) {
-        console.log("[vision debug] schema validation failed, parsed:", JSON.stringify(parsed).slice(0, 1000));
+        console.log(
+          "[vision debug] post-validation failed, parsed:",
+          JSON.stringify(parsed).slice(0, 1000),
+        );
       }
       return this.buildVisionFailureResult(
-        "Vision model response did not match the expected schema.",
+        "Vision model response failed post-validation.",
         rawContent,
       );
     }
