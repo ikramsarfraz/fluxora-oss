@@ -170,6 +170,7 @@ async function renderPdfPage({
 
   await page.render({
     canvasContext: context,
+    canvas,
     viewport,
   }).promise;
 
