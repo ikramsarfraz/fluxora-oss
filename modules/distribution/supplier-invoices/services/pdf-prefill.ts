@@ -12,7 +12,7 @@ import {
 } from "../utils/pdf-prefill";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
-import { extractPdfText } from "./extract-pdf-text";
+import { extractPdfText, type PdfRow } from "./extract-pdf-text";
 import {
   runParsingPipeline,
   scoreParseResult,
@@ -45,7 +45,12 @@ function readParseMode(): ParseMode {
 async function extractTextForPipeline(
   bytes: Buffer,
   mode: ParseMode,
-): Promise<{ text: string; pageCount: number; textExtractor: TextExtractor }> {
+): Promise<{
+  text: string;
+  pageCount: number;
+  textExtractor: TextExtractor;
+  rows: PdfRow[];
+}> {
   if (mode === "text-first") {
     try {
       const layout = await extractPdfText(bytes);
@@ -54,6 +59,7 @@ async function extractTextForPipeline(
           text: layout.combinedText,
           pageCount: layout.pageCount,
           textExtractor: "pdfjs-dist",
+          rows: layout.rows,
         };
       }
     } catch (err) {
@@ -68,6 +74,10 @@ async function extractTextForPipeline(
     text: parsed.text?.trim() ?? "",
     pageCount: parsed.numpages ?? 1,
     textExtractor: "pdf-parse",
+    // pdf-parse doesn't expose positions; without rows the bbox-matcher
+    // downstream simply leaves UnresolvedLine.bbox unset and the highlight
+    // overlay stays inactive for those parses.
+    rows: [],
   };
 }
 
@@ -122,6 +132,7 @@ export async function parseSupplierInvoicePdf(input: {
 
   const result = await runParsingPipeline({
     extractedText: extracted.text,
+    extractedRows: extracted.rows,
     sourceFilename: originalFilename,
     tenantId: tenant.id,
     pdfPageCount: extracted.pageCount,
