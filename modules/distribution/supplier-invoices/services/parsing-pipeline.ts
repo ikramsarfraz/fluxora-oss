@@ -56,6 +56,27 @@ export type UnresolvedLine = {
   aiSuggestionPending: boolean;
   topCandidates?: Array<{ id: string; name: string; score: number }>;
   aiSuggestion?: { productId: string | null; confidence: number } | null;
+  /**
+   * Optional bounding box on the source PDF for this line, in PDF user-space
+   * points (origin top-left, page-relative). When present, the Review screen's
+   * PDF pane overlays a clickable rectangle here for the bidirectional
+   * highlight (see modules/.../components/review/bbox-overlay.tsx).
+   *
+   * Phase 5f only adds the type — the parser doesn't populate this yet.
+   * Wiring approximate bboxes from pdfjs-dist text-item positions is the next
+   * follow-up; a vision-OCR provider response would supply real per-line
+   * boxes directly.
+   */
+  bbox?: {
+    /** 1-based page index. */
+    page: number;
+    /** Top-left x in PDF points. */
+    x: number;
+    /** Top-left y in PDF points (origin top-left, after flipping pdfjs's viewport). */
+    y: number;
+    width: number;
+    height: number;
+  };
 };
 
 type LineSnapshot = {
