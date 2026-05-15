@@ -141,7 +141,7 @@ export function ReviewScreen({
   };
 
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+    <main className="relative -m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
       <ReviewHeaderStrip
         fileName={data.fileName}
         counts={counts}
@@ -251,13 +251,15 @@ export function ReviewScreen({
         </div>
       </div>
 
-      {/* Bill-total bar — `position: fixed` to the viewport so it stays visible
-          regardless of any scroll or layout overflow above. `right-0` + width
-          anchor it under the right pane (matching its 52% / 600px clamp);
-          PdfPane on the left stays uncovered. z-20 keeps it under Radix
-          dialogs (z-50) so modals still cover it. */}
+      {/* Bill-total bar — `position: absolute` scoped to <main> (which is
+          height-locked to the viewport via h-[calc(100dvh-4rem)]). Using
+          absolute instead of fixed means the bar's geometry tracks <main>'s
+          width and right edge, so when the app sidebar collapses or expands
+          the bar stays correctly aligned to the right pane (also 52% / 600px
+          of <main>). z-20 keeps it under Radix dialogs (z-50) so modals can
+          still cover it. */}
       <div
-        className="fixed bottom-0 right-0 z-20"
+        className="absolute bottom-0 right-0 z-20"
         style={{ width: "52%", minWidth: 600 }}
       >
         <ReviewFooterStrip
