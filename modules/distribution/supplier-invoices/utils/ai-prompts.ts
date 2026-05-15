@@ -52,6 +52,33 @@ LINE ITEM RULES:
 - quantityCases is the number of cases/boxes, not weight.
 - quantityWeight is the TOTAL weight in pounds for the line.
 
+PRODUCT NAME vs DESCRIPTION — CRITICAL:
+- Many invoices have TWO product columns side-by-side. The first column is a
+  short Item code or short name (e.g. "RR Brisket Short Rib", "Chicken Ham Deli
+  Sliced", "2x20 Gyros Cones"). The second column is a longer DESCRIPTION
+  (e.g. "Brisket Short Rib", "Smoked & Sliced @ 12 oz packages", "Fatima Halal
+  Small Cones (2 cones per case - 20lbs each)").
+- When BOTH columns are present on the same row:
+    - "vendorProductName" = ONLY the short Item / first column. Do NOT concatenate.
+    - "vendorProductDescription" = the longer Description / second column.
+- When only ONE product column exists (most simple invoices):
+    - "vendorProductName" = that column.
+    - "vendorProductDescription" = null.
+- Never concatenate two columns into a single field. Never duplicate the same
+  text into both vendorProductName and vendorProductDescription — if they would
+  be identical, leave vendorProductDescription null.
+- Use the column-header text or the consistent layout across rows to decide
+  which is the Item column and which is the Description column.
+
+PHANTOM LINES — CRITICAL:
+- Every entry in "lines" MUST have a non-empty, non-placeholder vendorProductName.
+- Do NOT emit a line where vendorProductName is empty, whitespace, "Line N",
+  "Item N", or any other placeholder. If a row in the PDF has no readable
+  product name (e.g. a subtotal row, a payment row, a continuation/wrap of a
+  previous row's text), OMIT it from "lines" entirely.
+- Do NOT split one invoice row into multiple "lines" entries — every row maps
+  to AT MOST one line.
+
 WEIGHT EXTRACTION — CRITICAL:
 - If the invoice has a weight column (e.g. "Qty/Weight", "Weight", "Wt", "LBS"),
   EVERY catch_weight line MUST have a non-null quantityWeight. Returning null
@@ -97,6 +124,7 @@ REQUIRED JSON SCHEMA (return exactly this shape, no extra keys):
   "lines": [
     {
       "vendorProductName": string,
+      "vendorProductDescription": string | null,
       "quantityCases": number | null,
       "quantityWeight": number | null,
       "caseWeights": number[] | null,

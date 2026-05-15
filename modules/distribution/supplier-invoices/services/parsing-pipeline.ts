@@ -52,6 +52,14 @@ export type PipelineParseSource = "deterministic" | "ai_fallback" | "hybrid" | "
 
 export type UnresolvedLine = {
   vendorProductName: string;
+  /**
+   * Optional secondary description from the invoice's Description column,
+   * separate from `vendorProductName`. Populated by the AI extraction path;
+   * the deterministic parser doesn't emit one. Used by the Review screen to
+   * show extra context under the product name without affecting alias keys
+   * (aliases continue to key on `vendorProductName` only).
+   */
+  vendorProductDescription?: string | null;
   suggestedProductId: string | null;
   confidence: number;
   stage: string;
@@ -447,11 +455,22 @@ export async function runParsingPipeline(args: {
     return buildFirstBillResult(finalResult, source, true, visionUsed);
   }
 
+  // Build a name → description lookup from whichever AI source produced the
+  // final merged result, so the Review screen can show secondary description
+  // text under each line's vendor name.
+  const descriptionSource = visionUsed && visionResult ? visionResult.lines : aiResult.lines;
+  const descriptionByVendorName = new Map<string, string>();
+  for (const l of descriptionSource) {
+    const desc = l.vendorProductDescription?.trim();
+    if (desc) descriptionByVendorName.set(l.vendorProductName, desc);
+  }
+
   const enriched = await enrichWithAliasesAndAiMatching(
     finalResult,
     tenantId,
     finalResult.values.supplierId || null,
     richProductRows,
+    descriptionByVendorName,
   );
 
   const productNameMap = new Map(richProductRows.map(p => [p.id, p.name]));
@@ -696,6 +715,7 @@ async function enrichWithAliasesAndAiMatching(
   tenantId: string,
   supplierId: string | null,
   candidateProducts: ProductMatchCandidate[],
+  descriptionByVendorName: ReadonlyMap<string, string> = new Map(),
 ): Promise<{ result: SupplierInvoicePdfPrefillResult; unresolvedLines: UnresolvedLine[] }> {
   if (result.unmatchedLineDescriptions.length === 0) {
     return { result, unresolvedLines: [] };
@@ -722,6 +742,7 @@ async function enrichWithAliasesAndAiMatching(
 
   const unresolvedLines: UnresolvedLine[] = matchResults.map(m => ({
     vendorProductName: m.vendorProductName,
+    vendorProductDescription: descriptionByVendorName.get(m.vendorProductName) ?? null,
     suggestedProductId: m.productId,
     confidence: m.confidence,
     stage: m.stage,

@@ -27,6 +27,18 @@ import "server-only";
 
 export type AiInvoiceLine = {
   vendorProductName: string;
+  /**
+   * Optional secondary product description column on the invoice — usually the
+   * spelled-out / human-readable version when the "Item" column carries an SKU
+   * or short code (e.g. Item="RR Brisket Short Rib", Description="Brisket
+   * Short Rib"). Kept separate from `vendorProductName` so the Review screen
+   * can display it as additional context without polluting alias keys.
+   * Optional (mirrors `caseWeights`) so older fixtures and the deterministic
+   * path don't have to populate it; the validator backfills `null` for any
+   * payload missing the key, so post-validation it always reads as
+   * `string | null`.
+   */
+  vendorProductDescription?: string | null;
   quantityCases: number | null;
   quantityWeight: number | null;
   /**

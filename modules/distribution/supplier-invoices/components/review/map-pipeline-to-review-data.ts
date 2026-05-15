@@ -160,15 +160,32 @@ function buildLines({
     pipeline.detectedFees.map(f => f.description.toLowerCase()),
   );
 
-  return prefillLines.map((line, index) => {
-    return buildLine({
+  const productLines = prefillLines.map((line, index) =>
+    buildLine({
       index,
       line,
       unresolved: unresolved[index] ?? null,
       products,
       feeDescriptions,
-    });
-  });
+    }),
+  );
+
+  // Append fee rows (delivery charges, cut fees, etc.). These come from the
+  // pipeline's `detectedFees` channel and aren't part of `prefillLines`. We
+  // synthesize a ParsedLine per fee so they render in the line list with the
+  // existing fee styling and surface via the new "Fees" filter tab.
+  const feeLines: ParsedLine[] = pipeline.detectedFees.map((fee, i) => ({
+    id: productLines.length + i + 1,
+    raw: fee.description,
+    cases: 1,
+    weight: 0,
+    unitPrice: fee.amount,
+    total: fee.amount,
+    fixed: true,
+    match: { status: "fee", candidates: [] },
+  }));
+
+  return [...productLines, ...feeLines];
 }
 
 function buildLine({
@@ -192,12 +209,14 @@ function buildLine({
 
   const product = line.productId ? findProduct(products, line.productId) : null;
   const rawText = unresolved?.vendorProductName ?? product?.name ?? `Line ${index + 1}`;
+  const description = unresolved?.vendorProductDescription ?? null;
   const isFee = feeDescriptions.has(rawText.toLowerCase());
 
   if (isFee) {
     return {
       id: index + 1,
       raw: rawText,
+      description,
       cases,
       weight,
       unitPrice,
@@ -216,6 +235,7 @@ function buildLine({
     return {
       id: index + 1,
       raw: rawText,
+      description,
       cases,
       weight,
       unitPrice,
@@ -238,6 +258,7 @@ function buildLine({
   return {
     id: index + 1,
     raw: rawText,
+    description,
     cases,
     weight,
     unitPrice,

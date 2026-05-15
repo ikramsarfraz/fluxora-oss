@@ -563,6 +563,87 @@ test("validateExtractionResult: keeps caseWeights when quantityCases is null (me
   assert.deepEqual(result!.lines[0].caseWeights, [22.5, 23.1, 22.8]);
 });
 
+// ---------------------------------------------------------------------------
+// validateExtractionResult — phantom-line filtering + vendorProductDescription
+// ---------------------------------------------------------------------------
+
+test("validateExtractionResult: drops lines with empty vendorProductName", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      validExtractionPayload().lines[0],
+      { ...validExtractionPayload().lines[0], vendorProductName: "" },
+      { ...validExtractionPayload().lines[0], vendorProductName: "   " },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(
+    result!.lines.length,
+    1,
+    "empty/whitespace-name lines should be filtered out at parse time",
+  );
+});
+
+test("validateExtractionResult: keeps vendorProductDescription when distinct from name", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        vendorProductName: "RR Brisket Short Rib",
+        vendorProductDescription: "Brisket Short Rib",
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].vendorProductDescription, "Brisket Short Rib");
+});
+
+test("validateExtractionResult: trims whitespace-only description to null", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        vendorProductDescription: "   ",
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].vendorProductDescription, null);
+});
+
+test("validateExtractionResult: collapses description equal to name to null", () => {
+  const payload = {
+    ...validExtractionPayload(),
+    lines: [
+      {
+        ...validExtractionPayload().lines[0],
+        vendorProductName: "Lamb Rack Frenched",
+        vendorProductDescription: "lamb rack frenched",
+      },
+    ],
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(
+    result!.lines[0].vendorProductDescription,
+    null,
+    "a description that just repeats the name is noise — should be null",
+  );
+});
+
+test("validateExtractionResult: backfills missing vendorProductDescription to null", () => {
+  // Older fixtures / pre-PR-shaped payloads omit the field — validator must
+  // not reject them. After validation the field reads as null.
+  const result = validateExtractionResult(validExtractionPayload());
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].vendorProductDescription, null);
+});
+
 test("AI extraction output with real lines passes validation even when supplier is null", () => {
   const aiOutput = {
     supplierName: null,

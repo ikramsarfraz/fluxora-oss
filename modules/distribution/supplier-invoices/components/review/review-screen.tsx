@@ -103,6 +103,7 @@ export function ReviewScreen({
     if (filter === "all") return data.lines;
     if (filter === "matched")
       return data.lines.filter(l => l.match.status === "matched" && !l.match.warning);
+    if (filter === "fees") return data.lines.filter(l => l.match.status === "fee");
     return data.lines.filter(l => lineNeedsReview(l.match));
   }, [data.lines, filter]);
 
@@ -131,7 +132,9 @@ export function ReviewScreen({
         ? data.lines
         : next === "matched"
           ? data.lines.filter(l => l.match.status === "matched" && !l.match.warning)
-          : data.lines.filter(l => lineNeedsReview(l.match));
+          : next === "fees"
+            ? data.lines.filter(l => l.match.status === "fee")
+            : data.lines.filter(l => lineNeedsReview(l.match));
     if (!nextVisible.some(l => l.id === activeLineId)) {
       setActiveLineId(nextVisible[0]?.id ?? null);
     }
@@ -187,8 +190,11 @@ export function ReviewScreen({
             <div className="flex items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-[15px] font-semibold text-stone-ink">Line items</h2>
+                {/* Show only the product-line count here. Fees are surfaced
+                    separately via the Fees filter tab and the per-tab count
+                    chip — counting them in the header would double-count. */}
                 <span className="rounded bg-stone-line2 px-1.5 py-0.5 font-mono text-[11px] text-stone-muted">
-                  {data.lines.length}
+                  {counts.total - counts.fees}
                 </span>
               </div>
               <FilterSegmented filter={filter} counts={counts} onChange={handleFilterChange} />
