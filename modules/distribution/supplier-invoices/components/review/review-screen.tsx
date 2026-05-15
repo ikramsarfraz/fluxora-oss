@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { FilterSegmented } from "./filter-segmented";
 import { HeaderCard } from "./header-card";
+import type { LineBbox } from "./line-bbox";
 import { LineRow } from "./line-row";
 import { PdfPane } from "./pdf-pane";
 import { ReviewFooterStrip } from "./review-footer-strip";
@@ -15,7 +16,17 @@ import {
   type ReviewFilter,
 } from "./types";
 
-export function ReviewScreen({ data }: { data: ReviewData }) {
+export function ReviewScreen({
+  data,
+  pdfUrl,
+  lineBboxes,
+}: {
+  data: ReviewData;
+  /** Real PDF URL — supplied by phase 5; omit for the demo placeholder. */
+  pdfUrl?: string | null;
+  /** Per-line bounding boxes for the clickable overlay on the rasterized page. */
+  lineBboxes?: LineBbox[];
+}) {
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
   const [supplier, setSupplier] = useState(data.parsed.supplier.value);
@@ -56,6 +67,8 @@ export function ReviewScreen({ data }: { data: ReviewData }) {
           lines={data.lines}
           activeLineId={activeLineId}
           onLineClick={setActiveLineId}
+          pdfUrl={pdfUrl}
+          lineBboxes={lineBboxes}
         />
 
         <div
