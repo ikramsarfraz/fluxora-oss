@@ -17,12 +17,24 @@ export default async function SupplierInvoicesParsingPage({
   if (!can(currentUser.role, "edit_supplier_invoice")) notFound();
 
   const { uploadId } = await params;
-  // The single-import uploader navigates with a localStorage handoff key as
-  // the path segment. Other shapes (legacy URLs, manually-typed paths) get a
-  // 404 rather than rendering an empty screen.
-  if (!uploadId.startsWith(BULK_IMPORT_LS_PREFIX)) {
+  // Next 16 hands dynamic-segment params back URL-encoded; our storage keys
+  // (`fluxora:bulk-import:<id>`) contain colons which encodeURIComponent
+  // escapes to `%3A`, so we have to decode before the prefix check. Wrapping
+  // in try/catch keeps malformed escapes from blowing up the route — those
+  // are treated the same as any other unrecognized path: 404.
+  let storageKey: string;
+  try {
+    storageKey = decodeURIComponent(uploadId);
+  } catch {
     notFound();
   }
 
-  return <ParsingProgressLive storageKey={uploadId} />;
+  // The single-import uploader navigates with a localStorage handoff key as
+  // the path segment. Other shapes (legacy URLs, manually-typed paths) get a
+  // 404 rather than rendering an empty screen.
+  if (!storageKey.startsWith(BULK_IMPORT_LS_PREFIX)) {
+    notFound();
+  }
+
+  return <ParsingProgressLive storageKey={storageKey} />;
 }
