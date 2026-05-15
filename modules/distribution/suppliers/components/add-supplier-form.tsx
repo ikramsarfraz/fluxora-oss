@@ -45,13 +45,23 @@ const createSupplierSchema = z.object({
 type CreateSupplierValues = z.input<typeof createSupplierSchema>;
 type CreateSupplierParsed = z.output<typeof createSupplierSchema>;
 
-export function AddSupplierForm() {
+export function AddSupplierForm(props?: {
+  /** Prefill the supplier name — used by the bill review create-supplier flow. */
+  initialName?: string;
+  /**
+   * When provided, called with the created supplier instead of navigating
+   * away. Enables embedding the form in a modal.
+   */
+  onCreated?: (supplier: { id: string; name: string }) => void;
+  /** When provided, the Cancel button calls this instead of routing back. */
+  onCancel?: () => void;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<CreateSupplierValues, unknown, CreateSupplierParsed>({
     resolver: zodResolver(createSupplierSchema),
-    defaultValues: { name: "", netDays: "" },
+    defaultValues: { name: props?.initialName ?? "", netDays: "" },
   });
 
   const createSupplier = useCreateSupplier();
@@ -63,7 +73,11 @@ export function AddSupplierForm() {
       {
         onSuccess: result => {
           toast.success("Supplier created.");
-          router.push(`/suppliers/${result.id}`);
+          if (props?.onCreated) {
+            props.onCreated({ id: result.id, name: result.name });
+          } else {
+            router.push(`/suppliers/${result.id}`);
+          }
         },
         onError: (e: Error) => setError(e.message),
       },
@@ -141,7 +155,13 @@ export function AddSupplierForm() {
       <FormActionFooter
         formId="form-add-supplier"
         isPending={createSupplier.isPending}
-        onCancel={() => router.push("/suppliers")}
+        onCancel={() => {
+          if (props?.onCancel) {
+            props.onCancel();
+          } else {
+            router.push("/suppliers");
+          }
+        }}
         pendingLabel="Creating…"
         submitLabel="Create supplier"
       />
