@@ -61,7 +61,6 @@ import {
 } from "./supplier-invoice-lines-editor";
 import { AlertTriangle, FileText, Plus, Trash2 } from "lucide-react";
 import type { PipelineResult } from "@/modules/distribution/supplier-invoices/services/parsing-pipeline";
-import { ImportReviewView } from "./import-review-view";
 import { FirstBillPanel } from "./first-bill-panel";
 import { IngestionPanel } from "./ingestion-panel";
 import { CreateSupplierDialog } from "./create-supplier-dialog";
@@ -534,21 +533,11 @@ export function SupplierInvoiceForm({
   const [pdfPrefill, setPdfPrefill] = useState<PipelineResult | null>(null);
   const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
   const [pdfUnresolvedCount, setPdfUnresolvedCount] = useState(0);
-  // Maps vendorProductName → form line index for resolved lines.
-  // Built when a PDF is parsed; updated as the user accepts/chooses products.
-  const [vendorNameLineMap, setVendorNameLineMap] = useState<Map<string, number>>(new Map());
   // Per-form-line vendor product names (from PDF import), indexed to match the lines array.
   const [lineVendorNames, setLineVendorNames] = useState<(string | null)[]>([]);
   // Vendor names whose aliases were already saved via the review panel — skip on submit.
   const savedAliasNamesRef = useRef<Set<string>>(new Set());
-  // Vendor names where no product could be auto-filled — drive the footer warning counter.
-  const [trulyUnresolvedNames, setTrulyUnresolvedNames] = useState<Set<string>>(new Set());
   const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" }) ?? "";
-  const watchedCharges = useWatch({ control: form.control, name: "charges" });
-  const chargesTotal = (watchedCharges ?? []).reduce(
-    (sum: number, c: SupplierInvoiceChargeValues) => sum + (parseFloat(c.amount) || 0),
-    0,
-  );
 
   // ── Live cost-diff context (drives the per-line callout + Complete gate) ──
   const watchedLinesRaw = useWatch({ control: form.control, name: "lines" });
@@ -727,40 +716,32 @@ export function SupplierInvoiceForm({
 
       // Only count lines where no product was auto-filled (confidence < 60 or
       // no suggestion). AI suggestions with confidence ≥ 60 are pre-selected
-      // in the form already.
-      const newTrulyUnresolved = new Set(
-        result.unresolvedLines
-          .filter(l => !l.suggestedProductId || l.confidence < 60)
-          .map(l => l.vendorProductName),
-      );
-      setTrulyUnresolvedNames(newTrulyUnresolved);
-      setPdfUnresolvedCount(newTrulyUnresolved.size);
+      // in the form already. The count drives the footer warning; the user
+      // resolves each unresolved line via the line editor's product picker.
+      const trulyUnresolvedCount = result.unresolvedLines.filter(
+        l => !l.suggestedProductId || l.confidence < 60,
+      ).length;
+      setPdfUnresolvedCount(trulyUnresolvedCount);
       setAutoSaveStatus("idle");
 
-      // Map vendor name → form line index for lines still needing product
-      // selection. unmatchedLineDescriptions[k] corresponds to the (k+1)-th
-      // form line with empty productId.
-      const newMap = new Map<string, number>();
-      let unmatchedIdx = 0;
+      // Build per-line vendor name array for the line editor display. We pair
+      // unmatchedLineDescriptions with the form lines that came in without a
+      // productId: unmatchedNames[k] aligns with the (k+1)-th empty-product
+      // form line. The editor surfaces this raw OCR text alongside the picker
+      // so the user knows what to match against.
+      const vendorNames: (string | null)[] = Array(
+        result.prefillResult.values.lines.length,
+      ).fill(null);
       const unmatchedNames = result.prefillResult.unmatchedLineDescriptions;
+      let unmatchedIdx = 0;
       for (let i = 0; i < result.prefillResult.values.lines.length; i++) {
         if (
           !result.prefillResult.values.lines[i].productId &&
           unmatchedIdx < unmatchedNames.length
         ) {
-          newMap.set(unmatchedNames[unmatchedIdx], i);
+          vendorNames[i] = unmatchedNames[unmatchedIdx];
           unmatchedIdx++;
         }
-      }
-      setVendorNameLineMap(newMap);
-
-      // Build per-line vendor name array for the lines editor display
-      // (invert newMap).
-      const vendorNames: (string | null)[] = Array(
-        result.prefillResult.values.lines.length,
-      ).fill(null);
-      for (const [vendorName, lineIdx] of newMap) {
-        vendorNames[lineIdx] = vendorName;
       }
       setLineVendorNames(vendorNames);
 
@@ -784,8 +765,6 @@ export function SupplierInvoiceForm({
       setPdfPrefill,
       setPdfUnresolvedCount,
       setPendingPdfFile,
-      setTrulyUnresolvedNames,
-      setVendorNameLineMap,
     ],
   );
 
@@ -971,17 +950,6 @@ export function SupplierInvoiceForm({
       toast.error(
         err instanceof Error ? err.message : "Could not save invoice.",
       );
-    }
-  }
-
-  function handleVendorNameResolved(vendorName: string, productId: string) {
-    const lineIndex = vendorNameLineMap.get(vendorName);
-    if (lineIndex !== undefined) {
-      form.setValue(`lines.${lineIndex}.productId`, productId, { shouldValidate: true });
-      savedAliasNamesRef.current.add(vendorName);
-      if (trulyUnresolvedNames.has(vendorName)) {
-        setPdfUnresolvedCount(c => Math.max(0, c - 1));
-      }
     }
   }
 
@@ -1354,8 +1322,7 @@ export function SupplierInvoiceForm({
                   padding: "7px 14px",
                   background: C.surfaceAlt,
                   border: `1px solid ${C.line}`,
-                  borderBottom: "none",
-                  borderRadius: "10px 10px 0 0",
+                  borderRadius: "10px",
                   fontSize: 12,
                   color: C.muted,
                   display: "flex",
@@ -1367,18 +1334,20 @@ export function SupplierInvoiceForm({
                 <span>Scanned PDF — OCR not yet supported. Results may be incomplete.</span>
               </div>
             )}
-            {pdfPrefill.firstBillLines ? (
+            {/*
+              First-bill mode (tenant catalog empty) still needs the dedicated
+              setup panel; FirstBillPanel creates products + supplier + invoice
+              atomically and isn't replaceable by the line editor below.
+
+              Everything else used to render ImportReviewView here as a
+              secondary "match unresolved products" surface. That UI is now
+              retired — the unresolved warning in the footer ("N unresolved
+              products — review before posting") plus the line editor's own
+              per-row product picker covers the same job.
+            */}
+            {pdfPrefill.firstBillLines && (
               <FirstBillPanel
                 pipelineResult={pdfPrefill}
-                pendingPdfFile={pendingPdfFile}
-              />
-            ) : (
-              <ImportReviewView
-                pipelineResult={pdfPrefill}
-                products={products ?? []}
-                supplierId={watchedSupplierId || null}
-                onVendorNameResolved={handleVendorNameResolved}
-                chargesTotal={chargesTotal}
                 pendingPdfFile={pendingPdfFile}
               />
             )}
