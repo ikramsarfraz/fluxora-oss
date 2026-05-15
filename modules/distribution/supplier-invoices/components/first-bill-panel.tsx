@@ -293,10 +293,13 @@ export function FirstBillPanel({ pipelineResult, pendingPdfFile }: Props) {
       });
       toast.success(
         asDraft
-          ? "Draft saved. Your products and aliases are ready."
-          : "First bill saved — catalog seeded.",
+          ? "Draft saved — review quantities, weights, and pricing before completing."
+          : "Catalog seeded — review quantities, weights, and pricing before completing.",
       );
-      router.push(`/supplier-invoices/${result.invoiceId}`);
+      // Land on the edit form so the user can verify and adjust qty / weight /
+      // unit price for each line. The first-bill panel only exposes vendor →
+      // product-name mapping; the saved draft still needs a full review pass.
+      router.push(`/supplier-invoices/${result.invoiceId}/edit`);
     } catch (err) {
       toast.error((err as Error).message ?? "Could not save.");
       setIsSaving(false);
@@ -588,7 +591,7 @@ export function FirstBillPanel({ pipelineResult, pendingPdfFile }: Props) {
                   fontFamily: "inherit",
                 }}
               >
-                {isSaving ? "Saving…" : `Save with these names →`}
+                {isSaving ? "Saving…" : `Save & review →`}
               </button>
             </div>
           </div>
