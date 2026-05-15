@@ -1,11 +1,19 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
 import { useBulkImportSupplierInvoices } from "../hooks/use-supplier-invoices";
-import type { BulkImportResult } from "../services/bulk-import";
+import type {
+  BulkImportItemResult,
+  BulkImportResult,
+} from "../services/bulk-import";
+import {
+  BULK_IMPORT_LS_PREFIX,
+  clearPendingBulkImport,
+  storePendingBulkImport,
+} from "../utils/bulk-import-storage";
 
 // Mirrors the server-side cap; surfaced here so the UI can guide rather than
 // just reject. Keep in sync with BULK_IMPORT_MAX_FILES.
@@ -48,17 +56,27 @@ type PendingFile = {
   reason?: string;
 };
 
+// Track which result rows have been "reviewed" (opened) so the user can see
+// at a glance which items they still need to handle. Persists only for the
+// life of the panel — closing the tab is treated as starting over.
+type ResultRowState = {
+  storageKey: string | null;
+  reviewed: boolean;
+};
+
 export function BulkImportPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [result, setResult] = useState<BulkImportResult | null>(null);
+  const [rowState, setRowState] = useState<ResultRowState[]>([]);
 
   const mutation = useBulkImportSupplierInvoices();
   const isImporting = mutation.isPending;
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     setResult(null);
+    setRowState([]);
     const next: PendingFile[] = [];
     const existingNames = new Set(pending.map(p => p.file.name));
     for (const f of Array.from(incoming)) {
@@ -119,12 +137,22 @@ export function BulkImportPanel() {
     }
     try {
       const r = await mutation.mutateAsync(formData);
+
+      // Persist each parsed pipeline result to localStorage so the
+      // single-import flow in a new tab can seed from it without re-parsing.
+      const rowStates: ResultRowState[] = r.items.map(item => {
+        if (item.status === "parsed") {
+          const key = storePendingBulkImport(item);
+          return { storageKey: key, reviewed: false };
+        }
+        return { storageKey: null, reviewed: false };
+      });
+      setRowState(rowStates);
       setResult(r);
       setPending([]);
-      const { created, needsReview, errored } = r.summary;
+      const { parsed, errored } = r.summary;
       const parts: string[] = [];
-      if (created > 0) parts.push(`${created} draft${created === 1 ? "" : "s"} created`);
-      if (needsReview > 0) parts.push(`${needsReview} need${needsReview === 1 ? "s" : ""} review`);
+      if (parsed > 0) parts.push(`${parsed} ready to review`);
       if (errored > 0) parts.push(`${errored} failed`);
       toast.success(parts.join(" · ") || "Import finished.");
     } catch (err) {
@@ -132,9 +160,53 @@ export function BulkImportPanel() {
     }
   }
 
+  // Refresh "reviewed" indicators when the user returns to this tab — the
+  // review tab clears its localStorage entry on save, so an empty key means
+  // the item has been handled.
+  useEffect(() => {
+    if (!result) return;
+    const refresh = () => {
+      setRowState(prev =>
+        prev.map(state => {
+          if (!state.storageKey) return state;
+          const stillPending =
+            typeof window !== "undefined" &&
+            window.localStorage.getItem(state.storageKey) !== null;
+          return stillPending ? state : { ...state, reviewed: true };
+        }),
+      );
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith(BULK_IMPORT_LS_PREFIX)) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [result]);
+
   // ── Results screen ─────────────────────────────────────────────────────
   if (result) {
-    return <BulkImportResults result={result} onStartOver={() => setResult(null)} />;
+    return (
+      <BulkImportResults
+        result={result}
+        rowState={rowState}
+        onStartOver={() => {
+          // Best-effort cleanup of unconsumed localStorage entries so we
+          // don't leak parse data across sessions.
+          for (const state of rowState) {
+            if (state.storageKey) clearPendingBulkImport(state.storageKey);
+          }
+          setResult(null);
+          setRowState([]);
+        }}
+      />
+    );
   }
 
   // ── Picker screen ──────────────────────────────────────────────────────
@@ -156,9 +228,10 @@ export function BulkImportPanel() {
           Bulk import supplier bills
         </h3>
         <div style={{ fontSize: 12.5, color: C.text2, marginTop: 4 }}>
-          Drop or pick up to {MAX_FILES_CLIENT_HINT} PDFs. We&apos;ll parse each one and
-          auto-create a draft when the supplier and every line match cleanly. Anything
-          ambiguous comes back as &quot;needs review&quot; so you can handle it in single-import.
+          Drop or pick up to {MAX_FILES_CLIENT_HINT} PDFs. Each one is parsed and
+          handed to single-import for your review — every file becomes a separate
+          &quot;needs review&quot; entry. No drafts are written until you confirm them
+          one at a time.
         </div>
       </div>
 
@@ -285,7 +358,7 @@ export function BulkImportPanel() {
         <div style={{ fontSize: 12, color: C.text2 }}>
           {usableCount === 0
             ? "Pick at least one PDF to start."
-            : `Ready to import ${usableCount} file${usableCount === 1 ? "" : "s"}.`}
+            : `Ready to parse ${usableCount} file${usableCount === 1 ? "" : "s"}.`}
         </div>
         <button
           type="button"
@@ -305,8 +378,8 @@ export function BulkImportPanel() {
           }}
         >
           {isImporting
-            ? `Importing ${usableCount} file${usableCount === 1 ? "" : "s"}…`
-            : `Import ${usableCount > 0 ? usableCount : ""} ${usableCount === 1 ? "PDF" : "PDFs"} →`}
+            ? `Parsing ${usableCount} file${usableCount === 1 ? "" : "s"}…`
+            : `Parse ${usableCount > 0 ? usableCount : ""} ${usableCount === 1 ? "PDF" : "PDFs"} →`}
         </button>
       </div>
 
@@ -331,13 +404,20 @@ export function BulkImportPanel() {
 
 function BulkImportResults({
   result,
+  rowState,
   onStartOver,
 }: {
   result: BulkImportResult;
+  rowState: ResultRowState[];
   onStartOver: () => void;
 }) {
   const { items, summary } = result;
-  const allGood = summary.errored === 0 && summary.needsReview === 0;
+  const allErrored = summary.errored === summary.total;
+  const allReviewed =
+    summary.parsed > 0 &&
+    rowState.every((state, i) =>
+      items[i].status === "error" ? true : state.reviewed,
+    );
 
   return (
     <div
@@ -353,30 +433,36 @@ function BulkImportResults({
       <div
         style={{
           padding: "16px 20px",
-          background: allGood
+          background: allReviewed
             ? `linear-gradient(135deg, ${C.greenBg} 0%, #ecfdf5 100%)`
-            : `linear-gradient(135deg, ${C.amberBg} 0%, #fff7ed 100%)`,
+            : allErrored
+              ? `linear-gradient(135deg, ${C.redBg} 0%, #fff1f2 100%)`
+              : `linear-gradient(135deg, ${C.amberBg} 0%, #fff7ed 100%)`,
           borderBottom: `1px solid ${C.border}`,
         }}
       >
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-          {allGood ? "Import complete" : "Import finished with items to review"}
+          {allReviewed
+            ? "All files reviewed"
+            : allErrored
+              ? "Import finished — no files parsed"
+              : "Parsed — every file needs review"}
         </h3>
         <div style={{ fontSize: 12.5, color: C.text2, marginTop: 4 }}>
           {summary.total} file{summary.total === 1 ? "" : "s"} processed ·{" "}
-          <strong style={{ color: C.green }}>{summary.created} created</strong>
-          {summary.needsReview > 0 && (
-            <>
-              {" "}·{" "}
-              <strong style={{ color: C.amber }}>{summary.needsReview} need review</strong>
-            </>
-          )}
+          <strong style={{ color: C.amber }}>
+            {summary.parsed} need{summary.parsed === 1 ? "s" : ""} review
+          </strong>
           {summary.errored > 0 && (
             <>
               {" "}·{" "}
               <strong style={{ color: C.red }}>{summary.errored} failed</strong>
             </>
           )}
+          <div style={{ marginTop: 6, color: C.text3, fontSize: 11.5 }}>
+            Each &quot;Review&quot; link opens in a new tab so you don&apos;t lose this list
+            while you confirm the others.
+          </div>
         </div>
       </div>
 
@@ -392,9 +478,13 @@ function BulkImportResults({
               gridTemplateColumns: "auto 1fr auto",
               gap: 12,
               alignItems: "start",
+              opacity: rowState[i]?.reviewed ? 0.55 : 1,
             }}
           >
-            <StatusBadge status={item.status} />
+            <StatusBadge
+              status={item.status}
+              reviewed={rowState[i]?.reviewed ?? false}
+            />
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
@@ -411,7 +501,11 @@ function BulkImportResults({
               </div>
               <ResultDetail item={item} />
             </div>
-            <ResultAction item={item} />
+            <ResultAction
+              item={item}
+              storageKey={rowState[i]?.storageKey ?? null}
+              reviewed={rowState[i]?.reviewed ?? false}
+            />
           </div>
         ))}
       </div>
@@ -460,13 +554,37 @@ function BulkImportResults({
   );
 }
 
-function StatusBadge({ status }: { status: "created" | "needs_review" | "error" }) {
-  const map = {
-    created: { label: "Draft", bg: C.greenBg, color: C.green, border: C.greenBorder },
-    needs_review: { label: "Review", bg: C.amberBg, color: C.amber, border: C.amberBorder },
-    error: { label: "Error", bg: C.redBg, color: C.red, border: C.redBorder },
-  };
-  const t = map[status];
+function StatusBadge({
+  status,
+  reviewed,
+}: {
+  status: "parsed" | "error";
+  reviewed: boolean;
+}) {
+  if (status === "error") {
+    return <Pill bg={C.redBg} color={C.red} border={C.redBorder} label="Error" />;
+  }
+  if (reviewed) {
+    return (
+      <Pill bg={C.greenBg} color={C.green} border={C.greenBorder} label="Reviewed" />
+    );
+  }
+  return (
+    <Pill bg={C.amberBg} color={C.amber} border={C.amberBorder} label="Needs review" />
+  );
+}
+
+function Pill({
+  label,
+  bg,
+  color,
+  border,
+}: {
+  label: string;
+  bg: string;
+  color: string;
+  border: string;
+}) {
   return (
     <span
       style={{
@@ -476,91 +594,83 @@ function StatusBadge({ status }: { status: "created" | "needs_review" | "error" 
         borderRadius: 5,
         fontSize: 11,
         fontWeight: 600,
-        background: t.bg,
-        color: t.color,
-        border: `1px solid ${t.border}`,
-        minWidth: 64,
+        background: bg,
+        color,
+        border: `1px solid ${border}`,
+        minWidth: 86,
         justifyContent: "center",
       }}
     >
-      {t.label}
+      {label}
     </span>
   );
 }
 
-function ResultDetail({
-  item,
-}: {
-  item: BulkImportResult["items"][number];
-}) {
-  if (item.status === "created") {
+function ResultDetail({ item }: { item: BulkImportItemResult }) {
+  if (item.status === "parsed") {
+    const issues: string[] = [];
+    if (!item.supplierMatched) issues.push("supplier not matched");
+    if (item.unmatchedLineCount > 0) {
+      issues.push(
+        `${item.unmatchedLineCount} of ${item.lineCount} line${
+          item.lineCount === 1 ? "" : "s"
+        } unmatched`,
+      );
+    }
     return (
       <div style={{ fontSize: 11.5, color: C.text2, marginTop: 3 }}>
         {item.supplierName ? `${item.supplierName} · ` : ""}
-        {item.lineCount} line{item.lineCount === 1 ? "" : "s"} · ${item.totalAmount}
-        {item.warnings.length > 0 && (
+        {item.lineCount} line{item.lineCount === 1 ? "" : "s"} · $
+        {item.computedLineTotal}
+        {issues.length > 0 && (
           <div style={{ fontSize: 11, color: C.amber, marginTop: 3 }}>
-            ⚠ {item.warnings.length} warning
-            {item.warnings.length === 1 ? "" : "s"} on the draft — open to review
+            ⚠ {issues.join(" · ")}
+          </div>
+        )}
+        {item.warnings.length > 0 && (
+          <div style={{ fontSize: 11, color: C.text3, marginTop: 3 }}>
+            {item.warnings.length} parsing warning
+            {item.warnings.length === 1 ? "" : "s"} — visible on the review form
           </div>
         )}
       </div>
     );
   }
-  if (item.status === "needs_review") {
-    return (
-      <div style={{ fontSize: 11.5, color: C.text2, marginTop: 3 }}>
-        {item.reason}
-      </div>
-    );
-  }
-  return (
-    <div style={{ fontSize: 11.5, color: C.red, marginTop: 3 }}>{item.error}</div>
-  );
+  return <div style={{ fontSize: 11.5, color: C.red, marginTop: 3 }}>{item.error}</div>;
 }
 
 function ResultAction({
   item,
+  storageKey,
+  reviewed,
 }: {
-  item: BulkImportResult["items"][number];
+  item: BulkImportItemResult;
+  storageKey: string | null;
+  reviewed: boolean;
 }) {
-  if (item.status === "created") {
-    return (
-      <Link
-        href={`/supplier-invoices/${item.invoiceId}/edit`}
-        style={{
-          padding: "6px 12px",
-          borderRadius: 6,
-          fontSize: 12.5,
-          fontWeight: 500,
-          border: `1px solid ${C.borderStrong}`,
-          color: C.text,
-          textDecoration: "none",
-          background: C.surface,
-        }}
-      >
-        Open draft →
-      </Link>
-    );
-  }
-  if (item.status === "needs_review") {
-    return (
-      <Link
-        href="/supplier-invoices/new"
-        style={{
-          padding: "6px 12px",
-          borderRadius: 6,
-          fontSize: 12.5,
-          fontWeight: 500,
-          border: `1px solid ${C.borderStrong}`,
-          color: C.text,
-          textDecoration: "none",
-          background: C.surface,
-        }}
-      >
-        Single-import →
-      </Link>
-    );
-  }
-  return null;
+  if (item.status === "error") return null;
+  if (!storageKey) return null;
+
+  // Open in a NEW TAB so the user can review each file without losing the
+  // bulk-import results page (and the other in-flight items on it).
+  const href = `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(storageKey)}`;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        padding: "6px 12px",
+        borderRadius: 6,
+        fontSize: 12.5,
+        fontWeight: 500,
+        border: `1px solid ${C.borderStrong}`,
+        color: C.text,
+        textDecoration: "none",
+        background: C.surface,
+      }}
+    >
+      {reviewed ? "Open again ↗" : "Review →"}
+    </a>
+  );
 }
