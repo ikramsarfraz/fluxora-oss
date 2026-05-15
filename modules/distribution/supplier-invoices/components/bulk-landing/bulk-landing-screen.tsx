@@ -32,7 +32,24 @@ function startWithLabel(name: string): string {
   return head.length > 12 ? `${head.slice(0, 12)}…` : head;
 }
 
-export function BulkLandingScreen({ view }: { view: BatchView }) {
+export function BulkLandingScreen({
+  view,
+  openFileHref,
+  openInNewTab = false,
+  onImportMore,
+}: {
+  view: BatchView;
+  /**
+   * URL builder for the per-row Review action. When omitted (demo mode), the
+   * file id is treated as a supplier-invoice id and routed to the detail page;
+   * the real bulk-landing supplies a path that includes the localStorage key.
+   */
+  openFileHref?: (file: BatchFile) => string;
+  /** When true, the Review action opens in a new tab — required by the handoff. */
+  openInNewTab?: boolean;
+  /** Click handler for "Import more"; falls back to a no-op in demo mode. */
+  onImportMore?: () => void;
+}) {
   const router = useRouter();
   const [filter, setFilter] = useState<BatchFilter>("all");
   const [focusedId, setFocusedId] = useState<string | null>(view.files[1]?.id ?? null);
@@ -44,10 +61,13 @@ export function BulkLandingScreen({ view }: { view: BatchView }) {
 
   const nextFile = view.files.find(f => f.status !== "reviewed") ?? null;
 
-  const openFile = (id: string) => {
-    // Opens the review screen for this file. Until phase 3 ships, fall back to
-    // the existing detail route so the button is wired end-to-end.
-    router.push(`/supplier-invoices/${id}`);
+  const openFile = (file: BatchFile) => {
+    const href = openFileHref ? openFileHref(file) : `/supplier-invoices/${file.id}`;
+    if (openInNewTab && typeof window !== "undefined") {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    router.push(href);
   };
 
   return (
@@ -66,7 +86,14 @@ export function BulkLandingScreen({ view }: { view: BatchView }) {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 text-[13px]">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onImportMore}
+            disabled={!onImportMore}
+            className="h-9 gap-1.5 text-[13px]"
+          >
             <Upload className="size-[14px]" strokeWidth={1.6} />
             Import more
           </Button>
@@ -74,7 +101,7 @@ export function BulkLandingScreen({ view }: { view: BatchView }) {
             <Button
               type="button"
               size="sm"
-              onClick={() => openFile(nextFile.id)}
+              onClick={() => openFile(nextFile)}
               className="h-9 gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
             >
               Start with {startWithLabel(nextFile.name)}
@@ -100,7 +127,7 @@ export function BulkLandingScreen({ view }: { view: BatchView }) {
               file={file}
               isFocused={focusedId === file.id}
               onFocus={() => setFocusedId(file.id)}
-              onOpen={() => openFile(file.id)}
+              onOpen={() => openFile(file)}
             />
           ))
         )}

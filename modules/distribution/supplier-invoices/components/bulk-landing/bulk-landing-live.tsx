@@ -1,0 +1,62 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+
+import { BulkLandingScreen } from "./bulk-landing-screen";
+import type { BatchFile } from "./types";
+import { useBulkBatchView } from "./use-bulk-batch-view";
+
+/**
+ * The bulk-landing screen wired to real localStorage handoffs. When the
+ * scan returns no entries we route the user to the bulk-import uploader
+ * so they have somewhere to start; otherwise we render the parsed files
+ * with the new design.
+ *
+ * Each Review action opens in a new tab — the handoff README calls this
+ * out as required ("Each file opens in a new tab so you don't lose this
+ * list"). The link points at the existing
+ * `/supplier-invoices/new?bulk-import-key=…` route, which now branches
+ * to the new Review screen (see phase 5a).
+ */
+export function BulkLandingLive() {
+  const router = useRouter();
+  const { view } = useBulkBatchView();
+
+  // Pre-mount flash: localStorage hasn't been read yet. Keep silent.
+  if (view === null) return null;
+
+  // Empty batch — there's nothing to review. Push the user to the uploader.
+  if (view.files.length === 0) {
+    return (
+      <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
+        <div className="max-w-[420px]">
+          <h1 className="mb-2 text-[22px] font-semibold tracking-[-0.015em] text-stone-ink">
+            No batch in progress
+          </h1>
+          <p className="mb-6 text-[14px] text-stone-muted">
+            Upload supplier-invoice PDFs to start a batch. Parsed files will appear
+            here once they&apos;re ready to review.
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/supplier-invoices/bulk-import")}
+            className="rounded-md border border-stone-ink bg-stone-ink px-4 py-2 text-[13px] text-stone-surface hover:bg-stone-ink/90"
+          >
+            Upload invoices
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <BulkLandingScreen
+      view={view}
+      openInNewTab
+      openFileHref={(file: BatchFile) =>
+        `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(file.id)}`
+      }
+      onImportMore={() => router.push("/supplier-invoices/bulk-import")}
+    />
+  );
+}

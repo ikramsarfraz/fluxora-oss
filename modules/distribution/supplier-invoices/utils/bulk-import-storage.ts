@@ -17,6 +17,10 @@ export const BULK_IMPORT_LS_PREFIX = "fluxora:bulk-import:";
 const ENTRY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 export type StoredBulkImportEntry = {
+  /** Unix-ms timestamp set when the user has reviewed + saved this file. */
+  reviewedAt?: number;
+  /** Resulting supplier-invoice id once the review submits a draft. */
+  supplierInvoiceId?: string;
   filename: string;
   storedAt: number;
   /** Full bulk-import item — the .pipelineResult inside is what the form needs. */
@@ -220,4 +224,55 @@ export async function clearPendingPdf(key: string): Promise<void> {
  *  cross-tab links before the parse response returns). */
 export function mintBulkImportKey(): string {
   return `${BULK_IMPORT_LS_PREFIX}${randomKey()}`;
+}
+
+/**
+ * Snapshot of every non-expired bulk-import entry in localStorage. Used by
+ * the new bulk-landing screen to drive its files table; the legacy bulk-
+ * import panel manages its own component-local row state and doesn't need
+ * this.
+ *
+ * Sorted by `storedAt` descending (newest first) so the landing screen
+ * surfaces the most recent batch up top.
+ */
+export function listPendingBulkImports(): Array<{
+  key: string;
+  entry: StoredBulkImportEntry;
+}> {
+  if (typeof window === "undefined") return [];
+  const out: Array<{ key: string; entry: StoredBulkImportEntry }> = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(BULK_IMPORT_LS_PREFIX)) continue;
+    const entry = readPendingBulkImport(key);
+    if (!entry) continue;
+    out.push({ key, entry });
+  }
+  out.sort((a, b) => b.entry.storedAt - a.entry.storedAt);
+  return out;
+}
+
+/**
+ * Mark a localStorage entry as reviewed (the user has saved a draft from it).
+ * Keeps the entry around until its TTL so the bulk-landing screen can show
+ * it with the `Re-open →` affordance.
+ */
+export function markBulkImportReviewed(
+  key: string,
+  supplierInvoiceId?: string,
+): void {
+  if (!key.startsWith(BULK_IMPORT_LS_PREFIX)) return;
+  if (typeof window === "undefined") return;
+  const entry = readPendingBulkImport(key);
+  if (!entry) return;
+  const next: StoredBulkImportEntry = {
+    ...entry,
+    reviewedAt: Date.now(),
+    supplierInvoiceId: supplierInvoiceId ?? entry.supplierInvoiceId,
+  };
+  try {
+    window.localStorage.setItem(key, JSON.stringify(next));
+  } catch {
+    /* ignore quota / private-mode failures */
+  }
 }
