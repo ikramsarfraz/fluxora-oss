@@ -761,7 +761,7 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     prefillResult: {
       values: {
         supplierId: "",
-        invoiceNumber: "",
+        supplierInvoiceNumber: "",
         invoiceDate: new Date().toISOString().slice(0, 10),
         receiveDate: new Date().toISOString().slice(0, 10),
         paymentMethod: null,
@@ -783,7 +783,7 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     },
     confidence: 0,
     confidenceBreakdown: {
-      invoiceNumberFound: false,
+      supplierInvoiceNumberFound: false,
       invoiceDateFound: false,
       supplierMatched: false,
       linesExtracted: false,
@@ -839,7 +839,7 @@ function buildFirstBillResult(
     prefillResult: result,
     confidence: 0,
     confidenceBreakdown: {
-      invoiceNumberFound: !!result.values.invoiceNumber,
+      supplierInvoiceNumberFound: !!result.values.supplierInvoiceNumber,
       invoiceDateFound: !!result.values.invoiceDate,
       supplierMatched: !!result.values.supplierId,
       linesExtracted: firstBillLines.length > 0,

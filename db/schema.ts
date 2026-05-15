@@ -1083,11 +1083,20 @@ export const supplierInvoices = pgTable(
     /**
      * System-assigned, tenant-unique identifier (e.g. "IB-000001") minted on
      * insert from `tenants.supplier_invoice_counter`. This is the canonical
-     * reference for searching and audit; `invoice_number` continues to hold
-     * the supplier's printed number, which may or may not be unique.
+     * reference for searching and audit.
      */
     referenceNumber: varchar("reference_number", { length: 32 }).notNull(),
-    invoiceNumber: varchar("invoice_number", { length: 64 }).notNull(),
+    /**
+     * The supplier's printed invoice number, exactly as written on the bill.
+     * Optional because some hand-written or scanned bills have no number.
+     * Uniqueness is enforced per (tenant, supplier) when non-null so the
+     * same bill can't be imported twice from the same supplier.
+     *
+     * Kept as `invoiceNumber` on the TS side to avoid a sweeping cross-module
+     * rename; the DB column is `supplier_invoice_number` to make the intent
+     * obvious in raw SQL / pgAdmin contexts.
+     */
+    invoiceNumber: varchar("supplier_invoice_number", { length: 64 }),
     invoiceDate: date("invoice_date").notNull(),
     receiveDate: date("receive_date").notNull(),
     status: supplierInvoiceStatusEnum("status").notNull().default("draft"),
@@ -1133,10 +1142,9 @@ export const supplierInvoices = pgTable(
       table.tenantId,
       table.referenceNumber,
     ),
-    uniqueIndex("supplier_invoices_tenant_invoice_number_unique").on(
-      table.tenantId,
-      table.invoiceNumber,
-    ),
+    uniqueIndex("supplier_invoices_tenant_supplier_inv_number_unique")
+      .on(table.tenantId, table.supplierId, table.invoiceNumber)
+      .where(sql`${table.invoiceNumber} IS NOT NULL`),
     index("supplier_invoices_tenant_invoice_date_idx").on(
       table.tenantId,
       table.invoiceDate,

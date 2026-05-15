@@ -18,7 +18,7 @@ function makeResult(
   return {
     values: {
       supplierId: "supplier-1",
-      invoiceNumber: "12345",
+      supplierInvoiceNumber: "12345",
       invoiceDate: "2026-04-20",
       receiveDate: "2026-04-20",
       paymentMethod: null,
@@ -60,7 +60,7 @@ test("scoreParseResult: perfect parse gives full score", () => {
   const result = makeResult();
   const breakdown = scoreParseResult(result);
   assert.equal(breakdown.score, 100);
-  assert.equal(breakdown.invoiceNumberFound, true);
+  assert.equal(breakdown.supplierInvoiceNumberFound, true);
   assert.equal(breakdown.invoiceDateFound, true);
   assert.equal(breakdown.supplierMatched, true);
   assert.equal(breakdown.linesExtracted, true);
@@ -70,10 +70,10 @@ test("scoreParseResult: perfect parse gives full score", () => {
 
 test("scoreParseResult: missing invoice number reduces score by 20", () => {
   const result = makeResult({
-    values: { ...makeResult().values, invoiceNumber: "" },
+    values: { ...makeResult().values, supplierInvoiceNumber: "" },
   });
   const breakdown = scoreParseResult(result);
-  assert.equal(breakdown.invoiceNumberFound, false);
+  assert.equal(breakdown.supplierInvoiceNumberFound, false);
   assert.ok(breakdown.score <= 80, `Expected <= 80, got ${breakdown.score}`);
 });
 
@@ -188,7 +188,7 @@ test("scoreParseResult: score never exceeds 100 or drops below 0", () => {
   const minResult = makeResult({
     values: {
       supplierId: "",
-      invoiceNumber: "",
+      supplierInvoiceNumber: "",
       invoiceDate: "",
       receiveDate: "",
       paymentMethod: null,
@@ -281,7 +281,7 @@ test("scoreParseResult: successful parse scores high confidence", () => {
   });
   const breakdown = scoreParseResult(result);
   assert.ok(breakdown.score >= 80, `Expected >= 80 for full parse, got ${breakdown.score}`);
-  assert.equal(breakdown.invoiceNumberFound, true);
+  assert.equal(breakdown.supplierInvoiceNumberFound, true);
   assert.equal(breakdown.supplierMatched, true);
   assert.equal(breakdown.totalsMatch, true);
 });

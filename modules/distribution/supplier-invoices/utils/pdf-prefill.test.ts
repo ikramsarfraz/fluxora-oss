@@ -107,7 +107,7 @@ test("parses the attached supplier invoice text", () => {
   assert.equal(result.sourceFilename, "Invoice 57876.pdf");
   assert.deepEqual(result.unmatchedSupplierCandidates, []);
   assert.equal(result.values.supplierId, "supplier-1");
-  assert.equal(result.values.invoiceNumber, "57876");
+  assert.equal(result.values.supplierInvoiceNumber, "57876");
   assert.equal(result.values.invoiceDate, "2026-04-20");
   assert.equal(result.values.receiveDate, "2026-04-20");
   assert.equal(result.values.paymentMethod, null);
@@ -214,7 +214,7 @@ test("parses Brewer Livestock packed invoice rows", () => {
   });
 
   assert.equal(result.values.supplierId, "supplier-brewer");
-  assert.equal(result.values.invoiceNumber, "137098");
+  assert.equal(result.values.supplierInvoiceNumber, "137098");
   assert.equal(result.values.invoiceDate, "2026-04-21");
   assert.deepEqual(
     result.values.lines.map(line => ({
@@ -394,7 +394,7 @@ test("parses Zabiha/Fatima packed catch-weight and fixed-case rows", () => {
   });
 
   assert.equal(result.values.supplierId, "supplier-zabiha");
-  assert.equal(result.values.invoiceNumber, "243192");
+  assert.equal(result.values.supplierInvoiceNumber, "243192");
   assert.equal(result.values.invoiceDate, "2026-04-20");
   assert.equal(result.values.lines.length, 9);
   assert.deepEqual(

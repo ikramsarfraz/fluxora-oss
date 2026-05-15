@@ -16,7 +16,7 @@ const MAX_PDF_BYTES_FOR_VISION = 20 * 1024 * 1024;
 function buildFailureResult(reason: string, rawContent = ""): VisionExtractionResult {
   return {
     supplierName: null,
-    invoiceNumber: null,
+    supplierInvoiceNumber: null,
     invoiceDate: null,
     totalAmount: null,
     subtotal: null,

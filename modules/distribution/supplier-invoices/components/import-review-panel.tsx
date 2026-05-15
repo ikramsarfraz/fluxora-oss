@@ -1162,7 +1162,7 @@ export function ImportReviewPanel({
           <div style={{ padding: "0 20px 14px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", rowGap: 5, columnGap: 16 }}>
               {([
-                ["Invoice number", confidenceBreakdown.invoiceNumberFound],
+                ["Supplier invoice #", confidenceBreakdown.supplierInvoiceNumberFound],
                 ["Invoice date", confidenceBreakdown.invoiceDateFound],
                 ["Supplier matched", confidenceBreakdown.supplierMatched],
                 ["Lines extracted", confidenceBreakdown.linesExtracted],

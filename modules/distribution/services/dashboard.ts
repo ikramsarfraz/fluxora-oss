@@ -251,7 +251,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     db
       .select({
         id: supplierInvoices.id,
-        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceNumber: supplierInvoices.referenceNumber,
         supplierId: supplierInvoices.supplierId,
         supplierName: suppliers.name,
         receiveDate: supplierInvoices.receiveDate,
@@ -273,7 +273,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       )
       .groupBy(
         supplierInvoices.id,
-        supplierInvoices.invoiceNumber,
+        supplierInvoices.referenceNumber,
         supplierInvoices.supplierId,
         suppliers.name,
         supplierInvoices.receiveDate,
@@ -286,7 +286,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     db
       .select({
         id: supplierInvoices.id,
-        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceNumber: supplierInvoices.referenceNumber,
         supplierId: supplierInvoices.supplierId,
         supplierName: suppliers.name,
         receiveDate: supplierInvoices.receiveDate,
@@ -303,7 +303,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .where(eq(supplierInvoices.tenantId, tenantId))
       .groupBy(
         supplierInvoices.id,
-        supplierInvoices.invoiceNumber,
+        supplierInvoices.referenceNumber,
         supplierInvoices.supplierId,
         suppliers.name,
         supplierInvoices.receiveDate,

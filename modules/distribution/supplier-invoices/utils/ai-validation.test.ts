@@ -112,7 +112,7 @@ test("safeParseJson: strips plain code fences", () => {
 function validExtractionPayload() {
   return {
     supplierName: "SUMMIT TRADING",
-    invoiceNumber: "57876",
+    supplierInvoiceNumber: "57876",
     invoiceDate: "2026-04-20",
     totalAmount: 1536.80,
     subtotal: 1536.80,
@@ -146,7 +146,7 @@ test("validateExtractionResult: accepts null fields", () => {
   const payload = {
     ...validExtractionPayload(),
     supplierName: null,
-    invoiceNumber: null,
+    supplierInvoiceNumber: null,
     invoiceDate: null,
     totalAmount: null,
     subtotal: null,
@@ -379,7 +379,7 @@ test("mock provider is not available", async () => {
   // This test simply verifies the mock returns safe empty results.
   const mockResult = {
     supplierName: null,
-    invoiceNumber: null,
+    supplierInvoiceNumber: null,
     invoiceDate: null,
     totalAmount: null,
     subtotal: null,
@@ -566,7 +566,7 @@ test("validateExtractionResult: keeps caseWeights when quantityCases is null (me
 test("AI extraction output with real lines passes validation even when supplier is null", () => {
   const aiOutput = {
     supplierName: null,
-    invoiceNumber: "12345",
+    supplierInvoiceNumber: "12345",
     invoiceDate: "2026-04-20",
     totalAmount: 500.0,
     subtotal: 500.0,

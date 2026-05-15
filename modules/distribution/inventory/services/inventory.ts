@@ -637,7 +637,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
     .map(r => r.supplierInvoiceLine?.id)
     .filter((id): id is string => id != null);
 
-  const invoiceByLineId = new Map<string, { id: string; invoiceNumber: string; invoiceDate: string | null; receiveDate: string | null; status: string } | null>();
+  const invoiceByLineId = new Map<string, { id: string; referenceNumber: string; invoiceNumber: string | null; invoiceDate: string | null; receiveDate: string | null; status: string } | null>();
 
   if (lineIds.length > 0) {
     const lines = await db.query.supplierInvoiceLines.findMany({
@@ -647,6 +647,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
         supplierInvoice: {
           columns: {
             id: true,
+            referenceNumber: true,
             invoiceNumber: true,
             invoiceDate: true,
             receiveDate: true,

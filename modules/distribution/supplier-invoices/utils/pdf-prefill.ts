@@ -20,7 +20,7 @@ export type SupplierInvoicePdfPrefillLine = {
 
 export type SupplierInvoicePdfPrefillValues = {
   supplierId: string;
-  invoiceNumber: string;
+  supplierInvoiceNumber: string;
   invoiceDate: string;
   receiveDate: string;
   paymentMethod: SupplierInvoicePdfPaymentMethod | null;
@@ -146,7 +146,7 @@ function parseUsDate(value: string | null | undefined): string | null {
 }
 
 function extractInvoiceHeader(lines: string[], sourceFilename: string) {
-  let invoiceNumber = "";
+  let supplierInvoiceNumber = "";
   let invoiceDate: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -155,9 +155,9 @@ function extractInvoiceHeader(lines: string[], sourceFilename: string) {
     if (!invoiceDate && /^date$/i.test(line)) {
       invoiceDate = parseUsDate(nextLine);
     }
-    if (!invoiceNumber && /^invoice\s*#$/i.test(line)) {
+    if (!supplierInvoiceNumber && /^invoice\s*#$/i.test(line)) {
       const match = nextLine.match(/\d{3,}/);
-      invoiceNumber = match?.[0] ?? "";
+      supplierInvoiceNumber = match?.[0] ?? "";
     }
   }
 
@@ -165,15 +165,15 @@ function extractInvoiceHeader(lines: string[], sourceFilename: string) {
     const compact = line.replace(/\s+/g, "");
     const match = compact.match(/(\d{3,}?)(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))/);
     if (!match) continue;
-    invoiceNumber ||= match[1];
+    supplierInvoiceNumber ||= match[1];
     invoiceDate ||= parseUsDate(match[2]);
   }
 
   const filenameInvoiceNumber = sourceFilename.match(/\bInv[_ -]?(\d{3,})\b/i)?.[1];
-  invoiceNumber ||= filenameInvoiceNumber ?? "";
+  supplierInvoiceNumber ||= filenameInvoiceNumber ?? "";
 
   return {
-    invoiceNumber,
+    supplierInvoiceNumber,
     invoiceDate,
   };
 }
@@ -728,7 +728,7 @@ export function parseSupplierInvoicePdfText(args: {
   return {
     values: {
       supplierId,
-      invoiceNumber: header.invoiceNumber,
+      supplierInvoiceNumber: header.supplierInvoiceNumber,
       invoiceDate,
       receiveDate: invoiceDate,
       paymentMethod: parsePaymentMethod(args.text),

@@ -1,7 +1,7 @@
 import type { SupplierInvoicePdfPrefillResult } from "./pdf-prefill";
 
 export type ParsedConfidenceBreakdown = {
-  invoiceNumberFound: boolean;
+  supplierInvoiceNumberFound: boolean;
   invoiceDateFound: boolean;
   supplierMatched: boolean;
   linesExtracted: boolean;
@@ -11,7 +11,7 @@ export type ParsedConfidenceBreakdown = {
 };
 
 const CONFIDENCE_WEIGHTS = {
-  invoiceNumber: 20,
+  supplierInvoiceNumber: 20,
   invoiceDate: 20,
   supplierMatched: 20,
   linesExtracted: 20,
@@ -22,7 +22,7 @@ const CONFIDENCE_WEIGHTS = {
 export function scoreParseResult(
   result: SupplierInvoicePdfPrefillResult,
 ): ParsedConfidenceBreakdown {
-  const invoiceNumberFound = Boolean(result.values.invoiceNumber);
+  const supplierInvoiceNumberFound = Boolean(result.values.supplierInvoiceNumber);
   // The deterministic parser and AI merge now leave invoiceDate as an empty
   // string when no date could be extracted, so a direct truthiness check is
   // sufficient — no need to grep warnings.
@@ -43,7 +43,7 @@ export function scoreParseResult(
   const unmatchedRatio = totalLines > 0 ? unmatchedCount / totalLines : 1;
 
   let score = 0;
-  if (invoiceNumberFound) score += CONFIDENCE_WEIGHTS.invoiceNumber;
+  if (supplierInvoiceNumberFound) score += CONFIDENCE_WEIGHTS.supplierInvoiceNumber;
   if (invoiceDateFound) score += CONFIDENCE_WEIGHTS.invoiceDate;
   if (supplierMatched) score += CONFIDENCE_WEIGHTS.supplierMatched;
   if (linesExtracted) score += CONFIDENCE_WEIGHTS.linesExtracted;
@@ -53,7 +53,7 @@ export function scoreParseResult(
   else score += Math.round(CONFIDENCE_WEIGHTS.allProductsMatched * (1 - unmatchedRatio));
 
   return {
-    invoiceNumberFound,
+    supplierInvoiceNumberFound,
     invoiceDateFound,
     supplierMatched,
     linesExtracted,

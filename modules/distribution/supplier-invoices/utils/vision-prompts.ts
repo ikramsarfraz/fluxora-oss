@@ -100,7 +100,7 @@ ABSOLUTE RULES:
 REQUIRED JSON SCHEMA (return exactly this shape, no extra top-level keys):
 {
   "supplierName": string | null,
-  "invoiceNumber": string | null,
+  "supplierInvoiceNumber": string | null,
   "invoiceDate": string | null,
   "totalAmount": number | null,
   "subtotal": number | null,

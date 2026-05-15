@@ -52,7 +52,7 @@ export type AiExtractionInput = {
 
 export type AiExtractionResult = {
   supplierName: string | null;
-  invoiceNumber: string | null;
+  supplierInvoiceNumber: string | null;
   invoiceDate: string | null;
   totalAmount: number | null;
   subtotal: number | null;
@@ -123,7 +123,7 @@ class MockAiProvider implements AiProvider {
   async extractSupplierInvoice(_input: AiExtractionInput): Promise<AiExtractionResult> {
     return {
       supplierName: null,
-      invoiceNumber: null,
+      supplierInvoiceNumber: null,
       invoiceDate: null,
       totalAmount: null,
       subtotal: null,
@@ -153,7 +153,7 @@ class MockAiProvider implements AiProvider {
   ): Promise<AiExtractionResult & { rawJson: string }> {
     return {
       supplierName: null,
-      invoiceNumber: null,
+      supplierInvoiceNumber: null,
       invoiceDate: null,
       totalAmount: null,
       subtotal: null,

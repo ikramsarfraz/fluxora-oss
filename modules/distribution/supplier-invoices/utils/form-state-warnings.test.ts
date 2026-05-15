@@ -29,7 +29,7 @@ function makeResult(
   return {
     values: {
       supplierId: "sup-1",
-      invoiceNumber: "12345",
+      supplierInvoiceNumber: "12345",
       invoiceDate: "2026-05-01",
       receiveDate: "2026-05-01",
       paymentMethod: null,
@@ -71,9 +71,9 @@ test("buildFormStateWarnings: does NOT warn when supplier is matched", () => {
   assert.ok(!warnings.some(w => /Supplier was not matched/.test(w)));
 });
 
-test("buildFormStateWarnings: does NOT warn when invoiceNumber is populated", () => {
-  const { warnings } = buildFormStateWarnings(makeResult({ invoiceNumber: "57876" }));
-  assert.ok(!warnings.some(w => /Invoice number was not found/.test(w)));
+test("buildFormStateWarnings: does NOT warn when supplierInvoiceNumber is populated", () => {
+  const { warnings } = buildFormStateWarnings(makeResult({ supplierInvoiceNumber: "57876" }));
+  assert.ok(!warnings.some(w => /Supplier invoice number was not found/.test(w)));
 });
 
 test("buildFormStateWarnings: does NOT warn when all product lines are matched", () => {
@@ -91,9 +91,9 @@ test("buildFormStateWarnings: warns when supplierId is empty", () => {
   assert.ok(warnings.some(w => /Supplier was not matched/.test(w)));
 });
 
-test("buildFormStateWarnings: warns when invoiceNumber is empty", () => {
-  const { warnings } = buildFormStateWarnings(makeResult({ invoiceNumber: "" }));
-  assert.ok(warnings.some(w => /Invoice number was not found/.test(w)));
+test("buildFormStateWarnings: warns when supplierInvoiceNumber is empty", () => {
+  const { warnings } = buildFormStateWarnings(makeResult({ supplierInvoiceNumber: "" }));
+  assert.ok(warnings.some(w => /Supplier invoice number was not found/.test(w)));
 });
 
 test("buildFormStateWarnings: warns and backfills today when invoiceDate is empty", () => {

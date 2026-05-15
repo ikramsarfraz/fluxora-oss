@@ -21,7 +21,7 @@ export function SupplierInvoiceEditShell({
     if (!invoice) return undefined;
     return {
       supplierId: invoice.supplierId,
-      invoiceNumber: invoice.invoiceNumber,
+      supplierInvoiceNumber: invoice.invoiceNumber ?? "",
       invoiceDate: invoice.invoiceDate,
       receiveDate: invoice.receiveDate,
       paymentMethod: invoice.paymentMethod ?? null,

@@ -934,9 +934,9 @@ export function SupplierInvoiceDetailPage({
                 )}
               </dd>
 
-              <dt style={{ color: C.muted }}>Invoice #</dt>
+              <dt style={{ color: C.muted }}>Supplier invoice #</dt>
               <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 500 }}>
-                {invoice.invoiceNumber}
+                {invoice.invoiceNumber ?? <span style={{ color: C.muted }}>—</span>}
               </dd>
 
               <dt style={{ color: C.muted }}>Invoice date</dt>
@@ -1054,11 +1054,11 @@ export function SupplierInvoiceDetailPage({
           <AlertDialogHeader>
             <AlertDialogTitle>Receive this bill?</AlertDialogTitle>
             <AlertDialogDescription>
-              Receiving <strong>{invoice.invoiceNumber}</strong> will
+              Receiving <strong>{invoice.referenceNumber}</strong> will
               automatically create one lot and one inventory item per line. Lot
               numbers and expirations will use any overrides you entered,
               otherwise they default to{" "}
-              <code>LOT-{invoice.invoiceNumber}-XX</code> and receive date + 7
+              <code>LOT-{invoice.referenceNumber}-XX</code> and receive date + 7
               days. Received bills can no longer be edited.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1074,7 +1074,7 @@ export function SupplierInvoiceDetailPage({
                   { id: invoiceId },
                   {
                     onSuccess: () => {
-                      toast.success(`Bill "${invoice.invoiceNumber}" received. Lots and inventory created.`);
+                      toast.success(`Bill ${invoice.referenceNumber} received. Lots and inventory created.`);
                       setCompleteOpen(false);
                     },
                     onError: err =>
@@ -1099,7 +1099,7 @@ export function SupplierInvoiceDetailPage({
             <AlertDialogTitle>Delete draft bill?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete draft{" "}
-              <strong>{invoice.invoiceNumber}</strong>. No inventory has been
+              <strong>{invoice.referenceNumber}</strong>. No inventory has been
               created yet, so nothing in stock changes. This action cannot be
               undone.
             </AlertDialogDescription>
@@ -1115,7 +1115,7 @@ export function SupplierInvoiceDetailPage({
                 event.preventDefault();
                 deleteMutation.mutate(invoiceId, {
                   onSuccess: () => {
-                    toast.success(`Draft bill "${invoice.invoiceNumber}" deleted.`);
+                    toast.success(`Draft bill ${invoice.referenceNumber} deleted.`);
                     router.push("/supplier-invoices");
                   },
                   onError: err =>
@@ -1137,7 +1137,7 @@ export function SupplierInvoiceDetailPage({
         open={reverseOpen}
         onOpenChange={setReverseOpen}
         invoiceId={invoiceId}
-        invoiceNumber={invoice.invoiceNumber}
+        invoiceNumber={invoice.referenceNumber}
         canReverse={canReverse}
       />
 
@@ -1145,7 +1145,7 @@ export function SupplierInvoiceDetailPage({
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         supplierInvoiceId={invoice.id}
-        invoiceNumber={invoice.invoiceNumber}
+        invoiceNumber={invoice.referenceNumber}
         balanceDue={paymentSummary.balanceDue}
         defaultPaymentMethod={invoice.paymentMethod ?? undefined}
       />
@@ -1155,7 +1155,7 @@ export function SupplierInvoiceDetailPage({
         onOpenChange={setForwardOpen}
         invoice={{
           id: invoice.id,
-          invoiceNumber: invoice.invoiceNumber,
+          invoiceNumber: invoice.referenceNumber,
           invoiceDate: invoice.invoiceDate,
           totalAmount: invoice.totalAmount,
           supplierName: invoice.supplier?.name ?? null,
