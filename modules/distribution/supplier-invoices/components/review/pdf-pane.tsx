@@ -27,6 +27,7 @@ export function PdfPane({
   onLineClick,
   pdfFile,
   lineBboxes,
+  paneEnterClass,
 }: {
   fileName: string;
   page: number;
@@ -40,6 +41,8 @@ export function PdfPane({
   pdfFile?: Blob | null;
   /** Per-line bounding boxes — required for clickable overlays on the real PDF. */
   lineBboxes?: LineBbox[];
+  /** Optional CSS class to layer the pane-enter slide animation on. */
+  paneEnterClass?: string;
 }) {
   // Real PDF canvases are rendered at native CSS size scaled by zoom, so
   // bboxes (in PDF user-space points) need `zoom/100` to align with the canvas.
@@ -49,7 +52,7 @@ export function PdfPane({
 
   return (
     <div
-      className="flex min-w-0 flex-1 flex-col"
+      className={cn("flex min-w-0 flex-1 flex-col", paneEnterClass)}
       style={{ background: "#1a1a1a", borderRight: "1px solid var(--stone-line)" }}
     >
       <PdfToolbar
