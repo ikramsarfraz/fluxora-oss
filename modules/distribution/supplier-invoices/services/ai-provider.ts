@@ -206,7 +206,12 @@ export function createAiProvider(): AiProvider {
       apiKey: openaiKey,
       invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o-mini",
       productMatchModel: process.env.OPENAI_PRODUCT_MATCH_MODEL ?? "gpt-4o-mini",
-      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o",
+      // `gpt-4o-mini` is multimodal and roughly 2–3× faster than `gpt-4o` on
+      // PDF vision calls, with ~10× lower per-token cost. For most invoices
+      // this is the right default; tenants who hit accuracy regressions on
+      // complex multi-page or merged-cell tables can opt back into the full
+      // model via `OPENAI_VISION_MODEL=gpt-4o`.
+      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini",
       maxInvoiceTextChars: resolveMaxInt(
         process.env.AI_MAX_INVOICE_TEXT_CHARS,
         30_000,

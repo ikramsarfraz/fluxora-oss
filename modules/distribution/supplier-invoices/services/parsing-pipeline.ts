@@ -36,6 +36,7 @@ import {
   mergeVisionOverResult as mergeVisionOverResultPure,
 } from "../utils/ai-merge";
 import { buildFormStateWarnings } from "../utils/form-state-warnings";
+import { shouldSpeculativelyDispatchVision } from "../utils/vision-dispatch";
 
 export { scoreParseResult, detectScannedPdf };
 export type { ParsedConfidenceBreakdown };
@@ -243,7 +244,40 @@ export async function runParsingPipeline(args: {
     };
   }
 
-  // Stage 3: AI text fallback
+  // Stage 3 + speculative Stage 4. When the extracted PDF text is clearly
+  // lossy (image-heavy or table structure lost), vision is almost certainly
+  // going to be the path that produces the final result — so we dispatch it
+  // concurrently with text-AI instead of waiting for text-AI to fail first.
+  // On hard invoices this cuts wall-clock by ~the length of the text-AI call
+  // (8–12s typically). On easy invoices the heuristic stays false and the
+  // pipeline runs serially as before.
+  const speculativeVision =
+    pdfBytes !== undefined &&
+    pdfBytes.byteLength > 0 &&
+    shouldSpeculativelyDispatchVision({
+      extractedTextLength: extractedText.length,
+      pdfPageCount,
+      deterministicLineCount: deterministicResult.values.lines.length,
+      hasPdfBytes: true,
+    });
+
+  // Wrap in a never-rejecting promise so the speculative call can't bubble
+  // up as an unhandled rejection if `needsVision` ends up false and we
+  // never await it. `extractSupplierInvoiceWithVision` already swallows
+  // internal errors into a failure-shaped result, but this is defence in
+  // depth.
+  const speculativeVisionPromise: Promise<VisionExtractionResult | null> | null =
+    speculativeVision && pdfBytes
+      ? extractSupplierInvoiceWithVision({
+          pdfBuffer: pdfBytes,
+          filename: sourceFilename,
+          extractedText,
+          supplierHints: deterministicResult.unmatchedSupplierCandidates,
+          candidateSuppliers: supplierRows,
+          debug,
+        }).catch(() => null)
+      : null;
+
   const aiResult = await extractSupplierInvoiceWithAi({
     filename: sourceFilename,
     extractedText,
@@ -273,14 +307,24 @@ export async function runParsingPipeline(args: {
   let visionUsed = false;
 
   if (needsVision && pdfBytes) {
-    visionResult = await extractSupplierInvoiceWithVision({
-      pdfBuffer: pdfBytes,
-      filename: sourceFilename,
-      extractedText,
-      supplierHints: deterministicResult.unmatchedSupplierCandidates,
-      candidateSuppliers: supplierRows,
-      debug,
-    });
+    // If we dispatched vision speculatively, the call is already in flight
+    // (or already finished). Await it instead of starting a fresh request.
+    // If the speculative call somehow returned null (rare — the .catch
+    // above swallows network/parse errors into null), fall back to a fresh
+    // synchronous request so the caller still gets a result.
+    const speculative = speculativeVisionPromise
+      ? await speculativeVisionPromise
+      : null;
+    visionResult =
+      speculative ??
+      (await extractSupplierInvoiceWithVision({
+        pdfBuffer: pdfBytes,
+        filename: sourceFilename,
+        extractedText,
+        supplierHints: deterministicResult.unmatchedSupplierCandidates,
+        candidateSuppliers: supplierRows,
+        debug,
+      }));
 
     // Correct column-swap errors (e.g. Qty/Weight value read as Qty) before scoring.
     const columnFix = correctVisionColumnSwap(visionResult.lines, extractedText);
@@ -328,6 +372,7 @@ export async function runParsingPipeline(args: {
       mergedLines: mergedResult.values.lines.length,
       mergedTotalsMatch: mergedBreakdown.totalsMatch,
       mergedComputedTotal: mergedResult.totalComparison.computedLineTotal,
+      speculativeVision,
       needsVision,
       visionLines: visionResult?.lines.length ?? 0,
       visionFirst: fmtLine(visionResult?.lines[0] ?? null),
