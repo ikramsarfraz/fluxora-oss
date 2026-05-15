@@ -278,3 +278,13 @@
   .loading-caret,
   .loading-dot { animation: none !important; }
 }
+
+/* ── Supplier-invoice review: PDF-line bidirectional highlight ──────────
+   Applied to clickable line rows in the PDF preview pane. The active row
+   gets a warn-tinted background + outline; matched-AND-active gets the
+   good-tinted variant. Used by the rasterized-PDF bbox overlay in phase 4
+   too. */
+.pdf-line { cursor: pointer; transition: background .12s, outline-color .12s; }
+.pdf-line:hover { background: oklch(97% 0.02 80); }
+.pdf-line.active { background: oklch(96% 0.04 80) !important; outline: 1.5px solid oklch(70% 0.16 70); }
+.pdf-line.matched.active { background: oklch(96% 0.03 155) !important; outline-color: oklch(58% 0.13 155); }
