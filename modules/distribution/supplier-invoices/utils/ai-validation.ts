@@ -9,13 +9,15 @@ import { parseInvoiceDate } from "./invoice-date-parsing";
 // Zod schemas
 // ---------------------------------------------------------------------------
 
+// Schema doubles as the OpenAI strict structured-output schema (via
+// `zodResponseFormat`). Strict mode forbids `.optional()` and requires every
+// property to appear in `required`, so `caseWeights` is `.nullable()` —
+// the model emits an array or explicit null, never an omitted key.
 const AiInvoiceLineSchema = z.object({
   vendorProductName: z.string(),
   quantityCases: z.number().nullable(),
   quantityWeight: z.number().nullable(),
-  // Optional in the schema so older prompt variants and tests keep working;
-  // post-parse we always coerce `undefined` → `null` for downstream code.
-  caseWeights: z.array(z.number()).nullable().optional(),
+  caseWeights: z.array(z.number()).nullable(),
   unitPrice: z.number().nullable(),
   lineTotal: z.number().nullable(),
   unitType: z.enum(["catch_weight", "fixed_case"]).nullable(),
@@ -81,8 +83,29 @@ export function sanitizeSupplierName(value: string | null): string | null {
   return trimmed;
 }
 
+// OpenAI strict structured outputs require every property to be in `required`,
+// so the schema can't mark caseWeights `.optional()`. To keep the validator
+// permissive — older prompts and unit-test fixtures omit the field entirely —
+// we inject `caseWeights: null` on raw lines before handing them to Zod.
+// Data that already comes through the OpenAI strict path is unaffected because
+// the field is already present.
+function injectMissingCaseWeights(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.lines)) return obj;
+  return {
+    ...obj,
+    lines: obj.lines.map(line => {
+      if (!line || typeof line !== "object") return line;
+      const lineObj = line as Record<string, unknown>;
+      if ("caseWeights" in lineObj) return lineObj;
+      return { ...lineObj, caseWeights: null };
+    }),
+  };
+}
+
 export function validateExtractionResult(raw: unknown): ValidatedExtractionResult | null {
-  const result = AiExtractionResultSchema.safeParse(raw);
+  const result = AiExtractionResultSchema.safeParse(injectMissingCaseWeights(raw));
   if (!result.success) return null;
 
   const data = result.data;

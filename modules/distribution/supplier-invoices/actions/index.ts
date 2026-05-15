@@ -222,6 +222,9 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
       ai_used: result.aiUsed,
       vision_used: result.visionUsed,
       first_bill_mode: Boolean(result.firstBillLines),
+      parse_mode: result.telemetry?.mode ?? null,
+      text_extractor: result.telemetry?.textExtractor ?? null,
+      text_char_count: result.telemetry?.textCharCount ?? null,
     },
   });
   return result;
@@ -289,6 +292,19 @@ export async function bulkImportSupplierInvoicesAction(
 
   const startedAt = Date.now();
   const result = await bulkImportSupplierInvoices(inputs);
+
+  // Aggregate per-file parse telemetry — handy for spotting batches where
+  // PARSE_MODE=text-first stayed entirely on the fast path vs. falling back
+  // to pdf-parse / vision for some subset of the upload.
+  const parsedItems = result.items.flatMap(item =>
+    item.status === "parsed" ? [item.pipelineResult] : [],
+  );
+  const visionCount = parsedItems.filter(p => p.visionUsed).length;
+  const pdfjsCount = parsedItems.filter(
+    p => p.telemetry?.textExtractor === "pdfjs-dist",
+  ).length;
+  const parseMode = parsedItems[0]?.telemetry?.mode ?? null;
+
   await captureServerEvent({
     userId: user.id,
     tenantId: user.tenantId,
@@ -298,6 +314,9 @@ export async function bulkImportSupplierInvoicesAction(
       parsed_count: result.summary.parsed,
       errored_count: result.summary.errored,
       duration_ms: Date.now() - startedAt,
+      parse_mode: parseMode,
+      pdfjs_extractor_count: pdfjsCount,
+      vision_used_count: visionCount,
     },
   });
   return result;

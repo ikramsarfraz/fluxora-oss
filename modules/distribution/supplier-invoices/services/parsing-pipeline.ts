@@ -101,6 +101,24 @@ export type FirstBillLine = {
   unitType: "catch_weight" | "fixed_case";
 };
 
+/**
+ * Telemetry about how the PDF text was obtained — populated by the entry
+ * point (parseSupplierInvoicePdf), not by runParsingPipeline itself.
+ *
+ *   mode:          PARSE_MODE flag — "text-first" tries pdfjs-dist layout
+ *                  extraction before falling through to pdf-parse / vision.
+ *   textExtractor: which text source was actually used (the text-first
+ *                  branch falls back to pdf-parse when pdfjs yields too
+ *                  little).
+ *   textCharCount: characters fed into the AI text path — useful to spot
+ *                  invoices that bypass the text path entirely.
+ */
+export type PipelineTelemetry = {
+  mode: "text-first" | "vision-only";
+  textExtractor: "pdfjs-dist" | "pdf-parse";
+  textCharCount: number;
+};
+
 export type PipelineResult = {
   prefillResult: SupplierInvoicePdfPrefillResult;
   confidence: number;
@@ -121,6 +139,7 @@ export type PipelineResult = {
   debug?: PipelineDebugInfo;
   /** Populated only when the tenant catalog is empty (first-bill mode). */
   firstBillLines?: FirstBillLine[];
+  telemetry?: PipelineTelemetry;
 };
 
 // ---------------------------------------------------------------------------
