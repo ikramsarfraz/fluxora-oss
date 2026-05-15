@@ -144,10 +144,17 @@ async function renderPdfPage({
   // inside the client effect to avoid pulling it into the RSC bundle.
   const pdfjs = await import("pdfjs-dist");
   if (!workerConfigured) {
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
+    // Point the worker at a version-pinned jsDelivr URL rather than going
+    // through the bundler. `pdfjs.version` reads from the installed package
+    // so the worker stays in lockstep with the API build; jsDelivr serves the
+    // file as an immutable artifact so it caches indefinitely.
+    //
+    // Routing through `new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)`
+    // would trip Turbopack's serverExternalPackages matcher (warning:
+    // "Package pdfjs-dist can't be external") and force a workaround there;
+    // the CDN approach keeps both the server-side text extractor and the
+    // client renderer happy.
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
     workerConfigured = true;
   }
 
