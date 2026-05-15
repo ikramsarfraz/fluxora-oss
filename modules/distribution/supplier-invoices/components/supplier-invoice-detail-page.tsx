@@ -255,7 +255,7 @@ export function SupplierInvoiceDetailPage({
     new Set(),
   );
 
-  useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.invoiceNumber);
+  useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.referenceNumber);
 
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
@@ -378,7 +378,7 @@ export function SupplierInvoiceDetailPage({
                 margin: 0,
               }}
             >
-              {invoice.invoiceNumber}
+              {invoice.referenceNumber}
             </h1>
             <StatusPill
               label={statusPill.label}
@@ -386,6 +386,18 @@ export function SupplierInvoiceDetailPage({
               color={statusPill.color}
             />
           </div>
+          {invoice.invoiceNumber ? (
+            <div
+              style={{
+                fontFamily: C.mono,
+                fontSize: "13px",
+                color: C.muted,
+                marginTop: "4px",
+              }}
+            >
+              Supplier inv: {invoice.invoiceNumber}
+            </div>
+          ) : null}
 
           {invoice.supplier && (
             <div style={{ fontSize: "16px", color: C.ink2, marginTop: "4px" }}>

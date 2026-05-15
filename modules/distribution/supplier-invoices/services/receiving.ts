@@ -17,6 +17,7 @@ import {
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
+  tenants,
 } from "@/db/schema";
 
 import { requirePermission } from "@/lib/auth/permissions";
@@ -47,6 +48,38 @@ import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
  * its queries are scoped to the same transaction.
  */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Mint the next per-tenant supplier-invoice reference number. The counter on
+ * `tenants` is incremented atomically inside the caller's transaction, so two
+ * concurrent inserts can never receive the same number. Format is
+ * `IB-NNNNNN` (zero-padded to 6 digits, grows naturally past 1 million).
+ */
+export async function generateSupplierInvoiceReferenceNumber(
+  tx: Tx,
+  tenantId: string,
+): Promise<string> {
+  const [row] = await tx
+    .update(tenants)
+    .set({
+      supplierInvoiceCounter: sql`${tenants.supplierInvoiceCounter} + 1`,
+    })
+    .where(eq(tenants.id, tenantId))
+    .returning({ counter: tenants.supplierInvoiceCounter });
+
+  if (!row) {
+    throw new Error(
+      "Tenant not found while generating supplier invoice reference number.",
+    );
+  }
+
+  return formatSupplierInvoiceReferenceNumber(row.counter);
+}
+
+export function formatSupplierInvoiceReferenceNumber(counter: number): string {
+  const padded = String(counter).padStart(6, "0");
+  return `IB-${padded}`;
+}
 
 // -------------------- Types --------------------
 
@@ -407,6 +440,7 @@ export async function getSupplierInvoices() {
 }
 
 export type SupplierInvoiceListSort =
+  | "referenceNumber"
   | "invoiceNumber"
   | "invoiceDate"
   | "receiveDate"
@@ -434,6 +468,7 @@ export async function getSupplierInvoicesPage(
   const where = and(
     eq(supplierInvoices.tenantId, tenant.id),
     buildTextSearchCondition(query.search, [
+      supplierInvoices.referenceNumber,
       supplierInvoices.invoiceNumber,
       supplierInvoices.status,
       suppliers.name,
@@ -456,6 +491,7 @@ export async function getSupplierInvoicesPage(
         sort: query.sort,
         direction: query.direction,
         expressions: {
+          referenceNumber: supplierInvoices.referenceNumber,
           invoiceNumber: supplierInvoices.invoiceNumber,
           invoiceDate: supplierInvoices.invoiceDate,
           receiveDate: supplierInvoices.receiveDate,
@@ -887,11 +923,13 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
   ]);
 
   const invoiceId = await db.transaction(async tx => {
+    const referenceNumber = await generateSupplierInvoiceReferenceNumber(tx, tenant.id);
     const [invoice] = await tx
       .insert(supplierInvoices)
       .values({
         tenantId: tenant.id,
         supplierId: input.supplierId,
+        referenceNumber,
         invoiceNumber: input.invoiceNumber.trim(),
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,
@@ -911,7 +949,7 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       action: "insert",
       entityTable: "supplier_invoices",
       entityId: invoice.id,
-      entityLabel: invoice.invoiceNumber,
+      entityLabel: invoice.referenceNumber,
       afterJson: JSON.stringify({
         status: "draft",
         totalAmount,

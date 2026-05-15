@@ -338,6 +338,14 @@ export const tenants = pgTable(
     businessCategory: businessCategoryEnum("business_category"),
     /** Running count of supplier invoices posted; drives first-bill-mode and data-readiness gates. */
     billCount: integer("bill_count").notNull().default(0),
+    /**
+     * Monotonically increasing counter used to mint per-tenant system
+     * reference numbers (e.g. IB-000001) for supplier invoices. Atomically
+     * incremented inside the create-invoice transaction.
+     */
+    supplierInvoiceCounter: integer("supplier_invoice_counter")
+      .notNull()
+      .default(0),
     /** Whether the onboarding welcome flow has been completed. */
     onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
     /** Set when the user explicitly skips or finishes the welcome flow; stops the cold-start redirect. */
@@ -1072,6 +1080,13 @@ export const supplierInvoices = pgTable(
     supplierId: uuid("supplier_id")
       .notNull()
       .references(() => suppliers.id, { onDelete: "restrict" }),
+    /**
+     * System-assigned, tenant-unique identifier (e.g. "IB-000001") minted on
+     * insert from `tenants.supplier_invoice_counter`. This is the canonical
+     * reference for searching and audit; `invoice_number` continues to hold
+     * the supplier's printed number, which may or may not be unique.
+     */
+    referenceNumber: varchar("reference_number", { length: 32 }).notNull(),
     invoiceNumber: varchar("invoice_number", { length: 64 }).notNull(),
     invoiceDate: date("invoice_date").notNull(),
     receiveDate: date("receive_date").notNull(),
@@ -1114,6 +1129,10 @@ export const supplierInvoices = pgTable(
   table => [
     index("supplier_invoices_tenant_id_idx").on(table.tenantId),
     index("supplier_invoices_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("supplier_invoices_tenant_reference_number_unique").on(
+      table.tenantId,
+      table.referenceNumber,
+    ),
     uniqueIndex("supplier_invoices_tenant_invoice_number_unique").on(
       table.tenantId,
       table.invoiceNumber,

@@ -1569,6 +1569,7 @@ async function seedSupplierInvoices(
     const invoiceCount = 2;
     for (let i = 0; i < invoiceCount; i++) {
       const invoiceNumber = `SUP-${invoiceCounter}`;
+      const referenceNumber = `IB-${String(invoiceCounter).padStart(6, "0")}`;
       const invoiceDate = addDays("2025-01-05", invoiceCounter - 1000);
 
       await db
@@ -1576,6 +1577,7 @@ async function seedSupplierInvoices(
         .values({
           tenantId,
           supplierId: supplier.id,
+          referenceNumber,
           invoiceNumber,
           invoiceDate,
           receiveDate: invoiceDate,
