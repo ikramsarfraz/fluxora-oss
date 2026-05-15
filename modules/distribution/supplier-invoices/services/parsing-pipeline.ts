@@ -445,24 +445,33 @@ export async function runParsingPipeline(args: {
     });
   }
 
-  // First-bill mode: empty catalog — skip all product matching and return naming scaffolding.
+  // Build a name → description lookup from whichever AI source produced the
+  // final merged result, so the Review screen can show secondary description
+  // text under each line's vendor name. Done before the first-bill early-return
+  // so first-bill mode can also surface descriptions and detected fees.
+  const descriptionSource = visionUsed && visionResult ? visionResult.lines : aiResult.lines;
+  const descriptionByVendorName = new Map<string, string>();
+  for (const l of descriptionSource) {
+    const desc = l.vendorProductDescription?.trim();
+    if (desc) descriptionByVendorName.set(l.vendorProductName, desc);
+  }
+  const detectedFeesFromAi: DetectedFee[] =
+    (visionUsed && visionResult ? visionResult.fees : aiResult.fees) ?? [];
+
+  // First-bill mode: empty catalog — skip all product matching, but still
+  // populate `unresolvedLines` and `detectedFees` so the new Review screen
+  // can render vendor product names + fee rows (matching never runs, so
+  // confidence stays 0 on every line).
   if (firstBillMode) {
     const source: PipelineParseSource = visionUsed
       ? "vision"
       : aiResult.lines.length > 0
         ? "ai_fallback"
         : "hybrid";
-    return buildFirstBillResult(finalResult, source, true, visionUsed);
-  }
-
-  // Build a name → description lookup from whichever AI source produced the
-  // final merged result, so the Review screen can show secondary description
-  // text under each line's vendor name.
-  const descriptionSource = visionUsed && visionResult ? visionResult.lines : aiResult.lines;
-  const descriptionByVendorName = new Map<string, string>();
-  for (const l of descriptionSource) {
-    const desc = l.vendorProductDescription?.trim();
-    if (desc) descriptionByVendorName.set(l.vendorProductName, desc);
+    return buildFirstBillResult(finalResult, source, true, visionUsed, {
+      descriptionByVendorName,
+      detectedFees: detectedFeesFromAi,
+    });
   }
 
   const enriched = await enrichWithAliasesAndAiMatching(
@@ -939,6 +948,12 @@ function buildFirstBillResult(
   source: PipelineParseSource,
   aiUsed: boolean,
   visionUsed: boolean,
+  extras: {
+    /** Vendor-name → description map from the AI lines (Item vs Description split). */
+    descriptionByVendorName?: ReadonlyMap<string, string>;
+    /** Fees detected by the AI extraction (Delivery Charge, Cut Fee, etc.). */
+    detectedFees?: DetectedFee[];
+  } = {},
 ): PipelineResult {
   const descriptions = result.unmatchedLineDescriptions;
   const lines = result.values.lines;
@@ -951,6 +966,20 @@ function buildFirstBillResult(
     weightLbs: lines[i]?.weightLbs ?? "0",
     unitPrice: lines[i]?.unitPrice ?? "0",
     unitType: (lines[i]?.unitType ?? "catch_weight") as "catch_weight" | "fixed_case",
+  }));
+
+  // Populate `unresolvedLines` so the new Review screen renders vendor product
+  // names instead of falling back to "Line N" placeholders. Product matching
+  // never runs in first-bill mode (no catalog), so confidence is 0 and the
+  // suggestion list is empty — the user picks Create new on each row.
+  const unresolvedLines: UnresolvedLine[] = descriptions.map(name => ({
+    vendorProductName: name,
+    vendorProductDescription: extras.descriptionByVendorName?.get(name) ?? null,
+    suggestedProductId: null,
+    confidence: 0,
+    stage: "no_catalog",
+    reasoning: "Catalog is empty — no product matching attempted.",
+    aiSuggestionPending: false,
   }));
 
   return {
@@ -969,8 +998,8 @@ function buildFirstBillResult(
     aiUsed,
     requiresOcr: false,
     warnings: result.warnings,
-    unresolvedLines: [],
-    detectedFees: [],
+    unresolvedLines,
+    detectedFees: extras.detectedFees ?? [],
     priceDeviations: [],
     detectedProfileId: null,
     proposedProfile: null,

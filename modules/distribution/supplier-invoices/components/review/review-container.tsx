@@ -140,13 +140,21 @@ export function ReviewContainer({
   const handleSupplierCandidate = useCallback(
     (candidate: SupplierCandidate) => {
       // The pipeline's unmatched-supplier candidates are raw names, not ids.
-      // Try to resolve to a known supplier by name; otherwise just fill the
-      // text so the user can review.
+      // If the name exactly matches a known supplier, select it. Otherwise
+      // the chip is effectively a "use this name" affordance for a supplier
+      // that doesn't exist yet — open the Create Supplier dialog pre-filled
+      // with the chip's name so the user lands one click away from creating
+      // it instead of having to retype it into the picker.
       const match = suppliers.find(
         s => s.name.toLowerCase() === candidate.name.toLowerCase(),
       );
-      setSupplierIdOverride(match?.id ?? null);
+      if (match) {
+        setSupplierIdOverride(match.id);
+        setSupplierNameOverride(candidate.name);
+        return;
+      }
       setSupplierNameOverride(candidate.name);
+      setCreateSupplierOpen(true);
     },
     [suppliers],
   );
