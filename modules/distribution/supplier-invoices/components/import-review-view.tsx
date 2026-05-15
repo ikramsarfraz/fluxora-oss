@@ -22,6 +22,7 @@ import {
 import type { PipelineResult, UnresolvedLine } from "../services/parsing-pipeline";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import { filterProducts } from "../utils/parsing-pipeline-logic";
+import { InlineCreateProduct } from "./inline-create-product";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const TK = {
@@ -375,6 +376,7 @@ function LineReviewCard({
 }) {
   const [saveAlias, setSaveAlias] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const saveMutation = useSaveConfirmedAiAlias();
@@ -605,7 +607,10 @@ function LineReviewCard({
         </label>
         <button
           type="button"
-          onClick={() => setSearching(s => !s)}
+          onClick={() => {
+            setSearching(s => !s);
+            if (creating) setCreating(false);
+          }}
           style={{
             marginLeft: "auto",
             display: "flex",
@@ -623,7 +628,43 @@ function LineReviewCard({
           <Search style={{ width: 10, height: 10 }} />
           Search all
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCreating(c => !c);
+            if (searching) setSearching(false);
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 11,
+            color: TK.accent,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            fontFamily: "inherit",
+          }}
+        >
+          + Create new
+        </button>
       </div>
+
+      {/* Inline product-creation form — last-resort when nothing in the
+          catalog matches the vendor text. Creates a complete-enough product
+          (name + category + stock unit) and seeds the row's productId via
+          the same accept() path the search picker uses. */}
+      {creating && (
+        <InlineCreateProduct
+          vendorProductName={line.vendorProductName}
+          onCancel={() => setCreating(false)}
+          onCreated={async productId => {
+            setCreating(false);
+            await accept(productId);
+          }}
+        />
+      )}
 
       {/* Product search */}
       {searching && (
