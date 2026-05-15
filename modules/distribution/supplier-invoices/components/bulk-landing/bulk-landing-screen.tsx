@@ -37,6 +37,8 @@ export function BulkLandingScreen({
   openFileHref,
   openInNewTab = false,
   onImportMore,
+  onDismissFile,
+  onClearReviewed,
 }: {
   view: BatchView;
   /**
@@ -49,6 +51,10 @@ export function BulkLandingScreen({
   openInNewTab?: boolean;
   /** Click handler for "Import more"; falls back to a no-op in demo mode. */
   onImportMore?: () => void;
+  /** Per-row dismiss — removes the row from the batch (host clears storage). */
+  onDismissFile?: (file: BatchFile) => void;
+  /** Footer action — drops every row that's already been reviewed. */
+  onClearReviewed?: () => void;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<BatchFilter>("all");
@@ -128,10 +134,14 @@ export function BulkLandingScreen({
               isFocused={focusedId === file.id}
               onFocus={() => setFocusedId(file.id)}
               onOpen={() => openFile(file)}
+              onDismiss={onDismissFile ? () => onDismissFile(file) : undefined}
             />
           ))
         )}
-        <CardFooter readyToPost={view.summary.readyToPost} />
+        <CardFooter
+          readyToPost={view.summary.readyToPost}
+          onClearReviewed={onClearReviewed}
+        />
       </div>
     </main>
   );
@@ -237,7 +247,13 @@ function ColumnHeader() {
   );
 }
 
-function CardFooter({ readyToPost }: { readyToPost: number }) {
+function CardFooter({
+  readyToPost,
+  onClearReviewed,
+}: {
+  readyToPost: number;
+  onClearReviewed?: () => void;
+}) {
   return (
     <div className="flex items-center justify-between bg-stone-bg px-[22px] py-3.5">
       <div className="text-[12px] text-stone-muted">
@@ -245,6 +261,16 @@ function CardFooter({ readyToPost }: { readyToPost: number }) {
       </div>
       <div className="flex items-center gap-2.5">
         <span className="text-[12px] text-stone-muted">Bulk:</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={readyToPost === 0 || !onClearReviewed}
+          onClick={onClearReviewed}
+          className="h-8 text-[12px]"
+        >
+          Clear {readyToPost} reviewed
+        </Button>
         <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]">
           Re-parse all
         </Button>

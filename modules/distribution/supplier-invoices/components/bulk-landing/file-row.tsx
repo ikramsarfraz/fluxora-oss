@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Check, FileText } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileText, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,11 +24,19 @@ export function FileRow({
   isFocused,
   onFocus,
   onOpen,
+  onDismiss,
 }: {
   file: BatchFile;
   isFocused: boolean;
   onFocus: () => void;
   onOpen: () => void;
+  /**
+   * Per-row "discard" hook. When provided, a small X button appears on hover
+   * (always visible when the row is focused) — clicking it removes the file
+   * from the batch without going through review. The host is responsible for
+   * deleting the underlying storage entry.
+   */
+  onDismiss?: () => void;
 }) {
   return (
     <div
@@ -42,7 +50,7 @@ export function FileRow({
         }
       }}
       className={cn(
-        "grid cursor-pointer items-center gap-[18px] border-b border-stone-line py-[18px] pl-[19px] pr-[22px] transition-colors hover:bg-stone-line2/40",
+        "group grid cursor-pointer items-center gap-[18px] border-b border-stone-line py-[18px] pl-[19px] pr-[22px] transition-colors hover:bg-stone-line2/40",
         isFocused ? "bg-stone-line2" : "bg-stone-surface",
       )}
       style={{
@@ -118,7 +126,7 @@ export function FileRow({
         )}
       </div>
 
-      <div className="text-right">
+      <div className="flex items-center justify-end gap-1.5">
         <Button
           type="button"
           size="sm"
@@ -136,6 +144,22 @@ export function FileRow({
           {file.status === "reviewed" ? "Re-open" : "Review"}
           <ArrowRight className="size-3" strokeWidth={1.8} />
         </Button>
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onDismiss();
+            }}
+            aria-label={`Dismiss ${file.name}`}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-md text-stone-muted transition-opacity hover:bg-stone-line2 hover:text-stone-ink",
+              isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            )}
+          >
+            <X className="size-[14px]" strokeWidth={1.6} />
+          </button>
+        ) : null}
       </div>
     </div>
   );
