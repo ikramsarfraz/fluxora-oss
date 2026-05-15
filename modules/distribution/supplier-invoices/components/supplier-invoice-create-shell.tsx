@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
 import { ReviewContainer } from "./review/review-container";
 import {
-  clearPendingBulkImport,
   readPendingBulkImport,
   readPendingPdf,
 } from "../utils/bulk-import-storage";
@@ -67,12 +66,12 @@ export function SupplierInvoiceCreateShell() {
         pdfFile,
         key: bulkImportKey,
       });
-      // Clear the localStorage entry so the bulk-import panel can flip the
-      // row to "Reviewed" once the user switches back. The PDF blob in
-      // IndexedDB is cleared by clearPendingBulkImport too (fire-and-forget
-      // inside that helper). We've already captured the parse result and
-      // file in component state, so subsequent rerenders here are safe.
-      clearPendingBulkImport(bulkImportKey);
+      // Entry is intentionally NOT cleared here — the new bulk-landing screen
+      // (phase 5b) needs it to stay around so the row can flip to "Reviewed"
+      // after submit. ReviewContainer calls markBulkImportReviewed on success
+      // and the 24h TTL handles eventual cleanup. The legacy bulk-import
+      // panel's "row reviewed?" signal is therefore no longer accurate, but
+      // that panel is being retired in 5g.
     }
 
     void load();
@@ -95,6 +94,7 @@ export function SupplierInvoiceCreateShell() {
         fileName={load.pdfFile?.name ?? load.result.prefillResult.sourceFilename}
         pdfFile={load.pdfFile}
         result={load.result}
+        bulkImportKey={load.key}
       />
     );
   }
@@ -126,10 +126,12 @@ function ReviewBulkImport({
   fileName,
   pdfFile,
   result,
+  bulkImportKey,
 }: {
   fileName: string;
   pdfFile: File | null;
   result: PipelineResult;
+  bulkImportKey: string;
 }) {
   // Build the blob URL once. URL.createObjectURL is browser-only and lazy —
   // useMemo gives us a stable URL across rerenders and an effect releases it
@@ -157,6 +159,7 @@ function ReviewBulkImport({
       fileSize={fileSize}
       pipelineResult={result}
       pdfUrl={pdfUrl}
+      bulkImportKey={bulkImportKey}
     />
   );
 }
