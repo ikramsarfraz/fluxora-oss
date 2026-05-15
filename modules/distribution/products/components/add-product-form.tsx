@@ -68,11 +68,14 @@ import type { UnitOfMeasureListItem } from "@/modules/distribution/units-of-meas
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildDefaultForm(product?: ProductDetail): AddProductFormValues {
+function buildDefaultForm(
+  product?: ProductDetail,
+  initialName?: string,
+): AddProductFormValues {
   if (!product) {
     return {
       sku: "",
-      name: "",
+      name: initialName ?? "",
       categoryIds: [],
       sellingType: "by_weight",
       sellByPound: true,
@@ -268,16 +271,28 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
 export function AddProductForm(props?: {
   mode?: "create" | "edit";
   product?: ProductDetail;
+  /** Prefill the name field — used by inline create-from-review surfaces. */
+  initialName?: string;
+  /**
+   * When provided, called with the created/updated product instead of
+   * navigating away. Enables embedding the form in a modal where the
+   * caller handles post-save behaviour (closing the modal, resolving a
+   * row, etc.).
+   */
+  onCreated?: (result: { id: string }) => void;
+  /** When provided, the Cancel button calls this instead of routing back. */
+  onCancel?: () => void;
 }) {
   const mode = props?.mode ?? "create";
   const product = props?.product;
+  const initialName = props?.initialName;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const form = useForm<AddProductFormValues>({
     resolver: zodResolver(addProductFormSchema),
-    defaultValues: buildDefaultForm(product),
+    defaultValues: buildDefaultForm(product, initialName),
   });
 
   const { data: productCategories } = useCategories();
@@ -315,8 +330,12 @@ export function AddProductForm(props?: {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["price-chart"] });
       invalidateSetupChecklistQuery(queryClient);
-      router.push(`/products/${result.id}`);
       toast.success(mode === "edit" ? "Product updated." : "Product created.");
+      if (props?.onCreated) {
+        props.onCreated({ id: result.id });
+      } else {
+        router.push(`/products/${result.id}`);
+      }
     } catch (e) {
       setMutationError(
         e instanceof Error
@@ -664,13 +683,17 @@ export function AddProductForm(props?: {
       <FormActionFooter
         formId="form-add-product"
         isPending={isPending}
-        onCancel={() =>
-          router.push(
-            mode === "edit" && product
-              ? `/products/${product.id}`
-              : "/products",
-          )
-        }
+        onCancel={() => {
+          if (props?.onCancel) {
+            props.onCancel();
+          } else {
+            router.push(
+              mode === "edit" && product
+                ? `/products/${product.id}`
+                : "/products",
+            );
+          }
+        }}
         pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
         submitLabel={mode === "edit" ? "Save changes" : "Create product"}
       />

@@ -22,7 +22,7 @@ import {
 import type { PipelineResult, UnresolvedLine } from "../services/parsing-pipeline";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import { filterProducts } from "../utils/parsing-pipeline-logic";
-import { InlineCreateProduct } from "./inline-create-product";
+import { CreateProductDialog } from "./create-product-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const TK = {
@@ -630,10 +630,7 @@ function LineReviewCard({
         </button>
         <button
           type="button"
-          onClick={() => {
-            setCreating(c => !c);
-            if (searching) setSearching(false);
-          }}
+          onClick={() => setCreating(true)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -651,20 +648,17 @@ function LineReviewCard({
         </button>
       </div>
 
-      {/* Inline product-creation form — last-resort when nothing in the
-          catalog matches the vendor text. Creates a complete-enough product
-          (name + category + stock unit) and seeds the row's productId via
-          the same accept() path the search picker uses. */}
-      {creating && (
-        <InlineCreateProduct
-          vendorProductName={line.vendorProductName}
-          onCancel={() => setCreating(false)}
-          onCreated={async productId => {
-            setCreating(false);
-            await accept(productId);
-          }}
-        />
-      )}
+      {/* Full product-creation form in a modal — same fields as Settings →
+          Products, so the new product is immediately usable for receiving,
+          pricing, and order fulfilment. Vendor text prefills the name. */}
+      <CreateProductDialog
+        open={creating}
+        onOpenChange={setCreating}
+        initialName={line.vendorProductName}
+        onCreated={productId => {
+          void accept(productId);
+        }}
+      />
 
       {/* Product search */}
       {searching && (

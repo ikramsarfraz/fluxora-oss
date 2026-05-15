@@ -64,6 +64,7 @@ import type { PipelineResult } from "@/modules/distribution/supplier-invoices/se
 import { ImportReviewView } from "./import-review-view";
 import { FirstBillPanel } from "./first-bill-panel";
 import { IngestionPanel } from "./ingestion-panel";
+import { CreateSupplierDialog } from "./create-supplier-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -78,6 +79,7 @@ const C = {
   lineStrong: "#d4d1c7",
   good: "oklch(58% 0.13 155)",
   warn: "oklch(70% 0.13 70)",
+  accent: "#2563eb",
   mono: "var(--font-mono)",
 } as const;
 
@@ -548,6 +550,7 @@ export function SupplierInvoiceForm({
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
   const [pdfPrefill, setPdfPrefill] = useState<PipelineResult | null>(null);
+  const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
   const [pdfUnresolvedCount, setPdfUnresolvedCount] = useState(0);
   // Maps vendorProductName → form line index for resolved lines.
   // Built when a PDF is parsed; updated as the user accepts/chooses products.
@@ -1134,41 +1137,83 @@ export function SupplierInvoiceForm({
               <Controller
                 name="supplierId"
                 control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <label style={lblStyle}>
-                      Supplier{" "}
-                      <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
-                    </label>
-                    <Select
-                      value={field.value || undefined}
-                      onValueChange={field.onChange}
-                      disabled={suppliersLoading || isPending}
-                    >
-                      <SelectTrigger
-                        id="si-supplier"
-                        aria-invalid={fieldState.invalid}
-                        className={inputCls}
+                render={({ field, fieldState }) => {
+                  const candidate =
+                    pdfPrefill?.prefillResult.unmatchedSupplierCandidates[0] ??
+                    null;
+                  const showCreateHint = !field.value && !!candidate;
+                  return (
+                    <Field data-invalid={fieldState.invalid}>
+                      <label style={lblStyle}>
+                        Supplier{" "}
+                        <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
+                      </label>
+                      <Select
+                        value={field.value || undefined}
+                        onValueChange={field.onChange}
+                        disabled={suppliersLoading || isPending}
                       >
-                        <SelectValue
-                          placeholder={
-                            suppliersLoading
-                              ? "Loading…"
-                              : "Select supplier…"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(suppliers ?? []).map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  </Field>
-                )}
+                        <SelectTrigger
+                          id="si-supplier"
+                          aria-invalid={fieldState.invalid}
+                          className={inputCls}
+                        >
+                          <SelectValue
+                            placeholder={
+                              suppliersLoading
+                                ? "Loading…"
+                                : "Select supplier…"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(suppliers ?? []).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {showCreateHint && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 11.5,
+                            color: C.muted,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <span>
+                            Parsed from bill:{" "}
+                            <strong style={{ color: C.ink }}>
+                              {candidate}
+                            </strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCreateSupplierOpen(true)}
+                            disabled={isPending}
+                            style={{
+                              fontSize: 11.5,
+                              color: C.accent,
+                              background: "none",
+                              border: "none",
+                              cursor: isPending ? "not-allowed" : "pointer",
+                              padding: 0,
+                              fontFamily: "inherit",
+                              fontWeight: 500,
+                            }}
+                          >
+                            + Create supplier
+                          </button>
+                        </div>
+                      )}
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    </Field>
+                  );
+                }}
               />
 
               {/* Invoice number */}
@@ -1695,6 +1740,20 @@ export function SupplierInvoiceForm({
         </button>
         </div>
       </div>
+
+      {/* Create supplier from invoice header — opened when the user clicks
+          the "+ Create supplier" hint under the supplier picker. Pre-fills
+          the parsed supplier name and assigns it to this bill on save. */}
+      <CreateSupplierDialog
+        open={createSupplierOpen}
+        onOpenChange={setCreateSupplierOpen}
+        initialName={
+          pdfPrefill?.prefillResult.unmatchedSupplierCandidates[0] ?? ""
+        }
+        onCreated={supplier => {
+          form.setValue("supplierId", supplier.id, { shouldValidate: true });
+        }}
+      />
     </>
   );
 }
