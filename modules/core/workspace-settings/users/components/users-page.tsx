@@ -85,7 +85,13 @@ function buildColumns(handlers: {
   ];
 }
 
-export default function Users() {
+export default function Users({
+  title = "Users",
+  subtitle = "Manage team members and invitations.",
+}: {
+  title?: string;
+  subtitle?: string;
+} = {}) {
   const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
 
   const pagination = useUrlPaginationState<UsersDirectoryListSort>({
@@ -163,8 +169,8 @@ export default function Users() {
 
   return (
     <ListingPage
-      title="Users"
-      subtitle="Manage team members and invitations."
+      title={title}
+      subtitle={subtitle}
       primaryAction={
         <ListingAction href="/users/new">
           <Plus className="size-3.5" />

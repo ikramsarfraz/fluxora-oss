@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { getConnectedBanks } from "@/modules/distribution/plaid/actions";
 import { BanksSettingsPage } from "@/modules/distribution/plaid/components/banks-settings-page";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
-import { SettingsPageHeader } from "@/modules/core/workspace-settings/components/settings-hub/settings-page-header";
 import { SettingsForbidden } from "@/modules/core/workspace-settings/components/settings-hub/settings-forbidden";
 
 async function BanksContent() {
@@ -18,14 +17,8 @@ export default async function BanksSettingsRoutePage() {
   }
 
   return (
-    <div>
-      <SettingsPageHeader
-        title="Bank connections"
-        description="Read-only · powered by Plaid · we never move money."
-      />
-      <Suspense fallback={<div className="text-[13px] text-stone-muted">Loading…</div>}>
-        <BanksContent />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="text-[13px] text-stone-muted">Loading…</div>}>
+      <BanksContent />
+    </Suspense>
   );
 }
