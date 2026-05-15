@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -90,6 +90,13 @@ type Props = {
   mode: Mode;
   invoiceId?: string;
   initialValues?: SupplierInvoiceFormValues;
+  /**
+   * Pre-parsed pipeline result handed down by the bulk-import review flow.
+   * When set in create mode, the form seeds its state from this result on
+   * mount — the same code path the file-upload handler uses — so the user
+   * lands on a fully populated review screen without re-uploading the PDF.
+   */
+  prefilledPipelineResult?: PipelineResult;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -465,7 +472,12 @@ const inputCls =
 
 
 // ── Component ──────────────────────────────────────────────────────────────
-export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
+export function SupplierInvoiceForm({
+  mode,
+  invoiceId,
+  initialValues,
+  prefilledPipelineResult,
+}: Props) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
@@ -710,26 +722,20 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     pdfInputRef.current?.click();
   }
 
-  async function handlePdfFileChange(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = event.target.files?.[0] ?? null;
-    event.target.value = "";
-    if (!file) return;
-    if (file.size > MAX_PDF_BYTES) {
-      toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
-      return;
-    }
-
-    try {
-      const result = await parsePdfMutation.mutateAsync(file);
+  // Apply a parsed PipelineResult to the form state. Used by both the
+  // file-upload handler (which produces the result via parsePdfMutation) and
+  // the bulk-import review flow (which hands the result over via the
+  // `prefilledPipelineResult` prop after parsing on a separate request).
+  const seedFromPipelineResult = useCallback(
+    (result: PipelineResult, options: { pdfFile: File | null } = { pdfFile: null }) => {
       form.reset(result.prefillResult.values);
-      setPendingPdfFile(file);
+      setPendingPdfFile(options.pdfFile);
       setPdfPrefill(result);
       savedAliasNamesRef.current = new Set();
 
-      // Only count lines where no product was auto-filled (confidence < 60 or no suggestion).
-      // AI suggestions with confidence ≥ 60 are pre-selected in the form already.
+      // Only count lines where no product was auto-filled (confidence < 60 or
+      // no suggestion). AI suggestions with confidence ≥ 60 are pre-selected
+      // in the form already.
       const newTrulyUnresolved = new Set(
         result.unresolvedLines
           .filter(l => !l.suggestedProductId || l.confidence < 60)
@@ -739,21 +745,28 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
       setPdfUnresolvedCount(newTrulyUnresolved.size);
       setAutoSaveStatus("idle");
 
-      // Map vendor name → form line index for lines still needing product selection.
-      // unmatchedLineDescriptions[k] corresponds to the (k+1)-th form line with empty productId.
+      // Map vendor name → form line index for lines still needing product
+      // selection. unmatchedLineDescriptions[k] corresponds to the (k+1)-th
+      // form line with empty productId.
       const newMap = new Map<string, number>();
       let unmatchedIdx = 0;
       const unmatchedNames = result.prefillResult.unmatchedLineDescriptions;
       for (let i = 0; i < result.prefillResult.values.lines.length; i++) {
-        if (!result.prefillResult.values.lines[i].productId && unmatchedIdx < unmatchedNames.length) {
+        if (
+          !result.prefillResult.values.lines[i].productId &&
+          unmatchedIdx < unmatchedNames.length
+        ) {
           newMap.set(unmatchedNames[unmatchedIdx], i);
           unmatchedIdx++;
         }
       }
       setVendorNameLineMap(newMap);
 
-      // Build per-line vendor name array for the lines editor display (invert newMap).
-      const vendorNames: (string | null)[] = Array(result.prefillResult.values.lines.length).fill(null);
+      // Build per-line vendor name array for the lines editor display
+      // (invert newMap).
+      const vendorNames: (string | null)[] = Array(
+        result.prefillResult.values.lines.length,
+      ).fill(null);
       for (const [vendorName, lineIdx] of newMap) {
         vendorNames[lineIdx] = vendorName;
       }
@@ -770,7 +783,48 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           })),
         );
       }
+    },
+    [
+      form,
+      replaceCharges,
+      setAutoSaveStatus,
+      setLineVendorNames,
+      setPdfPrefill,
+      setPdfUnresolvedCount,
+      setPendingPdfFile,
+      setTrulyUnresolvedNames,
+      setVendorNameLineMap,
+    ],
+  );
 
+  // Seed once from the bulk-import handoff. Effect runs only on mount in
+  // create mode — edit mode already populates initialValues from the DB.
+  const hasSeededFromPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (mode !== "create") return;
+    if (!prefilledPipelineResult) return;
+    if (hasSeededFromPrefilledRef.current) return;
+    hasSeededFromPrefilledRef.current = true;
+    seedFromPipelineResult(prefilledPipelineResult);
+    toast.success(
+      "Loaded parsed PDF. Review every field before saving the draft.",
+    );
+  }, [mode, prefilledPipelineResult, seedFromPipelineResult]);
+
+  async function handlePdfFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_PDF_BYTES) {
+      toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+
+    try {
+      const result = await parsePdfMutation.mutateAsync(file);
+      seedFromPipelineResult(result, { pdfFile: file });
       toast.success(`Read ${file.name}. Review the imported fields before saving.`);
     } catch (err) {
       toast.error(

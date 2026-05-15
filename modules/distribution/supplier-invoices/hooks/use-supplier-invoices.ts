@@ -64,24 +64,18 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
 }
 
 /**
- * Mutation hook for the bulk-import flow. Wraps the FormData-based action and
- * invalidates listing caches when at least one draft was created so the user
- * sees their new bills in the list without a manual refresh.
+ * Mutation hook for the bulk-import flow. The action now only parses PDFs;
+ * actual drafts are written when the user reviews each item via the
+ * single-import flow, so listing caches don't need invalidation here.
  */
 export function useBulkImportSupplierInvoices() {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: bulkImportSupplierInvoicesAction,
     onSuccess: result => {
-      if (result.summary.created > 0) {
-        invalidateAll(queryClient);
-        invalidateSetupChecklistQuery(queryClient);
-        captureClientEvent("bulk_import.completed", {
-          created: result.summary.created,
-          needs_review: result.summary.needsReview,
-          errored: result.summary.errored,
-        });
-      }
+      captureClientEvent("bulk_import.completed", {
+        parsed: result.summary.parsed,
+        errored: result.summary.errored,
+      });
     },
   });
 }
