@@ -10,7 +10,10 @@ import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-supplie
 import { CreateProductDialog } from "../create-product-dialog";
 import { CreateSupplierDialog } from "../create-supplier-dialog";
 
-import { createSupplierInvoiceAction } from "../../actions";
+import {
+  createSupplierInvoiceAction,
+  saveImportAliasesBatchAction,
+} from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 import { markBulkImportReviewed } from "../../utils/bulk-import-storage";
 
@@ -109,6 +112,7 @@ export function ReviewContainer({
   const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
   /** Which line is opening the Create Product dialog, or null when closed. */
   const [createProductForLine, setCreateProductForLine] = useState<number | null>(null);
+  const [rememberAliases, setRememberAliases] = useState(true);
 
   const enriched = useMemo(() => {
     return enrichData({
@@ -273,15 +277,41 @@ export function ReviewContainer({
         paymentMethod: pipelineResult.prefillResult.values.paymentMethod ?? null,
         notes: pipelineResult.prefillResult.values.notes || null,
         lines,
-        complete: false,
+        complete: true, // Complete & receive — creates lots + inventory atomically.
       });
+
+      // Remember-aliases: persist the user's confirmed line→product matches
+      // for this supplier so future imports auto-resolve. Only the *manual*
+      // overrides count — lines that came in already matched by the parser
+      // don't need an alias write-through.
+      if (rememberAliases && Object.keys(lineProductOverrides).length > 0) {
+        const aliasEntries = Object.entries(lineProductOverrides).map(
+          ([lineIdStr, override]) => {
+            const lineId = Number(lineIdStr);
+            const prefillLine = prefillLines[lineId - 1];
+            const rawText =
+              baseData.lines.find(l => l.id === lineId)?.raw ?? prefillLine?.productId ?? "";
+            return {
+              supplierId: supplierIdOverride,
+              vendorProductName: rawText,
+              internalProductId: override.productId,
+            };
+          },
+        );
+        // Best-effort — the alias write happens asynchronously after the
+        // bill is committed. A failure shouldn't unwind the bill itself.
+        await saveImportAliasesBatchAction(aliasEntries).catch(err => {
+          console.warn("[review] alias write-through failed", err);
+        });
+      }
+
       // Flip the corresponding bulk-import row to "Reviewed" so the landing
       // tab updates immediately on focus. The entry is intentionally NOT
       // deleted — it stays around (until TTL) so the user can re-open it.
       if (bulkImportKey) {
         markBulkImportReviewed(bulkImportKey, result.id);
       }
-      toast.success("Draft bill saved.");
+      toast.success("Bill posted to inventory.");
       router.push(`/supplier-invoices/${result.id}`);
     } catch (err) {
       const message =
@@ -296,6 +326,8 @@ export function ReviewContainer({
     pipelineResult,
     skippedLines,
     lineProductOverrides,
+    rememberAliases,
+    baseData.lines,
     bulkImportKey,
     router,
   ]);
@@ -337,6 +369,8 @@ export function ReviewContainer({
         products={products}
         supplierSelectedId={supplierIdOverride}
         lineMatchedProductIds={lineMatchedProductIds}
+        rememberAliases={rememberAliases}
+        onRememberAliasesChange={setRememberAliases}
       />
       <CreateSupplierDialog
         open={createSupplierOpen}

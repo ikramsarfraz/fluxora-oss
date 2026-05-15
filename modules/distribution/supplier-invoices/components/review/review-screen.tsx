@@ -42,6 +42,8 @@ export function ReviewScreen({
   products = [],
   supplierSelectedId,
   lineMatchedProductIds,
+  rememberAliases,
+  onRememberAliasesChange,
 }: {
   data: ReviewData;
   /** Real PDF URL — supplied by phase 5; omit for the demo placeholder. */
@@ -75,12 +77,19 @@ export function ReviewScreen({
   supplierSelectedId?: string | null;
   /** Per-line matched product id, used to drive each row's picker selected state. */
   lineMatchedProductIds?: Record<number, string | null>;
+  /** Controlled value for the footer's remember-aliases checkbox. */
+  rememberAliases?: boolean;
+  onRememberAliasesChange?: (value: boolean) => void;
 }) {
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
   const [supplier, setSupplier] = useState(data.parsed.supplier.value);
   const [filter, setFilter] = useState<ReviewFilter>("needs");
-  const [rememberAliases, setRememberAliases] = useState(true);
+  // When `rememberAliases` is uncontrolled, fall back to local state so the
+  // demo path keeps working without the host wiring anything.
+  const [rememberAliasesLocal, setRememberAliasesLocal] = useState(true);
+  const rememberAliasesValue = rememberAliases ?? rememberAliasesLocal;
+  const setRememberAliases = onRememberAliasesChange ?? setRememberAliasesLocal;
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const counts: ReviewCounts = useMemo(() => {
@@ -201,7 +210,7 @@ export function ReviewScreen({
             </div>
 
             <ReviewFooterStrip
-              rememberAliases={rememberAliases}
+              rememberAliases={rememberAliasesValue}
               onRememberAliasesChange={setRememberAliases}
               billTotal={data.parsed.total.value}
             />
