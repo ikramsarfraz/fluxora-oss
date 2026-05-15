@@ -29,6 +29,7 @@ export type AnalyticsEvent =
   | "welcome.completed"
   | "welcome.skipped"
   | "pdf.parsed"
+  | "bulk_import.processed"
   | "first_bill.saved"
   | "bill.saved"
   | "bill.received"

@@ -42,6 +42,12 @@ import {
 } from "../services/receiving";
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
 import {
+  bulkImportSupplierInvoices,
+  BULK_IMPORT_MAX_FILES,
+  type BulkImportFileInput,
+  type BulkImportResult,
+} from "../services/bulk-import";
+import {
   getImportProfilesForSupplier,
   createImportProfile,
   updateImportProfile,
@@ -211,6 +217,83 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
       ai_used: result.aiUsed,
       vision_used: result.visionUsed,
       first_bill_mode: Boolean(result.firstBillLines),
+    },
+  });
+  return result;
+}
+
+export async function bulkImportSupplierInvoicesAction(
+  formData: FormData,
+): Promise<BulkImportResult> {
+  // Each file is appended under the same key "file"; collect them in order.
+  const rawFiles = formData.getAll("file");
+  const files: File[] = [];
+  for (const f of rawFiles) {
+    if (f instanceof File && f.size > 0) files.push(f);
+  }
+  if (files.length === 0) {
+    throw new Error("Pick at least one PDF to import.");
+  }
+  if (files.length > BULK_IMPORT_MAX_FILES) {
+    throw new Error(
+      `At most ${BULK_IMPORT_MAX_FILES} PDFs can be imported in one batch.`,
+    );
+  }
+
+  // Validate every file upfront so we don't burn rate-limit tokens on bad
+  // uploads. validatePdfUpload checks MIME, magic bytes, and size caps.
+  const validations = await Promise.all(files.map(f => validatePdfUpload(f)));
+  const safeNames: string[] = [];
+  for (let i = 0; i < validations.length; i++) {
+    const v = validations[i];
+    if (!v.ok) {
+      throw new Error(`${files[i].name}: ${v.error}`);
+    }
+    safeNames.push(v.safeName);
+  }
+
+  const user = await getCurrentPortalUser();
+
+  // Rate-limit each file. Platform admins skip — keeps internal tooling
+  // unconstrained. Drawing per-file keeps cost-per-import predictable; if
+  // the budget runs out mid-batch we bail before the expensive parse work.
+  if (!(await isPlatformAdminAuthUser(user.authUserId))) {
+    for (let i = 0; i < files.length; i++) {
+      const [userResult, tenantResult] = await Promise.all([
+        applyRateLimit(rateLimiters.pdfParse, `user:${user.id}`),
+        applyRateLimit(rateLimiters.pdfParseTenant, `tenant:${user.tenantId}`),
+      ]);
+      if (!userResult.success) {
+        throw new RateLimitError(userResult.retryAfterSeconds);
+      }
+      if (!tenantResult.success) {
+        throw new RateLimitError(tenantResult.retryAfterSeconds);
+      }
+    }
+  }
+
+  // Materialise file bytes once so the bulk service can pass them through
+  // the parse pipeline without re-reading the FormData stream.
+  const inputs: BulkImportFileInput[] = await Promise.all(
+    files.map(async (file, i) => ({
+      originalFilename: safeNames[i],
+      mimeType: file.type || null,
+      bytes: Buffer.from(await file.arrayBuffer()),
+    })),
+  );
+
+  const startedAt = Date.now();
+  const result = await bulkImportSupplierInvoices(inputs);
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "bulk_import.processed",
+    properties: {
+      file_count: result.summary.total,
+      created_count: result.summary.created,
+      needs_review_count: result.summary.needsReview,
+      errored_count: result.summary.errored,
+      duration_ms: Date.now() - startedAt,
     },
   });
   return result;

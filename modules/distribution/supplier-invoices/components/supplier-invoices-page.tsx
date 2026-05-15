@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -151,6 +151,12 @@ export default function SupplierInvoicesPage() {
           <ListingAction href="/supplier-invoices/new">
             <Plus className="size-3.5" />
             Record bill
+          </ListingAction>
+        }
+        secondaryActions={
+          <ListingAction href="/supplier-invoices/bulk" variant="outline">
+            <Layers className="size-3.5" />
+            Bulk import
           </ListingAction>
         }
         columns={COLUMNS}
