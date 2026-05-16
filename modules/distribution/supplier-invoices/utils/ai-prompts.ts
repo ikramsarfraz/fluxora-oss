@@ -46,6 +46,19 @@ SUPPLIER NAME RULES — CRITICAL:
 LINE ITEM RULES:
 - For items that are clearly fees (delivery, freight, cut fee, service charge, tax),
   put them in "fees", NOT "lines".
+
+FEE CATEGORIES — REQUIRED:
+- Each fee MUST have a "category" field, drawn from this fixed set:
+  - "fuel"          → fuel surcharge, fuel adjustment
+  - "freight"       → freight, delivery, trucking, shipping
+  - "processing"    → cut fee, kill fee, processing fee, fabrication, trim
+  - "inspection"    → federal inspection fee, USDA fee, FSIS fee
+  - "cod"           → COD fee, cash-on-delivery handling
+  - "refrigeration" → refrigeration surcharge, cold-chain fee
+  - "other"         → anything that doesn't fit the above (taxes, misc)
+- Match by intent rather than label phrasing — if the line item says
+  "GAS SURCHARGE" treat it as "fuel"; if it says "ICE" treat it as
+  "refrigeration". When unsure, use "other" — never invent a new category.
 - If a line has both a weight and a per-lb rate: unitType = "catch_weight".
 - If a line has a per-case rate with no weight: unitType = "fixed_case".
 - If you cannot determine unitType: null.
@@ -120,7 +133,7 @@ REQUIRED JSON SCHEMA (return exactly this shape, no extra keys):
   "invoiceDate": string | null,
   "totalAmount": number | null,
   "subtotal": number | null,
-  "fees": [{ "description": string, "amount": number }],
+  "fees": [{ "description": string, "amount": number, "category": "fuel" | "freight" | "processing" | "inspection" | "cod" | "refrigeration" | "other" | null }],
   "lines": [
     {
       "vendorProductName": string,

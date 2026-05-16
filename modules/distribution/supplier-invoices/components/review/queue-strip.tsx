@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Check, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -64,6 +64,21 @@ export function QueueStrip({
     return map;
   }, [statsQuery.data]);
 
+  // Auto-scroll the active card into view when `currentKey` changes — which
+  // happens from the prev/next buttons in this strip, keyboard ← →, and
+  // FloatingNav. The rail itself has no visible scrollbar (`no-scrollbar`),
+  // so this is the only way the user sees the rail follow the selection.
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  useEffect(() => {
+    if (!currentKey) return;
+    const card = cardRefs.current[currentKey];
+    card?.scrollIntoView({
+      behavior: "smooth",
+      inline: "nearest",
+      block: "nearest",
+    });
+  }, [currentKey]);
+
   return (
     <div
       className="flex shrink-0 items-stretch border-b border-stone-line"
@@ -96,7 +111,8 @@ export function QueueStrip({
         </div>
       </div>
 
-      {/* Prev arrow */}
+      {/* Prev arrow — advances selection one invoice back. The
+          currentKey-change effect above auto-scrolls the new card into view. */}
       <ArrowButton
         disabled={!hasPrev}
         onClick={onPrev}
@@ -106,35 +122,47 @@ export function QueueStrip({
         <ChevronLeft className="size-[14px]" strokeWidth={1.6} />
       </ArrowButton>
 
-      {/* Carousel — horizontal scroll with thin scrollbar. `min-w-0` is
-          required so this flex item can actually shrink: flex items have an
-          implicit `min-width: auto` (= intrinsic content size) that would
-          otherwise let the cards push the strip wider than the viewport and
-          spill horizontal scroll onto <main>. */}
+      {/* Carousel — real scroll container (`overflow-x-auto`) so
+          `scrollIntoView` works reliably in every browser, with the visible
+          scrollbar hidden via `no-scrollbar` so the user navigates via the
+          prev/next arrows (which advance `currentKey`; the effect above
+          auto-scrolls the matching card into view). `min-w-0` lets this
+          flex item shrink — flex items have an implicit `min-width: auto`
+          (= intrinsic content size) that would otherwise let the cards
+          push the strip wider than the viewport and spill horizontal
+          scroll onto <main>. */}
       <div
-        className="flex flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden"
+        className="no-scrollbar flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scroll-smooth"
         style={{ paddingBottom: 2 }}
       >
         {queue.map((entry, idx) => (
-          <QueueCard
+          <div
             key={entry.key}
-            entry={entry}
-            position={idx + 1}
-            isCurrent={entry.key === currentKey}
-            isCompleting={entry.key === completingKey}
-            performanceBucket={
-              entry.supplierId
-                ? bucketBySupplierId.get(entry.supplierId) ?? null
-                : null
-            }
-            onClick={() => {
-              if (entry.key !== completingKey) onPick(entry.key);
+            ref={el => {
+              cardRefs.current[entry.key] = el;
             }}
-          />
+            className="flex items-stretch"
+          >
+            <QueueCard
+              entry={entry}
+              position={idx + 1}
+              isCurrent={entry.key === currentKey}
+              isCompleting={entry.key === completingKey}
+              performanceBucket={
+                entry.supplierId
+                  ? bucketBySupplierId.get(entry.supplierId) ?? null
+                  : null
+              }
+              onClick={() => {
+                if (entry.key !== completingKey) onPick(entry.key);
+              }}
+            />
+          </div>
         ))}
       </div>
 
-      {/* Next arrow */}
+      {/* Next arrow — advances selection one invoice forward. The
+          currentKey-change effect above auto-scrolls the new card into view. */}
       <ArrowButton
         disabled={!hasNext}
         onClick={onNext}

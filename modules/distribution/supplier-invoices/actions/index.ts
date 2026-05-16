@@ -28,6 +28,7 @@ import {
   completeSupplierInvoice,
   createSupplierInvoice,
   deleteSupplierInvoice,
+  findExistingSupplierInvoices,
   generateSupplierInvoiceReferenceNumber,
   getReversalPreview,
   getSupplierInvoiceById,
@@ -39,6 +40,7 @@ import {
   reverseSupplierInvoice,
   updateSupplierInvoice,
   uploadSupplierInvoiceAttachment,
+  type ExistingSupplierInvoiceMatch,
 } from "../services/receiving";
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
 import {
@@ -90,6 +92,18 @@ export async function getSupplierInvoicesPageAction(
 
 export async function getSupplierInvoiceByIdAction(id: string) {
   return await getSupplierInvoiceById(id);
+}
+
+/**
+ * Look up posted supplier invoices that share the same supplier + printed
+ * invoice number — used by the Review screen to warn before the user
+ * re-posts a duplicate vendor invoice.
+ */
+export async function findExistingSupplierInvoicesAction(args: {
+  supplierId: string;
+  supplierInvoiceNumber: string;
+}): Promise<ExistingSupplierInvoiceMatch[]> {
+  return await findExistingSupplierInvoices(args);
 }
 
 export async function createSupplierInvoiceAction(

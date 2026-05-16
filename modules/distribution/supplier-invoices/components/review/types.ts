@@ -82,6 +82,37 @@ export type ParsedLine = {
   /** Case-priced rather than weight-priced. */
   fixed?: boolean;
   match: LineMatch;
+  /**
+   * AI-detected fee category. Populated only for fee rows (synthesized in
+   * `mapPipelineToReviewData` from `pipeline.detectedFees`). Shown as a
+   * small pill on the fee row so the user knows whether something is
+   * fuel vs. processing vs. freight before it lands in COGS reports.
+   */
+  feeCategory?:
+    | "fuel"
+    | "freight"
+    | "processing"
+    | "inspection"
+    | "cod"
+    | "refrigeration"
+    | "other"
+    | null;
+};
+
+/**
+ * One row per matched line whose unit price has moved more than a small
+ * threshold since the supplier's previous invoice for the same product.
+ * Powers the price-change banner above the line items list.
+ */
+export type ParsedPriceDeviation = {
+  productId: string;
+  productName: string;
+  parsedUnitPrice: number;
+  lastUnitPrice: number;
+  /** Signed delta as percent — positive when price went up. */
+  deviationPct: number;
+  /** Date of the last invoice we're comparing against. */
+  lastInvoiceDate: string;
 };
 
 export type ReviewData = {
@@ -91,6 +122,8 @@ export type ReviewData = {
   size: string;
   parsed: ParsedHeader;
   lines: ParsedLine[];
+  /** Optional. Empty when the parser found nothing notable. */
+  priceDeviations: ParsedPriceDeviation[];
 };
 
 export type ReviewFilter = "needs" | "matched" | "fees" | "all";
