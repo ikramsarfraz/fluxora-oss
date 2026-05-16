@@ -48,6 +48,15 @@ import {
   type BulkImportResult,
 } from "../services/bulk-import";
 import {
+  getBulkImportFile,
+  getBulkImportPdfSignedUrl,
+  listPendingBulkImportFiles,
+  markBulkImportFileReviewed,
+  restoreBulkImportFile,
+  softDeleteBulkImportFile,
+  type BulkImportFileRow,
+} from "../services/bulk-import-history";
+import {
   getImportProfilesForSupplier,
   createImportProfile,
   updateImportProfile,
@@ -323,6 +332,53 @@ export async function bulkImportSupplierInvoicesAction(
     },
   });
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk-import history actions — server-backed reads + writes that replace
+// the prior localStorage handoff. The client uses these to drive the
+// bulk-landing screen, the review queue carousel, and the per-file PDF
+// preview without writing anything to localStorage / IndexedDB.
+// ---------------------------------------------------------------------------
+
+export async function listPendingBulkImportFilesAction(): Promise<
+  BulkImportFileRow[]
+> {
+  return await listPendingBulkImportFiles();
+}
+
+export async function getBulkImportFileAction(
+  id: string,
+): Promise<BulkImportFileRow | null> {
+  return await getBulkImportFile(id);
+}
+
+export async function markBulkImportFileReviewedAction(args: {
+  id: string;
+  supplierInvoiceId: string;
+}): Promise<void> {
+  return await markBulkImportFileReviewed(args);
+}
+
+export async function getBulkImportPdfSignedUrlAction(
+  id: string,
+): Promise<string | null> {
+  return await getBulkImportPdfSignedUrl(id);
+}
+
+/**
+ * Soft-delete a bulk-import row. Pairs with `restoreBulkImportFileAction`
+ * for the bulk-landing Undo affordance. The R2 object is retained on
+ * delete; recovery is just clearing `deleted_at`.
+ */
+export async function softDeleteBulkImportFileAction(
+  id: string,
+): Promise<void> {
+  return await softDeleteBulkImportFile(id);
+}
+
+export async function restoreBulkImportFileAction(id: string): Promise<void> {
+  return await restoreBulkImportFile(id);
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(

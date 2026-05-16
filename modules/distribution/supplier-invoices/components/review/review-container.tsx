@@ -12,14 +12,11 @@ import { CreateSupplierDialog } from "../create-supplier-dialog";
 
 import {
   createSupplierInvoiceAction,
+  markBulkImportFileReviewedAction,
   saveImportAliasesBatchAction,
   uploadSupplierInvoiceAttachmentAction,
 } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
-import {
-  clearPendingBulkImportResultOnly,
-  markBulkImportReviewed,
-} from "../../utils/bulk-import-storage";
 
 import {
   mapPipelineToLineBboxes,
@@ -380,13 +377,20 @@ export function ReviewContainer({
         });
       }
 
-      // Flip the corresponding bulk-import row to "Reviewed" so the landing
-      // tab updates immediately on focus. The entry is intentionally NOT
-      // deleted — it stays around (until TTL) so the user can re-open it.
+      // Flip the corresponding bulk-import row to "Reviewed" on the server
+      // so the bulk-landing screen reflects the post immediately. Best-
+      // effort — a failure here doesn't unwind the bill itself, the user
+      // can still see the new bill in the supplier-invoices list.
       // (In queue mode the shell's completeCurrent also calls this with
-      // the same id; it's idempotent so the duplicate is harmless.)
+      // the same id; the server-side update is idempotent so the duplicate
+      // is harmless.)
       if (bulkImportKey) {
-        markBulkImportReviewed(bulkImportKey, result.id);
+        await markBulkImportFileReviewedAction({
+          id: bulkImportKey,
+          supplierInvoiceId: result.id,
+        }).catch(err => {
+          console.warn("[review] mark-reviewed failed", err);
+        });
       }
       toast.success("Bill posted to inventory.");
       if (onSubmitSuccess) {
@@ -465,20 +469,11 @@ export function ReviewContainer({
         pdfPaneAccessory={pdfPaneAccessory}
         paneEnterDirection={paneEnterDirection}
         onCancel={() => router.push("/supplier-invoices/bulk")}
-        onReparse={
-          bulkImportKey
-            ? () => {
-                // Drop the cached parse result and walk the user through the
-                // parsing screen, which reads the PDF blob still in IndexedDB
-                // and re-runs the parser. Overrides the user picked here are
-                // discarded — the whole point of re-parsing is to start fresh.
-                clearPendingBulkImportResultOnly(bulkImportKey);
-                router.push(
-                  `/supplier-invoices/parsing/${encodeURIComponent(bulkImportKey)}`,
-                );
-              }
-            : undefined
-        }
+        // Re-parse is parked while the server-side bulk_import_files row is
+        // the source of truth — the legacy parsing screen reads from
+        // IndexedDB, which the new server flow no longer populates.
+        // Tracked as a follow-up alongside the single-PDF migration.
+        onReparse={undefined}
         onSelectLineCandidate={handleLineCandidate}
         onSelectLineProduct={handleSelectLineProduct}
         onSkipLine={handleSkipLine}

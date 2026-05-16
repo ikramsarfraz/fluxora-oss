@@ -1,14 +1,12 @@
 /**
- * Convert a localStorage handoff entry (the shape the bulk-import uploader
- * persists) into the `BatchFile` the new bulk-landing screen renders against.
- *
- * The mapping leans on:
- * - `pipelineResult.confidence` for the parse-confidence meter.
- * - `pipelineResult.unmatchedLineCount` + `warnings` for the issues column.
- * - The presence of `reviewedAt` for the StatusPill state.
+ * Convert a server-side `BulkImportFileRow` into the `BatchFile` the
+ * bulk-landing screen renders against. The shape mirrors the prior
+ * localStorage-backed entry conversion — the upstream change is purely
+ * "where the row lives" (DB rather than localStorage), so the presentation
+ * mapping stays stable.
  */
 
-import type { StoredBulkImportEntry } from "../../utils/bulk-import-storage";
+import type { BulkImportFileRow } from "../../services/bulk-import-history";
 
 import type {
   BatchFile,
@@ -16,80 +14,100 @@ import type {
   BatchFileStatus,
 } from "./types";
 
-const REL_TIME_UNITS: Array<[number, string]> = [
-  [60 * 1000, "s"],
-  [60 * 60 * 1000, "m"],
-  [24 * 60 * 60 * 1000, "h"],
-  [Infinity, "d"],
-];
-
-function relativeTime(ms: number): string {
-  const delta = Math.max(0, Date.now() - ms);
-  // Pick the largest unit that still produces a value <= 99, capped at "d".
-  if (delta < REL_TIME_UNITS[0][0]) return "just now";
-  if (delta < REL_TIME_UNITS[1][0]) {
-    return `${Math.floor(delta / 1000)}s ago`;
-  }
-  if (delta < REL_TIME_UNITS[2][0]) {
-    return `${Math.floor(delta / (60 * 1000))}m ago`;
-  }
-  if (delta < REL_TIME_UNITS[3][0]) {
+function relativeTime(date: Date): string {
+  const delta = Math.max(0, Date.now() - date.getTime());
+  if (delta < 60 * 1000) return "just now";
+  if (delta < 60 * 60 * 1000) return `${Math.floor(delta / 1000)}s ago`;
+  if (delta < 24 * 60 * 60 * 1000) return `${Math.floor(delta / (60 * 1000))}m ago`;
+  if (delta < 7 * 24 * 60 * 60 * 1000)
     return `${Math.floor(delta / (60 * 60 * 1000))}h ago`;
-  }
   return `${Math.floor(delta / (24 * 60 * 60 * 1000))}d ago`;
 }
 
-function statusFor(entry: StoredBulkImportEntry): BatchFileStatus {
-  if (entry.reviewedAt) return "reviewed";
-  const item = entry.item;
-  const unmatched = item.unmatchedLineCount;
-  const hasSupplier = item.supplierMatched;
-  if (unmatched === 0 && hasSupplier) return "attention";
-  if (!hasSupplier || unmatched > item.lineCount / 2) return "needs-review";
+function unmatchedLineCount(row: BulkImportFileRow): number {
+  const pipeline = row.pipelineResult;
+  if (!pipeline) return 0;
+  // Mirror the legacy localStorage stat: count lines whose unresolved entry
+  // either has no suggested product or a low-confidence one. The pipeline
+  // result already pre-computes this in `unresolvedLines` so we read it
+  // straight off without re-deriving from `values.lines`.
+  return pipeline.unresolvedLines.filter(
+    u => !u.suggestedProductId || u.confidence < 65,
+  ).length;
+}
+
+function lineCount(row: BulkImportFileRow): number {
+  return row.pipelineResult?.prefillResult.values.lines.length ?? 0;
+}
+
+function supplierMatched(row: BulkImportFileRow): boolean {
+  return Boolean(row.pipelineResult?.prefillResult.values.supplierId);
+}
+
+function supplierName(row: BulkImportFileRow): string | null {
+  const pipeline = row.pipelineResult;
+  if (!pipeline) return null;
+  return pipeline.prefillResult.unmatchedSupplierCandidates[0] ?? null;
+}
+
+function warnings(row: BulkImportFileRow): string[] {
+  return row.pipelineResult?.warnings ?? [];
+}
+
+function computedLineTotal(row: BulkImportFileRow): string {
+  return (
+    row.pipelineResult?.prefillResult.totalComparison.computedLineTotal ?? "0.00"
+  );
+}
+
+function statusFor(row: BulkImportFileRow): BatchFileStatus {
+  if (row.status === "reviewed") return "reviewed";
+  const unmatched = unmatchedLineCount(row);
+  const matched = supplierMatched(row);
+  const total = lineCount(row);
+  if (unmatched === 0 && matched) return "attention";
+  if (!matched || unmatched > total / 2) return "needs-review";
   return "attention";
 }
 
-function issuesFor(entry: StoredBulkImportEntry): BatchFileIssue[] {
-  const item = entry.item;
+function issuesFor(row: BulkImportFileRow): BatchFileIssue[] {
   const issues: BatchFileIssue[] = [];
-  if (!item.supplierMatched) {
+  const matched = supplierMatched(row);
+  const unmatched = unmatchedLineCount(row);
+  const total = lineCount(row);
+  const ws = warnings(row);
+
+  if (!matched) {
     issues.push({ tone: "danger", message: "Supplier not in directory" });
   }
-  if (item.unmatchedLineCount > 0) {
+  if (unmatched > 0) {
     issues.push({
-      tone: item.unmatchedLineCount === item.lineCount ? "danger" : "warn",
-      message: `${item.unmatchedLineCount} of ${item.lineCount} lines unmatched`,
+      tone: unmatched === total ? "danger" : "warn",
+      message: `${unmatched} of ${total} lines unmatched`,
     });
   }
-  if (item.warnings.length > 0 && issues.length < 2) {
+  if (ws.length > 0 && issues.length < 2) {
     issues.push({
       tone: "warn",
       message:
-        item.warnings.length === 1
-          ? item.warnings[0]
-          : `${item.warnings.length} parsing warnings`,
+        ws.length === 1 ? ws[0] : `${ws.length} parsing warnings`,
     });
   }
   return issues;
 }
 
-export function entryToBatchFile(args: {
-  key: string;
-  entry: StoredBulkImportEntry;
-}): BatchFile {
-  const { key, entry } = args;
-  const item = entry.item;
+export function rowToBatchFile(row: BulkImportFileRow): BatchFile {
   return {
-    id: key,
-    name: item.filename,
-    supplier: item.supplierName,
+    id: row.id,
+    name: row.filename,
+    supplier: supplierName(row),
     invoiceNumber:
-      item.pipelineResult.prefillResult.values.supplierInvoiceNumber || null,
-    lineCount: item.lineCount,
-    totalAmount: Number(item.computedLineTotal) || 0,
-    confidence: Math.round(item.pipelineResult.confidence),
-    status: statusFor(entry),
-    issues: issuesFor(entry),
-    elapsedLabel: relativeTime(entry.storedAt),
+      row.pipelineResult?.prefillResult.values.supplierInvoiceNumber || null,
+    lineCount: lineCount(row),
+    totalAmount: Number(computedLineTotal(row)) || 0,
+    confidence: Math.round(row.pipelineResult?.confidence ?? 0),
+    status: statusFor(row),
+    issues: issuesFor(row),
+    elapsedLabel: relativeTime(row.createdAt),
   };
 }

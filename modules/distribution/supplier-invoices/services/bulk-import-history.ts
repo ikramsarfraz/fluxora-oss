@@ -210,9 +210,8 @@ export async function markBulkImportFileReviewed(args: {
 
 /**
  * Soft-delete a bulk-import row. The underlying R2 object is intentionally
- * retained — storage is cheap and recovery is "set deleted_at = null".
- * Phase B wires this up to a UI affordance; Phase A defines the operation
- * so the wiring above is ready to call.
+ * retained — storage is cheap and recovery is `restoreBulkImportFile`,
+ * which just clears `deletedAt`.
  */
 export async function softDeleteBulkImportFile(id: string): Promise<void> {
   const tenant = await getCurrentTenant();
@@ -230,6 +229,31 @@ export async function softDeleteBulkImportFile(id: string): Promise<void> {
         eq(bulkImportFiles.id, id),
         eq(bulkImportFiles.tenantId, tenant.id),
         isNull(bulkImportFiles.deletedAt),
+      ),
+    );
+}
+
+/**
+ * Restore a previously soft-deleted bulk-import row. Powers the "Undo"
+ * affordance on the bulk-landing screen — the toast that fires after a
+ * dismiss stays around for ~6s and clicking it calls back through here.
+ * Idempotent: restoring a row that isn't deleted is a no-op.
+ */
+export async function restoreBulkImportFile(id: string): Promise<void> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  await db
+    .update(bulkImportFiles)
+    .set({ deletedAt: null })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
       ),
     );
 }

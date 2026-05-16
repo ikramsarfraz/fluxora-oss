@@ -4,12 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { parseSupplierInvoicePdfAction } from "../../actions";
+import { bulkImportSupplierInvoicesAction } from "../../actions";
 import {
   clearPendingBulkImport,
-  readPendingBulkImport,
   readPendingPdf,
-  storePendingBulkImport,
 } from "../../utils/bulk-import-storage";
 
 import { ParsingProgressScreen } from "./parsing-progress-screen";
@@ -65,16 +63,6 @@ export function ParsingProgressLive({
     parseStartedRef.current = true;
 
     async function go() {
-      // If we already parsed this key (back navigation), short-circuit to
-      // the review screen instead of double-charging the rate limit.
-      const existing = readPendingBulkImport(storageKey);
-      if (existing) {
-        router.replace(
-          `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(storageKey)}`,
-        );
-        return;
-      }
-
       const pdfFile = await readPendingPdf(storageKey);
       if (cancelledRef.current) return;
       if (!pdfFile) {
@@ -85,37 +73,36 @@ export function ParsingProgressLive({
       }
       setFile(pdfFile);
 
+      // Single-file batch — runs the same persistence path the bulk uploader
+      // uses, so the resulting row lands in `bulk_import_files` and the
+      // Review screen can read it from the server like any other entry.
       const formData = new FormData();
       formData.append("file", pdfFile);
 
       try {
-        const pipelineResult = await parseSupplierInvoicePdfAction(formData);
+        const result = await bulkImportSupplierInvoicesAction(formData);
         if (cancelledRef.current) return;
-        storePendingBulkImport(
-          {
-            filename: pdfFile.name,
-            status: "parsed",
-            pipelineResult,
-            supplierName:
-              pipelineResult.proposedProfile?.supplierId
-                ? null
-                : pipelineResult.prefillResult.unmatchedSupplierCandidates[0] ?? null,
-            supplierMatched: Boolean(pipelineResult.prefillResult.values.supplierId),
-            lineCount: pipelineResult.prefillResult.values.lines.length,
-            unmatchedLineCount: pipelineResult.unresolvedLines.length,
-            computedLineTotal: pipelineResult.prefillResult.totalComparison.computedLineTotal,
-            warnings: pipelineResult.warnings,
-          },
-          storageKey,
-        );
+        const item = result.items[0];
+        if (!item || item.status !== "parsed" || !item.bulkImportFileId) {
+          setError(
+            item && item.status === "error"
+              ? item.error
+              : "Parse failed — no bulk-import row was created.",
+          );
+          return;
+        }
+        // PDF blob now lives in R2 + bulk_import_files — drop the transient
+        // IndexedDB handoff blob so we don't leak quota.
+        clearPendingBulkImport(storageKey);
         setOverallProgress(100);
         setDone(true);
         // Brief beat so the user sees the "done" state flash before we
         // navigate. Keep it short — under 350ms feels instant.
+        const bulkImportFileId = item.bulkImportFileId;
         setTimeout(() => {
           if (cancelledRef.current) return;
           router.replace(
-            `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(storageKey)}`,
+            `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(bulkImportFileId)}`,
           );
         }, 250);
       } catch (err) {
