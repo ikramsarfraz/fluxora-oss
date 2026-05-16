@@ -1,102 +1,57 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
-import { ReviewContainer } from "./review/review-container";
-import {
-  readPendingBulkImport,
-  readPendingPdf,
-} from "../utils/bulk-import-storage";
-import type { PipelineResult } from "../services/parsing-pipeline";
+import { ReviewQueueShell } from "./review/review-queue-shell";
+import { readPendingBulkImport } from "../utils/bulk-import-storage";
 
 type BulkImportLoad =
   | { state: "none" }
   | { state: "loading" }
-  | {
-      state: "ready";
-      result: PipelineResult;
-      pdfFile: File | null;
-      key: string;
-    }
+  | { state: "ready"; key: string }
   | { state: "expired" };
 
 /**
  * Client wrapper for the "new bill" route. When the URL carries a
- * `bulk-import-key` query param (handed over by the bulk-import panel), we
- * load the pre-parsed PipelineResult from localStorage AND the original PDF
- * blob from IndexedDB, then pass both down so the form can seed itself
- * without re-uploading the PDF and still render the PDF preview pane +
- * attach the file when the draft is saved.
- *
- * The localStorage entry is cleared as soon as we've read it — re-loading
- * the same review tab won't double-consume, and the bulk-import panel
- * notices the empty key on visibility-change and flips that row to
- * "Reviewed".
+ * `bulk-import-key` query param (handed over by the bulk-import panel /
+ * bulk-landing screen), we hand off to the new Review Queue Carousel,
+ * which loads every pending bulk-import entry and lets the user sweep
+ * through them sequentially without leaving the review view. Single-PDF
+ * imports work the same way — the carousel just has one card.
  */
+function resolveInitialLoad(bulkImportKey: string | null): BulkImportLoad {
+  // Lazy initializer — runs on first client render. localStorage is unavailable
+  // during SSR but resolveInitialLoad is only ever called via useState's lazy
+  // form below, so we're guaranteed to be in the browser by then.
+  if (!bulkImportKey) return { state: "none" };
+  if (typeof window === "undefined") return { state: "loading" };
+  const entry = readPendingBulkImport(bulkImportKey);
+  if (!entry) return { state: "expired" };
+  return { state: "ready", key: bulkImportKey };
+}
+
 export function SupplierInvoiceCreateShell() {
   const params = useSearchParams();
   const bulkImportKey = params?.get("bulk-import-key") ?? null;
-  const [load, setLoad] = useState<BulkImportLoad>(
-    bulkImportKey ? { state: "loading" } : { state: "none" },
+  // Lazy initializer ensures we read localStorage exactly once on mount and
+  // never call setState from inside an effect (which the React Compiler
+  // flags as a cascading-render hazard).
+  const [load] = useState<BulkImportLoad>(() =>
+    resolveInitialLoad(bulkImportKey),
   );
-
-  useEffect(() => {
-    // localStorage/IndexedDB aren't available during SSR; this can't run
-    // earlier than first client render. The setState calls are intentional —
-    // we're synchronising external storage into React state once on mount.
-    let cancelled = false;
-
-    async function load() {
-      if (!bulkImportKey) {
-        setLoad({ state: "none" });
-        return;
-      }
-      const entry = readPendingBulkImport(bulkImportKey);
-      if (!entry) {
-        if (!cancelled) setLoad({ state: "expired" });
-        return;
-      }
-      const pdfFile = await readPendingPdf(bulkImportKey);
-      if (cancelled) return;
-      setLoad({
-        state: "ready",
-        result: entry.item.pipelineResult,
-        pdfFile,
-        key: bulkImportKey,
-      });
-      // Entry is intentionally NOT cleared here — the new bulk-landing screen
-      // (phase 5b) needs it to stay around so the row can flip to "Reviewed"
-      // after submit. ReviewContainer calls markBulkImportReviewed on success
-      // and the 24h TTL handles eventual cleanup. The legacy bulk-import
-      // panel's "row reviewed?" signal is therefore no longer accurate, but
-      // that panel is being retired in 5g.
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [bulkImportKey]);
 
   if (load.state === "loading") {
     // Brief flicker before storage reads complete — keep it silent.
     return null;
   }
 
-  // Bulk-import handoff with a parsed result → render the new Review screen.
-  // The legacy SupplierInvoiceForm path still serves manual-create and the
-  // expired-handoff fallback so users can re-upload a PDF.
   if (load.state === "ready") {
-    return (
-      <ReviewBulkImport
-        fileName={load.pdfFile?.name ?? load.result.prefillResult.sourceFilename}
-        pdfFile={load.pdfFile}
-        result={load.result}
-        bulkImportKey={load.key}
-      />
-    );
+    // The queue shell owns the carousel state and renders ReviewContainer
+    // internally for the active invoice. PDF blobs are fetched per-invoice
+    // from IndexedDB inside the shell.
+    return <ReviewQueueShell initialKey={load.key} />;
   }
 
   return (
@@ -120,37 +75,4 @@ export function SupplierInvoiceCreateShell() {
       <SupplierInvoiceForm mode="create" />
     </>
   );
-}
-
-function ReviewBulkImport({
-  fileName,
-  pdfFile,
-  result,
-  bulkImportKey,
-}: {
-  fileName: string;
-  pdfFile: File | null;
-  result: PipelineResult;
-  bulkImportKey: string;
-}) {
-  const fileSize = useMemo(() => formatFileSize(pdfFile?.size), [pdfFile?.size]);
-
-  return (
-    <ReviewContainer
-      fileName={fileName}
-      fileSize={fileSize}
-      pipelineResult={result}
-      pdfFile={pdfFile}
-      bulkImportKey={bulkImportKey}
-    />
-  );
-}
-
-function formatFileSize(bytes: number | undefined): string {
-  if (!bytes || bytes <= 0) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  const mb = kb / 1024;
-  return `${mb.toFixed(1)} MB`;
 }

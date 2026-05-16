@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -30,6 +30,11 @@ import {
 import { ReviewScreen } from "./review-screen";
 import type { ParsedLine, ProductCandidate, SupplierCandidate } from "./types";
 
+/** Custom event the queue shell dispatches when the user clicks the
+ *  page-header "Complete & next" button. ReviewContainer listens for this
+ *  so the form's submit logic stays encapsulated here. */
+const QUEUE_COMPLETE_EVENT = "review-queue:complete";
+
 /**
  * Threads a real `PipelineResult` (loaded by the caller from localStorage or
  * IndexedDB) through the new Review screen. Owns the editable state — supplier
@@ -56,6 +61,13 @@ export function ReviewContainer({
   pipelineResult,
   pdfFile,
   bulkImportKey,
+  topSlot,
+  headerSlot,
+  pdfPaneAccessory,
+  paneEnterDirection,
+  onSubmitStart,
+  onSubmitEnd,
+  onSubmitSuccess,
 }: {
   fileName: string;
   fileSize?: string;
@@ -69,6 +81,20 @@ export function ReviewContainer({
    * row flips to the "Reviewed" status pill without a manual reload.
    */
   bulkImportKey?: string | null;
+  /** Queue-mode pass-through slots — see ReviewScreen for details. */
+  topSlot?: ReactNode;
+  headerSlot?: ReactNode;
+  pdfPaneAccessory?: ReactNode;
+  paneEnterDirection?: "next" | "prev";
+  /**
+   * Queue-mode lifecycle hooks. The shell uses these to drive the page
+   * header's submitting-spinner state and to fire the completion animation
+   * once the bill is actually posted. When ALL three are omitted (default
+   * single-PDF path), submit routes to the bill detail page on success.
+   */
+  onSubmitStart?: () => void;
+  onSubmitEnd?: () => void;
+  onSubmitSuccess?: (args: { supplierInvoiceId: string }) => void;
 }) {
   const router = useRouter();
   const productsQuery = useProducts();
@@ -289,6 +315,7 @@ export function ReviewContainer({
     }
 
     setSubmitting(true);
+    onSubmitStart?.();
     try {
       const result = await createSupplierInvoiceAction({
         supplierId: supplierIdOverride,
@@ -356,17 +383,28 @@ export function ReviewContainer({
       // Flip the corresponding bulk-import row to "Reviewed" so the landing
       // tab updates immediately on focus. The entry is intentionally NOT
       // deleted — it stays around (until TTL) so the user can re-open it.
+      // (In queue mode the shell's completeCurrent also calls this with
+      // the same id; it's idempotent so the duplicate is harmless.)
       if (bulkImportKey) {
         markBulkImportReviewed(bulkImportKey, result.id);
       }
       toast.success("Bill posted to inventory.");
-      router.push(`/supplier-invoices/${result.id}`);
+      if (onSubmitSuccess) {
+        // Queue-mode: hand control back to the shell so it can animate the
+        // current card out and advance to the next invoice. The detail
+        // page is reachable from the queue's "Reviewed" pill afterwards.
+        onSubmitSuccess({ supplierInvoiceId: result.id });
+      } else {
+        // Default single-PDF path: route to the new bill detail page.
+        router.push(`/supplier-invoices/${result.id}`);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to save the bill.";
       toast.error(message);
     } finally {
       setSubmitting(false);
+      onSubmitEnd?.();
     }
   }, [
     submitting,
@@ -380,7 +418,22 @@ export function ReviewContainer({
     pdfFile,
     fileName,
     router,
+    onSubmitStart,
+    onSubmitEnd,
+    onSubmitSuccess,
   ]);
+
+  // Queue-mode: listen for the page header's Complete event so the form's
+  // existing submit() captures all of the in-form overrides. Single-PDF mode
+  // ignores the event because nothing fires it.
+  useEffect(() => {
+    if (!onSubmitSuccess) return; // Only attach in queue mode.
+    const handler = () => {
+      void submit();
+    };
+    window.addEventListener(QUEUE_COMPLETE_EVENT, handler);
+    return () => window.removeEventListener(QUEUE_COMPLETE_EVENT, handler);
+  }, [onSubmitSuccess, submit]);
 
   const lineMatchedProductIds = useMemo(() => {
     const map: Record<number, string | null> = {};
@@ -407,6 +460,10 @@ export function ReviewContainer({
         lineBboxes={lineBboxes.length > 0 ? lineBboxes : undefined}
         onSubmit={submit}
         submitDisabled={submitting}
+        topSlot={topSlot}
+        headerSlot={headerSlot}
+        pdfPaneAccessory={pdfPaneAccessory}
+        paneEnterDirection={paneEnterDirection}
         onCancel={() => router.push("/supplier-invoices/bulk")}
         onReparse={
           bulkImportKey

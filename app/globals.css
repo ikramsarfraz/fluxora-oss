@@ -220,6 +220,47 @@
   }
 }
 
+/* ── Review queue carousel animations ───────────────────────────────────── */
+
+/* Queue card collapses out when the user posts an invoice. Reaches scale 0.7
+   + opacity 0 + max-width 0 so the remaining cards slide left to close the
+   gap in one continuous motion. */
+@keyframes review-complete-out {
+  0%   { transform: scale(1) translateY(0); opacity: 1; }
+  35%  { transform: scale(0.96) translateY(-2px); opacity: 1; }
+  100% { transform: scale(0.7) translateY(-10px); opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin-right: -8px; }
+}
+.review-queue-card-completing {
+  animation: review-complete-out 550ms cubic-bezier(0.6, 0, 0.2, 1) forwards;
+}
+
+/* PDF + form panes slide in from the right when the user moves to a later
+   invoice. The from-prev modifier mirrors the direction for leftward nav. */
+@keyframes review-pane-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes review-pane-in-left {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.review-pane-enter {
+  animation: review-pane-in 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.review-pane-enter.review-pane-enter-from-prev {
+  animation-name: review-pane-in-left;
+}
+
+/* All-caught-up empty state entrance — a single 800ms burst on mount. */
+@keyframes review-done-burst {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.review-done-burst {
+  animation: review-done-burst 800ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 /* ── Loading UX animations ──────────────────────────────────────────────── */
 
 @keyframes loading-shimmer {

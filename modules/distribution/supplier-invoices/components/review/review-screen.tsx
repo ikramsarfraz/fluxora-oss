@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import { cn } from "@/lib/utils";
 
 import { FilterSegmented } from "./filter-segmented";
 import { HeaderCard } from "./header-card";
@@ -44,6 +46,10 @@ export function ReviewScreen({
   lineMatchedProductIds,
   rememberAliases,
   onRememberAliasesChange,
+  topSlot,
+  headerSlot,
+  pdfPaneAccessory,
+  paneEnterDirection,
 }: {
   data: ReviewData;
   /** Original PDF bytes — supplied by phase 5; omit for the demo placeholder. */
@@ -80,6 +86,28 @@ export function ReviewScreen({
   /** Controlled value for the footer's remember-aliases checkbox. */
   rememberAliases?: boolean;
   onRememberAliasesChange?: (value: boolean) => void;
+  /** Optional chrome to render at the very top of <main> (above the header). */
+  topSlot?: ReactNode;
+  /**
+   * Optional override for the default ReviewHeaderStrip. When supplied, the
+   * host renders its own page header (e.g. the queue-aware one with
+   * Skip / Complete & next buttons). When omitted, the legacy single-PDF
+   * header strip renders.
+   */
+  headerSlot?: ReactNode;
+  /**
+   * Optional absolutely-positioned overlay rendered inside the same horizontal
+   * flex as the PDF pane — used by the queue carousel to drop floating
+   * prev/next arrows over the PDF.
+   */
+  pdfPaneAccessory?: ReactNode;
+  /**
+   * When set, the two content panes re-mount with a slide-in animation each
+   * render (keyed on data.fileName change so React re-runs the keyframe).
+   * Direction controls whether the slide comes from the right (`next`) or
+   * the left (`prev`).
+   */
+  paneEnterDirection?: "next" | "prev";
 }) {
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
@@ -170,18 +198,37 @@ export function ReviewScreen({
     }
   };
 
+  // Keyed pane-enter animation: when the parent provides a direction, we
+  // attach the slide-in keyframe class to both panes. The animation reruns on
+  // every render because `paneEnterDirection` flips back to undefined between
+  // navigations in the queue shell — easier than reseeding a numeric key.
+  const paneEnterClass = paneEnterDirection
+    ? cn(
+        "review-pane-enter",
+        paneEnterDirection === "prev" && "review-pane-enter-from-prev",
+      )
+    : undefined;
+
+  // Default header keeps the legacy single-PDF behavior intact. The queue
+  // shell passes its own headerSlot to swap in the Skip / Complete & next
+  // segmented control.
+  const header = headerSlot ?? (
+    <ReviewHeaderStrip
+      fileName={data.fileName}
+      counts={counts}
+      onSubmit={onSubmit}
+      submitDisabled={submitDisabled}
+      onCancel={onCancel}
+      onReparse={onReparse}
+    />
+  );
+
   return (
     <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
-      <ReviewHeaderStrip
-        fileName={data.fileName}
-        counts={counts}
-        onSubmit={onSubmit}
-        submitDisabled={submitDisabled}
-        onCancel={onCancel}
-        onReparse={onReparse}
-      />
+      {topSlot}
+      {header}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <PdfPane
           fileName={data.fileName}
           page={data.page}
@@ -193,11 +240,14 @@ export function ReviewScreen({
           onLineClick={setActiveLineId}
           pdfFile={pdfFile}
           lineBboxes={lineBboxes}
+          paneEnterClass={paneEnterClass}
         />
+
+        {pdfPaneAccessory}
 
         <div
           ref={rightPaneRef}
-          className="flex min-h-0 flex-col bg-stone-bg"
+          className={cn("flex min-h-0 flex-col bg-stone-bg", paneEnterClass)}
           style={{ width: "52%", minWidth: 600 }}
         >
           <HeaderCard
