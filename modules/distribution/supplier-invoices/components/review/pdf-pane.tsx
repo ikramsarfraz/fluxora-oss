@@ -28,6 +28,7 @@ export function PdfPane({
   pdfFile,
   lineBboxes,
   paneEnterClass,
+  accessory,
 }: {
   fileName: string;
   page: number;
@@ -43,6 +44,13 @@ export function PdfPane({
   lineBboxes?: LineBbox[];
   /** Optional CSS class to layer the pane-enter slide animation on. */
   paneEnterClass?: string;
+  /**
+   * Optional overlay rendered inside the pane container. Used by the queue
+   * carousel to drop floating prev/next buttons at the pane edges. Children
+   * receive PdfPane as the nearest positioned ancestor so their absolute
+   * coordinates stay within the dark pane regardless of viewport width.
+   */
+  accessory?: React.ReactNode;
 }) {
   // Real PDF canvases are rendered at native CSS size scaled by zoom, so
   // bboxes (in PDF user-space points) need `zoom/100` to align with the canvas.
@@ -52,9 +60,10 @@ export function PdfPane({
 
   return (
     <div
-      className={cn("flex min-w-0 flex-1 flex-col", paneEnterClass)}
+      className={cn("relative flex min-w-0 flex-1 flex-col", paneEnterClass)}
       style={{ background: "#1a1a1a", borderRight: "1px solid var(--stone-line)" }}
     >
+      {accessory}
       <PdfToolbar
         fileName={fileName}
         page={page}

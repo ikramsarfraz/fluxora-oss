@@ -224,11 +224,15 @@ export function ReviewScreen({
   );
 
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+    // overflow-hidden on <main> guarantees the scroll lives inside the line
+    // items list — not on the page or the right pane. Combined with each
+    // child column using min-h-0 + flex-1 the inner scroll context can't
+    // escape upward.
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
         <PdfPane
           fileName={data.fileName}
           page={data.page}
@@ -241,13 +245,18 @@ export function ReviewScreen({
           pdfFile={pdfFile}
           lineBboxes={lineBboxes}
           paneEnterClass={paneEnterClass}
+          // The queue carousel passes its floating prev/next here so the
+          // arrows sit inside PdfPane (a positioned ancestor) — keeps them
+          // from triggering horizontal page scroll on narrow viewports.
+          accessory={pdfPaneAccessory}
         />
-
-        {pdfPaneAccessory}
 
         <div
           ref={rightPaneRef}
-          className={cn("flex min-h-0 flex-col bg-stone-bg", paneEnterClass)}
+          className={cn(
+            "flex min-h-0 flex-col overflow-hidden bg-stone-bg",
+            paneEnterClass,
+          )}
           style={{ width: "52%", minWidth: 600 }}
         >
           <HeaderCard

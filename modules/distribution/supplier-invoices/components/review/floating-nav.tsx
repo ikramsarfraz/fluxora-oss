@@ -64,10 +64,12 @@ function FloatingArrow({
       style={{
         width: 40,
         height: 40,
-        // Left arrow sits 14px from the PDF pane's left edge; right arrow sits
-        // just inside the inner divider between PDF and form panes (which is
-        // at left:48% — 22px ≈ button half-width).
-        left: isPrev ? 14 : "calc(48% - 22px)",
+        // Both arrows are pinned to the inside edges of the PDF pane (the
+        // FloatingNav's nearest positioned ancestor). Anchoring to the pane
+        // rather than the outer horizontal flex avoids the small horizontal
+        // overflow we'd otherwise get when `calc(48% − 22px)` crosses the
+        // pane boundary on narrow viewports.
+        ...(isPrev ? { left: 14 } : { right: 14 }),
         transform: "translateY(-50%)",
         background: "rgba(255,255,255,0.92)",
         backdropFilter: "blur(4px)",
