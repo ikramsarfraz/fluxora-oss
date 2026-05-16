@@ -48,6 +48,14 @@ import {
   type BulkImportResult,
 } from "../services/bulk-import";
 import {
+  getBulkImportFile,
+  getBulkImportPdfSignedUrl,
+  listPendingBulkImportFiles,
+  markBulkImportFileReviewed,
+  softDeleteBulkImportFile,
+  type BulkImportFileRow,
+} from "../services/bulk-import-history";
+import {
   getImportProfilesForSupplier,
   createImportProfile,
   updateImportProfile,
@@ -323,6 +331,49 @@ export async function bulkImportSupplierInvoicesAction(
     },
   });
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk-import history actions — server-backed reads + writes that replace
+// the prior localStorage handoff. The client uses these to drive the
+// bulk-landing screen, the review queue carousel, and the per-file PDF
+// preview without writing anything to localStorage / IndexedDB.
+// ---------------------------------------------------------------------------
+
+export async function listPendingBulkImportFilesAction(): Promise<
+  BulkImportFileRow[]
+> {
+  return await listPendingBulkImportFiles();
+}
+
+export async function getBulkImportFileAction(
+  id: string,
+): Promise<BulkImportFileRow | null> {
+  return await getBulkImportFile(id);
+}
+
+export async function markBulkImportFileReviewedAction(args: {
+  id: string;
+  supplierInvoiceId: string;
+}): Promise<void> {
+  return await markBulkImportFileReviewed(args);
+}
+
+export async function getBulkImportPdfSignedUrlAction(
+  id: string,
+): Promise<string | null> {
+  return await getBulkImportPdfSignedUrl(id);
+}
+
+/**
+ * Phase B-ready soft delete. Wired up here so the UI can call it once the
+ * delete affordance lands; the underlying R2 object is intentionally retained
+ * so recovery is a single column flip.
+ */
+export async function softDeleteBulkImportFileAction(
+  id: string,
+): Promise<void> {
+  return await softDeleteBulkImportFile(id);
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(

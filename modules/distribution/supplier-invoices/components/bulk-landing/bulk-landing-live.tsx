@@ -4,13 +4,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { parseSupplierInvoicePdfAction } from "../../actions";
-import {
-  clearPendingBulkImport,
-  clearPendingBulkImportResultOnly,
-  readPendingPdf,
-  storePendingBulkImport,
-} from "../../utils/bulk-import-storage";
+import { softDeleteBulkImportFileAction } from "../../actions";
 
 import { BulkLandingScreen } from "./bulk-landing-screen";
 import type { BatchFile } from "./types";
@@ -31,91 +25,45 @@ import { useBulkBatchView } from "./use-bulk-batch-view";
 export function BulkLandingLive() {
   const router = useRouter();
   const { view, refresh } = useBulkBatchView();
-  const [reparseAllPending, setReparseAllPending] = useState(false);
+  // Re-parse is parked (see `reparseAll` below) — the pending flag is held
+  // at false until the server-side re-parse lands.
+  const [reparseAllPending] = useState(false);
 
+  // Dismiss + clear-reviewed both now soft-delete on the server. The
+  // underlying R2 object is retained; restore by clearing `deleted_at`.
+  // Phase B will add an optimistic UI affordance + a "Restore" action.
   const dismissFile = useCallback(
-    (file: BatchFile) => {
-      clearPendingBulkImport(file.id);
+    async (file: BatchFile) => {
+      try {
+        await softDeleteBulkImportFileAction(file.id);
+      } catch (err) {
+        console.warn("[bulk-landing] soft-delete failed", err);
+      }
       refresh();
     },
     [refresh],
   );
 
-  const clearReviewed = useCallback(() => {
+  const clearReviewed = useCallback(async () => {
     const reviewed = (view?.files ?? []).filter(f => f.status === "reviewed");
     if (reviewed.length === 0) return;
-    for (const file of reviewed) {
-      clearPendingBulkImport(file.id);
-    }
+    await Promise.allSettled(
+      reviewed.map(f => softDeleteBulkImportFileAction(f.id)),
+    );
     refresh();
     toast.success(
       `Cleared ${reviewed.length} reviewed ${reviewed.length === 1 ? "file" : "files"} from the batch.`,
     );
   }, [view, refresh]);
 
+  // Re-parse is parked while the server-side history is the source of truth:
+  // the PDF lives in R2 and the legacy local re-parse loop no longer applies.
+  // Tracked as a follow-up alongside server-side re-parse.
   const reparseAll = useCallback(async () => {
-    if (!view || reparseAllPending) return;
-    const files = view.files;
-    if (files.length === 0) return;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        `Re-parse ${files.length} ${files.length === 1 ? "file" : "files"}? Any manual edits you've made via Review will be reset.`,
-      )
-    ) {
-      return;
-    }
-    setReparseAllPending(true);
-    let succeeded = 0;
-    let failed = 0;
-    // Sequential to keep server load + rate limiting predictable. The toast at
-    // the end summarises rather than spamming one per file.
-    for (const file of files) {
-      try {
-        const pdf = await readPendingPdf(file.id);
-        if (!pdf) {
-          failed++;
-          continue;
-        }
-        clearPendingBulkImportResultOnly(file.id);
-        const formData = new FormData();
-        formData.append("file", pdf);
-        const pipelineResult = await parseSupplierInvoicePdfAction(formData);
-        storePendingBulkImport(
-          {
-            filename: pdf.name,
-            status: "parsed",
-            pipelineResult,
-            supplierName:
-              pipelineResult.proposedProfile?.supplierId
-                ? null
-                : pipelineResult.prefillResult.unmatchedSupplierCandidates[0] ?? null,
-            supplierMatched: Boolean(pipelineResult.prefillResult.values.supplierId),
-            lineCount: pipelineResult.prefillResult.values.lines.length,
-            unmatchedLineCount: pipelineResult.unresolvedLines.length,
-            computedLineTotal: pipelineResult.prefillResult.totalComparison.computedLineTotal,
-            warnings: pipelineResult.warnings,
-          },
-          file.id,
-        );
-        succeeded++;
-      } catch (err) {
-        console.error("[bulk-landing] re-parse failed for", file.id, err);
-        failed++;
-      }
-    }
-    setReparseAllPending(false);
-    refresh();
-    if (failed === 0) {
-      toast.success(`Re-parsed ${succeeded} ${succeeded === 1 ? "file" : "files"}.`);
-    } else if (succeeded === 0) {
-      toast.error(`Re-parse failed for all ${failed} files.`);
-    } else {
-      toast(
-        `Re-parsed ${succeeded} ${succeeded === 1 ? "file" : "files"}, ${failed} failed.`,
-      );
-    }
-  }, [view, reparseAllPending, refresh]);
+    toast.info(
+      "Re-parse is being rebuilt for the new server-side flow. Delete the row and re-upload the PDF for now.",
+    );
+  }, []);
 
   // Pre-mount flash: localStorage hasn't been read yet. Keep silent.
   if (view === null) return null;

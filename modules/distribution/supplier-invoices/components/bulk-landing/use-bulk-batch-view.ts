@@ -1,54 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { listPendingBulkImports } from "../../utils/bulk-import-storage";
+import { listPendingBulkImportFilesAction } from "../../actions";
 
-import { entryToBatchFile } from "./entry-to-batch-file";
+import { rowToBatchFile } from "./entry-to-batch-file";
 import type { BatchFile, BatchView } from "./types";
 
-function scanFiles(): BatchFile[] | null {
-  if (typeof window === "undefined") return null;
-  return listPendingBulkImports().map(({ key, entry }) =>
-    entryToBatchFile({ key, entry }),
-  );
-}
-
 /**
- * Reads all bulk-import handoffs out of localStorage and returns them as the
- * `BatchView` the new bulk-landing screen consumes. Listens for cross-tab
- * `storage` events + a same-tab focus event so a review tab marking an entry
- * `reviewed` reflects back on the landing screen without a manual reload.
- *
- * Initial scan runs via a lazy `useState` initializer so we don't have to
- * call `setState` from inside the mount effect (which would trip the React
- * Compiler's cascading-renders rule).
+ * Reads every pending bulk-import row from the server (PR A1's
+ * `bulk_import_files` table) via React Query and shapes the result for the
+ * bulk-landing screen. React Query's `refetchOnWindowFocus` plus invalidation
+ * after a successful review keeps the list fresh without explicit cross-tab
+ * plumbing.
  */
 export function useBulkBatchView(): {
   view: BatchView | null;
   refresh: () => void;
 } {
-  const [files, setFiles] = useState<BatchFile[] | null>(scanFiles);
+  const query = useQuery({
+    queryKey: ["bulk-import-files", "pending"] as const,
+    queryFn: () => listPendingBulkImportFilesAction(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
-  const refresh = useCallback(() => {
-    const next = scanFiles();
-    if (next) setFiles(next);
-  }, []);
+  const files: BatchFile[] | null = useMemo(() => {
+    if (!query.data) return null;
+    return query.data.map(rowToBatchFile);
+  }, [query.data]);
 
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (!event.key || event.key.startsWith("fluxora:bulk-import:")) {
-        refresh();
-      }
-    };
-    const onFocus = () => refresh();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [refresh]);
+  const refresh = () => {
+    void query.refetch();
+  };
 
   if (files === null) return { view: null, refresh };
 

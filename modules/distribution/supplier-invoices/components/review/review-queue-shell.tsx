@@ -3,10 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  clearPendingBulkImportResultOnly,
-  readPendingPdf,
-} from "../../utils/bulk-import-storage";
+import { getBulkImportPdfSignedUrlAction } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 
 import { FloatingNav } from "./floating-nav";
@@ -54,11 +51,12 @@ export function ReviewQueueShell({
     completeCurrent,
   } = queueState;
 
-  // PDF blob is fetched separately from IndexedDB. Keep it keyed to currentKey
-  // so switching invoices replaces the blob (without re-running parsing).
-  // We seed pdfFile with `null` on a key change via a render-time reset
-  // (cheaper than setState-in-effect, and React Compiler-clean) before the
-  // async IndexedDB read populates it.
+  // PDF blob now comes from R2 via a short-lived signed URL — no more
+  // IndexedDB cache. We refetch the URL whenever the current invoice
+  // changes; PdfPane downloads the bytes itself via fetch. We seed pdfFile
+  // with `null` on a key change via a render-time reset (cheaper than
+  // setState-in-effect, and React Compiler-clean) before the async signed-
+  // URL fetch + download populates it.
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfFileKey, setPdfFileKey] = useState<string | null>(currentKey);
   if (pdfFileKey !== currentKey) {
@@ -68,13 +66,25 @@ export function ReviewQueueShell({
   useEffect(() => {
     if (!currentKey) return;
     let cancelled = false;
-    void readPendingPdf(currentKey).then(file => {
-      if (!cancelled) setPdfFile(file);
-    });
+    void (async () => {
+      const url = await getBulkImportPdfSignedUrlAction(currentKey).catch(
+        () => null,
+      );
+      if (!url || cancelled) return;
+      const res = await fetch(url).catch(() => null);
+      if (!res || !res.ok || cancelled) return;
+      const blob = await res.blob();
+      if (cancelled) return;
+      // Wrap in a `File` so downstream consumers (PdfPane, attachment upload
+      // in ReviewContainer) get the familiar shape they had with IndexedDB.
+      const filename = currentStored?.filename ?? "invoice.pdf";
+      const mime = currentStored?.mimeType ?? "application/pdf";
+      setPdfFile(new File([blob], filename, { type: mime }));
+    })();
     return () => {
       cancelled = true;
     };
-  }, [currentKey]);
+  }, [currentKey, currentStored?.filename, currentStored?.mimeType]);
 
   // Submit-in-flight UI state — held here so the page header can disable the
   // Complete button while the action runs. ReviewContainer informs us by
@@ -137,18 +147,15 @@ export function ReviewQueueShell({
   }
 
   if (!currentStored || !currentKey) return null;
-  const pipelineResult: PipelineResult = currentStored.entry.item.pipelineResult;
-  const fileName = currentStored.entry.filename;
+  const pipelineResult: PipelineResult | null = currentStored.pipelineResult;
+  const fileName = currentStored.filename;
+  if (!pipelineResult) return null;
 
-  // Page header derives its labels from the queue state. The shell wires the
-  // Skip / Complete & next CTAs back to the queue.
-  const onReparse = () => {
-    // Same affordance as the legacy ReviewContainer — drop the cached parse
-    // and route the user through the parsing screen, which re-runs the
-    // parser on the PDF blob still in IndexedDB.
-    clearPendingBulkImportResultOnly(currentKey);
-    router.push(`/supplier-invoices/parsing/${encodeURIComponent(currentKey)}`);
-  };
+  // Re-parse on the server side is out of scope for this PR — the legacy
+  // parsing screen route reads from localStorage / IndexedDB, which the
+  // server-side flow no longer populates. We hide the affordance until the
+  // server-side re-parse lands (tracked as a follow-up).
+  const onReparse: (() => void) | undefined = undefined;
 
   const header = (
     <ReviewQueueHeaderForCurrent
