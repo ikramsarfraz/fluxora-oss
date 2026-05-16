@@ -110,7 +110,9 @@ export function ReviewScreen({
   paneEnterDirection?: "next" | "prev";
 }) {
   const [zoom, setZoom] = useState(85);
-  const [activeLineId, setActiveLineId] = useState<number | null>(data.lines[0]?.id ?? null);
+  const [activeLineId, setActiveLineId] = useState<number | null>(
+    data.lines[0]?.id ?? null,
+  );
   const [supplier, setSupplier] = useState(data.parsed.supplier.value);
   const [filter, setFilter] = useState<ReviewFilter>("all");
   // When `rememberAliases` is uncontrolled, fall back to local state so the
@@ -127,9 +129,10 @@ export function ReviewScreen({
   // measure the right pane's bounding rect and pass it as inline styles to
   // the fixed bar below.
   const rightPaneRef = useRef<HTMLDivElement | null>(null);
-  const [footerGeometry, setFooterGeometry] = useState<{ left: number; width: number } | null>(
-    null,
-  );
+  const [footerGeometry, setFooterGeometry] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
   useEffect(() => {
     const el = rightPaneRef.current;
     if (!el) return;
@@ -151,7 +154,9 @@ export function ReviewScreen({
   }, []);
 
   const counts: ReviewCounts = useMemo(() => {
-    const matched = data.lines.filter(l => l.match.status === "matched" && !l.match.warning).length;
+    const matched = data.lines.filter(
+      l => l.match.status === "matched" && !l.match.warning,
+    ).length;
     const needsReview = data.lines.filter(l => lineNeedsReview(l.match)).length;
     const fees = data.lines.filter(l => l.match.status === "fee").length;
     return { matched, needsReview, fees, total: data.lines.length };
@@ -160,8 +165,11 @@ export function ReviewScreen({
   const filteredLines = useMemo(() => {
     if (filter === "all") return data.lines;
     if (filter === "matched")
-      return data.lines.filter(l => l.match.status === "matched" && !l.match.warning);
-    if (filter === "fees") return data.lines.filter(l => l.match.status === "fee");
+      return data.lines.filter(
+        l => l.match.status === "matched" && !l.match.warning,
+      );
+    if (filter === "fees")
+      return data.lines.filter(l => l.match.status === "fee");
     return data.lines.filter(l => lineNeedsReview(l.match));
   }, [data.lines, filter]);
 
@@ -189,7 +197,9 @@ export function ReviewScreen({
       next === "all"
         ? data.lines
         : next === "matched"
-          ? data.lines.filter(l => l.match.status === "matched" && !l.match.warning)
+          ? data.lines.filter(
+              l => l.match.status === "matched" && !l.match.warning,
+            )
           : next === "fees"
             ? data.lines.filter(l => l.match.status === "fee")
             : data.lines.filter(l => lineNeedsReview(l.match));
@@ -224,15 +234,18 @@ export function ReviewScreen({
   );
 
   return (
-    // The parent slot in `app/(app)/layout.tsx` is `flex min-h-0 flex-1
-    // flex-col gap-4 p-4` inside SidebarInset. <main> fills that slot via
-    // `min-h-0 flex-1 w-full` and uses `-m-4` to expand visually back over
-    // the parent's `p-4`. `overflow-hidden` clips any in-pane overflow so
-    // the line items list's `overflow-y-auto` is the only scroll context.
-    // ReviewQueueShell additionally locks document.body overflow while it
-    // is mounted, so even subtle rounding/positioning differences can't
-    // bubble up into a body scroll on this page.
-    <main className="-m-4 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    // Height: pinned to `calc(100svh - 4rem)` (viewport minus the 4rem app
+    // breadcrumb header in `app/(app)/layout.tsx`). The parent slot's `p-4`
+    // is cancelled visually by `-m-4`, and the margin's -32px exactly offsets
+    // the padding's +32px in the slot's intrinsic-height calculation — so
+    // SidebarInset still resolves to 100svh and nothing pushes body scroll.
+    // `h-full` doesn't work here because the ancestor chain only sets a
+    // *minimum* viewport height (`min-h-svh` on SidebarProvider), so an
+    // h-full chain has no real ceiling and any overflowing descendant grows
+    // the page. A svh-derived explicit height gives the inner flex column
+    // the definite ancestor the line-items scroll context needs.
+    // ReviewQueueShell also locks document.body overflow as a safety net.
+    <main className="-m-4 flex h-[calc(100svh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
@@ -258,10 +271,9 @@ export function ReviewScreen({
         <div
           ref={rightPaneRef}
           className={cn(
-            "flex min-h-0 flex-col overflow-hidden bg-stone-bg",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg",
             paneEnterClass,
           )}
-          style={{ width: "52%", minWidth: 600 }}
         >
           <HeaderCard
             parsed={data.parsed}
@@ -287,7 +299,9 @@ export function ReviewScreen({
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-[15px] font-semibold text-stone-ink">Line items</h2>
+                <h2 className="text-[15px] font-semibold text-stone-ink">
+                  Line items
+                </h2>
                 {/* Show only the product-line count here. Fees are surfaced
                     separately via the Fees filter tab and the per-tab count
                     chip — counting them in the header would double-count. */}
@@ -295,13 +309,17 @@ export function ReviewScreen({
                   {counts.total - counts.fees}
                 </span>
               </div>
-              <FilterSegmented filter={filter} counts={counts} onChange={handleFilterChange} />
+              <FilterSegmented
+                filter={filter}
+                counts={counts}
+                onChange={handleFilterChange}
+              />
             </div>
 
-            {/* pb matches the fixed footer's height (≈56px including border)
-                + a few px of breathing room so the last row isn't hidden
-                behind the bill-total bar. */}
-            <div className="min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-[64px]">
+            {/* pb clears the fixed bill-total bar (~67px) plus enough extra
+                room that floating UI sitting above the bar doesn't overlap
+                the last line when scrolled to the bottom. */}
+            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-38">
               {filteredLines.length === 0 ? (
                 <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
                   No lines match this filter.
@@ -319,7 +337,9 @@ export function ReviewScreen({
                       isActive={activeLineId === line.id}
                       onClick={() => setActiveLineId(line.id)}
                       products={products}
-                      matchedProductId={lineMatchedProductIds?.[line.id] ?? null}
+                      matchedProductId={
+                        lineMatchedProductIds?.[line.id] ?? null
+                      }
                       onSelectProduct={
                         onSelectLineProduct
                           ? p => onSelectLineProduct(line.id, p)
@@ -330,7 +350,9 @@ export function ReviewScreen({
                           ? c => onSelectLineCandidate(line.id, c)
                           : undefined
                       }
-                      onSkip={onSkipLine ? () => onSkipLine(line.id) : undefined}
+                      onSkip={
+                        onSkipLine ? () => onSkipLine(line.id) : undefined
+                      }
                       onCreateNew={
                         onCreateLineProduct
                           ? () => onCreateLineProduct(line.id)

@@ -30,11 +30,7 @@ export function FloatingNav({
         />
       ) : null}
       {hasNext ? (
-        <FloatingArrow
-          direction="next"
-          onClick={onNext}
-          title="Next PDF (→)"
-        />
+        <FloatingArrow direction="next" onClick={onNext} title="Next PDF (→)" />
       ) : null}
     </>
   );
@@ -69,7 +65,7 @@ function FloatingArrow({
         // rather than the outer horizontal flex avoids the small horizontal
         // overflow we'd otherwise get when `calc(48% − 22px)` crosses the
         // pane boundary on narrow viewports.
-        ...(isPrev ? { left: 14 } : { right: 14 }),
+        ...(isPrev ? { left: 24 } : { right: 24 }),
         transform: "translateY(-50%)",
         background: "rgba(255,255,255,0.92)",
         backdropFilter: "blur(4px)",
