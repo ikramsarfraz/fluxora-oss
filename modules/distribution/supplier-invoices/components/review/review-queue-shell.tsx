@@ -153,7 +153,7 @@ export function ReviewQueueShell({
   // `review-done-burst` keyframe class.
   if (queue.length === 0) {
     return (
-      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
         <QueueDone
           onBackToBulk={() => router.push("/supplier-invoices/bulk")}
         />
@@ -188,7 +188,7 @@ export function ReviewQueueShell({
   );
 
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       <QueueStrip
         queue={queue}
         currentKey={currentKey}
@@ -241,7 +241,7 @@ export function ReviewQueueShell({
  */
 function ReviewQueueSkeleton() {
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       {/* Queue strip */}
       <div className="flex shrink-0 items-center gap-2 border-b border-stone-line bg-stone-surface px-4 py-3">
         <div className="flex flex-col gap-1.5 border-r border-stone-line pr-4">
