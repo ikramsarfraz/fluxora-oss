@@ -370,7 +370,7 @@ export function ReviewScreen({
           scroll area above gets `pb-20` so the last line item isn't hidden
           behind this bar. */}
       <div
-        className="fixed right-0 bottom-0 z-20 grid grid-cols-2 transition-[left] duration-200 ease-linear"
+        className="fixed right-0 bottom-0 z-20 grid grid-cols-2 overflow-hidden transition-[left] duration-200 ease-linear"
         style={{
           left: sidebarState === "collapsed" ? 0 : "var(--sidebar-width)",
         }}
