@@ -52,6 +52,7 @@ import {
   getBulkImportPdfSignedUrl,
   listPendingBulkImportFiles,
   markBulkImportFileReviewed,
+  restoreBulkImportFile,
   softDeleteBulkImportFile,
   type BulkImportFileRow,
 } from "../services/bulk-import-history";
@@ -366,14 +367,18 @@ export async function getBulkImportPdfSignedUrlAction(
 }
 
 /**
- * Phase B-ready soft delete. Wired up here so the UI can call it once the
- * delete affordance lands; the underlying R2 object is intentionally retained
- * so recovery is a single column flip.
+ * Soft-delete a bulk-import row. Pairs with `restoreBulkImportFileAction`
+ * for the bulk-landing Undo affordance. The R2 object is retained on
+ * delete; recovery is just clearing `deleted_at`.
  */
 export async function softDeleteBulkImportFileAction(
   id: string,
 ): Promise<void> {
   return await softDeleteBulkImportFile(id);
+}
+
+export async function restoreBulkImportFileAction(id: string): Promise<void> {
+  return await restoreBulkImportFile(id);
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(
