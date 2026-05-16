@@ -68,7 +68,21 @@ export type AiExtractionResult = {
   invoiceDate: string | null;
   totalAmount: number | null;
   subtotal: number | null;
-  fees: Array<{ description: string; amount: number }>;
+  fees: Array<{
+    description: string;
+    amount: number;
+    /** Categorized by the AI for COGS reporting. Null when the model
+     *  couldn't classify or for older results from before the taxonomy. */
+    category?:
+      | "fuel"
+      | "freight"
+      | "processing"
+      | "inspection"
+      | "cod"
+      | "refrigeration"
+      | "other"
+      | null;
+  }>;
   lines: AiInvoiceLine[];
   confidence: number;
   warnings: string[];

@@ -80,7 +80,7 @@ export function LineRow({
                 <UnmatchedStatus />
               )
             ) : (
-              <FeeStatus />
+              <FeeStatus category={line.feeCategory ?? null} />
             )}
           </div>
           <NumericSnapshot line={line} />
@@ -195,11 +195,31 @@ function UnmatchedStatus() {
   );
 }
 
-function FeeStatus() {
+// Human-readable labels for the parser's fee taxonomy. Kept inside the
+// component file because the label set is purely presentational — the
+// canonical category list lives in `ai-validation.ts`.
+const FEE_CATEGORY_LABEL: Record<NonNullable<ParsedLine["feeCategory"]>, string> = {
+  fuel: "Fuel surcharge",
+  freight: "Freight / delivery",
+  processing: "Processing fee",
+  inspection: "Inspection fee",
+  cod: "COD handling",
+  refrigeration: "Refrigeration",
+  other: "Other charge",
+};
+
+function FeeStatus({
+  category,
+}: {
+  category: ParsedLine["feeCategory"] | null;
+}) {
+  const label = category ? FEE_CATEGORY_LABEL[category] : "Non-inventory charge";
   return (
     <div className="inline-flex items-center gap-1.5 text-[12px] font-medium text-stone-muted">
-      <span>Non-inventory charge</span>
-      <span className="rounded bg-stone-line2 px-1.5 py-px text-[11px]">Fee</span>
+      <span>{label}</span>
+      <span className="rounded bg-stone-line2 px-1.5 py-px text-[11px]">
+        {category ? "Fee" : "Uncategorized"}
+      </span>
     </div>
   );
 }

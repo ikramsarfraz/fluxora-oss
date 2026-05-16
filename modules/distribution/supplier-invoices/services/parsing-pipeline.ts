@@ -112,7 +112,23 @@ export type PipelineDebugInfo = {
   visionScore: VisionExtractionScore | null;
 };
 
-export type DetectedFee = { description: string; amount: number };
+export type FeeCategory =
+  | "fuel"
+  | "freight"
+  | "processing"
+  | "inspection"
+  | "cod"
+  | "refrigeration"
+  | "other";
+
+export type DetectedFee = {
+  description: string;
+  amount: number;
+  /** Categorized by the AI (fuel/freight/processing/...). Null when the AI
+   *  couldn't classify or for legacy pipeline results from before the
+   *  taxonomy landed. */
+  category: FeeCategory | null;
+};
 
 export type PriceDeviation = {
   productId: string;
@@ -455,8 +471,16 @@ export async function runParsingPipeline(args: {
     const desc = l.vendorProductDescription?.trim();
     if (desc) descriptionByVendorName.set(l.vendorProductName, desc);
   }
-  const detectedFeesFromAi: DetectedFee[] =
-    (visionUsed && visionResult ? visionResult.fees : aiResult.fees) ?? [];
+  // Normalize AI fee shape → pipeline DetectedFee. The taxonomy enum lands
+  // through as-is; missing category defaults to null (older fixtures /
+  // pre-taxonomy responses).
+  const detectedFeesFromAi: DetectedFee[] = (
+    (visionUsed && visionResult ? visionResult.fees : aiResult.fees) ?? []
+  ).map(f => ({
+    description: f.description,
+    amount: f.amount,
+    category: f.category ?? null,
+  }));
 
   // First-bill mode: empty catalog — skip all product matching, but still
   // populate `unresolvedLines` and `detectedFees` so the new Review screen
@@ -559,9 +583,7 @@ export async function runParsingPipeline(args: {
     requiresOcr: false,
     warnings: finalized.warnings,
     unresolvedLines: attachBboxes(enriched.unresolvedLines, extractedRows),
-    detectedFees: visionUsed
-      ? (visionResult?.fees ?? [])
-      : aiResult.fees,
+    detectedFees: detectedFeesFromAi,
     priceDeviations,
     detectedProfileId: detectedProfile?.id ?? null,
     proposedProfile:

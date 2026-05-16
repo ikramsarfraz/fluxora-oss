@@ -342,6 +342,16 @@ export function ReviewContainer({
     setSubmitting(true);
     onSubmitStart?.();
     try {
+      // Fees detected by the parser become non-inventory charges on the
+      // bill, with `chargeType` set to the AI's taxonomy when available so
+      // reports can break out fuel vs. freight vs. processing. The legacy
+      // path was dropping these on the floor.
+      const charges = pipelineResult.detectedFees.map(fee => ({
+        description: fee.description,
+        amount: String(fee.amount),
+        chargeType: fee.category ?? "other",
+      }));
+
       const result = await createSupplierInvoiceAction({
         supplierId: supplierIdOverride,
         invoiceNumber:
@@ -351,6 +361,7 @@ export function ReviewContainer({
         paymentMethod: pipelineResult.prefillResult.values.paymentMethod ?? null,
         notes: pipelineResult.prefillResult.values.notes || null,
         lines,
+        charges,
         complete: true, // Complete & receive — creates lots + inventory atomically.
       });
 
