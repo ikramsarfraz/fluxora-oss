@@ -19,4 +19,8 @@ export type QueueEntry = {
   needsReviewCount: number;
   /** True when the parser matched a known supplier — drives the yellow dot. */
   supplierMatched: boolean;
+  /** Resolved supplier id when matched — used to look up the supplier-
+   *  performance badge that hints at how messy this invoice is likely to be
+   *  before the user opens it. Null when the supplier is still unmatched. */
+  supplierId?: string | null;
 };

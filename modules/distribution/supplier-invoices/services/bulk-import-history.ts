@@ -1,9 +1,9 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { bulkImportFiles } from "@/db/schema";
+import { bulkImportFiles, supplierInvoices } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildBulkImportObjectKey,
@@ -345,4 +345,81 @@ function rowToDomain(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Supplier performance — drives the queue-card badge so a reviewer can
+// sequence their work ("knock out the trusted suppliers first, leave the
+// new one for when I have time").
+//
+// MVP heuristic: count of past supplier_invoices per supplier in this
+// tenant. The hypothesis is well-validated by support tickets — by the
+// 5th invoice from a vendor, the alias mappings + parsing patterns are
+// usually well-established, so parses are clean. Brand-new vendors
+// require manual product mapping for every line.
+//
+// More-nuanced metrics (price stability, review-friction average) can
+// layer on later without changing the action shape — the bucket field
+// is intentionally opaque to callers.
+// ---------------------------------------------------------------------------
+
+export type SupplierPerformanceBucket = "green" | "yellow" | "red";
+
+export type SupplierPerformanceStats = {
+  supplierId: string;
+  /** Posted invoices for this supplier in the tenant, all-time. */
+  totalBills: number;
+  /** Coarse bucket the UI maps to a colored dot. */
+  bucket: SupplierPerformanceBucket;
+};
+
+export async function getSupplierPerformanceStats(
+  supplierIds: string[],
+): Promise<SupplierPerformanceStats[]> {
+  if (supplierIds.length === 0) return [];
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
+
+  // Distinct to avoid duplicate work + bounded payload — the queue rarely
+  // has more than a dozen unique suppliers at once.
+  const uniqueIds = Array.from(new Set(supplierIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  const rows = await db
+    .select({
+      supplierId: supplierInvoices.supplierId,
+      bills: count(),
+    })
+    .from(supplierInvoices)
+    .where(
+      and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        inArray(supplierInvoices.supplierId, uniqueIds),
+      ),
+    )
+    .groupBy(supplierInvoices.supplierId);
+
+  const byId = new Map<string, number>();
+  for (const r of rows) byId.set(r.supplierId, Number(r.bills) || 0);
+
+  // Always return a row for every requested id so callers don't have to
+  // distinguish "unknown" from "zero bills" — the bucket is the answer.
+  return uniqueIds.map(id => {
+    const total = byId.get(id) ?? 0;
+    return {
+      supplierId: id,
+      totalBills: total,
+      bucket: bucketFor(total),
+    };
+  });
+}
+
+function bucketFor(totalBills: number): SupplierPerformanceBucket {
+  if (totalBills >= 5) return "green"; // Trusted, alias map mature.
+  if (totalBills >= 1) return "yellow"; // Some history.
+  return "red"; // Brand-new vendor — expect to map every product manually.
 }

@@ -52,11 +52,13 @@ import {
 import {
   getBulkImportFile,
   getBulkImportPdfSignedUrl,
+  getSupplierPerformanceStats,
   listPendingBulkImportFiles,
   markBulkImportFileReviewed,
   restoreBulkImportFile,
   softDeleteBulkImportFile,
   type BulkImportFileRow,
+  type SupplierPerformanceStats,
 } from "../services/bulk-import-history";
 import {
   getImportProfilesForSupplier,
@@ -389,6 +391,17 @@ export async function softDeleteBulkImportFileAction(
   id: string,
 ): Promise<void> {
   return await softDeleteBulkImportFile(id);
+}
+
+/**
+ * Coarse supplier-performance buckets for the queue-card badge. Returns one
+ * row per requested supplier id, including `red` for brand-new vendors so
+ * the UI doesn't have to distinguish "unknown" from "zero bills".
+ */
+export async function getSupplierPerformanceStatsAction(
+  supplierIds: string[],
+): Promise<SupplierPerformanceStats[]> {
+  return await getSupplierPerformanceStats(supplierIds);
 }
 
 export async function restoreBulkImportFileAction(id: string): Promise<void> {
