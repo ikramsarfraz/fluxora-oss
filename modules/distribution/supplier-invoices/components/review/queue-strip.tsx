@@ -1,8 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { Check, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
+
+import { getSupplierPerformanceStatsAction } from "../../actions";
+import type { SupplierPerformanceBucket } from "../../services/bulk-import-history";
 
 import type { QueueEntry } from "./queue-types";
 import { REVIEW_COLORS } from "./tokens";
@@ -32,6 +37,33 @@ export function QueueStrip({
   hasPrev: boolean;
   hasNext: boolean;
 }) {
+  // Fetch vendor-performance buckets for every distinct supplier in the
+  // queue, in a single round-trip. Stale-time is generous — the buckets only
+  // change when posted bills accrue, which the user is doing right now via
+  // the carousel; we invalidate on completion (see ReviewContainer).
+  const supplierIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          queue
+            .map(q => q.supplierId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    [queue],
+  );
+  const statsQuery = useQuery({
+    queryKey: ["supplier-performance", supplierIds] as const,
+    queryFn: () => getSupplierPerformanceStatsAction(supplierIds),
+    enabled: supplierIds.length > 0,
+    staleTime: 60_000,
+  });
+  const bucketBySupplierId = useMemo(() => {
+    const map = new Map<string, SupplierPerformanceBucket>();
+    for (const s of statsQuery.data ?? []) map.set(s.supplierId, s.bucket);
+    return map;
+  }, [statsQuery.data]);
+
   return (
     <div
       className="flex shrink-0 items-stretch border-b border-stone-line"
@@ -90,6 +122,11 @@ export function QueueStrip({
             position={idx + 1}
             isCurrent={entry.key === currentKey}
             isCompleting={entry.key === completingKey}
+            performanceBucket={
+              entry.supplierId
+                ? bucketBySupplierId.get(entry.supplierId) ?? null
+                : null
+            }
             onClick={() => {
               if (entry.key !== completingKey) onPick(entry.key);
             }}
@@ -115,12 +152,14 @@ function QueueCard({
   position,
   isCurrent,
   isCompleting,
+  performanceBucket,
   onClick,
 }: {
   entry: QueueEntry;
   position: number;
   isCurrent: boolean;
   isCompleting: boolean;
+  performanceBucket: SupplierPerformanceBucket | null;
   onClick: () => void;
 }) {
   const supplierWarn = !entry.supplierMatched;
@@ -184,6 +223,13 @@ function QueueCard({
         >
           {entry.supplierShort}
         </span>
+        {/* Vendor-performance badge — green/yellow/red dot hinting at how
+            many past bills we've posted from this supplier. Lets the user
+            sequence work (knock out green first, save red for last).
+            Hidden when there's no matched supplier or no data yet. */}
+        {performanceBucket ? (
+          <VendorPerformanceDot bucket={performanceBucket} />
+        ) : null}
       </div>
 
       {/* Row 2: invoice ref · total */}
@@ -287,5 +333,32 @@ function ArrowButton({
     >
       {children}
     </button>
+  );
+}
+
+function VendorPerformanceDot({
+  bucket,
+}: {
+  bucket: SupplierPerformanceBucket;
+}) {
+  const fill =
+    bucket === "green"
+      ? REVIEW_COLORS.good
+      : bucket === "yellow"
+        ? REVIEW_COLORS.warn
+        : REVIEW_COLORS.danger;
+  const tooltip =
+    bucket === "green"
+      ? "Trusted vendor — many past bills; alias map mature."
+      : bucket === "yellow"
+        ? "Some past history with this vendor."
+        : "New vendor — expect to map products manually.";
+  return (
+    <span
+      title={tooltip}
+      aria-label={tooltip}
+      className="block size-[7px] shrink-0 rounded-full"
+      style={{ background: fill }}
+    />
   );
 }

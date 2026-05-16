@@ -36,6 +36,7 @@ function buildQueueEntry(row: BulkImportFileRow): QueueEntry {
     lineCount: pipeline?.prefillResult.values.lines.length ?? 0,
     needsReviewCount: countNeedsReview(pipeline),
     supplierMatched: Boolean(pipeline?.prefillResult.values.supplierId),
+    supplierId: pipeline?.prefillResult.values.supplierId || null,
   };
 }
 
