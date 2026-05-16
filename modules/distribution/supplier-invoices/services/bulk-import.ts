@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createBulkImportFile } from "./bulk-import-history";
 import { parseSupplierInvoicePdf } from "./pdf-prefill";
 import type { PipelineResult } from "./parsing-pipeline";
 
@@ -26,6 +27,14 @@ export type BulkImportItemResult =
   | {
       filename: string;
       status: "parsed";
+      /**
+       * Server-side bulk-import-file id (Phase A). Populated when the row was
+       * created via the bulk-import action; optional for legacy client-side
+       * re-parse paths (bulk-landing-live, parsing-progress-live) that
+       * synthesise the result for the localStorage handoff. PR A2 will
+       * retire those paths and make this field required.
+       */
+      bulkImportFileId?: string;
       /** Full pipeline result the client persists so the review form can be pre-filled. */
       pipelineResult: PipelineResult;
       /** Summary fields surfaced on the bulk results screen without unpacking pipelineResult. */
@@ -43,6 +52,8 @@ export type BulkImportItemResult =
     };
 
 export type BulkImportResult = {
+  /** Shared batch id stamped on every persisted row from this call. */
+  batchId: string;
   items: BulkImportItemResult[];
   summary: {
     total: number;
@@ -62,8 +73,15 @@ function summarize(items: BulkImportItemResult[]): BulkImportResult["summary"] {
   };
 }
 
+type ProcessOneFileArgs = {
+  tenantId: string;
+  uploadedByUserId: string;
+  batchId: string;
+};
+
 async function processOneFile(
   file: BulkImportFileInput,
+  args: ProcessOneFileArgs,
 ): Promise<BulkImportItemResult> {
   let pipeline: PipelineResult;
   try {
@@ -84,9 +102,39 @@ async function processOneFile(
   const detectedSupplierName =
     prefill.unmatchedSupplierCandidates[0] ?? null;
 
+  // Persist alongside parsing so the row is available to the bulk-landing
+  // screen the moment the action returns. If R2 or DB fails we downgrade
+  // the per-file result to "error" — a single bad row doesn't sink the
+  // batch, and the original PipelineResult is already in hand so callers
+  // can still proceed via the localStorage path until PR A2 lands.
+  let bulkImportFileId: string;
+  try {
+    const created = await createBulkImportFile({
+      tenantId: args.tenantId,
+      uploadedByUserId: args.uploadedByUserId,
+      batchId: args.batchId,
+      filename: file.originalFilename,
+      mimeType: file.mimeType,
+      bytes: file.bytes,
+      pipelineResult: pipeline,
+      status: "parsed",
+    });
+    bulkImportFileId = created.id;
+  } catch (err) {
+    return {
+      filename: file.originalFilename,
+      status: "error",
+      error:
+        err instanceof Error
+          ? `Persistence failed: ${err.message}`
+          : "Failed to persist PDF.",
+    };
+  }
+
   return {
     filename: file.originalFilename,
     status: "parsed",
+    bulkImportFileId,
     pipelineResult: pipeline,
     supplierName: detectedSupplierName,
     supplierMatched: Boolean(prefill.values.supplierId),
@@ -99,9 +147,11 @@ async function processOneFile(
 
 export async function bulkImportSupplierInvoices(
   files: BulkImportFileInput[],
+  args: { tenantId: string; uploadedByUserId: string },
 ): Promise<BulkImportResult> {
+  const batchId = crypto.randomUUID();
   if (files.length === 0) {
-    return { items: [], summary: summarize([]) };
+    return { batchId, items: [], summary: summarize([]) };
   }
   if (files.length > BULK_IMPORT_MAX_FILES) {
     throw new Error(
@@ -109,14 +159,20 @@ export async function bulkImportSupplierInvoices(
     );
   }
 
-  // Process serially. PDF parsing makes OpenAI calls (text + vision) which
-  // are slow individually but parallel doesn't help much — the OpenAI rate
-  // limits would kick in and we'd just end up queueing anyway. Serial keeps
-  // the work bounded and the cost predictable.
+  // Process serially. PDF parsing makes OpenAI text calls which are slow
+  // individually but parallel doesn't help much — the OpenAI rate limits
+  // would kick in and we'd just end up queueing anyway. Serial keeps the
+  // work bounded and the cost predictable.
   const items: BulkImportItemResult[] = [];
   for (const file of files) {
-    items.push(await processOneFile(file));
+    items.push(
+      await processOneFile(file, {
+        tenantId: args.tenantId,
+        uploadedByUserId: args.uploadedByUserId,
+        batchId,
+      }),
+    );
   }
 
-  return { items, summary: summarize(items) };
+  return { batchId, items, summary: summarize(items) };
 }
