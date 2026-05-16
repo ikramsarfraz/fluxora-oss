@@ -71,9 +71,13 @@ export function QueueStrip({
         <ChevronLeft className="size-[14px]" strokeWidth={1.6} />
       </ArrowButton>
 
-      {/* Carousel — horizontal scroll with thin scrollbar. */}
+      {/* Carousel — horizontal scroll with thin scrollbar. `min-w-0` is
+          required so this flex item can actually shrink: flex items have an
+          implicit `min-width: auto` (= intrinsic content size) that would
+          otherwise let the cards push the strip wider than the viewport and
+          spill horizontal scroll onto <main>. */}
       <div
-        className="flex flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden"
+        className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden"
         style={{ paddingBottom: 2 }}
       >
         {queue.map((entry, idx) => (
