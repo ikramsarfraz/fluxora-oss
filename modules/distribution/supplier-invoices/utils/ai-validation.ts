@@ -25,6 +25,23 @@ const AiInvoiceLineSchema = z.object({
   notes: z.string().nullable(),
 });
 
+/**
+ * Fee taxonomy. Meat invoices typically carry a small finite set of
+ * non-inventory charges; categorizing each lets reports break out COGS
+ * overhead by type and lets the charges table flag freight separately
+ * from processing.
+ */
+export const FEE_CATEGORIES = [
+  "fuel",
+  "freight",
+  "processing",
+  "inspection",
+  "cod",
+  "refrigeration",
+  "other",
+] as const;
+export type FeeCategory = (typeof FEE_CATEGORIES)[number];
+
 export const AiExtractionResultSchema = z.object({
   supplierName: z.string().nullable(),
   supplierInvoiceNumber: z.string().nullable(),
@@ -35,6 +52,7 @@ export const AiExtractionResultSchema = z.object({
     z.object({
       description: z.string(),
       amount: z.number(),
+      category: z.enum(FEE_CATEGORIES).nullable(),
     }),
   ),
   lines: z.array(AiInvoiceLineSchema),
@@ -93,19 +111,34 @@ export function sanitizeSupplierName(value: string | null): string | null {
 function backfillOptionalLineFields(raw: unknown): unknown {
   if (!raw || typeof raw !== "object") return raw;
   const obj = raw as Record<string, unknown>;
-  if (!Array.isArray(obj.lines)) return obj;
-  return {
-    ...obj,
-    lines: obj.lines.map(line => {
+  const patched: Record<string, unknown> = { ...obj };
+
+  if (Array.isArray(obj.lines)) {
+    patched.lines = obj.lines.map(line => {
       if (!line || typeof line !== "object") return line;
       const lineObj = line as Record<string, unknown>;
-      const patched: Record<string, unknown> = { ...lineObj };
-      if (!("caseWeights" in patched)) patched.caseWeights = null;
-      if (!("vendorProductDescription" in patched))
-        patched.vendorProductDescription = null;
-      return patched;
-    }),
-  };
+      const next: Record<string, unknown> = { ...lineObj };
+      if (!("caseWeights" in next)) next.caseWeights = null;
+      if (!("vendorProductDescription" in next))
+        next.vendorProductDescription = null;
+      return next;
+    });
+  }
+
+  // Backfill `category` on fees so older fixtures + pre-taxonomy AI
+  // responses still validate. New AI responses will set it explicitly.
+  if (Array.isArray(obj.fees)) {
+    patched.fees = obj.fees.map(fee => {
+      if (!fee || typeof fee !== "object") return fee;
+      const feeObj = fee as Record<string, unknown>;
+      if (!("category" in feeObj)) {
+        return { ...feeObj, category: null };
+      }
+      return feeObj;
+    });
+  }
+
+  return patched;
 }
 
 export function validateExtractionResult(raw: unknown): ValidatedExtractionResult | null {

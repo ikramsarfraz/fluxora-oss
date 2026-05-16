@@ -183,6 +183,7 @@ function buildLines({
     total: fee.amount,
     fixed: true,
     match: { status: "fee", candidates: [] },
+    feeCategory: fee.category,
   }));
 
   return [...productLines, ...feeLines];

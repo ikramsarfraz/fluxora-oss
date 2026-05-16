@@ -82,6 +82,21 @@ export type ParsedLine = {
   /** Case-priced rather than weight-priced. */
   fixed?: boolean;
   match: LineMatch;
+  /**
+   * AI-detected fee category. Populated only for fee rows (synthesized in
+   * `mapPipelineToReviewData` from `pipeline.detectedFees`). Shown as a
+   * small pill on the fee row so the user knows whether something is
+   * fuel vs. processing vs. freight before it lands in COGS reports.
+   */
+  feeCategory?:
+    | "fuel"
+    | "freight"
+    | "processing"
+    | "inspection"
+    | "cod"
+    | "refrigeration"
+    | "other"
+    | null;
 };
 
 export type ReviewData = {
