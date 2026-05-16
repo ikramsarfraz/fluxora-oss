@@ -110,6 +110,12 @@ export function ReviewScreen({
   paneEnterDirection?: "next" | "prev";
 }) {
   const [zoom, setZoom] = useState(85);
+  // Local page state seeded from data.page. Multi-page invoices use the
+  // PdfToolbar's prev/next buttons via `onPageChange`. When the user
+  // navigates to a different invoice in the queue carousel, the parent
+  // remounts ReviewContainer (key={currentKey}), which remounts this
+  // component, which reseeds the state — so page resets to 1 on switch.
+  const [page, setPage] = useState(data.page);
   const [activeLineId, setActiveLineId] = useState<number | null>(
     data.lines[0]?.id ?? null,
   );
@@ -252,8 +258,9 @@ export function ReviewScreen({
       <div className="flex min-h-0 min-w-0 flex-1">
         <PdfPane
           fileName={data.fileName}
-          page={data.page}
+          page={page}
           pages={data.pages}
+          onPageChange={setPage}
           zoom={zoom}
           onZoom={setZoom}
           lines={data.lines}

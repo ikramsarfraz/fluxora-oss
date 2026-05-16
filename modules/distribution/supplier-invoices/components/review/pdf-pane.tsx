@@ -1,6 +1,13 @@
 "use client";
 
-import { Link2, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Link2,
+  Maximize2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -20,6 +27,7 @@ export function PdfPane({
   fileName,
   page,
   pages,
+  onPageChange,
   zoom,
   onZoom,
   lines,
@@ -33,6 +41,9 @@ export function PdfPane({
   fileName: string;
   page: number;
   pages: number;
+  /** Controlled page change. When omitted, the toolbar's page buttons are
+   *  hidden (single-page invoices). */
+  onPageChange?: (page: number) => void;
   zoom: number;
   onZoom: (zoom: number) => void;
   lines: ParsedLine[];
@@ -70,6 +81,7 @@ export function PdfPane({
         pages={pages}
         zoom={zoom}
         onZoom={onZoom}
+        onPageChange={onPageChange}
       />
       <div
         className="flex flex-1 justify-center overflow-y-auto p-6"
@@ -115,12 +127,17 @@ function PdfToolbar({
   pages,
   zoom,
   onZoom,
+  onPageChange,
 }: {
   fileName: string;
   page: number;
   pages: number;
   zoom: number;
   onZoom: (zoom: number) => void;
+  /** Optional — when omitted the prev/next page buttons stay hidden. Multi-
+   *  page invoices need this; single-page parses leave it off so the toolbar
+   *  doesn't show disabled chrome the user can't interact with. */
+  onPageChange?: (page: number) => void;
 }) {
   return (
     <div
@@ -134,9 +151,34 @@ function PdfToolbar({
         {fileName}
       </span>
       <div className="flex-1" />
-      <span style={{ color: "#9ca3af" }}>
-        Page {page} / {pages}
-      </span>
+      {pages > 1 && onPageChange ? (
+        <>
+          <ToolbarButton
+            onClick={() => onPageChange(Math.max(1, page - 1))}
+            label="Previous page"
+            disabled={page <= 1}
+          >
+            <ChevronLeft className="size-[14px]" strokeWidth={1.6} />
+          </ToolbarButton>
+          <span
+            className="min-w-[64px] text-center font-mono tabular-nums"
+            style={{ color: "#d4d4d4" }}
+          >
+            {page} / {pages}
+          </span>
+          <ToolbarButton
+            onClick={() => onPageChange(Math.min(pages, page + 1))}
+            label="Next page"
+            disabled={page >= pages}
+          >
+            <ChevronRight className="size-[14px]" strokeWidth={1.6} />
+          </ToolbarButton>
+        </>
+      ) : (
+        <span style={{ color: "#9ca3af" }}>
+          Page {page} / {pages}
+        </span>
+      )}
       <div className="h-[18px] w-px" style={{ background: "#3a3a3a" }} />
       <ToolbarButton onClick={() => onZoom(Math.max(40, zoom - 10))} label="Zoom out">
         <ZoomOut className="size-[14px]" strokeWidth={1.6} />
@@ -161,10 +203,12 @@ function PdfToolbar({
 function ToolbarButton({
   onClick,
   label,
+  disabled,
   children,
 }: {
   onClick?: () => void;
   label: string;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -172,7 +216,12 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex size-[26px] items-center justify-center rounded-[5px] bg-transparent transition-colors hover:bg-white/10"
+      disabled={disabled}
+      className={cn(
+        "flex size-[26px] items-center justify-center rounded-[5px] bg-transparent transition-colors",
+        "enabled:hover:bg-white/10",
+        "disabled:cursor-not-allowed disabled:opacity-40",
+      )}
       style={{ color: "#d4d4d4" }}
     >
       {children}
