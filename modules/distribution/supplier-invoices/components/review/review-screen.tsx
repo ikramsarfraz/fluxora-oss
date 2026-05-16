@@ -224,11 +224,18 @@ export function ReviewScreen({
   );
 
   return (
-    // overflow-hidden on <main> guarantees the scroll lives inside the line
-    // items list — not on the page or the right pane. Combined with each
-    // child column using min-h-0 + flex-1 the inner scroll context can't
-    // escape upward.
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    // The parent slot in `app/(app)/layout.tsx` is `flex min-h-0 flex-1
+    // flex-col gap-4 p-4` inside SidebarInset, which is already height-locked
+    // to the viewport via the sidebar wrapper. So <main> just fills that
+    // slot with `min-h-0 flex-1` — using a fixed `h-[calc(100dvh-4rem)]`
+    // ignored the parent's p-4 (16px top/bottom) and made the page taller
+    // than the wrapper's min-h-svh, which then bubbled into both a 32px
+    // body scroll and a broken line-items scroll chain.
+    //
+    // `overflow-hidden` keeps any horizontal/vertical overflow inside <main>
+    // off the page entirely; the only scroll context inside the review screen
+    // is the line items list's `overflow-y-auto`.
+    <main className="-m-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
