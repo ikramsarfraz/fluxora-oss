@@ -45,6 +45,7 @@ export function ReviewQueueShell({
     hasNext,
     completingKey,
     direction,
+    isLoading,
     goPrev,
     goNext,
     goTo,
@@ -136,8 +137,21 @@ export function ReviewQueueShell({
     };
   }, []);
 
-  // When the queue is empty, render the all-caught-up state. The done card
-  // animates on mount via the `review-done-burst` keyframe class.
+  // First-render guard: React Query starts with `data === undefined`, which
+  // would otherwise make `queue.length === 0` true and flash <QueueDone />
+  // for a single frame before the real list arrives. Render nothing while
+  // the first fetch is in flight — the loading window is short (cached
+  // response when warm, ~100ms cold) and a blank screen is preferable to
+  // a misleading "All caught up" celebration.
+  if (isLoading && queue.length === 0) {
+    return (
+      <main className="-m-4 flex min-h-0 min-w-0 flex-1 flex-col bg-stone-bg" />
+    );
+  }
+
+  // When the queue is empty AND the fetch has settled, render the
+  // all-caught-up state. The done card animates on mount via the
+  // `review-done-burst` keyframe class.
   if (queue.length === 0) {
     return (
       <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
