@@ -1844,3 +1844,60 @@ export type SupplierInvoiceDetail = NonNullable<
 >;
 export type SupplierInvoiceAttachment =
   SupplierInvoiceDetail["attachments"][number];
+
+// ---------------------------------------------------------------------------
+// Duplicate-invoice lookup. Vendors occasionally resend the same invoice;
+// receivers can also accidentally re-import a PDF that's already been posted.
+// The Review screen calls this to warn before the user re-posts a duplicate.
+//
+// Scoped to (tenant, supplier, supplier-printed invoice number). Returns a
+// short list with enough info for a humane warning ("Already posted on
+// 2026-04-22 as bill #INV-014, $1,234.56"). Returns [] when there's no
+// match — the typical case.
+// ---------------------------------------------------------------------------
+
+export type ExistingSupplierInvoiceMatch = {
+  id: string;
+  referenceNumber: string;
+  invoiceNumber: string | null;
+  invoiceDate: string;
+  totalAmount: string;
+  status: string;
+};
+
+export async function findExistingSupplierInvoices(args: {
+  supplierId: string;
+  supplierInvoiceNumber: string;
+}): Promise<ExistingSupplierInvoiceMatch[]> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
+
+  const trimmed = args.supplierInvoiceNumber.trim();
+  if (!trimmed) return [];
+
+  const rows = await db
+    .select({
+      id: supplierInvoices.id,
+      referenceNumber: supplierInvoices.referenceNumber,
+      invoiceNumber: supplierInvoices.invoiceNumber,
+      invoiceDate: supplierInvoices.invoiceDate,
+      totalAmount: supplierInvoices.totalAmount,
+      status: supplierInvoices.status,
+    })
+    .from(supplierInvoices)
+    .where(
+      and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        eq(supplierInvoices.supplierId, args.supplierId),
+        eq(supplierInvoices.invoiceNumber, trimmed),
+      ),
+    )
+    .orderBy(desc(supplierInvoices.invoiceDate))
+    .limit(5);
+
+  return rows;
+}

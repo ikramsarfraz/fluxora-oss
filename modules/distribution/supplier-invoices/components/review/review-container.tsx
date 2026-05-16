@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
@@ -12,6 +13,7 @@ import { CreateSupplierDialog } from "../create-supplier-dialog";
 
 import {
   createSupplierInvoiceAction,
+  findExistingSupplierInvoicesAction,
   markBulkImportFileReviewedAction,
   saveImportAliasesBatchAction,
   uploadSupplierInvoiceAttachmentAction,
@@ -150,6 +152,32 @@ export function ReviewContainer({
       skippedLines,
     });
   }, [baseData, supplierNameOverride, lineProductOverrides, skippedLines]);
+
+  // Duplicate-invoice lookup. Runs whenever both the selected supplier and
+  // the parsed invoice number are known — re-runs automatically when the
+  // user changes the supplier in the picker, since `supplierIdOverride` is
+  // part of the query key. Returns matching posted bills so the Review
+  // header can warn before the user re-posts a vendor invoice we've
+  // already saved.
+  const parsedInvoiceNumber = (
+    pipelineResult.prefillResult.values.supplierInvoiceNumber ?? ""
+  ).trim();
+  const duplicateQuery = useQuery({
+    queryKey: [
+      "supplier-invoices",
+      "duplicates",
+      supplierIdOverride,
+      parsedInvoiceNumber,
+    ] as const,
+    queryFn: () =>
+      findExistingSupplierInvoicesAction({
+        supplierId: supplierIdOverride!,
+        supplierInvoiceNumber: parsedInvoiceNumber,
+      }),
+    enabled: Boolean(supplierIdOverride && parsedInvoiceNumber.length > 0),
+    staleTime: 60_000,
+  });
+  const duplicateMatches = duplicateQuery.data ?? [];
 
   // Bbox data flows through unchanged from the pipeline result. Today this is
   // always empty (the parser doesn't populate `bbox` on UnresolvedLine yet);
@@ -487,6 +515,7 @@ export function ReviewContainer({
         lineMatchedProductIds={lineMatchedProductIds}
         rememberAliases={rememberAliases}
         onRememberAliasesChange={setRememberAliases}
+        duplicateMatches={duplicateMatches}
       />
       <CreateSupplierDialog
         open={createSupplierOpen}
