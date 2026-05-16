@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
 import { FilterSegmented } from "./filter-segmented";
@@ -12,7 +13,7 @@ import type {
   ProductLookup,
   SupplierLookup,
 } from "./map-pipeline-to-review-data";
-import { PdfPane } from "./pdf-pane";
+import { PdfHint, PdfPane } from "./pdf-pane";
 import { ReviewFooterStrip } from "./review-footer-strip";
 import { ReviewHeaderStrip } from "./review-header-strip";
 import {
@@ -109,6 +110,10 @@ export function ReviewScreen({
    */
   paneEnterDirection?: "next" | "prev";
 }) {
+  // Read sidebar state so the fixed bottom bar can re-anchor its left edge
+  // when the sidebar collapses/expands. The default mode is "offcanvas", so
+  // collapsed = sidebar fully off-screen and the bar should reach left:0.
+  const { state: sidebarState } = useSidebar();
   const [zoom, setZoom] = useState(85);
   const [activeLineId, setActiveLineId] = useState<number | null>(
     data.lines[0]?.id ?? null,
@@ -121,37 +126,6 @@ export function ReviewScreen({
   const rememberAliasesValue = rememberAliases ?? rememberAliasesLocal;
   const setRememberAliases = onRememberAliasesChange ?? setRememberAliasesLocal;
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
-
-  // The bill-total bar needs two things at once: pinned to the viewport bottom
-  // (position: fixed) AND width matched to the right pane (which changes when
-  // the app sidebar collapses/expands). Pure CSS can't do both — `width: 52%`
-  // on a fixed element is 52% of viewport, not 52% of any container. So we
-  // measure the right pane's bounding rect and pass it as inline styles to
-  // the fixed bar below.
-  const rightPaneRef = useRef<HTMLDivElement | null>(null);
-  const [footerGeometry, setFooterGeometry] = useState<{
-    left: number;
-    width: number;
-  } | null>(null);
-  useEffect(() => {
-    const el = rightPaneRef.current;
-    if (!el) return;
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setFooterGeometry({ left: rect.left, width: rect.width });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    // Also re-measure on viewport resize — ResizeObserver fires on element
-    // size changes but not on viewport changes that don't resize the element
-    // (e.g. zoom).
-    window.addEventListener("resize", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, []);
 
   const counts: ReviewCounts = useMemo(() => {
     const matched = data.lines.filter(
@@ -234,22 +208,19 @@ export function ReviewScreen({
   );
 
   return (
-    // Height: pinned to `calc(100svh - 4rem)` (viewport minus the 4rem app
-    // breadcrumb header in `app/(app)/layout.tsx`). The parent slot's `p-4`
-    // is cancelled visually by `-m-4`, and the margin's -32px exactly offsets
-    // the padding's +32px in the slot's intrinsic-height calculation — so
-    // SidebarInset still resolves to 100svh and nothing pushes body scroll.
-    // `h-full` doesn't work here because the ancestor chain only sets a
-    // *minimum* viewport height (`min-h-svh` on SidebarProvider), so an
-    // h-full chain has no real ceiling and any overflowing descendant grows
-    // the page. A svh-derived explicit height gives the inner flex column
-    // the definite ancestor the line-items scroll context needs.
-    // ReviewQueueShell also locks document.body overflow as a safety net.
-    <main className="-m-4 flex h-[calc(100svh-4rem)] min-h-0 min-w-0 flex-col overflow-hidden bg-stone-bg">
+    // ReviewScreen is rendered inside ReviewQueueShell's <main>, which owns
+    // the viewport-height + `-m-4` constraint. This root is a <div> (not a
+    // nested <main>) that just fills whatever space the shell gives it via
+    // `flex-1 min-h-0`. `overflow-hidden` keeps any in-pane overflow inside
+    // the line-items scroll context.
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
-      <div className="flex min-h-0 min-w-0 flex-1">
+      {/* grid-cols-2 gives both panes a deterministic 50/50 split regardless
+          of intrinsic content widths, so the bottom-bar columns below line
+          up exactly with the panes above. */}
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-2">
         <PdfPane
           fileName={data.fileName}
           page={data.page}
@@ -269,7 +240,6 @@ export function ReviewScreen({
         />
 
         <div
-          ref={rightPaneRef}
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col bg-stone-bg",
             paneEnterClass,
@@ -292,10 +262,10 @@ export function ReviewScreen({
             onCreateSupplier={onCreateSupplier}
           />
 
-          {/* Line items section — header + scroll area only. The footer is
-              promoted to a direct child of the right pane below so it stays
-              pinned at the bottom regardless of how much the line list
-              scrolls or how short the pane gets. */}
+          {/* Line items section — header + scroll area only. The bill-total
+              footer is no longer inside this section; it lives in the bottom
+              bar of <main> alongside PdfHint so both halves are siblings of
+              the two-pane row and the scroll area is free of overlay padding. */}
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
@@ -316,10 +286,9 @@ export function ReviewScreen({
               />
             </div>
 
-            {/* pb clears the fixed bill-total bar (~67px) plus enough extra
-                room that floating UI sitting above the bar doesn't overlap
-                the last line when scrolled to the bottom. */}
-            <div className="relative h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-38">
+            {/* pb-20 clears the fixed bill-total bar (~67px) so the last
+                line stays visible above it when scrolled to the bottom. */}
+            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-20">
               {filteredLines.length === 0 ? (
                 <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
                   No lines match this filter.
@@ -362,27 +331,33 @@ export function ReviewScreen({
                   </div>
                 ))
               )}
-              {/* Bill-total bar — `position: fixed` so it stays pinned to the viewport
-          bottom regardless of any scroll or layout overflow above. The bar's
-          left edge + width are measured from the right pane (see the
-          ResizeObserver above), so it tracks the right pane exactly when the
-          app sidebar collapses/expands — solving both requirements at once.
-          Renders nothing on the first paint while the measurement is pending;
-          appears as soon as the ref resolves. z-20 keeps it under Radix
-          dialogs (z-50) so modals still cover it. */}
-              {footerGeometry ? (
-                <div className="absolute bottom-0 z-20 w-full">
-                  <ReviewFooterStrip
-                    rememberAliases={rememberAliasesValue}
-                    onRememberAliasesChange={setRememberAliases}
-                    billTotal={data.parsed.total.value}
-                  />
-                </div>
-              ) : null}
             </div>
           </div>
         </div>
       </div>
-    </main>
+
+      {/* Bottom bar — pinned to the viewport bottom via `position: fixed`,
+          escaping any ancestor overflow/sizing so it's always visible. The
+          left offset is driven by sidebar state (`var(--sidebar-width)` when
+          expanded, `0` when collapsed/offcanvas) so the bar grows into the
+          freed space on collapse. `transition-[left]` matches the sidebar's
+          own width transition so they move together. `grid-cols-2` splits
+          the remaining width 50/50, matching the panes above exactly. The
+          scroll area above gets `pb-20` so the last line item isn't hidden
+          behind this bar. */}
+      <div
+        className="fixed right-0 bottom-0 z-20 grid grid-cols-2 transition-[left] duration-200 ease-linear"
+        style={{
+          left: sidebarState === "collapsed" ? 0 : "var(--sidebar-width)",
+        }}
+      >
+        <PdfHint />
+        <ReviewFooterStrip
+          rememberAliases={rememberAliasesValue}
+          onRememberAliasesChange={setRememberAliases}
+          billTotal={data.parsed.total.value}
+        />
+      </div>
+    </div>
   );
 }

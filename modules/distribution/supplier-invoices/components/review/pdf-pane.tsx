@@ -104,7 +104,6 @@ export function PdfPane({
           </div>
         )}
       </div>
-      <PdfHint />
     </div>
   );
 }
@@ -180,7 +179,13 @@ function ToolbarButton({
   );
 }
 
-function PdfHint() {
+/**
+ * Hint strip that lives in the bottom bar of <ReviewScreen> alongside the
+ * bill-total footer. Exported so the host renders both halves of the
+ * bottom bar together rather than having one bar live inside PdfPane and
+ * the other live inside the right pane.
+ */
+export function PdfHint() {
   return (
     <div
       className="flex items-center gap-2.5 border-t px-3.5 py-2 text-[11px]"
