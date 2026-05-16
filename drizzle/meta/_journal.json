@@ -281,6 +281,13 @@
       "when": 1779000000000,
       "tag": "0039_supplier_invoice_number_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1779100000000,
+      "tag": "0040_bulk_import_files",
+      "breakpoints": true
     }
   ]
 }

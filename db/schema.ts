@@ -145,6 +145,17 @@ export const supplierInvoiceStatusEnum = pgEnum("supplier_invoice_status", [
   "paid",
 ]);
 
+export const bulkImportStatusEnum = pgEnum("bulk_import_status", [
+  // Parsing finished cleanly — the user can pick this row from the bulk
+  // landing screen and walk through review.
+  "parsed",
+  // Parsing finished but the user has already posted the bill from this
+  // entry. We keep the row for audit + recovery (TTL is operator-controlled).
+  "reviewed",
+  // Parsing failed. The user can re-upload from the bulk landing screen.
+  "errored",
+]);
+
 export const plaidConnectionStatusEnum = pgEnum("plaid_connection_status", [
   "active",
   "requires_reauth",
@@ -1954,6 +1965,87 @@ export const supplierInvoiceAttachments = pgTable(
       columns: [table.supplierInvoiceId, table.fileId],
     }),
     index("supplier_invoice_attachments_file_id_idx").on(table.fileId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Bulk-import history. Each row records one PDF that a user uploaded through
+// the bulk-import flow. The row pins:
+//   - the parsed PipelineResult JSON (so the Review screen can prefill
+//     without re-parsing),
+//   - the original PDF's R2 object key (so we can serve it to the Review
+//     screen on demand, and so audit / recovery has the source bytes),
+//   - the lifecycle status (parsed → reviewed; errored on parse failure),
+//   - soft-delete flag (Phase B) so users can dismiss rows without waiting
+//     on a server round-trip; a future sweep can hard-delete.
+//
+// Replaces the prior 24h localStorage handoff with a durable, cross-device,
+// audit-friendly history. PDFs live in R2; this table keeps the metadata.
+// ---------------------------------------------------------------------------
+export const bulkImportFiles = pgTable(
+  "bulk_import_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    uploadedByUserId: uuid("uploaded_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Shared across every file submitted in a single bulk-import action call,
+     * so the queue carousel + landing screen can group "imported together"
+     * rows even though they are siblings rather than children of a parent
+     * row.
+     */
+    batchId: uuid("batch_id").notNull(),
+    /** Original filename as uploaded by the user (already path-safe). */
+    filename: varchar("filename", { length: 512 }).notNull(),
+    mimeType: varchar("mime_type", { length: 255 }),
+    sizeBytes: integer("size_bytes"),
+    /** R2 key the PDF was uploaded under. Object key is unique per row. */
+    objectKey: varchar("object_key", { length: 1024 }).notNull(),
+    /** Frozen `PipelineResult` JSON — used by the Review screen to prefill. */
+    pipelineResult: jsonb("pipeline_result"),
+    status: bulkImportStatusEnum("status").notNull().default("parsed"),
+    /** Set when the user has posted a bill from this entry. */
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** The resulting supplier invoice id, set together with reviewedAt. */
+    supplierInvoiceId: uuid("supplier_invoice_id").references(
+      () => supplierInvoices.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Phase B soft-delete flag. Reads filter on `deleted_at IS NULL`. The
+     * underlying R2 object is intentionally retained — storage is cheap and
+     * recovery is "set deleted_at = null".
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("bulk_import_files_object_key_unique").on(table.objectKey),
+    // Drives the bulk-landing list query: pending rows for the current tenant
+    // ordered by created_at desc.
+    index("bulk_import_files_tenant_status_created_at_idx").on(
+      table.tenantId,
+      table.status,
+      table.createdAt,
+    ),
+    // Drives "all files in this batch" lookups for the queue carousel.
+    index("bulk_import_files_batch_id_idx").on(table.batchId),
+    // Drives the soft-delete filter — pending = (status=parsed AND deleted_at IS NULL).
+    index("bulk_import_files_tenant_deleted_at_idx").on(
+      table.tenantId,
+      table.deletedAt,
+    ),
   ],
 );
 

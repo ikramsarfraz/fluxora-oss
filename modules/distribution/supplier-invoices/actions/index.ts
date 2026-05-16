@@ -286,7 +286,15 @@ export async function bulkImportSupplierInvoicesAction(
   );
 
   const startedAt = Date.now();
-  const result = await bulkImportSupplierInvoices(inputs);
+  // Phase A dual-write: bulkImportSupplierInvoices now also persists each
+  // parsed file to R2 + the bulk_import_files table. The client still gets
+  // the full PipelineResult per item so the existing localStorage handoff
+  // continues to work; PR A2 will switch the client to read from the server.
+  const tenant = await getCurrentTenant();
+  const result = await bulkImportSupplierInvoices(inputs, {
+    tenantId: tenant.id,
+    uploadedByUserId: user.id,
+  });
 
   // Aggregate per-file parse telemetry — handy for spotting batches where
   // PARSE_MODE=text-first stayed entirely on the fast path vs. falling back
