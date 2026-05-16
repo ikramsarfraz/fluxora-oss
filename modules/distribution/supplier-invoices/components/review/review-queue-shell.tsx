@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 import { getBulkImportPdfSignedUrlAction } from "../../actions";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 
@@ -114,39 +116,36 @@ export function ReviewQueueShell({
     return () => window.removeEventListener("keydown", handler);
   }, [goPrev, goNext]);
 
-  // Lock body + html overflow for the lifetime of the review queue. The
-  // app's tenant layout sizes its main content slot with `min-h-svh` on the
-  // sidebar wrapper, which means any descendant slightly bigger than the
-  // viewport (due to subtle rounding, the parent's `p-4` + `gap-4`, or our
-  // fixed-positioned bill-total bar) lets the document body scroll. The
-  // review screen is a viewport-locked two-pane app surface — scrolling
-  // belongs to the line items list, not the page. We restore the previous
-  // overflow values on unmount so navigating away leaves other routes
-  // untouched.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const html = document.documentElement;
-    const body = document.body;
-    const prevHtmlOverflow = html.style.overflow;
-    const prevBodyOverflow = body.style.overflow;
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    return () => {
-      html.style.overflow = prevHtmlOverflow;
-      body.style.overflow = prevBodyOverflow;
-    };
-  }, []);
+  // // Lock body + html overflow for the lifetime of the review queue. The
+  // // app's tenant layout sizes its main content slot with `min-h-svh` on the
+  // // sidebar wrapper, which means any descendant slightly bigger than the
+  // // viewport (due to subtle rounding, the parent's `p-4` + `gap-4`, or our
+  // // fixed-positioned bill-total bar) lets the document body scroll. The
+  // // review screen is a viewport-locked two-pane app surface — scrolling
+  // // belongs to the line items list, not the page. We restore the previous
+  // // overflow values on unmount so navigating away leaves other routes
+  // // untouched.
+  // useEffect(() => {
+  //   if (typeof document === "undefined") return;
+  //   const html = document.documentElement;
+  //   const body = document.body;
+  //   const prevHtmlOverflow = html.style.overflow;
+  //   const prevBodyOverflow = body.style.overflow;
+  //   html.style.overflow = "hidden";
+  //   body.style.overflow = "hidden";
+  //   return () => {
+  //     html.style.overflow = prevHtmlOverflow;
+  //     body.style.overflow = prevBodyOverflow;
+  //   };
+  // }, []);
 
   // First-render guard: React Query starts with `data === undefined`, which
   // would otherwise make `queue.length === 0` true and flash <QueueDone />
-  // for a single frame before the real list arrives. Render nothing while
-  // the first fetch is in flight — the loading window is short (cached
-  // response when warm, ~100ms cold) and a blank screen is preferable to
-  // a misleading "All caught up" celebration.
+  // for a single frame before the real list arrives. Show a skeleton of the
+  // two-pane layout so the user sees the page shape immediately rather than
+  // a misleading "All caught up" celebration or a blank window.
   if (isLoading && queue.length === 0) {
-    return (
-      <main className="-m-4 flex min-h-0 min-w-0 flex-1 flex-col bg-stone-bg" />
-    );
+    return <ReviewQueueSkeleton />;
   }
 
   // When the queue is empty AND the fetch has settled, render the
@@ -155,7 +154,9 @@ export function ReviewQueueShell({
   if (queue.length === 0) {
     return (
       <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
-        <QueueDone onBackToBulk={() => router.push("/supplier-invoices/bulk")} />
+        <QueueDone
+          onBackToBulk={() => router.push("/supplier-invoices/bulk")}
+        />
       </main>
     );
   }
@@ -228,6 +229,63 @@ export function ReviewQueueShell({
           completeCurrent({ supplierInvoiceId })
         }
       />
+    </main>
+  );
+}
+
+/**
+ * Loading-state placeholder shown while the first queue fetch is in flight.
+ * Mirrors the eventual two-pane layout — queue strip on top, PDF pane on
+ * the left, header card + line items list on the right — so the page shape
+ * is stable across the loading → loaded transition.
+ */
+function ReviewQueueSkeleton() {
+  return (
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col bg-stone-bg">
+      {/* Queue strip */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-stone-line bg-stone-surface px-4 py-3">
+        <div className="flex flex-col gap-1.5 border-r border-stone-line pr-4">
+          <Skeleton className="h-2.5 w-24" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-12 w-44 shrink-0" />
+        ))}
+      </div>
+
+      {/* Two-pane body */}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {/* PDF pane */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="min-h-0 flex-1" />
+        </div>
+
+        {/* Right pane */}
+        <div className="flex min-w-0 flex-1 flex-col gap-4 bg-stone-surface p-4">
+          {/* Header card */}
+          <div className="flex flex-col gap-3 rounded-md border border-stone-line bg-stone-bg p-4">
+            <Skeleton className="h-4 w-32" />
+            <div className="grid grid-cols-2 gap-3">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          </div>
+
+          {/* Line items */}
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-6 w-32" />
+            </div>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full shrink-0" />
+            ))}
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

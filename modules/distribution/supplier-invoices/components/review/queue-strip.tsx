@@ -8,7 +8,10 @@ import type { QueueEntry } from "./queue-types";
 import { REVIEW_COLORS } from "./tokens";
 
 const fmt = (n: number) =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  n.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 export function QueueStrip({
   queue,
@@ -77,7 +80,7 @@ export function QueueStrip({
           otherwise let the cards push the strip wider than the viewport and
           spill horizontal scroll onto <main>. */}
       <div
-        className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden"
+        className="flex flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden"
         style={{ paddingBottom: 2 }}
       >
         {queue.map((entry, idx) => (
@@ -140,7 +143,9 @@ function QueueCard({
         minWidth: 230,
         maxWidth: 280,
         padding: "8px 10px",
-        background: isCurrent ? "var(--stone-surface)" : "rgba(255,255,255,0.55)",
+        background: isCurrent
+          ? "var(--stone-surface)"
+          : "rgba(255,255,255,0.55)",
         border: `1px solid ${isCurrent ? "var(--stone-ink)" : "var(--stone-line)"}`,
         outline: isCurrent
           ? `2px solid color-mix(in oklch, var(--stone-ink) 15%, transparent)`
@@ -165,7 +170,9 @@ function QueueCard({
         <FileText
           className="size-[14px] shrink-0"
           strokeWidth={1.6}
-          style={{ color: isCurrent ? "var(--stone-ink)" : "var(--stone-muted)" }}
+          style={{
+            color: isCurrent ? "var(--stone-ink)" : "var(--stone-muted)",
+          }}
         />
         <span
           className={cn(

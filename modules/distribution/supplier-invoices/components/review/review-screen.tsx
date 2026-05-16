@@ -245,11 +245,11 @@ export function ReviewScreen({
     // the page. A svh-derived explicit height gives the inner flex column
     // the definite ancestor the line-items scroll context needs.
     // ReviewQueueShell also locks document.body overflow as a safety net.
-    <main className="-m-4 flex h-[calc(100svh-4rem)] min-h-0 w-full min-w-0 flex-col overflow-hidden bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100svh-4rem)] min-h-0 min-w-0 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <PdfPane
           fileName={data.fileName}
           page={data.page}
@@ -271,7 +271,7 @@ export function ReviewScreen({
         <div
           ref={rightPaneRef}
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg",
+            "flex min-h-0 min-w-0 flex-1 flex-col bg-stone-bg",
             paneEnterClass,
           )}
         >
@@ -319,7 +319,7 @@ export function ReviewScreen({
             {/* pb clears the fixed bill-total bar (~67px) plus enough extra
                 room that floating UI sitting above the bar doesn't overlap
                 the last line when scrolled to the bottom. */}
-            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-38">
+            <div className="relative h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-38">
               {filteredLines.length === 0 ? (
                 <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
                   No lines match this filter.
@@ -362,12 +362,7 @@ export function ReviewScreen({
                   </div>
                 ))
               )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bill-total bar — `position: fixed` so it stays pinned to the viewport
+              {/* Bill-total bar — `position: fixed` so it stays pinned to the viewport
           bottom regardless of any scroll or layout overflow above. The bar's
           left edge + width are measured from the right pane (see the
           ResizeObserver above), so it tracks the right pane exactly when the
@@ -375,18 +370,19 @@ export function ReviewScreen({
           Renders nothing on the first paint while the measurement is pending;
           appears as soon as the ref resolves. z-20 keeps it under Radix
           dialogs (z-50) so modals still cover it. */}
-      {footerGeometry ? (
-        <div
-          className="fixed bottom-0 z-20"
-          style={{ left: footerGeometry.left, width: footerGeometry.width }}
-        >
-          <ReviewFooterStrip
-            rememberAliases={rememberAliasesValue}
-            onRememberAliasesChange={setRememberAliases}
-            billTotal={data.parsed.total.value}
-          />
+              {footerGeometry ? (
+                <div className="absolute bottom-0 z-20 w-full">
+                  <ReviewFooterStrip
+                    rememberAliases={rememberAliasesValue}
+                    onRememberAliasesChange={setRememberAliases}
+                    billTotal={data.parsed.total.value}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
-      ) : null}
+      </div>
     </main>
   );
 }
