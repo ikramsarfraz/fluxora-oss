@@ -103,6 +103,29 @@ export function ReviewQueueShell({
     return () => window.removeEventListener("keydown", handler);
   }, [goPrev, goNext]);
 
+  // Lock body + html overflow for the lifetime of the review queue. The
+  // app's tenant layout sizes its main content slot with `min-h-svh` on the
+  // sidebar wrapper, which means any descendant slightly bigger than the
+  // viewport (due to subtle rounding, the parent's `p-4` + `gap-4`, or our
+  // fixed-positioned bill-total bar) lets the document body scroll. The
+  // review screen is a viewport-locked two-pane app surface — scrolling
+  // belongs to the line items list, not the page. We restore the previous
+  // overflow values on unmount so navigating away leaves other routes
+  // untouched.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
+
   // When the queue is empty, render the all-caught-up state. The done card
   // animates on mount via the `review-done-burst` keyframe class.
   if (queue.length === 0) {

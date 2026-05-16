@@ -225,17 +225,14 @@ export function ReviewScreen({
 
   return (
     // The parent slot in `app/(app)/layout.tsx` is `flex min-h-0 flex-1
-    // flex-col gap-4 p-4` inside SidebarInset, which is already height-locked
-    // to the viewport via the sidebar wrapper. So <main> just fills that
-    // slot with `min-h-0 flex-1` — using a fixed `h-[calc(100dvh-4rem)]`
-    // ignored the parent's p-4 (16px top/bottom) and made the page taller
-    // than the wrapper's min-h-svh, which then bubbled into both a 32px
-    // body scroll and a broken line-items scroll chain.
-    //
-    // `overflow-hidden` keeps any horizontal/vertical overflow inside <main>
-    // off the page entirely; the only scroll context inside the review screen
-    // is the line items list's `overflow-y-auto`.
-    <main className="-m-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    // flex-col gap-4 p-4` inside SidebarInset. <main> fills that slot via
+    // `min-h-0 flex-1 w-full` and uses `-m-4` to expand visually back over
+    // the parent's `p-4`. `overflow-hidden` clips any in-pane overflow so
+    // the line items list's `overflow-y-auto` is the only scroll context.
+    // ReviewQueueShell additionally locks document.body overflow while it
+    // is mounted, so even subtle rounding/positioning differences can't
+    // bubble up into a body scroll on this page.
+    <main className="-m-4 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
       {topSlot}
       {header}
 
