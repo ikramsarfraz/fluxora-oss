@@ -14,6 +14,7 @@ import type {
   SupplierLookup,
 } from "./map-pipeline-to-review-data";
 import { PdfHint, PdfPane } from "./pdf-pane";
+import { PriceChangeBanner } from "./price-change-banner";
 import { ReviewFooterStrip } from "./review-footer-strip";
 import { ReviewHeaderStrip } from "./review-header-strip";
 import {
@@ -261,6 +262,10 @@ export function ReviewScreen({
             onSupplierCandidate={onSelectSupplierCandidate}
             onCreateSupplier={onCreateSupplier}
           />
+
+          {/* Price-change banner. Renders nothing when there are no
+              deviations, so this is a zero-cost slot for clean invoices. */}
+          <PriceChangeBanner deviations={data.priceDeviations} />
 
           {/* Line items section — header + scroll area only. The bill-total
               footer is no longer inside this section; it lives in the bottom
