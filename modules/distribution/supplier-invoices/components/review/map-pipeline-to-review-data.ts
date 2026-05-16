@@ -290,6 +290,16 @@ export function mapPipelineToReviewData(input: MapPipelineInput): ReviewData {
     size: fileSize,
     parsed: buildHeader({ pipeline, suppliers }),
     lines: buildLines({ pipeline, products }),
+    // `priceDeviations` is computed server-side per matched line — we just
+    // pass the shape through unchanged. Empty list means nothing notable.
+    priceDeviations: pipeline.priceDeviations.map(d => ({
+      productId: d.productId,
+      productName: d.productName,
+      parsedUnitPrice: d.parsedUnitPrice,
+      lastUnitPrice: d.lastUnitPrice,
+      deviationPct: d.deviationPct,
+      lastInvoiceDate: d.lastInvoiceDate,
+    })),
   };
 }
 
