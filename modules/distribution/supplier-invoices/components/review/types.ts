@@ -84,6 +84,22 @@ export type ParsedLine = {
   match: LineMatch;
 };
 
+/**
+ * One row per matched line whose unit price has moved more than a small
+ * threshold since the supplier's previous invoice for the same product.
+ * Powers the price-change banner above the line items list.
+ */
+export type ParsedPriceDeviation = {
+  productId: string;
+  productName: string;
+  parsedUnitPrice: number;
+  lastUnitPrice: number;
+  /** Signed delta as percent — positive when price went up. */
+  deviationPct: number;
+  /** Date of the last invoice we're comparing against. */
+  lastInvoiceDate: string;
+};
+
 export type ReviewData = {
   fileName: string;
   page: number;
@@ -91,6 +107,8 @@ export type ReviewData = {
   size: string;
   parsed: ParsedHeader;
   lines: ParsedLine[];
+  /** Optional. Empty when the parser found nothing notable. */
+  priceDeviations: ParsedPriceDeviation[];
 };
 
 export type ReviewFilter = "needs" | "matched" | "fees" | "all";
