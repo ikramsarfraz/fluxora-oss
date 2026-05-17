@@ -12,9 +12,13 @@ import "server-only";
 //
 // OpenAI-specific env vars:
 //   OPENAI_API_KEY              Required when using OpenAI provider.
-//   OPENAI_INVOICE_MODEL        Model for invoice extraction (default: gpt-4o)
+//   OPENAI_INVOICE_MODEL        Model for invoice extraction (default: gpt-4o-mini)
 //   OPENAI_PRODUCT_MATCH_MODEL  Model for product matching (default: gpt-4o-mini)
-//   OPENAI_VISION_MODEL         Model for vision extraction (default: gpt-4o)
+//   OPENAI_VISION_MODEL         Model for vision extraction (default: gpt-4o-mini)
+//   OPENAI_ESCALATION_MODEL     Larger model used as a one-shot fallback when
+//                               the primary call fails with a transient
+//                               connection/timeout error (default: gpt-4o).
+//                               Set to "" to disable escalation entirely.
 //
 // Cost controls:
 //   AI_MAX_INVOICE_TEXT_CHARS   Max invoice text sent to AI (default: 30000)
@@ -279,21 +283,24 @@ export function createAiProvider(): AiProvider {
 
     _provider = new OpenAiProvider({
       apiKey: openaiKey,
-      // Invoice extraction defaults to `gpt-4o`. We had `gpt-4o-mini` here
-      // originally for cost, but the long structured outputs (~9K completion
-      // tokens for a 100-line invoice) hit a `UND_ERR_SOCKET: other side
-      // closed` failure pattern reliably under real-world load — confirmed
-      // by user-observed `parse_error` rows + 10-minute retry waits.
-      // gpt-4o has the throughput headroom; revisit at scale when telemetry
-      // says the cost is worth optimising. Product-match calls stay on the
-      // mini model because they're small structured outputs that haven't
-      // shown the same failure mode.
-      invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o",
+      // Defaults are `gpt-4o-mini` for both extraction stages: cheap (~$0.006
+      // per parse vs. ~$0.10 on gpt-4o for a 100-line invoice) and fast for
+      // typical invoice shapes (3-8 lines, <2K output tokens). The known
+      // failure mode (`UND_ERR_SOCKET: other side closed` mid-stream on long
+      // structured outputs) is handled by the escalation path: when the mini
+      // call fails with a transient connection/timeout error, the provider
+      // retries once with `escalationModel` (gpt-4o by default) before
+      // declaring `parse_error`. See `OPENAI_ESCALATION_MODEL` env var.
+      invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o-mini",
       productMatchModel: process.env.OPENAI_PRODUCT_MATCH_MODEL ?? "gpt-4o-mini",
-      // Same reasoning — long structured outputs from a PDF need the bigger
-      // model's throughput right now. Override via `OPENAI_VISION_MODEL` for
-      // experimentation.
-      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o",
+      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini",
+      // Escalation target. Set OPENAI_ESCALATION_MODEL="" to disable
+      // escalation (useful for cost-sensitive environments that want hard
+      // failures instead of paying for the bigger model on retry).
+      escalationModel:
+        process.env.OPENAI_ESCALATION_MODEL === undefined
+          ? "gpt-4o"
+          : process.env.OPENAI_ESCALATION_MODEL,
       maxInvoiceTextChars: resolveMaxInt(
         process.env.AI_MAX_INVOICE_TEXT_CHARS,
         30_000,
