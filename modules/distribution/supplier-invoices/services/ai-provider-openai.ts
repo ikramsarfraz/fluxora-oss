@@ -127,6 +127,14 @@ export class OpenAiProvider implements AiProvider {
     escalationModel: string;
     maxInvoiceTextChars: number;
     maxProductCandidates: number;
+    /**
+     * Test-only seam. When provided, replaces the OpenAI client this
+     * provider would otherwise construct. Lets the integration test inject
+     * a stub that drives the escalation path (mini-fails → gpt-4o-succeeds)
+     * without hitting the real OpenAI API. Production paths always pass
+     * `undefined` here.
+     */
+    clientForTest?: OpenAI;
   }) {
     // `timeout` caps each individual request; without it, a stuck socket can
     // hang for minutes (real observation: 10.3 min when OpenAI dropped both
@@ -139,11 +147,13 @@ export class OpenAiProvider implements AiProvider {
     // (3+1) × 60s × 2 stages = 8 min worst case, vs. 10+ min without the cap.
     // Retries still only fire on APIConnectionError/RateLimitError/5xx, and
     // most successful calls finish on the first attempt.
-    this.client = new OpenAI({
-      apiKey: args.apiKey,
-      maxRetries: 3,
-      timeout: 60_000,
-    });
+    this.client =
+      args.clientForTest ??
+      new OpenAI({
+        apiKey: args.apiKey,
+        maxRetries: 3,
+        timeout: 60_000,
+      });
     this.invoiceModel = args.invoiceModel;
     this.productMatchModel = args.productMatchModel;
     this.visionModel = args.visionModel;
