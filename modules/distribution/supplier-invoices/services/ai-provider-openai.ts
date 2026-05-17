@@ -18,7 +18,10 @@ import {
   AiExtractionResultSchema,
   AiProductMatchResultSchema,
 } from "../utils/ai-validation";
-import { classifyOpenAiError } from "../utils/openai-error-classification";
+import {
+  classifyOpenAiError,
+  shouldEscalateAiFailure,
+} from "../utils/openai-error-classification";
 import type {
   AiProvider,
   AiExtractionInput,
@@ -107,6 +110,12 @@ export class OpenAiProvider implements AiProvider {
   private readonly invoiceModel: string;
   private readonly productMatchModel: string;
   private readonly visionModel: string;
+  /**
+   * Larger model used as a one-shot fallback when the primary call fails
+   * with a transient connection/timeout error. Empty string disables
+   * escalation entirely.
+   */
+  private readonly escalationModel: string;
   private readonly maxInvoiceTextChars: number;
   private readonly maxProductCandidates: number;
 
@@ -115,29 +124,73 @@ export class OpenAiProvider implements AiProvider {
     invoiceModel: string;
     productMatchModel: string;
     visionModel: string;
+    escalationModel: string;
     maxInvoiceTextChars: number;
     maxProductCandidates: number;
+    /**
+     * Test-only seam. When provided, replaces the OpenAI client this
+     * provider would otherwise construct. Lets the integration test inject
+     * a stub that drives the escalation path (mini-fails → gpt-4o-succeeds)
+     * without hitting the real OpenAI API. Production paths always pass
+     * `undefined` here.
+     */
+    clientForTest?: OpenAI;
   }) {
     // `timeout` caps each individual request; without it, a stuck socket can
     // hang for minutes (real observation: 10.3 min when OpenAI dropped both
     // text-AI and vision sockets mid-stream and the SDK kept retrying). 60s
-    // is well above the happy-path budget (~12-30s on gpt-4o for a 100-line
-    // invoice) but short enough to fail fast when the remote stops talking.
+    // is well above the happy-path budget (~3-5s on mini for a typical small
+    // invoice, ~12-30s on gpt-4o for a 100-line one) but short enough to
+    // fail fast when the remote stops talking.
     //
     // `maxRetries: 3` pairs with the timeout to bound worst-case end-to-end:
     // (3+1) × 60s × 2 stages = 8 min worst case, vs. 10+ min without the cap.
     // Retries still only fire on APIConnectionError/RateLimitError/5xx, and
     // most successful calls finish on the first attempt.
-    this.client = new OpenAI({
-      apiKey: args.apiKey,
-      maxRetries: 3,
-      timeout: 60_000,
-    });
+    this.client =
+      args.clientForTest ??
+      new OpenAI({
+        apiKey: args.apiKey,
+        maxRetries: 3,
+        timeout: 60_000,
+      });
     this.invoiceModel = args.invoiceModel;
     this.productMatchModel = args.productMatchModel;
     this.visionModel = args.visionModel;
+    this.escalationModel = args.escalationModel;
     this.maxInvoiceTextChars = args.maxInvoiceTextChars;
     this.maxProductCandidates = args.maxProductCandidates;
+  }
+
+  /**
+   * Thin wrapper over the pure helper in `utils/openai-error-classification`,
+   * which is the single source of truth for the escalation rules + has the
+   * unit tests. Kept here so the call sites read cleanly.
+   */
+  private shouldEscalate(
+    primaryModel: string,
+    failure: AiExtractionResult,
+  ): boolean {
+    return shouldEscalateAiFailure({
+      primaryModel,
+      escalationModel: this.escalationModel,
+      result: failure,
+    });
+  }
+
+  /**
+   * Warning appended to the result when escalation produces a successful
+   * parse. Surfaces in the Review screen warnings list + the
+   * bulk_import_files.pipeline_result.warnings for visibility — repeated
+   * escalations are a signal to lower the model default or scale up the
+   * primary tier.
+   */
+  private escalationWarning(primaryModel: string): string {
+    return (
+      `AI extraction escalated to '${this.escalationModel}' after '${primaryModel}'` +
+      ` returned a transient connection/timeout error. Each escalation costs` +
+      ` roughly 17× more than the primary call.`
+    );
   }
 
   isAvailable(): boolean {
@@ -149,6 +202,35 @@ export class OpenAiProvider implements AiProvider {
   }
 
   async extractSupplierInvoice(input: AiExtractionInput): Promise<AiExtractionResult> {
+    const primary = await this.runInvoiceExtraction(input, this.invoiceModel);
+    if (!this.shouldEscalate(this.invoiceModel, primary)) return primary;
+
+    // Transient failure on the primary model — retry once with the
+    // escalation model. If the escalation succeeds, append a warning so the
+    // cost spike is visible in the Review screen + bulk_import_files row.
+    // If it also fails, we return the escalation's failure (more recent
+    // signal beats the original) so the resulting parseErrorCodes reflect
+    // both attempts having been exhausted.
+    const escalated = await this.runInvoiceExtraction(input, this.escalationModel);
+    if (escalated.status === "success") {
+      return {
+        ...escalated,
+        warnings: [...escalated.warnings, this.escalationWarning(this.invoiceModel)],
+      };
+    }
+    return escalated;
+  }
+
+  /**
+   * The actual extraction call — single attempt against a specified model.
+   * Pulled out of `extractSupplierInvoice` so the escalation path can re-run
+   * with a different model parameter. Behaviour is identical to the prior
+   * inline implementation; only the model became a parameter.
+   */
+  private async runInvoiceExtraction(
+    input: AiExtractionInput,
+    model: string,
+  ): Promise<AiExtractionResult> {
     const truncatedText = truncateInvoiceText(input.extractedText, this.maxInvoiceTextChars);
     const limitedProducts = limitProductCandidates(
       input.candidateProducts,
@@ -171,7 +253,7 @@ export class OpenAiProvider implements AiProvider {
       // malformed JSON afterwards. Refusals surface as `parsed === null`
       // (model declined to answer) which we handle below.
       const response = await this.client.chat.completions.parse({
-        model: this.invoiceModel,
+        model,
         response_format: zodResponseFormat(AiExtractionResultSchema, "invoice_extraction"),
         messages: [
           { role: "system", content: INVOICE_EXTRACTION_SYSTEM_PROMPT },
@@ -300,6 +382,31 @@ export class OpenAiProvider implements AiProvider {
   async extractInvoiceFromPdf(
     input: VisionExtractionInput,
   ): Promise<AiExtractionResult & { rawJson: string }> {
+    const primary = await this.runVisionExtraction(input, this.visionModel);
+    if (!this.shouldEscalate(this.visionModel, primary)) return primary;
+
+    // Same pattern as extractSupplierInvoice — retry once on the bigger
+    // model when the primary failed transiently. Successful escalation
+    // appends a warning so cost spikes are visible in the Review screen.
+    const escalated = await this.runVisionExtraction(input, this.escalationModel);
+    if (escalated.status === "success") {
+      return {
+        ...escalated,
+        warnings: [...escalated.warnings, this.escalationWarning(this.visionModel)],
+      };
+    }
+    return escalated;
+  }
+
+  /**
+   * Single-attempt vision extraction against a specified model. Pulled out
+   * of `extractInvoiceFromPdf` so the escalation path can re-run with the
+   * larger model. Behaviour is identical to the prior inline implementation.
+   */
+  private async runVisionExtraction(
+    input: VisionExtractionInput,
+    model: string,
+  ): Promise<AiExtractionResult & { rawJson: string }> {
     const pdfDataUrl = `data:application/pdf;base64,${input.pdfBuffer.toString("base64")}`;
 
     const textHint = buildVisionInvoiceUserMessage({
@@ -319,7 +426,7 @@ export class OpenAiProvider implements AiProvider {
 
     if (input.debug) {
       console.log("[vision debug] sending request", {
-        model: this.visionModel,
+        model,
         pdfBytes: input.pdfBuffer.byteLength,
         filename: input.filename,
         contentParts: ["file", "text"],
@@ -333,7 +440,7 @@ export class OpenAiProvider implements AiProvider {
 
     try {
       const response = await this.client.chat.completions.parse({
-        model: this.visionModel,
+        model,
         response_format: zodResponseFormat(AiExtractionResultSchema, "invoice_extraction"),
         messages: [
           { role: "system", content: VISION_INVOICE_EXTRACTION_SYSTEM_PROMPT },
