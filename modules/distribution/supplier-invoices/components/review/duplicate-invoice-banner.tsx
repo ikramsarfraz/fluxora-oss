@@ -13,36 +13,59 @@ export type DuplicateMatch = {
   invoiceDate: string;
   totalAmount: string;
   status: string;
+  /**
+   * How the duplicate was detected. `invoice_number` is the strong signal
+   * — vendors don't reuse numbers. `date_and_total` is the soft fallback
+   * for parses that didn't capture an invoice number.
+   */
+  matchedBy?: "invoice_number" | "date_and_total";
 };
 
 /**
  * Warning banner shown above the line-items list when the parsed invoice
- * number already exists in `supplier_invoices` for the same supplier.
+ * matches an existing bill in `supplier_invoices` for the same supplier.
  * Vendors do resend invoices; receivers do re-upload PDFs. Catching it
  * pre-submit is much cheaper than discovering the double-post later.
  *
- * The banner is informational rather than blocking — the user might
- * legitimately want a second copy on file (e.g. a re-issued invoice with
- * the same number after a correction). We surface the existing bill(s)
- * with a click-through so they can compare.
+ * Posted (non-draft) duplicates render the "I want to post this anyway"
+ * checkbox — the host disables the submit button until that's checked.
+ * This is the block-on-duplicate affordance: informational for drafts,
+ * actively gating for already-posted bills.
  */
 export function DuplicateInvoiceBanner({
   matches,
+  acknowledged,
+  onAcknowledgedChange,
 }: {
   matches: DuplicateMatch[];
+  /** When provided, renders the ack checkbox for posted-duplicate matches. */
+  acknowledged?: boolean;
+  onAcknowledgedChange?: (value: boolean) => void;
 }) {
   if (matches.length === 0) return null;
 
-  // One match is the common case; pluralize gracefully for the rare
-  // multi-hit scenario (e.g. an invoice number that's been reused across
-  // years — uncommon but seen in the wild).
+  // Soft matches (date + total) get a less alarming tone — the user might
+  // legitimately have two same-date same-amount bills from one supplier.
+  const allSoft = matches.every(m => m.matchedBy === "date_and_total");
   const isOne = matches.length === 1;
+  const hasPostedDuplicate = matches.some(m => m.status !== "draft");
+  const showAck = hasPostedDuplicate && onAcknowledgedChange !== undefined;
+
+  const headline = allSoft
+    ? isOne
+      ? "Possible duplicate (same date + amount)"
+      : `${matches.length} possible duplicates (same date + amount)`
+    : isOne
+      ? "Already posted for this supplier"
+      : `${matches.length} existing bills with this invoice number`;
 
   return (
     <div
       className="shrink-0 border-b border-stone-line"
       style={{
-        background: `color-mix(in oklch, ${REVIEW_COLORS.danger} 8%, transparent)`,
+        background: allSoft
+          ? `color-mix(in oklch, ${REVIEW_COLORS.danger} 4%, transparent)`
+          : `color-mix(in oklch, ${REVIEW_COLORS.danger} 8%, transparent)`,
       }}
     >
       <div className="flex items-start gap-2.5 px-[22px] py-2.5">
@@ -56,9 +79,7 @@ export function DuplicateInvoiceBanner({
             className="text-[13px] font-semibold"
             style={{ color: REVIEW_COLORS.danger }}
           >
-            {isOne
-              ? "Already posted for this supplier"
-              : `${matches.length} existing bills with this invoice number`}
+            {headline}
           </div>
           <ul className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-stone-muted">
             {matches.map(m => (
@@ -82,6 +103,17 @@ export function DuplicateInvoiceBanner({
               </li>
             ))}
           </ul>
+          {showAck && (
+            <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-stone-ink">
+              <input
+                type="checkbox"
+                checked={acknowledged ?? false}
+                onChange={e => onAcknowledgedChange?.(e.target.checked)}
+                className="size-[13px] cursor-pointer accent-stone-ink"
+              />
+              I&apos;ve compared the bills — post this anyway
+            </label>
+          )}
         </div>
       </div>
     </div>

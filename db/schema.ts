@@ -2346,6 +2346,65 @@ export const aiUsageEvents = pgTable(
   ],
 );
 
+// -------------------- AI extraction cache --------------------
+//
+// When a tenant re-uploads a PDF we've already AI-parsed (identical bytes →
+// same SHA-256), look it up here and skip the OpenAI call entirely. The
+// cached JSON is the RAW AiExtractionResult from the original parse — i.e.
+// supplier name + line text + totals + token usage — NOT the post-matching
+// PipelineResult. On cache hit the pipeline re-runs deterministic product
+// matching against the current catalog, so renamed/deleted products don't
+// produce stale alias references.
+//
+// Scope is per-tenant (uniqueness on tenant_id + hash) — never share cached
+// extractions across tenants because the prompt includes that tenant's
+// known suppliers + product candidates, which influences the AI's choice
+// of supplierName and the unmatched-line composition.
+
+export const aiExtractionCache = pgTable(
+  "ai_extraction_cache",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** SHA-256 hex of the PDF bytes (64 chars). */
+    pdfContentHash: varchar("pdf_content_hash", { length: 64 }).notNull(),
+    /**
+     * Frozen AiExtractionResult from the original parse. Includes lines,
+     * supplier name, totals, warnings, reasoning, and usage metadata. Read
+     * back as `AiExtractionResult` (cast at the boundary) and fed back into
+     * the pipeline as if the AI had just returned it.
+     */
+    aiExtractionJson: jsonb("ai_extraction_json").notNull(),
+    /**
+     * Stage the cached extraction came from. Lets us cache vision results
+     * separately from text-AI results — useful when text-AI was bypassed
+     * (e.g. scanned PDF) and only vision succeeded.
+     */
+    stage: aiUsageStageEnum("stage").notNull(),
+    /** Model that produced the cached extraction. Useful for invalidating
+     *  on model upgrades — a follow-up could nuke rows where model is below
+     *  a threshold version. */
+    model: varchar("model", { length: 64 }).notNull(),
+    /** Original filename — kept for the admin drilldown / debugging. */
+    sourceFilename: varchar("source_filename", { length: 512 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    // Primary lookup path. Unique to dedupe re-parses of the same PDF.
+    uniqueIndex("ai_extraction_cache_tenant_hash_stage_unique").on(
+      table.tenantId,
+      table.pdfContentHash,
+      table.stage,
+    ),
+    // Drives a future TTL/cleanup job ("delete entries older than 90 days").
+    index("ai_extraction_cache_created_at_idx").on(table.createdAt),
+  ],
+);
+
 // -------------------- Lot disposition decisions --------------------
 
 export const dispositionDecisions = pgTable(

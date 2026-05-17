@@ -158,26 +158,68 @@ export function ReviewContainer({
   // user changes the supplier in the picker, since `supplierIdOverride` is
   // part of the query key. Returns matching posted bills so the Review
   // header can warn before the user re-posts a vendor invoice we've
-  // already saved.
+  // already saved. The action checks invoice number first (strong signal);
+  // when no number is present, it falls back to (date, total) which catches
+  // re-uploads where the AI didn't read the number reliably.
   const parsedInvoiceNumber = (
     pipelineResult.prefillResult.values.supplierInvoiceNumber ?? ""
   ).trim();
+  const parsedInvoiceDate = (
+    pipelineResult.prefillResult.values.invoiceDate ?? ""
+  ).trim();
+  const parsedTotalAmount =
+    pipelineResult.prefillResult.totalComparison?.extractedTotal ?? null;
   const duplicateQuery = useQuery({
     queryKey: [
       "supplier-invoices",
       "duplicates",
       supplierIdOverride,
       parsedInvoiceNumber,
+      parsedInvoiceDate,
+      parsedTotalAmount,
     ] as const,
     queryFn: () =>
       findExistingSupplierInvoicesAction({
         supplierId: supplierIdOverride!,
         supplierInvoiceNumber: parsedInvoiceNumber,
+        invoiceDate: parsedInvoiceDate || null,
+        totalAmount: parsedTotalAmount,
       }),
-    enabled: Boolean(supplierIdOverride && parsedInvoiceNumber.length > 0),
+    // Run when EITHER the invoice number is present OR we have date+total to
+    // soft-match on — both paths produce useful warnings.
+    enabled: Boolean(
+      supplierIdOverride &&
+        (parsedInvoiceNumber.length > 0 ||
+          (parsedInvoiceDate.length > 0 && parsedTotalAmount != null)),
+    ),
     staleTime: 60_000,
   });
   const duplicateMatches = duplicateQuery.data ?? [];
+
+  // Block-on-duplicate: when a posted (non-draft) duplicate exists, the user
+  // must explicitly acknowledge before submit goes through. Drafts don't
+  // trigger the block — the user might legitimately want to replace a stale
+  // draft with this parse.
+  const hasPostedDuplicate = duplicateMatches.some(m => m.status !== "draft");
+  // Key the ack on the *content* of the duplicate set (sorted ids). When the
+  // set changes — user switched supplier, new server data — the key changes
+  // and the ack auto-resets without a setState-in-effect. The previous ack
+  // simply no longer matches, so `duplicateAcknowledged` falls back to false.
+  const duplicateMatchKey = duplicateMatches
+    .map(m => m.id)
+    .sort()
+    .join("|");
+  const [acknowledgedMatchKey, setAcknowledgedMatchKey] = useState<string | null>(
+    null,
+  );
+  const duplicateAcknowledged =
+    hasPostedDuplicate && acknowledgedMatchKey === duplicateMatchKey;
+  const setDuplicateAcknowledged = useCallback(
+    (value: boolean) => {
+      setAcknowledgedMatchKey(value ? duplicateMatchKey : null);
+    },
+    [duplicateMatchKey],
+  );
 
   // Bbox data flows through unchanged from the pipeline result. Today this is
   // always empty (the parser doesn't populate `bbox` on UnresolvedLine yet);
@@ -303,6 +345,15 @@ export function ReviewContainer({
     if (submitting) return;
     if (!supplierIdOverride) {
       toast.error("Pick or create a supplier before saving.");
+      return;
+    }
+    // Block-on-duplicate guard. A posted (non-draft) duplicate exists for
+    // this supplier and the user hasn't checked the ack box yet. The toast
+    // points at the banner so they know where to look.
+    if (hasPostedDuplicate && !duplicateAcknowledged) {
+      toast.error(
+        "This invoice looks like a duplicate of a bill that's already posted. Confirm in the banner above to post anyway.",
+      );
       return;
     }
 
@@ -452,6 +503,8 @@ export function ReviewContainer({
   }, [
     submitting,
     supplierIdOverride,
+    hasPostedDuplicate,
+    duplicateAcknowledged,
     pipelineResult,
     skippedLines,
     lineProductOverrides,
@@ -502,7 +555,7 @@ export function ReviewContainer({
         pdfFile={pdfFile}
         lineBboxes={lineBboxes.length > 0 ? lineBboxes : undefined}
         onSubmit={submit}
-        submitDisabled={submitting}
+        submitDisabled={submitting || (hasPostedDuplicate && !duplicateAcknowledged)}
         topSlot={topSlot}
         headerSlot={headerSlot}
         pdfPaneAccessory={pdfPaneAccessory}
@@ -527,6 +580,8 @@ export function ReviewContainer({
         rememberAliases={rememberAliases}
         onRememberAliasesChange={setRememberAliases}
         duplicateMatches={duplicateMatches}
+        duplicateAcknowledged={duplicateAcknowledged}
+        onDuplicateAcknowledgedChange={setDuplicateAcknowledged}
       />
       <CreateSupplierDialog
         open={createSupplierOpen}
