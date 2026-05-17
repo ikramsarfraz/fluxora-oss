@@ -41,6 +41,8 @@ export function BulkLandingScreen({
   onClearReviewed,
   onReparseAll,
   reparseAllPending,
+  hideHeader = false,
+  onParseErrorClick,
 }: {
   view: BatchView;
   /**
@@ -61,6 +63,19 @@ export function BulkLandingScreen({
   onReparseAll?: () => void;
   /** True while a "Re-parse all" pass is in flight. */
   reparseAllPending?: boolean;
+  /**
+   * Embedded mode: hide the inner header and CTA strip. The parent shell
+   * (SupplierBillsShell) owns the title + actions + tab navigation. Filter
+   * pills, file rows, summary metrics still render normally.
+   */
+  hideHeader?: boolean;
+  /**
+   * Per-row click handler for `parse-error` files. The Review button is
+   * disabled on these rows (Re-parse handler is parked), so click routes to
+   * a dialog that explains the failure + offers re-upload. When omitted,
+   * the row keeps the legacy disabled-button behaviour.
+   */
+  onParseErrorClick?: (file: BatchFile) => void;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<BatchFilter>("all");
@@ -82,50 +97,66 @@ export function BulkLandingScreen({
     router.push(href);
   };
 
+  // Tag: standalone vs. embedded mode. Standalone keeps the full-bleed `<main>`
+  // styling for the legacy /supplier-invoices/bulk route; embedded drops the
+  // outer wrapper so the parent shell owns layout + bg + page semantics.
+  const Outer = hideHeader ? "div" : "main";
+  const outerClass = hideHeader
+    ? "flex min-w-0 flex-1 flex-col"
+    : "-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg";
+  const summaryPadding = hideHeader ? "" : "";
+  const filesCardClass = hideHeader
+    ? "mb-7 overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface"
+    : "mx-8 mb-7 overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface";
+
   return (
-    <main className="-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg">
-      <header className="flex items-end justify-between gap-6 px-8 pb-[22px] pt-[28px]">
-        <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
-            Bulk import · {view.summary.filesProcessed}{" "}
-            {view.summary.filesProcessed === 1 ? "file" : "files"}
+    <Outer className={outerClass}>
+      {hideHeader ? null : (
+        <header className="flex items-end justify-between gap-6 px-8 pb-[22px] pt-[28px]">
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+              Bulk import · {view.summary.filesProcessed}{" "}
+              {view.summary.filesProcessed === 1 ? "file" : "files"}
+            </div>
+            <h1 className="mb-2 text-[26px] font-semibold leading-tight tracking-[-0.015em] text-stone-ink">
+              Review parsed invoices
+            </h1>
+            <p className="max-w-[640px] text-[14px] text-stone-muted">
+              Files were parsed and fields suggested by AI. Confirm each one before they post to inventory.
+            </p>
           </div>
-          <h1 className="mb-2 text-[26px] font-semibold leading-tight tracking-[-0.015em] text-stone-ink">
-            Review parsed invoices
-          </h1>
-          <p className="max-w-[640px] text-[14px] text-stone-muted">
-            Files were parsed and fields suggested by AI. Confirm each one before they post to inventory.
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onImportMore}
-            disabled={!onImportMore}
-            className="h-9 gap-1.5 text-[13px]"
-          >
-            <Upload className="size-[14px]" strokeWidth={1.6} />
-            Import more
-          </Button>
-          {nextFile ? (
+          <div className="flex shrink-0 gap-2">
             <Button
               type="button"
+              variant="outline"
               size="sm"
-              onClick={() => openFile(nextFile)}
-              className="h-9 gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
+              onClick={onImportMore}
+              disabled={!onImportMore}
+              className="h-9 gap-1.5 text-[13px]"
             >
-              Start with {startWithLabel(nextFile.name)}
-              <ArrowRight className="size-3" strokeWidth={1.8} />
+              <Upload className="size-[14px]" strokeWidth={1.6} />
+              Import more
             </Button>
-          ) : null}
-        </div>
-      </header>
+            {nextFile ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => openFile(nextFile)}
+                className="h-9 gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
+              >
+                Start with {startWithLabel(nextFile.name)}
+                <ArrowRight className="size-3" strokeWidth={1.8} />
+              </Button>
+            ) : null}
+          </div>
+        </header>
+      )}
 
-      <SummaryStrip view={view} />
+      <div className={summaryPadding}>
+        <SummaryStrip view={view} embedded={hideHeader} />
+      </div>
 
-      <div className="mx-8 mb-7 overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface">
+      <div className={filesCardClass}>
         <FilesCardHeader filter={filter} onFilterChange={setFilter} />
         <ColumnHeader />
         {visibleFiles.length === 0 ? (
@@ -141,6 +172,9 @@ export function BulkLandingScreen({
               onFocus={() => setFocusedId(file.id)}
               onOpen={() => openFile(file)}
               onDismiss={onDismissFile ? () => onDismissFile(file) : undefined}
+              onParseErrorClick={
+                onParseErrorClick ? () => onParseErrorClick(file) : undefined
+              }
             />
           ))
         )}
@@ -152,17 +186,27 @@ export function BulkLandingScreen({
           reparseAllPending={reparseAllPending}
         />
       </div>
-    </main>
+    </Outer>
   );
 }
 
-function SummaryStrip({ view }: { view: BatchView }) {
+function SummaryStrip({
+  view,
+  embedded = false,
+}: {
+  view: BatchView;
+  embedded?: boolean;
+}) {
   const { summary } = view;
   const ratio =
     summary.filesProcessed === 0 ? 0 : summary.readyToPost / summary.filesProcessed;
   return (
     <div
-      className="mx-8 mb-[18px] grid items-center gap-6 rounded-[12px] border border-stone-line bg-stone-surface px-6 py-[18px]"
+      // Drop the page-margin when embedded — parent shell handles padding.
+      className={cn(
+        "mb-[18px] grid items-center gap-6 rounded-[12px] border border-stone-line bg-stone-surface px-6 py-[18px]",
+        embedded ? "" : "mx-8",
+      )}
       style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr auto" }}
     >
       <MetricCard label="Files processed" value={summary.filesProcessed} />

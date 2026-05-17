@@ -27,6 +27,13 @@ export type BatchFile = {
   confidence: number;
   status: BatchFileStatus;
   issues: BatchFileIssue[];
+  /**
+   * Surfaced from `bulk_import_files.parse_error_codes` when status is
+   * `parse-error`. Used by ParseErrorDialog to show the exact failure code
+   * and pick a human-readable message. Empty array when status is anything
+   * else.
+   */
+  parseErrorCodes: string[];
   /** Free-form relative-time label, e.g. "2m ago". */
   elapsedLabel?: string;
 };

@@ -88,6 +88,13 @@ export interface ListingPageProps<TRow> {
   subtitle?: string;
   primaryAction?: React.ReactNode;
   secondaryActions?: React.ReactNode;
+  /**
+   * Suppress the entire title + subtitle + actions row. Used when this
+   * component is embedded inside a parent that already owns those slots
+   * (e.g. a tabbed shell with shared header chrome). The body, filters,
+   * pagination, etc. still render normally.
+   */
+  hideHeader?: boolean;
   belowHeader?: React.ReactNode;
   savedViews?: SavedView[];
   activeView?: string;
@@ -197,6 +204,7 @@ export function ListingPage<TRow>({
   subtitle,
   primaryAction,
   secondaryActions,
+  hideHeader,
   belowHeader,
   savedViews,
   activeView,
@@ -247,24 +255,26 @@ export function ListingPage<TRow>({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
-            {title}
-          </h1>
-          {subtitle ? (
-            <p className="mt-1 mb-0 text-[13px] text-stone-muted">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-        {(secondaryActions || primaryAction) && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {secondaryActions}
-            {primaryAction}
+      {!hideHeader ? (
+        <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div>
+            <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-1 mb-0 text-[13px] text-stone-muted">
+                {subtitle}
+              </p>
+            ) : null}
           </div>
-        )}
-      </div>
+          {(secondaryActions || primaryAction) && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {secondaryActions}
+              {primaryAction}
+            </div>
+          )}
+        </div>
+      ) : null}
       {belowHeader}
 
       {savedViews && savedViews.length > 0 ? (

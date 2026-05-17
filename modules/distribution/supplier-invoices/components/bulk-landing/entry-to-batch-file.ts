@@ -140,6 +140,7 @@ export function rowToBatchFile(row: BulkImportFileRow): BatchFile {
     confidence: Math.round(row.pipelineResult?.confidence ?? 0),
     status: statusFor(row),
     issues: issuesFor(row),
+    parseErrorCodes: row.parseErrorCodes ?? [],
     elapsedLabel: relativeTime(row.createdAt),
   };
 }
