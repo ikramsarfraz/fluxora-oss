@@ -12,8 +12,9 @@ import "server-only";
 //
 // OpenAI-specific env vars:
 //   OPENAI_API_KEY              Required when using OpenAI provider.
-//   OPENAI_INVOICE_MODEL        Model for invoice extraction (default: gpt-4o-mini)
+//   OPENAI_INVOICE_MODEL        Model for invoice extraction (default: gpt-4o)
 //   OPENAI_PRODUCT_MATCH_MODEL  Model for product matching (default: gpt-4o-mini)
+//   OPENAI_VISION_MODEL         Model for vision extraction (default: gpt-4o)
 //
 // Cost controls:
 //   AI_MAX_INVOICE_TEXT_CHARS   Max invoice text sent to AI (default: 30000)
@@ -278,14 +279,21 @@ export function createAiProvider(): AiProvider {
 
     _provider = new OpenAiProvider({
       apiKey: openaiKey,
-      invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o-mini",
+      // Invoice extraction defaults to `gpt-4o`. We had `gpt-4o-mini` here
+      // originally for cost, but the long structured outputs (~9K completion
+      // tokens for a 100-line invoice) hit a `UND_ERR_SOCKET: other side
+      // closed` failure pattern reliably under real-world load — confirmed
+      // by user-observed `parse_error` rows + 10-minute retry waits.
+      // gpt-4o has the throughput headroom; revisit at scale when telemetry
+      // says the cost is worth optimising. Product-match calls stay on the
+      // mini model because they're small structured outputs that haven't
+      // shown the same failure mode.
+      invoiceModel: process.env.OPENAI_INVOICE_MODEL ?? "gpt-4o",
       productMatchModel: process.env.OPENAI_PRODUCT_MATCH_MODEL ?? "gpt-4o-mini",
-      // `gpt-4o-mini` is multimodal and roughly 2–3× faster than `gpt-4o` on
-      // PDF vision calls, with ~10× lower per-token cost. For most invoices
-      // this is the right default; tenants who hit accuracy regressions on
-      // complex multi-page or merged-cell tables can opt back into the full
-      // model via `OPENAI_VISION_MODEL=gpt-4o`.
-      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o-mini",
+      // Same reasoning — long structured outputs from a PDF need the bigger
+      // model's throughput right now. Override via `OPENAI_VISION_MODEL` for
+      // experimentation.
+      visionModel: process.env.OPENAI_VISION_MODEL ?? "gpt-4o",
       maxInvoiceTextChars: resolveMaxInt(
         process.env.AI_MAX_INVOICE_TEXT_CHARS,
         30_000,
