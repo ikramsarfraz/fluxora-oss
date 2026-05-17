@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   Building2,
   ChevronsUpDown,
   CreditCard,
@@ -81,6 +82,11 @@ const navItems: NavItem[] = [
     title: "Subscriptions",
     url: "/admin/subscriptions",
     icon: CreditCard,
+  },
+  {
+    title: "AI usage",
+    url: "/admin/ai-usage",
+    icon: BarChart3,
   },
 ];
 

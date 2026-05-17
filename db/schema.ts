@@ -2256,6 +2256,96 @@ export const supplierProductAliases = pgTable(
   ],
 );
 
+// -------------------- AI usage events --------------------
+//
+// One row per OpenAI call made during invoice parsing. Drives platform-admin
+// cost transparency: which tenants are burning the most tokens, how often the
+// gpt-4o escalation path fires, and per-month cost trajectory. Persistence
+// lives at the row level (not aggregated) so we can drill into the failure
+// pattern when a tenant hits a cost spike — e.g. "this one PDF triggered 4
+// escalations in 30s because of a flaky OpenAI window."
+
+export const aiUsageStageEnum = pgEnum("ai_usage_stage", [
+  // Text-based invoice extraction (the primary AI call per upload).
+  "invoice_extraction",
+  // Vision-based extraction (fired when text-AI failed or returned a low-
+  // quality result). More expensive than text per call.
+  "vision_extraction",
+  // Per-line product matching (smaller structured outputs; cheap on mini).
+  "product_matching",
+]);
+
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /**
+     * The user that triggered the parse (nullable because automated /
+     * system-driven parses may not have a portal-user context). Maps to
+     * portalUsers via the same FK shape as bulk_import_files.
+     */
+    portalUserId: uuid("portal_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    stage: aiUsageStageEnum("stage").notNull(),
+    /** Exact model id sent to OpenAI (e.g. "gpt-4o-mini", "gpt-4o"). */
+    model: varchar("model", { length: 64 }).notNull(),
+    /**
+     * When set, this row is the escalation attempt that followed a transient
+     * failure on `escalated_from_model`. Lets us cleanly compute "escalations
+     * fired N times this month" and the marginal cost they added.
+     */
+    escalatedFromModel: varchar("escalated_from_model", { length: 64 }),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    /**
+     * Total cost of THIS call in micro-USD (1 = $0.000001). Integer to avoid
+     * float rounding across aggregates. The reader converts to display dollars
+     * with `formatAiUsageCost`.
+     */
+    costMicros: integer("cost_micros").notNull().default(0),
+    /** Whether the OpenAI call returned a usable result (status=success). */
+    succeeded: boolean("succeeded").notNull(),
+    /**
+     * Coarse-grained AiExtractionErrorCode when the call failed; null on
+     * success. Mirrors `bulk_import_files.parse_error_codes` so the admin
+     * page can group failures by category.
+     */
+    errorCode: varchar("error_code", { length: 32 }),
+    /**
+     * Best-effort link back to the source bulk-import row, when the call was
+     * made through that path. Set to null for direct parses (e.g. legacy
+     * single-PDF upload). ON DELETE SET NULL so we keep the audit even when
+     * the bulk-import row is soft-deleted + later hard-removed.
+     */
+    sourceBulkImportFileId: uuid("source_bulk_import_file_id").references(
+      () => bulkImportFiles.id,
+      { onDelete: "set null" },
+    ),
+    /** Original filename — kept denormalised for fast list rendering. */
+    sourceFilename: varchar("source_filename", { length: 512 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    // Drives the admin per-tenant aggregate query.
+    index("ai_usage_events_tenant_created_at_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    // Drives "escalations fired in the last 24h" admin filter.
+    index("ai_usage_events_escalated_idx").on(table.escalatedFromModel),
+    // Drives the per-source drilldown.
+    index("ai_usage_events_source_bulk_import_file_idx").on(
+      table.sourceBulkImportFileId,
+    ),
+  ],
+);
+
 // -------------------- Lot disposition decisions --------------------
 
 export const dispositionDecisions = pgTable(

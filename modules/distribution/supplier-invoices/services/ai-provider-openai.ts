@@ -23,6 +23,7 @@ import {
   shouldEscalateAiFailure,
 } from "../utils/openai-error-classification";
 import type {
+  AiCallUsage,
   AiProvider,
   AiExtractionInput,
   AiExtractionResult,
@@ -31,6 +32,25 @@ import type {
   AiProductMatchResult,
   VisionExtractionInput,
 } from "./ai-provider";
+
+/**
+ * Extract a normalised `AiCallUsage` from the SDK's response.usage. Returns
+ * null when the response didn't include usage (rare — only happens on certain
+ * SDK error paths) so the caller can decide not to bill the tenant.
+ */
+function usageFromResponse(args: {
+  model: string;
+  promptTokens: number | undefined;
+  completionTokens: number | undefined;
+  escalatedFromModel: string | null;
+}): AiCallUsage {
+  return {
+    model: args.model,
+    promptTokens: args.promptTokens ?? 0,
+    completionTokens: args.completionTokens ?? 0,
+    escalatedFromModel: args.escalatedFromModel,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Safe failure builders
@@ -54,6 +74,9 @@ function buildFailureExtractionResult(args: {
     status: "failed",
     errorCode: args.errorCode,
     errorMessage: args.errorMessage,
+    // SDK threw before delivering a usage report — caller should not bill
+    // the tenant for this call.
+    usage: null,
   };
 }
 
@@ -66,6 +89,13 @@ function buildFailureExtractionResult(args: {
 function buildNoOutputExtractionResult(args: {
   errorCode: Extract<AiExtractionErrorCode, "no_output" | "refusal" | "post_validation">;
   errorMessage: string;
+  /**
+   * Token usage observed for this call. The SDK DID return — we just couldn't
+   * use the response — so the tenant should be billed for what was consumed.
+   * Refusals and post-validation failures still incur token cost; only thrown
+   * SDK errors are "free" (no usage info available).
+   */
+  usage?: AiCallUsage | null;
 }): AiExtractionResult {
   return {
     supplierName: null,
@@ -81,12 +111,17 @@ function buildNoOutputExtractionResult(args: {
     status: "failed",
     errorCode: args.errorCode,
     errorMessage: args.errorMessage,
+    usage: args.usage ?? null,
   };
 }
 
 function buildFailureMatchResult(
   vendorProductNames: string[],
-  args: { errorCode: AiExtractionErrorCode; errorMessage: string },
+  args: {
+    errorCode: AiExtractionErrorCode;
+    errorMessage: string;
+    usage?: AiCallUsage | null;
+  },
 ): AiProductMatchResult {
   return {
     matches: vendorProductNames.map(name => ({
@@ -98,6 +133,7 @@ function buildFailureMatchResult(
     status: "failed",
     errorCode: args.errorCode,
     errorMessage: args.errorMessage,
+    usage: args.usage ?? null,
   };
 }
 
@@ -202,7 +238,7 @@ export class OpenAiProvider implements AiProvider {
   }
 
   async extractSupplierInvoice(input: AiExtractionInput): Promise<AiExtractionResult> {
-    const primary = await this.runInvoiceExtraction(input, this.invoiceModel);
+    const primary = await this.runInvoiceExtraction(input, this.invoiceModel, null);
     if (!this.shouldEscalate(this.invoiceModel, primary)) return primary;
 
     // Transient failure on the primary model — retry once with the
@@ -210,8 +246,14 @@ export class OpenAiProvider implements AiProvider {
     // cost spike is visible in the Review screen + bulk_import_files row.
     // If it also fails, we return the escalation's failure (more recent
     // signal beats the original) so the resulting parseErrorCodes reflect
-    // both attempts having been exhausted.
-    const escalated = await this.runInvoiceExtraction(input, this.escalationModel);
+    // both attempts having been exhausted. The escalation result's usage
+    // carries `escalatedFromModel` so the cost-tracking layer can attribute
+    // the marginal spend.
+    const escalated = await this.runInvoiceExtraction(
+      input,
+      this.escalationModel,
+      this.invoiceModel,
+    );
     if (escalated.status === "success") {
       return {
         ...escalated,
@@ -230,6 +272,7 @@ export class OpenAiProvider implements AiProvider {
   private async runInvoiceExtraction(
     input: AiExtractionInput,
     model: string,
+    escalatedFromModel: string | null,
   ): Promise<AiExtractionResult> {
     const truncatedText = truncateInvoiceText(input.extractedText, this.maxInvoiceTextChars);
     const limitedProducts = limitProductCandidates(
@@ -246,6 +289,7 @@ export class OpenAiProvider implements AiProvider {
     });
 
     let parsed: unknown;
+    let usage: AiCallUsage | null = null;
 
     try {
       // Strict structured outputs: the SDK rejects any response that doesn't
@@ -262,11 +306,22 @@ export class OpenAiProvider implements AiProvider {
         temperature: 0,
       });
 
+      // Capture usage as soon as we have a response — refusals and
+      // post-validation failures still incur token cost, so the cost
+      // tracker needs the data even on the failure paths below.
+      usage = usageFromResponse({
+        model,
+        promptTokens: response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens,
+        escalatedFromModel,
+      });
+
       const message = response.choices[0]?.message;
       if (message?.refusal) {
         return buildNoOutputExtractionResult({
           errorCode: "refusal",
           errorMessage: `OpenAI refused to answer: ${message.refusal}`,
+          usage,
         });
       }
       parsed = message?.parsed;
@@ -274,6 +329,7 @@ export class OpenAiProvider implements AiProvider {
         return buildNoOutputExtractionResult({
           errorCode: "no_output",
           errorMessage: "OpenAI returned no parsed output.",
+          usage,
         });
       }
     } catch (err) {
@@ -293,16 +349,29 @@ export class OpenAiProvider implements AiProvider {
       return buildNoOutputExtractionResult({
         errorCode: "post_validation",
         errorMessage: "OpenAI response failed post-validation.",
+        usage,
       });
     }
 
-    return { ...validated, status: "success", errorCode: null, errorMessage: null };
+    return {
+      ...validated,
+      status: "success",
+      errorCode: null,
+      errorMessage: null,
+      usage,
+    };
   }
 
   async suggestProductMatches(input: AiProductMatchInput): Promise<AiProductMatchResult> {
     if (input.vendorProductNames.length === 0) {
       // Legitimately nothing to match — success-with-empty.
-      return { matches: [], status: "success", errorCode: null, errorMessage: null };
+      return {
+        matches: [],
+        status: "success",
+        errorCode: null,
+        errorMessage: null,
+        usage: null,
+      };
     }
 
     const limitedProducts = limitProductCandidates(
@@ -316,6 +385,7 @@ export class OpenAiProvider implements AiProvider {
     });
 
     let parsed: unknown;
+    let usage: AiCallUsage | null = null;
 
     try {
       const response = await this.client.chat.completions.parse({
@@ -328,11 +398,19 @@ export class OpenAiProvider implements AiProvider {
         temperature: 0,
       });
 
+      usage = usageFromResponse({
+        model: this.productMatchModel,
+        promptTokens: response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens,
+        escalatedFromModel: null,
+      });
+
       const message = response.choices[0]?.message;
       if (message?.refusal) {
         return buildFailureMatchResult(input.vendorProductNames, {
           errorCode: "refusal",
           errorMessage: `OpenAI refused to answer: ${message.refusal}`,
+          usage,
         });
       }
       parsed = message?.parsed;
@@ -340,6 +418,7 @@ export class OpenAiProvider implements AiProvider {
         return buildFailureMatchResult(input.vendorProductNames, {
           errorCode: "no_output",
           errorMessage: "OpenAI returned no parsed output.",
+          usage,
         });
       }
     } catch (err) {
@@ -355,6 +434,7 @@ export class OpenAiProvider implements AiProvider {
       return buildFailureMatchResult(input.vendorProductNames, {
         errorCode: "post_validation",
         errorMessage: "OpenAI response failed post-validation.",
+        usage,
       });
     }
 
@@ -376,19 +456,24 @@ export class OpenAiProvider implements AiProvider {
       status: "success",
       errorCode: null,
       errorMessage: null,
+      usage,
     };
   }
 
   async extractInvoiceFromPdf(
     input: VisionExtractionInput,
   ): Promise<AiExtractionResult & { rawJson: string }> {
-    const primary = await this.runVisionExtraction(input, this.visionModel);
+    const primary = await this.runVisionExtraction(input, this.visionModel, null);
     if (!this.shouldEscalate(this.visionModel, primary)) return primary;
 
     // Same pattern as extractSupplierInvoice — retry once on the bigger
     // model when the primary failed transiently. Successful escalation
     // appends a warning so cost spikes are visible in the Review screen.
-    const escalated = await this.runVisionExtraction(input, this.escalationModel);
+    const escalated = await this.runVisionExtraction(
+      input,
+      this.escalationModel,
+      this.visionModel,
+    );
     if (escalated.status === "success") {
       return {
         ...escalated,
@@ -406,6 +491,7 @@ export class OpenAiProvider implements AiProvider {
   private async runVisionExtraction(
     input: VisionExtractionInput,
     model: string,
+    escalatedFromModel: string | null,
   ): Promise<AiExtractionResult & { rawJson: string }> {
     const pdfDataUrl = `data:application/pdf;base64,${input.pdfBuffer.toString("base64")}`;
 
@@ -437,6 +523,7 @@ export class OpenAiProvider implements AiProvider {
     let parsed: unknown;
     let rawContent = "";
     let finishReason: string | null = null;
+    let usage: AiCallUsage | null = null;
 
     try {
       const response = await this.client.chat.completions.parse({
@@ -456,6 +543,13 @@ export class OpenAiProvider implements AiProvider {
       finishReason = response.choices[0]?.finish_reason ?? null;
       rawContent = message?.content ?? "";
 
+      usage = usageFromResponse({
+        model,
+        promptTokens: response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens,
+        escalatedFromModel,
+      });
+
       if (input.debug) {
         const promptTokens = response.usage?.prompt_tokens ?? 0;
         const completionTokens = response.usage?.completion_tokens ?? 0;
@@ -473,6 +567,7 @@ export class OpenAiProvider implements AiProvider {
           {
             errorCode: "refusal",
             errorMessage: `Vision model refused to answer: ${message.refusal}`,
+            usage,
           },
           rawContent,
         );
@@ -484,6 +579,7 @@ export class OpenAiProvider implements AiProvider {
           {
             errorCode: "no_output",
             errorMessage: `Vision model returned no parsed output (finish_reason: ${finishReason}).`,
+            usage,
           },
           rawContent,
         );
@@ -511,6 +607,7 @@ export class OpenAiProvider implements AiProvider {
         {
           errorCode: "post_validation",
           errorMessage: "Vision model response failed post-validation.",
+          usage,
         },
         rawContent,
       );
@@ -531,11 +628,16 @@ export class OpenAiProvider implements AiProvider {
       status: "success",
       errorCode: null,
       errorMessage: null,
+      usage,
     };
   }
 
   private buildVisionFailureResult(
-    args: { errorCode: AiExtractionErrorCode; errorMessage: string },
+    args: {
+      errorCode: AiExtractionErrorCode;
+      errorMessage: string;
+      usage?: AiCallUsage | null;
+    },
     rawJson = "",
   ): AiExtractionResult & { rawJson: string } {
     return {
@@ -553,6 +655,7 @@ export class OpenAiProvider implements AiProvider {
       status: "failed",
       errorCode: args.errorCode,
       errorMessage: args.errorMessage,
+      usage: args.usage ?? null,
     };
   }
 }

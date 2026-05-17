@@ -1,5 +1,6 @@
 import "server-only";
 
+import { recordAiUsageEvents } from "./ai-usage-events";
 import { createBulkImportFile } from "./bulk-import-history";
 import { parseSupplierInvoicePdf } from "./pdf-prefill";
 import type { PipelineResult } from "./parsing-pipeline";
@@ -139,6 +140,17 @@ async function processOneFile(
           : "Failed to persist PDF.",
     };
   }
+
+  // Best-effort cost tracking. Records one row per OpenAI call this parse
+  // made. Failure here doesn't fail the parse — the user's review flow is
+  // unaffected, we just lose a row of telemetry.
+  await recordAiUsageEvents({
+    tenantId: args.tenantId,
+    portalUserId: args.uploadedByUserId,
+    sourceBulkImportFileId: bulkImportFileId,
+    sourceFilename: file.originalFilename,
+    events: pipeline.usageEvents,
+  });
 
   return {
     filename: file.originalFilename,
