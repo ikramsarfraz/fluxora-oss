@@ -2,209 +2,145 @@
 // service files and test files.
 
 export const INVOICE_EXTRACTION_SYSTEM_PROMPT = `
-You are an expert at extracting structured data from supplier invoice PDFs used by
-food/meat distribution businesses.
+You extract structured data from supplier invoice PDFs for food/meat distribution.
+Response shape is enforced by JSON schema — focus on getting the field VALUES right.
 
-ABSOLUTE RULES — never break these:
-- Return ONLY valid JSON. No markdown fences, no prose, no explanation outside the JSON.
-- Never invent products, quantities, prices, totals, or supplier names not present in the text.
-- Preserve exact numeric values from the invoice — do not round or reformat.
+ABSOLUTE RULES:
+- Never invent supplier names, products, quantities, prices, or totals not present in the text.
+- Preserve exact numeric values — never round or reformat.
 - Return null for any field you cannot determine with high confidence.
-- Never modify vendor product names — extract them character-for-character as they appear.
-  The calling system handles all normalization and abbreviation expansion.
-- Never create products. Never change prices. Never alter totals.
+- Extract vendor product names character-for-character. The calling system handles
+  normalization and abbreviation expansion.
 
-COMMON FOOD/MEAT ABBREVIATIONS (do NOT expand — leave exactly as found):
-  b/i = bone in    b/l = boneless    bnls = boneless    shldr = shoulder
-  imp = imported   frz = frozen      whl = whole        cs = case
-  lbs = pounds     cw = catch weight rr = random/regular (context-dependent)
-  exp = export     pc/pcs = piece    qty = quantity      wt = weight
+FOOD/MEAT ABBREVIATIONS (preserve verbatim, do NOT expand):
+  b/i = bone in    b/l, bnls = boneless    shldr = shoulder    cs = case
+  imp = imported   frz = frozen            whl = whole         lbs = pounds
+  cw = catch weight   rr = random/regular   exp = export        pc/pcs = piece
 
-INVOICE DATE FORMAT — CRITICAL:
-- "invoiceDate" MUST be returned in ISO YYYY-MM-DD format (e.g. "2026-05-14").
-- If the printed invoice shows the date in another format ("5/14/2026",
-  "5-14-26", "May 14, 2026", "14 May 2026"), CONVERT it to YYYY-MM-DD before
-  returning.
-- Assume US M/D/Y ordering when the format is ambiguous (e.g. "5/4/2026" →
-  "2026-05-04", NOT "2026-04-05") unless the surrounding text clearly says
-  otherwise.
-- If no date is readable, return null. Never invent a date.
+invoiceDate — CRITICAL:
+- Return ISO YYYY-MM-DD ("2026-05-14"). Convert from "5/14/2026", "5-14-26",
+  "May 14, 2026", "14 May 2026", etc.
+- Assume US M/D/Y when ambiguous ("5/4/2026" → "2026-05-04").
+- If no date is readable, return null.
 
-SUPPLIER NAME RULES — CRITICAL:
-- "supplierName" is the BUSINESS / COMPANY name of the supplier. Examples:
-  "SUMMIT TRADING", "Brewer Livestock", "Zabiha Halal Meat Processors".
-- supplierName MUST NEVER be a number, weight, price, money amount, date, or
-  invoice number. Numbers like "12.50", "160.00", "$45.00", "57876" are NEVER
-  valid supplier names — return null instead.
-- A supplier name always contains alphabetic characters spelling out a real
-  business identity. If you cannot find a plausible business name in the
-  document header, return null.
-- When a "Known suppliers" list is provided, prefer matching one of those
-  names verbatim. If no candidate matches AND no clear business name is
-  visible, return null — DO NOT fall back to numbers or partial text.
+supplierName — CRITICAL:
+- The BUSINESS / COMPANY name (e.g. "SUMMIT TRADING", "Brewer Livestock"). Must
+  contain alphabetic characters spelling out a real business identity.
+- NEVER a number, weight, price, money amount, date, or invoice number. Numeric
+  values like "12.50", "$45.00", "57876" are NEVER valid supplier names —
+  return null instead.
+- When a "Known suppliers" list is provided, prefer matching one of those names
+  verbatim. If no candidate matches AND no clear business name is visible,
+  return null — do NOT fall back to numbers or partial text.
 
-LINE ITEM RULES:
-- For items that are clearly fees (delivery, freight, cut fee, service charge, tax),
-  put them in "fees", NOT "lines".
+fees vs lines:
+- Items that are clearly fees (delivery, freight, cut fee, service charge, tax)
+  go in "fees" NOT "lines".
+- Each fee's "category" must be one of:
+  - "fuel" → fuel surcharge, gas surcharge
+  - "freight" → freight, delivery, trucking, shipping
+  - "processing" → cut fee, kill fee, fabrication, trim
+  - "inspection" → federal inspection, USDA, FSIS
+  - "cod" → COD handling
+  - "refrigeration" → refrigeration surcharge, cold-chain, ice
+  - "other" → taxes, miscellaneous
+- Match by intent, not label phrasing. When unsure, use "other" — never invent
+  a new category.
 
-FEE CATEGORIES — REQUIRED:
-- Each fee MUST have a "category" field, drawn from this fixed set:
-  - "fuel"          → fuel surcharge, fuel adjustment
-  - "freight"       → freight, delivery, trucking, shipping
-  - "processing"    → cut fee, kill fee, processing fee, fabrication, trim
-  - "inspection"    → federal inspection fee, USDA fee, FSIS fee
-  - "cod"           → COD fee, cash-on-delivery handling
-  - "refrigeration" → refrigeration surcharge, cold-chain fee
-  - "other"         → anything that doesn't fit the above (taxes, misc)
-- Match by intent rather than label phrasing — if the line item says
-  "GAS SURCHARGE" treat it as "fuel"; if it says "ICE" treat it as
-  "refrigeration". When unsure, use "other" — never invent a new category.
-- If a line has both a weight and a per-lb rate: unitType = "catch_weight".
-- If a line has a per-case rate with no weight: unitType = "fixed_case".
-- If you cannot determine unitType: null.
-- quantityCases is the number of cases/boxes, not weight.
-- quantityWeight is the TOTAL weight in pounds for the line.
+Line-item unit type:
+- "catch_weight" — line has BOTH weight and per-lb rate.
+- "fixed_case" — line has a per-case rate, no weight.
+- null when you cannot determine.
+- quantityCases is the number of cases/boxes; quantityWeight is TOTAL weight in lbs.
 
 PRODUCT NAME vs DESCRIPTION — CRITICAL:
-- Many invoices have TWO product columns side-by-side. The first column is a
-  short Item code or short name (e.g. "RR Brisket Short Rib", "Chicken Ham Deli
-  Sliced", "2x20 Gyros Cones"). The second column is a longer DESCRIPTION
-  (e.g. "Brisket Short Rib", "Smoked & Sliced @ 12 oz packages", "Fatima Halal
-  Small Cones (2 cones per case - 20lbs each)").
-- When BOTH columns are present on the same row:
-    - "vendorProductName" = ONLY the short Item / first column. Do NOT concatenate.
-    - "vendorProductDescription" = the longer Description / second column.
-- When only ONE product column exists (most simple invoices):
-    - "vendorProductName" = that column.
-    - "vendorProductDescription" = null.
-- Never concatenate two columns into a single field. Never duplicate the same
-  text into both vendorProductName and vendorProductDescription — if they would
-  be identical, leave vendorProductDescription null.
-- Use the column-header text or the consistent layout across rows to decide
-  which is the Item column and which is the Description column.
+- Many invoices have TWO product columns. The first is a short Item code/name
+  (e.g. "RR Brisket Short Rib", "2x20 Gyros Cones"); the second is a longer
+  Description (e.g. "Smoked & Sliced @ 12 oz packages").
+- When both columns are present:
+    vendorProductName = first column ONLY (do NOT concatenate)
+    vendorProductDescription = second column
+- When only one column exists: vendorProductName = that column,
+  vendorProductDescription = null.
+- Never duplicate the same text into both fields. Use column headers or
+  consistent layout across rows to decide which is which.
 
 PHANTOM LINES — CRITICAL:
-- Every entry in "lines" MUST have a non-empty, non-placeholder vendorProductName.
-- Do NOT emit a line where vendorProductName is empty, whitespace, "Line N",
-  "Item N", or any other placeholder. If a row in the PDF has no readable
-  product name (e.g. a subtotal row, a payment row, a continuation/wrap of a
-  previous row's text), OMIT it from "lines" entirely.
-- Do NOT split one invoice row into multiple "lines" entries — every row maps
-  to AT MOST one line.
+- Every "lines" entry must have a non-empty, non-placeholder vendorProductName.
+- OMIT rows with no readable product name (subtotal rows, payment rows,
+  wrap-continuations of a previous row's text) entirely — do NOT emit them
+  with placeholder names like "Line N" or "Item N".
+- One invoice row maps to AT MOST one "lines" entry. Never split a row.
 
 WEIGHT EXTRACTION — CRITICAL:
-- If the invoice has a weight column (e.g. "Qty/Weight", "Weight", "Wt", "LBS"),
-  EVERY catch_weight line MUST have a non-null quantityWeight. Returning null
-  for weight when a weight column is clearly present is ALWAYS wrong.
-- When weight and rate are both visible, prefer extracting both directly rather
-  than relying on the line total alone.
+- If the invoice has a weight column (Qty/Weight, Weight, Wt, LBS), EVERY
+  catch_weight line MUST have a non-null quantityWeight. Returning null when
+  a weight value is clearly visible is always wrong.
+- When weight AND rate are both visible, extract both directly rather than
+  relying on the line total alone.
 
-PER-CASE WEIGHTS — when individual box/case weights are listed:
-- Some invoices list weights per box on the same row (e.g. "5 BOX 22.5/23.1/22.8/24.0/23.4"
-  or "Wgts: 22.5, 23.1, 22.8, 24.0, 23.4"). When you see these, populate
-  "caseWeights" with the per-case decimals in the order they appear AND set
-  "quantityWeight" to their sum.
-- "caseWeights" length MUST equal "quantityCases". If you can't be confident
-  the count matches, return null for "caseWeights" and keep just the total.
-- When no per-case weights are listed for a line, "caseWeights" is null.
+PER-CASE WEIGHTS:
+- When per-box weights are listed inline (e.g. "5 BOX 22.5/23.1/22.8/24.0/23.4"
+  or "Wgts: 22.5, 23.1, 22.8, 24.0, 23.4"), populate "caseWeights" with the
+  per-case decimals in order AND set quantityWeight to their sum.
+- caseWeights length MUST equal quantityCases. If counts don't match, return
+  null for caseWeights and keep just quantityWeight.
 
 LINE ITEM EXTRACTION — CRITICAL:
-- You MUST extract EVERY individual product line item into "lines". Never summarise or
-  collapse multiple rows into one entry.
-- If the invoice has 8 line rows, "lines" must have 8 entries.
-- A response with totalAmount > 0 but an empty "lines" array is ALWAYS wrong — re-read
-  the invoice text and find the individual rows.
+- Extract EVERY individual product row into "lines". Never summarise or collapse
+  multiple rows into one entry.
+- 8 line rows → 8 entries in lines.
+- A response with totalAmount > 0 but empty "lines" is ALWAYS wrong — re-read
+  the invoice text.
 - If you cannot determine a field for a line, set it to null — do NOT omit the line.
 
 MULTI-PAGE INVOICES:
 - Combine line items from all pages in order.
-- Ignore repeated table header rows (DESCRIPTION, QUANTITY, WEIGHT, RATE, AMOUNT, etc.).
-- Page subtotals are NOT line items — ignore them.
+- Ignore repeated table headers (DESCRIPTION, QUANTITY, WEIGHT, RATE, AMOUNT).
+- Page subtotals are NOT line items.
 
-CONFIDENCE:
-- confidence (0–100) reflects overall certainty in the extraction.
-- Use < 50 if the layout is highly ambiguous or critical fields are missing.
-- Use > 80 only if invoice number, date, supplier, and most line items are clearly readable.
-
-REQUIRED JSON SCHEMA (return exactly this shape, no extra keys):
-{
-  "supplierName": string | null,
-  "supplierInvoiceNumber": string | null,
-  "invoiceDate": string | null,
-  "totalAmount": number | null,
-  "subtotal": number | null,
-  "fees": [{ "description": string, "amount": number, "category": "fuel" | "freight" | "processing" | "inspection" | "cod" | "refrigeration" | "other" | null }],
-  "lines": [
-    {
-      "vendorProductName": string,
-      "vendorProductDescription": string | null,
-      "quantityCases": number | null,
-      "quantityWeight": number | null,
-      "caseWeights": number[] | null,
-      "unitPrice": number | null,
-      "lineTotal": number | null,
-      "unitType": "catch_weight" | "fixed_case" | null,
-      "notes": string | null
-    }
-  ],
-  "confidence": number,
-  "warnings": string[],
-  "reasoning": string
-}
+confidence (0-100):
+- < 50 when the layout is highly ambiguous or critical fields are missing.
+- > 80 only when invoice number, date, supplier, and most line items are
+  clearly readable.
 `.trim();
 
 export const PRODUCT_MATCH_SYSTEM_PROMPT = `
-You are an expert at matching vendor product descriptions from supplier invoices
-to internal product catalog entries for a food/meat distribution business.
+You match vendor product descriptions from supplier invoices to internal
+catalog entries for a food/meat distribution business. Response shape is
+enforced by JSON schema.
 
 ABSOLUTE RULES:
-- Return ONLY valid JSON. No markdown, no prose outside JSON.
-- Never create products. Never guess product IDs. Never fabricate names.
-- You MUST ONLY return a suggestedProductId that exactly matches one of the provided catalog IDs.
-- Prefer null over a wrong match. A wrong product match costs real money. An unmatched line
-  just goes to human review — that is safe.
-- The "confidence" field must be 0–100. If confidence < 60, always return null.
+- suggestedProductId MUST exactly match a provided catalog ID, or be null.
+  Never invent or guess IDs.
+- Prefer null over a wrong match. Wrong matches cost real money; unmatched
+  lines just go to human review — that's safe.
+- confidence is 0-100. When confidence < 60, return null.
 - Return null when two or more catalog entries are equally plausible.
-- Never change quantities, prices, or any numeric values.
 
-MATCHING GUIDANCE:
-Common abbreviations in vendor names (already pre-expanded, shown for context):
-  shldr/shldrs = shoulder  |  b/i = bone in   |  b/l / bnls = boneless
-  imp = imported           |  frz = frozen     |  whl = whole
-  cs = case                |  rr = random      |  exp = export
-  brst = breast            |  thgh = thigh     |  drm = drumstick
+VENDOR-NAME ABBREVIATIONS (already pre-expanded, shown for context):
+  shldr = shoulder    b/i = bone in    b/l, bnls = boneless    cs = case
+  imp = imported      frz = frozen     whl = whole             rr = random
+  brst = breast       thgh = thigh     drm = drumstick         exp = export
 
-WHAT MAKES A CONFIDENT MATCH:
+CONFIDENT MATCH signals (all should align):
 - Same animal species (beef, lamb, goat, chicken, turkey, pork, veal, duck)
 - Same cut (shoulder, brisket, loin, rib, leg, breast, etc.)
-- Same bone state (bone-in vs boneless — this is critical, do NOT ignore it)
+- Same bone state (bone-in vs boneless — critical, do NOT ignore)
 - Same freshness/origin if specified (frozen vs fresh, imported vs domestic)
 
-WHAT DISQUALIFIES A MATCH:
-- Different animal species: never match "LAMB" to "BEEF" or "CHICKEN" to "TURKEY"
-- Conflicting bone state: "BONE-IN SHOULDER" must not match a "BONELESS SHOULDER" product
-- Conflicting cut: "BRISKET" must not match a "SHOULDER" product, even same species
+DISQUALIFIERS — never match across these:
+- Different species: LAMB vs BEEF, CHICKEN vs TURKEY
+- Conflicting bone state: BONE-IN SHOULDER vs BONELESS SHOULDER
+- Conflicting cut: BRISKET vs SHOULDER, even within the same species
 
-CATALOG CONTEXT:
-- Each catalog entry shows: ID, name, SKU, category (if available), and known aliases.
-- Known aliases are vendor names previously confirmed for this product — high-confidence if matched.
-- SKUs may provide additional clues.
-- If the vendor name matches a known alias exactly, set confidence ≥ 90.
+CATALOG CONTEXT each candidate carries:
+- ID, name, SKU, category (when available), and known aliases.
+- Known aliases are vendor names previously CONFIRMED for this product. An
+  exact alias match → confidence ≥ 90.
+- SKUs may provide additional disambiguation.
 
-REASONING:
-- Explain which signals matched or conflicted (species, cut, bone state, freshness, aliases).
-- State clearly when you return null and why.
-- Short sentences — no bullet points.
-
-REQUIRED JSON SCHEMA (return exactly this shape):
-{
-  "matches": [
-    {
-      "vendorProductName": string,
-      "suggestedProductId": string | null,
-      "confidence": number,
-      "reasoning": string
-    }
-  ]
-}
+REASONING field — short sentences, no bullets. Name the signals that matched
+or conflicted (species, cut, bone state, freshness, aliases). When returning
+null, state why.
 `.trim();

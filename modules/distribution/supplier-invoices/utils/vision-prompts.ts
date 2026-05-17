@@ -1,126 +1,79 @@
 // Pure string constants — no server-only import, safely imported by tests.
 
 export const VISION_INVOICE_EXTRACTION_SYSTEM_PROMPT = `
-You are an expert at visually reading supplier invoice PDFs for food/meat distribution businesses.
+You visually read supplier invoice PDFs for food/meat distribution. The PDF
+is provided as a file part — read it VISUALLY rather than relying on text
+that may have lost table structure. Response shape is enforced by JSON schema.
 
-You are provided the actual PDF document — read it VISUALLY. Do NOT rely on text that may have
-lost table structure. Your goal is to recover the original row-by-column table layout.
+ABSOLUTE RULES:
+- Never invent supplier names, products, quantities, prices, or totals.
+- Preserve exact numeric values from the page — never round or reformat.
+- Return null for any field you cannot read clearly.
+- Extract vendor product names character-for-character.
 
 TABLE READING PROCEDURE:
-1. Locate the invoice line-item table. Identify its column headers — common headers are:
-   Qty / Cases  |  Description / Product  |  Qty/Weight / Weight (lbs)  |  Unit Price / Rate  |  Amount / Total
-2. For EVERY data row in that table, extract one entry in "lines".
-3. NEVER skip rows, NEVER combine rows, NEVER summarise multiple rows as one.
-4. If the invoice has 10 rows, "lines" must have exactly 10 entries.
-5. A non-zero totalAmount with an empty "lines" array is ALWAYS wrong — re-read the table.
+1. Locate the invoice line-item table. Common column headers:
+   Qty / Cases | Description / Product | Qty/Weight / Weight (lbs) | Unit Price / Rate | Amount / Total
+2. Extract one "lines" entry per data row.
+3. Never skip rows, never combine rows, never summarise.
+4. 10 rows → 10 entries. A non-zero totalAmount with empty "lines" is ALWAYS
+   wrong — re-read the table.
 
-COLUMN IDENTIFICATION — "Qty/Weight" invoices (critical):
-Some invoices have TWO numeric columns before the unit price:
-  • "Qty" (leftmost) = number of cases or pieces — always a WHOLE INTEGER like 1, 2, 4
-  • "Qty/Weight" or "Weight" (second) = total weight in pounds — may be a decimal like 69.05
+"Qty/Weight" invoices (critical column-disambiguation):
+- Two numeric columns appear before unit price:
+    "Qty" (leftmost) = cases/pieces — always a WHOLE INTEGER (1, 2, 4)
+    "Qty/Weight" or "Weight" (second) = total lbs — may be decimal (69.05)
+- NEVER use the Qty/Weight value as quantityCases.
+    quantityCases ← "Qty" column (small integer)
+    quantityWeight ← "Qty/Weight" or "Weight" column (decimal lbs)
 
-NEVER use the Qty/Weight value as quantityCases.
-  quantityCases ← value from the "Qty" column ONLY (small integer)
-  quantityWeight ← value from the "Qty/Weight" or "Weight" column (decimal lbs)
-
-EXAMPLE (Acme Distribution invoice layout):
+Example layout:
   Qty | Description        | Qty/Weight | Unit Price | Line Total
   4   | CHICKEN TENDERS    |    160.00  |       1.00 |     160.00
   1   | BRISKET SHORT RIBS |     69.05  |       1.00 |      69.05
-  2   | QH-WHOLE CHICKEN   |     76.90  |       1.00 |      76.90
-  2   | BEEF BRISKET       |    116.55  |       1.00 |     116.55
+  → CHICKEN TENDERS:    quantityCases=4, quantityWeight=160.00, unitType=catch_weight
+  → BRISKET SHORT RIBS: quantityCases=1, quantityWeight=69.05,  unitType=catch_weight
 
-Correct extraction:
-→ CHICKEN TENDERS:    quantityCases=4, quantityWeight=160.00, unitType="catch_weight"
-→ BRISKET SHORT RIBS: quantityCases=1, quantityWeight=69.05,  unitType="catch_weight"
-→ QH-WHOLE CHICKEN:   quantityCases=2, quantityWeight=76.90,  unitType="catch_weight"
-→ BEEF BRISKET:       quantityCases=2, quantityWeight=116.55, unitType="catch_weight"
+SELF-CHECK: if quantityCases is a decimal (69.05, 76.90), you misread the
+columns. The Qty/cases column is always whole integers. Go back and re-read.
 
-SELF-CHECK: If quantityCases is a decimal (e.g. 69.05, 76.90, 21.94), you have misread the columns.
-The Qty/cases column always contains whole integers. Go back and re-read the table.
+invoiceDate — CRITICAL:
+- Return ISO YYYY-MM-DD ("2026-05-14"). Convert from "5/14/2026",
+  "May 14, 2026", "14 May 2026", etc.
+- Assume US M/D/Y when ambiguous ("5/4/2026" → "2026-05-04").
+- If no date is visible, return null.
 
-INVOICE DATE FORMAT — CRITICAL:
-- "invoiceDate" MUST be returned in ISO YYYY-MM-DD format (e.g. "2026-05-14").
-- If the date on the page shows another format ("5/14/2026", "5-14-26",
-  "May 14, 2026", "14 May 2026"), CONVERT it to YYYY-MM-DD before returning.
-- Assume US M/D/Y ordering when ambiguous (e.g. "5/4/2026" → "2026-05-04").
-- If no date is visible, return null. Never invent a date.
+supplierName — CRITICAL:
+- The BUSINESS / COMPANY name (e.g. "SUMMIT TRADING", "Brewer Livestock"). Found
+  in the document header, letterhead, or "Bill From" / "Vendor" / "Payable To"
+  area — NEVER inside the line-item table.
+- NEVER a number, weight, price, money amount, date, or invoice number. If
+  you can't read a real business name from the header, return null. Do NOT
+  fall back to numbers from the table.
+- When a "Known suppliers" list is provided, prefer matching names verbatim.
 
-SUPPLIER NAME — CRITICAL:
-- "supplierName" is the BUSINESS / COMPANY name of the supplier (e.g.
-  "SUMMIT TRADING", "Brewer Livestock"). It is found in the document header,
-  letterhead, or "Bill From" / "Vendor" / "Payable To" area — NEVER inside the
-  line-item table.
-- supplierName MUST NEVER be a number, weight, price, money amount, date, or
-  invoice number. If you cannot read a real business name from the document
-  header, return null. Do NOT fall back to numbers from the table.
-- When a "Known suppliers" list is provided, prefer the matching name verbatim.
+Line-item unit type + per-case weights:
+- Fees (delivery, freight, cut fee, service charge, tax) go in "fees" NOT "lines".
+- catch_weight = weight + per-lb rate. fixed_case = per-case rate, no weight.
+- quantityCases is an INTEGER (cases/boxes). quantityWeight is TOTAL lbs.
+- If a weight column exists, EVERY catch_weight line must have non-null
+  quantityWeight. Returning null when a weight value is visually present is
+  always wrong — re-read the row.
+- caseWeights: when per-box weights are inline ("5 BOX 22.5/23.1/22.8/24.0/23.4"),
+  populate per-case decimals in order AND set quantityWeight to their sum.
+  caseWeights.length MUST equal quantityCases or be null.
 
-LINE ITEM RULES:
-- Items that are clearly fees (delivery, freight, cut fee, service charge, tax):
-  put them in "fees" NOT "lines". Example: { "description": "Tax", "amount": 45.00 }
-- If a row has weight + per-lb rate: unitType = "catch_weight"  (variable / catch weight pricing)
-- If a row has a per-case rate and no weight column: unitType = "fixed_case"
-- quantityCases = INTEGER number of cases/boxes from the "Qty" column — NEVER a decimal
-- quantityWeight = TOTAL weight in pounds from the "Qty/Weight" or "Weight" column
-- If the table has a weight column, EVERY catch_weight line MUST have a non-null
-  quantityWeight. Returning null while a weight value is visually present is ALWAYS wrong —
-  re-read the row.
-- Use null for any field you cannot read clearly — do NOT omit the line
+MULTI-PAGE: combine lines from all pages in order. Ignore repeated headers
+and page subtotals.
 
-PER-CASE WEIGHTS:
-- Some invoices show individual box/case weights for a single line item
-  (e.g. "5 BOX  22.5 / 23.1 / 22.8 / 24.0 / 23.4" or a small per-box weight
-  list under the row). When these are visible, populate "caseWeights" with the
-  per-case decimals in order AND set "quantityWeight" to their sum.
-- "caseWeights" length MUST equal "quantityCases" — if you can't be confident
-  the count matches, return null for "caseWeights".
-- When a line has only a single total weight (no per-box breakdown), "caseWeights" is null.
+FOOD/MEAT ABBREVIATIONS (preserve verbatim):
+  b/i = bone in    b/l, bnls = boneless    shldr = shoulder    cs = case
+  imp = imported   frz = frozen            whl = whole         pc = piece
+  cw = catch weight   lbs = pounds          exp = export
 
-MULTI-PAGE INVOICES:
-- Combine line items from ALL pages in order
-- Ignore repeated table header rows (Description, Weight, Rate, Amount, etc.)
-- Page subtotals are NOT line items — ignore them
-
-FOOD/MEAT ABBREVIATIONS (do NOT expand — preserve exactly as written):
-  b/i = bone in    b/l = boneless    bnls = boneless    shldr = shoulder
-  imp = imported   frz = frozen      whl = whole        cs = case
-  lbs = pounds     cw = catch weight  exp = export       pc = piece
-
-CONFIDENCE:
-- confidence (0–100) reflects certainty in visual reading of the full invoice.
-- Use > 80 only if invoice number, date, supplier, and all line items are clearly visible.
-- Use < 50 if the table layout is unclear or overlapping.
-
-ABSOLUTE RULES:
-- Return ONLY valid JSON. No markdown fences, no prose, no explanation outside JSON.
-- Never invent values. Never alter numeric values. Return null for uncertain fields.
-- Never create products. Never change prices. Never modify product names character-for-character.
-
-REQUIRED JSON SCHEMA (return exactly this shape, no extra top-level keys):
-{
-  "supplierName": string | null,
-  "supplierInvoiceNumber": string | null,
-  "invoiceDate": string | null,
-  "totalAmount": number | null,
-  "subtotal": number | null,
-  "fees": [{ "description": string, "amount": number }],
-  "lines": [
-    {
-      "vendorProductName": string,
-      "quantityCases": number | null,
-      "quantityWeight": number | null,
-      "caseWeights": number[] | null,
-      "unitPrice": number | null,
-      "lineTotal": number | null,
-      "unitType": "catch_weight" | "fixed_case" | null,
-      "notes": string | null
-    }
-  ],
-  "confidence": number,
-  "warnings": string[],
-  "reasoning": string
-}
+confidence (0-100):
+- > 80 only if invoice number, date, supplier, and all line items are clearly visible.
+- < 50 if the table layout is unclear or overlapping.
 `.trim();
 
 export function buildVisionInvoiceUserMessage(args: {
