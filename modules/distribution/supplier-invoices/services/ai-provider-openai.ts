@@ -118,12 +118,21 @@ export class OpenAiProvider implements AiProvider {
     maxInvoiceTextChars: number;
     maxProductCandidates: number;
   }) {
-    // Long multipage-invoice completions can take 80+ seconds, which raises the
-    // odds of transient connection drops mid-response. SDK default is 2; bump
-    // to 4 for the long-call case. Retries use exponential backoff and only
-    // fire on APIConnectionError, RateLimitError, and 5xx — they don't slow
-    // the happy path.
-    this.client = new OpenAI({ apiKey: args.apiKey, maxRetries: 4 });
+    // `timeout` caps each individual request; without it, a stuck socket can
+    // hang for minutes (real observation: 10.3 min when OpenAI dropped both
+    // text-AI and vision sockets mid-stream and the SDK kept retrying). 60s
+    // is well above the happy-path budget (~12-30s on gpt-4o for a 100-line
+    // invoice) but short enough to fail fast when the remote stops talking.
+    //
+    // `maxRetries: 3` pairs with the timeout to bound worst-case end-to-end:
+    // (3+1) × 60s × 2 stages = 8 min worst case, vs. 10+ min without the cap.
+    // Retries still only fire on APIConnectionError/RateLimitError/5xx, and
+    // most successful calls finish on the first attempt.
+    this.client = new OpenAI({
+      apiKey: args.apiKey,
+      maxRetries: 3,
+      timeout: 60_000,
+    });
     this.invoiceModel = args.invoiceModel;
     this.productMatchModel = args.productMatchModel;
     this.visionModel = args.visionModel;
