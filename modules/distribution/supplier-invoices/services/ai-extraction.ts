@@ -48,6 +48,7 @@ export async function extractSupplierInvoiceWithAi(
       status: "failed",
       errorCode: "no_output",
       errorMessage: "AI provider not configured.",
+      usage: null,
     };
   }
 
@@ -88,6 +89,7 @@ export async function suggestProductMatches(
       status: failed ? "failed" : "success",
       errorCode: failed ? "no_output" : null,
       errorMessage: failed ? "AI provider not configured." : null,
+      usage: null,
     };
   }
 

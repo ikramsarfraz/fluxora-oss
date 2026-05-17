@@ -49,6 +49,7 @@ function aiResult(overrides: Partial<AiExtractionResult> = {}): AiExtractionResu
     status: "success",
     errorCode: null,
     errorMessage: null,
+    usage: null,
     ...overrides,
   };
 }
@@ -70,6 +71,7 @@ function visionResult(overrides: Partial<VisionExtractionResult> = {}): VisionEx
     status: "success",
     errorCode: null,
     errorMessage: null,
+    usage: null,
     ...overrides,
   };
 }

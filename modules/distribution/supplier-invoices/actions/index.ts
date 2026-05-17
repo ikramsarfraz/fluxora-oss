@@ -43,6 +43,7 @@ import {
   type ExistingSupplierInvoiceMatch,
 } from "../services/receiving";
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
+import { recordAiUsageEvents } from "../services/ai-usage-events";
 import {
   bulkImportSupplierInvoices,
   BULK_IMPORT_MAX_FILES,
@@ -246,6 +247,16 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
       text_extractor: result.telemetry?.textExtractor ?? null,
       text_char_count: result.telemetry?.textCharCount ?? null,
     },
+  });
+  // Best-effort cost tracking. Single-file parses don't have a
+  // bulk_import_files row, so sourceBulkImportFileId is null — the admin
+  // page treats those as direct parses.
+  await recordAiUsageEvents({
+    tenantId: user.tenantId,
+    portalUserId: user.id,
+    sourceBulkImportFileId: null,
+    sourceFilename: validation.safeName,
+    events: result.usageEvents,
   });
   return result;
 }

@@ -68,6 +68,25 @@ export type AiExtractionInput = {
 };
 
 /**
+ * Per-call token usage and model info reported by the SDK. Surfaced from
+ * every AI result so the action layer can record a cost-tracking row in
+ * `ai_usage_events`. Null when the call failed before producing a usage
+ * report (e.g. a connection error before the response arrived) or when the
+ * provider is the mock.
+ */
+export type AiCallUsage = {
+  /** The exact model the SDK was invoked with. */
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  /**
+   * When this call was an escalation retry, the model the primary attempt
+   * used. Null on the primary attempt itself.
+   */
+  escalatedFromModel: string | null;
+};
+
+/**
  * Discriminates between "AI ran successfully (with whatever it found)" and
  * "AI failed before producing a usable result." This is the difference between
  * a non-invoice PDF (success, lines=[]) and a connection error mid-stream
@@ -120,6 +139,12 @@ export type AiExtractionResult = {
   errorCode: AiExtractionErrorCode | null;
   /** Verbatim error message from the SDK / validator. Null on success. */
   errorMessage: string | null;
+  /**
+   * Token usage + model identification for cost tracking. Null when the call
+   * failed before the SDK delivered a usage report (e.g. connection error
+   * mid-stream) or for the mock provider.
+   */
+  usage: AiCallUsage | null;
 };
 
 export type AiProductMatchInput = {
@@ -147,6 +172,9 @@ export type AiProductMatchResult = {
   status: "success" | "failed";
   errorCode: AiExtractionErrorCode | null;
   errorMessage: string | null;
+  /** Token usage + model for cost tracking. Null when the call failed before
+   *  usage info was available or for the mock provider. */
+  usage: AiCallUsage | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -207,6 +235,7 @@ class MockAiProvider implements AiProvider {
       status: "failed",
       errorCode: "no_output",
       errorMessage: "AI provider not configured.",
+      usage: null,
     };
   }
 
@@ -221,6 +250,7 @@ class MockAiProvider implements AiProvider {
       status: "failed",
       errorCode: "no_output",
       errorMessage: "AI provider not configured.",
+      usage: null,
     };
   }
 
@@ -244,6 +274,7 @@ class MockAiProvider implements AiProvider {
       status: "failed",
       errorCode: "no_output",
       errorMessage: "Vision-capable AI provider not configured.",
+      usage: null,
     };
   }
 }

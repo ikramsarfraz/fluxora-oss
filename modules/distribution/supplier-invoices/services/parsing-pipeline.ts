@@ -178,6 +178,22 @@ export type PipelineTelemetry = {
 export type { PipelineParseStatus } from "../utils/parsing-pipeline-logic";
 import type { PipelineParseStatus } from "../utils/parsing-pipeline-logic";
 
+/**
+ * One OpenAI call observation, collected during the pipeline's run and
+ * persisted by the action layer as a row in `ai_usage_events`. The shape
+ * mirrors the DB columns so the persistence code can map 1:1 without
+ * reshaping the data.
+ */
+export type PipelineUsageEvent = {
+  stage: "invoice_extraction" | "vision_extraction" | "product_matching";
+  model: string;
+  escalatedFromModel: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  succeeded: boolean;
+  errorCode: AiExtractionErrorCode | null;
+};
+
 export type PipelineResult = {
   prefillResult: SupplierInvoicePdfPrefillResult;
   confidence: number;
@@ -204,6 +220,14 @@ export type PipelineResult = {
    * targeting (e.g. only auto-retry `connection`/`timeout`, not `refusal`).
    */
   parseErrorCodes: AiExtractionErrorCode[];
+  /**
+   * One row per OpenAI call observed during this parse, with token counts
+   * and model attribution. Persisted by the action layer as
+   * `ai_usage_events` rows for platform-admin cost transparency. Empty
+   * when no AI stages ran (deterministic-only early exit) or when the
+   * mock provider is in use.
+   */
+  usageEvents: PipelineUsageEvent[];
   debug?: PipelineDebugInfo;
   /** Populated only when the tenant catalog is empty (first-bill mode). */
   firstBillLines?: FirstBillLine[];
@@ -338,6 +362,8 @@ export async function runParsingPipeline(args: {
       visionUsed: false,
       parseStatus: "success",
       parseErrorCodes: [],
+      // Deterministic early-exit path — no AI calls fired, so nothing to bill.
+      usageEvents: [],
     };
   }
 
@@ -524,6 +550,36 @@ export async function runParsingPipeline(args: {
     realDeterministicLineCount: realDeterministicLinesEarly,
   });
 
+  // ---- usageEvents — one observation per OpenAI call that the action
+  // layer persists to `ai_usage_events` for cost tracking. Provider may
+  // return `usage: null` on thrown errors (no usage info available); skip
+  // those rather than recording a $0 phantom event. Product-matching usage
+  // is a follow-up — its data lives three layers deep in the matching
+  // helper and isn't surfaced yet. ----
+  const usageEventsEarly: PipelineUsageEvent[] = [];
+  if (aiResult.usage) {
+    usageEventsEarly.push({
+      stage: "invoice_extraction",
+      model: aiResult.usage.model,
+      escalatedFromModel: aiResult.usage.escalatedFromModel,
+      promptTokens: aiResult.usage.promptTokens,
+      completionTokens: aiResult.usage.completionTokens,
+      succeeded: aiResult.status === "success",
+      errorCode: aiResult.errorCode,
+    });
+  }
+  if (needsVision && visionResult?.usage) {
+    usageEventsEarly.push({
+      stage: "vision_extraction",
+      model: visionResult.usage.model,
+      escalatedFromModel: visionResult.usage.escalatedFromModel,
+      promptTokens: visionResult.usage.promptTokens,
+      completionTokens: visionResult.usage.completionTokens,
+      succeeded: visionResult.status === "success",
+      errorCode: visionResult.errorCode,
+    });
+  }
+
   // First-bill mode: empty catalog — skip all product matching, but still
   // populate `unresolvedLines` and `detectedFees` so the new Review screen
   // can render vendor product names + fee rows (matching never runs, so
@@ -539,6 +595,7 @@ export async function runParsingPipeline(args: {
       detectedFees: detectedFeesFromAi,
       parseStatus: parseStatusEarly,
       parseErrorCodes: collectedErrorCodesEarly,
+      usageEvents: usageEventsEarly,
     });
   }
 
@@ -637,6 +694,7 @@ export async function runParsingPipeline(args: {
     visionUsed,
     parseStatus: parseStatusEarly,
     parseErrorCodes: collectedErrorCodesEarly,
+    usageEvents: usageEventsEarly,
     debug: debugInfo,
   };
 }
@@ -1002,6 +1060,8 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     // whether to render an OCR-specific message vs. the generic re-upload.
     parseStatus: "parse_error",
     parseErrorCodes: ["no_output"],
+    // Scanned PDF detected before any AI call fired — no usage to record.
+    usageEvents: [],
   };
 }
 
@@ -1031,6 +1091,9 @@ function buildFirstBillResult(
      *  the safety-intercept (deterministic-OK) call site. */
     parseStatus?: PipelineParseStatus;
     parseErrorCodes?: AiExtractionErrorCode[];
+    /** Per-stage AI usage observations. Defaults to [] when called from
+     *  the deterministic safety-intercept (no AI ran). */
+    usageEvents?: PipelineUsageEvent[];
   } = {},
 ): PipelineResult {
   const descriptions = result.unmatchedLineDescriptions;
@@ -1084,6 +1147,7 @@ function buildFirstBillResult(
     visionUsed,
     parseStatus: extras.parseStatus ?? "success",
     parseErrorCodes: extras.parseErrorCodes ?? [],
+    usageEvents: extras.usageEvents ?? [],
     firstBillLines,
   };
 }

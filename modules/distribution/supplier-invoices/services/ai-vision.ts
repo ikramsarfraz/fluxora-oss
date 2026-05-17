@@ -30,6 +30,7 @@ function buildFailureResult(reason: string, rawContent = ""): VisionExtractionRe
     status: "failed",
     errorCode: "no_output",
     errorMessage: reason,
+    usage: null,
   };
 }
 
