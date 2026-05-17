@@ -57,6 +57,8 @@ export function ReviewScreen({
   pdfPaneAccessory,
   paneEnterDirection,
   duplicateMatches,
+  duplicateAcknowledged,
+  onDuplicateAcknowledgedChange,
 }: {
   data: ReviewData;
   /** Original PDF bytes — supplied by phase 5; omit for the demo placeholder. */
@@ -117,12 +119,20 @@ export function ReviewScreen({
   paneEnterDirection?: "next" | "prev";
   /**
    * Posted supplier invoices that share the same (supplier, supplier-printed
-   * invoice number) as the one currently being reviewed. When non-empty,
-   * a banner shows above the line items section so the user can compare
-   * and confirm before re-posting a duplicate. Empty / undefined hides
-   * the banner entirely.
+   * invoice number) — OR same (supplier, invoice date, total) as a softer
+   * signal — as the one currently being reviewed. When non-empty, a banner
+   * shows above the line items section so the user can compare and confirm
+   * before re-posting a duplicate. Empty / undefined hides the banner
+   * entirely.
    */
   duplicateMatches?: DuplicateMatch[];
+  /**
+   * Whether the user has acknowledged the duplicate banner's "I want to post
+   * this anyway" checkbox. When `duplicateMatches` contains a finalized
+   * (non-draft) row, the host treats this flag as a submit precondition.
+   */
+  duplicateAcknowledged?: boolean;
+  onDuplicateAcknowledgedChange?: (value: boolean) => void;
 }) {
   // Read sidebar state so the fixed bottom bar can re-anchor its left edge
   // when the sidebar collapses/expands. The default mode is "offcanvas", so
@@ -287,7 +297,11 @@ export function ReviewScreen({
               supplier-printed invoice number) doesn't match any posted
               bill — non-blocking when it does, just a banner with links to
               the existing bills so the user can compare. */}
-          <DuplicateInvoiceBanner matches={duplicateMatches ?? []} />
+          <DuplicateInvoiceBanner
+            matches={duplicateMatches ?? []}
+            acknowledged={duplicateAcknowledged}
+            onAcknowledgedChange={onDuplicateAcknowledgedChange}
+          />
 
           {/* Price-change banner. Renders nothing when there are no
               deviations, so this is a zero-cost slot for clean invoices. */}

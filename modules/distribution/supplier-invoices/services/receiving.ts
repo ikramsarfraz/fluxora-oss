@@ -1850,10 +1850,18 @@ export type SupplierInvoiceAttachment =
 // receivers can also accidentally re-import a PDF that's already been posted.
 // The Review screen calls this to warn before the user re-posts a duplicate.
 //
-// Scoped to (tenant, supplier, supplier-printed invoice number). Returns a
-// short list with enough info for a humane warning ("Already posted on
-// 2026-04-22 as bill #INV-014, $1,234.56"). Returns [] when there's no
-// match — the typical case.
+// Two match modes:
+//   `invoice_number` — strict: same (tenant, supplier, supplier-printed
+//      invoice number). High confidence — vendors don't typically issue two
+//      different bills with the same number.
+//   `date_and_total`  — softer: same (tenant, supplier, invoice date, total
+//      amount), but only used when the new invoice number is missing or
+//      doesn't match anything stored. This catches re-uploads where the AI
+//      didn't read the invoice number reliably.
+//
+// Returns up to 5 matches with enough info for a humane warning ("Already
+// posted on 2026-04-22 as bill #INV-014, $1,234.56"). Returns [] when there's
+// no match — the typical case.
 // ---------------------------------------------------------------------------
 
 export type ExistingSupplierInvoiceMatch = {
@@ -1863,11 +1871,22 @@ export type ExistingSupplierInvoiceMatch = {
   invoiceDate: string;
   totalAmount: string;
   status: string;
+  /**
+   * How we determined this is a duplicate. `invoice_number` is the strong
+   * signal — vendors don't reuse invoice numbers. `date_and_total` is a
+   * fallback for parses that didn't capture an invoice number; treat with
+   * a softer banner.
+   */
+  matchedBy: "invoice_number" | "date_and_total";
 };
 
 export async function findExistingSupplierInvoices(args: {
   supplierId: string;
   supplierInvoiceNumber: string;
+  /** Optional softer-match signals. When both are present and the strict
+   *  invoice-number lookup turns up empty, we fall back to (date, total). */
+  invoiceDate?: string | null;
+  totalAmount?: string | number | null;
 }): Promise<ExistingSupplierInvoiceMatch[]> {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
@@ -1877,9 +1896,46 @@ export async function findExistingSupplierInvoices(args: {
   requirePermission(currentUser.role, "view_supplier_invoice");
 
   const trimmed = args.supplierInvoiceNumber.trim();
-  if (!trimmed) return [];
 
-  const rows = await db
+  // Strict pass first — invoice-number duplicates are the high-signal case.
+  const strictMatches: ExistingSupplierInvoiceMatch[] = trimmed
+    ? (
+        await db
+          .select({
+            id: supplierInvoices.id,
+            referenceNumber: supplierInvoices.referenceNumber,
+            invoiceNumber: supplierInvoices.invoiceNumber,
+            invoiceDate: supplierInvoices.invoiceDate,
+            totalAmount: supplierInvoices.totalAmount,
+            status: supplierInvoices.status,
+          })
+          .from(supplierInvoices)
+          .where(
+            and(
+              eq(supplierInvoices.tenantId, tenant.id),
+              eq(supplierInvoices.supplierId, args.supplierId),
+              eq(supplierInvoices.invoiceNumber, trimmed),
+            ),
+          )
+          .orderBy(desc(supplierInvoices.invoiceDate))
+          .limit(5)
+      ).map(row => ({ ...row, matchedBy: "invoice_number" as const }))
+    : [];
+
+  if (strictMatches.length > 0) return strictMatches;
+
+  // Soft pass — only when no invoice number matched. Requires both date and
+  // total: matching on just one is too noisy (many bills share a date).
+  const dateStr = args.invoiceDate?.trim() || null;
+  const totalStr =
+    args.totalAmount == null ? null : String(args.totalAmount).trim() || null;
+  if (!dateStr || !totalStr) return [];
+
+  // totalAmount is stored as numeric — compare as numeric to avoid string-
+  // format mismatches ("100.00" vs "100"). Drizzle preserves the column type;
+  // an explicit cast on the bound parameter keeps Postgres from rejecting a
+  // text value.
+  const softRows = await db
     .select({
       id: supplierInvoices.id,
       referenceNumber: supplierInvoices.referenceNumber,
@@ -1893,11 +1949,12 @@ export async function findExistingSupplierInvoices(args: {
       and(
         eq(supplierInvoices.tenantId, tenant.id),
         eq(supplierInvoices.supplierId, args.supplierId),
-        eq(supplierInvoices.invoiceNumber, trimmed),
+        eq(supplierInvoices.invoiceDate, dateStr),
+        sql`${supplierInvoices.totalAmount} = ${totalStr}::numeric`,
       ),
     )
     .orderBy(desc(supplierInvoices.invoiceDate))
     .limit(5);
 
-  return rows;
+  return softRows.map(row => ({ ...row, matchedBy: "date_and_total" as const }));
 }

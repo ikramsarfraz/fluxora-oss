@@ -103,6 +103,9 @@ export async function getSupplierInvoiceByIdAction(id: string) {
 export async function findExistingSupplierInvoicesAction(args: {
   supplierId: string;
   supplierInvoiceNumber: string;
+  /** Optional softer-match signals — see findExistingSupplierInvoices. */
+  invoiceDate?: string | null;
+  totalAmount?: string | number | null;
 }): Promise<ExistingSupplierInvoiceMatch[]> {
   return await findExistingSupplierInvoices(args);
 }

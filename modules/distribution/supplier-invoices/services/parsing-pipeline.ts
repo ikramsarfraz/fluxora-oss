@@ -21,6 +21,11 @@ import {
 import { scoreVisionExtraction, isVisionExtractionUseful, type VisionExtractionScore } from "../utils/vision-scoring";
 import { correctVisionColumnSwap } from "../utils/vision-correction";
 import { extractSupplierInvoiceWithAi } from "./ai-extraction";
+import {
+  hashPdfBytes,
+  lookupAiExtractionCache,
+  saveAiExtractionCache,
+} from "./ai-extraction-cache";
 import { extractSupplierInvoiceWithVision, type VisionExtractionResult } from "./ai-vision";
 import type { AiExtractionErrorCode } from "./ai-provider";
 import { detectImportProfile } from "./import-profiles";
@@ -367,6 +372,31 @@ export async function runParsingPipeline(args: {
     };
   }
 
+  // Extraction cache: if this same PDF (per SHA-256 of bytes) was already
+  // AI-parsed for this tenant, reuse the cached extraction and skip the
+  // OpenAI call. Hash is null when no pdfBytes are provided (some legacy
+  // callers run text-only) — in that case caching is bypassed.
+  //
+  // Why look up BOTH stages up-front: a vision cache hit must also suppress
+  // the speculative vision dispatch below (otherwise we'd fire OpenAI for a
+  // result we already have on disk). Looking up both at the same point keeps
+  // the dispatch decision and the cache decision side-by-side.
+  const pdfContentHash = pdfBytes ? hashPdfBytes(pdfBytes) : null;
+  const [cachedTextExtraction, cachedVisionExtraction] = pdfContentHash
+    ? await Promise.all([
+        lookupAiExtractionCache({
+          tenantId,
+          pdfContentHash,
+          stage: "invoice_extraction",
+        }),
+        lookupAiExtractionCache({
+          tenantId,
+          pdfContentHash,
+          stage: "vision_extraction",
+        }),
+      ])
+    : [null, null];
+
   // Stage 3 + speculative Stage 4. When the extracted PDF text is clearly
   // lossy (image-heavy or table structure lost), vision is almost certainly
   // going to be the path that produces the final result — so we dispatch it
@@ -374,7 +404,12 @@ export async function runParsingPipeline(args: {
   // On hard invoices this cuts wall-clock by ~the length of the text-AI call
   // (8–12s typically). On easy invoices the heuristic stays false and the
   // pipeline runs serially as before.
+  //
+  // Cache short-circuit: if we already have a cached vision extraction for
+  // this PDF, the speculative dispatch is pure waste — skip it. The cached
+  // result will be picked up inside the `needsVision` block below.
   const speculativeVision =
+    !cachedVisionExtraction &&
     pdfBytes !== undefined &&
     pdfBytes.byteLength > 0 &&
     shouldSpeculativelyDispatchVision({
@@ -401,13 +436,29 @@ export async function runParsingPipeline(args: {
         }).catch(() => null)
       : null;
 
-  const aiResult = await extractSupplierInvoiceWithAi({
-    filename: sourceFilename,
-    extractedText,
-    supplierHints: deterministicResult.unmatchedSupplierCandidates,
-    candidateSuppliers: supplierRows,
-    candidateProducts: richProductRows,
-  });
+  const aiResult =
+    cachedTextExtraction ??
+    (await extractSupplierInvoiceWithAi({
+      filename: sourceFilename,
+      extractedText,
+      supplierHints: deterministicResult.unmatchedSupplierCandidates,
+      candidateSuppliers: supplierRows,
+      candidateProducts: richProductRows,
+    }));
+
+  // Write-back to the cache when we just produced a fresh successful
+  // extraction. No-op on cache hits (we'd be re-saving what we just read)
+  // and on failures (don't cache failures — re-uploads should retry).
+  if (!cachedTextExtraction && pdfContentHash && aiResult.usage) {
+    await saveAiExtractionCache({
+      tenantId,
+      pdfContentHash,
+      stage: "invoice_extraction",
+      model: aiResult.usage.model,
+      sourceFilename,
+      result: aiResult,
+    });
+  }
 
   const mergedResult = mergeAiOverDeterministicPure(deterministicResult, aiResult, supplierRows).result;
   const mergedBreakdown = scoreParseResult(mergedResult);
@@ -430,24 +481,45 @@ export async function runParsingPipeline(args: {
   let visionUsed = false;
 
   if (needsVision && pdfBytes) {
-    // If we dispatched vision speculatively, the call is already in flight
-    // (or already finished). Await it instead of starting a fresh request.
-    // If the speculative call somehow returned null (rare — the .catch
-    // above swallows network/parse errors into null), fall back to a fresh
-    // synchronous request so the caller still gets a result.
-    const speculative = speculativeVisionPromise
-      ? await speculativeVisionPromise
-      : null;
-    visionResult =
-      speculative ??
-      (await extractSupplierInvoiceWithVision({
-        pdfBuffer: pdfBytes,
-        filename: sourceFilename,
-        extractedText,
-        supplierHints: deterministicResult.unmatchedSupplierCandidates,
-        candidateSuppliers: supplierRows,
-        debug,
-      }));
+    // Cache hit short-circuits both the speculative call (suppressed above)
+    // and the fresh call. The cached row is shaped as VisionExtractionResult
+    // — saved by the cache write below on a previous successful run.
+    //
+    // If no cache hit but we dispatched vision speculatively, the call is
+    // already in flight (or already finished). Await it instead of starting
+    // a fresh request. If the speculative call somehow returned null (rare
+    // — the .catch above swallows network/parse errors into null), fall
+    // back to a fresh synchronous request so the caller still gets a result.
+    if (cachedVisionExtraction) {
+      visionResult = cachedVisionExtraction as VisionExtractionResult;
+    } else {
+      const speculative = speculativeVisionPromise
+        ? await speculativeVisionPromise
+        : null;
+      visionResult =
+        speculative ??
+        (await extractSupplierInvoiceWithVision({
+          pdfBuffer: pdfBytes,
+          filename: sourceFilename,
+          extractedText,
+          supplierHints: deterministicResult.unmatchedSupplierCandidates,
+          candidateSuppliers: supplierRows,
+          debug,
+        }));
+
+      // Write-back on fresh successful vision extraction. Mirrors the text
+      // cache write above — keyed on (tenant, pdf hash, stage="vision_extraction").
+      if (pdfContentHash && visionResult.usage) {
+        await saveAiExtractionCache({
+          tenantId,
+          pdfContentHash,
+          stage: "vision_extraction",
+          model: visionResult.usage.model,
+          sourceFilename,
+          result: visionResult,
+        });
+      }
+    }
 
     // Correct column-swap errors (e.g. Qty/Weight value read as Qty) before scoring.
     const columnFix = correctVisionColumnSwap(visionResult.lines, extractedText);
@@ -555,9 +627,14 @@ export async function runParsingPipeline(args: {
   // return `usage: null` on thrown errors (no usage info available); skip
   // those rather than recording a $0 phantom event. Product-matching usage
   // is a follow-up — its data lives three layers deep in the matching
-  // helper and isn't surfaced yet. ----
+  // helper and isn't surfaced yet.
+  //
+  // Cache hits are excluded — we re-used a stored extraction, we did NOT
+  // make a fresh OpenAI call, so charging the tenant a second time would
+  // overstate cost. The original call's usage was recorded when the cache
+  // row was first written. ----
   const usageEventsEarly: PipelineUsageEvent[] = [];
-  if (aiResult.usage) {
+  if (!cachedTextExtraction && aiResult.usage) {
     usageEventsEarly.push({
       stage: "invoice_extraction",
       model: aiResult.usage.model,
@@ -568,7 +645,7 @@ export async function runParsingPipeline(args: {
       errorCode: aiResult.errorCode,
     });
   }
-  if (needsVision && visionResult?.usage) {
+  if (needsVision && !cachedVisionExtraction && visionResult?.usage) {
     usageEventsEarly.push({
       stage: "vision_extraction",
       model: visionResult.usage.model,
