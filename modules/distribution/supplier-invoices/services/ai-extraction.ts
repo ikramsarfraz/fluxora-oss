@@ -45,6 +45,9 @@ export async function extractSupplierInvoiceWithAi(
           "Set AI_PROVIDER=openai and OPENAI_API_KEY to enable.",
       ],
       reasoning: "No AI provider available.",
+      status: "failed",
+      errorCode: "no_output",
+      errorMessage: "AI provider not configured.",
     };
   }
 
@@ -69,13 +72,22 @@ export async function suggestProductMatches(
   const provider = createAiProvider();
 
   if (!provider.isAvailable() || input.vendorProductNames.length === 0) {
+    // "No names provided" is success-with-empty (legitimately nothing to match).
+    // "Provider not configured" is failure (caller should treat as no-op, not
+    // as "the model decided there are no matches").
+    const failed = !provider.isAvailable();
     return {
       matches: input.vendorProductNames.map(name => ({
         vendorProductName: name,
         suggestedProductId: null,
         confidence: 0,
-        reasoning: "AI provider not configured or no names provided.",
+        reasoning: failed
+          ? "AI provider not configured."
+          : "No vendor names to match.",
       })),
+      status: failed ? "failed" : "success",
+      errorCode: failed ? "no_output" : null,
+      errorMessage: failed ? "AI provider not configured." : null,
     };
   }
 

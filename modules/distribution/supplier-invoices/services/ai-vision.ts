@@ -27,6 +27,9 @@ function buildFailureResult(reason: string, rawContent = ""): VisionExtractionRe
     reasoning: reason,
     visionUsed: true,
     rawVisionJson: rawContent,
+    status: "failed",
+    errorCode: "no_output",
+    errorMessage: reason,
   };
 }
 

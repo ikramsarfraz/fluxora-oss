@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import { db } from "@/db";
 import { bulkImportFiles, supplierInvoices } from "@/db/schema";
@@ -14,6 +14,7 @@ import {
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
+import type { AiExtractionErrorCode } from "./ai-provider";
 import type { PipelineResult } from "./parsing-pipeline";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,11 @@ import type { PipelineResult } from "./parsing-pipeline";
 // in `bulk-import.ts` which already has the tenant id from the action layer.
 // ---------------------------------------------------------------------------
 
-export type BulkImportFileStatus = "parsed" | "reviewed" | "errored";
+export type BulkImportFileStatus =
+  | "parsed"
+  | "reviewed"
+  | "errored"
+  | "parse_error";
 
 export type BulkImportFileRow = {
   id: string;
@@ -41,6 +46,8 @@ export type BulkImportFileRow = {
   objectKey: string;
   pipelineResult: PipelineResult | null;
   status: BulkImportFileStatus;
+  /** Non-null only when `status === "parse_error"`. */
+  parseErrorCodes: AiExtractionErrorCode[] | null;
   reviewedAt: Date | null;
   supplierInvoiceId: string | null;
   deletedAt: Date | null;
@@ -63,6 +70,9 @@ export type CreateBulkImportFileInput = {
   bytes: Buffer;
   pipelineResult: PipelineResult | null;
   status: BulkImportFileStatus;
+  /** Propagated to `bulk_import_files.parse_error_codes`; should be set
+   *  when `status === "parse_error"`. */
+  parseErrorCodes?: AiExtractionErrorCode[];
 };
 
 export type CreatedBulkImportFile = {
@@ -105,6 +115,7 @@ export async function createBulkImportFile(
     objectKey,
     pipelineResult: input.pipelineResult,
     status: input.status,
+    parseErrorCodes: input.parseErrorCodes ?? null,
   });
 
   return { id, objectKey };
@@ -133,7 +144,13 @@ export async function listPendingBulkImportFiles(): Promise<BulkImportFileRow[]>
     .where(
       and(
         eq(bulkImportFiles.tenantId, tenant.id),
-        eq(bulkImportFiles.status, "parsed"),
+        // Pending = needs user attention: either successfully parsed (queue
+        // card to review) or parse_error (callout to re-upload). `reviewed`
+        // is the terminal "done" state and stays out.
+        or(
+          eq(bulkImportFiles.status, "parsed"),
+          eq(bulkImportFiles.status, "parse_error"),
+        ),
         isNull(bulkImportFiles.deletedAt),
       ),
     )
@@ -339,6 +356,7 @@ function rowToDomain(
     // which would corrupt the queue carousel regardless.
     pipelineResult: row.pipelineResult as PipelineResult | null,
     status: row.status,
+    parseErrorCodes: (row.parseErrorCodes as AiExtractionErrorCode[] | null) ?? null,
     reviewedAt: row.reviewedAt,
     supplierInvoiceId: row.supplierInvoiceId,
     deletedAt: row.deletedAt,

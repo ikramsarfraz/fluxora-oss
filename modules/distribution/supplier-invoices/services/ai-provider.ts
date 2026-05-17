@@ -62,6 +62,22 @@ export type AiExtractionInput = {
   candidateProducts: Array<{ id: string; name: string; sku: string | null }>;
 };
 
+/**
+ * Discriminates between "AI ran successfully (with whatever it found)" and
+ * "AI failed before producing a usable result." This is the difference between
+ * a non-invoice PDF (success, lines=[]) and a connection error mid-stream
+ * (failed, lines=[]) — the downstream merge gate and queue UI need to treat
+ * those very differently.
+ */
+export type AiExtractionErrorCode =
+  | "connection"
+  | "timeout"
+  | "rate_limit"
+  | "refusal"
+  | "post_validation"
+  | "no_output"
+  | "unknown";
+
 export type AiExtractionResult = {
   supplierName: string | null;
   supplierInvoiceNumber: string | null;
@@ -87,6 +103,18 @@ export type AiExtractionResult = {
   confidence: number;
   warnings: string[];
   reasoning: string;
+  /**
+   * Outcome discriminator. `success` means the AI call completed and produced
+   * a parseable result (lines may still be empty if the document had none).
+   * `failed` means the call threw, timed out, refused, or post-validation
+   * rejected the response — never trust `lines`/`supplier*` fields on a
+   * `failed` result.
+   */
+  status: "success" | "failed";
+  /** Coarse-grained failure class for telemetry + retry decisions. Null on success. */
+  errorCode: AiExtractionErrorCode | null;
+  /** Verbatim error message from the SDK / validator. Null on success. */
+  errorMessage: string | null;
 };
 
 export type AiProductMatchInput = {
@@ -105,6 +133,15 @@ export type AiProductMatch = {
 
 export type AiProductMatchResult = {
   matches: AiProductMatch[];
+  /**
+   * Outcome discriminator — same semantics as on `AiExtractionResult`. A
+   * `failed` matching call means downstream consumers should fall back to
+   * deterministic matches rather than trusting the empty `matches` array
+   * as "the model considered all of these unresolvable."
+   */
+  status: "success" | "failed";
+  errorCode: AiExtractionErrorCode | null;
+  errorMessage: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -160,6 +197,11 @@ class MockAiProvider implements AiProvider {
         "AI extraction is not configured. Set AI_PROVIDER=openai and OPENAI_API_KEY to enable.",
       ],
       reasoning: "Mock provider — no AI extraction performed.",
+      // Mock provider's "no output" is semantically a failure: the merge gate
+      // should not apply any of these fields. status=failed makes that explicit.
+      status: "failed",
+      errorCode: "no_output",
+      errorMessage: "AI provider not configured.",
     };
   }
 
@@ -171,6 +213,9 @@ class MockAiProvider implements AiProvider {
         confidence: 0,
         reasoning: "Mock provider — no AI matching performed.",
       })),
+      status: "failed",
+      errorCode: "no_output",
+      errorMessage: "AI provider not configured.",
     };
   }
 
@@ -191,6 +236,9 @@ class MockAiProvider implements AiProvider {
       ],
       reasoning: "Mock provider — vision not available.",
       rawJson: "",
+      status: "failed",
+      errorCode: "no_output",
+      errorMessage: "Vision-capable AI provider not configured.",
     };
   }
 }

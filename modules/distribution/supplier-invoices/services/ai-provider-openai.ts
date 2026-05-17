@@ -18,10 +18,12 @@ import {
   AiExtractionResultSchema,
   AiProductMatchResultSchema,
 } from "../utils/ai-validation";
+import { classifyOpenAiError } from "../utils/openai-error-classification";
 import type {
   AiProvider,
   AiExtractionInput,
   AiExtractionResult,
+  AiExtractionErrorCode,
   AiProductMatchInput,
   AiProductMatchResult,
   VisionExtractionInput,
@@ -31,7 +33,10 @@ import type {
 // Safe failure builders
 // ---------------------------------------------------------------------------
 
-function buildFailureExtractionResult(reason: string): AiExtractionResult {
+function buildFailureExtractionResult(args: {
+  errorCode: AiExtractionErrorCode;
+  errorMessage: string;
+}): AiExtractionResult {
   return {
     supplierName: null,
     supplierInvoiceNumber: null,
@@ -41,22 +46,55 @@ function buildFailureExtractionResult(reason: string): AiExtractionResult {
     fees: [],
     lines: [],
     confidence: 0,
-    warnings: [`AI extraction failed: ${reason}`],
-    reasoning: reason,
+    warnings: [`AI extraction failed: ${args.errorMessage}`],
+    reasoning: args.errorMessage,
+    status: "failed",
+    errorCode: args.errorCode,
+    errorMessage: args.errorMessage,
+  };
+}
+
+/**
+ * The "model ran but didn't produce a usable result" case — refusal text, an
+ * empty parsed payload, or a structured-output post-validation failure. These
+ * are distinct from a thrown SDK error because there's no retry that would
+ * help; the model legitimately decided not to give us data.
+ */
+function buildNoOutputExtractionResult(args: {
+  errorCode: Extract<AiExtractionErrorCode, "no_output" | "refusal" | "post_validation">;
+  errorMessage: string;
+}): AiExtractionResult {
+  return {
+    supplierName: null,
+    supplierInvoiceNumber: null,
+    invoiceDate: null,
+    totalAmount: null,
+    subtotal: null,
+    fees: [],
+    lines: [],
+    confidence: 0,
+    warnings: [`AI extraction failed: ${args.errorMessage}`],
+    reasoning: args.errorMessage,
+    status: "failed",
+    errorCode: args.errorCode,
+    errorMessage: args.errorMessage,
   };
 }
 
 function buildFailureMatchResult(
   vendorProductNames: string[],
-  reason: string,
+  args: { errorCode: AiExtractionErrorCode; errorMessage: string },
 ): AiProductMatchResult {
   return {
     matches: vendorProductNames.map(name => ({
       vendorProductName: name,
       suggestedProductId: null,
       confidence: 0,
-      reasoning: `AI matching failed: ${reason}`,
+      reasoning: `AI matching failed: ${args.errorMessage}`,
     })),
+    status: "failed",
+    errorCode: args.errorCode,
+    errorMessage: args.errorMessage,
   };
 }
 
@@ -80,7 +118,12 @@ export class OpenAiProvider implements AiProvider {
     maxInvoiceTextChars: number;
     maxProductCandidates: number;
   }) {
-    this.client = new OpenAI({ apiKey: args.apiKey });
+    // Long multipage-invoice completions can take 80+ seconds, which raises the
+    // odds of transient connection drops mid-response. SDK default is 2; bump
+    // to 4 for the long-call case. Retries use exponential backoff and only
+    // fire on APIConnectionError, RateLimitError, and 5xx — they don't slow
+    // the happy path.
+    this.client = new OpenAI({ apiKey: args.apiKey, maxRetries: 4 });
     this.invoiceModel = args.invoiceModel;
     this.productMatchModel = args.productMatchModel;
     this.visionModel = args.visionModel;
@@ -130,17 +173,24 @@ export class OpenAiProvider implements AiProvider {
 
       const message = response.choices[0]?.message;
       if (message?.refusal) {
-        return buildFailureExtractionResult(
-          `OpenAI refused to answer: ${message.refusal}`,
-        );
+        return buildNoOutputExtractionResult({
+          errorCode: "refusal",
+          errorMessage: `OpenAI refused to answer: ${message.refusal}`,
+        });
       }
       parsed = message?.parsed;
       if (parsed == null) {
-        return buildFailureExtractionResult("OpenAI returned no parsed output.");
+        return buildNoOutputExtractionResult({
+          errorCode: "no_output",
+          errorMessage: "OpenAI returned no parsed output.",
+        });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return buildFailureExtractionResult(`OpenAI API error: ${message}`);
+      const { code, message } = classifyOpenAiError(err);
+      return buildFailureExtractionResult({
+        errorCode: code,
+        errorMessage: `OpenAI API error: ${message}`,
+      });
     }
 
     // Schema-level validation is already done by structured outputs, but the
@@ -149,15 +199,19 @@ export class OpenAiProvider implements AiProvider {
     // length check, and the empty-result guard.
     const validated = validateExtractionResult(parsed);
     if (!validated) {
-      return buildFailureExtractionResult("OpenAI response failed post-validation.");
+      return buildNoOutputExtractionResult({
+        errorCode: "post_validation",
+        errorMessage: "OpenAI response failed post-validation.",
+      });
     }
 
-    return validated;
+    return { ...validated, status: "success", errorCode: null, errorMessage: null };
   }
 
   async suggestProductMatches(input: AiProductMatchInput): Promise<AiProductMatchResult> {
     if (input.vendorProductNames.length === 0) {
-      return { matches: [] };
+      // Legitimately nothing to match — success-with-empty.
+      return { matches: [], status: "success", errorCode: null, errorMessage: null };
     }
 
     const limitedProducts = limitProductCandidates(
@@ -185,32 +239,32 @@ export class OpenAiProvider implements AiProvider {
 
       const message = response.choices[0]?.message;
       if (message?.refusal) {
-        return buildFailureMatchResult(
-          input.vendorProductNames,
-          `OpenAI refused to answer: ${message.refusal}`,
-        );
+        return buildFailureMatchResult(input.vendorProductNames, {
+          errorCode: "refusal",
+          errorMessage: `OpenAI refused to answer: ${message.refusal}`,
+        });
       }
       parsed = message?.parsed;
       if (parsed == null) {
-        return buildFailureMatchResult(
-          input.vendorProductNames,
-          "OpenAI returned no parsed output.",
-        );
+        return buildFailureMatchResult(input.vendorProductNames, {
+          errorCode: "no_output",
+          errorMessage: "OpenAI returned no parsed output.",
+        });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return buildFailureMatchResult(
-        input.vendorProductNames,
-        `OpenAI API error: ${message}`,
-      );
+      const { code, message } = classifyOpenAiError(err);
+      return buildFailureMatchResult(input.vendorProductNames, {
+        errorCode: code,
+        errorMessage: `OpenAI API error: ${message}`,
+      });
     }
 
     const validated = validateProductMatchResult(parsed, input.vendorProductNames);
     if (!validated) {
-      return buildFailureMatchResult(
-        input.vendorProductNames,
-        "OpenAI response failed post-validation.",
-      );
+      return buildFailureMatchResult(input.vendorProductNames, {
+        errorCode: "post_validation",
+        errorMessage: "OpenAI response failed post-validation.",
+      });
     }
 
     // Security: strip any product IDs not in the candidate list to prevent
@@ -228,6 +282,9 @@ export class OpenAiProvider implements AiProvider {
             ? 0
             : m.confidence,
       })),
+      status: "success",
+      errorCode: null,
+      errorMessage: null,
     };
   }
 
@@ -297,7 +354,10 @@ export class OpenAiProvider implements AiProvider {
 
       if (message?.refusal) {
         return this.buildVisionFailureResult(
-          `Vision model refused to answer: ${message.refusal}`,
+          {
+            errorCode: "refusal",
+            errorMessage: `Vision model refused to answer: ${message.refusal}`,
+          },
           rawContent,
         );
       }
@@ -305,16 +365,22 @@ export class OpenAiProvider implements AiProvider {
       parsed = message?.parsed;
       if (parsed == null) {
         return this.buildVisionFailureResult(
-          `Vision model returned no parsed output (finish_reason: ${finishReason}).`,
+          {
+            errorCode: "no_output",
+            errorMessage: `Vision model returned no parsed output (finish_reason: ${finishReason}).`,
+          },
           rawContent,
         );
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const { code, message } = classifyOpenAiError(err);
       if (input.debug) {
         console.error("[vision debug] API error", err);
       }
-      return this.buildVisionFailureResult(`OpenAI API error: ${message}`);
+      return this.buildVisionFailureResult({
+        errorCode: code,
+        errorMessage: `OpenAI API error: ${message}`,
+      });
     }
 
     const validated = validateExtractionResult(parsed);
@@ -326,7 +392,10 @@ export class OpenAiProvider implements AiProvider {
         );
       }
       return this.buildVisionFailureResult(
-        "Vision model response failed post-validation.",
+        {
+          errorCode: "post_validation",
+          errorMessage: "Vision model response failed post-validation.",
+        },
         rawContent,
       );
     }
@@ -340,11 +409,17 @@ export class OpenAiProvider implements AiProvider {
       });
     }
 
-    return { ...validated, rawJson: rawContent };
+    return {
+      ...validated,
+      rawJson: rawContent,
+      status: "success",
+      errorCode: null,
+      errorMessage: null,
+    };
   }
 
   private buildVisionFailureResult(
-    reason: string,
+    args: { errorCode: AiExtractionErrorCode; errorMessage: string },
     rawJson = "",
   ): AiExtractionResult & { rawJson: string } {
     return {
@@ -356,9 +431,12 @@ export class OpenAiProvider implements AiProvider {
       fees: [],
       lines: [],
       confidence: 0,
-      warnings: [`Vision extraction failed: ${reason}`],
-      reasoning: reason,
+      warnings: [`Vision extraction failed: ${args.errorMessage}`],
+      reasoning: args.errorMessage,
       rawJson,
+      status: "failed",
+      errorCode: args.errorCode,
+      errorMessage: args.errorMessage,
     };
   }
 }

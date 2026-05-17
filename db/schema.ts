@@ -152,8 +152,16 @@ export const bulkImportStatusEnum = pgEnum("bulk_import_status", [
   // Parsing finished but the user has already posted the bill from this
   // entry. We keep the row for audit + recovery (TTL is operator-controlled).
   "reviewed",
-  // Parsing failed. The user can re-upload from the bulk landing screen.
+  // Legacy value, retained for enum-stability — never written by current
+  // code. Superseded by `parse_error`. Safe to drop in a follow-up once we
+  // confirm no rows in any environment carry this value.
   "errored",
+  // Parsing failed — set when `PipelineResult.parseStatus === "parse_error"`.
+  // The R2 object is still stored so a future re-parse handler can retry
+  // without re-uploading; today's recovery is for the user to re-upload from
+  // the bulk landing screen. `parse_error_codes` carries the coarse-grained
+  // failure class (connection, timeout, refusal, …) for telemetry.
+  "parse_error",
 ]);
 
 export const plaidConnectionStatusEnum = pgEnum("plaid_connection_status", [
@@ -2009,6 +2017,14 @@ export const bulkImportFiles = pgTable(
     /** Frozen `PipelineResult` JSON — used by the Review screen to prefill. */
     pipelineResult: jsonb("pipeline_result"),
     status: bulkImportStatusEnum("status").notNull().default("parsed"),
+    /**
+     * When `status === 'parse_error'`, the coarse-grained AI failure codes
+     * surfaced by the pipeline (e.g. `["connection"]` for the bulk-import
+     * multipage bug we just fixed). Null on successful parses. Persisted as
+     * a string[] jsonb so future retry logic can filter (e.g. auto-retry on
+     * "connection" / "timeout" but not on "refusal").
+     */
+    parseErrorCodes: jsonb("parse_error_codes").$type<string[]>(),
     /** Set when the user has posted a bill from this entry. */
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     /** The resulting supplier invoice id, set together with reviewedAt. */

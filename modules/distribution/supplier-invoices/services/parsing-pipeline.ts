@@ -22,6 +22,7 @@ import { scoreVisionExtraction, isVisionExtractionUseful, type VisionExtractionS
 import { correctVisionColumnSwap } from "../utils/vision-correction";
 import { extractSupplierInvoiceWithAi } from "./ai-extraction";
 import { extractSupplierInvoiceWithVision, type VisionExtractionResult } from "./ai-vision";
+import type { AiExtractionErrorCode } from "./ai-provider";
 import { detectImportProfile } from "./import-profiles";
 import {
   matchProductsMultiStage,
@@ -32,6 +33,8 @@ import {
   applyAliasesToLines,
   applyMatchResultsToLines,
   buildProfileKeywords,
+  collectPipelineErrorCodes,
+  computePipelineParseStatus,
   type LineMatchEntry,
 } from "../utils/parsing-pipeline-logic";
 import {
@@ -168,6 +171,13 @@ export type PipelineTelemetry = {
   textCharCount: number;
 };
 
+// PipelineParseStatus lives in parsing-pipeline-logic.ts (alongside the pure
+// helpers that decide it) so the rules are testable without spinning the
+// full pipeline. Re-exported here so consumers can keep importing from this
+// module's barrel without knowing the implementation split.
+export type { PipelineParseStatus } from "../utils/parsing-pipeline-logic";
+import type { PipelineParseStatus } from "../utils/parsing-pipeline-logic";
+
 export type PipelineResult = {
   prefillResult: SupplierInvoicePdfPrefillResult;
   confidence: number;
@@ -185,6 +195,15 @@ export type PipelineResult = {
     keywords: string[];
   } | null;
   visionUsed: boolean;
+  /** See `PipelineParseStatus` doc. */
+  parseStatus: PipelineParseStatus;
+  /**
+   * Every non-null `errorCode` collected from AI calls that ran during this
+   * pipeline invocation. Empty when `parseStatus === "success"`. Persisted on
+   * `bulk_import_files.parse_error_codes` for observability + future retry
+   * targeting (e.g. only auto-retry `connection`/`timeout`, not `refusal`).
+   */
+  parseErrorCodes: AiExtractionErrorCode[];
   debug?: PipelineDebugInfo;
   /** Populated only when the tenant catalog is empty (first-bill mode). */
   firstBillLines?: FirstBillLine[];
@@ -317,6 +336,8 @@ export async function runParsingPipeline(args: {
       detectedProfileId: detectedProfile?.id ?? null,
       proposedProfile: buildProposedProfile(deterministicResult, supplierRows),
       visionUsed: false,
+      parseStatus: "success",
+      parseErrorCodes: [],
     };
   }
 
@@ -482,6 +503,27 @@ export async function runParsingPipeline(args: {
     category: f.category ?? null,
   }));
 
+  // ---- parseStatus / parseErrorCodes (computed once, used by every return
+  // path below — see `computePipelineParseStatus` in parsing-pipeline-logic) ----
+  const realDeterministicLinesEarly =
+    deterministicResult.values.lines.some(l => l.productId !== "") ||
+    deterministicResult.unmatchedLineDescriptions.length > 0
+      ? deterministicResult.values.lines.length +
+        deterministicResult.unmatchedLineDescriptions.length
+      : 0;
+  const collectedErrorCodesEarly = collectPipelineErrorCodes({
+    aiErrorCode: aiResult.errorCode,
+    visionAttempted: needsVision,
+    visionErrorCode: visionResult?.errorCode ?? null,
+  });
+  const parseStatusEarly: PipelineParseStatus = computePipelineParseStatus({
+    aiStatus: aiResult.status,
+    visionAttempted: needsVision,
+    visionStatus: visionResult?.status ?? null,
+    visionUsefullyApplied: visionUsed,
+    realDeterministicLineCount: realDeterministicLinesEarly,
+  });
+
   // First-bill mode: empty catalog — skip all product matching, but still
   // populate `unresolvedLines` and `detectedFees` so the new Review screen
   // can render vendor product names + fee rows (matching never runs, so
@@ -495,6 +537,8 @@ export async function runParsingPipeline(args: {
     return buildFirstBillResult(finalResult, source, true, visionUsed, {
       descriptionByVendorName,
       detectedFees: detectedFeesFromAi,
+      parseStatus: parseStatusEarly,
+      parseErrorCodes: collectedErrorCodesEarly,
     });
   }
 
@@ -591,6 +635,8 @@ export async function runParsingPipeline(args: {
         ? buildProposedProfile(finalResult, supplierRows)
         : null,
     visionUsed,
+    parseStatus: parseStatusEarly,
+    parseErrorCodes: collectedErrorCodesEarly,
     debug: debugInfo,
   };
 }
@@ -950,6 +996,12 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     detectedProfileId: null,
     proposedProfile: null,
     visionUsed: false,
+    // Scanned PDFs are a structural parse failure: no text was extractable,
+    // OCR is not yet wired up, the row should NOT surface as a normal review
+    // card. The `requiresOcr` flag is already true; queue UI can decide
+    // whether to render an OCR-specific message vs. the generic re-upload.
+    parseStatus: "parse_error",
+    parseErrorCodes: ["no_output"],
   };
 }
 
@@ -975,6 +1027,10 @@ function buildFirstBillResult(
     descriptionByVendorName?: ReadonlyMap<string, string>;
     /** Fees detected by the AI extraction (Delivery Charge, Cut Fee, etc.). */
     detectedFees?: DetectedFee[];
+    /** parseStatus from the upstream AI calls — defaults to "success" for
+     *  the safety-intercept (deterministic-OK) call site. */
+    parseStatus?: PipelineParseStatus;
+    parseErrorCodes?: AiExtractionErrorCode[];
   } = {},
 ): PipelineResult {
   const descriptions = result.unmatchedLineDescriptions;
@@ -1026,6 +1082,8 @@ function buildFirstBillResult(
     detectedProfileId: null,
     proposedProfile: null,
     visionUsed,
+    parseStatus: extras.parseStatus ?? "success",
+    parseErrorCodes: extras.parseErrorCodes ?? [],
     firstBillLines,
   };
 }
