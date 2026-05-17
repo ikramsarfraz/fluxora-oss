@@ -46,6 +46,9 @@ function aiResult(overrides: Partial<AiExtractionResult> = {}): AiExtractionResu
     confidence: 80,
     warnings: [],
     reasoning: "",
+    status: "success",
+    errorCode: null,
+    errorMessage: null,
     ...overrides,
   };
 }
@@ -64,6 +67,9 @@ function visionResult(overrides: Partial<VisionExtractionResult> = {}): VisionEx
     reasoning: "",
     visionUsed: true,
     rawVisionJson: "{}",
+    status: "success",
+    errorCode: null,
+    errorMessage: null,
     ...overrides,
   };
 }
@@ -290,6 +296,89 @@ test("mergeAiOverDeterministic: keeps deterministic lines when det totals match"
 
   assert.equal(result.values.lines[0].productId, "prod-1", "det line preserved");
   assert.equal(result.values.lines[0].weightLbs, "50");
+  assert.equal(backCalcCount, 0);
+  assert.equal(manualCount, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Discriminator: failed AI must not contaminate the deterministic result.
+// This is the core bug class the multipage 0-lines investigation surfaced —
+// a connection-error swallowed into a `lines: []` shape used to slip past
+// the old `ai.lines.length > 0` gate as if AI had run successfully.
+// ---------------------------------------------------------------------------
+
+test("mergeAiOverDeterministic: ai.status='failed' returns deterministic untouched", () => {
+  const det = emptyDeterministicResult();
+  const ai = aiResult({
+    // Even with a populated supplierName + invoiceNumber, a failed AI result
+    // must be ignored — those fields are unreliable when the call errored.
+    supplierName: "SUMMIT TRADING",
+    supplierInvoiceNumber: "57876",
+    invoiceDate: "2026-04-20",
+    totalAmount: 147086,
+    lines: [],
+    confidence: 0,
+    status: "failed",
+    errorCode: "connection",
+    errorMessage: "OpenAI API error: Connection error",
+  });
+
+  const { result, backCalcCount, manualCount } = mergeAiOverDeterministic(
+    det,
+    ai,
+    SUPPLIERS,
+  );
+
+  assert.strictEqual(result, det, "deterministic result is returned identity-equal");
+  assert.equal(result.values.supplierId, "", "no AI supplier applied");
+  assert.equal(result.values.supplierInvoiceNumber, "", "no AI invoice# applied");
+  assert.equal(result.values.invoiceDate, "", "no AI date applied");
+  assert.equal(backCalcCount, 0);
+  assert.equal(manualCount, 0);
+});
+
+test("mergeAiOverDeterministic: ai.status='success' + lines=[] does NOT apply lines but DOES apply header fields", () => {
+  // A non-invoice document (or a legitimately empty invoice) — AI returned
+  // header fields but no line items. Old behavior preserved: the deterministic
+  // empty line array stays in place, but supplier/invoice#/date come from AI.
+  const det = emptyDeterministicResult();
+  const ai = aiResult({
+    supplierName: "Brewer Livestock",
+    supplierInvoiceNumber: "999",
+    invoiceDate: "2026-05-01",
+    lines: [],
+    status: "success",
+    errorCode: null,
+    errorMessage: null,
+  });
+
+  const { result } = mergeAiOverDeterministic(det, ai, SUPPLIERS);
+
+  assert.equal(result.values.supplierId, "sup-2", "AI supplier matched");
+  assert.equal(result.values.supplierInvoiceNumber, "999");
+  assert.equal(result.values.invoiceDate, "2026-05-01");
+  // Lines: not modified — det had no lines and AI had no lines, so the
+  // result still has the deterministic (empty placeholder) lines unchanged.
+  assert.deepEqual(result.values.lines, det.values.lines);
+});
+
+test("mergeVisionOverResult: vision.status='failed' returns current untouched", () => {
+  const det = emptyDeterministicResult();
+  const vision = visionResult({
+    lines: [],
+    confidence: 0,
+    status: "failed",
+    errorCode: "timeout",
+    errorMessage: "OpenAI API error: Vision request timed out",
+  });
+
+  const { result, backCalcCount, manualCount } = mergeVisionOverResult(
+    det,
+    vision,
+    SUPPLIERS,
+  );
+
+  assert.strictEqual(result, det, "current result returned identity-equal");
   assert.equal(backCalcCount, 0);
   assert.equal(manualCount, 0);
 });

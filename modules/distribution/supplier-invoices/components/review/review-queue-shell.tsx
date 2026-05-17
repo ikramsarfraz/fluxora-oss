@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { getBulkImportPdfSignedUrlAction } from "../../actions";
+import type { AiExtractionErrorCode } from "../../services/ai-provider";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 
 import { FloatingNav } from "./floating-nav";
@@ -14,6 +17,17 @@ import { QueueStrip } from "./queue-strip";
 import { ReviewContainer } from "./review-container";
 import { ReviewQueueHeader } from "./review-queue-header";
 import { useReviewQueue } from "./use-review-queue";
+
+/** User-facing message per AI failure class for the queue-failed card. */
+const QUEUE_PARSE_ERROR_LABEL: Record<AiExtractionErrorCode, string> = {
+  connection: "OpenAI couldn't be reached while parsing this invoice.",
+  timeout: "OpenAI took too long to respond while parsing this invoice.",
+  rate_limit: "OpenAI rate-limited the request — please retry in a moment.",
+  refusal: "OpenAI declined to parse this document.",
+  post_validation: "AI returned a response we couldn't validate.",
+  no_output: "AI produced no output for this document.",
+  unknown: "An unexpected error occurred while parsing this invoice.",
+};
 
 /**
  * Orchestrator for the new bulk-import Review Queue Carousel. Reads every
@@ -166,6 +180,33 @@ export function ReviewQueueShell({
   const fileName = currentStored.filename;
   if (!pipelineResult) return null;
 
+  // parse_error rows are not reviewable as-is — the AI failed mid-parse and
+  // there's nothing meaningful in the prefill to edit. Render a compact
+  // failure card instead of the form so the user (a) knows what went wrong
+  // and (b) can navigate past it without being misled by an empty form.
+  if (pipelineResult.parseStatus === "parse_error") {
+    return (
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+        <QueueStrip
+          queue={queue}
+          currentKey={currentKey}
+          completingKey={completingKey}
+          onPick={goTo}
+          onPrev={goPrev}
+          onNext={goNext}
+          hasPrev={hasPrev}
+          hasNext={hasNext}
+        />
+        <QueueFailedCard
+          fileName={fileName}
+          parseErrorCodes={pipelineResult.parseErrorCodes}
+          onBackToBulk={() => router.push("/supplier-invoices/bulk")}
+          onSkip={hasNext ? goNext : undefined}
+        />
+      </main>
+    );
+  }
+
   // Re-parse on the server side is out of scope for this PR — the legacy
   // parsing screen route reads from localStorage / IndexedDB, which the
   // server-side flow no longer populates. We hide the affordance until the
@@ -230,6 +271,70 @@ export function ReviewQueueShell({
         }
       />
     </main>
+  );
+}
+
+/**
+ * Compact card shown in place of the editable form when the current queue
+ * entry has `parseStatus === "parse_error"`. The user can navigate past it
+ * with the strip or the Skip button; recovery is a re-upload from the
+ * bulk-import panel (Re-parse against the same R2 object is a follow-up).
+ */
+function QueueFailedCard({
+  fileName,
+  parseErrorCodes,
+  onBackToBulk,
+  onSkip,
+}: {
+  fileName: string;
+  parseErrorCodes: AiExtractionErrorCode[];
+  onBackToBulk: () => void;
+  onSkip?: () => void;
+}) {
+  const primaryCode = parseErrorCodes[0] ?? "unknown";
+  const primaryMessage = QUEUE_PARSE_ERROR_LABEL[primaryCode];
+
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+      <div className="flex max-w-[480px] flex-col gap-4 rounded-[12px] border border-stone-line bg-stone-surface p-6 text-center">
+        <div
+          className="mx-auto flex size-10 items-center justify-center rounded-full"
+          style={{ background: "oklch(94% 0.05 25)" }}
+        >
+          <AlertTriangle
+            className="size-5"
+            strokeWidth={1.8}
+            style={{ color: "oklch(48% 0.18 25)" }}
+          />
+        </div>
+        <div>
+          <div className="text-[15px] font-semibold text-stone-ink">Parse failed</div>
+          <div className="mt-1 font-mono text-[12px] text-stone-muted">{fileName}</div>
+        </div>
+        <p className="text-[13px] leading-[1.5] text-stone-muted">
+          {primaryMessage} Re-upload this PDF from the bulk-import panel to
+          retry. The original file is preserved in your batch history.
+        </p>
+        {parseErrorCodes.length > 0 ? (
+          <p
+            className="font-mono text-[10px] uppercase tracking-[0.08em] text-stone-muted"
+            aria-label="Failure codes"
+          >
+            {parseErrorCodes.join(" · ")}
+          </p>
+        ) : null}
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onBackToBulk}>
+            Back to bulk import
+          </Button>
+          {onSkip ? (
+            <Button type="button" size="sm" onClick={onSkip}>
+              Skip to next
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 

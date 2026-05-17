@@ -1,4 +1,12 @@
-export type BatchFileStatus = "reviewed" | "attention" | "needs-review";
+export type BatchFileStatus =
+  | "reviewed"
+  | "attention"
+  | "needs-review"
+  /** Server-side parse failed (AI connection error, refusal, etc.). The row
+   *  is in the queue so the user knows where their upload went; the only
+   *  current recovery is to re-upload the PDF. The Re-parse handler that
+   *  would retry against the same R2 object is parked — tracked separately. */
+  | "parse-error";
 
 export type BatchFileIssue = {
   /** Tone of the icon — `warn` (orange) or `danger` (red). */

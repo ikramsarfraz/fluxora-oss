@@ -271,16 +271,25 @@ export async function matchProductsMultiStage(args: {
         candidateProducts: aiCandidates,
       });
 
-      for (const m of aiResult.matches) {
-        if (m.confidence >= 50 && m.suggestedProductId) {
-          aiMatches.set(m.vendorProductName, {
-            suggestedProductId: m.suggestedProductId,
-            confidence: m.confidence,
-          });
+      // Failed match call (connection error, refusal, post-validation reject,
+      // etc.) returns placeholder matches with confidence=0 — the loop below
+      // would already skip them, but short-circuit explicitly so a future
+      // reader doesn't have to reason about the equivalence. Product-match
+      // failures are non-fatal: the user still gets deterministic matches and
+      // the Review screen lets them resolve unresolved lines manually.
+      if (aiResult.status === "success") {
+        for (const m of aiResult.matches) {
+          if (m.confidence >= 50 && m.suggestedProductId) {
+            aiMatches.set(m.vendorProductName, {
+              suggestedProductId: m.suggestedProductId,
+              confidence: m.confidence,
+            });
+          }
         }
       }
     } catch {
-      // AI failure is non-fatal — keep unresolved.
+      // Defensive — the provider catches its own errors into a failure shape,
+      // so this branch shouldn't fire in practice. Kept for safety.
     }
 
     for (let i = 0; i < results.length; i++) {

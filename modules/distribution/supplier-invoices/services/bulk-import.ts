@@ -107,6 +107,13 @@ async function processOneFile(
   // the per-file result to "error" — a single bad row doesn't sink the
   // batch, and the original PipelineResult is already in hand so callers
   // can still proceed via the localStorage path until PR A2 lands.
+  //
+  // When the pipeline itself failed (AI connection drop etc.), the row goes
+  // in with status='parse_error' instead of 'parsed'. Keep the PipelineResult
+  // JSON so the user can still see what the deterministic stage produced; UI
+  // surfaces a re-upload callout instead of a normal review card.
+  const rowStatus: "parsed" | "parse_error" =
+    pipeline.parseStatus === "parse_error" ? "parse_error" : "parsed";
   let bulkImportFileId: string;
   try {
     const created = await createBulkImportFile({
@@ -117,7 +124,9 @@ async function processOneFile(
       mimeType: file.mimeType,
       bytes: file.bytes,
       pipelineResult: pipeline,
-      status: "parsed",
+      status: rowStatus,
+      parseErrorCodes:
+        rowStatus === "parse_error" ? pipeline.parseErrorCodes : undefined,
     });
     bulkImportFileId = created.id;
   } catch (err) {

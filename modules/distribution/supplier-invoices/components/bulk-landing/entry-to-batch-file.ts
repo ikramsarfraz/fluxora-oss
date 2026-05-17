@@ -7,12 +7,25 @@
  */
 
 import type { BulkImportFileRow } from "../../services/bulk-import-history";
+import type { AiExtractionErrorCode } from "../../services/ai-provider";
 
 import type {
   BatchFile,
   BatchFileIssue,
   BatchFileStatus,
 } from "./types";
+
+/** User-facing message for each AI failure class. Keep short — fits the
+ *  Issues column on the bulk-landing table. */
+const PARSE_ERROR_LABEL: Record<AiExtractionErrorCode, string> = {
+  connection: "OpenAI connection error — re-upload to retry",
+  timeout: "OpenAI request timed out — re-upload to retry",
+  rate_limit: "Rate limit hit — wait a moment, then re-upload",
+  refusal: "AI refused this document — re-upload to retry",
+  post_validation: "AI response failed validation — re-upload to retry",
+  no_output: "AI produced no output — re-upload to retry",
+  unknown: "Unexpected AI error — re-upload to retry",
+};
 
 function relativeTime(date: Date): string {
   const delta = Math.max(0, Date.now() - date.getTime());
@@ -62,6 +75,9 @@ function computedLineTotal(row: BulkImportFileRow): string {
 
 function statusFor(row: BulkImportFileRow): BatchFileStatus {
   if (row.status === "reviewed") return "reviewed";
+  // Hard parse failure: row is in the queue but the parse produced nothing
+  // reviewable. UI surfaces a re-upload affordance instead of an editable form.
+  if (row.status === "parse_error") return "parse-error";
   const unmatched = unmatchedLineCount(row);
   const matched = supplierMatched(row);
   const total = lineCount(row);
@@ -71,6 +87,22 @@ function statusFor(row: BulkImportFileRow): BatchFileStatus {
 }
 
 function issuesFor(row: BulkImportFileRow): BatchFileIssue[] {
+  // parse_error rows surface a single high-signal message from the AI
+  // failure code instead of the usual per-line issues (which would all be
+  // misleading — the form is empty by design, not because data was missing).
+  if (row.status === "parse_error") {
+    const codes = row.parseErrorCodes ?? [];
+    if (codes.length === 0) {
+      return [{ tone: "danger", message: PARSE_ERROR_LABEL.unknown }];
+    }
+    return [
+      {
+        tone: "danger",
+        message: PARSE_ERROR_LABEL[codes[0]] ?? PARSE_ERROR_LABEL.unknown,
+      },
+    ];
+  }
+
   const issues: BatchFileIssue[] = [];
   const matched = supplierMatched(row);
   const unmatched = unmatchedLineCount(row);

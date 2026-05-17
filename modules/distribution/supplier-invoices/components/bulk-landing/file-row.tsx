@@ -127,23 +127,40 @@ export function FileRow({
       </div>
 
       <div className="flex items-center justify-end gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant={file.status === "reviewed" ? "outline" : "default"}
-          onClick={e => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          className={cn(
-            "h-8 gap-1.5 text-[12px]",
-            file.status !== "reviewed" &&
-              "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
-          )}
-        >
-          {file.status === "reviewed" ? "Re-open" : "Review"}
-          <ArrowRight className="size-3" strokeWidth={1.8} />
-        </Button>
+        {file.status === "parse-error" ? (
+          // Re-parse handler is parked (see review-container.tsx:513-515);
+          // the only current recovery is a fresh upload. Disable Review so
+          // the user can't open into an empty form. The X (onDismiss) on
+          // hover lets them clear the failed row.
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled
+            className="h-8 cursor-not-allowed gap-1.5 text-[12px]"
+            title="Parse failed — re-upload this file from the bulk-import panel."
+          >
+            Re-upload required
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant={file.status === "reviewed" ? "outline" : "default"}
+            onClick={e => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            className={cn(
+              "h-8 gap-1.5 text-[12px]",
+              file.status !== "reviewed" &&
+                "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
+            )}
+          >
+            {file.status === "reviewed" ? "Re-open" : "Review"}
+            <ArrowRight className="size-3" strokeWidth={1.8} />
+          </Button>
+        )}
         {onDismiss ? (
           <button
             type="button"

@@ -1,8 +1,65 @@
 // Pure helpers for line-patching logic in the parsing pipeline.
 // No server-only import — safe to use in tests and shared utilities.
 
+import type { AiExtractionErrorCode } from "../services/ai-provider";
 import type { SupplierInvoicePdfPrefillLine } from "./pdf-prefill";
 import { normalizeProductName } from "./normalization";
+
+export type PipelineParseStatus = "success" | "partial_success" | "parse_error";
+
+/**
+ * Compute the pipeline's `parseStatus` from the per-stage AI outcomes plus
+ * the deterministic line count. Pure — extracted from `runParsingPipeline`
+ * so the rules can be unit-tested without spinning up the full pipeline.
+ *
+ * Rules:
+ *  - `parse_error` when AI failed AND (vision failed or wasn't attempted)
+ *    AND vision wasn't usefully applied AND deterministic produced fewer
+ *    than 2 real lines.
+ *  - `partial_success` when at least one AI stage failed but the pipeline
+ *    still produced a defensible result by other means.
+ *  - `success` otherwise.
+ */
+export function computePipelineParseStatus(args: {
+  aiStatus: "success" | "failed";
+  visionAttempted: boolean;
+  visionStatus: "success" | "failed" | null;
+  visionUsefullyApplied: boolean;
+  realDeterministicLineCount: number;
+}): PipelineParseStatus {
+  const aiFailed = args.aiStatus === "failed";
+  const visionFailed =
+    args.visionAttempted && args.visionStatus === "failed";
+
+  if (
+    aiFailed &&
+    (visionFailed || !args.visionAttempted) &&
+    !args.visionUsefullyApplied &&
+    args.realDeterministicLineCount < 2
+  ) {
+    return "parse_error";
+  }
+  if (aiFailed || visionFailed) {
+    return "partial_success";
+  }
+  return "success";
+}
+
+/**
+ * Collect every non-null `errorCode` from the AI stages that ran during a
+ * single pipeline invocation. Pure helper used alongside
+ * `computePipelineParseStatus`.
+ */
+export function collectPipelineErrorCodes(args: {
+  aiErrorCode: AiExtractionErrorCode | null;
+  visionAttempted: boolean;
+  visionErrorCode: AiExtractionErrorCode | null;
+}): AiExtractionErrorCode[] {
+  const codes: AiExtractionErrorCode[] = [];
+  if (args.aiErrorCode) codes.push(args.aiErrorCode);
+  if (args.visionAttempted && args.visionErrorCode) codes.push(args.visionErrorCode);
+  return codes;
+}
 
 export type LineMatchEntry = {
   productId: string | null;

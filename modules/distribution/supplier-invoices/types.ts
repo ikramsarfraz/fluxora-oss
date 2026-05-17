@@ -30,10 +30,12 @@ export type {
 export type {
   PipelineResult,
   PipelineParseSource,
+  PipelineParseStatus,
   PipelineDebugInfo,
   UnresolvedLine,
   DetectedFee,
 } from "./services/parsing-pipeline";
+export type { AiExtractionErrorCode } from "./services/ai-provider";
 export type { ParsedConfidenceBreakdown } from "./utils/pipeline-scoring";
 export type { VisionExtractionScore } from "./utils/vision-scoring";
 export type { VisionExtractionInput, VisionExtractionResult } from "./services/ai-vision";

@@ -5,6 +5,8 @@ import {
   applyAliasesToLines,
   applyMatchResultsToLines,
   buildProfileKeywords,
+  collectPipelineErrorCodes,
+  computePipelineParseStatus,
   countBlockingUnresolved,
   filterProducts,
   resolveAliasParams,
@@ -459,4 +461,112 @@ test("pipeline warnings must not contain token usage strings", () => {
     "pattern must detect the old OpenAI token string");
   assert.ok(oldVisionFormat.test("Vision tokens: 500 (prompt: 400, completion: 100)"),
     "pattern must detect the old vision token string");
+});
+
+// ---------------------------------------------------------------------------
+// computePipelineParseStatus / collectPipelineErrorCodes
+//
+// The pipeline calls these to decide whether the resulting bulk_import_files
+// row goes in as `'parsed'` (reviewable) or `'parse_error'` (re-upload) —
+// see runParsingPipeline in services/parsing-pipeline.ts. These tests pin
+// the exact rules so the boundary doesn't drift.
+// ---------------------------------------------------------------------------
+
+test("computePipelineParseStatus: ai success + no vision attempt → success", () => {
+  const status = computePipelineParseStatus({
+    aiStatus: "success",
+    visionAttempted: false,
+    visionStatus: null,
+    visionUsefullyApplied: false,
+    realDeterministicLineCount: 0,
+  });
+  assert.equal(status, "success");
+});
+
+test("computePipelineParseStatus: ai failed + vision not attempted + no det lines → parse_error", () => {
+  // This is the exact multipage 0-lines symptom from the bulk-import bug.
+  const status = computePipelineParseStatus({
+    aiStatus: "failed",
+    visionAttempted: false,
+    visionStatus: null,
+    visionUsefullyApplied: false,
+    realDeterministicLineCount: 0,
+  });
+  assert.equal(status, "parse_error");
+});
+
+test("computePipelineParseStatus: ai failed + vision failed + no det lines → parse_error", () => {
+  const status = computePipelineParseStatus({
+    aiStatus: "failed",
+    visionAttempted: true,
+    visionStatus: "failed",
+    visionUsefullyApplied: false,
+    realDeterministicLineCount: 0,
+  });
+  assert.equal(status, "parse_error");
+});
+
+test("computePipelineParseStatus: ai failed + vision succeeded + usefully applied → partial_success", () => {
+  const status = computePipelineParseStatus({
+    aiStatus: "failed",
+    visionAttempted: true,
+    visionStatus: "success",
+    visionUsefullyApplied: true,
+    realDeterministicLineCount: 0,
+  });
+  assert.equal(status, "partial_success");
+});
+
+test("computePipelineParseStatus: ai failed + det parsed 5 real lines → partial_success", () => {
+  // Failure is real but the deterministic stage carried us — surface the
+  // failure code for telemetry but let the row stay reviewable.
+  const status = computePipelineParseStatus({
+    aiStatus: "failed",
+    visionAttempted: false,
+    visionStatus: null,
+    visionUsefullyApplied: false,
+    realDeterministicLineCount: 5,
+  });
+  assert.equal(status, "partial_success");
+});
+
+test("computePipelineParseStatus: ai failed + 1 det real line still tips to parse_error", () => {
+  // Threshold is < 2 — a single line on its own isn't enough to call this
+  // a usable parse.
+  const status = computePipelineParseStatus({
+    aiStatus: "failed",
+    visionAttempted: false,
+    visionStatus: null,
+    visionUsefullyApplied: false,
+    realDeterministicLineCount: 1,
+  });
+  assert.equal(status, "parse_error");
+});
+
+test("collectPipelineErrorCodes: empty when no errors", () => {
+  const codes = collectPipelineErrorCodes({
+    aiErrorCode: null,
+    visionAttempted: false,
+    visionErrorCode: null,
+  });
+  assert.deepEqual(codes, []);
+});
+
+test("collectPipelineErrorCodes: ai error only, vision not attempted", () => {
+  const codes = collectPipelineErrorCodes({
+    aiErrorCode: "connection",
+    visionAttempted: false,
+    visionErrorCode: "timeout",
+  });
+  // Vision wasn't attempted, so its code is ignored even if non-null.
+  assert.deepEqual(codes, ["connection"]);
+});
+
+test("collectPipelineErrorCodes: ai + vision both errored when attempted", () => {
+  const codes = collectPipelineErrorCodes({
+    aiErrorCode: "connection",
+    visionAttempted: true,
+    visionErrorCode: "timeout",
+  });
+  assert.deepEqual(codes, ["connection", "timeout"]);
 });

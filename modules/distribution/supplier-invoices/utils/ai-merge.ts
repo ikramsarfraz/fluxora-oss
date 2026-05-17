@@ -46,12 +46,25 @@ function lookupSupplierByName(
  *
  * Always uses `convertAiLineToPrefill` so weight back-calculation and
  * per-case-weight mode behave identically across the text and vision paths.
+ *
+ * If `ai.status === "failed"` (connection drop, timeout, refusal, etc.) NO
+ * AI fields are applied — caller propagates the failure via PipelineResult.
+ * This is distinct from `ai.status === "success" && ai.lines.length === 0`
+ * (legitimately a non-invoice document) where AI header fields might still
+ * be useful even though there are no line items to merge.
  */
 export function mergeAiOverDeterministic(
   det: SupplierInvoicePdfPrefillResult,
   ai: AiExtractionResult,
   supplierRows: Array<{ id: string; name: string }>,
 ): MergeResult {
+  // Hard short-circuit: failed AI calls must not contaminate the deterministic
+  // result. The "0 lines + correct BALANCE DUE" failure mode the bulk-import
+  // multipage bug surfaced is exactly what this gate prevents.
+  if (ai.status === "failed") {
+    return { result: det, backCalcCount: 0, manualCount: 0 };
+  }
+
   let supplierId = det.values.supplierId;
   if (!supplierId) {
     supplierId = lookupSupplierByName(ai.supplierName, supplierRows) ?? "";
@@ -152,12 +165,19 @@ export function mergeAiOverDeterministic(
  * Merge vision extraction over an existing prefill result. Always replaces the
  * current lines with the vision-extracted ones (vision is only invoked when
  * the prior result is unsatisfactory).
+ *
+ * On `vision.status === "failed"` the merge is a no-op — caller falls back to
+ * whatever the merged-text-AI-and-deterministic result was.
  */
 export function mergeVisionOverResult(
   current: SupplierInvoicePdfPrefillResult,
   vision: VisionExtractionResult,
   supplierRows: Array<{ id: string; name: string }>,
 ): MergeResult {
+  if (vision.status === "failed") {
+    return { result: current, backCalcCount: 0, manualCount: 0 };
+  }
+
   const conversions = vision.lines.map(convertAiLineToPrefill);
   const lines = conversions.map(c => c.line);
   const backCalcCount = conversions.filter(c => c.backCalculatedWeight).length;
