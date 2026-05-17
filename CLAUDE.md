@@ -18,6 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Install | `pnpm install` |
 | Dev server | `pnpm dev` |
 | Production build | `pnpm build` |
+| Production server (after build) | `pnpm start` |
 | Lint | `pnpm lint` |
 | Unit tests (all) | `pnpm test:unit` |
 | Single unit test | `node --import tsx --test path/to/file.test.ts` |
@@ -44,7 +45,7 @@ modules/
   shared/         # domain-agnostic primitives used by 2+ modules
 ```
 
-**Each module's `index.ts` is its only public entry point.** External code imports `@/modules/distribution/orders`, never `@/modules/distribution/orders/components/foo`.
+**Each module's `index.ts` is its only public entry point.** External code imports `@/modules/distribution/orders`, never `@/modules/distribution/orders/components/foo`. The top-level `modules/distribution/index.ts`, `modules/distribution/actions.ts`, and `modules/shared/actions.ts` are aggregate barrels that re-export from sub-modules; cross-cutting consumers (e.g. dashboard, aging) import from them.
 
 ### Forbidden import directions (enforced by `pnpm check:boundaries`)
 
@@ -92,3 +93,7 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 - **`types.ts` per module** re-exports the practical domain types (inferred from services / Zod / Drizzle `$inferSelect`) rather than redefining them. The service/schema is the source of truth.
 - **`@react-pdf/renderer` and `pdf-parse`** are marked `serverExternalPackages` in [next.config.ts](next.config.ts) — needed because the RSC bundler otherwise resolves `react` to the server build and breaks PDF rendering. Don't remove without testing PDF output.
 - **Sentry** is wired via `withSentryConfig` in `next.config.ts` plus `instrumentation*.ts` and `sentry.*.config.ts`. Source map upload is gated on `SENTRY_AUTH_TOKEN`.
+
+## Further reading
+
+The `docs/` directory has detailed guides; [docs/README.md](docs/README.md) is the index. Start with [docs/architecture-overview.md](docs/architecture-overview.md) and [docs/module-architecture.md](docs/module-architecture.md) for the module layout rationale, [docs/local-development.md](docs/local-development.md) for env/host setup, and [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) + [docs/subscription-system-overview.md](docs/subscription-system-overview.md) for billing.
