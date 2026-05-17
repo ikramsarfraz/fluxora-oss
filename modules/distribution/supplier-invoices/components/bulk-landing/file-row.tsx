@@ -25,6 +25,7 @@ export function FileRow({
   onFocus,
   onOpen,
   onDismiss,
+  onParseErrorClick,
 }: {
   file: BatchFile;
   isFocused: boolean;
@@ -37,6 +38,14 @@ export function FileRow({
    * deleting the underlying storage entry.
    */
   onDismiss?: () => void;
+  /**
+   * Per-row click handler for `parse-error` rows. When provided, replaces the
+   * disabled "Re-upload required" button with an active "View error" button
+   * that opens a dialog explaining the failure + offering re-upload. The
+   * disabled-button path is kept as fallback for any caller (currently none)
+   * that hasn't wired the dialog yet.
+   */
+  onParseErrorClick?: () => void;
 }) {
   return (
     <div
@@ -129,19 +138,37 @@ export function FileRow({
       <div className="flex items-center justify-end gap-1.5">
         {file.status === "parse-error" ? (
           // Re-parse handler is parked (see review-container.tsx:513-515);
-          // the only current recovery is a fresh upload. Disable Review so
-          // the user can't open into an empty form. The X (onDismiss) on
-          // hover lets them clear the failed row.
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled
-            className="h-8 cursor-not-allowed gap-1.5 text-[12px]"
-            title="Parse failed — re-upload this file from the bulk-import panel."
-          >
-            Re-upload required
-          </Button>
+          // the only current recovery is a fresh upload. When a click handler
+          // is provided (preferred path), the button opens a dialog with the
+          // failure detail + a re-upload affordance. Without a handler we
+          // fall back to a disabled button — keeps any non-shell callers
+          // from accidentally opening into an empty form.
+          onParseErrorClick ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={e => {
+                e.stopPropagation();
+                onParseErrorClick();
+              }}
+              className="h-8 gap-1.5 border-rose-300 bg-rose-50 text-[12px] text-rose-700 hover:bg-rose-100"
+            >
+              View error
+              <ArrowRight className="size-3" strokeWidth={1.8} />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled
+              className="h-8 cursor-not-allowed gap-1.5 text-[12px]"
+              title="Parse failed — re-upload this file from the bulk-import panel."
+            >
+              Re-upload required
+            </Button>
+          )
         ) : (
           <Button
             type="button"

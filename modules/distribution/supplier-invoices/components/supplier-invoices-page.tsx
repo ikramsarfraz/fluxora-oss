@@ -92,7 +92,19 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
   },
 ];
 
-export default function SupplierInvoicesPage() {
+/**
+ * Bills tab content for the supplier-invoices page.
+ *
+ * When `embedded` is true the component skips its own title/subtitle/actions
+ * because the parent `SupplierBillsShell` owns those (tabs + Bulk import
+ * sheet trigger + Record bill nav are shared chrome across tabs). Standalone
+ * usage (no `embedded` prop) keeps the original behaviour for any remaining
+ * direct callers — currently none, but kept for safety while the refactor is
+ * in flight.
+ */
+export default function SupplierInvoicesPage({
+  embedded = false,
+}: { embedded?: boolean } = {}) {
   const router = useRouter();
   const [deletingInvoice, setDeletingInvoice] = useState<InvoiceRow | null>(null);
 
@@ -145,6 +157,8 @@ export default function SupplierInvoicesPage() {
   return (
     <>
       <ListingPage
+        // Embedded mode: shell owns title + subtitle + actions.
+        hideHeader={embedded}
         title="Bills"
         subtitle="Supplier bills are how inventory enters your system. Receiving a bill creates lots and stock."
         primaryAction={

@@ -30,7 +30,22 @@ const QUEUE_KEY = ["bulk-import-files", "pending"] as const;
  * `/supplier-invoices/new?bulk-import-key=…` route, which now branches
  * to the new Review screen (see phase 5a).
  */
-export function BulkLandingLive() {
+export function BulkLandingLive({
+  embedded = false,
+  onImportMore,
+  onParseErrorClick,
+}: {
+  /** Render as a panel inside SupplierBillsShell rather than a standalone page. */
+  embedded?: boolean;
+  /**
+   * Click handler for "Import more" + the empty-state CTA. When the shell
+   * embeds this it passes a callback that opens the BulkImportSheet instead
+   * of routing to the (now-redirected) /supplier-invoices/bulk-import page.
+   */
+  onImportMore?: () => void;
+  /** Per-row click handler for parse-error rows — opens the ParseErrorDialog. */
+  onParseErrorClick?: (file: BatchFile) => void;
+} = {}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { view } = useBulkBatchView();
@@ -158,7 +173,32 @@ export function BulkLandingLive() {
   if (view === null) return null;
 
   // Empty batch — there's nothing to review. Push the user to the uploader.
+  // In embedded mode the shell renders the empty state itself (so the tab
+  // strip + page header stay visible); here we only render an empty state
+  // on the legacy standalone route.
   if (view.files.length === 0) {
+    if (embedded) {
+      return (
+        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[12px] border border-dashed border-stone-line bg-stone-surface p-12 text-center">
+          <div className="max-w-[420px]">
+            <h2 className="mb-2 text-[16px] font-semibold tracking-[-0.005em] text-stone-ink">
+              Inbox is empty
+            </h2>
+            <p className="mb-5 text-[13px] text-stone-muted">
+              Upload supplier-invoice PDFs to start a batch. Parsed files will
+              appear here once they&apos;re ready to review.
+            </p>
+            <button
+              type="button"
+              onClick={onImportMore ?? (() => router.push("/supplier-invoices/bulk-import"))}
+              className="rounded-md border border-stone-ink bg-stone-ink px-4 py-2 text-[13px] text-stone-surface hover:bg-stone-ink/90"
+            >
+              Bulk import PDFs
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
         <div className="max-w-[420px]">
@@ -185,14 +225,18 @@ export function BulkLandingLive() {
     <BulkLandingScreen
       view={view}
       openInNewTab
+      hideHeader={embedded}
       openFileHref={(file: BatchFile) =>
         `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(file.id)}`
       }
-      onImportMore={() => router.push("/supplier-invoices/bulk-import")}
+      onImportMore={
+        onImportMore ?? (() => router.push("/supplier-invoices/bulk-import"))
+      }
       onDismissFile={dismissFile}
       onClearReviewed={clearReviewed}
       onReparseAll={reparseAll}
       reparseAllPending={reparseAllPending}
+      onParseErrorClick={onParseErrorClick}
     />
   );
 }
