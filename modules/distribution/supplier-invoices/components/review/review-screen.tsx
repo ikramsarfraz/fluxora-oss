@@ -5,10 +5,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
+import { ChargesPanel, type ChargeDraft } from "./charges-panel";
 import { FilterSegmented } from "./filter-segmented";
 import { HeaderCard } from "./header-card";
 import type { LineBbox } from "./line-bbox";
 import type { LineCostAckKey } from "./line-cost-diff-banner";
+import type { LineLotExpiryState } from "./line-lot-expiry-editor";
 import { LineRow, type LineCostDiffData } from "./line-row";
 import type { LineWeightState } from "./line-weight-editor";
 import type {
@@ -50,14 +52,25 @@ export function ReviewScreen({
   openWeightEditorLines,
   onToggleLineWeightEditor,
   onLineWeightChange,
+  lineLotExpiryStates,
+  openLotExpiryEditorLines,
+  onToggleLineLotExpiryEditor,
+  onLineLotExpiryChange,
   lineCostDiffs,
   onToggleCostAck,
+  charges,
+  onChargesChange,
+  deletedLineIds,
+  onDeleteLine,
+  onRestoreAllLines,
   onSelectSupplierCandidate,
   onCreateSupplier,
   onSelectSupplier,
   onSupplierTypedNameChange,
   paymentMethod,
   onPaymentMethodChange,
+  notes,
+  onNotesChange,
   suppliers = [],
   products = [],
   supplierSelectedId,
@@ -110,6 +123,15 @@ export function ReviewScreen({
   onToggleLineWeightEditor?: (lineId: number) => void;
   onLineWeightChange?: (lineId: number, next: LineWeightState) => void;
   /**
+   * Per-line lot/expiry override state. Same shape as the weight editor:
+   * presence/missing keys + the open-set are tracked separately so
+   * toggling the tray doesn't mark a line as overridden.
+   */
+  lineLotExpiryStates?: Record<number, LineLotExpiryState | undefined>;
+  openLotExpiryEditorLines?: ReadonlySet<number>;
+  onToggleLineLotExpiryEditor?: (lineId: number) => void;
+  onLineLotExpiryChange?: (lineId: number, next: LineLotExpiryState) => void;
+  /**
    * Per-line cost-diff banner data — provided by the container after
    * cross-referencing the live cost-per-lb (from current line state)
    * against `getSupplierInvoiceCostDiffContext()`. Null/missing key =
@@ -117,6 +139,21 @@ export function ReviewScreen({
    */
   lineCostDiffs?: Record<number, LineCostDiffData | null>;
   onToggleCostAck?: (key: LineCostAckKey) => void;
+  /**
+   * Editable list of non-inventory charges (freight, fuel, tax, etc.) —
+   * seeded from the parser's `detectedFees`. When supplied alongside
+   * `onChargesChange`, the `ChargesPanel` renders below the line items.
+   */
+  charges?: ChargeDraft[];
+  onChargesChange?: (next: ChargeDraft[]) => void;
+  /**
+   * Line ids the user has explicitly removed from the bill. Filtered out
+   * of both the rendered list and the submit payload. Container exposes
+   * `onRestoreAllLines` so the footer can offer an undo.
+   */
+  deletedLineIds?: ReadonlySet<number>;
+  onDeleteLine?: (lineId: number) => void;
+  onRestoreAllLines?: () => void;
   /** Called when the user clicks a supplier candidate chip. */
   onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
   /** Called when the user clicks "+ Create supplier" on the header card. */
@@ -131,6 +168,12 @@ export function ReviewScreen({
    */
   paymentMethod: PaymentMethod | null;
   onPaymentMethodChange: (value: PaymentMethod | null) => void;
+  /**
+   * Bill-level notes — controlled by the parent, seeded from the parser's
+   * prefill. Empty string = no notes (sent to server as null on submit).
+   */
+  notes: string;
+  onNotesChange: (value: string) => void;
   suppliers?: SupplierLookup[];
   products?: ProductLookup[];
   supplierSelectedId?: string | null;
@@ -209,25 +252,60 @@ export function ReviewScreen({
   const setRememberAliases = onRememberAliasesChange ?? setRememberAliasesLocal;
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
+  // Apply line deletions BEFORE any other derived calculation so counts,
+  // filtered list, totals, and footer numbers all reflect the same
+  // "lines the user wants on this bill" universe.
+  const visibleLines = useMemo(() => {
+    if (!deletedLineIds || deletedLineIds.size === 0) return data.lines;
+    return data.lines.filter(l => !deletedLineIds.has(l.id));
+  }, [data.lines, deletedLineIds]);
+
   const counts: ReviewCounts = useMemo(() => {
-    const matched = data.lines.filter(
+    const matched = visibleLines.filter(
       l => l.match.status === "matched" && !l.match.warning,
     ).length;
-    const needsReview = data.lines.filter(l => lineNeedsReview(l.match)).length;
-    const fees = data.lines.filter(l => l.match.status === "fee").length;
-    return { matched, needsReview, fees, total: data.lines.length };
-  }, [data.lines]);
+    const needsReview = visibleLines.filter(l => lineNeedsReview(l.match)).length;
+    const fees = visibleLines.filter(l => l.match.status === "fee").length;
+    return { matched, needsReview, fees, total: visibleLines.length };
+  }, [visibleLines]);
+
+  // Bill-level totals shown in the footer strip. Product lines only —
+  // fees flow into `chargesTotal` separately so the user can verify
+  // "lines + charges = bill total" at a glance.
+  const footerTotals = useMemo(() => {
+    const productLines = visibleLines.filter(l => l.match.status !== "fee");
+    const totalLineCount = productLines.length;
+    let totalCases = 0;
+    let totalWeightLbs = 0;
+    let linesTotal = 0;
+    for (const line of productLines) {
+      totalCases += Number(line.cases) || 0;
+      totalWeightLbs += Number(line.weight) || 0;
+      linesTotal += Number(line.total) || 0;
+    }
+    const chargesTotal = (charges ?? []).reduce(
+      (sum, c) => sum + (Number(c.amount) || 0),
+      0,
+    );
+    return {
+      totalLineCount,
+      totalCases,
+      totalWeightLbs,
+      chargesTotal,
+      linesTotal,
+    };
+  }, [visibleLines, charges]);
 
   const filteredLines = useMemo(() => {
-    if (filter === "all") return data.lines;
+    if (filter === "all") return visibleLines;
     if (filter === "matched")
-      return data.lines.filter(
+      return visibleLines.filter(
         l => l.match.status === "matched" && !l.match.warning,
       );
     if (filter === "fees")
-      return data.lines.filter(l => l.match.status === "fee");
-    return data.lines.filter(l => lineNeedsReview(l.match));
-  }, [data.lines, filter]);
+      return visibleLines.filter(l => l.match.status === "fee");
+    return visibleLines.filter(l => lineNeedsReview(l.match));
+  }, [visibleLines, filter]);
 
   useEffect(() => {
     if (activeLineId == null) return;
@@ -251,14 +329,14 @@ export function ReviewScreen({
     if (activeLineId == null) return;
     const nextVisible =
       next === "all"
-        ? data.lines
+        ? visibleLines
         : next === "matched"
-          ? data.lines.filter(
+          ? visibleLines.filter(
               l => l.match.status === "matched" && !l.match.warning,
             )
           : next === "fees"
-            ? data.lines.filter(l => l.match.status === "fee")
-            : data.lines.filter(l => lineNeedsReview(l.match));
+            ? visibleLines.filter(l => l.match.status === "fee")
+            : visibleLines.filter(l => lineNeedsReview(l.match));
     if (!nextVisible.some(l => l.id === activeLineId)) {
       setActiveLineId(nextVisible[0]?.id ?? null);
     }
@@ -361,6 +439,8 @@ export function ReviewScreen({
             onCreateSupplier={onCreateSupplier}
             paymentMethod={paymentMethod}
             onPaymentMethodChange={onPaymentMethodChange}
+            notes={notes}
+            onNotesChange={onNotesChange}
           />
 
           {/* Duplicate-invoice warning. Hidden when the parsed (supplier,
@@ -460,12 +540,58 @@ export function ReviewScreen({
                           ? next => onLineWeightChange(line.id, next)
                           : undefined
                       }
+                      lotExpiryState={lineLotExpiryStates?.[line.id] ?? null}
+                      isLotExpiryEditorOpen={
+                        openLotExpiryEditorLines?.has(line.id) ?? false
+                      }
+                      onToggleLotExpiryEditor={
+                        onToggleLineLotExpiryEditor
+                          ? () => onToggleLineLotExpiryEditor(line.id)
+                          : undefined
+                      }
+                      onLotExpiryEditorChange={
+                        onLineLotExpiryChange
+                          ? next => onLineLotExpiryChange(line.id, next)
+                          : undefined
+                      }
                       costDiff={lineCostDiffs?.[line.id] ?? null}
                       onToggleCostAck={onToggleCostAck}
+                      onDelete={
+                        onDeleteLine ? () => onDeleteLine(line.id) : undefined
+                      }
                     />
                   </div>
                 ))
               )}
+              {/* Deleted-lines notice. The user can wipe lines they don't
+                  want on this bill; we keep them out of the rendered list
+                  + the submit payload, but leave a small footer so an
+                  accidental click is one-step recoverable. */}
+              {deletedLineIds && deletedLineIds.size > 0 && onRestoreAllLines ? (
+                <div className="flex items-center justify-between gap-3 border-t border-stone-line bg-stone-bg px-[22px] py-2 text-[12px] text-stone-muted">
+                  <span>
+                    {deletedLineIds.size} line
+                    {deletedLineIds.size === 1 ? "" : "s"} removed from this bill
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onRestoreAllLines}
+                    className="font-medium text-stone-ink underline-offset-2 hover:underline"
+                  >
+                    Restore all
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Non-inventory charges panel — rendered inside the same
+                  scroll container as the line items so it scrolls with
+                  them. Submit's `charges` payload comes from this state. */}
+              {charges && onChargesChange ? (
+                <ChargesPanel
+                  charges={charges}
+                  onChange={onChargesChange}
+                />
+              ) : null}
             </div>
           </div>
         </div>
@@ -490,6 +616,10 @@ export function ReviewScreen({
         <ReviewFooterStrip
           rememberAliases={rememberAliasesValue}
           onRememberAliasesChange={setRememberAliases}
+          totalLineCount={footerTotals.totalLineCount}
+          totalCases={footerTotals.totalCases}
+          totalWeightLbs={footerTotals.totalWeightLbs}
+          chargesTotal={footerTotals.chargesTotal}
           billTotal={data.parsed.total.value}
         />
       </div>

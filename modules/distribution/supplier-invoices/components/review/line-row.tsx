@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  Calendar,
   Check,
   ChevronDown,
   ChevronUp,
@@ -9,6 +10,7 @@ import {
   Scale,
   Sparkles,
   TriangleAlert,
+  X,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -17,6 +19,10 @@ import {
   LineCostDiffBanner,
   type LineCostAckKey,
 } from "./line-cost-diff-banner";
+import {
+  LineLotExpiryEditor,
+  type LineLotExpiryState,
+} from "./line-lot-expiry-editor";
 import {
   LineWeightEditor,
   type LineWeightState,
@@ -56,8 +62,13 @@ export function LineRow({
   isWeightEditorOpen,
   onToggleWeightEditor,
   onWeightEditorChange,
+  lotExpiryState,
+  isLotExpiryEditorOpen,
+  onToggleLotExpiryEditor,
+  onLotExpiryEditorChange,
   costDiff,
   onToggleCostAck,
+  onDelete,
 }: {
   line: ParsedLine;
   isActive: boolean;
@@ -81,12 +92,28 @@ export function LineRow({
   onToggleWeightEditor?: () => void;
   onWeightEditorChange?: (next: LineWeightState) => void;
   /**
+   * Per-line lot/expiry override state + tray-open flag. Same pattern as
+   * the weight editor — null = never opened; the toggle handler seeds it
+   * on first open so closing without edits is a no-op.
+   */
+  lotExpiryState?: LineLotExpiryState | null;
+  isLotExpiryEditorOpen?: boolean;
+  onToggleLotExpiryEditor?: () => void;
+  onLotExpiryEditorChange?: (next: LineLotExpiryState) => void;
+  /**
    * Cost-diff banner data for this line (or null when there's no recorded
    * cost change vs the live cost-per-lb). When non-null, renders the
    * banner above the row's content.
    */
   costDiff?: LineCostDiffData | null;
   onToggleCostAck?: (key: LineCostAckKey) => void;
+  /**
+   * When supplied, renders a small × button on the right edge of the
+   * line that removes the line from view AND from the submit payload.
+   * Container tracks deleted lines in a Set so the user can restore
+   * them via the footer notice.
+   */
+  onDelete?: () => void;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -147,6 +174,19 @@ export function LineRow({
             )}
           </div>
           <NumericSnapshot line={line} />
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title="Remove this line from the bill"
+              className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-md text-stone-muted transition-colors hover:bg-stone-line2 hover:text-stone-ink"
+            >
+              <X className="size-[14px]" strokeWidth={1.8} />
+            </button>
+          ) : null}
         </div>
 
         {!isFee ? (
@@ -180,6 +220,17 @@ export function LineRow({
                 onClick={onToggleWeightEditor}
               />
             ) : null}
+            {onToggleLotExpiryEditor ? (
+              <LotExpiryChipButton
+                isOpen={isLotExpiryEditorOpen === true}
+                hasOverride={
+                  lotExpiryState != null &&
+                  (lotExpiryState.lotNumberOverride.trim().length > 0 ||
+                    lotExpiryState.expirationDateOverride.trim().length > 0)
+                }
+                onClick={onToggleLotExpiryEditor}
+              />
+            ) : null}
             {!isMatched ? <SkipButton onClick={onSkip} /> : null}
           </div>
         ) : null}
@@ -195,8 +246,63 @@ export function LineRow({
             onClose={onToggleWeightEditor}
           />
         ) : null}
+
+        {!isFee &&
+        isLotExpiryEditorOpen === true &&
+        lotExpiryState != null &&
+        onLotExpiryEditorChange ? (
+          <LineLotExpiryEditor
+            state={lotExpiryState}
+            onChange={onLotExpiryEditorChange}
+            onClose={onToggleLotExpiryEditor}
+          />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function LotExpiryChipButton({
+  isOpen,
+  hasOverride,
+  onClick,
+}: {
+  isOpen: boolean;
+  hasOverride: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={e => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={
+        hasOverride
+          ? "Edit lot # / expiry (overridden)"
+          : "Edit lot # / expiry"
+      }
+      className={cn(
+        "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
+        hasOverride
+          ? "border-stone-ink text-stone-ink"
+          : "border-stone-line text-stone-muted hover:text-stone-ink",
+      )}
+    >
+      <Calendar className="size-[12px]" strokeWidth={1.8} />
+      {isOpen ? (
+        <>
+          Hide lot
+          <ChevronUp className="size-[12px]" strokeWidth={1.8} />
+        </>
+      ) : (
+        <>
+          {hasOverride ? "Lot set" : "Set lot / expiry"}
+          <ChevronDown className="size-[12px]" strokeWidth={1.8} />
+        </>
+      )}
+    </button>
   );
 }
 

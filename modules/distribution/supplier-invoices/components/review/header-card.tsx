@@ -36,6 +36,8 @@ export function HeaderCard({
   onCreateSupplier,
   paymentMethod,
   onPaymentMethodChange,
+  notes,
+  onNotesChange,
 }: {
   parsed: ParsedHeader;
   supplierValue: string;
@@ -51,6 +53,13 @@ export function HeaderCard({
    */
   paymentMethod: PaymentMethod | null;
   onPaymentMethodChange: (value: PaymentMethod | null) => void;
+  /**
+   * Bill-level notes textarea — initialized by the parent from the
+   * parser's prefill so any notes the AI extracted from the PDF show up
+   * as the default. Empty string is sent to the server as null on submit.
+   */
+  notes: string;
+  onNotesChange: (value: string) => void;
 }) {
   return (
     <div className="border-b border-stone-line bg-stone-surface px-[22px] py-4">
@@ -175,6 +184,24 @@ export function HeaderCard({
             ))}
           </select>
         </ParsedField>
+      </div>
+
+      {/* Notes — full-width textarea below the grid. Seeded from the
+          parser's prefill (e.g. PO #, special instructions found on the
+          invoice). Empty string maps to null at submit. */}
+      <div className="mt-3.5">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-stone-muted">
+          Notes
+        </label>
+        <textarea
+          value={notes}
+          onChange={e => onNotesChange(e.target.value)}
+          rows={2}
+          maxLength={2000}
+          placeholder="Optional notes for this bill (PO #, special instructions, etc.)"
+          className="block w-full resize-y rounded-lg border border-stone-line bg-stone-surface px-3 py-2 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+          style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
+        />
       </div>
     </div>
   );

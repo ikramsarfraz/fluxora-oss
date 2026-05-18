@@ -24,9 +24,20 @@ import {
 import type { PipelineResult } from "../../services/parsing-pipeline";
 
 import {
+  emptyChargeDraft,
+  resolveChargesSubmit,
+  type ChargeDraft,
+  type SupplierInvoiceChargeType,
+} from "./charges-panel";
+import {
   ackKey as buildCostAckKey,
   type LineCostAckKey,
 } from "./line-cost-diff-banner";
+import {
+  emptyLineLotExpiryState,
+  resolveLineLotExpirySubmit,
+  type LineLotExpiryState,
+} from "./line-lot-expiry-editor";
 import {
   initialLineWeightState,
   resolveLineWeightSubmit,
@@ -170,6 +181,12 @@ export function ReviewContainer({
   >(
     (pipelineResult.prefillResult.values.paymentMethod as PaymentMethod | null) ?? null,
   );
+  // Bill-level notes — seeded from the parser's prefill so any PO #,
+  // delivery instructions, or other free-text the parser pulled from
+  // the PDF show up as the default. Empty string maps to null at submit.
+  const [notesOverride, setNotesOverride] = useState<string>(
+    pipelineResult.prefillResult.values.notes ?? "",
+  );
   const [lineProductOverrides, setLineProductOverrides] = useState<
     Record<number, { productId: string; productName: string; sku: string | null }>
   >({});
@@ -193,6 +210,36 @@ export function ReviewContainer({
   const [acknowledgedCostKeys, setAcknowledgedCostKeys] = useState<
     Set<LineCostAckKey>
   >(new Set());
+  // Per-line lot # / expiration-date overrides. Same two-slice pattern
+  // as weights — having the tray open doesn't imply an override, and
+  // the override survives the tray being closed.
+  const [lineLotExpiryStates, setLineLotExpiryStates] = useState<
+    Record<number, LineLotExpiryState | undefined>
+  >({});
+  const [openLotExpiryEditorLines, setOpenLotExpiryEditorLines] = useState<
+    Set<number>
+  >(new Set());
+
+  // Lines the user has explicitly removed from the bill. Filtered out of
+  // both the rendered list (via ReviewScreen) and the submit payload —
+  // the user can restore all in one click from the footer notice.
+  const [deletedLineIds, setDeletedLineIds] = useState<Set<number>>(
+    new Set(),
+  );
+
+  // Editable charges, seeded from the parser's detected fees. Replaces
+  // the previous silent-stamp behavior where every detected fee went to
+  // the server as `chargeType: "other"`. The user can reclassify, edit
+  // amounts, mark in-cost, or add/remove charges before submit.
+  const [charges, setCharges] = useState<ChargeDraft[]>(() =>
+    pipelineResult.detectedFees.map(fee => ({
+      ...emptyChargeDraft(),
+      description: fee.description,
+      chargeType:
+        (fee.category as SupplierInvoiceChargeType | null) ?? "other",
+      amount: String(fee.amount ?? ""),
+    })),
+  );
   const [skippedLines, setSkippedLines] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
@@ -359,16 +406,27 @@ export function ReviewContainer({
         if (prev[lineId]) return prev;
         const line = baseData.lines.find(l => l.id === lineId);
         if (!line) return prev;
+        const prefill =
+          pipelineResult.prefillResult.values.lines[lineId - 1];
         return {
           ...prev,
           [lineId]: initialLineWeightState({
             quantityCases: line.cases,
             totalWeightLbs: line.weight,
+            // Honour the parser's unit-type. `fixed` on ParsedLine reads
+            // the case-priced flag the deterministic stage sets; we map
+            // it to the manual form's unitType enum.
+            unitType:
+              prefill?.unitType === "fixed_case"
+                ? "fixed_case"
+                : line.fixed
+                  ? "fixed_case"
+                  : "catch_weight",
           }),
         };
       });
     },
-    [baseData.lines],
+    [baseData.lines, pipelineResult],
   );
 
   const handleLineWeightChange = useCallback(
@@ -377,6 +435,41 @@ export function ReviewContainer({
     },
     [],
   );
+
+  /** Toggle the inline lot/expiry editor for a line. First open seeds
+   *  the override state with empty strings so closing without edits
+   *  leaves the line unchanged (server falls back to defaults). */
+  const handleToggleLineLotExpiryEditor = useCallback((lineId: number) => {
+    setOpenLotExpiryEditorLines(prev => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
+    setLineLotExpiryStates(prev => {
+      if (prev[lineId]) return prev;
+      return { ...prev, [lineId]: emptyLineLotExpiryState() };
+    });
+  }, []);
+
+  const handleLineLotExpiryChange = useCallback(
+    (lineId: number, next: LineLotExpiryState) => {
+      setLineLotExpiryStates(prev => ({ ...prev, [lineId]: next }));
+    },
+    [],
+  );
+
+  const handleDeleteLine = useCallback((lineId: number) => {
+    setDeletedLineIds(prev => {
+      const next = new Set(prev);
+      next.add(lineId);
+      return next;
+    });
+  }, []);
+
+  const handleRestoreAllLines = useCallback(() => {
+    setDeletedLineIds(new Set());
+  }, []);
 
   /** Direct pick from the line's product autocomplete. */
   const handleSelectLineProduct = useCallback(
@@ -512,16 +605,17 @@ export function ReviewContainer({
       }
       const weightOverride = lineWeightStates[line.id];
       const quantityCases = Number(prefill.quantityCases) || 0;
-      const weightLbs = weightOverride
-        ? resolveLineWeightSubmit({
-            quantityCases,
-            state: weightOverride,
-          }).weightLbs
-        : prefill.weightLbs;
+      const resolved = weightOverride
+        ? resolveLineWeightSubmit({ quantityCases, state: weightOverride })
+        : {
+            weightLbs: prefill.weightLbs,
+            caseWeightsLbs: null,
+            unitType: prefill.unitType,
+          };
       const liveCostPerLb = supplierInvoiceLineCostPerLb({
         quantityCases,
-        weightLbs,
-        unitType: prefill.unitType,
+        weightLbs: resolved.weightLbs,
+        unitType: resolved.unitType,
         unitPrice: prefill.unitPrice,
       });
       if (!liveCostPerLb) {
@@ -607,6 +701,7 @@ export function ReviewContainer({
       .map((line, index) => {
         const lineId = index + 1;
         if (skippedLines.has(lineId)) return null;
+        if (deletedLineIds.has(lineId)) return null;
         const override = lineProductOverrides[lineId];
         const productId = override?.productId ?? line.productId;
         if (!productId) return null; // unmatched + not skipped → block submit below
@@ -621,14 +716,24 @@ export function ReviewContainer({
               quantityCases,
               state: weightOverride,
             })
-          : { weightLbs: line.weightLbs, caseWeightsLbs: null };
+          : {
+              weightLbs: line.weightLbs,
+              caseWeightsLbs: null,
+              unitType: line.unitType,
+            };
+        const lotExpiryOverride = lineLotExpiryStates[lineId];
+        const lotExpiryPayload = lotExpiryOverride
+          ? resolveLineLotExpirySubmit(lotExpiryOverride)
+          : { lotNumberOverride: null, expirationDateOverride: null };
         return {
           productId,
           quantityCases,
           weightLbs: weightPayload.weightLbs,
           caseWeightsLbs: weightPayload.caseWeightsLbs,
-          unitType: line.unitType,
+          unitType: weightPayload.unitType,
           unitPrice: line.unitPrice,
+          lotNumberOverride: lotExpiryPayload.lotNumberOverride,
+          expirationDateOverride: lotExpiryPayload.expirationDateOverride,
         };
       })
       .filter((line): line is NonNullable<typeof line> => line !== null);
@@ -636,6 +741,7 @@ export function ReviewContainer({
     const stillUnresolved = prefillLines.some((line, index) => {
       const lineId = index + 1;
       if (skippedLines.has(lineId)) return false;
+      if (deletedLineIds.has(lineId)) return false;
       const override = lineProductOverrides[lineId];
       return !override && !line.productId;
     });
@@ -660,15 +766,12 @@ export function ReviewContainer({
     setSubmitting(true);
     onSubmitStart?.();
     try {
-      // Fees detected by the parser become non-inventory charges on the
-      // bill, with `chargeType` set to the AI's taxonomy when available so
-      // reports can break out fuel vs. freight vs. processing. The legacy
-      // path was dropping these on the floor.
-      const charges = pipelineResult.detectedFees.map(fee => ({
-        description: fee.description,
-        amount: String(fee.amount),
-        chargeType: fee.category ?? "other",
-      }));
+      // Charges come from the editable panel state — seeded from the
+      // parser's `detectedFees` but reclassifiable/extensible by the
+      // reviewer. Empty rows (no description AND no amount) are filtered
+      // out so an "Add charge" click that the user never filled in
+      // doesn't get persisted.
+      const chargesPayload = resolveChargesSubmit(charges);
 
       const result = await createSupplierInvoiceAction({
         supplierId: supplierIdOverride,
@@ -677,9 +780,9 @@ export function ReviewContainer({
         invoiceDate: pipelineResult.prefillResult.values.invoiceDate,
         receiveDate: pipelineResult.prefillResult.values.receiveDate,
         paymentMethod: paymentMethodOverride,
-        notes: pipelineResult.prefillResult.values.notes || null,
+        notes: notesOverride.trim() ? notesOverride : null,
         lines,
-        charges,
+        charges: chargesPayload,
         complete: true, // Complete & receive — creates lots + inventory atomically.
       });
 
@@ -771,12 +874,16 @@ export function ReviewContainer({
     submitting,
     supplierIdOverride,
     paymentMethodOverride,
+    notesOverride,
     hasPostedDuplicate,
     duplicateAcknowledged,
     pipelineResult,
     skippedLines,
+    deletedLineIds,
     lineProductOverrides,
     lineWeightStates,
+    lineLotExpiryStates,
+    charges,
     blockingCostChanges,
     rememberAliases,
     baseData.lines,
@@ -832,13 +939,24 @@ export function ReviewContainer({
         openWeightEditorLines={openWeightEditorLines}
         onToggleLineWeightEditor={handleToggleLineWeightEditor}
         onLineWeightChange={handleLineWeightChange}
+        lineLotExpiryStates={lineLotExpiryStates}
+        openLotExpiryEditorLines={openLotExpiryEditorLines}
+        onToggleLineLotExpiryEditor={handleToggleLineLotExpiryEditor}
+        onLineLotExpiryChange={handleLineLotExpiryChange}
         lineCostDiffs={lineCostDiffByLineId}
         onToggleCostAck={handleToggleCostAck}
+        charges={charges}
+        onChargesChange={setCharges}
+        deletedLineIds={deletedLineIds}
+        onDeleteLine={handleDeleteLine}
+        onRestoreAllLines={handleRestoreAllLines}
         onSelectSupplierCandidate={handleSupplierCandidate}
         onCreateSupplier={() => setCreateSupplierOpen(true)}
         onSelectSupplier={handleSelectSupplier}
         paymentMethod={paymentMethodOverride}
         onPaymentMethodChange={setPaymentMethodOverride}
+        notes={notesOverride}
+        onNotesChange={setNotesOverride}
         suppliers={suppliers}
         products={products}
         supplierSelectedId={supplierIdOverride}
