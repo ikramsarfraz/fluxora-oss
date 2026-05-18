@@ -402,6 +402,74 @@ export async function claimBulkImportFile(
 }
 
 /**
+ * Force-claim a row that someone else currently holds. Used by the
+ * banner's "Take over" affordance when the original reviewer is stuck
+ * (their tab is open but they're afk and the TTL hasn't elapsed yet).
+ * Returns the previous holder's id + display name so the action layer
+ * can audit-log who got kicked off — accountability matters here, the
+ * other reviewer is going to lose any in-progress edits.
+ */
+export async function forceClaimBulkImportFile(id: string): Promise<{
+  row: BulkImportFileRow;
+  previousHolderUserId: string | null;
+  previousHolderDisplayName: string | null;
+}> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  // Read the previous holder first so the audit log can name them.
+  // Best-effort — we proceed with the takeover even if the join misses.
+  const [before] = await db
+    .select({
+      claimedByUserId: bulkImportFiles.claimedByUserId,
+      status: bulkImportFiles.status,
+      displayName: portalUsers.fullName,
+      email: portalUsers.email,
+    })
+    .from(bulkImportFiles)
+    .leftJoin(portalUsers, eq(portalUsers.id, bulkImportFiles.claimedByUserId))
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+      ),
+    )
+    .limit(1);
+
+  if (!before) throw new Error("Bulk import file not found.");
+  if (before.status === "reviewed") {
+    throw new Error(
+      "This invoice was already posted — there's nothing to take over.",
+    );
+  }
+
+  const [updated] = await db
+    .update(bulkImportFiles)
+    .set({ claimedByUserId: currentUser.id, claimedAt: new Date() })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+        isNull(bulkImportFiles.deletedAt),
+        ne(bulkImportFiles.status, "reviewed"),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    throw new Error("Take-over failed — the row may have been deleted.");
+  }
+  return {
+    row: rowToDomain(updated),
+    previousHolderUserId: before.claimedByUserId ?? null,
+    previousHolderDisplayName:
+      before.displayName ?? before.email ?? null,
+  };
+}
+
+/**
  * Refresh the claim heartbeat. The shell calls this every ~60s while the
  * reviewer has the row open. Idempotent — only updates when the caller
  * still holds the claim, so a stolen claim (after stale-out) stays stolen.

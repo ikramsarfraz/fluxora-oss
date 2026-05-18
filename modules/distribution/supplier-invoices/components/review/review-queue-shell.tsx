@@ -387,6 +387,7 @@ export function ReviewQueueShell({
         <BulkImportLockBanner
           state={lock.state}
           onRetry={lock.retry}
+          onForceClaim={lock.forceClaim}
           onSkip={hasNext ? goNext : undefined}
         />
       ) : null}
@@ -457,10 +458,12 @@ export function ReviewQueueShell({
 function BulkImportLockBanner({
   state,
   onRetry,
+  onForceClaim,
   onSkip,
 }: {
   state: BulkImportLockState;
   onRetry: () => void;
+  onForceClaim: () => Promise<void>;
   onSkip?: () => void;
 }) {
   const isForeign = state.kind === "foreign";
@@ -502,9 +505,37 @@ function BulkImportLockBanner({
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {isForeign ? (
-          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-            Retry
-          </Button>
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              Retry
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Cheap confirm — the takeover destroys the other
+                // reviewer's unsaved overrides on their next heartbeat,
+                // so a one-tap-and-done is too easy to fire accidentally.
+                const holderLabel =
+                  state.kind === "foreign"
+                    ? state.claimedByDisplayName
+                    : "the current reviewer";
+                if (
+                  !window.confirm(
+                    `${holderLabel} is editing this invoice. Taking over will discard any edits they haven't posted yet. Continue?`,
+                  )
+                ) {
+                  return;
+                }
+                void onForceClaim().then(() => {
+                  toast.success("You're now the active reviewer.");
+                });
+              }}
+            >
+              Take over
+            </Button>
+          </>
         ) : null}
         {(isForeign || isUnavailable) && onSkip ? (
           <Button type="button" size="sm" onClick={onSkip}>

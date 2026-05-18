@@ -30,6 +30,7 @@ export type AuditAction =
   | "bulk_import.rescan"
   | "bulk_import.row_deleted"
   | "bulk_import.row_restored"
+  | "bulk_import.claim_taken_over"
   | "supplier.switch_primary"
   | "supplier.delete"
   | "product.delete"

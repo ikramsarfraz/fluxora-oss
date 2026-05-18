@@ -62,6 +62,7 @@ import {
 } from "../services/bulk-import";
 import {
   claimBulkImportFile,
+  forceClaimBulkImportFile,
   getBulkImportFile,
   getBulkImportPdfSignedUrl,
   getSupplierPerformanceStats,
@@ -584,6 +585,35 @@ export async function heartbeatBulkImportFileAction(
 /** Release the claim — called on shell unmount + post-submit. */
 export async function releaseBulkImportFileAction(id: string): Promise<void> {
   return await releaseBulkImportFile(id);
+}
+
+/**
+ * Force the claim away from whoever holds it. Used by the foreign-claim
+ * banner's "Take over" affordance when the original reviewer is stuck
+ * (tab afk but heartbeat still firing — TTL hasn't elapsed). Audit-log
+ * the takeover so we can reconstruct who kicked whom off; the other
+ * reviewer loses their unsaved overrides for this row on their next
+ * heartbeat (returns `false` → state flips to `foreign`).
+ */
+export async function forceClaimBulkImportFileAction(
+  id: string,
+): Promise<{ takenOverFrom: string | null }> {
+  const user = await getCurrentPortalUser();
+  const result = await forceClaimBulkImportFile(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bulk_import.claim_taken_over",
+    resourceType: "bulk_import_file",
+    resourceId: id,
+    metadata: {
+      previousHolderUserId: result.previousHolderUserId,
+      previousHolderDisplayName: result.previousHolderDisplayName,
+      filename: result.row.filename,
+    },
+  });
+  return { takenOverFrom: result.previousHolderDisplayName };
 }
 
 /**

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import {
   claimBulkImportFileAction,
+  forceClaimBulkImportFileAction,
   heartbeatBulkImportFileAction,
   releaseBulkImportFileAction,
 } from "@/modules/distribution/supplier-invoices/actions";
@@ -89,6 +90,14 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
    * safe to await even when we don't hold the claim.
    */
   releaseNow: () => Promise<void>;
+  /**
+   * Force-claim the row away from whoever currently holds it. The
+   * banner's "Take over" path uses this when the TTL hasn't elapsed
+   * but the original reviewer is clearly stuck. Audit-logged server-
+   * side; on resolve the hook re-fires the claim so state flips to
+   * `owned` and the form reactivates.
+   */
+  forceClaim: () => Promise<void>;
 } {
   // Last terminal outcome we received, tagged with the key it belongs to.
   // We only honor it when its key still matches `bulkImportKey` — otherwise
@@ -214,6 +223,22 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
         await releaseBulkImportFileAction(bulkImportKey);
       } catch {
         // The TTL covers us if this throws; not worth surfacing.
+      }
+    },
+    forceClaim: async () => {
+      if (!bulkImportKey) return;
+      // Optimistic: clear the cached outcome so the banner immediately
+      // flips to "claiming". The action either succeeds (next claim
+      // refresh shows owned) or throws and we re-render with whatever
+      // the next claim attempt returns.
+      setLastOutcome(null);
+      try {
+        await forceClaimBulkImportFileAction(bulkImportKey);
+      } finally {
+        // Re-run the effect by bumping the retry token — this re-claims
+        // (idempotent when we already hold it) and re-installs the
+        // heartbeat interval so the takeover persists.
+        setRetryToken(t => t + 1);
       }
     },
   };
