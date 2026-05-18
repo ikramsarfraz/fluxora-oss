@@ -478,7 +478,7 @@ function BulkImportLockBanner({
       : "This invoice is no longer available";
 
   const body = isForeign
-    ? "We've kept the form read-only so you don't post duplicate work. The claim auto-releases after 3 minutes of inactivity — Retry then to take over."
+    ? "We've kept the form read-only so you don't post duplicate work. The claim auto-releases after about 90 seconds of inactivity — Retry then to take over."
     : state.kind === "unavailable" && state.reason === "already_reviewed"
       ? "Someone else completed the review while this tab was open. Move on to the next file or back to the bulk import."
       : "The file was deleted from the bulk import queue. Skip to the next file in the queue.";

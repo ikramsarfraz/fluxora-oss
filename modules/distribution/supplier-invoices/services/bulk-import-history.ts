@@ -61,11 +61,12 @@ export type BulkImportFileRow = {
 
 /**
  * How long a claim stays valid without a heartbeat. The shell heartbeats
- * every ~60s, so 3 minutes gives generous slack — enough to absorb a slow
- * network round-trip without booting a still-active reviewer, but short
- * enough that a closed tab doesn't permanently strand the row.
+ * every ~60s, so 90 seconds gives enough slack to absorb one missed
+ * cycle (transient network blip or a long server roundtrip) without
+ * booting a still-active reviewer — but short enough that a closed tab
+ * doesn't strand the row long enough to be a real productivity hit.
  */
-export const BULK_IMPORT_CLAIM_TTL_MS = 3 * 60 * 1000;
+export const BULK_IMPORT_CLAIM_TTL_MS = 90 * 1000;
 
 // ---------------------------------------------------------------------------
 // Writes — called by bulk-import.ts after parsing each file. The action layer
