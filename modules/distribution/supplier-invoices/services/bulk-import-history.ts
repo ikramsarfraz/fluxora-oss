@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { bulkImportFiles, supplierInvoices } from "@/db/schema";
@@ -316,6 +316,12 @@ export type BulkImportClaimResult =
  * Refuses when another live reviewer holds it. The caller is responsible
  * for surfacing that to the user (read-only banner with the holder's
  * display name) — both happy and refused paths return enough info.
+ *
+ * Happy path is one DB roundtrip — we try the conditional UPDATE first
+ * and only fall back to a SELECT when it refuses, to disambiguate
+ * not_found / already_reviewed / claimed_by_other. Local dev against a
+ * remote Neon, two sequential queries adds noticeable banner-flash; the
+ * single-roundtrip path keeps the perceived delay short.
  */
 export async function claimBulkImportFile(
   id: string,
@@ -324,14 +330,6 @@ export async function claimBulkImportFile(
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
   requirePermission(currentUser.role, "edit_supplier_invoice");
-
-  // First read — gives us the "claimed_by_other" failure case + the
-  // pre-claim row to compare against the post-update version.
-  const existing = await getBulkImportFile(id);
-  if (!existing) return { ok: false, reason: "not_found" };
-  if (existing.status === "reviewed") {
-    return { ok: false, reason: "already_reviewed" };
-  }
 
   const now = new Date();
   const staleBefore = new Date(now.getTime() - BULK_IMPORT_CLAIM_TTL_MS);
@@ -344,6 +342,10 @@ export async function claimBulkImportFile(
         eq(bulkImportFiles.id, id),
         eq(bulkImportFiles.tenantId, tenant.id),
         isNull(bulkImportFiles.deletedAt),
+        // Refuse to claim a row that's already been posted — the
+        // disambiguating SELECT below will surface this to the caller
+        // as `already_reviewed`.
+        ne(bulkImportFiles.status, "reviewed"),
         or(
           isNull(bulkImportFiles.claimedByUserId),
           eq(bulkImportFiles.claimedByUserId, currentUser.id),
@@ -353,15 +355,23 @@ export async function claimBulkImportFile(
     )
     .returning();
 
-  if (!updated) {
-    return {
-      ok: false,
-      reason: "claimed_by_other",
-      claimedByUserId: existing.claimedByUserId ?? "",
-      claimedAt: existing.claimedAt,
-    };
+  if (updated) {
+    return { ok: true, row: rowToDomain(updated) };
   }
-  return { ok: true, row: rowToDomain(updated) };
+
+  // UPDATE matched zero rows — figure out which terminal state we're
+  // in so the UI can render the right banner.
+  const existing = await getBulkImportFile(id);
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (existing.status === "reviewed") {
+    return { ok: false, reason: "already_reviewed" };
+  }
+  return {
+    ok: false,
+    reason: "claimed_by_other",
+    claimedByUserId: existing.claimedByUserId ?? "",
+    claimedAt: existing.claimedAt,
+  };
 }
 
 /**
