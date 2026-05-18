@@ -25,6 +25,8 @@ export type BulkImportLockState =
   | {
       kind: "foreign";
       claimedByUserId: string;
+      /** Display name of the reviewer holding the claim, for the banner copy. */
+      claimedByDisplayName: string;
       claimedAt: Date | null;
     }
   | { kind: "unavailable"; reason: "not_found" | "already_reviewed" };
@@ -104,11 +106,15 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
                 if (cancelled) return;
                 if (!stillOurs) {
                   // Stale-out: another reviewer claimed it during a gap.
+                  // We don't know who took it (the heartbeat endpoint
+                  // just returns a boolean) — Retry will re-claim and
+                  // surface the new holder's name from the refusal path.
                   setLastOutcome({
                     key: bulkImportKey,
                     result: {
                       kind: "foreign",
                       claimedByUserId: "",
+                      claimedByDisplayName: "Another reviewer",
                       claimedAt: null,
                     },
                   });
@@ -128,6 +134,7 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
             result: {
               kind: "foreign",
               claimedByUserId: result.claimedByUserId,
+              claimedByDisplayName: result.claimedByDisplayName,
               claimedAt: result.claimedAt,
             },
           });

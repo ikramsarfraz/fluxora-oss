@@ -3,7 +3,7 @@ import "server-only";
 import { and, count, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { bulkImportFiles, supplierInvoices } from "@/db/schema";
+import { bulkImportFiles, portalUsers, supplierInvoices } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildBulkImportObjectKey,
@@ -301,6 +301,8 @@ export type BulkImportClaimResult =
       ok: false;
       reason: "claimed_by_other";
       claimedByUserId: string;
+      /** Holder's display name (full name, falling back to email). */
+      claimedByDisplayName: string;
       claimedAt: Date | null;
     }
   | { ok: false; reason: "not_found" }
@@ -360,17 +362,41 @@ export async function claimBulkImportFile(
   }
 
   // UPDATE matched zero rows — figure out which terminal state we're
-  // in so the UI can render the right banner.
-  const existing = await getBulkImportFile(id);
-  if (!existing) return { ok: false, reason: "not_found" };
-  if (existing.status === "reviewed") {
+  // in so the UI can render the right banner. Joins portal_users so
+  // the foreign-refusal case can surface "Sarah is editing this"
+  // instead of an opaque uuid.
+  const [refusalRow] = await db
+    .select({
+      id: bulkImportFiles.id,
+      status: bulkImportFiles.status,
+      claimedByUserId: bulkImportFiles.claimedByUserId,
+      claimedAt: bulkImportFiles.claimedAt,
+      claimedByFullName: portalUsers.fullName,
+      claimedByEmail: portalUsers.email,
+    })
+    .from(bulkImportFiles)
+    .leftJoin(portalUsers, eq(portalUsers.id, bulkImportFiles.claimedByUserId))
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+      ),
+    )
+    .limit(1);
+
+  if (!refusalRow) return { ok: false, reason: "not_found" };
+  if (refusalRow.status === "reviewed") {
     return { ok: false, reason: "already_reviewed" };
   }
   return {
     ok: false,
     reason: "claimed_by_other",
-    claimedByUserId: existing.claimedByUserId ?? "",
-    claimedAt: existing.claimedAt,
+    claimedByUserId: refusalRow.claimedByUserId ?? "",
+    claimedByDisplayName:
+      refusalRow.claimedByFullName ??
+      refusalRow.claimedByEmail ??
+      "Another reviewer",
+    claimedAt: refusalRow.claimedAt,
   };
 }
 

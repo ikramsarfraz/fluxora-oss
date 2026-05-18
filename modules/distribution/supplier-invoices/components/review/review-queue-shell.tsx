@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { captureClientEvent } from "@/lib/posthog-client";
+import { cn } from "@/lib/utils";
 
 import { getBulkImportPdfSignedUrlAction } from "../../actions";
 import {
@@ -393,7 +394,19 @@ export function ReviewQueueShell({
       {/* ReviewContainer is mounted with the current key so per-invoice state
           (form overrides, skipped lines, supplier choice) resets cleanly each
           time the user switches invoices. On a successful post we hook the
-          completion animation via `completeCurrent`. */}
+          completion animation via `completeCurrent`.
+          When the lock is foreign/unavailable, the wrapper dims the form +
+          blocks pointer events so accidental edits can't sneak through —
+          the parsed data stays readable for compare-and-decide, but the
+          UI clearly signals "you're not driving here." */}
+      <div
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col",
+          (isLockForeign || isLockUnavailable) &&
+            "pointer-events-none opacity-50",
+        )}
+        aria-hidden={isLockForeign || isLockUnavailable}
+      >
       <ReviewContainer
         // Include updatedAt in the key so a successful Re-scan (which
         // bumps the row's updatedAt) forces a clean remount with the
@@ -429,6 +442,7 @@ export function ReviewQueueShell({
           completeCurrent({ supplierInvoiceId })
         }
       />
+      </div>
     </main>
   );
 }
@@ -452,8 +466,13 @@ function BulkImportLockBanner({
   const isForeign = state.kind === "foreign";
   const isUnavailable = state.kind === "unavailable";
 
+  // Heading personalizes the foreign case with the holder's display name —
+  // "Sarah is editing this invoice" is much more actionable than "Another
+  // reviewer". The hook supplies a sensible fallback ("Another reviewer")
+  // when we couldn't resolve a name (e.g. stale-out path where the
+  // heartbeat endpoint didn't return holder info).
   const heading = isForeign
-    ? "Another reviewer is editing this invoice"
+    ? `${state.claimedByDisplayName} is editing this invoice`
     : state.kind === "unavailable" && state.reason === "already_reviewed"
       ? "This invoice was already posted"
       : "This invoice is no longer available";
