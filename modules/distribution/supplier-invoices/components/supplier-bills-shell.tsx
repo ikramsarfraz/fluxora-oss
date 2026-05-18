@@ -2,17 +2,15 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Layers, Plus } from "lucide-react";
+import { Inbox, Layers, Plus, Receipt } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import type { AiExtractionErrorCode } from "../services/ai-provider";
 
 import SupplierInvoicesPage from "./supplier-invoices-page";
-import { BulkImportSheet } from "./bulk-import-sheet";
 import { BulkLandingLive } from "./bulk-landing/bulk-landing-live";
 import { ParseErrorDialog } from "./bulk-landing/parse-error-dialog";
 import type { BatchFile } from "./bulk-landing/types";
@@ -20,9 +18,9 @@ import { useBulkBatchView } from "./bulk-landing/use-bulk-batch-view";
 
 type Tab = "inbox" | "bills";
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "inbox", label: "Inbox" },
-  { id: "bills", label: "Bills" },
+const TABS: Array<{ id: Tab; label: string; icon: LucideIcon }> = [
+  { id: "bills", label: "Bills", icon: Receipt },
+  { id: "inbox", label: "Imports", icon: Inbox },
 ];
 
 /**
@@ -33,14 +31,16 @@ const TABS: Array<{ id: Tab; label: string }> = [
  * Why this exists: previously there were three separate routes
  * (`/supplier-invoices`, `/supplier-invoices/bulk`, `/supplier-invoices/bulk-import`)
  * showing related data with different shells. Consolidating into one tabbed
- * page lets a reviewer triage the inbox (pending parses) and the bills
- * archive without context-switching across pages, and turns "Bulk import"
- * into a side-sheet affordance instead of a route navigation.
+ * page lets a reviewer triage imports (pending scans) and the bills archive
+ * without context-switching across pages. The "Bulk import" header button
+ * now triggers an inline dropzone embedded in the Imports tab — clicking it
+ * from any tab switches to Imports and opens the native file picker, so
+ * there's no separate sheet/drawer to dismiss.
  *
  * The shell stays thin: each tab's data + interactions live in their own
- * components (`BulkLandingLive`, `SupplierInvoicesPage`). The shell just
- * picks one, owns the sheet/dialog open state, and syncs the tab to the
- * URL so deep-links + browser back/forward work.
+ * components (`BulkLandingLive`, `SupplierInvoicesPage`). The shell owns
+ * the parse-error dialog state plus a one-shot `pickFilesIntent` flag that
+ * routes the header button click through the dropzone in BulkLandingLive.
  */
 export function SupplierBillsShell() {
   const router = useRouter();
@@ -69,11 +69,20 @@ export function SupplierBillsShell() {
     [router, searchParams],
   );
 
-  // ── Sheet + dialog state ──
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // ── Dialog + dropzone-trigger state ──
+  // `pickFilesIntent` is a one-shot flag the Imports tab consumes on mount
+  // to open the inline dropzone's file picker. We use a flag (rather than a
+  // ref) so it survives the tab-switch render: when the user clicks "Bulk
+  // import" from the Bills tab, the InlineDropzone hasn't mounted yet —
+  // setting the flag here AND switching tabs lets the dropzone fire its
+  // picker the moment it renders, then call back to clear the flag.
   const [parseErrorFile, setParseErrorFile] = useState<BatchFile | null>(null);
+  const [pickFilesIntent, setPickFilesIntent] = useState(false);
 
-  const openSheet = useCallback(() => setSheetOpen(true), []);
+  const triggerBulkImport = useCallback(() => {
+    if (activeTab !== "inbox") setTab("inbox");
+    setPickFilesIntent(true);
+  }, [activeTab, setTab]);
 
   const handleParseErrorClick = useCallback((file: BatchFile) => {
     setParseErrorFile(file);
@@ -81,8 +90,8 @@ export function SupplierBillsShell() {
 
   const handleParseErrorReupload = useCallback(() => {
     setParseErrorFile(null);
-    setSheetOpen(true);
-  }, []);
+    triggerBulkImport();
+  }, [triggerBulkImport]);
 
   // ── Tab counts ──
   // Inbox count is the live pending-bulk-import row count. We don't fetch
@@ -112,7 +121,7 @@ export function SupplierBillsShell() {
               Supplier bills
             </h1>
             <p className="mt-1 mb-0 text-[13px] text-stone-muted">
-              Inbox holds parsed PDFs awaiting your review. Bills are the
+              Imports holds parsed PDFs awaiting your review. Bills are the
               posted invoices that have already moved inventory.
             </p>
           </div>
@@ -121,7 +130,7 @@ export function SupplierBillsShell() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={openSheet}
+              onClick={triggerBulkImport}
               className="gap-1.5 text-[13px]"
             >
               <Layers className="size-3.5" />
@@ -139,48 +148,47 @@ export function SupplierBillsShell() {
           </div>
         </div>
 
-        {/* Tab strip — visually matches the savedViews pattern in
-            ListingPage so users coming from other listings see the same
-            interaction model. URL-synced via `?tab=` so deep-links work. */}
-        <ToggleGroup
-          type="single"
-          value={activeTab}
-          onValueChange={value => {
-            if (value === "inbox" || value === "bills") setTab(value);
-          }}
-          className="mb-5 w-full justify-start rounded-none border-b border-stone-line"
-          variant="default"
-          size="sm"
-        >
+        {/* Tab strip — matches the segmented pill toggle used by the
+            Inventory hub (InventoryViewToggle): line2-tinted track, active
+            tab as a white surface pill with subtle shadow. URL-synced via
+            `?tab=` so deep-links work. router.replace keeps tab switches
+            out of the browser back stack. */}
+        <div className="mb-5 inline-flex gap-1 self-start rounded-lg bg-stone-line2 p-1">
           {TABS.map(t => {
             const isActive = activeTab === t.id;
             const count = t.id === "inbox" ? inboxCount : null;
+            const Icon = t.icon;
             return (
-              <ToggleGroupItem
+              <button
                 key={t.id}
-                value={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-stone-muted hover:bg-transparent hover:text-stone-ink data-[state=on]:border-stone-ink data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-stone-ink",
+                  "inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-medium transition-colors",
+                  isActive
+                    ? "bg-stone-surface text-stone-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-stone-ink2 hover:text-stone-ink",
                 )}
               >
-                {t.label}
-                {count !== null ? (
-                  <Badge
-                    variant="secondary"
+                <Icon className="size-[14px] shrink-0" strokeWidth={1.8} />
+                <span>{t.label}</span>
+                {count != null ? (
+                  <span
                     className={cn(
-                      "ml-2 h-5 rounded-full px-1.5 text-[11px]",
+                      "rounded-full px-1.5 py-px text-[11px] font-medium",
                       isActive
-                        ? "bg-stone-ink text-stone-surface"
-                        : "bg-stone-line text-stone-muted",
+                        ? "bg-primary/10 text-primary"
+                        : "bg-stone-line2 text-stone-muted",
                     )}
                   >
                     {count}
-                  </Badge>
+                  </span>
                 ) : null}
-              </ToggleGroupItem>
+              </button>
             );
           })}
-        </ToggleGroup>
+        </div>
 
         {/* Tab body. Each tab renders its own embedded variant — the inner
             components skip their own title/header so the shell's chrome
@@ -188,15 +196,14 @@ export function SupplierBillsShell() {
         {activeTab === "inbox" ? (
           <BulkLandingLive
             embedded
-            onImportMore={openSheet}
+            pickFilesIntent={pickFilesIntent}
+            onPickFilesIntentHandled={() => setPickFilesIntent(false)}
             onParseErrorClick={handleParseErrorClick}
           />
         ) : (
           <SupplierInvoicesPage embedded />
         )}
       </div>
-
-      <BulkImportSheet open={sheetOpen} onOpenChange={setSheetOpen} />
 
       <ParseErrorDialog
         file={parseErrorFile}

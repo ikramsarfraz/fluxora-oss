@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -12,6 +11,7 @@ import {
 import type { BulkImportFileRow } from "../../services/bulk-import-history";
 
 import { BulkLandingScreen } from "./bulk-landing-screen";
+import { InlineDropzone, type InlineDropzoneHandle } from "./inline-dropzone";
 import type { BatchFile } from "./types";
 import { useBulkBatchView } from "./use-bulk-batch-view";
 
@@ -24,34 +24,53 @@ const QUEUE_KEY = ["bulk-import-files", "pending"] as const;
  * the background. A toast surfaces the action with an Undo affordance
  * that restores the row by clearing `deleted_at`.
  *
- * Each Review action opens in a new tab — the handoff README calls this
- * out as required ("Each file opens in a new tab so you don't lose this
- * list"). The link points at the existing
- * `/supplier-invoices/new?bulk-import-key=…` route, which now branches
- * to the new Review screen (see phase 5a).
+ * Review actions navigate in the same tab — the review surface is itself
+ * a multi-file queue carousel, so opening each file in a separate tab
+ * would duplicate the queue's own prev/next navigation. The link points
+ * at `/supplier-invoices/new?bulk-import-key=…`, which branches to the
+ * Review screen.
+ *
+ * Uploads happen inline via `InlineDropzone`: the dropzone IS the empty
+ * state, and a slim "drop more PDFs" strip sits above the list once it
+ * has rows. The shell's "Bulk import" header button triggers the same
+ * file picker via `pickFilesIntent`.
  */
 export function BulkLandingLive({
   embedded = false,
-  onImportMore,
+  pickFilesIntent = false,
+  onPickFilesIntentHandled,
   onParseErrorClick,
 }: {
   /** Render as a panel inside SupplierBillsShell rather than a standalone page. */
   embedded?: boolean;
   /**
-   * Click handler for "Import more" + the empty-state CTA. When the shell
-   * embeds this it passes a callback that opens the BulkImportSheet instead
-   * of routing to the (now-redirected) /supplier-invoices/bulk-import page.
+   * When true, the embedded InlineDropzone fires its file picker on the next
+   * render — used by the shell's "Bulk import" header button so the button
+   * works from any tab (the shell first switches to Imports, then flips this
+   * flag). The host should reset the flag via `onPickFilesIntentHandled`
+   * once we've consumed it so the picker doesn't re-trigger on every render.
    */
-  onImportMore?: () => void;
+  pickFilesIntent?: boolean;
+  onPickFilesIntentHandled?: () => void;
   /** Per-row click handler for parse-error rows — opens the ParseErrorDialog. */
   onParseErrorClick?: (file: BatchFile) => void;
 } = {}) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { view } = useBulkBatchView();
   // Re-parse is parked (see `reparseAll` below) — the pending flag is held
   // at false until the server-side re-parse lands.
   const [reparseAllPending] = useState(false);
+
+  // Ref the InlineDropzone exposes so we can trigger the native file picker
+  // from outside (e.g. the page header's "Bulk import" button). We fire it
+  // whenever `pickFilesIntent` flips to true, then notify the shell so it
+  // can reset the flag — keeps the picker from re-opening on every render.
+  const dropzoneRef = useRef<InlineDropzoneHandle>(null);
+  useEffect(() => {
+    if (!pickFilesIntent) return;
+    dropzoneRef.current?.openFilePicker();
+    onPickFilesIntentHandled?.();
+  }, [pickFilesIntent, onPickFilesIntentHandled]);
 
   // ── Optimistic dismiss ──
   // onMutate: cache the previous list snapshot, write the trimmed list
@@ -165,78 +184,43 @@ export function BulkLandingLive({
   // Tracked as a follow-up alongside server-side re-parse.
   const reparseAll = useCallback(async () => {
     toast.info(
-      "Re-parse is being rebuilt for the new server-side flow. Delete the row and re-upload the PDF for now.",
+      "Re-scan is being rebuilt for the new server-side flow. Delete the row and re-upload the PDF for now.",
     );
   }, []);
 
   // Pre-mount flash: server query hasn't completed yet. Keep silent.
   if (view === null) return null;
 
-  // Empty batch — there's nothing to review. Push the user to the uploader.
-  // In embedded mode the shell renders the empty state itself (so the tab
-  // strip + page header stay visible); here we only render an empty state
-  // on the legacy standalone route.
+  // Empty batch — the InlineDropzone IS the empty state. Drag + drop or
+  // click anywhere on the card to start a scan; rows land in this same
+  // surface as they finish, so there's no separate "upload screen" mode.
   if (view.files.length === 0) {
     if (embedded) {
-      return (
-        <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[12px] border border-dashed border-stone-line bg-stone-surface p-12 text-center">
-          <div className="max-w-[420px]">
-            <h2 className="mb-2 text-[16px] font-semibold tracking-[-0.005em] text-stone-ink">
-              Inbox is empty
-            </h2>
-            <p className="mb-5 text-[13px] text-stone-muted">
-              Upload supplier-invoice PDFs to start a batch. Parsed files will
-              appear here once they&apos;re ready to review.
-            </p>
-            <button
-              type="button"
-              onClick={onImportMore ?? (() => router.push("/supplier-invoices/bulk-import"))}
-              className="rounded-md border border-stone-ink bg-stone-ink px-4 py-2 text-[13px] text-stone-surface hover:bg-stone-ink/90"
-            >
-              Bulk import PDFs
-            </button>
-          </div>
-        </div>
-      );
+      return <InlineDropzone ref={dropzoneRef} variant="empty" />;
     }
     return (
-      <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
-        <div className="max-w-[420px]">
-          <h1 className="mb-2 text-[22px] font-semibold tracking-[-0.015em] text-stone-ink">
-            No batch in progress
-          </h1>
-          <p className="mb-6 text-[14px] text-stone-muted">
-            Upload supplier-invoice PDFs to start a batch. Parsed files will appear
-            here once they&apos;re ready to review.
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push("/supplier-invoices/bulk-import")}
-            className="rounded-md border border-stone-ink bg-stone-ink px-4 py-2 text-[13px] text-stone-surface hover:bg-stone-ink/90"
-          >
-            Upload invoices
-          </button>
-        </div>
+      <main className="-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg p-12">
+        <InlineDropzone ref={dropzoneRef} variant="empty" />
       </main>
     );
   }
 
   return (
-    <BulkLandingScreen
-      view={view}
-      openInNewTab
-      hideHeader={embedded}
-      openFileHref={(file: BatchFile) =>
-        `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(file.id)}`
-      }
-      onImportMore={
-        onImportMore ?? (() => router.push("/supplier-invoices/bulk-import"))
-      }
-      onDismissFile={dismissFile}
-      onClearReviewed={clearReviewed}
-      onReparseAll={reparseAll}
-      reparseAllPending={reparseAllPending}
-      onParseErrorClick={onParseErrorClick}
-    />
+    <>
+      <InlineDropzone ref={dropzoneRef} variant="compact" />
+      <BulkLandingScreen
+        view={view}
+        hideHeader={embedded}
+        openFileHref={(file: BatchFile) =>
+          `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(file.id)}`
+        }
+        onImportMore={() => dropzoneRef.current?.openFilePicker()}
+        onDismissFile={dismissFile}
+        onClearReviewed={clearReviewed}
+        onReparseAll={reparseAll}
+        reparseAllPending={reparseAllPending}
+        onParseErrorClick={onParseErrorClick}
+      />
+    </>
   );
 }
