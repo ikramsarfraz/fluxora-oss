@@ -210,10 +210,21 @@ export const completeSupplierInvoiceInputSchema = z.object({
 });
 
 /**
+ * Sentinel inside the thrown error's `message` so the client (which
+ * receives errors from Next.js server actions as plain `Error` —
+ * custom classes and named fields get stripped at the RSC boundary)
+ * can re-extract the structured issues for field-level rendering.
+ * The first line is a short human-readable summary suitable for
+ * toasts; the sentinel + JSON live on a separate line afterwards.
+ */
+export const SUPPLIER_INVOICE_VALIDATION_ISSUES_MARKER =
+  "__SUPPLIER_INVOICE_VALIDATION_ISSUES__:";
+
+/**
  * Thrown when an action's input fails Zod validation. The Zod issues
- * are attached as `issues` so callers can map them to field-level
- * errors in the UI; the `message` itself is a short, user-readable
- * summary suitable for toasts.
+ * are attached as `issues` so callers in the same process can use them
+ * directly; clients in the browser parse them out of `message` via
+ * `parseSupplierInvoiceValidationIssues()` in the client-safe utils.
  */
 export class SupplierInvoiceValidationError extends Error {
   readonly issues: z.ZodIssue[];
@@ -221,10 +232,13 @@ export class SupplierInvoiceValidationError extends Error {
   constructor(issues: z.ZodIssue[]) {
     const first = issues[0];
     const path = first?.path.join(".") || "request";
+    const summary = `${path}: ${first?.message ?? "Invalid input."}${
+      issues.length > 1 ? ` (+${issues.length - 1} more)` : ""
+    }`;
     super(
-      `${path}: ${first?.message ?? "Invalid input."}${
-        issues.length > 1 ? ` (+${issues.length - 1} more)` : ""
-      }`,
+      `${summary}\n${SUPPLIER_INVOICE_VALIDATION_ISSUES_MARKER}${JSON.stringify(
+        issues.map(i => ({ path: i.path, message: i.message })),
+      )}`,
     );
     this.name = "SupplierInvoiceValidationError";
     this.issues = issues;

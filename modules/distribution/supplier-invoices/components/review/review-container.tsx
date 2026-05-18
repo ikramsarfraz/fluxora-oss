@@ -10,6 +10,16 @@ import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-supplie
 
 import { useSupplierCostDiffContext } from "../../hooks/use-supplier-invoices";
 import { supplierInvoiceLineCostPerLb } from "../../utils/cost";
+import {
+  clearReviewOverrides,
+  readReviewOverrides,
+  writeReviewOverrides,
+} from "../../utils/review-overrides-storage";
+import {
+  groupSupplierInvoiceErrorsByLocation,
+  parseSupplierInvoiceValidationIssues,
+  summarizeSupplierInvoiceValidationIssues,
+} from "../../utils/parse-validation-error";
 
 import { CreateProductDialog } from "../create-product-dialog";
 import { CreateSupplierDialog } from "../create-supplier-dialog";
@@ -165,13 +175,25 @@ export function ReviewContainer({
     [fileName, fileSize, pages, pipelineResult, products, suppliers],
   );
 
+  // Restore in-progress overrides from sessionStorage (keyed on
+  // bulkImportKey) so an accidental refresh / tab switch / browser
+  // crash doesn't wipe a 20-minute reviewing session. Read once,
+  // lazily, so we don't churn on every render. The snapshot is
+  // cleared on successful submit (see end of `submit()`).
+  const [persistedSnapshot] = useState(() =>
+    readReviewOverrides(bulkImportKey ?? null),
+  );
+
   // Editable overlay on top of `baseData`. We keep the original mapped data
   // intact so a future "Reset" affordance can come for free, and so the
   // active-line state isn't disturbed when the user picks a candidate.
   const [supplierIdOverride, setSupplierIdOverride] = useState<string | null>(
-    pipelineResult.prefillResult.values.supplierId || null,
+    persistedSnapshot?.supplierIdOverride ??
+      (pipelineResult.prefillResult.values.supplierId || null),
   );
-  const [supplierNameOverride, setSupplierNameOverride] = useState<string | null>(null);
+  const [supplierNameOverride, setSupplierNameOverride] = useState<string | null>(
+    persistedSnapshot?.supplierNameOverride ?? null,
+  );
   // Payment-method override — initialised from the parser's prefill so a
   // confidently-detected method (e.g. "Paid by ACH" in the PDF text) is the
   // default. The user can change it to any other method or back to "Not
@@ -179,39 +201,52 @@ export function ReviewContainer({
   const [paymentMethodOverride, setPaymentMethodOverride] = useState<
     PaymentMethod | null
   >(
-    (pipelineResult.prefillResult.values.paymentMethod as PaymentMethod | null) ?? null,
+    persistedSnapshot?.paymentMethodOverride ??
+      (pipelineResult.prefillResult.values.paymentMethod as
+        | PaymentMethod
+        | null) ??
+      null,
   );
   // Bill-level notes — seeded from the parser's prefill so any PO #,
   // delivery instructions, or other free-text the parser pulled from
   // the PDF show up as the default. Empty string maps to null at submit.
   const [notesOverride, setNotesOverride] = useState<string>(
-    pipelineResult.prefillResult.values.notes ?? "",
+    persistedSnapshot?.notesOverride ??
+      pipelineResult.prefillResult.values.notes ??
+      "",
   );
   // Header text overrides. Previously HeaderCard's invoice number /
   // dates were `defaultValue` inputs whose edits never reached submit —
   // controlled state at the container fixes that data-loss bug. All
   // three seed from the parser's prefill.
   const [invoiceNumberOverride, setInvoiceNumberOverride] = useState<string>(
-    pipelineResult.prefillResult.values.supplierInvoiceNumber ?? "",
+    persistedSnapshot?.invoiceNumberOverride ??
+      pipelineResult.prefillResult.values.supplierInvoiceNumber ??
+      "",
   );
   const [invoiceDateOverride, setInvoiceDateOverride] = useState<string>(
-    pipelineResult.prefillResult.values.invoiceDate ?? "",
+    persistedSnapshot?.invoiceDateOverride ??
+      pipelineResult.prefillResult.values.invoiceDate ??
+      "",
   );
   const [receiveDateOverride, setReceiveDateOverride] = useState<string>(
-    pipelineResult.prefillResult.values.receiveDate ?? "",
+    persistedSnapshot?.receiveDateOverride ??
+      pipelineResult.prefillResult.values.receiveDate ??
+      "",
   );
   const [lineProductOverrides, setLineProductOverrides] = useState<
     Record<number, { productId: string; productName: string; sku: string | null }>
-  >({});
+  >(persistedSnapshot?.lineProductOverrides ?? {});
   // Per-line weight override state. Missing key = use the parser's
   // resolved weight as-is. Setting a key persists the user's choice of
   // mode + per-case entries, even after the tray is collapsed.
   const [lineWeightStates, setLineWeightStates] = useState<
     Record<number, LineWeightState | undefined>
-  >({});
+  >(persistedSnapshot?.lineWeightStates ?? {});
   // Which lines have the weight editor visually expanded. Kept separate
   // from `lineWeightStates` so toggling open doesn't accidentally mark
-  // a line as overridden (and vice versa).
+  // a line as overridden (and vice versa). NOT persisted — tray-open
+  // is transient UI state.
   const [openWeightEditorLines, setOpenWeightEditorLines] = useState<
     Set<number>
   >(new Set());
@@ -222,13 +257,13 @@ export function ReviewContainer({
   // invalidate the ack.
   const [acknowledgedCostKeys, setAcknowledgedCostKeys] = useState<
     Set<LineCostAckKey>
-  >(new Set());
+  >(() => new Set(persistedSnapshot?.acknowledgedCostKeys ?? []));
   // Per-line lot # / expiration-date overrides. Same two-slice pattern
   // as weights — having the tray open doesn't imply an override, and
   // the override survives the tray being closed.
   const [lineLotExpiryStates, setLineLotExpiryStates] = useState<
     Record<number, LineLotExpiryState | undefined>
-  >({});
+  >(persistedSnapshot?.lineLotExpiryStates ?? {});
   const [openLotExpiryEditorLines, setOpenLotExpiryEditorLines] = useState<
     Set<number>
   >(new Set());
@@ -237,8 +272,17 @@ export function ReviewContainer({
   // both the rendered list (via ReviewScreen) and the submit payload —
   // the user can restore all in one click from the footer notice.
   const [deletedLineIds, setDeletedLineIds] = useState<Set<number>>(
-    new Set(),
+    () => new Set(persistedSnapshot?.deletedLineIds ?? []),
   );
+
+  // Per-line submit errors surfaced from the server's Zod validation.
+  // Keyed on `line.id` (mapped from the server's submit-array index
+  // via `linePayloadIndexToLineId` built during the last submit pass).
+  // Cleared on every new submit attempt so the user sees only the
+  // errors from their most recent try.
+  const [lineSubmitErrors, setLineSubmitErrors] = useState<
+    Record<number, string[]>
+  >({});
 
   // Per-line case-count overrides. Parser quantity is often correct but
   // occasionally mis-reads (e.g. "1B" parsed as 18, or two adjacent
@@ -247,13 +291,14 @@ export function ReviewContainer({
   // of cleanup work. Missing key = use the parser's value as-is.
   const [lineCasesOverrides, setLineCasesOverrides] = useState<
     Record<number, number>
-  >({});
+  >(persistedSnapshot?.lineCasesOverrides ?? {});
 
   // Editable charges, seeded from the parser's detected fees. Replaces
   // the previous silent-stamp behavior where every detected fee went to
   // the server as `chargeType: "other"`. The user can reclassify, edit
   // amounts, mark in-cost, or add/remove charges before submit.
   const [charges, setCharges] = useState<ChargeDraft[]>(() =>
+    persistedSnapshot?.charges ??
     pipelineResult.detectedFees.map(fee => ({
       ...emptyChargeDraft(),
       description: fee.description,
@@ -262,7 +307,9 @@ export function ReviewContainer({
       amount: String(fee.amount ?? ""),
     })),
   );
-  const [skippedLines, setSkippedLines] = useState<Set<number>>(new Set());
+  const [skippedLines, setSkippedLines] = useState<Set<number>>(
+    () => new Set(persistedSnapshot?.skippedLines ?? []),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
   /** Which line is opening the Create Product dialog, or null when closed. */
@@ -342,7 +389,7 @@ export function ReviewContainer({
     .sort()
     .join("|");
   const [acknowledgedMatchKey, setAcknowledgedMatchKey] = useState<string | null>(
-    null,
+    persistedSnapshot?.acknowledgedMatchKey ?? null,
   );
   const duplicateAcknowledged =
     hasPostedDuplicate && acknowledgedMatchKey === duplicateMatchKey;
@@ -731,11 +778,22 @@ export function ReviewContainer({
       return;
     }
 
+    // Clear any per-line errors from a previous submit attempt — the
+    // user is taking another swing, so banners from last time would be
+    // stale by the time the server rejects (or accepts).
+    setLineSubmitErrors({});
+
     // Build SupplierInvoiceLineInput[] from the prefill data, swapping in
     // per-line overrides where the user picked a candidate. Skipped lines and
     // detected fees are excluded — fees are folded into the bill via charges
     // later (out of scope for this PR).
+    //
+    // `linePayloadIndexToLineId` tracks the lineId → array-index mapping
+    // so that if the server's Zod validation reports an issue with
+    // path `["lines", N, "field"]` we can resolve N back to the user-
+    // facing line.id in the catch handler below.
     const prefillLines = pipelineResult.prefillResult.values.lines;
+    const linePayloadIndexToLineId: Record<number, number> = {};
     const lines = prefillLines
       .map((line, index) => {
         const lineId = index + 1;
@@ -769,17 +827,26 @@ export function ReviewContainer({
           ? resolveLineLotExpirySubmit(lotExpiryOverride)
           : { lotNumberOverride: null, expirationDateOverride: null };
         return {
-          productId,
-          quantityCases,
-          weightLbs: weightPayload.weightLbs,
-          caseWeightsLbs: weightPayload.caseWeightsLbs,
-          unitType: weightPayload.unitType,
-          unitPrice: line.unitPrice,
-          lotNumberOverride: lotExpiryPayload.lotNumberOverride,
-          expirationDateOverride: lotExpiryPayload.expirationDateOverride,
+          _lineId: lineId,
+          payload: {
+            productId,
+            quantityCases,
+            weightLbs: weightPayload.weightLbs,
+            caseWeightsLbs: weightPayload.caseWeightsLbs,
+            unitType: weightPayload.unitType,
+            unitPrice: line.unitPrice,
+            lotNumberOverride: lotExpiryPayload.lotNumberOverride,
+            expirationDateOverride: lotExpiryPayload.expirationDateOverride,
+          },
         };
       })
-      .filter((line): line is NonNullable<typeof line> => line !== null);
+      .filter(
+        (entry): entry is NonNullable<typeof entry> => entry !== null,
+      )
+      .map((entry, index) => {
+        linePayloadIndexToLineId[index] = entry._lineId;
+        return entry.payload;
+      });
 
     const stillUnresolved = prefillLines.some((line, index) => {
       const lineId = index + 1;
@@ -896,6 +963,10 @@ export function ReviewContainer({
           console.warn("[review] mark-reviewed failed", err);
         });
       }
+      // Clear the persisted overrides snapshot — the bill is on the
+      // wire and the user moving on shouldn't see this row's edits
+      // re-restored if they later open a new bulk-import key.
+      if (bulkImportKey) clearReviewOverrides(bulkImportKey);
       toast.success("Bill posted to inventory.");
       if (onSubmitSuccess) {
         // Queue-mode: hand control back to the shell so it can animate the
@@ -907,9 +978,23 @@ export function ReviewContainer({
         router.push(`/supplier-invoices/${result.id}`);
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to save the bill.";
-      toast.error(message);
+      // Try to extract the server-side Zod issues out of the error
+      // message marker — when present, paint per-line banners and
+      // toast a one-line summary instead of dumping the raw multi-line
+      // error string at the user.
+      const issues = parseSupplierInvoiceValidationIssues(err);
+      if (issues && issues.length > 0) {
+        const grouped = groupSupplierInvoiceErrorsByLocation(
+          issues,
+          linePayloadIndexToLineId,
+        );
+        setLineSubmitErrors(grouped.perLine);
+        toast.error(summarizeSupplierInvoiceValidationIssues(issues));
+      } else {
+        const message =
+          err instanceof Error ? err.message : "Failed to save the bill.";
+        toast.error(message);
+      }
     } finally {
       setSubmitting(false);
       onSubmitEnd?.();
@@ -956,6 +1041,89 @@ export function ReviewContainer({
     return () => window.removeEventListener(QUEUE_COMPLETE_EVENT, handler);
   }, [onSubmitSuccess, submit]);
 
+  // Esc closes whichever editor tray / dialog the user has open. We
+  // own this here (not in the queue shell) because the tray-open sets
+  // live in container state. Order of priority: dialogs first, then
+  // open trays — closing one thing per press feels more predictable
+  // than wiping all surfaces at once.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (createSupplierOpen) {
+        setCreateSupplierOpen(false);
+        return;
+      }
+      if (createProductForLine != null) {
+        setCreateProductForLine(null);
+        return;
+      }
+      if (openWeightEditorLines.size > 0) {
+        setOpenWeightEditorLines(new Set());
+        return;
+      }
+      if (openLotExpiryEditorLines.size > 0) {
+        setOpenLotExpiryEditorLines(new Set());
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    createSupplierOpen,
+    createProductForLine,
+    openWeightEditorLines,
+    openLotExpiryEditorLines,
+  ]);
+
+  // Auto-persist every override to sessionStorage so an accidental
+  // refresh / tab close / crash doesn't wipe a long review session.
+  // Cleared on successful submit (inside `submit()`). Single effect
+  // that fires on any state change — sessionStorage writes are cheap
+  // and the snapshot is bounded by line count, not unbounded growth.
+  useEffect(() => {
+    if (!bulkImportKey) return;
+    writeReviewOverrides(bulkImportKey, {
+      supplierIdOverride,
+      supplierNameOverride,
+      paymentMethodOverride,
+      notesOverride,
+      invoiceNumberOverride,
+      invoiceDateOverride,
+      receiveDateOverride,
+      lineProductOverrides,
+      skippedLines: Array.from(skippedLines),
+      deletedLineIds: Array.from(deletedLineIds),
+      lineCasesOverrides,
+      lineWeightStates: Object.fromEntries(
+        Object.entries(lineWeightStates).filter(([, v]) => v != null),
+      ) as Record<number, LineWeightState>,
+      lineLotExpiryStates: Object.fromEntries(
+        Object.entries(lineLotExpiryStates).filter(([, v]) => v != null),
+      ) as Record<number, LineLotExpiryState>,
+      charges,
+      acknowledgedCostKeys: Array.from(acknowledgedCostKeys),
+      acknowledgedMatchKey,
+    });
+  }, [
+    bulkImportKey,
+    supplierIdOverride,
+    supplierNameOverride,
+    paymentMethodOverride,
+    notesOverride,
+    invoiceNumberOverride,
+    invoiceDateOverride,
+    receiveDateOverride,
+    lineProductOverrides,
+    skippedLines,
+    deletedLineIds,
+    lineCasesOverrides,
+    lineWeightStates,
+    lineLotExpiryStates,
+    charges,
+    acknowledgedCostKeys,
+    acknowledgedMatchKey,
+  ]);
+
   return (
     <>
       <ReviewScreen
@@ -999,6 +1167,7 @@ export function ReviewContainer({
         onDeleteLine={handleDeleteLine}
         onRestoreAllLines={handleRestoreAllLines}
         onLineCasesChange={handleLineCasesChange}
+        lineSubmitErrors={lineSubmitErrors}
         onSelectSupplierCandidate={handleSupplierCandidate}
         onCreateSupplier={() => setCreateSupplierOpen(true)}
         onSelectSupplier={handleSelectSupplier}

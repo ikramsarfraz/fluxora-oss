@@ -147,22 +147,42 @@ export function ReviewQueueShell({
   // calling onSubmitStart/onSubmitEnd.
   const [submitting, setSubmitting] = useState(false);
 
-  // Keyboard ← / → switch invoices. Ignored while focus is in a text input
-  // so date pickers and product search stay navigable with arrows.
+  // Keyboard shortcuts:
+  //  - ← / →                : previous / next invoice in the queue
+  //  - Cmd+Enter / Ctrl+Enter: Complete & next (same as header button)
+  // ←/→ and Cmd+Enter are gated when focus is in an input so date
+  // pickers + product autocomplete keep working as expected.
+  // Esc (closing open editor trays) is handled inside ReviewContainer
+  // because the tray-open state lives there.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        if (target.isContentEditable) return;
-      }
-      if (e.key === "ArrowLeft") {
+      const inEditableField =
+        !!target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+
+      if (!inEditableField && e.key === "ArrowLeft") {
         e.preventDefault();
         goPrev();
-      } else if (e.key === "ArrowRight") {
+        return;
+      }
+      if (!inEditableField && e.key === "ArrowRight") {
         e.preventDefault();
         goNext();
+        return;
+      }
+      // Cmd+Enter / Ctrl+Enter fires the same custom event the page
+      // header's Complete button uses, so all the existing submit
+      // gating (resolve N to continue, duplicate ack, cost-diff ack)
+      // applies. Allowed even while focus is in an input — common
+      // pattern for "save current form" muscle memory.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("review-queue:complete"));
+        return;
       }
     };
     window.addEventListener("keydown", handler);

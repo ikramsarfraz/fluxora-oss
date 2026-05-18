@@ -70,6 +70,7 @@ export function LineRow({
   onToggleCostAck,
   onDelete,
   onCasesChange,
+  submitErrors,
 }: {
   line: ParsedLine;
   isActive: boolean;
@@ -122,6 +123,12 @@ export function LineRow({
    * columns).
    */
   onCasesChange?: (cases: number) => void;
+  /**
+   * Per-line validation errors from the most recent rejected submit
+   * (parsed out of the server action's Zod issues by the container).
+   * Renders a red banner above the row when non-null/non-empty.
+   */
+  submitErrors?: string[] | null;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -155,6 +162,25 @@ export function LineRow({
         borderLeft: `3px solid ${isActive ? palette.bar : "transparent"}`,
       }}
     >
+      {submitErrors && submitErrors.length > 0 ? (
+        <div
+          onClick={e => e.stopPropagation()}
+          className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-[12px]"
+          style={{
+            background: "oklch(95% 0.05 25 / 0.55)",
+            borderColor: "oklch(48% 0.18 25 / 0.3)",
+            color: "oklch(48% 0.18 25)",
+          }}
+        >
+          <AlertCircle className="size-[12px] shrink-0" strokeWidth={1.8} />
+          <span className="font-semibold">
+            {submitErrors.length === 1
+              ? "1 issue:"
+              : `${submitErrors.length} issues:`}
+          </span>
+          <span>{submitErrors.join(" · ")}</span>
+        </div>
+      ) : null}
       {!isFee && costDiff && onToggleCostAck ? (
         <LineCostDiffBanner
           variant={costDiff.variant}

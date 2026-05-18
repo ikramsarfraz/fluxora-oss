@@ -64,6 +64,7 @@ export function ReviewScreen({
   onDeleteLine,
   onRestoreAllLines,
   onLineCasesChange,
+  lineSubmitErrors,
   onSelectSupplierCandidate,
   onCreateSupplier,
   onSelectSupplier,
@@ -167,6 +168,12 @@ export function ReviewScreen({
    * override (not exposed in v1 — user can just type the original back).
    */
   onLineCasesChange?: (lineId: number, cases: number) => void;
+  /**
+   * Per-line validation errors surfaced from the server's most recent
+   * rejected submit. Keyed on `line.id`. Renders an inline red banner
+   * above the offending row(s); cleared when the user retries submit.
+   */
+  lineSubmitErrors?: Record<number, string[]>;
   /** Called when the user clicks a supplier candidate chip. */
   onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
   /** Called when the user clicks "+ Create supplier" on the header card. */
@@ -613,6 +620,7 @@ export function ReviewScreen({
                           ? cases => onLineCasesChange(line.id, cases)
                           : undefined
                       }
+                      submitErrors={lineSubmitErrors?.[line.id] ?? null}
                     />
                   </div>
                 ))
