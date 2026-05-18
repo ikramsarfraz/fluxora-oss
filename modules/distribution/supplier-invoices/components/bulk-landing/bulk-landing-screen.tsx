@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Filter, Upload } from "lucide-react";
+import { ArrowRight, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -262,17 +262,8 @@ function FilesCardHeader({
           })}
         </div>
       </div>
-      <div className="flex items-center gap-2 text-[12px] text-stone-muted">
-        <span>
-          Sorted by: <span className="font-medium text-stone-ink">Lowest confidence first</span>
-        </span>
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded-md border border-stone-line bg-stone-surface text-stone-muted hover:text-stone-ink"
-          aria-label="Sort options"
-        >
-          <Filter className="size-[14px]" strokeWidth={1.6} />
-        </button>
+      <div className="text-[12px] text-stone-muted">
+        Sorted by: <span className="font-medium text-stone-ink">Lowest confidence first</span>
       </div>
     </div>
   );
@@ -307,10 +298,7 @@ function CardFooter({
   reparseAllPending?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between bg-stone-bg px-[22px] py-3.5">
-      <div className="text-[12px] text-stone-muted">
-        Each file opens in a new tab so you don&apos;t lose this list.
-      </div>
+    <div className="flex items-center justify-end bg-stone-bg px-[22px] py-3.5">
       <div className="flex items-center gap-2.5">
         <span className="text-[12px] text-stone-muted">Bulk:</span>
         <Button
