@@ -4,11 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { captureClientEvent } from "@/lib/posthog-client";
+
 import {
+  rescanBulkImportFileAction,
   restoreBulkImportFileAction,
   softDeleteBulkImportFileAction,
 } from "../../actions";
 import type { BulkImportFileRow } from "../../services/bulk-import-history";
+import { clearReviewOverrides } from "../../utils/review-overrides-storage";
 
 import { BulkLandingScreen } from "./bulk-landing-screen";
 import { InlineDropzone, type InlineDropzoneHandle } from "./inline-dropzone";
@@ -57,9 +61,11 @@ export function BulkLandingLive({
 } = {}) {
   const queryClient = useQueryClient();
   const { view } = useBulkBatchView();
-  // Re-parse is parked (see `reparseAll` below) — the pending flag is held
-  // at false until the server-side re-parse lands.
-  const [reparseAllPending] = useState(false);
+  // Bulk Re-scan-all runs every pending file's PDF back through the
+  // AI pipeline in parallel. We mirror `reparseAllPending` to the
+  // batch's in-flight state so the footer button can disable + show
+  // "Re-scanning…" until every per-row mutation has settled.
+  const [reparseAllPending, setReparseAllPending] = useState(false);
 
   // Ref the InlineDropzone exposes so we can trigger the native file picker
   // from outside (e.g. the page header's "Bulk import" button). We fire it
@@ -179,14 +185,42 @@ export function BulkLandingLive({
     })();
   }, [view, queryClient]);
 
-  // Re-parse is parked while the server-side history is the source of truth:
-  // the PDF lives in R2 and the legacy local re-parse loop no longer applies.
-  // Tracked as a follow-up alongside server-side re-parse.
+  // Re-scan every pending file in this batch in parallel. We don't
+  // gate on "confirm" — the footer button label already shows the
+  // count, so clicking it IS the confirmation. Per-row overrides
+  // (sessionStorage snapshots) get cleared for each id since the new
+  // pipelineResult may shift line ids.
   const reparseAll = useCallback(async () => {
-    toast.info(
-      "Re-scan is being rebuilt for the new server-side flow. Delete the row and re-upload the PDF for now.",
-    );
-  }, []);
+    const pending =
+      view?.files.filter(f => f.status !== "reviewed") ?? [];
+    if (pending.length === 0) return;
+    setReparseAllPending(true);
+    captureClientEvent("review.rescan_triggered", {
+      scope: "bulk",
+      file_count: pending.length,
+    });
+    try {
+      const settled = await Promise.allSettled(
+        pending.map(file => {
+          clearReviewOverrides(file.id);
+          return rescanBulkImportFileAction(file.id);
+        }),
+      );
+      const failed = settled.filter(s => s.status === "rejected").length;
+      void queryClient.invalidateQueries({ queryKey: QUEUE_KEY });
+      if (failed === 0) {
+        toast.success(
+          `Re-scanned ${pending.length} file${pending.length === 1 ? "" : "s"}.`,
+        );
+      } else {
+        toast.error(
+          `Re-scanned ${pending.length - failed} of ${pending.length}; ${failed} failed.`,
+        );
+      }
+    } finally {
+      setReparseAllPending(false);
+    }
+  }, [view, queryClient]);
 
   // Pre-mount flash: server query hasn't completed yet. Keep silent.
   if (view === null) return null;

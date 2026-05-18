@@ -292,6 +292,72 @@ export async function downloadBulkImportPdf(id: string): Promise<{
   return { bytes, filename: row.filename, mimeType: row.mimeType };
 }
 
+/**
+ * Re-run the AI parse pipeline against the PDF bytes already stored
+ * in R2 for this row, and write the fresh `pipelineResult` /
+ * `parseErrorCodes` / `status` back to `bulk_import_files`. Used by
+ * the review queue's "Re-scan" affordance when the original parse
+ * mis-mapped lines or failed mid-stream — saves the reviewer from
+ * having to delete + re-upload (which loses the queue position).
+ *
+ * Returns the updated row so callers can update local caches. Throws
+ * if the row is missing, soft-deleted, or already reviewed (re-scan
+ * after post would create misleading state — the bill is already on
+ * inventory and re-parsing the source doesn't change that).
+ *
+ * Imports `parseSupplierInvoicePdf` lazily because pdf-prefill pulls
+ * in pdfjs-dist + the AI provider — heavy modules we only want loaded
+ * on the parse paths, not every page that imports this service.
+ */
+export async function rescanBulkImportFile(id: string): Promise<BulkImportFileRow> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  const row = await getBulkImportFile(id);
+  if (!row) throw new Error("Bulk import file not found.");
+  if (row.status === "reviewed") {
+    throw new Error(
+      "This file has already been posted. Re-scanning would create misleading state — delete the posted bill first if you need to redo it.",
+    );
+  }
+
+  const bytes = await r2DownloadFile(row.objectKey);
+  const { parseSupplierInvoicePdf } = await import("./pdf-prefill");
+  const pipeline = await parseSupplierInvoicePdf({
+    originalFilename: row.filename,
+    mimeType: row.mimeType,
+    bytes,
+  });
+
+  const nextStatus: BulkImportFileStatus =
+    pipeline.parseStatus === "parse_error" ? "parse_error" : "parsed";
+
+  const [updated] = await db
+    .update(bulkImportFiles)
+    .set({
+      pipelineResult: pipeline,
+      status: nextStatus,
+      parseErrorCodes:
+        nextStatus === "parse_error" ? pipeline.parseErrorCodes : null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+        isNull(bulkImportFiles.deletedAt),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    throw new Error("Rescan succeeded but the row vanished — was it deleted?");
+  }
+  return rowToDomain(updated);
+}
+
 export async function getBulkImportPdfSignedUrl(
   id: string,
 ): Promise<string | null> {

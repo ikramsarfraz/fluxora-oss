@@ -62,6 +62,7 @@ import {
   getSupplierPerformanceStats,
   listPendingBulkImportFiles,
   markBulkImportFileReviewed,
+  rescanBulkImportFile,
   restoreBulkImportFile,
   softDeleteBulkImportFile,
   type BulkImportFileRow,
@@ -417,6 +418,48 @@ export async function getBulkImportPdfSignedUrlAction(
   id: string,
 ): Promise<string | null> {
   return await getBulkImportPdfSignedUrl(id);
+}
+
+/**
+ * Re-run the AI parse pipeline against the PDF bytes stored in R2 for
+ * this row, replacing the row's `pipelineResult` / `parseErrorCodes` /
+ * `status`. Used by the review queue's per-row "Re-scan" button and
+ * the bulk-landing footer's "Re-scan all". The reviewer's in-progress
+ * overrides are NOT preserved across a re-scan — the new pipeline can
+ * return different line ids, so per-line overrides aren't reliably
+ * portable. The client clears sessionStorage for this key before
+ * invalidating its query so the next render seeds fresh from the new
+ * prefill.
+ */
+export async function rescanBulkImportFileAction(
+  id: string,
+): Promise<BulkImportFileRow> {
+  const user = await getCurrentPortalUser();
+  // Rate-limit per user / tenant the same way the initial parse does
+  // so an enthusiastic "Re-scan all" can't drain the AI budget. Skip
+  // for platform admins — they're typically reproducing parse bugs.
+  if (!(await isPlatformAdminAuthUser(user.authUserId))) {
+    const [userResult, tenantResult] = await Promise.all([
+      applyRateLimit(rateLimiters.pdfParse, `user:${user.id}`),
+      applyRateLimit(rateLimiters.pdfParseTenant, `tenant:${user.tenantId}`),
+    ]);
+    if (!userResult.success) throw new RateLimitError(userResult.retryAfterSeconds);
+    if (!tenantResult.success) throw new RateLimitError(tenantResult.retryAfterSeconds);
+  }
+  const startedAt = Date.now();
+  const row = await rescanBulkImportFile(id);
+  await captureServerEvent({
+    userId: user.id,
+    tenantId: user.tenantId,
+    event: "bulk_import.rescanned",
+    properties: {
+      bulk_import_file_id: id,
+      duration_ms: Date.now() - startedAt,
+      parse_status: row.status,
+      parse_error_codes: row.parseErrorCodes ?? [],
+    },
+  });
+  return row;
 }
 
 /**

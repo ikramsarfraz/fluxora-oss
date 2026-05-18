@@ -19,6 +19,7 @@ import {
   recordSupplierInvoicePaymentAction,
   recordManualProductSelectionAction,
   removeSupplierInvoiceAttachmentAction,
+  rescanBulkImportFileAction,
   reverseSupplierInvoiceAction,
   saveConfirmedAiAliasAction,
   updateSupplierInvoiceAction,
@@ -74,6 +75,30 @@ export function useBulkImportSupplierInvoices() {
       captureClientEvent("bulk_import.completed", {
         parsed: result.summary.parsed,
         errored: result.summary.errored,
+      });
+    },
+  });
+}
+
+/**
+ * Re-run the AI parse pipeline against a previously-uploaded bulk-
+ * import row's PDF, replacing its pipeline result. Used from the
+ * review queue's per-row Re-scan button and the bulk-landing footer
+ * "Re-scan all" affordance. Invalidates both the pending-files query
+ * (so the queue carousel picks up the new pipelineResult / status)
+ * and the cost-diff query (re-resolved cost may shift if line ids
+ * change).
+ */
+export function useRescanBulkImportFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: rescanBulkImportFileAction,
+    onSuccess: (_row, id) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-import-files", "pending"] as const,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-import-pdf-blob", id],
       });
     },
   });

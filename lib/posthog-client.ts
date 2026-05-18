@@ -14,7 +14,15 @@ export type ClientAnalyticsEvent =
   | "first_bill.viewed"
   | "first_bill.names_edited"
   | "bank.connect_started"
-  | "feature.opened";
+  | "feature.opened"
+  // Review-queue observability — fires from ReviewContainer so we can
+  // measure how often the AI is wrong (cost-diff ack rate), how often
+  // submits fail server-side validation, and whether the manual re-
+  // scan affordance is actually useful in practice.
+  | "review.cost_diff_acknowledged"
+  | "review.cost_diff_unacknowledged"
+  | "review.submit_validation_failed"
+  | "review.rescan_triggered";
 
 /**
  * Capture a client-side event. No-op when PostHog isn't initialized

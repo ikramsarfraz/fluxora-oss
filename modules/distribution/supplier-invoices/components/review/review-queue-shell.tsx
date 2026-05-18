@@ -4,13 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { captureClientEvent } from "@/lib/posthog-client";
 
 import { getBulkImportPdfSignedUrlAction } from "../../actions";
+import { useRescanBulkImportFile } from "../../hooks/use-supplier-invoices";
 import type { AiExtractionErrorCode } from "../../services/ai-provider";
 import type { PipelineResult } from "../../services/parsing-pipeline";
+import { clearReviewOverrides } from "../../utils/review-overrides-storage";
 
 import { FloatingNav } from "./floating-nav";
 import { QueueDone } from "./queue-done";
@@ -266,11 +270,43 @@ export function ReviewQueueShell({
     );
   }
 
-  // Re-parse on the server side is out of scope for this PR — the legacy
-  // parsing screen route reads from localStorage / IndexedDB, which the
-  // server-side flow no longer populates. We hide the affordance until the
-  // server-side re-parse lands (tracked as a follow-up).
-  const onReparse: (() => void) | undefined = undefined;
+  // Re-scan — re-run the AI parser against the same R2-stored PDF and
+  // replace this row's pipelineResult / status / errors. The reviewer's
+  // in-progress overrides for THIS file are wiped because the new
+  // parse can return different line ids / counts and porting overrides
+  // across would silently misapply them. Confirmed via window.confirm
+  // for now; a proper dialog can come later.
+  const rescanMutation = useRescanBulkImportFile();
+  const onReparse: (() => void) | undefined = currentKey
+    ? () => {
+        if (rescanMutation.isPending) return;
+        if (
+          !window.confirm(
+            "Re-scan this invoice? Any edits you've made to product matches, weights, charges, or other fields on this row will be cleared.",
+          )
+        ) {
+          return;
+        }
+        clearReviewOverrides(currentKey);
+        captureClientEvent("review.rescan_triggered", {
+          scope: "single",
+        });
+        rescanMutation.mutate(currentKey, {
+          onSuccess: row => {
+            toast.success(
+              row.status === "parse_error"
+                ? "Re-scan finished, but the AI couldn't read this invoice. Try re-uploading the PDF."
+                : "Re-scan complete — review the updated fields.",
+            );
+          },
+          onError: err => {
+            toast.error(
+              err instanceof Error ? err.message : "Re-scan failed.",
+            );
+          },
+        });
+      }
+    : undefined;
 
   // Render as a function so the ReviewScreen can hand back its
   // form-state-aware `counts` (which include in-form product/supplier
@@ -317,7 +353,16 @@ export function ReviewQueueShell({
           time the user switches invoices. On a successful post we hook the
           completion animation via `completeCurrent`. */}
       <ReviewContainer
-        key={currentKey}
+        // Include updatedAt in the key so a successful Re-scan (which
+        // bumps the row's updatedAt) forces a clean remount with the
+        // new pipelineResult; otherwise overrides keyed on the old
+        // line ids would be silently applied to potentially-different
+        // new lines.
+        key={`${currentKey}:${
+          currentStored.updatedAt instanceof Date
+            ? currentStored.updatedAt.toISOString()
+            : String(currentStored.updatedAt)
+        }`}
         fileName={fileName}
         pipelineResult={pipelineResult}
         pdfFile={pdfFile}
