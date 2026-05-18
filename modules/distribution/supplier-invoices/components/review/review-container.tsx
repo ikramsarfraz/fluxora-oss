@@ -27,7 +27,12 @@ import {
   type SupplierLookup,
 } from "./map-pipeline-to-review-data";
 import { ReviewScreen } from "./review-screen";
-import type { ParsedLine, ProductCandidate, SupplierCandidate } from "./types";
+import type {
+  ParsedLine,
+  ProductCandidate,
+  ReviewCounts,
+  SupplierCandidate,
+} from "./types";
 
 /** Custom event the queue shell dispatches when the user clicks the
  *  page-header "Complete & next" button. ReviewContainer listens for this
@@ -82,7 +87,9 @@ export function ReviewContainer({
   bulkImportKey?: string | null;
   /** Queue-mode pass-through slots — see ReviewScreen for details. */
   topSlot?: ReactNode;
-  headerSlot?: ReactNode;
+  headerSlot?:
+    | ReactNode
+    | ((args: { counts: ReviewCounts; submitDisabled: boolean }) => ReactNode);
   pdfPaneAccessory?: ReactNode;
   paneEnterDirection?: "next" | "prev";
   /**

@@ -27,6 +27,7 @@ export function ReviewQueueHeader({
   onSkip,
   onComplete,
   submitting,
+  submitDisabled,
 }: {
   fileName: string;
   counts: ReviewCounts;
@@ -43,10 +44,20 @@ export function ReviewQueueHeader({
   onSkip?: () => void;
   onComplete?: () => void;
   submitting?: boolean;
+  /**
+   * Outer host gate — true when the form has its own reason to block submit
+   * (currently: unacknowledged posted-duplicate banner). Distinct from
+   * `submitting` so the label can stay meaningful while a submit is queued
+   * but pre-conditions aren't satisfied yet.
+   */
+  submitDisabled?: boolean;
 }) {
-  const blocked = counts.needsReview > 0 || submitting === true;
+  const needsReviewBlock = counts.needsReview > 0;
+  const blocked =
+    needsReviewBlock || submitting === true || submitDisabled === true;
   const completeLabel = (() => {
-    if (blocked) return `Resolve ${counts.needsReview} to continue`;
+    if (needsReviewBlock) return `Resolve ${counts.needsReview} to continue`;
+    if (submitDisabled === true) return "Confirm duplicate to continue";
     if (hasNext) return "Complete & next";
     if (isLastRemaining) return "Complete";
     return "Complete & finish";

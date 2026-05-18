@@ -102,8 +102,16 @@ export function ReviewScreen({
    * host renders its own page header (e.g. the queue-aware one with
    * Skip / Complete & next buttons). When omitted, the legacy single-PDF
    * header strip renders.
+   *
+   * Pass a function to receive the screen's live, form-state-aware `counts`
+   * plus the host-supplied `submitDisabled` flag — needed by the queue
+   * header so its Complete button reflects both line resolution state and
+   * outer guards like the duplicate-bill ack checkbox. Pass a node directly
+   * when neither piece of state is needed.
    */
-  headerSlot?: ReactNode;
+  headerSlot?:
+    | ReactNode
+    | ((args: { counts: ReviewCounts; submitDisabled: boolean }) => ReactNode);
   /**
    * Optional absolutely-positioned overlay rendered inside the same horizontal
    * flex as the PDF pane — used by the queue carousel to drop floating
@@ -225,8 +233,13 @@ export function ReviewScreen({
 
   // Default header keeps the legacy single-PDF behavior intact. The queue
   // shell passes its own headerSlot to swap in the Skip / Complete & next
-  // segmented control.
-  const header = headerSlot ?? (
+  // segmented control — as a function so it can read the live `counts` and
+  // the outer `submitDisabled` flag (duplicate-bill ack, in-flight submit).
+  const resolvedHeaderSlot =
+    typeof headerSlot === "function"
+      ? headerSlot({ counts, submitDisabled: submitDisabled === true })
+      : headerSlot;
+  const header = resolvedHeaderSlot ?? (
     <ReviewHeaderStrip
       fileName={data.fileName}
       counts={counts}

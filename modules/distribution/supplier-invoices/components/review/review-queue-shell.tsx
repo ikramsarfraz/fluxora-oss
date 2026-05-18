@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
@@ -16,6 +16,7 @@ import { QueueDone } from "./queue-done";
 import { QueueStrip } from "./queue-strip";
 import { ReviewContainer } from "./review-container";
 import { ReviewQueueHeader } from "./review-queue-header";
+import type { ReviewCounts } from "./types";
 import { useReviewQueue } from "./use-review-queue";
 
 /** User-facing message per AI failure class for the queue-failed card. */
@@ -213,15 +214,27 @@ export function ReviewQueueShell({
   // server-side re-parse lands (tracked as a follow-up).
   const onReparse: (() => void) | undefined = undefined;
 
-  const header = (
+  // Render as a function so the ReviewScreen can hand back its
+  // form-state-aware `counts` (which include in-form product/supplier
+  // resolutions) and the host-managed `submitDisabled` flag (covers the
+  // duplicate-bill ack checkbox and in-flight submits). Computing either
+  // here from `pipelineResult` would freeze gating at the parser snapshot.
+  const renderHeader = ({
+    counts,
+    submitDisabled,
+  }: {
+    counts: ReviewCounts;
+    submitDisabled: boolean;
+  }) => (
     <ReviewQueueHeaderForCurrent
       fileName={fileName}
-      pipelineResult={pipelineResult}
+      counts={counts}
       position={idx + 1}
       total={queue.length}
       hasNext={hasNext}
       isLastRemaining={queue.length === 1}
       submitting={submitting}
+      submitDisabled={submitDisabled}
       onBackToBulk={() => router.push("/supplier-invoices/bulk")}
       onSkip={goNext}
       onReparse={onReparse}
@@ -252,7 +265,7 @@ export function ReviewQueueShell({
         pdfFile={pdfFile}
         bulkImportKey={currentKey}
         topSlot={null}
-        headerSlot={header}
+        headerSlot={renderHeader}
         pdfPaneAccessory={
           <FloatingNav
             onPrev={goPrev}
@@ -396,55 +409,42 @@ function ReviewQueueSkeleton() {
 }
 
 /**
- * Thin wrapper that recomputes the header's counts from the current pipeline
- * result without re-deriving on every keystroke inside ReviewContainer. The
- * counts here come from the parser snapshot (which is what the queue strip
- * cards also use) — they don't reflect in-form edits, but the Complete
- * button is gated by parser counts anyway, so the gating is consistent.
+ * Thin wrapper around the queue page header. Counts are passed in from
+ * ReviewScreen via the `headerSlot` render prop so the "Resolve N to
+ * continue" gating tracks in-form product/supplier resolutions instead of
+ * the frozen parser snapshot.
  */
 function ReviewQueueHeaderForCurrent({
   fileName,
-  pipelineResult,
+  counts,
   position,
   total,
   hasNext,
   isLastRemaining,
   submitting,
+  submitDisabled,
   onBackToBulk,
   onSkip,
   onReparse,
 }: {
   fileName: string;
-  pipelineResult: PipelineResult;
+  counts: ReviewCounts;
   position: number;
   total: number;
   hasNext: boolean;
   isLastRemaining: boolean;
   submitting: boolean;
+  /**
+   * Outer guard — currently set by ReviewContainer when an unacknowledged
+   * posted-duplicate banner is showing, or while a submit is in flight.
+   * Disabling the Complete button when this is true keeps the queue header
+   * in sync with the rest of the form's gating.
+   */
+  submitDisabled: boolean;
   onBackToBulk?: () => void;
   onSkip?: () => void;
   onReparse?: () => void;
 }) {
-  const counts = useMemo(() => {
-    const lines = pipelineResult.prefillResult.values.lines;
-    const matched = lines.filter(l => Boolean(l.productId)).length;
-    const fees = pipelineResult.detectedFees.length;
-    const needsReview =
-      lines.length -
-      matched +
-      // Unresolved lines whose suggested match is low-confidence still need a
-      // human pick.
-      pipelineResult.unresolvedLines.filter(
-        u => u.suggestedProductId && u.confidence < 65,
-      ).length;
-    return {
-      matched,
-      needsReview: Math.max(0, needsReview),
-      fees,
-      total: lines.length + fees,
-    };
-  }, [pipelineResult]);
-
   // The real "Complete" handler lives in ReviewContainer. We dispatch a
   // custom event so the queue header can stay decoupled from the form
   // internals. The container listens on the document and runs its submit.
@@ -462,6 +462,7 @@ function ReviewQueueHeaderForCurrent({
       hasNext={hasNext}
       isLastRemaining={isLastRemaining}
       submitting={submitting}
+      submitDisabled={submitDisabled}
       onBackToBulk={onBackToBulk}
       onReparse={onReparse}
       onSkip={onSkip}
