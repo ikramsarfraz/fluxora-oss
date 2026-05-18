@@ -283,6 +283,45 @@ test("charge: empty description fails", () => {
   assert.equal(result.success, false);
 });
 
+// All nine charge types must round-trip through the schema. The AI
+// classifier emits the meat-specific ones (processing / inspection /
+// cod / refrigeration) and we widened the UI + DB to match — this
+// pins the wiring so it can't regress to the old five-value subset.
+const ALL_CHARGE_TYPES = [
+  "freight",
+  "fuel",
+  "tax",
+  "discount",
+  "processing",
+  "inspection",
+  "cod",
+  "refrigeration",
+  "other",
+] as const;
+
+for (const chargeType of ALL_CHARGE_TYPES) {
+  test(`charge: chargeType "${chargeType}" is accepted`, () => {
+    const input: Record<string, unknown> = {
+      description: `${chargeType} fee`,
+      chargeType,
+      amount: "10.00",
+    };
+    if (chargeType === "tax") input.rate = "7.5";
+    assert.doesNotThrow(() =>
+      supplierInvoiceChargeInputSchema.parse(input),
+    );
+  });
+}
+
+test("charge: an unknown chargeType is rejected", () => {
+  const result = supplierInvoiceChargeInputSchema.safeParse({
+    description: "Mystery fee",
+    chargeType: "made_up_category",
+    amount: "10.00",
+  });
+  assert.equal(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Create / Update / Complete top-level schemas
 // ---------------------------------------------------------------------------

@@ -8,31 +8,15 @@ import {
   releaseBulkImportFileAction,
 } from "@/modules/distribution/supplier-invoices/actions";
 
+import {
+  deriveLockState,
+  type BulkImportLockState,
+  type ClaimOutcome,
+} from "./bulk-import-file-lock-state";
+
+export type { BulkImportLockState, ClaimOutcome } from "./bulk-import-file-lock-state";
+
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
-
-/**
- * Live claim state for a single bulk-import row:
- *  - `idle`        — no key (queue empty, etc.)
- *  - `claiming`    — claim request in flight (initial mount or retry)
- *  - `owned`       — this user holds the claim, heartbeating in background
- *  - `foreign`     — another user holds the claim, we're locked out
- *  - `unavailable` — the row vanished or was already reviewed
- */
-export type BulkImportLockState =
-  | { kind: "idle" }
-  | { kind: "claiming" }
-  | { kind: "owned" }
-  | {
-      kind: "foreign";
-      claimedByUserId: string;
-      /** Display name of the reviewer holding the claim, for the banner copy. */
-      claimedByDisplayName: string;
-      claimedAt: Date | null;
-    }
-  | { kind: "unavailable"; reason: "not_found" | "already_reviewed" };
-
-/** Internal: terminal claim outcomes (everything except idle / claiming). */
-type ClaimOutcome = Exclude<BulkImportLockState, { kind: "idle" } | { kind: "claiming" }>;
 
 /**
  * Advisory review-claim lifecycle for the bulk-import review queue. The
@@ -73,17 +57,14 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
   >(null);
   const [retryToken, setRetryToken] = useState(0);
 
-  // Derive the surface state: idle when no key, otherwise the cached
-  // outcome iff it belongs to the current key, otherwise "claiming".
-  // The retryToken bumping resets `lastOutcome` so the banner switches
-  // to "claiming" the instant the user clicks Retry — without this the
-  // foreign banner sits unchanged through the entire server roundtrip
-  // and the button feels broken.
-  const state: BulkImportLockState = !bulkImportKey
-    ? { kind: "idle" }
-    : lastOutcome?.key === bulkImportKey
-      ? lastOutcome.result
-      : { kind: "claiming" };
+  // Derive the surface state via the pure helper. Retry bumping clears
+  // `lastOutcome` so the banner switches to "claiming" the instant the
+  // user clicks Retry — without that, the foreign banner sits unchanged
+  // through the entire server roundtrip and the button feels broken.
+  const state: BulkImportLockState = deriveLockState(
+    bulkImportKey,
+    lastOutcome,
+  );
 
   useEffect(() => {
     if (!bulkImportKey) return;
