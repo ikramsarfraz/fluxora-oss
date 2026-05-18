@@ -35,7 +35,6 @@ function startWithLabel(name: string): string {
 export function BulkLandingScreen({
   view,
   openFileHref,
-  openInNewTab = false,
   onImportMore,
   onDismissFile,
   onClearReviewed,
@@ -51,8 +50,6 @@ export function BulkLandingScreen({
    * the real bulk-landing supplies a path that includes the localStorage key.
    */
   openFileHref?: (file: BatchFile) => string;
-  /** When true, the Review action opens in a new tab — required by the handoff. */
-  openInNewTab?: boolean;
   /** Click handler for "Import more"; falls back to a no-op in demo mode. */
   onImportMore?: () => void;
   /** Per-row dismiss — removes the row from the batch (host clears storage). */
@@ -90,10 +87,6 @@ export function BulkLandingScreen({
 
   const openFile = (file: BatchFile) => {
     const href = openFileHref ? openFileHref(file) : `/supplier-invoices/${file.id}`;
-    if (openInNewTab && typeof window !== "undefined") {
-      window.open(href, "_blank", "noopener,noreferrer");
-      return;
-    }
     router.push(href);
   };
 
@@ -338,7 +331,7 @@ function CardFooter({
           onClick={onReparseAll}
           className="h-8 text-[12px]"
         >
-          {reparseAllPending ? "Re-parsing…" : `Re-parse all (${totalFiles})`}
+          {reparseAllPending ? "Re-scanning…" : `Re-scan all (${totalFiles})`}
         </Button>
       </div>
     </div>

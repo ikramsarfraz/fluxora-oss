@@ -87,7 +87,7 @@ export function ParsingProgressLive({
           setError(
             item && item.status === "error"
               ? item.error
-              : "Parse failed — no bulk-import row was created.",
+              : "Couldn't read this invoice — no bulk-import row was created.",
           );
           return;
         }
@@ -107,7 +107,7 @@ export function ParsingProgressLive({
         }, 250);
       } catch (err) {
         if (cancelledRef.current) return;
-        setError(err instanceof Error ? err.message : "Parse failed.");
+        setError(err instanceof Error ? err.message : "Couldn't read this invoice.");
       }
     }
 
@@ -137,7 +137,7 @@ export function ParsingProgressLive({
     // Drop the stashed PDF + any parse-result entry the server-side call may
     // have already written so the screen doesn't reappear on back navigation.
     clearPendingBulkImport(storageKey);
-    toast("Parse cancelled.");
+    toast("Scan cancelled.");
     router.replace("/supplier-invoices/bulk-import");
   };
 
@@ -146,7 +146,7 @@ export function ParsingProgressLive({
       <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
         <div className="max-w-[480px]">
           <h1 className="mb-2 text-[22px] font-semibold tracking-[-0.015em] text-stone-ink">
-            Parse failed
+            Couldn&apos;t read this invoice
           </h1>
           <p className="mb-6 text-[14px] text-stone-muted">{error}</p>
           <button
@@ -180,7 +180,7 @@ const STAGE_DEFS: Array<Omit<ParseStage, "status" | "time">> = [
   { id: "upload",  label: "Upload",          detail: "stashing PDF locally" },
   { id: "extract", label: "Text extraction", detail: "reading page content" },
   { id: "tables",  label: "Table detection", detail: "locating line-item table" },
-  { id: "lines",   label: "Line items",      detail: "parsing rows…" },
+  { id: "lines",   label: "Line items",      detail: "reading rows…" },
   { id: "match",   label: "Product matching",detail: "searching catalog…" },
   { id: "fees",    label: "Fees & tax",      detail: "detect freight, fuel, tax" },
   { id: "recon",   label: "Reconciliation",  detail: "cross-check totals" },
@@ -222,8 +222,8 @@ function buildJobView({
     stages,
     header: {},
     lines: [],
-    lineCountLabel: done ? "ready" : "parsing…",
-    averageParseLabel: "Average parse: ~3.2s",
+    lineCountLabel: done ? "ready" : "scanning…",
+    averageParseLabel: "Average scan: ~3.2s",
   };
 }
 

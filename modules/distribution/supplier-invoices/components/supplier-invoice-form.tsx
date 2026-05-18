@@ -782,7 +782,7 @@ export function SupplierInvoiceForm({
       pdfFile: prefilledPdfFile ?? null,
     });
     toast.success(
-      "Loaded parsed PDF. Review every field before saving the draft.",
+      "Loaded scanned PDF. Review every field before saving the draft.",
     );
   }, [
     mode,
@@ -1152,7 +1152,7 @@ export function SupplierInvoiceForm({
                           }}
                         >
                           <span>
-                            Parsed from bill:{" "}
+                            Read from bill:{" "}
                             <strong style={{ color: C.ink }}>
                               {candidate}
                             </strong>

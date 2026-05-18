@@ -180,7 +180,7 @@ function LineRow({ line }: { line: StreamingLine }) {
             className="size-1.5 animate-pulse rounded-full"
             style={{ background: COLORS.accent }}
           />
-          parsing…
+          scanning…
         </span>
       ) : null}
     </div>

@@ -164,7 +164,7 @@ export function FileRow({
               variant="outline"
               disabled
               className="h-8 cursor-not-allowed gap-1.5 text-[12px]"
-              title="Parse failed — re-upload this file from the bulk-import panel."
+              title="Couldn't read this file — re-upload it from the bulk-import panel."
             >
               Re-upload required
             </Button>

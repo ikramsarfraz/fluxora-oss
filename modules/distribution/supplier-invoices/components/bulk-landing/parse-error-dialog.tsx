@@ -24,10 +24,10 @@ import type { BatchFile } from "./types";
  * persisted result is the deterministic empty placeholder. This dialog
  * shows the user (a) what failed in human terms, (b) the underlying
  * AiExtractionErrorCode strings for screenshots / support, and (c) a
- * "Re-upload" button that opens the BulkImportSheet so they can drop the
- * same PDF in again. The server-side re-parse handler is still parked
- * (would skip the R2 re-upload and just re-run the pipeline against the
- * stored object) — tracked as a follow-up.
+ * "Re-upload" button that triggers the inline dropzone's file picker so
+ * they can drop the same PDF in again. The server-side re-scan handler is
+ * still parked (would skip the R2 re-upload and just re-run the pipeline
+ * against the stored object) — tracked as a follow-up.
  *
  * Dismissing a failed row is handled separately by the existing X-on-hover
  * affordance in FileRow; this dialog intentionally doesn't dismiss the row
@@ -39,32 +39,32 @@ const PARSE_ERROR_DETAIL: Record<
   { title: string; body: string }
 > = {
   connection: {
-    title: "OpenAI couldn't be reached",
-    body: "The connection to OpenAI dropped mid-stream while parsing this invoice. This is usually transient — re-uploading the PDF often succeeds on the next attempt.",
+    title: "Couldn't reach our AI",
+    body: "The connection to our AI dropped mid-scan. This is usually transient — re-uploading the PDF often succeeds on the next attempt.",
   },
   timeout: {
-    title: "OpenAI request timed out",
-    body: "OpenAI didn't respond in time. Long-completion calls (large invoices) are particularly affected. Re-upload to retry.",
+    title: "Scan timed out",
+    body: "Our AI didn't respond in time. Long scans (large invoices) are particularly affected. Re-upload to retry.",
   },
   rate_limit: {
-    title: "Rate limit hit",
-    body: "OpenAI throttled the request. Wait a minute, then re-upload the PDF to retry.",
+    title: "Too many scans at once",
+    body: "Our AI throttled the request. Wait a minute, then re-upload the PDF to retry.",
   },
   refusal: {
-    title: "AI refused this document",
-    body: "OpenAI declined to parse this document. This usually means the content tripped a safety filter. Re-upload after editing the file, or record the bill manually.",
+    title: "AI couldn't read this document",
+    body: "Our AI declined to scan this document. This usually means the content tripped a safety filter. Re-upload after editing the file, or record the bill manually.",
   },
   post_validation: {
-    title: "AI response failed validation",
+    title: "Scan didn't match expected format",
     body: "The AI returned a response that didn't match the expected schema. This is rare — re-upload to retry, or record the bill manually if it persists.",
   },
   no_output: {
-    title: "AI produced no output",
+    title: "Scan produced no result",
     body: "The AI returned an empty response. Re-upload to retry, or record the bill manually.",
   },
   unknown: {
-    title: "Unexpected AI error",
-    body: "Something went wrong while parsing this invoice. Re-upload to retry, or record the bill manually.",
+    title: "Unexpected scan error",
+    body: "Something went wrong while reading this invoice. Re-upload to retry, or record the bill manually.",
   },
 };
 

@@ -113,7 +113,7 @@ export function ReviewQueueHeader({
           className="h-8 gap-1.5 text-[12px]"
         >
           <RefreshCw className="size-[12px]" strokeWidth={1.6} />
-          Re-parse
+          Re-scan
         </Button>
 
         {/* Segmented Skip / Complete & next group. */}

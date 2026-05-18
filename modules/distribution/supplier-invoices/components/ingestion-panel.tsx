@@ -525,7 +525,7 @@ export function IngestionPanel({
                 <span style={{ fontFamily: C.mono }}>{fileName}</span>
               </h3>
               <div style={{ fontSize: 12, color: C.text2, marginTop: 1, display: "flex", alignItems: "center", gap: 6 }}>
-                {fmtBytes(fileBytes)} · Parsing…
+                {fmtBytes(fileBytes)} · Scanning…
                 {isSlow && (
                   <span style={{ color: C.amber, fontWeight: 500 }}>
                     · {fmtElapsed(elapsed)} elapsed · usually 4–8s for this size
