@@ -164,6 +164,8 @@ export function LineRow({
     >
       {submitErrors && submitErrors.length > 0 ? (
         <div
+          role="alert"
+          aria-live="polite"
           onClick={e => e.stopPropagation()}
           className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-[12px]"
           style={{
@@ -172,7 +174,11 @@ export function LineRow({
             color: "oklch(48% 0.18 25)",
           }}
         >
-          <AlertCircle className="size-[12px] shrink-0" strokeWidth={1.8} />
+          <AlertCircle
+            className="size-[12px] shrink-0"
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
           <span className="font-semibold">
             {submitErrors.length === 1
               ? "1 issue:"
@@ -305,6 +311,9 @@ function LotExpiryChipButton({
   hasOverride: boolean;
   onClick: () => void;
 }) {
+  const baseLabel = hasOverride
+    ? "Edit lot number and expiry (overridden)"
+    : "Edit lot number and expiry";
   return (
     <button
       type="button"
@@ -312,11 +321,9 @@ function LotExpiryChipButton({
         e.stopPropagation();
         onClick();
       }}
-      title={
-        hasOverride
-          ? "Edit lot # / expiry (overridden)"
-          : "Edit lot # / expiry"
-      }
+      title={baseLabel}
+      aria-label={baseLabel}
+      aria-expanded={isOpen}
       className={cn(
         "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
         hasOverride
@@ -324,16 +331,16 @@ function LotExpiryChipButton({
           : "border-stone-line text-stone-muted hover:text-stone-ink",
       )}
     >
-      <Calendar className="size-[12px]" strokeWidth={1.8} />
+      <Calendar className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
       {isOpen ? (
         <>
           Hide lot
-          <ChevronUp className="size-[12px]" strokeWidth={1.8} />
+          <ChevronUp className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
         </>
       ) : (
         <>
           {hasOverride ? "Lot set" : "Set lot / expiry"}
-          <ChevronDown className="size-[12px]" strokeWidth={1.8} />
+          <ChevronDown className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
         </>
       )}
     </button>
@@ -349,6 +356,9 @@ function WeightChipButton({
   hasOverride: boolean;
   onClick: () => void;
 }) {
+  const baseLabel = hasOverride
+    ? "Edit per-case weights (overridden)"
+    : "Edit per-case weights";
   return (
     <button
       type="button"
@@ -356,7 +366,9 @@ function WeightChipButton({
         e.stopPropagation();
         onClick();
       }}
-      title={hasOverride ? "Edit per-case weights (overridden)" : "Edit per-case weights"}
+      title={baseLabel}
+      aria-label={baseLabel}
+      aria-expanded={isOpen}
       className={cn(
         "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
         hasOverride
@@ -364,16 +376,16 @@ function WeightChipButton({
           : "border-stone-line text-stone-muted hover:text-stone-ink",
       )}
     >
-      <Scale className="size-[12px]" strokeWidth={1.8} />
+      <Scale className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
       {isOpen ? (
         <>
           Hide weights
-          <ChevronUp className="size-[12px]" strokeWidth={1.8} />
+          <ChevronUp className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
         </>
       ) : (
         <>
           {hasOverride ? "Weights set" : "Set weights"}
-          <ChevronDown className="size-[12px]" strokeWidth={1.8} />
+          <ChevronDown className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
         </>
       )}
     </button>
@@ -566,6 +578,7 @@ function CasesStepper({
           onChange(Number.isFinite(next) ? next : 0);
         }}
         onClick={e => e.stopPropagation()}
+        aria-label="Case count"
         // Width fits up to ~3 digits; longer typing scrolls inside the
         // input rather than expanding the row.
         className="h-5 w-9 border-x border-stone-line bg-stone-surface text-center font-mono text-[11px] tabular-nums text-stone-ink outline-none focus:bg-stone-line2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"

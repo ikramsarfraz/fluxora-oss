@@ -134,6 +134,12 @@ export function ReviewQueueHeader({
             size="sm"
             onClick={onComplete}
             disabled={blocked}
+            // aria-live keeps the label announceable when it flips
+            // between "Resolve N to continue" / "Confirm duplicate" /
+            // "Complete & next" so screen-reader users hear why the
+            // button is gated without having to re-navigate to it.
+            aria-live="polite"
+            aria-disabled={blocked}
             className={cn(
               "h-8 gap-1.5 rounded-l-none border-stone-ink bg-stone-ink text-[12px] text-stone-surface hover:bg-stone-ink/90",
               blocked && "cursor-not-allowed opacity-50",
@@ -141,7 +147,11 @@ export function ReviewQueueHeader({
           >
             {completeLabel}
             {showCompleteArrow ? (
-              <ArrowRight className="size-[12px]" strokeWidth={1.8} />
+              <ArrowRight
+                className="size-[12px]"
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
             ) : null}
           </Button>
         </div>

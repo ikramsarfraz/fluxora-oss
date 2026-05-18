@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, type ChangeEvent, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -181,9 +187,24 @@ export function LineWeightEditor({
   const activeHint =
     MODE_OPTIONS.find(o => o.value === state.weightEntryMode)?.hint ?? "";
 
+  // Focus the first input in the tray on mount so keyboard / screen-
+  // reader users immediately land where they can edit, instead of
+  // having to tab past the row above. We focus once per mount only —
+  // re-focusing on mode change would steal focus mid-edit.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const input = rootRef.current?.querySelector<HTMLInputElement | HTMLButtonElement>(
+      "input, button",
+    );
+    input?.focus();
+  }, []);
+
   return (
     <div
+      ref={rootRef}
       onClick={stop}
+      role="region"
+      aria-label="Per-case weight editor"
       className="mt-2 rounded-lg border border-stone-line bg-stone-line2/50 p-3 text-[12px]"
     >
       {/* Unit-type toggle. Catch-weight = each case weighed individually

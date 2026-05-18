@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, type ChangeEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 
 /**
  * Per-line lot-number + expiration-date override state. Both fields are
@@ -75,9 +81,20 @@ export function LineLotExpiryEditor({
     return null;
   }, [state.expirationDateOverride]);
 
+  // Focus the lot input on mount so screen-reader / keyboard users
+  // land in the first editable field instead of below the row.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const input = rootRef.current?.querySelector<HTMLInputElement>("input");
+    input?.focus();
+  }, []);
+
   return (
     <div
+      ref={rootRef}
       onClick={stop}
+      role="region"
+      aria-label="Lot number and expiration override"
       className="mt-2 rounded-lg border border-stone-line bg-stone-line2/50 p-3 text-[12px]"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
