@@ -64,6 +64,7 @@ export function ReviewContainer({
   pages,
   pipelineResult,
   pdfFile,
+  pdfLoadError,
   bulkImportKey,
   topSlot,
   headerSlot,
@@ -79,6 +80,12 @@ export function ReviewContainer({
   pipelineResult: PipelineResult;
   /** Original PDF bytes from the bulk-import handoff, if any. */
   pdfFile?: Blob | null;
+  /**
+   * True when the host's PDF fetch failed irrecoverably. Forwarded to
+   * PdfPane so it surfaces an explicit error card instead of a permanent
+   * loading skeleton — the user should not review against a missing source.
+   */
+  pdfLoadError?: boolean;
   /**
    * Optional localStorage key the parse was loaded from. When set, a successful
    * submit marks the corresponding entry as `reviewed` so the bulk-landing
@@ -560,6 +567,7 @@ export function ReviewContainer({
       <ReviewScreen
         data={enriched}
         pdfFile={pdfFile}
+        pdfLoadError={pdfLoadError}
         lineBboxes={lineBboxes.length > 0 ? lineBboxes : undefined}
         onSubmit={submit}
         submitDisabled={submitting || (hasPostedDuplicate && !duplicateAcknowledged)}

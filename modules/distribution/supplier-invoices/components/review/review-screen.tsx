@@ -33,6 +33,7 @@ import {
 export function ReviewScreen({
   data,
   pdfFile,
+  pdfLoadError,
   lineBboxes,
   onSubmit,
   submitDisabled,
@@ -61,8 +62,13 @@ export function ReviewScreen({
   onDuplicateAcknowledgedChange,
 }: {
   data: ReviewData;
-  /** Original PDF bytes — supplied by phase 5; omit for the demo placeholder. */
+  /** Original PDF bytes. Null while the host is still fetching them. */
   pdfFile?: Blob | null;
+  /**
+   * True when the host gave up fetching the PDF — surfaces an explicit
+   * error card in PdfPane instead of an indefinite loading skeleton.
+   */
+  pdfLoadError?: boolean;
   /** Per-line bounding boxes for the clickable overlay on the rasterized page. */
   lineBboxes?: LineBbox[];
   /** Primary CTA handler. Omit when the host wants the demo's no-op behavior. */
@@ -260,32 +266,43 @@ export function ReviewScreen({
       {topSlot}
       {header}
 
-      {/* grid-cols-2 gives both panes a deterministic 50/50 split regardless
-          of intrinsic content widths, so the bottom-bar columns below line
-          up exactly with the panes above. */}
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-2">
-        <PdfPane
-          fileName={data.fileName}
-          page={page}
-          pages={data.pages}
-          onPageChange={setPage}
-          zoom={zoom}
-          onZoom={setZoom}
-          lines={data.lines}
-          activeLineId={activeLineId}
-          onLineClick={setActiveLineId}
-          pdfFile={pdfFile}
-          lineBboxes={lineBboxes}
-          paneEnterClass={paneEnterClass}
-          // The queue carousel passes its floating prev/next here so the
-          // arrows sit inside PdfPane (a positioned ancestor) — keeps them
-          // from triggering horizontal page scroll on narrow viewports.
-          accessory={pdfPaneAccessory}
-        />
+      {/* Two-pane row implemented as a flex row (not grid). Flex gives us
+          predictable height-constraint propagation: with `flex-1 min-h-0`
+          on the row AND each pane, children's max-height collapses to the
+          available space rather than expanding the row to fit content.
+          The previous grid implementation needed an explicit
+          `grid-template-rows: 1fr` and even then the implicit
+          `grid-auto-rows: auto` minimum sometimes let a tall right pane
+          (100 line items) push past the row's allotment, breaking the
+          inner overflow-y-auto chain. Inline `overflow-hidden` on each
+          pane is a final belt — guarantees any residual overflow is
+          clipped at the pane boundary so the inner scroll engages. */}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <PdfPane
+            fileName={data.fileName}
+            page={page}
+            pages={data.pages}
+            onPageChange={setPage}
+            zoom={zoom}
+            onZoom={setZoom}
+            lines={data.lines}
+            activeLineId={activeLineId}
+            onLineClick={setActiveLineId}
+            pdfFile={pdfFile}
+            pdfLoadError={pdfLoadError}
+            lineBboxes={lineBboxes}
+            paneEnterClass={paneEnterClass}
+            // The queue carousel passes its floating prev/next here so the
+            // arrows sit inside PdfPane (a positioned ancestor) — keeps them
+            // from triggering horizontal page scroll on narrow viewports.
+            accessory={pdfPaneAccessory}
+          />
+        </div>
 
         <div
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col bg-stone-bg",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg",
             paneEnterClass,
           )}
         >
@@ -323,8 +340,12 @@ export function ReviewScreen({
           {/* Line items section — header + scroll area only. The bill-total
               footer is no longer inside this section; it lives in the bottom
               bar of <main> alongside PdfHint so both halves are siblings of
-              the two-pane row and the scroll area is free of overlay padding. */}
-          <div className="flex min-h-0 flex-1 flex-col">
+              the two-pane row and the scroll area is free of overlay padding.
+              `overflow-hidden` here keeps the wrapper from being inflated by
+              its scroll-list child — without it, a child with `flex-1` whose
+              content far exceeds available space can still push the wrapper
+              past the parent's allotment in some flexbox edge cases. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-[15px] font-semibold text-stone-ink">

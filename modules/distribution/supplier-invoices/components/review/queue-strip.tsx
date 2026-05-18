@@ -130,10 +130,14 @@ export function QueueStrip({
           flex item shrink — flex items have an implicit `min-width: auto`
           (= intrinsic content size) that would otherwise let the cards
           push the strip wider than the viewport and spill horizontal
-          scroll onto <main>. */}
+          scroll onto <main>.
+          Symmetric padding on all four axes leaves room inside the clip
+          for the active card's 2px lift plus the 2px Tailwind ring (and
+          the same ring on focus-visible) so the first/last card's ring
+          doesn't get sheared off at the strip edges. */}
       <div
         className="no-scrollbar flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scroll-smooth"
-        style={{ paddingBottom: 2 }}
+        style={{ padding: 5 }}
       >
         {queue.map((entry, idx) => (
           <div
@@ -198,26 +202,23 @@ function QueueCard({
       type="button"
       onClick={onClick}
       disabled={isCompleting}
-      // Hover + active styles are below in inline style for the lift effect;
-      // the className handles base focus ring + transition timing.
+      // Visual tokens come from the same Card primitive used elsewhere in
+      // the app (--card, --foreground) so the strip stays consistent with
+      // bills/invoices listing cards. Active state is a heavier ring +
+      // shadow, not a color swap — keeps both states on the same surface
+      // so density and contrast stay even across the carousel.
       className={cn(
-        "review-queue-card relative flex shrink-0 flex-col gap-[5px] rounded-[9px] text-left transition-[transform,background,border-color,opacity] duration-150 ease-[cubic-bezier(.2,.7,.2,1)]",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--stone-ink)]",
-        isCurrent ? "translate-y-[-2px]" : "hover:translate-y-[-1px]",
+        "review-queue-card relative flex shrink-0 flex-col gap-[5px] rounded-xl bg-card text-card-foreground text-left transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.2,1)]",
+        "focus-visible:ring-2 focus-visible:ring-foreground focus-visible:outline-none",
+        isCurrent
+          ? "translate-y-[-2px] shadow-sm ring-2 ring-foreground/60"
+          : "shadow-xs ring-1 ring-foreground/10 hover:translate-y-[-1px] hover:ring-foreground/30",
         isCompleting && "review-queue-card-completing",
       )}
       style={{
         minWidth: 230,
         maxWidth: 280,
         padding: "8px 10px",
-        background: isCurrent
-          ? "var(--stone-surface)"
-          : "rgba(255,255,255,0.55)",
-        border: `1px solid ${isCurrent ? "var(--stone-ink)" : "var(--stone-line)"}`,
-        outline: isCurrent
-          ? `2px solid color-mix(in oklch, var(--stone-ink) 15%, transparent)`
-          : "none",
-        outlineOffset: -1,
         cursor: isCompleting ? "default" : "pointer",
       }}
     >
@@ -314,19 +315,6 @@ function QueueCard({
         </span>
       </div>
 
-      {/* 2px ink underline pinned to the bottom edge of the current card. */}
-      {isCurrent ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0"
-          style={{
-            bottom: -1,
-            height: 2,
-            background: "var(--stone-ink)",
-            borderRadius: 1,
-          }}
-        />
-      ) : null}
     </button>
   );
 }

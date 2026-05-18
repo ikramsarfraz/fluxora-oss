@@ -34,6 +34,7 @@ export function PdfCanvas({
   fallback,
   children,
   onPageSize,
+  onPageCount,
 }: {
   pdfFile?: Blob | null;
   pageNumber: number;
@@ -44,6 +45,12 @@ export function PdfCanvas({
   /** Overlay content (bboxes). */
   children?: React.ReactNode;
   onPageSize?: (size: RenderedPageSize) => void;
+  /**
+   * Fired once pdfjs reports the document's page count. The server-side
+   * pipeline doesn't surface page count on its result, so the parent uses
+   * this to drive the toolbar's prev/next page chrome for multi-page PDFs.
+   */
+  onPageCount?: (count: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -66,6 +73,7 @@ export function PdfCanvas({
       zoom,
       canvas: canvasRef.current,
       handle,
+      onPageCount,
     })
       .then(size => {
         if (handle.cancelled) return;
@@ -88,7 +96,7 @@ export function PdfCanvas({
       // be synchronous and pdfjs is happy to be told to tear down in flight.
       void handle.loadingTask?.destroy();
     };
-  }, [pdfFile, pageNumber, zoom, onPageSize]);
+  }, [pdfFile, pageNumber, zoom, onPageSize, onPageCount]);
 
   if (!pdfFile) {
     return (
@@ -156,12 +164,14 @@ async function renderPdfPage({
   zoom,
   canvas,
   handle,
+  onPageCount,
 }: {
   pdfFile: Blob;
   pageNumber: number;
   zoom: number;
   canvas: HTMLCanvasElement | null;
   handle: RenderHandle;
+  onPageCount?: (count: number) => void;
 }): Promise<RenderedPageSize> {
   if (!canvas) throw new Error("Canvas not mounted");
 
@@ -202,6 +212,10 @@ async function renderPdfPage({
   handle.loadingTask = loadingTask as unknown as PdfLoadingTask;
   const pdf = await loadingTask.promise;
   if (handle.cancelled) throw new RenderCancelled();
+  // Surface page count so the toolbar can render prev/next chrome for
+  // multi-page invoices. The pipeline result doesn't carry this through,
+  // so the loaded PDF is the source of truth.
+  onPageCount?.((pdf as { numPages: number }).numPages);
   const page = await pdf.getPage(pageNumber);
   if (handle.cancelled) throw new RenderCancelled();
 

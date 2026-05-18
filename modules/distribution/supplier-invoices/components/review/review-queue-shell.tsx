@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -21,13 +22,13 @@ import { useReviewQueue } from "./use-review-queue";
 
 /** User-facing message per AI failure class for the queue-failed card. */
 const QUEUE_PARSE_ERROR_LABEL: Record<AiExtractionErrorCode, string> = {
-  connection: "OpenAI couldn't be reached while parsing this invoice.",
-  timeout: "OpenAI took too long to respond while parsing this invoice.",
-  rate_limit: "OpenAI rate-limited the request — please retry in a moment.",
-  refusal: "OpenAI declined to parse this document.",
+  connection: "Our AI couldn't be reached while scanning this invoice.",
+  timeout: "Our AI took too long to respond while scanning this invoice.",
+  rate_limit: "Too many scans at once — please retry in a moment.",
+  refusal: "Our AI declined to scan this document.",
   post_validation: "AI returned a response we couldn't validate.",
   no_output: "AI produced no output for this document.",
-  unknown: "An unexpected error occurred while parsing this invoice.",
+  unknown: "Something went wrong while scanning this invoice.",
 };
 
 /**
@@ -69,40 +70,77 @@ export function ReviewQueueShell({
     completeCurrent,
   } = queueState;
 
-  // PDF blob now comes from R2 via a short-lived signed URL — no more
-  // IndexedDB cache. We refetch the URL whenever the current invoice
-  // changes; PdfPane downloads the bytes itself via fetch. We seed pdfFile
-  // with `null` on a key change via a render-time reset (cheaper than
-  // setState-in-effect, and React Compiler-clean) before the async signed-
-  // URL fetch + download populates it.
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [pdfFileKey, setPdfFileKey] = useState<string | null>(currentKey);
-  if (pdfFileKey !== currentKey) {
-    setPdfFileKey(currentKey);
-    setPdfFile(null);
-  }
-  useEffect(() => {
-    if (!currentKey) return;
-    let cancelled = false;
-    void (async () => {
-      const url = await getBulkImportPdfSignedUrlAction(currentKey).catch(
-        () => null,
-      );
-      if (!url || cancelled) return;
-      const res = await fetch(url).catch(() => null);
-      if (!res || !res.ok || cancelled) return;
+  // PDF blob comes from R2 via a short-lived signed URL. React Query
+  // caches the resulting File by key so navigating back to an already-
+  // viewed card hits the cache (no re-mint of the signed URL, no second
+  // R2 fetch) — the PDF bytes are immutable once uploaded, so
+  // `staleTime: Infinity` is safe. `gcTime` evicts after 30 min of idle
+  // so memory doesn't grow unbounded across long queue sessions.
+  //
+  // `isError` distinguishes "still fetching" from "we gave up" so PdfPane
+  // can surface an explicit error card instead of an indefinite loading
+  // skeleton — we never want the reviewer comparing parsed fields against
+  // a missing source.
+  const pdfQuery = useQuery({
+    queryKey: [
+      "bulk-import-pdf-blob",
+      currentKey,
+      currentStored?.filename ?? null,
+      currentStored?.mimeType ?? null,
+    ] as const,
+    enabled: Boolean(currentKey),
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    retry: false,
+    queryFn: async (): Promise<File> => {
+      if (!currentKey) {
+        throw new Error("No current key for PDF fetch.");
+      }
+      const url = await getBulkImportPdfSignedUrlAction(currentKey);
+      if (!url) {
+        console.warn(
+          "[review-queue] signed URL action returned null for",
+          currentKey,
+          "— bulk_import_files row may be missing or R2 helper failed.",
+        );
+        throw new Error("Signed URL unavailable.");
+      }
+      let res: Response;
+      try {
+        res = await fetch(url);
+      } catch (err) {
+        // Most common cause: CORS — the browser blocked the cross-origin
+        // fetch because the R2 bucket's CORS policy doesn't include this
+        // origin. DevTools Network shows a red 0/CORS-blocked entry.
+        console.warn(
+          "[review-queue] PDF fetch threw for",
+          currentKey,
+          err,
+        );
+        throw err;
+      }
+      if (!res.ok) {
+        console.warn(
+          "[review-queue] R2 fetch failed for",
+          currentKey,
+          "status",
+          res.status,
+          res.statusText,
+          "url:",
+          url,
+        );
+        throw new Error(`R2 fetch failed: ${res.status} ${res.statusText}`);
+      }
       const blob = await res.blob();
-      if (cancelled) return;
       // Wrap in a `File` so downstream consumers (PdfPane, attachment upload
       // in ReviewContainer) get the familiar shape they had with IndexedDB.
       const filename = currentStored?.filename ?? "invoice.pdf";
       const mime = currentStored?.mimeType ?? "application/pdf";
-      setPdfFile(new File([blob], filename, { type: mime }));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentKey, currentStored?.filename, currentStored?.mimeType]);
+      return new File([blob], filename, { type: mime });
+    },
+  });
+  const pdfFile = pdfQuery.data ?? null;
+  const pdfLoadError = pdfQuery.isError;
 
   // Submit-in-flight UI state — held here so the page header can disable the
   // Complete button while the action runs. ReviewContainer informs us by
@@ -131,28 +169,28 @@ export function ReviewQueueShell({
     return () => window.removeEventListener("keydown", handler);
   }, [goPrev, goNext]);
 
-  // // Lock body + html overflow for the lifetime of the review queue. The
-  // // app's tenant layout sizes its main content slot with `min-h-svh` on the
-  // // sidebar wrapper, which means any descendant slightly bigger than the
-  // // viewport (due to subtle rounding, the parent's `p-4` + `gap-4`, or our
-  // // fixed-positioned bill-total bar) lets the document body scroll. The
-  // // review screen is a viewport-locked two-pane app surface — scrolling
-  // // belongs to the line items list, not the page. We restore the previous
-  // // overflow values on unmount so navigating away leaves other routes
-  // // untouched.
-  // useEffect(() => {
-  //   if (typeof document === "undefined") return;
-  //   const html = document.documentElement;
-  //   const body = document.body;
-  //   const prevHtmlOverflow = html.style.overflow;
-  //   const prevBodyOverflow = body.style.overflow;
-  //   html.style.overflow = "hidden";
-  //   body.style.overflow = "hidden";
-  //   return () => {
-  //     html.style.overflow = prevHtmlOverflow;
-  //     body.style.overflow = prevBodyOverflow;
-  //   };
-  // }, []);
+  // Lock body + html overflow for the lifetime of the review queue. The
+  // app's tenant layout sizes its main content slot with `min-h-svh` on the
+  // sidebar wrapper, which means any descendant slightly bigger than the
+  // viewport (due to subtle rounding, the parent's `p-4` + `gap-4`, or our
+  // fixed-positioned bill-total bar) lets the document body scroll. The
+  // review screen is a viewport-locked two-pane app surface — scrolling
+  // belongs to the line items list, not the page. We restore the previous
+  // overflow values on unmount so navigating away leaves other routes
+  // untouched.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
 
   // First-render guard: React Query starts with `data === undefined`, which
   // would otherwise make `queue.length === 0` true and flash <QueueDone />
@@ -168,7 +206,7 @@ export function ReviewQueueShell({
   // `review-done-burst` keyframe class.
   if (queue.length === 0) {
     return (
-      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
         <QueueDone
           onBackToBulk={() => router.push("/supplier-invoices/bulk")}
         />
@@ -187,7 +225,7 @@ export function ReviewQueueShell({
   // and (b) can navigate past it without being misled by an empty form.
   if (pipelineResult.parseStatus === "parse_error") {
     return (
-      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
         <QueueStrip
           queue={queue}
           currentKey={currentKey}
@@ -242,7 +280,7 @@ export function ReviewQueueShell({
   );
 
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
       <QueueStrip
         queue={queue}
         currentKey={currentKey}
@@ -263,6 +301,7 @@ export function ReviewQueueShell({
         fileName={fileName}
         pipelineResult={pipelineResult}
         pdfFile={pdfFile}
+        pdfLoadError={pdfLoadError}
         bulkImportKey={currentKey}
         topSlot={null}
         headerSlot={renderHeader}
@@ -321,7 +360,7 @@ function QueueFailedCard({
           />
         </div>
         <div>
-          <div className="text-[15px] font-semibold text-stone-ink">Parse failed</div>
+          <div className="text-[15px] font-semibold text-stone-ink">Couldn&apos;t read this invoice</div>
           <div className="mt-1 font-mono text-[12px] text-stone-muted">{fileName}</div>
         </div>
         <p className="text-[13px] leading-[1.5] text-stone-muted">
@@ -359,7 +398,7 @@ function QueueFailedCard({
  */
 function ReviewQueueSkeleton() {
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
       {/* Queue strip */}
       <div className="flex shrink-0 items-center gap-2 border-b border-stone-line bg-stone-surface px-4 py-3">
         <div className="flex flex-col gap-1.5 border-r border-stone-line pr-4">
