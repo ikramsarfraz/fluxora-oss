@@ -155,7 +155,9 @@ export function QueueStrip({
       <div
         ref={scrollContainerRef}
         className="no-scrollbar flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden scroll-smooth"
-        style={{ padding: 5 }}
+        // minHeight is required because cards are absolutely positioned
+        // (virtualization) and don't drive parent height. ~76 card + 10 padding.
+        style={{ padding: 5, minHeight: 86 }}
       >
         {/* Inner spacer holds the virtualizer's reported total width so
             the scrollbar geometry matches the full queue length. Cards
