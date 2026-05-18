@@ -6,6 +6,7 @@ import { and, count, isNull, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { products } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
+import { captureServerEvent } from "@/lib/posthog-server";
 import {
   parseSupplierInvoicePdfText,
   type SupplierInvoicePdfPrefillResult,
@@ -37,6 +38,17 @@ function readParseMode(): ParseMode {
   return raw === "text-first" ? "text-first" : "vision-only";
 }
 
+/**
+ * An extractor we attempted that threw before we landed on the final
+ * `textExtractor` value. Captured into the result so the parent can fire
+ * a PostHog event per fallback hop — knowing how often pdf-parse falls
+ * through to vision matters because vision is ~10x the cost.
+ */
+export type TextExtractorFallback = {
+  extractor: TextExtractor;
+  errorMessage: string;
+};
+
 // Extract invoice text under the active parse mode. The text-first branch
 // uses pdfjs-dist to preserve table columns (line items become tab-separated
 // rows) and falls back to pdf-parse if pdfjs throws or produces too few
@@ -50,7 +62,10 @@ async function extractTextForPipeline(
   pageCount: number;
   textExtractor: TextExtractor;
   rows: PdfRow[];
+  fallbacks: TextExtractorFallback[];
 }> {
+  const fallbacks: TextExtractorFallback[] = [];
+
   if (mode === "text-first") {
     try {
       const layout = await extractPdfText(bytes);
@@ -60,6 +75,7 @@ async function extractTextForPipeline(
           pageCount: layout.pageCount,
           textExtractor: "pdfjs-dist",
           rows: layout.rows,
+          fallbacks,
         };
       }
     } catch (err) {
@@ -72,6 +88,7 @@ async function extractTextForPipeline(
       console.warn(
         `[pdf-prefill] pdfjs-dist failed, falling back to pdf-parse (${msg})`,
       );
+      fallbacks.push({ extractor: "pdfjs-dist", errorMessage: msg });
     }
   }
   // pdf-parse can throw on malformed content streams ("Invalid number ...
@@ -90,17 +107,20 @@ async function extractTextForPipeline(
       // downstream simply leaves UnresolvedLine.bbox unset and the highlight
       // overlay stays inactive for those parses.
       rows: [],
+      fallbacks,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(
       `[pdf-prefill] pdf-parse failed, falling back to vision (${msg})`,
     );
+    fallbacks.push({ extractor: "pdf-parse", errorMessage: msg });
     return {
       text: "",
       pageCount: 1,
       textExtractor: "pdf-parse",
       rows: [],
+      fallbacks,
     };
   }
 }
@@ -151,6 +171,23 @@ export async function parseSupplierInvoicePdf(input: {
       .from(products)
       .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
   ]);
+
+  // Report each extractor-fallback hop so the cost shape stays visible
+  // in PostHog. pdf-parse → vision is the one to watch most closely —
+  // vision is ~10x the cost per parse, so a regression here matters.
+  for (const fallback of extracted.fallbacks) {
+    void captureServerEvent({
+      userId: currentUser.id,
+      tenantId: tenant.id,
+      event: "pdf.text_extractor_fallback",
+      properties: {
+        from_extractor: fallback.extractor,
+        error_message: fallback.errorMessage,
+        source_filename: originalFilename,
+        parse_mode: mode,
+      },
+    });
+  }
 
   const productCount = Number(productCountRow?.n ?? 0);
 
