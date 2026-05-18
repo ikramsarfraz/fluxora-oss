@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -355,18 +356,37 @@ export function ReviewScreen({
     return visibleLines.filter(l => lineNeedsReview(l.match));
   }, [visibleLines, filter]);
 
+  // Virtualize the line-items list — big bills can run 100+ lines and
+  // each LineRow brings its own product picker, conditional banners,
+  // and expandable trays. Rendering them all eats noticeable frame
+  // budget on the initial mount + every state change. `react-virtual`
+  // only mounts rows in (or near) the viewport; off-screen rows are
+  // skipped entirely. Variable heights from the trays/banners are
+  // handled via `measureElement`. The active-line scroll behavior
+  // routes through `scrollToIndex` instead of the old `scrollIntoView`
+  // ref so it works even when the target row hasn't been rendered yet.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredLines.length,
+    getScrollElement: () => scrollContainerRef.current,
+    // Estimate of a base LineRow's height (no trays / banners open).
+    // Mis-estimating just changes the initial scroll-jump precision;
+    // `measureElement` corrects it the moment each row mounts.
+    estimateSize: () => 96,
+    overscan: 6,
+    getItemKey: index => filteredLines[index]?.id ?? index,
+  });
+
   useEffect(() => {
     if (activeLineId == null) return;
-    // Respect the user's reduced-motion preference — scroll-with-behavior is
-    // the most jarring animation on this screen for vestibular sensitivity.
-    const prefersReducedMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    lineRefs.current[activeLineId]?.scrollIntoView({
-      block: "nearest",
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-    });
-  }, [activeLineId]);
+    const idx = filteredLines.findIndex(l => l.id === activeLineId);
+    if (idx < 0) return;
+    // `align: "auto"` only scrolls when the target is out of view —
+    // matches the previous `block: "nearest"` semantics. Reduced
+    // motion is honored by react-virtual via the CSS scroll-behavior
+    // on the parent so we don't need to thread it manually.
+    rowVirtualizer.scrollToIndex(idx, { align: "auto" });
+  }, [activeLineId, filteredLines, rowVirtualizer]);
 
   // Wrap setFilter so flipping the segmented control also retargets the active
   // line to the first still-visible row when the previous active row gets
@@ -542,88 +562,123 @@ export function ReviewScreen({
             </div>
 
             {/* pb-20 clears the fixed bill-total bar (~67px) so the last
-                line stays visible above it when scrolled to the bottom. */}
-            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-20">
+                line stays visible above it when scrolled to the bottom.
+                The virtualizer below positions rows absolutely inside a
+                tall inner spacer; this outer div is the scroll port. */}
+            <div
+              ref={scrollContainerRef}
+              className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-20"
+            >
               {filteredLines.length === 0 ? (
                 <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
                   No lines match this filter.
                 </div>
               ) : (
-                filteredLines.map(line => (
-                  <div
-                    key={line.id}
-                    ref={el => {
-                      lineRefs.current[line.id] = el;
-                    }}
-                  >
-                    <LineRow
-                      line={line}
-                      isActive={activeLineId === line.id}
-                      onClick={() => handleLineClickForCollapse(line.id)}
-                      products={products}
-                      matchedProductId={
-                        lineMatchedProductIds?.[line.id] ?? null
-                      }
-                      onSelectProduct={
-                        onSelectLineProduct
-                          ? p => onSelectLineProduct(line.id, p)
-                          : undefined
-                      }
-                      onSelectCandidate={
-                        onSelectLineCandidate
-                          ? c => onSelectLineCandidate(line.id, c)
-                          : undefined
-                      }
-                      onSkip={
-                        onSkipLine ? () => onSkipLine(line.id) : undefined
-                      }
-                      onCreateNew={
-                        onCreateLineProduct
-                          ? () => onCreateLineProduct(line.id)
-                          : undefined
-                      }
-                      weightEditorState={lineWeightStates?.[line.id] ?? null}
-                      isWeightEditorOpen={
-                        openWeightEditorLines?.has(line.id) ?? false
-                      }
-                      onToggleWeightEditor={
-                        onToggleLineWeightEditor
-                          ? () => onToggleLineWeightEditor(line.id)
-                          : undefined
-                      }
-                      onWeightEditorChange={
-                        onLineWeightChange
-                          ? next => onLineWeightChange(line.id, next)
-                          : undefined
-                      }
-                      lotExpiryState={lineLotExpiryStates?.[line.id] ?? null}
-                      isLotExpiryEditorOpen={
-                        openLotExpiryEditorLines?.has(line.id) ?? false
-                      }
-                      onToggleLotExpiryEditor={
-                        onToggleLineLotExpiryEditor
-                          ? () => onToggleLineLotExpiryEditor(line.id)
-                          : undefined
-                      }
-                      onLotExpiryEditorChange={
-                        onLineLotExpiryChange
-                          ? next => onLineLotExpiryChange(line.id, next)
-                          : undefined
-                      }
-                      costDiff={lineCostDiffs?.[line.id] ?? null}
-                      onToggleCostAck={onToggleCostAck}
-                      onDelete={
-                        onDeleteLine ? () => onDeleteLine(line.id) : undefined
-                      }
-                      onCasesChange={
-                        onLineCasesChange
-                          ? cases => onLineCasesChange(line.id, cases)
-                          : undefined
-                      }
-                      submitErrors={lineSubmitErrors?.[line.id] ?? null}
-                    />
-                  </div>
-                ))
+                <div
+                  style={{
+                    height: rowVirtualizer.getTotalSize(),
+                    width: "100%",
+                    position: "relative",
+                  }}
+                >
+                  {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                    const line = filteredLines[virtualRow.index];
+                    if (!line) return null;
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={el => {
+                          // Track each row's actual rendered height so the
+                          // virtualizer's total-size + offsets stay accurate
+                          // when trays / banners expand or collapse.
+                          rowVirtualizer.measureElement(el);
+                          lineRefs.current[line.id] = el;
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          transform: `translateY(${virtualRow.start}px)`,
+                        }}
+                      >
+                        <LineRow
+                          line={line}
+                          isActive={activeLineId === line.id}
+                          onClick={() => handleLineClickForCollapse(line.id)}
+                          products={products}
+                          matchedProductId={
+                            lineMatchedProductIds?.[line.id] ?? null
+                          }
+                          onSelectProduct={
+                            onSelectLineProduct
+                              ? p => onSelectLineProduct(line.id, p)
+                              : undefined
+                          }
+                          onSelectCandidate={
+                            onSelectLineCandidate
+                              ? c => onSelectLineCandidate(line.id, c)
+                              : undefined
+                          }
+                          onSkip={
+                            onSkipLine ? () => onSkipLine(line.id) : undefined
+                          }
+                          onCreateNew={
+                            onCreateLineProduct
+                              ? () => onCreateLineProduct(line.id)
+                              : undefined
+                          }
+                          weightEditorState={
+                            lineWeightStates?.[line.id] ?? null
+                          }
+                          isWeightEditorOpen={
+                            openWeightEditorLines?.has(line.id) ?? false
+                          }
+                          onToggleWeightEditor={
+                            onToggleLineWeightEditor
+                              ? () => onToggleLineWeightEditor(line.id)
+                              : undefined
+                          }
+                          onWeightEditorChange={
+                            onLineWeightChange
+                              ? next => onLineWeightChange(line.id, next)
+                              : undefined
+                          }
+                          lotExpiryState={
+                            lineLotExpiryStates?.[line.id] ?? null
+                          }
+                          isLotExpiryEditorOpen={
+                            openLotExpiryEditorLines?.has(line.id) ?? false
+                          }
+                          onToggleLotExpiryEditor={
+                            onToggleLineLotExpiryEditor
+                              ? () => onToggleLineLotExpiryEditor(line.id)
+                              : undefined
+                          }
+                          onLotExpiryEditorChange={
+                            onLineLotExpiryChange
+                              ? next => onLineLotExpiryChange(line.id, next)
+                              : undefined
+                          }
+                          costDiff={lineCostDiffs?.[line.id] ?? null}
+                          onToggleCostAck={onToggleCostAck}
+                          onDelete={
+                            onDeleteLine
+                              ? () => onDeleteLine(line.id)
+                              : undefined
+                          }
+                          onCasesChange={
+                            onLineCasesChange
+                              ? cases => onLineCasesChange(line.id, cases)
+                              : undefined
+                          }
+                          submitErrors={lineSubmitErrors?.[line.id] ?? null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               )}
               {/* Deleted-lines notice. The user can wipe lines they don't
                   want on this bill; we keep them out of the rendered list
