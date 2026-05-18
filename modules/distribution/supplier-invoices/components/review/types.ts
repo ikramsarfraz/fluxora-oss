@@ -2,6 +2,18 @@ export type FieldConfidenceStatus = "warn" | "auto";
 
 export type ConfidenceLevel = "high" | "medium" | "low";
 
+/**
+ * Mirror of the manual form's payment-method enum
+ * (supplier-invoice-form.schema.ts). Kept here so review components don't
+ * need to import the manual form's schema module.
+ */
+export type PaymentMethod =
+  | "cash"
+  | "check"
+  | "ach"
+  | "zelle"
+  | "credit_card";
+
 export type SupplierCandidate = {
   name: string;
   /** 0–100. */

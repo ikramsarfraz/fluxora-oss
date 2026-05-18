@@ -1,9 +1,26 @@
 "use client";
 
-import { AlertCircle, Check, Plus, Sparkles, TriangleAlert } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Scale,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+import {
+  LineCostDiffBanner,
+  type LineCostAckKey,
+} from "./line-cost-diff-banner";
+import {
+  LineWeightEditor,
+  type LineWeightState,
+} from "./line-weight-editor";
 import type { ProductLookup } from "./map-pipeline-to-review-data";
 import { ProductPicker } from "./product-picker";
 import { REVIEW_COLORS, toneColors } from "./tokens";
@@ -11,6 +28,19 @@ import { lineTone, type ParsedLine, type ProductCandidate } from "./types";
 
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Render-side shape of one line's cost-diff banner data. Mirrors the
+ *  fields LineCostDiffBanner needs plus the ack key the container uses
+ *  to flip the ack state. */
+export type LineCostDiffData = {
+  variant: "changed" | "new";
+  recordedCostPerLb: string | null;
+  liveCostPerLb: string;
+  productName: string;
+  dependentCustomerCount: number;
+  acknowledged: boolean;
+  ackKey: LineCostAckKey;
+};
 
 export function LineRow({
   line,
@@ -22,6 +52,12 @@ export function LineRow({
   onCreateNew,
   products,
   matchedProductId,
+  weightEditorState,
+  isWeightEditorOpen,
+  onToggleWeightEditor,
+  onWeightEditorChange,
+  costDiff,
+  onToggleCostAck,
 }: {
   line: ParsedLine;
   isActive: boolean;
@@ -35,6 +71,22 @@ export function LineRow({
   products?: ProductLookup[];
   /** Currently matched product id (used to drive the picker's selected state). */
   matchedProductId?: string | null;
+  /**
+   * Inline weight-editor state for this line (when the user has opened
+   * the tray). Null when never opened. When non-null + isWeightEditorOpen
+   * is true, the editor renders below the row.
+   */
+  weightEditorState?: LineWeightState | null;
+  isWeightEditorOpen?: boolean;
+  onToggleWeightEditor?: () => void;
+  onWeightEditorChange?: (next: LineWeightState) => void;
+  /**
+   * Cost-diff banner data for this line (or null when there's no recorded
+   * cost change vs the live cost-per-lb). When non-null, renders the
+   * banner above the row's content.
+   */
+  costDiff?: LineCostDiffData | null;
+  onToggleCostAck?: (key: LineCostAckKey) => void;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -62,12 +114,23 @@ export function LineRow({
           onClick();
         }
       }}
-      className="flex cursor-pointer border-b border-stone-line transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--stone-ink)]"
+      className="flex cursor-pointer flex-col border-b border-stone-line transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--stone-ink)]"
       style={{
         background: palette.bg,
         borderLeft: `3px solid ${isActive ? palette.bar : "transparent"}`,
       }}
     >
+      {!isFee && costDiff && onToggleCostAck ? (
+        <LineCostDiffBanner
+          variant={costDiff.variant}
+          recordedCostPerLb={costDiff.recordedCostPerLb}
+          liveCostPerLb={costDiff.liveCostPerLb}
+          productName={costDiff.productName}
+          dependentCustomerCount={costDiff.dependentCustomerCount}
+          acknowledged={costDiff.acknowledged}
+          onToggleAck={() => onToggleCostAck(costDiff.ackKey)}
+        />
+      ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-4 py-3.5">
         <div className="flex items-start justify-between gap-3.5">
           <div className="min-w-0 flex-1">
@@ -110,11 +173,70 @@ export function LineRow({
                 ))
               : null}
             <CreateNewButton onClick={onCreateNew} />
+            {onToggleWeightEditor ? (
+              <WeightChipButton
+                isOpen={isWeightEditorOpen === true}
+                hasOverride={weightEditorState != null}
+                onClick={onToggleWeightEditor}
+              />
+            ) : null}
             {!isMatched ? <SkipButton onClick={onSkip} /> : null}
           </div>
         ) : null}
+
+        {!isFee &&
+        isWeightEditorOpen === true &&
+        weightEditorState != null &&
+        onWeightEditorChange ? (
+          <LineWeightEditor
+            quantityCases={line.cases}
+            state={weightEditorState}
+            onChange={onWeightEditorChange}
+            onClose={onToggleWeightEditor}
+          />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function WeightChipButton({
+  isOpen,
+  hasOverride,
+  onClick,
+}: {
+  isOpen: boolean;
+  hasOverride: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={e => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title={hasOverride ? "Edit per-case weights (overridden)" : "Edit per-case weights"}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
+        hasOverride
+          ? "border-stone-ink text-stone-ink"
+          : "border-stone-line text-stone-muted hover:text-stone-ink",
+      )}
+    >
+      <Scale className="size-[12px]" strokeWidth={1.8} />
+      {isOpen ? (
+        <>
+          Hide weights
+          <ChevronUp className="size-[12px]" strokeWidth={1.8} />
+        </>
+      ) : (
+        <>
+          {hasOverride ? "Weights set" : "Set weights"}
+          <ChevronDown className="size-[12px]" strokeWidth={1.8} />
+        </>
+      )}
+    </button>
   );
 }
 

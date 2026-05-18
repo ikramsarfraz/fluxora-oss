@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 import { FilterSegmented } from "./filter-segmented";
 import { HeaderCard } from "./header-card";
 import type { LineBbox } from "./line-bbox";
-import { LineRow } from "./line-row";
+import type { LineCostAckKey } from "./line-cost-diff-banner";
+import { LineRow, type LineCostDiffData } from "./line-row";
+import type { LineWeightState } from "./line-weight-editor";
 import type {
   ProductLookup,
   SupplierLookup,
@@ -23,6 +25,7 @@ import { ReviewFooterStrip } from "./review-footer-strip";
 import { ReviewHeaderStrip } from "./review-header-strip";
 import {
   lineNeedsReview,
+  type PaymentMethod,
   type ProductCandidate,
   type ReviewCounts,
   type ReviewData,
@@ -43,10 +46,18 @@ export function ReviewScreen({
   onSelectLineProduct,
   onSkipLine,
   onCreateLineProduct,
+  lineWeightStates,
+  openWeightEditorLines,
+  onToggleLineWeightEditor,
+  onLineWeightChange,
+  lineCostDiffs,
+  onToggleCostAck,
   onSelectSupplierCandidate,
   onCreateSupplier,
   onSelectSupplier,
   onSupplierTypedNameChange,
+  paymentMethod,
+  onPaymentMethodChange,
   suppliers = [],
   products = [],
   supplierSelectedId,
@@ -85,6 +96,27 @@ export function ReviewScreen({
   onSkipLine?: (lineId: number) => void;
   /** Called when the user clicks "+ Create new" on a line. */
   onCreateLineProduct?: (lineId: number) => void;
+  /**
+   * Per-line weight-editor state (only populated for lines the user has
+   * opened the tray for). Keyed by `line.id`. Missing key = no override.
+   */
+  lineWeightStates?: Record<number, LineWeightState | undefined>;
+  /**
+   * Set of line ids whose weight tray is currently expanded. Distinct
+   * from `lineWeightStates` so a line can have an override applied while
+   * the tray is collapsed.
+   */
+  openWeightEditorLines?: ReadonlySet<number>;
+  onToggleLineWeightEditor?: (lineId: number) => void;
+  onLineWeightChange?: (lineId: number, next: LineWeightState) => void;
+  /**
+   * Per-line cost-diff banner data — provided by the container after
+   * cross-referencing the live cost-per-lb (from current line state)
+   * against `getSupplierInvoiceCostDiffContext()`. Null/missing key =
+   * no banner for that line.
+   */
+  lineCostDiffs?: Record<number, LineCostDiffData | null>;
+  onToggleCostAck?: (key: LineCostAckKey) => void;
   /** Called when the user clicks a supplier candidate chip. */
   onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
   /** Called when the user clicks "+ Create supplier" on the header card. */
@@ -93,6 +125,12 @@ export function ReviewScreen({
   onSelectSupplier?: (supplier: SupplierLookup | null) => void;
   /** Called as the user types into the supplier picker's search input. */
   onSupplierTypedNameChange?: (name: string) => void;
+  /**
+   * Payment-method override controlled by the parent (initialized from the
+   * parser's prefill). Null when the user picks "Not specified".
+   */
+  paymentMethod: PaymentMethod | null;
+  onPaymentMethodChange: (value: PaymentMethod | null) => void;
   suppliers?: SupplierLookup[];
   products?: ProductLookup[];
   supplierSelectedId?: string | null;
@@ -321,6 +359,8 @@ export function ReviewScreen({
             }}
             onSupplierCandidate={onSelectSupplierCandidate}
             onCreateSupplier={onCreateSupplier}
+            paymentMethod={paymentMethod}
+            onPaymentMethodChange={onPaymentMethodChange}
           />
 
           {/* Duplicate-invoice warning. Hidden when the parsed (supplier,
@@ -406,6 +446,22 @@ export function ReviewScreen({
                           ? () => onCreateLineProduct(line.id)
                           : undefined
                       }
+                      weightEditorState={lineWeightStates?.[line.id] ?? null}
+                      isWeightEditorOpen={
+                        openWeightEditorLines?.has(line.id) ?? false
+                      }
+                      onToggleWeightEditor={
+                        onToggleLineWeightEditor
+                          ? () => onToggleLineWeightEditor(line.id)
+                          : undefined
+                      }
+                      onWeightEditorChange={
+                        onLineWeightChange
+                          ? next => onLineWeightChange(line.id, next)
+                          : undefined
+                      }
+                      costDiff={lineCostDiffs?.[line.id] ?? null}
+                      onToggleCostAck={onToggleCostAck}
                     />
                   </div>
                 ))
