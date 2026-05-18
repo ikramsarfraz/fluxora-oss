@@ -65,8 +65,13 @@ async function extractTextForPipeline(
     } catch (err) {
       // Swallow and fall through — pdfjs-dist occasionally chokes on PDFs
       // that pdf-parse handles fine; the downstream vision fallback covers
-      // anything pdf-parse can't read either.
-      console.warn("[pdf-prefill] pdfjs-dist extraction failed", err);
+      // anything pdf-parse can't read either. One-line log: the full stack
+      // is just noise here because the path is expected and the vision
+      // branch picks up the slack.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[pdf-prefill] pdfjs-dist failed, falling back to pdf-parse (${msg})`,
+      );
     }
   }
   // pdf-parse can throw on malformed content streams ("Invalid number ...
@@ -87,7 +92,10 @@ async function extractTextForPipeline(
       rows: [],
     };
   } catch (err) {
-    console.warn("[pdf-prefill] pdf-parse extraction failed", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[pdf-prefill] pdf-parse failed, falling back to vision (${msg})`,
+    );
     return {
       text: "",
       pageCount: 1,
