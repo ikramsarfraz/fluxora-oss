@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { bulkImportFiles, supplierInvoices } from "@/db/schema";
@@ -51,9 +51,21 @@ export type BulkImportFileRow = {
   reviewedAt: Date | null;
   supplierInvoiceId: string | null;
   deletedAt: Date | null;
+  /** Portal-user id currently holding the advisory review claim, or null. */
+  claimedByUserId: string | null;
+  /** Last heartbeat timestamp — used to detect a stale (expired) claim. */
+  claimedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
+
+/**
+ * How long a claim stays valid without a heartbeat. The shell heartbeats
+ * every ~60s, so 3 minutes gives generous slack — enough to absorb a slow
+ * network round-trip without booting a still-active reviewer, but short
+ * enough that a closed tab doesn't permanently strand the row.
+ */
+export const BULK_IMPORT_CLAIM_TTL_MS = 3 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Writes — called by bulk-import.ts after parsing each file. The action layer
@@ -276,6 +288,139 @@ export async function restoreBulkImportFile(id: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Advisory claim — prevents two reviewers from racing on the same queue row.
+// The shell calls claim() on mount + heartbeat() every minute + release() on
+// unmount. Strictly advisory: the existing `status = 'parsed'` filter on
+// markBulkImportFileReviewed already prevents double-posts. The claim's job
+// is UX (don't let both reviewers waste effort) not data integrity.
+// ---------------------------------------------------------------------------
+
+export type BulkImportClaimResult =
+  | { ok: true; row: BulkImportFileRow }
+  | {
+      ok: false;
+      reason: "claimed_by_other";
+      claimedByUserId: string;
+      claimedAt: Date | null;
+    }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "already_reviewed" };
+
+/**
+ * Try to grab the advisory claim on this row. Succeeds atomically when:
+ *  - no one holds it, OR
+ *  - the previous holder's heartbeat is stale (older than the TTL), OR
+ *  - the current user is already the holder (idempotent — also bumps the
+ *    heartbeat, so this doubles as a "still here" ping after a tab reload).
+ *
+ * Refuses when another live reviewer holds it. The caller is responsible
+ * for surfacing that to the user (read-only banner with the holder's
+ * display name) — both happy and refused paths return enough info.
+ */
+export async function claimBulkImportFile(
+  id: string,
+): Promise<BulkImportClaimResult> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  // First read — gives us the "claimed_by_other" failure case + the
+  // pre-claim row to compare against the post-update version.
+  const existing = await getBulkImportFile(id);
+  if (!existing) return { ok: false, reason: "not_found" };
+  if (existing.status === "reviewed") {
+    return { ok: false, reason: "already_reviewed" };
+  }
+
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - BULK_IMPORT_CLAIM_TTL_MS);
+
+  const [updated] = await db
+    .update(bulkImportFiles)
+    .set({ claimedByUserId: currentUser.id, claimedAt: now })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+        isNull(bulkImportFiles.deletedAt),
+        or(
+          isNull(bulkImportFiles.claimedByUserId),
+          eq(bulkImportFiles.claimedByUserId, currentUser.id),
+          lt(bulkImportFiles.claimedAt, staleBefore),
+        ),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    return {
+      ok: false,
+      reason: "claimed_by_other",
+      claimedByUserId: existing.claimedByUserId ?? "",
+      claimedAt: existing.claimedAt,
+    };
+  }
+  return { ok: true, row: rowToDomain(updated) };
+}
+
+/**
+ * Refresh the claim heartbeat. The shell calls this every ~60s while the
+ * reviewer has the row open. Idempotent — only updates when the caller
+ * still holds the claim, so a stolen claim (after stale-out) stays stolen.
+ * Returns true on success so the client can detect the takeover case and
+ * back off into a read-only banner.
+ */
+export async function heartbeatBulkImportFile(id: string): Promise<boolean> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+
+  const [updated] = await db
+    .update(bulkImportFiles)
+    .set({ claimedAt: new Date() })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+        eq(bulkImportFiles.claimedByUserId, currentUser.id),
+      ),
+    )
+    .returning({ id: bulkImportFiles.id });
+
+  return Boolean(updated);
+}
+
+/**
+ * Release the claim. Called on shell unmount + after a successful submit.
+ * Idempotent — releasing a row this user doesn't hold is a no-op. Also
+ * doesn't touch `updatedAt` (would mis-trigger the queue re-fetch chain).
+ */
+export async function releaseBulkImportFile(id: string): Promise<void> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+
+  await db
+    .update(bulkImportFiles)
+    .set({
+      claimedByUserId: null,
+      claimedAt: null,
+      // Skip the $onUpdate hook for updatedAt — releasing the claim is
+      // not a content change and shouldn't bust queue-blob caches that
+      // include updatedAt in their key.
+      updatedAt: sql`${bulkImportFiles.updatedAt}`,
+    })
+    .where(
+      and(
+        eq(bulkImportFiles.id, id),
+        eq(bulkImportFiles.tenantId, tenant.id),
+        eq(bulkImportFiles.claimedByUserId, currentUser.id),
+      ),
+    );
+}
+
+// ---------------------------------------------------------------------------
 // PDF fetch — used by the Review screen + parsing screen to render the
 // original PDF. Two flavours: download bytes server-side (for re-parse) or
 // hand back a short-lived signed URL the browser can fetch directly.
@@ -426,6 +571,8 @@ function rowToDomain(
     reviewedAt: row.reviewedAt,
     supplierInvoiceId: row.supplierInvoiceId,
     deletedAt: row.deletedAt,
+    claimedByUserId: row.claimedByUserId,
+    claimedAt: row.claimedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

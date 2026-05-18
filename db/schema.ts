@@ -2038,6 +2038,19 @@ export const bulkImportFiles = pgTable(
      * recovery is "set deleted_at = null".
      */
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /**
+     * Advisory claim — set when a reviewer opens this row in the queue, kept
+     * fresh via a heartbeat, and cleared on unmount / submit. A second
+     * reviewer who opens the same row while the claim is still fresh sees a
+     * read-only banner instead of an editable form. Auto-expires when the
+     * heartbeat lapses (closed tab, crashed browser) so the row never
+     * permanently strands.
+     */
+    claimedByUserId: uuid("claimed_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

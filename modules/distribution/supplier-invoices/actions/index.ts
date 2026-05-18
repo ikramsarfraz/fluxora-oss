@@ -57,14 +57,18 @@ import {
   type BulkImportResult,
 } from "../services/bulk-import";
 import {
+  claimBulkImportFile,
   getBulkImportFile,
   getBulkImportPdfSignedUrl,
   getSupplierPerformanceStats,
+  heartbeatBulkImportFile,
   listPendingBulkImportFiles,
   markBulkImportFileReviewed,
+  releaseBulkImportFile,
   rescanBulkImportFile,
   restoreBulkImportFile,
   softDeleteBulkImportFile,
+  type BulkImportClaimResult,
   type BulkImportFileRow,
   type SupplierPerformanceStats,
 } from "../services/bulk-import-history";
@@ -540,6 +544,31 @@ export async function rescanBulkImportFileAction(
     },
   });
   return row;
+}
+
+/**
+ * Try to grab the advisory review claim on this row. The shell calls
+ * this on mount; on success the user gets the editable form, on refusal
+ * a read-only banner with the other reviewer's id. No audit/PostHog
+ * here — the open/claim cycle fires once per navigation and would just
+ * be noise next to the existing review.submit_validation_failed etc.
+ */
+export async function claimBulkImportFileAction(
+  id: string,
+): Promise<BulkImportClaimResult> {
+  return await claimBulkImportFile(id);
+}
+
+/** Refresh the claim heartbeat — called every ~60s while the row is open. */
+export async function heartbeatBulkImportFileAction(
+  id: string,
+): Promise<boolean> {
+  return await heartbeatBulkImportFile(id);
+}
+
+/** Release the claim — called on shell unmount + post-submit. */
+export async function releaseBulkImportFileAction(id: string): Promise<void> {
+  return await releaseBulkImportFile(id);
 }
 
 /**

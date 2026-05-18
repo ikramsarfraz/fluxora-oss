@@ -11,6 +11,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { captureClientEvent } from "@/lib/posthog-client";
 
 import { getBulkImportPdfSignedUrlAction } from "../../actions";
+import {
+  useBulkImportFileLock,
+  type BulkImportLockState,
+} from "../../hooks/use-bulk-import-file-lock";
 import { useRescanBulkImportFile } from "../../hooks/use-supplier-invoices";
 import type { AiExtractionErrorCode } from "../../services/ai-provider";
 import type { PipelineResult } from "../../services/parsing-pipeline";
@@ -151,6 +155,24 @@ export function ReviewQueueShell({
   // calling onSubmitStart/onSubmitEnd.
   const [submitting, setSubmitting] = useState(false);
 
+  // Advisory claim on the current row — prevents two reviewers from racing
+  // on the same invoice. `owned` is the happy path (this user has the
+  // claim, heartbeats firing); `foreign` swaps the editable form for a
+  // read-only banner with the other reviewer's id.
+  const lock = useBulkImportFileLock(currentKey);
+  const isLockForeign = lock.state.kind === "foreign";
+  const isLockUnavailable = lock.state.kind === "unavailable";
+
+  // Re-scan — re-run the AI parser against the same R2-stored PDF and
+  // replace this row's pipelineResult / status / errors. The reviewer's
+  // in-progress overrides for THIS file are wiped because the new
+  // parse can return different line ids / counts and porting overrides
+  // across would silently misapply them. Confirmed via window.confirm
+  // for now; a proper dialog can come later. Hook lives up here (above
+  // the early returns) so the order of hook calls stays stable across
+  // renders — react-hooks/rules-of-hooks.
+  const rescanMutation = useRescanBulkImportFile();
+
   // Keyboard shortcuts:
   //  - ← / →                : previous / next invoice in the queue
   //  - Cmd+Enter / Ctrl+Enter: Complete & next (same as header button)
@@ -270,13 +292,6 @@ export function ReviewQueueShell({
     );
   }
 
-  // Re-scan — re-run the AI parser against the same R2-stored PDF and
-  // replace this row's pipelineResult / status / errors. The reviewer's
-  // in-progress overrides for THIS file are wiped because the new
-  // parse can return different line ids / counts and porting overrides
-  // across would silently misapply them. Confirmed via window.confirm
-  // for now; a proper dialog can come later.
-  const rescanMutation = useRescanBulkImportFile();
   const onReparse: (() => void) | undefined = currentKey
     ? () => {
         if (rescanMutation.isPending) return;
@@ -328,7 +343,11 @@ export function ReviewQueueShell({
       hasNext={hasNext}
       isLastRemaining={queue.length === 1}
       submitting={submitting}
-      submitDisabled={submitDisabled}
+      // Disable Complete whenever the user doesn't hold the advisory
+      // claim — without it, posting would still succeed (the row's
+      // status filter blocks the second post anyway), but the user
+      // would have spent edits on a file someone else already covered.
+      submitDisabled={submitDisabled || isLockForeign || isLockUnavailable}
       onBackToBulk={() => router.push("/supplier-invoices/bulk")}
       onSkip={goNext}
       onReparse={onReparse}
@@ -347,6 +366,19 @@ export function ReviewQueueShell({
         hasPrev={hasPrev}
         hasNext={hasNext}
       />
+
+      {/* Advisory-claim banner: shown when another reviewer (or another
+          tab as this same user) holds the claim, or the row has been
+          posted out from under us. Doesn't replace the form — we still
+          render ReviewContainer so the user can read the parsed data —
+          but Complete is disabled and we surface a Retry affordance. */}
+      {isLockForeign || isLockUnavailable ? (
+        <BulkImportLockBanner
+          state={lock.state}
+          onRetry={lock.retry}
+          onSkip={hasNext ? goNext : undefined}
+        />
+      ) : null}
 
       {/* ReviewContainer is mounted with the current key so per-invoice state
           (form overrides, skipped lines, supplier choice) resets cleanly each
@@ -388,6 +420,70 @@ export function ReviewQueueShell({
         }
       />
     </main>
+  );
+}
+
+/**
+ * Banner shown above the form when another reviewer holds the advisory
+ * claim on this row — or when the row has been reviewed or deleted out
+ * from under us. Stays compact so the form stays visible underneath
+ * (the reviewer can still read what's parsed); the Complete button in
+ * the queue header is the gate that actually prevents the post.
+ */
+function BulkImportLockBanner({
+  state,
+  onRetry,
+  onSkip,
+}: {
+  state: BulkImportLockState;
+  onRetry: () => void;
+  onSkip?: () => void;
+}) {
+  const isForeign = state.kind === "foreign";
+  const isUnavailable = state.kind === "unavailable";
+
+  const heading = isForeign
+    ? "Another reviewer is editing this invoice"
+    : state.kind === "unavailable" && state.reason === "already_reviewed"
+      ? "This invoice was already posted"
+      : "This invoice is no longer available";
+
+  const body = isForeign
+    ? "We've kept the form read-only so you don't post duplicate work. The claim auto-releases after 3 minutes of inactivity — Retry then to take over."
+    : state.kind === "unavailable" && state.reason === "already_reviewed"
+      ? "Someone else completed the review while this tab was open. Move on to the next file or back to the bulk import."
+      : "The file was deleted from the bulk import queue. Skip to the next file in the queue.";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex shrink-0 items-start gap-3 border-b border-stone-line bg-amber-50 px-4 py-2.5 text-[13px] text-stone-ink"
+      style={{ background: "oklch(96% 0.06 80)" }}
+    >
+      <AlertTriangle
+        className="mt-[1px] size-4 shrink-0"
+        strokeWidth={1.8}
+        style={{ color: "oklch(48% 0.16 70)" }}
+        aria-hidden
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="font-semibold">{heading}</span>
+        <span className="text-stone-muted">{body}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {isForeign ? (
+          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        ) : null}
+        {(isForeign || isUnavailable) && onSkip ? (
+          <Button type="button" size="sm" onClick={onSkip}>
+            Skip
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
