@@ -115,11 +115,29 @@ export const InlineDropzone = forwardRef<
       try {
         const result = await mutation.mutateAsync(formData);
         const { parsed, errored } = result.summary;
-        const parts: string[] = [];
-        if (parsed > 0)
-          parts.push(`${parsed} ready to review`);
-        if (errored > 0) parts.push(`${errored} couldn't be read`);
-        toast.success(parts.join(" · ") || "Scan complete.");
+        if (parsed > 0) {
+          // Happy path — surface as success even when some files errored,
+          // so the user knows the parsed ones are queued.
+          const parts: string[] = [`${parsed} ready to review`];
+          if (errored > 0) parts.push(`${errored} couldn't be read`);
+          toast.success(parts.join(" · "));
+        } else if (errored > 0) {
+          // All files failed — promote to an error toast and surface the
+          // first failure's actual reason (e.g. "Uploaded PDF is empty",
+          // "Persistence failed: …"). Without this the user just sees
+          // "1 couldn't be read" with no way to diagnose.
+          const erroredItems = result.items.filter(i => i.status === "error");
+          const firstReason = erroredItems[0]?.error;
+          const heading =
+            errored === 1
+              ? "Couldn't read this PDF"
+              : `Couldn't read ${errored} PDFs`;
+          toast.error(heading, {
+            description: firstReason ?? undefined,
+          });
+        } else {
+          toast.success("Scan complete.");
+        }
         // Imports tab list reads from the bulk_import_files query; new rows
         // landed server-side as part of the action, so a single invalidation
         // pulls them in. No need to seed the cache manually.
