@@ -69,16 +69,32 @@ async function extractTextForPipeline(
       console.warn("[pdf-prefill] pdfjs-dist extraction failed", err);
     }
   }
-  const parsed = await pdfParse(bytes);
-  return {
-    text: parsed.text?.trim() ?? "",
-    pageCount: parsed.numpages ?? 1,
-    textExtractor: "pdf-parse",
-    // pdf-parse doesn't expose positions; without rows the bbox-matcher
-    // downstream simply leaves UnresolvedLine.bbox unset and the highlight
-    // overlay stays inactive for those parses.
-    rows: [],
-  };
+  // pdf-parse can throw on malformed content streams ("Invalid number ...
+  // (charCode XX)" is the common one when it hits an unexpected token). When
+  // it does, treat it the same as "produced no usable text" — return an
+  // empty-text shell and let the downstream vision branch read the PDF
+  // straight from its bytes. Without this catch a single failing PDF poisons
+  // the whole bulk import.
+  try {
+    const parsed = await pdfParse(bytes);
+    return {
+      text: parsed.text?.trim() ?? "",
+      pageCount: parsed.numpages ?? 1,
+      textExtractor: "pdf-parse",
+      // pdf-parse doesn't expose positions; without rows the bbox-matcher
+      // downstream simply leaves UnresolvedLine.bbox unset and the highlight
+      // overlay stays inactive for those parses.
+      rows: [],
+    };
+  } catch (err) {
+    console.warn("[pdf-prefill] pdf-parse extraction failed", err);
+    return {
+      text: "",
+      pageCount: 1,
+      textExtractor: "pdf-parse",
+      rows: [],
+    };
+  }
 }
 
 function isPdfFile(args: {
