@@ -18,6 +18,47 @@ export type { BulkImportLockState, ClaimOutcome } from "./bulk-import-file-lock-
 
 const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
+const RELEASE_BEACON_URL =
+  "/api/supplier-invoices/bulk-import/release-claim";
+
+/**
+ * Fire-and-forget release for the tab-close / page-unload path. The
+ * useEffect cleanup also calls `releaseBulkImportFileAction`, but most
+ * browsers abort that in-flight fetch as soon as navigation/unload
+ * starts — leaving the row stuck until the server-side TTL expires.
+ *
+ * `navigator.sendBeacon` guarantees delivery (within bandwidth limits)
+ * across page unload. Falls back to `fetch(..., { keepalive: true })`
+ * when sendBeacon is unavailable. Either way the request is best-effort
+ * — the TTL is still the final safety net.
+ */
+function fireReleaseBeacon(bulkImportKey: string): void {
+  if (typeof window === "undefined") return;
+  const body = JSON.stringify({ id: bulkImportKey });
+  try {
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      // Blob with the right MIME so the API route can JSON-parse the
+      // body. sendBeacon defaults to text/plain otherwise.
+      const blob = new Blob([body], { type: "application/json" });
+      const ok = navigator.sendBeacon(RELEASE_BEACON_URL, blob);
+      if (ok) return;
+    }
+  } catch {
+    // sendBeacon can throw quota-exceeded under load — fall through to
+    // the keepalive fetch below.
+  }
+  try {
+    void fetch(RELEASE_BEACON_URL, {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+  } catch {
+    // Both paths failed — TTL covers us.
+  }
+}
+
 /**
  * Advisory review-claim lifecycle for the bulk-import review queue. The
  * hook owns one slot:
@@ -71,6 +112,15 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
 
     let cancelled = false;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+    // Tab-close / page-unload release. `pagehide` is more reliable than
+    // `beforeunload` (it fires on mobile + when the page goes into the
+    // bfcache); we listen on both for browser coverage. The handler
+    // dispatches a sendBeacon that survives the unload, so the row's
+    // claim clears in real time instead of waiting on the TTL.
+    const onUnload = () => fireReleaseBeacon(bulkImportKey);
+    window.addEventListener("pagehide", onUnload);
+    window.addEventListener("beforeunload", onUnload);
 
     void (async () => {
       try {
@@ -140,6 +190,8 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
     return () => {
       cancelled = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+      window.removeEventListener("pagehide", onUnload);
+      window.removeEventListener("beforeunload", onUnload);
       // Best-effort release. Fire-and-forget — the user is already
       // moving on, and the server-side TTL covers us if this call
       // never lands.
