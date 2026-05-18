@@ -45,6 +45,12 @@ import {
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
 import { recordAiUsageEvents } from "../services/ai-usage-events";
 import {
+  completeSupplierInvoiceInputSchema,
+  createSupplierInvoiceInputSchema,
+  updateSupplierInvoiceInputSchema,
+  validateSupplierInvoiceInput,
+} from "../services/supplier-invoice-input.schema";
+import {
   bulkImportSupplierInvoices,
   BULK_IMPORT_MAX_FILES,
   type BulkImportFileInput,
@@ -113,14 +119,23 @@ export async function findExistingSupplierInvoicesAction(args: {
 export async function createSupplierInvoiceAction(
   input: Parameters<typeof createSupplierInvoice>[0],
 ) {
+  // Trust-boundary check: the client form validates this same shape,
+  // but a malformed payload (bug, manual API call, browser extension
+  // mucking with state) shouldn't reach the DB. Throws
+  // SupplierInvoiceValidationError with structured issues if anything
+  // is off.
+  const validated = validateSupplierInvoiceInput(
+    createSupplierInvoiceInputSchema,
+    input,
+  );
   const user = await getCurrentPortalUser();
-  const result = await createSupplierInvoice(input);
+  const result = await createSupplierInvoice(validated);
   await captureServerEvent({
     userId: user.id,
     tenantId: user.tenantId,
     event: "bill.saved",
     properties: {
-      line_count: input.lines?.length ?? 0,
+      line_count: validated.lines.length,
     },
   });
   return result;
@@ -129,21 +144,29 @@ export async function createSupplierInvoiceAction(
 export async function updateSupplierInvoiceAction(
   input: Parameters<typeof updateSupplierInvoice>[0],
 ) {
-  return await updateSupplierInvoice(input);
+  const validated = validateSupplierInvoiceInput(
+    updateSupplierInvoiceInputSchema,
+    input,
+  );
+  return await updateSupplierInvoice(validated);
 }
 
 export async function completeSupplierInvoiceAction(
   input: Parameters<typeof completeSupplierInvoice>[0],
 ) {
+  const validated = validateSupplierInvoiceInput(
+    completeSupplierInvoiceInputSchema,
+    input,
+  );
   const user = await getCurrentPortalUser();
-  const result = await completeSupplierInvoice(input);
+  const result = await completeSupplierInvoice(validated);
   await captureServerEvent({
     userId: user.id,
     tenantId: user.tenantId,
     event: "bill.received",
     properties: {
-      bill_id: input.id,
-      line_override_count: input.lineOverrides?.length ?? 0,
+      bill_id: validated.id,
+      line_override_count: validated.lineOverrides?.length ?? 0,
     },
   });
   return result;
