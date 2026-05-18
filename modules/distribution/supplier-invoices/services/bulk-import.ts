@@ -1,5 +1,7 @@
 import "server-only";
 
+import { captureException } from "@/lib/sentry-scope";
+
 import { recordAiUsageEvents } from "./ai-usage-events";
 import { createBulkImportFile } from "./bulk-import-history";
 import { parseSupplierInvoicePdf } from "./pdf-prefill";
@@ -92,6 +94,18 @@ async function processOneFile(
       bytes: file.bytes,
     });
   } catch (err) {
+    // The user-facing summary collapses this into "1 couldn't be read"
+    // — Sentry needs the actual error to triage. Capture with the
+    // filename + tenant context so we can group recurring failures by
+    // supplier or PDF flavor.
+    captureException(err, {
+      stage: "parse_supplier_invoice_pdf",
+      filename: file.originalFilename,
+      mime_type: file.mimeType,
+      size_bytes: file.bytes.byteLength,
+      tenant_id: args.tenantId,
+      batch_id: args.batchId,
+    });
     return {
       filename: file.originalFilename,
       status: "error",
@@ -131,6 +145,17 @@ async function processOneFile(
     });
     bulkImportFileId = created.id;
   } catch (err) {
+    // Same rationale as the parse catch above — without explicit capture,
+    // R2/DB persistence failures collapse into the same generic count
+    // and we lose the underlying cause.
+    captureException(err, {
+      stage: "create_bulk_import_file",
+      filename: file.originalFilename,
+      mime_type: file.mimeType,
+      size_bytes: file.bytes.byteLength,
+      tenant_id: args.tenantId,
+      batch_id: args.batchId,
+    });
     return {
       filename: file.originalFilename,
       status: "error",

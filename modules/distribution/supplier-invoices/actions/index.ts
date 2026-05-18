@@ -12,6 +12,10 @@ import {
 } from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 import { logAuditEvent } from "@/lib/audit-log";
+import {
+  addBreadcrumb as addSentryBreadcrumb,
+  setSentryUserScope,
+} from "@/lib/sentry-scope";
 import { validatePdfUpload } from "@/lib/file-validation";
 import { captureServerEvent } from "@/lib/posthog-server";
 import {
@@ -353,6 +357,14 @@ export async function bulkImportSupplierInvoicesAction(
   for (const f of rawFiles) {
     if (f instanceof File && f.size > 0) files.push(f);
   }
+  addSentryBreadcrumb({
+    category: "supplier-invoices.bulk-import",
+    message: "Action entered",
+    data: {
+      file_count: files.length,
+      total_size_bytes: files.reduce((sum, f) => sum + f.size, 0),
+    },
+  });
   if (files.length === 0) {
     throw new Error("Pick at least one PDF to import.");
   }
@@ -375,6 +387,9 @@ export async function bulkImportSupplierInvoicesAction(
   }
 
   const user = await getCurrentPortalUser();
+  // Tag the Sentry scope with the actor so any subsequent capture inside
+  // this action ships with user + tenant context.
+  setSentryUserScope({ userId: user.id, tenantId: user.tenantId });
 
   // Rate-limit each file. Platform admins skip — keeps internal tooling
   // unconstrained. Drawing per-file keeps cost-per-import predictable; if
