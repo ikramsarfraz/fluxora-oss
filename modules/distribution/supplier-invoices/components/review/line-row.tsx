@@ -69,6 +69,7 @@ export function LineRow({
   costDiff,
   onToggleCostAck,
   onDelete,
+  onCasesChange,
 }: {
   line: ParsedLine;
   isActive: boolean;
@@ -114,6 +115,13 @@ export function LineRow({
    * them via the footer notice.
    */
   onDelete?: () => void;
+  /**
+   * Edit the case-count for this line — replaces the read-only digit
+   * in the NumericSnapshot with an inline +/- stepper. Used by the
+   * reviewer to fix parser misreads (e.g. "1B" parsed as 18, merged
+   * columns).
+   */
+  onCasesChange?: (cases: number) => void;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -173,7 +181,7 @@ export function LineRow({
               <FeeStatus category={line.feeCategory ?? null} />
             )}
           </div>
-          <NumericSnapshot line={line} />
+          <NumericSnapshot line={line} onCasesChange={onCasesChange} />
           {onDelete ? (
             <button
               type="button"
@@ -452,27 +460,103 @@ function FeeStatus({
   );
 }
 
-function NumericSnapshot({ line }: { line: ParsedLine }) {
+function NumericSnapshot({
+  line,
+  onCasesChange,
+}: {
+  line: ParsedLine;
+  onCasesChange?: (cases: number) => void;
+}) {
   const isFee = line.match.status === "fee";
+  // Fees don't have an editable case count (they're flat amounts) — only
+  // matched / unmatched product lines do.
+  const showStepper = !isFee && onCasesChange != null;
   return (
-    <div className="shrink-0 pl-3.5 text-right">
+    <div className="flex shrink-0 flex-col items-end pl-3.5 text-right">
       <div className="font-mono text-[15px] font-semibold tabular-nums text-stone-ink">
         ${fmt(line.total)}
       </div>
       <div
-        className="mt-0.5 font-mono text-[11px] tabular-nums"
+        className="mt-0.5 flex items-center gap-1 font-mono text-[11px] tabular-nums"
         style={{ color: REVIEW_COLORS.mutedSoft }}
       >
-        {line.cases}×{" "}
-        {line.weight > 0
-          ? `${line.weight.toFixed(2)}lb`
-          : isFee
-            ? "flat"
-            : `${line.cases}cs`}{" "}
-        @ ${line.unitPrice.toFixed(2)}
-        {line.weight > 0 ? "/lb" : "/cs"}
+        {showStepper ? (
+          <CasesStepper
+            value={line.cases}
+            onChange={onCasesChange!}
+          />
+        ) : (
+          <span>{line.cases}</span>
+        )}
+        <span>×</span>
+        <span>
+          {line.weight > 0
+            ? `${line.weight.toFixed(2)}lb`
+            : isFee
+              ? "flat"
+              : `${line.cases}cs`}
+        </span>
+        <span>@ ${line.unitPrice.toFixed(2)}</span>
+        <span>{line.weight > 0 ? "/lb" : "/cs"}</span>
       </div>
     </div>
+  );
+}
+
+/** Compact inline number editor with +/- buttons. Used for case-count
+ *  edits in NumericSnapshot — typeable AND clickable so the user can
+ *  bump by 1 or paste a corrected value. */
+function CasesStepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (cases: number) => void;
+}) {
+  return (
+    <span
+      onClick={e => e.stopPropagation()}
+      className="inline-flex items-stretch overflow-hidden rounded-md border border-stone-line bg-stone-surface"
+    >
+      <button
+        type="button"
+        onClick={e => {
+          e.stopPropagation();
+          onChange(Math.max(0, value - 1));
+        }}
+        title="Decrease cases"
+        aria-label="Decrease cases"
+        className="flex w-5 items-center justify-center text-stone-muted transition-colors hover:text-stone-ink"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={value}
+        onChange={e => {
+          const next = Number.parseInt(e.target.value, 10);
+          onChange(Number.isFinite(next) ? next : 0);
+        }}
+        onClick={e => e.stopPropagation()}
+        // Width fits up to ~3 digits; longer typing scrolls inside the
+        // input rather than expanding the row.
+        className="h-5 w-9 border-x border-stone-line bg-stone-surface text-center font-mono text-[11px] tabular-nums text-stone-ink outline-none focus:bg-stone-line2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={e => {
+          e.stopPropagation();
+          onChange(value + 1);
+        }}
+        title="Increase cases"
+        aria-label="Increase cases"
+        className="flex w-5 items-center justify-center text-stone-muted transition-colors hover:text-stone-ink"
+      >
+        +
+      </button>
+    </span>
   );
 }
 

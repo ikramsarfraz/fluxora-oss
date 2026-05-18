@@ -63,6 +63,7 @@ export function ReviewScreen({
   deletedLineIds,
   onDeleteLine,
   onRestoreAllLines,
+  onLineCasesChange,
   onSelectSupplierCandidate,
   onCreateSupplier,
   onSelectSupplier,
@@ -154,6 +155,12 @@ export function ReviewScreen({
   deletedLineIds?: ReadonlySet<number>;
   onDeleteLine?: (lineId: number) => void;
   onRestoreAllLines?: () => void;
+  /**
+   * Edit the case-count for a line. Stored as an override in the
+   * container so the parser's value can be restored by clearing the
+   * override (not exposed in v1 — user can just type the original back).
+   */
+  onLineCasesChange?: (lineId: number, cases: number) => void;
   /** Called when the user clicks a supplier candidate chip. */
   onSelectSupplierCandidate?: (candidate: SupplierCandidate) => void;
   /** Called when the user clicks "+ Create supplier" on the header card. */
@@ -576,6 +583,11 @@ export function ReviewScreen({
                       onToggleCostAck={onToggleCostAck}
                       onDelete={
                         onDeleteLine ? () => onDeleteLine(line.id) : undefined
+                      }
+                      onCasesChange={
+                        onLineCasesChange
+                          ? cases => onLineCasesChange(line.id, cases)
+                          : undefined
                       }
                     />
                   </div>

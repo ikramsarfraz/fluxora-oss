@@ -227,6 +227,15 @@ export function ReviewContainer({
     new Set(),
   );
 
+  // Per-line case-count overrides. Parser quantity is often correct but
+  // occasionally mis-reads (e.g. "1B" parsed as 18, or two adjacent
+  // columns merged). Letting the reviewer fix the cases count directly
+  // on the line — instead of having to delete + recreate — saves a lot
+  // of cleanup work. Missing key = use the parser's value as-is.
+  const [lineCasesOverrides, setLineCasesOverrides] = useState<
+    Record<number, number>
+  >({});
+
   // Editable charges, seeded from the parser's detected fees. Replaces
   // the previous silent-stamp behavior where every detected fee went to
   // the server as `chargeType: "other"`. The user can reclassify, edit
@@ -252,9 +261,16 @@ export function ReviewContainer({
       baseData,
       supplierNameOverride,
       lineProductOverrides,
+      lineCasesOverrides,
       skippedLines,
     });
-  }, [baseData, supplierNameOverride, lineProductOverrides, skippedLines]);
+  }, [
+    baseData,
+    supplierNameOverride,
+    lineProductOverrides,
+    lineCasesOverrides,
+    skippedLines,
+  ]);
 
   // Duplicate-invoice lookup. Runs whenever both the selected supplier and
   // the parsed invoice number are known — re-runs automatically when the
@@ -471,6 +487,14 @@ export function ReviewContainer({
     setDeletedLineIds(new Set());
   }, []);
 
+  const handleLineCasesChange = useCallback(
+    (lineId: number, cases: number) => {
+      const clamped = Number.isFinite(cases) ? Math.max(0, Math.trunc(cases)) : 0;
+      setLineCasesOverrides(prev => ({ ...prev, [lineId]: clamped }));
+    },
+    [],
+  );
+
   /** Direct pick from the line's product autocomplete. */
   const handleSelectLineProduct = useCallback(
     (lineId: number, product: ProductLookup) => {
@@ -604,7 +628,9 @@ export function ReviewContainer({
         continue;
       }
       const weightOverride = lineWeightStates[line.id];
-      const quantityCases = Number(prefill.quantityCases) || 0;
+      const casesOverride = lineCasesOverrides[line.id];
+      const quantityCases =
+        casesOverride != null ? casesOverride : Number(prefill.quantityCases) || 0;
       const resolved = weightOverride
         ? resolveLineWeightSubmit({ quantityCases, state: weightOverride })
         : {
@@ -705,7 +731,11 @@ export function ReviewContainer({
         const override = lineProductOverrides[lineId];
         const productId = override?.productId ?? line.productId;
         if (!productId) return null; // unmatched + not skipped → block submit below
-        const quantityCases = Number(line.quantityCases) || 0;
+        const casesOverride = lineCasesOverrides[lineId];
+        const quantityCases =
+          casesOverride != null
+            ? casesOverride
+            : Number(line.quantityCases) || 0;
         // Apply weight override when present. We re-resolve from the
         // editor state via the same helpers the manual form uses so the
         // submitted `weightLbs` always matches what the user saw in the
@@ -881,6 +911,7 @@ export function ReviewContainer({
     skippedLines,
     deletedLineIds,
     lineProductOverrides,
+    lineCasesOverrides,
     lineWeightStates,
     lineLotExpiryStates,
     charges,
@@ -950,6 +981,7 @@ export function ReviewContainer({
         deletedLineIds={deletedLineIds}
         onDeleteLine={handleDeleteLine}
         onRestoreAllLines={handleRestoreAllLines}
+        onLineCasesChange={handleLineCasesChange}
         onSelectSupplierCandidate={handleSupplierCandidate}
         onCreateSupplier={() => setCreateSupplierOpen(true)}
         onSelectSupplier={handleSelectSupplier}
@@ -993,6 +1025,7 @@ function enrichData({
   baseData,
   supplierNameOverride,
   lineProductOverrides,
+  lineCasesOverrides,
   skippedLines,
 }: {
   baseData: ReturnType<typeof mapPipelineToReviewData>;
@@ -1001,6 +1034,7 @@ function enrichData({
     number,
     { productId: string; productName: string; sku: string | null }
   >;
+  lineCasesOverrides: Record<number, number>;
   skippedLines: Set<number>;
 }) {
   return {
@@ -1016,6 +1050,7 @@ function enrichData({
       applyLineOverrides({
         line,
         override: lineProductOverrides[line.id],
+        casesOverride: lineCasesOverrides[line.id],
         skipped: skippedLines.has(line.id),
       }),
     ),
@@ -1025,12 +1060,22 @@ function enrichData({
 function applyLineOverrides({
   line,
   override,
+  casesOverride,
   skipped,
 }: {
   line: ParsedLine;
   override?: { productId: string; productName: string; sku: string | null };
+  casesOverride?: number;
   skipped: boolean;
 }): ParsedLine {
+  // Apply cases override before product/skip so downstream consumers
+  // (NumericSnapshot, weight editor's quantityCases, footer totals) all
+  // see the corrected count without needing to peek at the override map.
+  const withCases =
+    casesOverride != null && casesOverride !== line.cases
+      ? { ...line, cases: casesOverride }
+      : line;
+  line = withCases;
   if (skipped) {
     return {
       ...line,
