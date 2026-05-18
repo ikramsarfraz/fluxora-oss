@@ -19,9 +19,17 @@ function extractClientIp(h: Headers): string | null {
  * union — both the call site and the type system catch the change.
  */
 export type AuditAction =
+  | "bill.create"
+  | "bill.update"
+  | "bill.complete"
+  | "bill.reverse"
   | "bill.delete"
   | "bill.forward"
   | "bill.mark_paid_manually"
+  | "bulk_import.upload"
+  | "bulk_import.rescan"
+  | "bulk_import.row_deleted"
+  | "bulk_import.row_restored"
   | "supplier.switch_primary"
   | "supplier.delete"
   | "product.delete"

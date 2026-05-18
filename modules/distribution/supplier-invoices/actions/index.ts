@@ -139,6 +139,22 @@ export async function createSupplierInvoiceAction(
       line_count: validated.lines.length,
     },
   });
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: validated.complete ? "bill.complete" : "bill.create",
+    resourceType: "supplier_invoice",
+    resourceId: result.id,
+    metadata: {
+      invoiceNumber: validated.invoiceNumber,
+      invoiceDate: validated.invoiceDate,
+      supplierId: validated.supplierId,
+      lineCount: validated.lines.length,
+      chargeCount: validated.charges?.length ?? 0,
+      completedOnCreate: validated.complete === true,
+    },
+  });
   return result;
 }
 
@@ -149,7 +165,21 @@ export async function updateSupplierInvoiceAction(
     updateSupplierInvoiceInputSchema,
     input,
   );
-  return await updateSupplierInvoice(validated);
+  const user = await getCurrentPortalUser();
+  const result = await updateSupplierInvoice(validated);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bill.update",
+    resourceType: "supplier_invoice",
+    resourceId: validated.id,
+    metadata: {
+      invoiceNumber: validated.invoiceNumber,
+      lineCount: validated.lines.length,
+    },
+  });
+  return result;
 }
 
 export async function completeSupplierInvoiceAction(
@@ -170,13 +200,35 @@ export async function completeSupplierInvoiceAction(
       line_override_count: validated.lineOverrides?.length ?? 0,
     },
   });
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bill.complete",
+    resourceType: "supplier_invoice",
+    resourceId: validated.id,
+    metadata: {
+      lineOverrideCount: validated.lineOverrides?.length ?? 0,
+    },
+  });
   return result;
 }
 
 export async function reverseSupplierInvoiceAction(
   input: Parameters<typeof reverseSupplierInvoice>[0],
 ) {
-  return await reverseSupplierInvoice(input);
+  const user = await getCurrentPortalUser();
+  const result = await reverseSupplierInvoice(input);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bill.reverse",
+    resourceType: "supplier_invoice",
+    resourceId: input.id,
+    metadata: { reason: input.reason ?? null },
+  });
+  return result;
 }
 
 export async function getSupplierInvoiceCostDiffContextAction(
@@ -371,6 +423,20 @@ export async function bulkImportSupplierInvoicesAction(
   ).length;
   const parseMode = parsedItems[0]?.telemetry?.mode ?? null;
 
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bulk_import.upload",
+    resourceType: "bulk_import_batch",
+    resourceId: result.batchId,
+    metadata: {
+      fileCount: result.summary.total,
+      parsedCount: result.summary.parsed,
+      erroredCount: result.summary.errored,
+      filenames: safeNames,
+    },
+  });
   await captureServerEvent({
     userId: user.id,
     tenantId: user.tenantId,
@@ -459,6 +525,20 @@ export async function rescanBulkImportFileAction(
       parse_error_codes: row.parseErrorCodes ?? [],
     },
   });
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bulk_import.rescan",
+    resourceType: "bulk_import_file",
+    resourceId: id,
+    metadata: {
+      filename: row.filename,
+      parseStatus: row.status,
+      parseErrorCodes: row.parseErrorCodes ?? [],
+      durationMs: Date.now() - startedAt,
+    },
+  });
   return row;
 }
 
@@ -470,7 +550,16 @@ export async function rescanBulkImportFileAction(
 export async function softDeleteBulkImportFileAction(
   id: string,
 ): Promise<void> {
-  return await softDeleteBulkImportFile(id);
+  const user = await getCurrentPortalUser();
+  await softDeleteBulkImportFile(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bulk_import.row_deleted",
+    resourceType: "bulk_import_file",
+    resourceId: id,
+  });
 }
 
 /**
@@ -485,7 +574,16 @@ export async function getSupplierPerformanceStatsAction(
 }
 
 export async function restoreBulkImportFileAction(id: string): Promise<void> {
-  return await restoreBulkImportFile(id);
+  const user = await getCurrentPortalUser();
+  await restoreBulkImportFile(id);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "bulk_import.row_restored",
+    resourceType: "bulk_import_file",
+    resourceId: id,
+  });
 }
 
 export async function uploadSupplierInvoiceAttachmentAction(
