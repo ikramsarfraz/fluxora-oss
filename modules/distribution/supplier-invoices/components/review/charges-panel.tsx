@@ -26,6 +26,13 @@ export type SupplierInvoiceChargeType =
   | "fuel"
   | "tax"
   | "discount"
+  // Meat-supplier categories the AI extractor classifies — keep this
+  // dropdown in sync with the prompt's taxonomy in ai-prompts.ts, the
+  // server Zod enum, and the DB CHECK constraint.
+  | "processing"
+  | "inspection"
+  | "cod"
+  | "refrigeration"
   | "other";
 
 const CHARGE_TYPE_OPTIONS: Array<{
@@ -36,6 +43,10 @@ const CHARGE_TYPE_OPTIONS: Array<{
   { value: "fuel", label: "Fuel" },
   { value: "tax", label: "Tax" },
   { value: "discount", label: "Discount" },
+  { value: "processing", label: "Processing" },
+  { value: "inspection", label: "Inspection" },
+  { value: "cod", label: "COD" },
+  { value: "refrigeration", label: "Refrigeration" },
   { value: "other", label: "Other" },
 ];
 

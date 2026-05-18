@@ -119,6 +119,10 @@ const CHARGE_TYPE_LABELS: Record<string, string> = {
   fuel: "Fuel",
   tax: "Tax",
   discount: "Discount",
+  processing: "Processing",
+  inspection: "Inspection",
+  cod: "COD",
+  refrigeration: "Refrigeration",
   other: "Other",
 };
 

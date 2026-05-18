@@ -1263,7 +1263,7 @@ export const supplierInvoiceCharges = pgTable(
     index("supplier_invoice_charges_invoice_id_idx").on(table.supplierInvoiceId),
     check(
       "supplier_invoice_charges_charge_type_check",
-      sql`${table.chargeType} IN ('freight','fuel','tax','discount','other')`,
+      sql`${table.chargeType} IN ('freight','fuel','tax','discount','processing','inspection','cod','refrigeration','other')`,
     ),
   ],
 );

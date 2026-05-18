@@ -8,7 +8,10 @@ import { useSupplierInvoice } from "../hooks/use-supplier-invoices";
 import { inferWeightDraftState } from "@/modules/distribution/supplier-invoices/utils/case-weights";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
-import type { SupplierInvoiceFormValues } from "./supplier-invoice-form.schema";
+import type {
+  SupplierInvoiceChargeType,
+  SupplierInvoiceFormValues,
+} from "./supplier-invoice-form.schema";
 
 export function SupplierInvoiceEditShell({
   invoiceId,
@@ -44,7 +47,7 @@ export function SupplierInvoiceEditShell({
       })),
       charges: (invoice.charges ?? []).map(c => ({
         description: c.description,
-        chargeType: (c.chargeType as "freight" | "fuel" | "tax" | "discount" | "other") ?? "other",
+        chargeType: (c.chargeType as SupplierInvoiceChargeType) ?? "other",
         rate: c.rate ? String(c.rate) : "",
         includeInInventoryCost: c.includeInInventoryCost ?? false,
         amount: String(c.amount ?? "0"),

@@ -104,6 +104,13 @@ export const supplierInvoiceChargeTypes = [
   "fuel",
   "tax",
   "discount",
+  // Meat-supplier categories — the AI extractor already classifies fees
+  // into these buckets, so the manual form mirrors the same options to
+  // keep the two surfaces in sync.
+  "processing",
+  "inspection",
+  "cod",
+  "refrigeration",
   "other",
 ] as const;
 export type SupplierInvoiceChargeType = (typeof supplierInvoiceChargeTypes)[number];

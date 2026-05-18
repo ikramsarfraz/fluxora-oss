@@ -65,6 +65,14 @@ export const supplierInvoiceChargeTypeEnum = z.enum([
   "fuel",
   "tax",
   "discount",
+  // Meat-supplier categories the AI extractor classifies. Kept distinct
+  // (rather than collapsed to "other") so reporting + COGS allocation
+  // can treat them on their own — e.g. processing/inspection/cod usually
+  // belong in landed cost, taxes don't.
+  "processing",
+  "inspection",
+  "cod",
+  "refrigeration",
   "other",
 ]);
 
