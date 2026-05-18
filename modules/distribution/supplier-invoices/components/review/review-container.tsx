@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { captureClientEvent } from "@/lib/posthog-client";
+
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
 
@@ -756,8 +758,17 @@ export function ReviewContainer({
   const handleToggleCostAck = useCallback((key: LineCostAckKey) => {
     setAcknowledgedCostKeys(prev => {
       const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
+      const wasAcknowledged = next.has(key);
+      if (wasAcknowledged) next.delete(key);
       else next.add(key);
+      // Fire the observability event from inside setState so we capture
+      // the actual transition (ack ↔ un-ack) rather than guessing from
+      // a parallel read of prev state outside the updater.
+      captureClientEvent(
+        wasAcknowledged
+          ? "review.cost_diff_unacknowledged"
+          : "review.cost_diff_acknowledged",
+      );
       return next;
     });
   }, []);
@@ -990,6 +1001,19 @@ export function ReviewContainer({
         );
         setLineSubmitErrors(grouped.perLine);
         toast.error(summarizeSupplierInvoiceValidationIssues(issues));
+        captureClientEvent("review.submit_validation_failed", {
+          issue_count: issues.length,
+          // Distinct top-level paths help spot validation patterns
+          // (e.g. "always lines.weightLbs failing" → bad parser
+          // heuristic) without leaking row-level data into PostHog.
+          paths: Array.from(
+            new Set(
+              issues.map(i =>
+                i.path.length > 0 ? String(i.path[0]) : "request",
+              ),
+            ),
+          ),
+        });
       } else {
         const message =
           err instanceof Error ? err.message : "Failed to save the bill.";
