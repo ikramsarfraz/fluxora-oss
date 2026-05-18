@@ -85,6 +85,13 @@ export function groupSupplierInvoiceErrorsByLocation(
         (perLine[lineId] ??= []).push(message);
         continue;
       }
+      // Server pointed at a line index the client doesn't know about
+      // — typically a server bug or a race condition we can't act on
+      // per-row. Surface in unbucketed so the toast still tells the
+      // user something went wrong without painting a banner on an
+      // unrelated row.
+      unbucketed.push(message);
+      continue;
     }
     if (section === "charges" && typeof idxRaw === "number") {
       (perCharge[idxRaw] ??= []).push(message);

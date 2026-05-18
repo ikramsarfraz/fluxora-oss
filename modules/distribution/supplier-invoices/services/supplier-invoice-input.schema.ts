@@ -19,12 +19,31 @@ import { z } from "zod";
  */
 
 const uuidSchema = z.string().uuid("Must be a valid UUID.");
+/**
+ * Validates a YYYY-MM-DD string AND that it represents a real calendar
+ * date. `Date.parse` is too lenient — it silently rolls "2026-02-30"
+ * over to March 2, so we have to round-trip through UTC and confirm
+ * the day-of-month matches what we asked for.
+ */
 const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format.")
-  .refine(v => !Number.isNaN(Date.parse(v)), {
-    message: "Date is not a valid calendar date.",
-  });
+  .refine(
+    v => {
+      const [yStr, mStr, dStr] = v.split("-");
+      const y = Number(yStr);
+      const m = Number(mStr);
+      const d = Number(dStr);
+      if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+      const utc = new Date(Date.UTC(y, m - 1, d));
+      return (
+        utc.getUTCFullYear() === y &&
+        utc.getUTCMonth() === m - 1 &&
+        utc.getUTCDate() === d
+      );
+    },
+    { message: "Date is not a valid calendar date." },
+  );
 const moneyStringSchema = z
   .string()
   .regex(/^-?\d+(\.\d{1,4})?$/, "Must be a decimal with up to 4 fraction digits.");
