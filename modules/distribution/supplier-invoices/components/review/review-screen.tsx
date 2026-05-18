@@ -252,6 +252,22 @@ export function ReviewScreen({
   const setRememberAliases = onRememberAliasesChange ?? setRememberAliasesLocal;
   const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
+  // Header card auto-collapses to a thin summary strip the moment the
+  // reviewer first interacts with a line — claws back ~150-200px of
+  // line items real estate without preventing the user from re-
+  // expanding. We track "has already auto-collapsed once this session"
+  // via a ref so a manual re-expand doesn't get clobbered the next
+  // time the user clicks a line.
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const hasAutoCollapsedHeaderRef = useRef(false);
+  const handleLineClickForCollapse = (lineId: number) => {
+    setActiveLineId(lineId);
+    if (!hasAutoCollapsedHeaderRef.current) {
+      hasAutoCollapsedHeaderRef.current = true;
+      setHeaderCollapsed(true);
+    }
+  };
+
   // Apply line deletions BEFORE any other derived calculation so counts,
   // filtered list, totals, and footer numbers all reflect the same
   // "lines the user wants on this bill" universe.
@@ -404,7 +420,7 @@ export function ReviewScreen({
             onZoom={setZoom}
             lines={data.lines}
             activeLineId={activeLineId}
-            onLineClick={setActiveLineId}
+            onLineClick={handleLineClickForCollapse}
             pdfFile={pdfFile}
             pdfLoadError={pdfLoadError}
             lineBboxes={lineBboxes}
@@ -441,6 +457,8 @@ export function ReviewScreen({
             onPaymentMethodChange={onPaymentMethodChange}
             notes={notes}
             onNotesChange={onNotesChange}
+            collapsed={headerCollapsed}
+            onToggleCollapse={() => setHeaderCollapsed(v => !v)}
           />
 
           {/* Duplicate-invoice warning. Hidden when the parsed (supplier,
@@ -503,7 +521,7 @@ export function ReviewScreen({
                     <LineRow
                       line={line}
                       isActive={activeLineId === line.id}
-                      onClick={() => setActiveLineId(line.id)}
+                      onClick={() => handleLineClickForCollapse(line.id)}
                       products={products}
                       matchedProductId={
                         lineMatchedProductIds?.[line.id] ?? null
