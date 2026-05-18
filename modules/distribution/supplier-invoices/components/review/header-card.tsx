@@ -47,6 +47,12 @@ export function HeaderCard({
   onPaymentMethodChange,
   notes,
   onNotesChange,
+  invoiceNumber,
+  onInvoiceNumberChange,
+  invoiceDate,
+  onInvoiceDateChange,
+  receiveDate,
+  onReceiveDateChange,
   collapsed,
   onToggleCollapse,
 }: {
@@ -72,6 +78,18 @@ export function HeaderCard({
   notes: string;
   onNotesChange: (value: string) => void;
   /**
+   * Header text fields, now fully controlled. Previously these were
+   * `defaultValue` inputs so user edits silently dropped on submit;
+   * lifting to the parent (which seeds from the parser's prefill) means
+   * every keystroke flows into the createSupplierInvoiceAction payload.
+   */
+  invoiceNumber: string;
+  onInvoiceNumberChange: (value: string) => void;
+  invoiceDate: string;
+  onInvoiceDateChange: (value: string) => void;
+  receiveDate: string;
+  onReceiveDateChange: (value: string) => void;
+  /**
    * When true, the header card renders as a thin one-line summary strip
    * (supplier · invoice # · date · total · payment method) with a
    * chevron to expand. Used by the review screen to claw back vertical
@@ -94,8 +112,9 @@ export function HeaderCard({
 
   // Trim padding when expanded so the header card eats fewer pixels —
   // every row we save flows directly into line items real estate.
-  const receiveDateSameAsInvoice =
-    parsed.receiveDate.value === parsed.invoiceDate.value;
+  // Compare overrides (not the parser's prefill) so a manual edit
+  // that re-syncs the two dates re-collapses the receive-date row.
+  const receiveDateSameAsInvoice = receiveDate === invoiceDate;
 
   return (
     <div className="border-b border-stone-line bg-stone-surface px-4 py-3">
@@ -178,7 +197,9 @@ export function HeaderCard({
           chip={<FieldChip confidence={parsed.invoiceNumber.confidence} />}
         >
           <input
-            defaultValue={parsed.invoiceNumber.value}
+            value={invoiceNumber}
+            onChange={e => onInvoiceNumberChange(e.target.value)}
+            maxLength={128}
             className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 font-mono text-[13px] tabular-nums outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
             style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
           />
@@ -190,7 +211,8 @@ export function HeaderCard({
         >
           <input
             type="date"
-            defaultValue={parsed.invoiceDate.value}
+            value={invoiceDate}
+            onChange={e => onInvoiceDateChange(e.target.value)}
             className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
             style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
           />
@@ -198,7 +220,8 @@ export function HeaderCard({
 
         {receiveDateSameAsInvoice ? (
           <ReceiveDateSameStub
-            defaultValue={parsed.receiveDate.value}
+            value={receiveDate}
+            onChange={onReceiveDateChange}
           />
         ) : (
           <ParsedField
@@ -212,7 +235,8 @@ export function HeaderCard({
           >
             <input
               type="date"
-              defaultValue={parsed.receiveDate.value}
+              value={receiveDate}
+              onChange={e => onReceiveDateChange(e.target.value)}
               className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
               style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
             />
@@ -369,20 +393,26 @@ function CollapsedHeaderStrip({
 }
 
 /**
- * Renders a hidden `<input type="date">` (so the value still posts when
- * we wire field controls upstream) plus a small inline notice saying
- * "Receive date: same as invoice — Edit". Saves a full row in the
- * common case where the parser stamped the receive date as the invoice
- * date. Click "Edit" reveals the date input.
+ * Compact stub shown in place of the receive-date ParsedField when the
+ * receive date already equals the invoice date (the common parser
+ * default). Click "Edit" reveals a real controlled date input that
+ * posts the new value through `onChange`.
  */
-function ReceiveDateSameStub({ defaultValue }: { defaultValue: string }) {
+function ReceiveDateSameStub({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
   const [editing, setEditing] = useState(false);
   if (editing) {
     return (
       <ParsedField label="Receive date">
         <input
           type="date"
-          defaultValue={defaultValue}
+          value={value}
+          onChange={e => onChange(e.target.value)}
           className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
           style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
         />

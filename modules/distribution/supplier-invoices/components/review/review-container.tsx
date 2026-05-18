@@ -187,6 +187,19 @@ export function ReviewContainer({
   const [notesOverride, setNotesOverride] = useState<string>(
     pipelineResult.prefillResult.values.notes ?? "",
   );
+  // Header text overrides. Previously HeaderCard's invoice number /
+  // dates were `defaultValue` inputs whose edits never reached submit —
+  // controlled state at the container fixes that data-loss bug. All
+  // three seed from the parser's prefill.
+  const [invoiceNumberOverride, setInvoiceNumberOverride] = useState<string>(
+    pipelineResult.prefillResult.values.supplierInvoiceNumber ?? "",
+  );
+  const [invoiceDateOverride, setInvoiceDateOverride] = useState<string>(
+    pipelineResult.prefillResult.values.invoiceDate ?? "",
+  );
+  const [receiveDateOverride, setReceiveDateOverride] = useState<string>(
+    pipelineResult.prefillResult.values.receiveDate ?? "",
+  );
   const [lineProductOverrides, setLineProductOverrides] = useState<
     Record<number, { productId: string; productName: string; sku: string | null }>
   >({});
@@ -805,10 +818,11 @@ export function ReviewContainer({
 
       const result = await createSupplierInvoiceAction({
         supplierId: supplierIdOverride,
-        invoiceNumber:
-          pipelineResult.prefillResult.values.supplierInvoiceNumber || null,
-        invoiceDate: pipelineResult.prefillResult.values.invoiceDate,
-        receiveDate: pipelineResult.prefillResult.values.receiveDate,
+        invoiceNumber: invoiceNumberOverride.trim()
+          ? invoiceNumberOverride.trim()
+          : null,
+        invoiceDate: invoiceDateOverride,
+        receiveDate: receiveDateOverride,
         paymentMethod: paymentMethodOverride,
         notes: notesOverride.trim() ? notesOverride : null,
         lines,
@@ -905,6 +919,9 @@ export function ReviewContainer({
     supplierIdOverride,
     paymentMethodOverride,
     notesOverride,
+    invoiceNumberOverride,
+    invoiceDateOverride,
+    receiveDateOverride,
     hasPostedDuplicate,
     duplicateAcknowledged,
     pipelineResult,
@@ -989,6 +1006,12 @@ export function ReviewContainer({
         onPaymentMethodChange={setPaymentMethodOverride}
         notes={notesOverride}
         onNotesChange={setNotesOverride}
+        invoiceNumber={invoiceNumberOverride}
+        onInvoiceNumberChange={setInvoiceNumberOverride}
+        invoiceDate={invoiceDateOverride}
+        onInvoiceDateChange={setInvoiceDateOverride}
+        receiveDate={receiveDateOverride}
+        onReceiveDateChange={setReceiveDateOverride}
         suppliers={suppliers}
         products={products}
         supplierSelectedId={supplierIdOverride}

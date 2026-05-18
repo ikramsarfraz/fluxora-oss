@@ -72,6 +72,12 @@ export function ReviewScreen({
   onPaymentMethodChange,
   notes,
   onNotesChange,
+  invoiceNumber,
+  onInvoiceNumberChange,
+  invoiceDate,
+  onInvoiceDateChange,
+  receiveDate,
+  onReceiveDateChange,
   suppliers = [],
   products = [],
   supplierSelectedId,
@@ -181,6 +187,18 @@ export function ReviewScreen({
    */
   notes: string;
   onNotesChange: (value: string) => void;
+  /**
+   * Controlled invoice header text fields. Previously these were
+   * `defaultValue` inputs inside HeaderCard whose edits never made it
+   * to the submit payload — moving them to controlled state at the
+   * container fixes the silent-drop bug.
+   */
+  invoiceNumber: string;
+  onInvoiceNumberChange: (value: string) => void;
+  invoiceDate: string;
+  onInvoiceDateChange: (value: string) => void;
+  receiveDate: string;
+  onReceiveDateChange: (value: string) => void;
   suppliers?: SupplierLookup[];
   products?: ProductLookup[];
   supplierSelectedId?: string | null;
@@ -464,6 +482,12 @@ export function ReviewScreen({
             onPaymentMethodChange={onPaymentMethodChange}
             notes={notes}
             onNotesChange={onNotesChange}
+            invoiceNumber={invoiceNumber}
+            onInvoiceNumberChange={onInvoiceNumberChange}
+            invoiceDate={invoiceDate}
+            onInvoiceDateChange={onInvoiceDateChange}
+            receiveDate={receiveDate}
+            onReceiveDateChange={onReceiveDateChange}
             collapsed={headerCollapsed}
             onToggleCollapse={() => setHeaderCollapsed(v => !v)}
           />
