@@ -25,6 +25,13 @@ export function FilterSegmented({
   return (
     <div className="flex gap-1 rounded-[7px] border border-stone-line bg-stone-line2 p-[3px]">
       <FilterBtn
+        active={filter === "all"}
+        onClick={() => onChange("all")}
+        count={counts.total}
+      >
+        All
+      </FilterBtn>
+      <FilterBtn
         active={filter === "needs"}
         onClick={() => onChange("needs")}
         count={counts.needsReview}
@@ -51,13 +58,6 @@ export function FilterSegmented({
           Fees
         </FilterBtn>
       ) : null}
-      <FilterBtn
-        active={filter === "all"}
-        onClick={() => onChange("all")}
-        count={counts.total}
-      >
-        All
-      </FilterBtn>
     </div>
   );
 }
