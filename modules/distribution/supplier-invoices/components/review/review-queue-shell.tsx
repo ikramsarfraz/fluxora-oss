@@ -163,6 +163,16 @@ export function ReviewQueueShell({
   const isLockForeign = lock.state.kind === "foreign";
   const isLockUnavailable = lock.state.kind === "unavailable";
 
+  // Explicit release-then-navigate. The hook's unmount cleanup also fires
+  // releaseBulkImportFileAction, but the browser can cancel that request
+  // mid-navigation — leaving the claim stuck until the TTL expires.
+  // Awaiting before router.push guarantees the next reviewer's Retry
+  // works the moment they click it.
+  const goBackToBulk = async () => {
+    await lock.releaseNow();
+    router.push("/supplier-invoices/bulk");
+  };
+
   // Re-scan — re-run the AI parser against the same R2-stored PDF and
   // replace this row's pipelineResult / status / errors. The reviewer's
   // in-progress overrides for THIS file are wiped because the new
@@ -254,7 +264,7 @@ export function ReviewQueueShell({
     return (
       <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
         <QueueDone
-          onBackToBulk={() => router.push("/supplier-invoices/bulk")}
+          onBackToBulk={goBackToBulk}
         />
       </main>
     );
@@ -285,7 +295,7 @@ export function ReviewQueueShell({
         <QueueFailedCard
           fileName={fileName}
           parseErrorCodes={pipelineResult.parseErrorCodes}
-          onBackToBulk={() => router.push("/supplier-invoices/bulk")}
+          onBackToBulk={goBackToBulk}
           onSkip={hasNext ? goNext : undefined}
         />
       </main>
@@ -348,7 +358,7 @@ export function ReviewQueueShell({
       // status filter blocks the second post anyway), but the user
       // would have spent edits on a file someone else already covered.
       submitDisabled={submitDisabled || isLockForeign || isLockUnavailable}
-      onBackToBulk={() => router.push("/supplier-invoices/bulk")}
+      onBackToBulk={goBackToBulk}
       onSkip={goNext}
       onReparse={onReparse}
     />

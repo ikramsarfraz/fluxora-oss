@@ -55,6 +55,13 @@ type ClaimOutcome = Exclude<BulkImportLockState, { kind: "idle" } | { kind: "cla
 export function useBulkImportFileLock(bulkImportKey: string | null): {
   state: BulkImportLockState;
   retry: () => void;
+  /**
+   * Explicit release — call before navigating away so we await the
+   * server's response, instead of relying on the unmount cleanup
+   * (which the browser may cancel mid-navigation). Idempotent and
+   * safe to await even when we don't hold the claim.
+   */
+  releaseNow: () => Promise<void>;
 } {
   // Last terminal outcome we received, tagged with the key it belongs to.
   // We only honor it when its key still matches `bulkImportKey` — otherwise
@@ -64,6 +71,12 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
   >(null);
   const [retryToken, setRetryToken] = useState(0);
 
+  // Derive the surface state: idle when no key, otherwise the cached
+  // outcome iff it belongs to the current key, otherwise "claiming".
+  // The retryToken bumping resets `lastOutcome` so the banner switches
+  // to "claiming" the instant the user clicks Retry — without this the
+  // foreign banner sits unchanged through the entire server roundtrip
+  // and the button feels broken.
   const state: BulkImportLockState = !bulkImportKey
     ? { kind: "idle" }
     : lastOutcome?.key === bulkImportKey
@@ -148,6 +161,20 @@ export function useBulkImportFileLock(bulkImportKey: string | null): {
 
   return {
     state,
-    retry: () => setRetryToken(t => t + 1),
+    retry: () => {
+      // Drop the cached outcome so the derived state flips to "claiming"
+      // for the duration of the new claim request — instant visual
+      // feedback while the server roundtrip is in flight.
+      setLastOutcome(null);
+      setRetryToken(t => t + 1);
+    },
+    releaseNow: async () => {
+      if (!bulkImportKey) return;
+      try {
+        await releaseBulkImportFileAction(bulkImportKey);
+      } catch {
+        // The TTL covers us if this throws; not worth surfacing.
+      }
+    },
   };
 }
