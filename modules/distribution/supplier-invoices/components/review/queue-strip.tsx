@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Check, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { cn } from "@/lib/utils";
 
@@ -64,20 +65,36 @@ export function QueueStrip({
     return map;
   }, [statsQuery.data]);
 
-  // Auto-scroll the active card into view when `currentKey` changes — which
-  // happens from the prev/next buttons in this strip, keyboard ← →, and
-  // FloatingNav. The rail itself has no visible scrollbar (`no-scrollbar`),
-  // so this is the only way the user sees the rail follow the selection.
-  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Virtualize the horizontal card carousel. For typical queues (5-50
+  // entries) this is overkill, but a single tenant uploading 200+ PDFs
+  // in one batch would otherwise pay the cost of mounting every card
+  // (each with its own QueueCard render + scrollIntoView ref + the
+  // supplier-performance bucket lookup) on every prev/next nav. With
+  // virtualization, the active card and its neighbors are always
+  // rendered, and the rest are skipped.
+  //
+  // The active-card scroll behavior switches from per-card refs +
+  // scrollIntoView to scrollToIndex — works correctly even when the
+  // target card isn't rendered yet.
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const cardVirtualizer = useVirtualizer({
+    count: queue.length,
+    getScrollElement: () => scrollContainerRef.current,
+    // Card minWidth is 230 + 8px flex gap = 238. Estimating slightly
+    // higher keeps the overscan generous; measureElement corrects the
+    // virtualizer once cards mount.
+    estimateSize: () => 245,
+    horizontal: true,
+    overscan: 4,
+    getItemKey: i => queue[i]?.key ?? i,
+  });
+
   useEffect(() => {
     if (!currentKey) return;
-    const card = cardRefs.current[currentKey];
-    card?.scrollIntoView({
-      behavior: "smooth",
-      inline: "nearest",
-      block: "nearest",
-    });
-  }, [currentKey]);
+    const idx = queue.findIndex(q => q.key === currentKey);
+    if (idx < 0) return;
+    cardVirtualizer.scrollToIndex(idx, { align: "auto", behavior: "smooth" });
+  }, [currentKey, queue, cardVirtualizer]);
 
   return (
     <div
@@ -136,33 +153,59 @@ export function QueueStrip({
           the same ring on focus-visible) so the first/last card's ring
           doesn't get sheared off at the strip edges. */}
       <div
-        className="no-scrollbar flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scroll-smooth"
+        ref={scrollContainerRef}
+        className="no-scrollbar flex min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden scroll-smooth"
         style={{ padding: 5 }}
       >
-        {queue.map((entry, idx) => (
-          <div
-            key={entry.key}
-            ref={el => {
-              cardRefs.current[entry.key] = el;
-            }}
-            className="flex items-stretch"
-          >
-            <QueueCard
-              entry={entry}
-              position={idx + 1}
-              isCurrent={entry.key === currentKey}
-              isCompleting={entry.key === completingKey}
-              performanceBucket={
-                entry.supplierId
-                  ? bucketBySupplierId.get(entry.supplierId) ?? null
-                  : null
-              }
-              onClick={() => {
-                if (entry.key !== completingKey) onPick(entry.key);
-              }}
-            />
-          </div>
-        ))}
+        {/* Inner spacer holds the virtualizer's reported total width so
+            the scrollbar geometry matches the full queue length. Cards
+            are absolutely positioned inside it at their virtual offset.
+            8px gap from the original flex layout is folded into each
+            card's translateX so the spacing carries through. */}
+        <div
+          style={{
+            width: cardVirtualizer.getTotalSize(),
+            height: "100%",
+            position: "relative",
+            flexShrink: 0,
+          }}
+        >
+          {cardVirtualizer.getVirtualItems().map(virtualCard => {
+            const entry = queue[virtualCard.index];
+            if (!entry) return null;
+            return (
+              <div
+                key={virtualCard.key}
+                data-index={virtualCard.index}
+                ref={el => cardVirtualizer.measureElement(el)}
+                className="flex items-stretch"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  height: "100%",
+                  transform: `translateX(${virtualCard.start}px)`,
+                  paddingRight: 8,
+                }}
+              >
+                <QueueCard
+                  entry={entry}
+                  position={virtualCard.index + 1}
+                  isCurrent={entry.key === currentKey}
+                  isCompleting={entry.key === completingKey}
+                  performanceBucket={
+                    entry.supplierId
+                      ? bucketBySupplierId.get(entry.supplierId) ?? null
+                      : null
+                  }
+                  onClick={() => {
+                    if (entry.key !== completingKey) onPick(entry.key);
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Next arrow — advances selection one invoice forward. The
