@@ -98,7 +98,7 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
           <Icon className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
+        <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight">
           {value}
         </CardTitle>
         {helper ? <p className="mt-1 text-[11px] text-stone-muted">{helper}</p> : null}
@@ -185,7 +185,7 @@ export default function CustomerPortfolioPage() {
           {initials(customer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold leading-tight text-stone-ink">
+          <h1 className="truncate text-2xl font-medium leading-tight text-stone-ink">
             {customer.name}
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -311,7 +311,7 @@ export default function CustomerPortfolioPage() {
       </Card>
 
       {/* Tab bar — sticky below topbar */}
-      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-white px-4">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-card px-4">
         <div className="flex">
           {TABS.map(t => (
             <button

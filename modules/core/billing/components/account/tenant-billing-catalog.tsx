@@ -102,14 +102,14 @@ const PLAN_CONFIG: Record<
 > = {
   starter: {
     description: "Perfect for small teams getting started",
-    iconBg: "bg-sky-100 dark:bg-sky-900/30",
-    iconColor: "text-sky-600 dark:text-sky-400",
+    iconBg: "bg-forest-tint dark:bg-sky-900/30",
+    iconColor: "text-forest dark:text-sky-400",
     cardBorder: "border-border",
     cardHoverBorder: "hover:border-sky-300 dark:hover:border-sky-700",
-    badgeBg: "bg-sky-100 dark:bg-sky-900/30",
+    badgeBg: "bg-forest-tint dark:bg-sky-900/30",
     badgeText: "text-sky-700 dark:text-sky-300",
-    checkBg: "bg-sky-100 dark:bg-sky-900/30",
-    checkColor: "text-sky-600 dark:text-sky-400",
+    checkBg: "bg-forest-tint dark:bg-sky-900/30",
+    checkColor: "text-forest dark:text-sky-400",
   },
   growth: {
     description: "For growing businesses that need more",
@@ -124,14 +124,14 @@ const PLAN_CONFIG: Record<
   },
   enterprise: {
     description: "Advanced features for large organizations",
-    iconBg: "bg-amber-100 dark:bg-amber-900/30",
-    iconColor: "text-amber-600 dark:text-amber-400",
+    iconBg: "bg-warning-bg dark:bg-warning-fg/30",
+    iconColor: "text-warning-fg dark:text-warning-fg",
     cardBorder: "border-border",
-    cardHoverBorder: "hover:border-amber-300 dark:hover:border-amber-700",
-    badgeBg: "bg-amber-100 dark:bg-amber-900/30",
-    badgeText: "text-amber-700 dark:text-amber-300",
-    checkBg: "bg-amber-100 dark:bg-amber-900/30",
-    checkColor: "text-amber-600 dark:text-amber-400",
+    cardHoverBorder: "hover:border-warning-border dark:hover:border-amber-700",
+    badgeBg: "bg-warning-bg dark:bg-warning-fg/30",
+    badgeText: "text-warning-fg dark:text-warning-fg",
+    checkBg: "bg-warning-bg dark:bg-warning-fg/30",
+    checkColor: "text-warning-fg dark:text-warning-fg",
   },
 };
 
@@ -300,7 +300,7 @@ function PlanCard({
             <Icon className={cn("h-5 w-5", config.iconColor)} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold capitalize">{plan.planKey}</h3>
+            <h3 className="text-lg font-medium capitalize">{plan.planKey}</h3>
             <p className="text-xs text-muted-foreground">
               {plan.productDescription?.trim() || config.description}
             </p>
@@ -389,7 +389,7 @@ function PlanCard({
             <Button
               type="button"
               variant="outline"
-              className="w-full gap-2 transition-all duration-200 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20 dark:hover:text-amber-300"
+              className="w-full gap-2 transition-all duration-200 hover:bg-warning-bg hover:text-warning-fg dark:hover:bg-warning-fg/20 dark:hover:text-warning-fg"
               size="lg"
               asChild
             >

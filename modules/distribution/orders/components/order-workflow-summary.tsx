@@ -148,13 +148,13 @@ export function OrderWorkflowSummary({
         </div>
 
         {readyToInvoice && !hasInvoice ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+          <div className="rounded-lg border border-success-border bg-success-bg/60 px-4 py-3 text-sm text-success-fg dark:border-emerald-900/40 dark:bg-success-fg/20 dark:text-success-fg">
             Ready for invoicing. All lines are closed by fulfillment or short shipment.
           </div>
         ) : null}
 
         {unreconciledLines > 0 ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="rounded-lg border border-warning-border bg-warning-bg/60 px-4 py-3 text-sm text-warning-fg dark:border-amber-900/40 dark:bg-warning-fg/20 dark:text-warning-fg">
             {unreconciledLines} line
             {unreconciledLines === 1 ? "" : "s"} still have allocation warnings.
           </div>

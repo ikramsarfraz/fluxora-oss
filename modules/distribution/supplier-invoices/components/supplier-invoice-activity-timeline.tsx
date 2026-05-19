@@ -47,13 +47,13 @@ const SCOPE_STYLES: Record<
   },
   line: {
     icon: Pencil,
-    dot: "bg-slate-500/15 text-slate-600 ring-slate-500/20 dark:text-slate-300",
-    chip: "border-slate-500/30 text-slate-700 dark:text-slate-300",
+    dot: "bg-ink-warm/15 text-subtle ring-slate-500/20 dark:text-card-warm",
+    chip: "border-border-default/30 text-ink-warm dark:text-card-warm",
   },
   allocation: {
     icon: PackageCheck,
-    dot: "bg-amber-500/15 text-amber-700 ring-amber-500/20 dark:text-amber-400",
-    chip: "border-amber-500/30 text-amber-700 dark:text-amber-400",
+    dot: "bg-warning-fg/15 text-warning-fg ring-amber-500/20 dark:text-warning-fg",
+    chip: "border-amber-500/30 text-warning-fg dark:text-warning-fg",
   },
   invoice: {
     icon: Receipt,
@@ -62,12 +62,12 @@ const SCOPE_STYLES: Record<
   },
   payment: {
     icon: Wallet,
-    dot: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400",
-    chip: "border-emerald-500/30 text-emerald-700 dark:text-emerald-400",
+    dot: "bg-success-fg/15 text-success-fg ring-emerald-500/20 dark:text-success-fg",
+    chip: "border-emerald-500/30 text-success-fg dark:text-success-fg",
   },
   file: {
     icon: FileText,
-    dot: "bg-sky-500/15 text-sky-600 ring-sky-500/20 dark:text-sky-400",
+    dot: "bg-sky-500/15 text-forest ring-sky-500/20 dark:text-sky-400",
     chip: "border-sky-500/30 text-sky-700 dark:text-sky-400",
   },
   other: {

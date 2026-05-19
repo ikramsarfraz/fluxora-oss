@@ -215,7 +215,7 @@ export const InlineDropzone = forwardRef<
         )}
       >
         <Upload className="mb-3 size-7 text-stone-muted" strokeWidth={1.6} />
-        <h2 className="mb-2 text-[16px] font-semibold tracking-[-0.005em] text-stone-ink">
+        <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-stone-ink">
           {isImporting
             ? "Scanning…"
             : isDragging

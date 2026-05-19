@@ -117,7 +117,7 @@ export function SupplierBillsShell() {
             across both tabs so the page feels like one surface. */}
         <div className="flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
+            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-stone-ink">
               Supplier bills
             </h1>
             <p className="mt-1 mb-0 text-[13px] text-stone-muted">

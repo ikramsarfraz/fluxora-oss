@@ -98,7 +98,7 @@ export function ChargesPanel({
     <div className="border-t border-stone-line bg-stone-surface">
       <div className="flex items-center justify-between border-b border-stone-line bg-stone-line2 px-[22px] py-3">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-[13px] font-semibold text-stone-ink">
+          <h2 className="text-[13px] font-medium text-stone-ink">
             Non-inventory charges
           </h2>
           <span className="font-mono text-[11px] text-stone-muted">

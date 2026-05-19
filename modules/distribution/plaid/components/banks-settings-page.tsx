@@ -140,7 +140,7 @@ function ReconnectButton({ connectionId, institutionName, onSuccess }: {
       onClick={handleReconnect}
       variant="outline"
       size="sm"
-      className="h-7 border-amber-200 bg-amber-50 px-3 text-[12px] text-amber-700 hover:bg-amber-100"
+      className="h-7 border-warning-border bg-warning-bg px-3 text-[12px] text-warning-fg hover:bg-warning-bg"
     >
       Reconnect {institutionName ?? "bank"}
     </Button>
@@ -322,7 +322,7 @@ function BankCard({
             size="icon-sm"
             onClick={onDisconnect}
             disabled={disconnecting}
-            className="size-7 text-stone-muted hover:text-red-600"
+            className="size-7 text-stone-muted hover:text-danger-fg"
           >
             <Trash2 size={13} />
           </Button>

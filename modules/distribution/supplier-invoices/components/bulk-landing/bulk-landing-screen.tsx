@@ -111,7 +111,7 @@ export function BulkLandingScreen({
               Bulk import · {view.summary.filesProcessed}{" "}
               {view.summary.filesProcessed === 1 ? "file" : "files"}
             </div>
-            <h1 className="mb-2 text-[26px] font-semibold leading-tight tracking-[-0.015em] text-stone-ink">
+            <h1 className="mb-2 text-[26px] font-medium leading-tight tracking-[-0.015em] text-stone-ink">
               Review parsed invoices
             </h1>
             <p className="max-w-[640px] text-[14px] text-stone-muted">

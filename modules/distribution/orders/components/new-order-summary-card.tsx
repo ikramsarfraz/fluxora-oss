@@ -164,7 +164,7 @@ export function NewOrderSummaryCard({
               }`}
             >
               <span
-                className={`absolute top-0.5 size-4 rounded-full bg-white transition-[left] ${
+                className={`absolute top-0.5 size-4 rounded-full bg-card transition-[left] ${
                   field.value ? "left-4" : "left-0.5"
                 }`}
               />

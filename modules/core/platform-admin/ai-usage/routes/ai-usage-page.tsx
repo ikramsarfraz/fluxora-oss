@@ -72,8 +72,8 @@ export default async function PlatformAdminAiUsagePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-sm font-medium text-blue-700">Pelzer Solutions internal</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+        <p className="text-sm font-medium text-forest">Pelzer Solutions internal</p>
+        <h1 className="text-3xl font-medium tracking-tight text-ink">
           AI usage
         </h1>
         <p className="text-sm text-muted-foreground">

@@ -17,7 +17,7 @@ export function ParsingProgressScreen({
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
           Step 1 of 2 · Scanning
         </div>
-        <h1 className="mb-1.5 text-[26px] font-semibold leading-tight tracking-[-0.015em] text-stone-ink">
+        <h1 className="mb-1.5 text-[26px] font-medium leading-tight tracking-[-0.015em] text-stone-ink">
           Reading invoice
         </h1>
         <p className="max-w-[640px] text-[14px] text-stone-muted">

@@ -14,31 +14,31 @@ function expirationClasses(state: ExpirationState) {
     case "expired":
       return "border-destructive/40 text-destructive";
     case "expiring_soon":
-      return "border-amber-500/30 text-amber-700 dark:text-amber-400";
+      return "border-amber-500/30 text-warning-fg dark:text-warning-fg";
     case "fresh":
     default:
-      return "border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
+      return "border-emerald-500/30 text-success-fg dark:text-success-fg";
   }
 }
 
 function inventoryClasses(status: InventoryLifecycleState) {
   switch (status) {
     case "allocated":
-      return "border-amber-500/30 text-amber-700 dark:text-amber-400";
+      return "border-amber-500/30 text-warning-fg dark:text-warning-fg";
     case "picked":
       return "border-sky-500/30 text-sky-700 dark:text-sky-400";
     case "packed":
-      return "border-indigo-500/30 text-indigo-700 dark:text-indigo-400";
+      return "border-indigo-500/30 text-forest dark:text-indigo-400";
     case "shipped":
-      return "border-slate-500/30 text-slate-700 dark:text-slate-300";
+      return "border-border-default/30 text-ink-warm dark:text-card-warm";
     case "sold":
-      return "border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
+      return "border-emerald-500/30 text-success-fg dark:text-success-fg";
     case "damaged":
     case "expired":
       return "border-destructive/40 text-destructive";
     case "in_stock":
     default:
-      return "border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
+      return "border-emerald-500/30 text-success-fg dark:text-success-fg";
   }
 }
 

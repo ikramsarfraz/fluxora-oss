@@ -152,7 +152,7 @@ export function FileRow({
                 e.stopPropagation();
                 onParseErrorClick();
               }}
-              className="h-8 gap-1.5 border-rose-300 bg-rose-50 text-[12px] text-rose-700 hover:bg-rose-100"
+              className="h-8 gap-1.5 border-rose-300 bg-danger-bg text-[12px] text-rose-700 hover:bg-danger-bg"
             >
               View error
               <ArrowRight className="size-3" strokeWidth={1.8} />

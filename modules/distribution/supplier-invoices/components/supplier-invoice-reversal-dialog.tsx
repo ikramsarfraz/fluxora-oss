@@ -84,7 +84,7 @@ export function SupplierInvoiceReversalDialog({
         className="max-w-2xl gap-0 p-0 overflow-hidden"
       >
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-stone-line">
-          <DialogTitle className="text-[15px] font-semibold tracking-tight">
+          <DialogTitle className="text-[15px] font-medium tracking-tight">
             Reverse receipt {invoiceNumber}?
           </DialogTitle>
           <DialogDescription className="text-[13px] text-stone-muted">

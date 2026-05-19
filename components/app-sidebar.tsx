@@ -41,6 +41,7 @@ import {
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useTenantLogoUrl } from "@/modules/core/workspace-settings/hooks/use-tenant-branding";
+import { Logomark } from "@/components/brand/logomark";
 import { can, type Permission } from "@/lib/auth/permissions";
 import type { AccessibleDestination } from "@/modules/shared/services/auth";
 import {
@@ -226,7 +227,7 @@ export function AppSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg">
-                  <div className="flex size-8 items-center justify-center rounded-lg border bg-background">
+                  <div className="flex size-8 items-center justify-center overflow-hidden">
                     {tenantLogoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -235,14 +236,14 @@ export function AppSidebar({
                         className="max-h-7 max-w-7 object-contain"
                       />
                     ) : (
-                      <Building2 className="size-4" />
+                      <Logomark size={32} />
                     )}
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
+                    <span className="truncate font-serif text-[15px] font-medium tracking-[-0.01em] text-ink">
                       {tenantName ?? "Workspace"}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-[11px] text-subtle">
                       {tenantSlug ? `${tenantSlug} workspace` : "Company workspace"}
                     </span>
                   </div>
@@ -304,7 +305,7 @@ export function AppSidebar({
         {visibleGroups.map(group => (
           <SidebarGroup key={group.title} className="py-1">
             {!group.hideLabel && (
-              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              <SidebarGroupLabel className="px-2.5 mt-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
                 {group.title}
               </SidebarGroupLabel>
             )}
@@ -374,8 +375,8 @@ export function AppSidebar({
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{userDisplayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">
+                      <span className="truncate font-medium text-ink">{userDisplayName}</span>
+                      <span className="truncate text-[11px] text-subtle">
                         {user.email}
                       </span>
                     </div>

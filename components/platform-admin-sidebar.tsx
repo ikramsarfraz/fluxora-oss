@@ -123,7 +123,7 @@ export function PlatformAdminSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-ink-warm text-white">
                     <ShieldCheck className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">

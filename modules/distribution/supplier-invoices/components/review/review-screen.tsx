@@ -544,7 +544,7 @@ export function ReviewScreen({
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-[15px] font-semibold text-stone-ink">
+                <h2 className="text-[15px] font-medium text-stone-ink">
                   Line items
                 </h2>
                 {/* Show only the product-line count here. Fees are surfaced

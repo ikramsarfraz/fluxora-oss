@@ -38,7 +38,7 @@ export default async function InvoicesPreviewPage({
           </Button>
         </div>
         <div>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">
+          <h1 className="font-mono text-2xl font-medium tracking-tight">
             {invoice.invoiceNumber}
           </h1>
           <div className="text-sm text-muted-foreground">

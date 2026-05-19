@@ -38,7 +38,7 @@ export function PurchasingSection({ purchasing }: Props) {
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
         <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-semibold text-stone-ink">Purchasing</h2>
+          <h2 className="text-sm font-medium text-stone-ink">Purchasing</h2>
           <p className="mt-0.5 text-xs text-stone-muted">
             Supplier activity and open payables.
           </p>
@@ -69,7 +69,7 @@ function RecentSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[]
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Recent supplier invoices</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Recent supplier invoices</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Newest 8 across all statuses.
         </CardDescription>
@@ -123,7 +123,7 @@ function UnpaidSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[]
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Unpaid supplier invoices</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Unpaid supplier invoices</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Completed invoices with balance remaining.
         </CardDescription>
@@ -178,7 +178,7 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
   return (
     <Card className="shadow-none">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Spend by supplier</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Spend by supplier</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Completed invoice totals, last 90 days.
         </CardDescription>

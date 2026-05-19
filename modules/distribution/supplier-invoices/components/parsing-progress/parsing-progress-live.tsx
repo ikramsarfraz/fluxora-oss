@@ -145,7 +145,7 @@ export function ParsingProgressLive({
     return (
       <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
         <div className="max-w-[480px]">
-          <h1 className="mb-2 text-[22px] font-semibold tracking-[-0.015em] text-stone-ink">
+          <h1 className="mb-2 text-[22px] font-medium tracking-[-0.015em] text-stone-ink">
             Couldn&apos;t read this invoice
           </h1>
           <p className="mb-6 text-[14px] text-stone-muted">{error}</p>

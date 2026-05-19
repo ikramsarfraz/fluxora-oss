@@ -99,10 +99,10 @@ export default async function PlatformAdminTenantDetailPage({
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
-          <Link href="/admin/tenants" className="text-sm font-medium text-blue-700 hover:underline">
+          <Link href="/admin/tenants" className="text-sm font-medium text-forest hover:underline">
             Back to tenants
           </Link>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{tenant.name}</h1>
+          <h1 className="text-3xl font-medium tracking-tight text-ink">{tenant.name}</h1>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{tenant.slug}</span>
             <span>•</span>
@@ -202,7 +202,7 @@ export default async function PlatformAdminTenantDetailPage({
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
             Current status:{" "}
-            <span className="font-medium text-slate-900">
+            <span className="font-medium text-ink">
               {tenant.isActive ? "Active" : "Inactive"}
             </span>
           </p>

@@ -32,7 +32,7 @@ export function OrderDetailsCard({ order }: OrderDetailsCardProps) {
           <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Customer account</h3>
+              <h3 className="text-sm font-medium">Customer account</h3>
             </div>
             <DetailGrid className="grid-cols-1 gap-3">
               <DetailField label="Customer">
@@ -75,7 +75,7 @@ export function OrderDetailsCard({ order }: OrderDetailsCardProps) {
           <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Order scheduling</h3>
+              <h3 className="text-sm font-medium">Order scheduling</h3>
             </div>
             <DetailGrid className="grid-cols-1 gap-3">
               <DetailField label="Order #">

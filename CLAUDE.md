@@ -55,7 +55,7 @@ modules/
 - `modules/shared/**` → `modules/distribution/**`
 - Anyone → `@/services/` or `@/actions/` (legacy paths — import from the owning module)
 
-`modules/shared/` may import from `modules/core/` **only** for auth/session, tenant resolution, subscription/billing context, and portal user identity helpers. See [docs/architecture-overview.md](docs/architecture-overview.md) for the full rationale.
+`modules/shared/` may import from `modules/core/` **only** for auth/session, tenant resolution, subscription/billing context, and portal user identity helpers. See [docs/module-architecture.md](docs/module-architecture.md) for the full rationale.
 
 ### Client/server boundary (critical)
 
@@ -96,4 +96,4 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 
 ## Further reading
 
-The `docs/` directory has detailed guides; [docs/README.md](docs/README.md) is the index. Start with [docs/architecture-overview.md](docs/architecture-overview.md) and [docs/module-architecture.md](docs/module-architecture.md) for the module layout rationale, [docs/local-development.md](docs/local-development.md) for env/host setup, and [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) + [docs/subscription-system-overview.md](docs/subscription-system-overview.md) for billing.
+The `docs/` directory has detailed guides; [docs/README.md](docs/README.md) is the index. Start with [docs/module-architecture.md](docs/module-architecture.md) for the module layout rationale, [docs/local-development.md](docs/local-development.md) for env/host setup, [docs/feature-flows.md](docs/feature-flows.md) for end-to-end domain flows, and [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) + [docs/subscription-system-overview.md](docs/subscription-system-overview.md) for billing.

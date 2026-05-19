@@ -49,7 +49,7 @@ export function TenantChooserCard({
   const card = (
     <div
       className={cn(
-        "w-full rounded-[10px] border border-border bg-white shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]",
+        "w-full rounded-[10px] border border-border bg-card shadow-[0_1px_3px_oklch(0_0_0/0.06),0_8px_24px_oklch(0_0_0/0.07)]",
         variant === "page" ? "max-w-100" : "max-w-full shadow-sm",
         className,
       )}
@@ -63,7 +63,7 @@ export function TenantChooserCard({
         </div>
         <h2
           className={cn(
-            "font-bold tracking-tight text-foreground",
+            "font-medium tracking-tight text-foreground",
             variant === "page" ? "text-2xl" : "text-xl",
           )}
         >
@@ -88,7 +88,7 @@ export function TenantChooserCard({
                 : destination.id
             }
             type="button"
-            className="flex w-full items-center justify-between rounded-[8px] border border-border bg-white px-4 py-3 text-left transition-colors hover:bg-muted"
+            className="flex w-full items-center justify-between rounded-[8px] border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted"
             onClick={() => window.location.assign(destination.continueUrl)}
           >
             <div className="flex items-center gap-3">

@@ -55,7 +55,7 @@ function FloatingArrow({
       className={cn(
         "absolute top-1/2 z-10 inline-flex items-center justify-center rounded-full text-stone-ink transition-colors",
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--stone-ink)]",
-        "enabled:hover:bg-white",
+        "enabled:hover:bg-card",
       )}
       style={{
         width: 40,

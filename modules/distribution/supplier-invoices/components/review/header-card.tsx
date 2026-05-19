@@ -119,7 +119,7 @@ export function HeaderCard({
   return (
     <div className="border-b border-stone-line bg-stone-surface px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
-        <h2 className="text-[14px] font-semibold text-stone-ink">Invoice header</h2>
+        <h2 className="text-[14px] font-medium text-stone-ink">Invoice header</h2>
         <div className="flex items-center gap-2">
           <FieldChip
             confidence={parsed.total.confidence}

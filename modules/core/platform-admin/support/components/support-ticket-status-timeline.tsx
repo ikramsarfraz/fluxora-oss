@@ -31,9 +31,9 @@ export function SupportTicketStatusTimeline({
             className={cn(
               "rounded-lg border p-3",
               isCurrent
-                ? "border-blue-200 bg-blue-50 text-blue-900"
+                ? "border-info-border bg-forest-tint text-forest"
                 : isComplete
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  ? "border-success-border bg-success-bg text-success-fg"
                   : "text-muted-foreground",
             )}
           >

@@ -86,7 +86,7 @@ export function TenantSubscriptionForm({ tenant }: { tenant: Tenant }) {
         });
       }}
     >
-      <Alert variant="default" className="border-amber-500/40 bg-amber-50/70 dark:bg-amber-950/35 dark:border-amber-800/50">
+      <Alert variant="default" className="border-amber-500/40 bg-warning-bg/70 dark:bg-warning-fg/35 dark:border-amber-800/50">
         <AlertTitle>Stripe webhooks may overwrite manual edits</AlertTitle>
         <AlertDescription className="text-muted-foreground text-sm leading-relaxed">
           Saving applies to this tenant row right away; enforcement is unchanged. Later webhook

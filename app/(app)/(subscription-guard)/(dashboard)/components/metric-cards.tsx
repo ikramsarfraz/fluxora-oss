@@ -48,7 +48,7 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
           <Icon className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight @[250px]/card:text-3xl">
+        <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight @[250px]/card:text-3xl">
           {value}
         </CardTitle>
         {helper ? (

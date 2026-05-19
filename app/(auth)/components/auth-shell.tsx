@@ -1,31 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Package, CheckCircle, Shield, ArrowRight } from "lucide-react";
+import { CheckCircle, Shield, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildPublicSupportMailto } from "@/lib/public-contact";
-
-// ── Marketing color tokens (matching marketing page) ─────────────────────────
-// Light backgrounds with soft blue/teal radial gradients
-const lightPanelBg = `
-  radial-gradient(ellipse 100% 80% at 50% -20%, oklch(0.92 0.04 230 / 0.6) 0%, transparent 60%),
-  radial-gradient(ellipse 80% 50% at 100% 0%, oklch(0.90 0.06 195 / 0.4) 0%, transparent 50%),
-  radial-gradient(ellipse 60% 40% at 0% 30%, oklch(0.94 0.03 230 / 0.3) 0%, transparent 50%),
-  linear-gradient(180deg, oklch(0.985 0.005 230) 0%, white 100%)
-`;
-
-const gridPattern = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='%23cbd5e1' stroke-width='0.5'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
-
-// Text gradient (navy to teal)
-const gradientTextStyle = {
-  background: "linear-gradient(135deg, oklch(0.50 0.14 230) 0%, oklch(0.55 0.15 195) 100%)",
-  WebkitBackgroundClip: "text" as const,
-  WebkitTextFillColor: "transparent" as const,
-  backgroundClip: "text" as const,
-};
-
-// Primary button background
-const primaryBtnBg = "oklch(0.35 0.10 230)";
+import { Logomark } from "@/components/brand/logomark";
 
 // ── Brand ────────────────────────────────────────────────────────────────────
 
@@ -33,53 +12,38 @@ export function AuthBrand() {
   return (
     <Link
       href="/"
-      className="flex items-center gap-2 text-base font-bold tracking-tight text-[oklch(0.20_0.03_230)] transition-opacity hover:opacity-80"
+      className="flex items-center gap-2 font-serif text-base font-medium tracking-[-0.01em] text-ink transition-opacity hover:opacity-80"
     >
-      <div
-        className="flex size-7 items-center justify-center rounded-lg text-white"
-        style={{ background: "linear-gradient(135deg, oklch(0.50 0.14 230), oklch(0.55 0.15 195))" }}
-      >
-        <Package className="size-3.5" />
-      </div>
+      <Logomark size={28} />
       Fluxora
     </Link>
   );
 }
 
-// ── Marketing Panel (Light, airy - matches marketing hero) ───────────────────
+// ── Marketing Panel ──────────────────────────────────────────────────────────
 
 function MarketingPanel() {
   return (
-    <div
-      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
-      style={{ background: lightPanelBg }}
-    >
-      {/* Grid pattern overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{ backgroundImage: gridPattern }}
-      />
-
+    <div className="relative flex h-full flex-col justify-between bg-surface p-10 lg:p-12">
       <div className="relative z-10">
         <AuthBrand />
       </div>
 
       {/* Center content */}
       <div className="relative z-10 space-y-6">
-        <h2 className="text-2xl font-bold tracking-tight text-[oklch(0.20_0.03_230)] lg:text-3xl">
-          Distribution,{" "}
-          <span style={gradientTextStyle}>simplified.</span>
+        <h2 className="font-serif text-[28px] font-medium tracking-[-0.02em] leading-tight text-ink lg:text-[32px]">
+          Distribution, simplified.
         </h2>
-        <p className="max-w-xs text-sm leading-relaxed text-[oklch(0.45_0.02_230)]">
+        <p className="max-w-xs text-sm leading-relaxed text-subtle">
           One platform for orders, inventory, invoicing, and payments.
         </p>
-        
+
         {/* Feature pills */}
         <div className="flex flex-wrap gap-2">
           {["Orders", "Inventory", "Invoicing", "Payments"].map((f) => (
             <span
               key={f}
-              className="rounded-full bg-[oklch(0.94_0.03_230)] px-3 py-1 text-xs font-medium text-[oklch(0.45_0.02_230)]"
+              className="rounded-full bg-forest-tint px-3 py-1 text-xs font-medium text-forest"
             >
               {f}
             </span>
@@ -89,10 +53,10 @@ function MarketingPanel() {
 
       {/* Bottom quote */}
       <div className="relative z-10">
-        <blockquote className="border-l-2 border-[oklch(0.55_0.15_195)] pl-4 text-sm italic text-[oklch(0.45_0.02_230)]">
+        <blockquote className="border-l-2 border-forest-bright pl-4 font-serif text-sm italic text-ink-warm">
           &ldquo;Cut our order processing time in half.&rdquo;
         </blockquote>
-        <p className="mt-2 pl-4 text-xs text-[oklch(0.55_0.02_230)]">
+        <p className="mt-2 pl-4 text-xs text-subtle">
           Metro Foods Distribution
         </p>
       </div>
@@ -111,26 +75,16 @@ type AuthStepperPanelProps = {
 
 export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) {
   return (
-    <div
-      className="relative flex h-full flex-col justify-between p-10 lg:p-12"
-      style={{ background: lightPanelBg }}
-    >
-      {/* Grid pattern overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{ backgroundImage: gridPattern }}
-      />
-
+    <div className="relative flex h-full flex-col justify-between bg-surface p-10 lg:p-12">
       <div className="relative z-10">
         <AuthBrand />
 
         <div className="mt-12">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[oklch(0.55_0.15_195)]">
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-subtle">
             Create workspace
           </p>
-          <h1 className="mt-2 text-xl font-bold text-[oklch(0.20_0.03_230)] lg:text-2xl">
-            Get started with{" "}
-            <span style={gradientTextStyle}>Fluxora</span>
+          <h1 className="mt-2 font-serif text-[24px] font-medium tracking-[-0.02em] leading-tight text-ink lg:text-[28px]">
+            Get started with Fluxora
           </h1>
         </div>
 
@@ -143,18 +97,17 @@ export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) 
               <div
                 key={step.id}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors",
-                  state === "active" && "bg-white shadow-sm"
+                  "flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors",
+                  state === "active" && "bg-card"
                 )}
               >
                 <div
                   className={cn(
-                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                    state === "done" && "bg-[oklch(0.55_0.15_195)] text-white",
-                    state === "active" && "text-white",
-                    state === "upcoming" && "border border-[oklch(0.88_0.02_230)] bg-white text-[oklch(0.55_0.02_230)]"
+                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors",
+                    state === "done" && "bg-forest text-card-warm",
+                    state === "active" && "bg-forest text-card-warm",
+                    state === "upcoming" && "border border-border-default bg-card text-muted"
                   )}
-                  style={state === "active" ? { background: primaryBtnBg } : undefined}
                 >
                   {state === "done" ? (
                     <CheckCircle className="size-3.5" />
@@ -166,16 +119,16 @@ export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) 
                   className={cn(
                     "text-sm transition-colors",
                     state === "active"
-                      ? "font-medium text-[oklch(0.20_0.03_230)]"
+                      ? "font-medium text-ink"
                       : state === "done"
-                        ? "text-[oklch(0.45_0.02_230)]"
-                        : "text-[oklch(0.55_0.02_230)]"
+                        ? "text-ink-warm"
+                        : "text-subtle"
                   )}
                 >
                   {step.title}
                 </span>
                 {state === "active" && (
-                  <ArrowRight className="ml-auto size-3.5 text-[oklch(0.55_0.02_230)]" />
+                  <ArrowRight className="ml-auto size-3.5 text-subtle" />
                 )}
               </div>
             );
@@ -184,13 +137,13 @@ export function AuthStepperPanel({ currentStep, steps }: AuthStepperPanelProps) 
       </div>
 
       {/* Bottom badges */}
-      <div className="relative z-10 flex items-center gap-6 text-xs text-[oklch(0.55_0.02_230)]">
+      <div className="relative z-10 flex items-center gap-6 text-xs text-subtle">
         <div className="flex items-center gap-1.5">
-          <Shield className="size-3.5 text-[oklch(0.55_0.15_195)]" />
+          <Shield className="size-3.5 text-forest" />
           <span>Secure</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <CheckCircle className="size-3.5 text-[oklch(0.55_0.15_195)]" />
+          <CheckCircle className="size-3.5 text-forest" />
           <span>No credit card</span>
         </div>
       </div>
@@ -220,13 +173,7 @@ export function AuthSplitShell({
   const marketingPanel = side || <MarketingPanel />;
 
   const formPanel = (
-    <div className="relative flex flex-1 flex-col bg-[oklch(0.99_0.003_230)]">
-      {/* Grid pattern overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{ backgroundImage: gridPattern }}
-      />
-
+    <div className="relative flex flex-1 flex-col bg-page">
       {/* Top nav */}
       <nav className="relative z-10 flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <div className="lg:hidden">
@@ -234,11 +181,11 @@ export function AuthSplitShell({
         </div>
         <div className="hidden lg:block" />
         {topLabel && topHref && topAction && (
-          <div className="text-sm text-[oklch(0.55_0.02_230)]">
+          <div className="text-sm text-subtle">
             {topLabel}{" "}
             <Link
               href={topHref}
-              className="font-medium text-[oklch(0.55_0.15_195)] transition-opacity hover:opacity-70"
+              className="font-medium text-forest transition-opacity hover:opacity-70"
             >
               {topAction}
             </Link>
@@ -253,17 +200,17 @@ export function AuthSplitShell({
 
       {/* Footer */}
       <footer className="relative z-10 shrink-0 px-6 py-4 lg:px-10">
-        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[oklch(0.55_0.02_230)] sm:gap-6">
-          <Link href="/changelog" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-subtle sm:gap-6">
+          <Link href="/changelog" className="transition-colors hover:text-ink-warm">
             Changelog
           </Link>
-          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-ink-warm">
             Privacy
           </Link>
-          <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <Link href="/terms" className="transition-colors hover:text-ink-warm">
             Terms
           </Link>
-          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-ink-warm">
             Help
           </a>
         </div>
@@ -308,21 +255,15 @@ export function AuthCenteredShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-screen flex-col bg-[oklch(0.99_0.003_230)]">
-      {/* Grid pattern overlay */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{ backgroundImage: gridPattern }}
-      />
-
+    <div className="relative flex min-h-screen flex-col bg-page">
       <nav className="relative z-10 flex h-14 shrink-0 items-center justify-between px-6 lg:px-10">
         <AuthBrand />
         {topLabel && topHref && topAction && (
-          <div className="text-sm text-[oklch(0.55_0.02_230)]">
+          <div className="text-sm text-subtle">
             {topLabel}{" "}
             <Link
               href={topHref}
-              className="font-medium text-[oklch(0.55_0.15_195)] transition-opacity hover:opacity-70"
+              className="font-medium text-forest transition-opacity hover:opacity-70"
             >
               {topAction}
             </Link>
@@ -335,17 +276,17 @@ export function AuthCenteredShell({
       </main>
 
       <footer className="relative z-10 shrink-0 px-6 py-4">
-        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[oklch(0.55_0.02_230)] sm:gap-6">
-          <Link href="/changelog" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-subtle sm:gap-6">
+          <Link href="/changelog" className="transition-colors hover:text-ink-warm">
             Changelog
           </Link>
-          <Link href="/privacy" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <Link href="/privacy" className="transition-colors hover:text-ink-warm">
             Privacy
           </Link>
-          <Link href="/terms" className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <Link href="/terms" className="transition-colors hover:text-ink-warm">
             Terms
           </Link>
-          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-[oklch(0.35_0.05_230)]">
+          <a href={buildPublicSupportMailto("Fluxora support request")} className="transition-colors hover:text-ink-warm">
             Help
           </a>
         </div>

@@ -211,7 +211,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                     onClick={() => field.onChange("")}
                     variant="ghost"
                     size="xs"
-                    className="shrink-0 text-xs text-stone-muted hover:bg-white/50 hover:text-stone-ink"
+                    className="shrink-0 text-xs text-stone-muted hover:bg-card/50 hover:text-stone-ink"
                   >
                     Change
                   </Button>
