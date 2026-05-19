@@ -134,7 +134,7 @@ async function runScript(c: Controls) {
     if (c.isCancelled()) return;
 
     // ---- Scene 1: Click "Import invoice" ----
-    c.setCursor({ selector: "[data-reel='import-invoice']" });
+    c.setCursor({ selector: "[data-reel='import-invoice']", offsetX: 60, offsetY: 16 });
     await c.sleep(1100);
     c.flash();
     await c.sleep(220);
@@ -148,14 +148,15 @@ async function runScript(c: Controls) {
       headline: "Drop in a supplier PDF.",
       body: "Single file or hundreds — they all import in parallel.",
     });
-    c.setCursor({ selector: "[data-reel='dropzone']", offsetY: 64 });
+    // Land on the cloud icon, roughly centered horizontally
+    c.setCursor({ selector: "[data-reel='dropzone']", offsetX: 260, offsetY: 70 });
     await c.sleep(1100);
     c.flash();
     await c.sleep(180);
     c.dispatch({ type: "ADD_FILES", files: [INITIAL_FILE] });
     await c.sleep(900);
 
-    c.setCursor({ selector: "[data-reel='start-import']" });
+    c.setCursor({ selector: "[data-reel='start-import']", offsetX: 50, offsetY: 16 });
     await c.sleep(900);
     c.flash();
     await c.sleep(200);
@@ -180,7 +181,8 @@ async function runScript(c: Controls) {
       body: "Open one to confirm matches and resolve any issues.",
     });
     await c.sleep(1200);
-    c.setCursor({ selector: "[data-reel='queue-row-first']" });
+    // Land on the supplier name cell, not the middle of the wide row
+    c.setCursor({ selector: "[data-reel='queue-row-first']", offsetX: 60, offsetY: 22 });
     await c.sleep(1000);
     c.flash();
     await c.sleep(180);
@@ -198,7 +200,7 @@ async function runScript(c: Controls) {
     await c.sleep(1600);
 
     // ---- Scene 6: Line highlight demo ----
-    c.setCursor({ selector: "[data-reel='line-line_1']", offsetX: 80 });
+    c.setCursor({ selector: "[data-reel='line-line_1']", offsetX: 110, offsetY: 22 });
     await c.sleep(700);
     c.dispatch({ type: "SET_HIGHLIGHT", lineId: "line_1" });
     await c.sleep(1300);
@@ -211,7 +213,7 @@ async function runScript(c: Controls) {
       headline: "Supplier not in your catalog? Create it inline.",
       body: "Name, terms, currency — extracted and pre-filled.",
     });
-    c.setCursor({ selector: "[data-reel='supplier-trigger']" });
+    c.setCursor({ selector: "[data-reel='supplier-trigger']", offsetX: 80, offsetY: 18 });
     await c.sleep(1100);
     c.flash();
     await c.sleep(220);
@@ -232,7 +234,7 @@ async function runScript(c: Controls) {
       headline: "Edit anything inline.",
       body: "Line had a partial scan — fill in the cost and the total recomputes.",
     });
-    c.setCursor({ selector: "[data-reel='line-line_2-cost']" });
+    c.setCursor({ selector: "[data-reel='line-line_2-cost']", offsetX: 40, offsetY: 16 });
     await c.sleep(900);
     c.flash();
     await c.sleep(200);
@@ -249,14 +251,14 @@ async function runScript(c: Controls) {
       headline: "Confirm a suggested match.",
       body: "Fluxora remembers — next invoice from this supplier matches automatically.",
     });
-    c.setCursor({ selector: "[data-reel='line-line_3-picker']" });
+    c.setCursor({ selector: "[data-reel='line-line_3-picker']", offsetX: 70, offsetY: 22 });
     await c.sleep(1000);
     c.flash();
     await c.sleep(180);
     c.dispatch({ type: "CONFIRM_SUGGESTION", lineId: "line_3", productId: "prod_bracket_l" });
     await c.sleep(2000);
 
-    c.setCursor({ selector: "[data-reel='line-line_4-picker']" });
+    c.setCursor({ selector: "[data-reel='line-line_4-picker']", offsetX: 70, offsetY: 22 });
     await c.sleep(800);
     c.flash();
     await c.sleep(180);
@@ -269,7 +271,7 @@ async function runScript(c: Controls) {
       headline: "New product? Create it from the line.",
       body: "Name, SKU, category, unit, cost — all suggested.",
     });
-    c.setCursor({ selector: "[data-reel='line-line_5-create']" });
+    c.setCursor({ selector: "[data-reel='line-line_5-create']", offsetX: 60, offsetY: 16 });
     await c.sleep(1200);
     c.flash();
     await c.sleep(200);
@@ -292,7 +294,7 @@ async function runScript(c: Controls) {
       headline: "Save once. Everything updates.",
       body: "Stock, costs, aliases, and expense charges in a single commit.",
     });
-    c.setCursor({ selector: "[data-reel='save']" });
+    c.setCursor({ selector: "[data-reel='save']", offsetX: 55, offsetY: 16 });
     await c.sleep(1200);
     c.flash();
     await c.sleep(200);
