@@ -46,18 +46,21 @@ export function InboxBell() {
           type="button"
           aria-label={hasUnread ? `Inbox — ${unread} new` : "Inbox"}
           className={cn(
-            "relative grid size-7 shrink-0 place-items-center rounded-md border text-ink-warm transition-colors",
-            "hover:text-ink",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
-            // Subtle green tint matches the prototype's "has unread" affordance.
-            "border-[oklch(85%_0.08_155)] bg-[oklch(95%_0.05_155)]",
+            "relative grid size-8 shrink-0 place-items-center rounded-md text-ink-warm transition-colors",
+            "hover:bg-card/60 hover:text-ink",
+            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-forest",
+            // Soft forest tint signals unread; otherwise the bell sits flush
+            // with the cream top bar as a quiet ghost button.
+            hasUnread
+              ? "border border-forest-tint-deep bg-forest-tint text-forest"
+              : "border border-transparent",
           )}
         >
-          <Bell className="size-3.5" strokeWidth={1.8} />
+          <Bell className="size-4" strokeWidth={1.8} />
           {hasUnread ? (
             <span
               aria-hidden
-              className="absolute right-[5px] top-[4px] size-[7px] rounded-full bg-[var(--color-success-fg,oklch(58%_0.13_155))] ring-[1.5px] ring-card"
+              className="absolute right-[5px] top-[4px] size-[7px] rounded-full bg-success-fg ring-[1.5px] ring-surface"
             />
           ) : null}
         </button>
@@ -65,14 +68,14 @@ export function InboxBell() {
 
       <DropdownMenuContent
         align="end"
-        side="top"
+        side="bottom"
         sideOffset={8}
         className="w-[360px] p-0"
         onCloseAutoFocus={e => e.preventDefault()}
       >
         <div className="flex h-[440px] flex-col">
           <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
-            <span className="text-[14px] font-semibold text-ink">Inbox</span>
+            <span className="text-[14px] font-medium text-ink">Inbox</span>
             {hasUnread ? (
               <span className="text-[11px] text-subtle">{unread} new</span>
             ) : null}
@@ -104,7 +107,7 @@ export function InboxBell() {
                           {isUrgent ? (
                             <span
                               aria-hidden
-                              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--color-warning-fg,oklch(70%_0.13_70))]"
+                              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning-fg"
                             />
                           ) : (
                             <span

@@ -58,7 +58,6 @@ import { authClient } from "@/lib/auth-client";
 import { getAvatarColor } from "@/lib/utils/get-avatar-color";
 import { getInitials } from "@/lib/utils/get-initials";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
-import { InboxBell } from "@/components/inbox-bell";
 import type { User } from "better-auth";
 
 type NavItem = {
@@ -429,7 +428,6 @@ export function AppSidebar({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <InboxBell />
             </SidebarMenuItem>
           </SidebarMenu>
           <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
