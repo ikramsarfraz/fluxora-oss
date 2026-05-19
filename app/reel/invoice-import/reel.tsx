@@ -30,7 +30,7 @@ function ReelLayout() {
 
   return (
     <main className="min-h-screen bg-page py-10">
-      <div className="mx-auto max-w-6xl px-4">
+      <div className="mx-auto max-w-7xl px-4">
         <header className="mb-8 text-center">
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
             Invoice import
