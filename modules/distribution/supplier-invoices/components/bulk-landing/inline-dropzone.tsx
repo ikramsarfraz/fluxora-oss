@@ -207,22 +207,22 @@ export const InlineDropzone = forwardRef<
           }
         }}
         className={cn(
-          "flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-12 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-ink",
+          "flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-12 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
           isDragging
-            ? "border-stone-ink bg-stone-line2"
-            : "border-stone-line bg-stone-surface hover:border-stone-line2",
+            ? "border-forest-mid bg-divider"
+            : "border-border-default bg-card hover:border-divider",
           isImporting && "cursor-not-allowed opacity-60",
         )}
       >
-        <Upload className="mb-3 size-7 text-stone-muted" strokeWidth={1.6} />
-        <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-stone-ink">
+        <Upload className="mb-3 size-7 text-subtle" strokeWidth={1.6} />
+        <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-ink">
           {isImporting
             ? "Scanning…"
             : isDragging
               ? "Drop to start scanning"
               : "Drop PDFs to scan"}
         </h2>
-        <p className="max-w-[420px] text-[13px] text-stone-muted">
+        <p className="max-w-[420px] text-[13px] text-subtle">
           {isImporting
             ? "Files are being read in order — they'll appear here as each one finishes."
             : `Drag supplier-invoice PDFs here, or click to pick. Up to ${MAX_FILES_PER_BATCH} per batch, ${fmtBytes(MAX_FILE_BYTES)} each.`}
@@ -254,10 +254,10 @@ export const InlineDropzone = forwardRef<
         }
       }}
       className={cn(
-        "mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-ink",
+        "mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
         isDragging
-          ? "border-stone-ink bg-stone-line2 text-stone-ink"
-          : "border-stone-line bg-stone-surface text-stone-muted hover:border-stone-line2 hover:text-stone-ink",
+          ? "border-forest-mid bg-divider text-ink"
+          : "border-border-default bg-card text-subtle hover:border-divider hover:text-ink",
         isImporting && "cursor-not-allowed opacity-60",
       )}
     >

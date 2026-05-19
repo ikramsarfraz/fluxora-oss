@@ -11,13 +11,13 @@ export function ConfidenceBar({ value }: { value: number }) {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="h-[5px] w-12 overflow-hidden rounded-[3px] bg-stone-line2">
+      <div className="h-[5px] w-12 overflow-hidden rounded-[3px] bg-divider">
         <div
           className="h-full rounded-[3px]"
           style={{ width: `${clamped}%`, background: color }}
         />
       </div>
-      <span className="font-mono text-[11px] font-semibold tabular-nums text-stone-ink">
+      <span className="font-mono text-[11px] font-semibold tabular-nums text-ink">
         {clamped}%
       </span>
     </div>

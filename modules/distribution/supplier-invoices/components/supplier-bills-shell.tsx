@@ -117,10 +117,10 @@ export function SupplierBillsShell() {
             across both tabs so the page feels like one surface. */}
         <div className="flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-stone-ink">
+            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-ink">
               Supplier bills
             </h1>
-            <p className="mt-1 mb-0 text-[13px] text-stone-muted">
+            <p className="mt-1 mb-0 text-[13px] text-subtle">
               Imports holds parsed PDFs awaiting your review. Bills are the
               posted invoices that have already moved inventory.
             </p>
@@ -140,7 +140,7 @@ export function SupplierBillsShell() {
               type="button"
               size="sm"
               onClick={() => router.push("/supplier-invoices/new")}
-              className="gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
+              className="gap-1.5 border-forest-mid bg-forest-mid text-[13px] text-card-warm hover:bg-forest"
             >
               <Plus className="size-3.5" />
               Record bill
@@ -153,7 +153,7 @@ export function SupplierBillsShell() {
             tab as a white surface pill with subtle shadow. URL-synced via
             `?tab=` so deep-links work. router.replace keeps tab switches
             out of the browser back stack. */}
-        <div className="mb-5 inline-flex gap-1 self-start rounded-lg bg-stone-line2 p-1">
+        <div className="mb-5 inline-flex gap-1 self-start rounded-lg bg-divider p-1">
           {TABS.map(t => {
             const isActive = activeTab === t.id;
             const count = t.id === "inbox" ? inboxCount : null;
@@ -167,8 +167,8 @@ export function SupplierBillsShell() {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-medium transition-colors",
                   isActive
-                    ? "bg-stone-surface text-stone-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                    : "text-stone-ink2 hover:text-stone-ink",
+                    ? "bg-card text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    : "text-ink-warm hover:text-ink",
                 )}
               >
                 <Icon className="size-[14px] shrink-0" strokeWidth={1.8} />
@@ -179,7 +179,7 @@ export function SupplierBillsShell() {
                       "rounded-full px-1.5 py-px text-[11px] font-medium",
                       isActive
                         ? "bg-primary/10 text-primary"
-                        : "bg-stone-line2 text-stone-muted",
+                        : "bg-divider text-subtle",
                     )}
                   >
                     {count}

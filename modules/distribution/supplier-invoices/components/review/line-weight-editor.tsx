@@ -205,17 +205,17 @@ export function LineWeightEditor({
       onClick={stop}
       role="region"
       aria-label="Per-case weight editor"
-      className="mt-2 rounded-lg border border-stone-line bg-stone-line2/50 p-3 text-[12px]"
+      className="mt-2 rounded-lg border border-border-default bg-divider/50 p-3 text-[12px]"
     >
       {/* Unit-type toggle. Catch-weight = each case weighed individually
           (meat, produce); fixed-case = uniform weight applied per case
           (canned goods, sealed retail bags). Switching to fixed_case
           collapses the per-case modes since they no longer apply. */}
       <div className="mb-3 flex items-center gap-2 text-[11px]">
-        <span className="font-semibold uppercase tracking-[0.06em] text-stone-muted">
+        <span className="font-semibold uppercase tracking-[0.06em] text-subtle">
           Unit type
         </span>
-        <div className="flex gap-1 rounded-md border border-stone-line bg-stone-surface p-0.5">
+        <div className="flex gap-1 rounded-md border border-border-default bg-card p-0.5">
           {(
             [
               { value: "catch_weight", label: "Catch-weight" },
@@ -232,8 +232,8 @@ export function LineWeightEditor({
               className={cn(
                 "rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
                 state.unitType === opt.value
-                  ? "bg-stone-ink text-stone-surface"
-                  : "text-stone-muted hover:text-stone-ink",
+                  ? "bg-forest-mid text-card-warm"
+                  : "text-subtle hover:text-ink",
               )}
             >
               {opt.label}
@@ -246,7 +246,7 @@ export function LineWeightEditor({
         <div className="flex items-center gap-2">
           {!isFixedCase ? (
             <>
-              <div className="flex gap-1 rounded-md border border-stone-line bg-stone-surface p-0.5">
+              <div className="flex gap-1 rounded-md border border-border-default bg-card p-0.5">
                 {MODE_OPTIONS.map(opt => (
                   <button
                     key={opt.value}
@@ -258,30 +258,30 @@ export function LineWeightEditor({
                     className={cn(
                       "rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
                       state.weightEntryMode === opt.value
-                        ? "bg-stone-ink text-stone-surface"
-                        : "text-stone-muted hover:text-stone-ink",
+                        ? "bg-forest-mid text-card-warm"
+                        : "text-subtle hover:text-ink",
                     )}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
-              <span className="text-[11px] text-stone-muted">{activeHint}</span>
+              <span className="text-[11px] text-subtle">{activeHint}</span>
             </>
           ) : (
-            <span className="text-[11px] text-stone-muted">
+            <span className="text-[11px] text-subtle">
               Each case weighs the same — enter the total or per-case weight below.
             </span>
           )}
         </div>
-        <div className="flex items-baseline gap-2.5 text-[11px] text-stone-muted">
+        <div className="flex items-baseline gap-2.5 text-[11px] text-subtle">
           <span>{quantityCases} cs</span>
           <span>·</span>
           <span className="font-mono tabular-nums">
             {avgPerCase.toFixed(2)} lb/cs
           </span>
           <span>·</span>
-          <span className="font-mono font-semibold tabular-nums text-stone-ink">
+          <span className="font-mono font-semibold tabular-nums text-ink">
             {totalWeight.toFixed(2)} lb
           </span>
           {onClose ? (
@@ -291,7 +291,7 @@ export function LineWeightEditor({
                 e.stopPropagation();
                 onClose();
               }}
-              className="ml-1.5 rounded-md border border-stone-line bg-stone-surface px-2 py-0.5 text-[10.5px] font-medium text-stone-muted hover:text-stone-ink"
+              className="ml-1.5 rounded-md border border-border-default bg-card px-2 py-0.5 text-[10.5px] font-medium text-subtle hover:text-ink"
             >
               Close
             </button>
@@ -308,7 +308,7 @@ export function LineWeightEditor({
           onChange={setWeightLbs}
           onClick={stop}
           placeholder="Total weight (lbs)"
-          className="h-9 w-48 rounded-md border border-stone-line bg-stone-surface px-3 text-right font-mono text-[12px] tabular-nums outline-none focus:border-stone-ink"
+          className="h-9 w-48 rounded-md border border-border-default bg-card px-3 text-right font-mono text-[12px] tabular-nums outline-none focus:border-forest-mid"
         />
       ) : null}
 
@@ -321,7 +321,7 @@ export function LineWeightEditor({
           onChange={setDefaultCaseWeight}
           onClick={stop}
           placeholder="Weight per case (lbs)"
-          className="h-9 w-48 rounded-md border border-stone-line bg-stone-surface px-3 text-right font-mono text-[12px] tabular-nums outline-none focus:border-stone-ink"
+          className="h-9 w-48 rounded-md border border-border-default bg-card px-3 text-right font-mono text-[12px] tabular-nums outline-none focus:border-forest-mid"
         />
       ) : null}
 
@@ -333,7 +333,7 @@ export function LineWeightEditor({
           >
             {Array.from({ length: quantityCases }, (_, i) => (
               <div key={i} className="relative">
-                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[10px] font-semibold text-stone-muted">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 font-mono text-[10px] font-semibold text-subtle">
                   #{i + 1}
                 </span>
                 <input
@@ -344,16 +344,16 @@ export function LineWeightEditor({
                   onChange={e => setCaseEntry(i, e.target.value)}
                   onClick={stop}
                   placeholder="0.00"
-                  className="h-9 w-full rounded-md border border-stone-line bg-stone-surface pl-7 pr-7 text-right font-mono text-[12px] tabular-nums outline-none focus:border-stone-ink"
+                  className="h-9 w-full rounded-md border border-border-default bg-card pl-7 pr-7 text-right font-mono text-[12px] tabular-nums outline-none focus:border-forest-mid"
                 />
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-muted">
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-subtle">
                   lb
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-[12px] text-stone-muted">
+          <div className="text-[12px] text-subtle">
             Set a case count before entering per-case weights.
           </div>
         )

@@ -30,7 +30,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
     <div className="-m-4 flex min-h-[calc(100dvh-4rem)] flex-1 items-stretch">
       <SettingsBreadcrumbLabels groups={groups} />
       <SettingsSubNav groups={groups} />
-      <div className="flex-1 overflow-y-auto bg-stone-bg px-9 pb-20 pt-8">
+      <div className="flex-1 overflow-y-auto bg-page px-9 pb-20 pt-8">
         {children}
       </div>
     </div>

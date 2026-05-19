@@ -8,9 +8,9 @@ import type {
 } from "@/modules/distribution/services/aging";
 
 const BUCKET_TONE: Record<AgingBucketKey, string> = {
-  current: "bg-stone-line2 text-stone-muted border-stone-line",
-  d1_30: "bg-status-warn-soft text-status-warn border-status-warn/20",
-  d31_60: "bg-status-warn-soft text-status-warn border-status-warn/30",
+  current: "bg-divider text-subtle border-border-default",
+  d1_30: "bg-warning-bg text-warning-fg border-warning-border/20",
+  d31_60: "bg-warning-bg text-warning-fg border-warning-border/30",
   d61_90: "bg-destructive/10 text-destructive border-destructive/20",
   d90_plus: "bg-destructive/15 text-destructive border-destructive/30",
 };
@@ -49,7 +49,7 @@ export function BucketBars({ buckets }: { buckets: AgingBucketRow[] }) {
             <div className="flex items-center justify-between gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <BucketBadge bucket={bucket.key} />
-                <span className="text-xs text-stone-muted">
+                <span className="text-xs text-subtle">
                   {bucket.invoiceCount} invoice
                   {bucket.invoiceCount === 1 ? "" : "s"}
                 </span>
@@ -58,7 +58,7 @@ export function BucketBars({ buckets }: { buckets: AgingBucketRow[] }) {
                 {formatMoney(bucket.total)}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-stone-line2">
+            <div className="h-1.5 overflow-hidden rounded-full bg-divider">
               <div
                 className="h-full rounded-full bg-primary"
                 style={{ width: `${pct}%` }}

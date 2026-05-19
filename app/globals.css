@@ -149,7 +149,11 @@
   --popover: var(--color-card);
   --popover-foreground: var(--color-ink);
 
-  --primary: var(--color-forest);
+  /* Primary intentionally uses forest-mid (#2D5040) not the darker forest
+     (#1F3A2E) so action chrome (buttons, progress, checkboxes, settings
+     nav) reads as a visible green rather than near-black. Forest stays
+     reserved for borders, deep headings, and the logomark. */
+  --primary: var(--color-forest-mid);
   --primary-foreground: var(--color-card-warm);
 
   --secondary: var(--color-surface);

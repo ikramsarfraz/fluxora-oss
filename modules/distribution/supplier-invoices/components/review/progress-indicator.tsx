@@ -20,7 +20,7 @@ export function ProgressIndicator({ counts }: { counts: ReviewCounts }) {
       <Dot color={REVIEW_COLORS.danger} label={`${counts.needsReview} needs review`} />
       <Dot color={REVIEW_COLORS.mutedSoft} label={`${counts.fees} fee`} muted />
       <div
-        className="ml-1.5 h-[5px] w-[120px] overflow-hidden rounded-[3px] bg-stone-line2"
+        className="ml-1.5 h-[5px] w-[120px] overflow-hidden rounded-[3px] bg-divider"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -50,8 +50,8 @@ function Dot({
       <span
         className={
           muted
-            ? "text-[12.5px] font-medium text-stone-muted"
-            : "text-[12.5px] font-medium text-stone-ink"
+            ? "text-[12.5px] font-medium text-subtle"
+            : "text-[12.5px] font-medium text-ink"
         }
       >
         {label}

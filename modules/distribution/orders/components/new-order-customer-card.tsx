@@ -69,7 +69,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
     : "";
 
   return (
-    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface p-5 shadow-none ring-0 sm:p-[22px]">
+    <Card className="gap-0 rounded-[10px] border-border-default bg-card p-5 shadow-none ring-0 sm:p-[22px]">
       {/* Section header */}
       <div
         style={{
@@ -123,7 +123,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                         type="button"
                         variant="outline"
                         aria-invalid={fieldState.invalid}
-                        className="h-auto w-full justify-start border-stone-line bg-stone-surface px-3.5 py-2.5 text-sm font-normal text-stone-muted shadow-none hover:bg-stone-line2"
+                        className="h-auto w-full justify-start border-border-default bg-card px-3.5 py-2.5 text-sm font-normal text-subtle shadow-none hover:bg-divider"
                         disabled={isLoading}
                       >
                         <ComboboxValue>
@@ -211,7 +211,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                     onClick={() => field.onChange("")}
                     variant="ghost"
                     size="xs"
-                    className="shrink-0 text-xs text-stone-muted hover:bg-card/50 hover:text-stone-ink"
+                    className="shrink-0 text-xs text-subtle hover:bg-card/50 hover:text-ink"
                   >
                     Change
                   </Button>
@@ -295,7 +295,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                 {...field}
                 id="new-order-order-date"
                 type="date"
-                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && (
@@ -319,7 +319,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                 {...field}
                 id="new-order-delivery-date"
                 type="date"
-                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
             </div>

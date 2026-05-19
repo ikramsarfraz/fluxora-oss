@@ -89,8 +89,8 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-status-warn"
-        : "text-stone-muted";
+        ? "text-warning-fg"
+        : "text-subtle";
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -101,7 +101,7 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
         <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight">
           {value}
         </CardTitle>
-        {helper ? <p className="mt-1 text-[11px] text-stone-muted">{helper}</p> : null}
+        {helper ? <p className="mt-1 text-[11px] text-subtle">{helper}</p> : null}
       </CardHeader>
     </Card>
   );
@@ -185,18 +185,18 @@ export default function CustomerPortfolioPage() {
           {initials(customer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-medium leading-tight text-stone-ink">
+          <h1 className="truncate text-2xl font-medium leading-tight text-ink">
             {customer.name}
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             {customer.phoneNumber && (
-              <span className="flex items-center gap-1 text-sm text-stone-muted">
+              <span className="flex items-center gap-1 text-sm text-subtle">
                 <Phone className="size-3.5 shrink-0" />
                 {formatPhone(customer.phoneNumber)}
               </span>
             )}
-            {city && <span className="text-sm text-stone-muted">{city}</span>}
-            <span className="text-sm text-stone-muted">
+            {city && <span className="text-sm text-subtle">{city}</span>}
+            <span className="text-sm text-subtle">
               Customer since {formatMonthYear(customer.createdAt)}
             </span>
           </div>
@@ -248,29 +248,29 @@ export default function CustomerPortfolioPage() {
           onClick={toggleDetails}
           className="flex w-full items-center justify-between px-6 py-4 text-left"
         >
-          <span className="text-sm font-semibold text-stone-ink">Account details</span>
+          <span className="text-sm font-semibold text-ink">Account details</span>
           <ChevronDown
             className={cn(
-              "size-4 text-stone-muted transition-transform duration-200",
+              "size-4 text-subtle transition-transform duration-200",
               detailsOpen && "rotate-180",
             )}
           />
         </button>
         {detailsOpen && (
-          <div className="border-t border-stone-line px-6 py-5">
+          <div className="border-t border-border-default px-6 py-5">
             <div className="grid grid-cols-3 gap-x-6 gap-y-4">
               <div>
-                <p className="text-xs text-stone-muted">Abbreviation</p>
+                <p className="text-xs text-subtle">Abbreviation</p>
                 <p className="mt-0.5 text-sm font-medium">{customer.abbreviation ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs text-stone-muted">Phone</p>
+                <p className="text-xs text-subtle">Phone</p>
                 <p className="mt-0.5 text-sm font-medium">
                   {customer.phoneNumber ? formatPhone(customer.phoneNumber) : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-stone-muted">Fuel surcharge</p>
+                <p className="text-xs text-subtle">Fuel surcharge</p>
                 <p className="mt-0.5 text-sm font-medium">
                   {customer.fuelSurchargeAmount != null
                     ? formatMoney(customer.fuelSurchargeAmount)
@@ -279,8 +279,8 @@ export default function CustomerPortfolioPage() {
               </div>
             </div>
             {customer.addresses.length > 0 && (
-              <div className="mt-5 border-t border-stone-line pt-5">
-                <p className="mb-3 text-xs font-medium text-stone-muted">Addresses</p>
+              <div className="mt-5 border-t border-border-default pt-5">
+                <p className="mb-3 text-xs font-medium text-subtle">Addresses</p>
                 <div className="space-y-3">
                   {customer.addresses.map(addr => {
                     const line2 = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
@@ -288,7 +288,7 @@ export default function CustomerPortfolioPage() {
                       <div key={addr.id} className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{addr.street}</p>
-                          {line2 && <p className="text-xs text-stone-muted">{line2}</p>}
+                          {line2 && <p className="text-xs text-subtle">{line2}</p>}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <Badge variant="outline" className="text-xs capitalize">
@@ -311,7 +311,7 @@ export default function CustomerPortfolioPage() {
       </Card>
 
       {/* Tab bar — sticky below topbar */}
-      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-card px-4">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">
         <div className="flex">
           {TABS.map(t => (
             <button
@@ -320,8 +320,8 @@ export default function CustomerPortfolioPage() {
               className={cn(
                 "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                 tab === t.id
-                  ? "border-primary text-stone-ink"
-                  : "border-transparent text-stone-muted hover:text-stone-ink",
+                  ? "border-primary text-ink"
+                  : "border-transparent text-subtle hover:text-ink",
               )}
             >
               {t.label}
@@ -331,8 +331,8 @@ export default function CustomerPortfolioPage() {
                   className={cn(
                     "h-5 rounded-full px-1.5 text-[11px]",
                     tab === t.id
-                      ? "bg-stone-ink text-stone-surface"
-                      : "bg-stone-line text-stone-muted",
+                      ? "bg-forest-mid text-card-warm"
+                      : "bg-surface-deep text-subtle",
                   )}
                 >
                   {t.count}
@@ -351,31 +351,31 @@ export default function CustomerPortfolioPage() {
           {ordersLoading ? (
             <PageLoading message="Loading orders..." />
           ) : !ordersData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No orders on record.</p>
+            <p className="text-sm text-subtle">No orders on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Order #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Due
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Items
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -388,17 +388,17 @@ export default function CustomerPortfolioPage() {
                     return (
                       <TableRow
                         key={order.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {order.orderNumber ?? "—"}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(order.orderDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(order.dueDate) ?? "—"}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 text-right align-middle">
@@ -418,7 +418,7 @@ export default function CustomerPortfolioPage() {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link href={`/orders/${order.id}`} onClick={e => e.stopPropagation()}>
                                 View
@@ -448,31 +448,31 @@ export default function CustomerPortfolioPage() {
           {invoicesLoading ? (
             <PageLoading message="Loading invoices..." />
           ) : !invoicesData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No invoices on record.</p>
+            <p className="text-sm text-subtle">No invoices on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Due
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Balance
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -486,17 +486,17 @@ export default function CustomerPortfolioPage() {
                     return (
                       <TableRow
                         key={inv.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {inv.invoiceNumber}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.invoiceDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.dueDate) ?? "—"}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 align-middle">
@@ -523,7 +523,7 @@ export default function CustomerPortfolioPage() {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link
                                 href={`/invoices/${inv.id}`}

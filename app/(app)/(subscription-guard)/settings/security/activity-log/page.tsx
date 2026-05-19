@@ -57,18 +57,18 @@ export default async function ActivityLogSettingsPage() {
       />
 
       {events.length === 0 ? (
-        <div className="rounded-[10px] border border-stone-line bg-stone-bg px-6 py-12 text-center text-[13px] text-stone-muted">
+        <div className="rounded-[10px] border border-border-default bg-page px-6 py-12 text-center text-[13px] text-subtle">
           No audit events recorded yet.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface">
+        <div className="overflow-hidden rounded-[10px] border border-border-default bg-card">
           <table className="w-full border-collapse text-[12px]">
             <thead>
-              <tr className="bg-stone-line2/60">
+              <tr className="bg-divider/60">
                 {(["When", "Actor", "Action", "Resource", "Details"] as const).map(label => (
                   <th
                     key={label}
-                    className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-stone-muted"
+                    className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-subtle"
                   >
                     {label}
                   </th>
@@ -82,13 +82,13 @@ export default async function ActivityLogSettingsPage() {
                 return (
                   <tr
                     key={event.id}
-                    className="border-t border-stone-line2 align-top"
+                    className="border-t border-divider align-top"
                   >
-                    <td className="px-4 py-2.5 font-mono text-stone-ink2">
+                    <td className="px-4 py-2.5 font-mono text-ink-warm">
                       <div>{ts.date}</div>
-                      <div className="text-stone-muted">{ts.time}</div>
+                      <div className="text-subtle">{ts.time}</div>
                     </td>
-                    <td className="px-4 py-2.5 text-stone-ink2">
+                    <td className="px-4 py-2.5 text-ink-warm">
                       {event.actorEmail ?? event.actorUserId}
                     </td>
                     <td
@@ -97,11 +97,11 @@ export default async function ActivityLogSettingsPage() {
                     >
                       {humanizeAuditAction(event.action)}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-stone-muted">
+                    <td className="px-4 py-2.5 font-mono text-subtle">
                       {event.resourceType}
                       {event.resourceId ? ` · ${event.resourceId.slice(0, 8)}` : ""}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-stone-ink2">
+                    <td className="px-4 py-2.5 font-mono text-ink-warm">
                       {renderMetadata(event.metadata)}
                     </td>
                   </tr>
@@ -112,7 +112,7 @@ export default async function ActivityLogSettingsPage() {
         </div>
       )}
 
-      <p className="mt-4 text-[12px] text-stone-muted">
+      <p className="mt-4 text-[12px] text-subtle">
         Audit entries are append-only. Filters, full pagination, and CSV export are planned for a follow-up.
       </p>
     </div>

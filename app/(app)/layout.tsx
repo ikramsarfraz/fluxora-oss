@@ -50,7 +50,7 @@ export default async function AppGroupLayout({
             user={session.user}
           />
           <SidebarInset className="min-w-0 overflow-x-hidden">
-            <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-4">
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
               <SidebarTrigger className="-ml-1" />
               <Separator
                 orientation="vertical"

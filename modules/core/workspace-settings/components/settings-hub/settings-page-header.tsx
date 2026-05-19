@@ -16,13 +16,13 @@ export function SettingsPageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-stone-line pb-5">
+    <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-border-default pb-5">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-medium leading-tight tracking-[-0.02em] text-stone-ink">
+        <h1 className="text-[22px] font-medium leading-tight tracking-[-0.02em] text-ink">
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 max-w-[520px] text-[13px] text-stone-muted">{description}</p>
+          <p className="mt-1 max-w-[520px] text-[13px] text-subtle">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}

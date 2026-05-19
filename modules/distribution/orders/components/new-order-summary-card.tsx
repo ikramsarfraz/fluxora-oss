@@ -88,7 +88,7 @@ export function NewOrderSummaryCard({
   const total = Math.max(0, subtotal + fuelSurchargeAmt - discount);
 
   return (
-    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface px-5 py-[18px] shadow-none ring-0">
+    <Card className="gap-0 rounded-[10px] border-border-default bg-card px-5 py-[18px] shadow-none ring-0">
       <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "4px", color: C.ink }}>
         Estimate
       </div>
@@ -159,8 +159,8 @@ export function NewOrderSummaryCard({
               variant="ghost"
               className={`relative h-5 w-[34px] shrink-0 rounded-full p-0 ${
                 field.value
-                  ? "bg-stone-ink hover:bg-stone-ink/90"
-                  : "bg-stone-line hover:bg-stone-line"
+                  ? "bg-forest-mid hover:bg-forest"
+                  : "bg-surface-deep hover:bg-surface-deep"
               }`}
             >
               <span
@@ -200,7 +200,7 @@ export function NewOrderSummaryCard({
                   step="0.01"
                   inputMode="decimal"
                   placeholder="0.00"
-                  className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                  className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                   aria-invalid={fieldState.invalid}
                 />
                 {fieldState.invalid && (

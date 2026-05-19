@@ -248,22 +248,22 @@ export function NewOrderLinesTable({
         <Table className="text-[13px]">
           <TableHeader>
             <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Product
               </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Unit
               </TableHead>
-              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Qty
               </TableHead>
-              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Weight (lbs)
               </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Price
               </TableHead>
-              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
                 Total
               </TableHead>
               <TableHead className="h-auto w-7.5 px-2.5 pt-0 pb-2" />
@@ -305,7 +305,7 @@ export function NewOrderLinesTable({
           type="button"
           onClick={() => append(newLineDefaults())}
           variant="outline"
-          className="h-8 border-dashed border-stone-line bg-transparent px-3.5 text-[13px] text-stone-muted shadow-none hover:bg-stone-line2 hover:text-stone-ink"
+          className="h-8 border-dashed border-border-default bg-transparent px-3.5 text-[13px] text-subtle shadow-none hover:bg-divider hover:text-ink"
         >
           + Add product
         </Button>
@@ -362,7 +362,7 @@ export function NewOrderLinesTable({
                     {...field}
                     placeholder="Delivery instructions, packing requests…"
                     rows={2}
-                    className="min-h-15 resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
+                    className="min-h-15 resize-y border-border-default bg-card px-3 py-2.5 text-[13px] text-ink shadow-none"
                   />
                 </div>
               )}
@@ -394,7 +394,7 @@ export function NewOrderLinesTable({
                     {...field}
                     placeholder="Notes for warehouse and office staff…"
                     rows={2}
-                    className="min-h-15 resize-y border-stone-line bg-stone-surface px-3 py-2.5 text-[13px] text-stone-ink shadow-none"
+                    className="min-h-15 resize-y border-border-default bg-card px-3 py-2.5 text-[13px] text-ink shadow-none"
                   />
                 </div>
               )}
@@ -527,9 +527,9 @@ function LineRow({
     (p) => p.id === row?.productId || !takenProductIds.has(p.id),
   );
 
-  const cellCn = "border-t border-stone-line2 px-2.5 py-1.5 align-top";
+  const cellCn = "border-t border-divider px-2.5 py-1.5 align-top";
   const inputCn =
-    "h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none";
+    "h-auto border-transparent bg-divider px-2.5 py-2 text-[13px] text-ink shadow-none";
 
   // ── Weight cell ──────────────────────────────────────────────────────────
   function renderWeightCell() {
@@ -677,7 +677,7 @@ function LineRow({
                         type="button"
                         variant="outline"
                         aria-invalid={fieldState.invalid}
-                        className="h-auto w-full justify-start border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] font-normal text-stone-ink shadow-none hover:bg-stone-line2 data-[placeholder=true]:text-stone-muted"
+                        className="h-auto w-full justify-start border-transparent bg-divider px-2.5 py-2 text-[13px] font-normal text-ink shadow-none hover:bg-divider data-[placeholder=true]:text-subtle"
                       >
                         <ComboboxValue>
                           {product ? (
@@ -804,7 +804,7 @@ function LineRow({
                     disabled={!product || salesUnits.length === 0}
                   >
                     <SelectTrigger
-                      className="h-auto border-transparent bg-stone-line2 px-2.5 py-2 text-[13px] text-stone-ink shadow-none"
+                      className="h-auto border-transparent bg-divider px-2.5 py-2 text-[13px] text-ink shadow-none"
                       aria-invalid={fieldState.invalid}
                     >
                       <SelectValue placeholder={!product ? "—" : "Unit…"} />
@@ -929,8 +929,8 @@ function LineRow({
         <TableCell
           className={`${cellCn} whitespace-nowrap text-right text-[13px] ${
             lineTotal !== null
-              ? "font-medium text-stone-ink"
-              : "font-normal text-stone-muted"
+              ? "font-medium text-ink"
+              : "font-normal text-subtle"
           }`}
         >
           <div
@@ -973,7 +973,7 @@ function LineRow({
             aria-label={`Remove line ${index + 1}`}
             variant="ghost"
             size="icon-xs"
-            className="size-7 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
+            className="size-7 text-subtle hover:bg-divider hover:text-ink"
           >
             ✕
           </Button>

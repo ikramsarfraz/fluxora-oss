@@ -480,7 +480,7 @@ const lblStyle: React.CSSProperties = {
 };
 
 const inputCls =
-  "border-stone-line bg-stone-surface text-sm text-stone-ink shadow-none";
+  "border-border-default bg-card text-sm text-ink shadow-none";
 
 
 // ── Component ──────────────────────────────────────────────────────────────

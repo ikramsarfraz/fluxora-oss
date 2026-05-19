@@ -41,24 +41,24 @@ export function RoleEditMode({
   return (
     <div>
       {/* Members strip */}
-      <div className="mb-5 flex flex-wrap items-center gap-3.5 rounded-[10px] border border-stone-line bg-stone-surface px-[18px] py-4">
+      <div className="mb-5 flex flex-wrap items-center gap-3.5 rounded-[10px] border border-border-default bg-card px-[18px] py-4">
         <div>
-          <div className="text-[12px] text-stone-muted">
-            <b className="font-semibold text-stone-ink">Assigned to</b>
+          <div className="text-[12px] text-subtle">
+            <b className="font-semibold text-ink">Assigned to</b>
           </div>
-          <div className="text-[11px] text-stone-muted">People in this role today</div>
+          <div className="text-[11px] text-subtle">People in this role today</div>
         </div>
         {members.length === 0 ? (
-          <span className="rounded-full border border-dashed border-stone-line px-3 py-1 text-[12px] text-stone-muted">
+          <span className="rounded-full border border-dashed border-border-default px-3 py-1 text-[12px] text-subtle">
             No members assigned
           </span>
         ) : (
           members.map(m => (
             <span
               key={m.id}
-              className="inline-flex items-center gap-2 rounded-full bg-stone-line2 py-1 pl-1 pr-2.5 text-[12px] text-stone-ink2"
+              className="inline-flex items-center gap-2 rounded-full bg-divider py-1 pl-1 pr-2.5 text-[12px] text-ink-warm"
             >
-              <span className="grid size-[22px] place-items-center rounded-full bg-stone-ink text-[10px] font-semibold text-stone-surface">
+              <span className="grid size-[22px] place-items-center rounded-full bg-forest-mid text-[10px] font-semibold text-card-warm">
                 {m.initials}
               </span>
               {m.fullName}
@@ -68,7 +68,7 @@ export function RoleEditMode({
         <button
           type="button"
           disabled
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-stone-line bg-stone-surface px-3 py-1 text-[12px] font-medium text-stone-muted"
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-border-default bg-card px-3 py-1 text-[12px] font-medium text-subtle"
           title="Editing assignments requires the per-tenant role schema — coming next"
         >
           <Plus className="size-[14px]" strokeWidth={1.8} />
@@ -83,15 +83,15 @@ export function RoleEditMode({
           return (
             <section
               key={group.key}
-              className="overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface"
+              className="overflow-hidden rounded-[10px] border border-border-default bg-card"
             >
-              <header className="flex items-center justify-between gap-3 border-b border-stone-line bg-stone-line2 px-[18px] py-3">
-                <div className="flex items-center gap-2.5 text-stone-ink2">
+              <header className="flex items-center justify-between gap-3 border-b border-border-default bg-divider px-[18px] py-3">
+                <div className="flex items-center gap-2.5 text-ink-warm">
                   <Icon className="size-[14px] shrink-0" strokeWidth={1.8} />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-stone-muted">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-subtle">
                     {group.label}
                   </span>
-                  <span className="text-[13px] font-semibold text-stone-ink">
+                  <span className="text-[13px] font-semibold text-ink">
                     {group.resources.length}{" "}
                     {group.resources.length === 1 ? "resource" : "resources"}
                   </span>
@@ -102,13 +102,13 @@ export function RoleEditMode({
                 {group.resources.map(resource => (
                   <div
                     key={resource.key}
-                    className="grid grid-cols-[1fr_360px] items-center gap-6 border-t border-stone-line2 px-[18px] py-3 first:border-t-0"
+                    className="grid grid-cols-[1fr_360px] items-center gap-6 border-t border-divider px-[18px] py-3 first:border-t-0"
                   >
                     <div>
-                      <div className="text-[13px] font-medium text-stone-ink">
+                      <div className="text-[13px] font-medium text-ink">
                         {resource.label}
                       </div>
-                      <div className="mt-0.5 text-[12px] text-stone-muted">
+                      <div className="mt-0.5 text-[12px] text-subtle">
                         {resource.description}
                       </div>
                     </div>
@@ -125,14 +125,14 @@ export function RoleEditMode({
         })}
 
         {/* Workspace controls (booleans) */}
-        <section className="overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface">
-          <header className="flex items-center justify-between gap-3 border-b border-stone-line bg-stone-line2 px-[18px] py-3">
-            <div className="flex items-center gap-2.5 text-stone-ink2">
+        <section className="overflow-hidden rounded-[10px] border border-border-default bg-card">
+          <header className="flex items-center justify-between gap-3 border-b border-border-default bg-divider px-[18px] py-3">
+            <div className="flex items-center gap-2.5 text-ink-warm">
               <SettingsIcon className="size-[14px] shrink-0" strokeWidth={1.8} />
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-stone-muted">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-subtle">
                 Workspace controls
               </span>
-              <span className="text-[13px] font-semibold text-stone-ink">
+              <span className="text-[13px] font-semibold text-ink">
                 Boolean permissions
               </span>
             </div>
@@ -159,7 +159,7 @@ function QuickSet() {
   // change once the role schema is editable. Disabled cursor + `aria-disabled`
   // surfaces that intent without removing the affordance from the design.
   return (
-    <div className="flex items-center gap-1 text-[11px] text-stone-muted">
+    <div className="flex items-center gap-1 text-[11px] text-subtle">
       <span>Set all:</span>
       {(["None", "View", "Edit", "Full"] as const).map(label => (
         <button
@@ -168,7 +168,7 @@ function QuickSet() {
           disabled
           aria-disabled
           className={cn(
-            "rounded px-2 py-0.5 text-[11px] text-stone-ink2",
+            "rounded px-2 py-0.5 text-[11px] text-ink-warm",
             "cursor-not-allowed opacity-70",
           )}
         >

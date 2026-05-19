@@ -12,9 +12,9 @@ export function SettingsForbidden({ leafLabel }: { leafLabel: string }) {
         title={leafLabel}
         description="You don't have permission to view this page. Ask an owner or admin for access."
       />
-      <div className="rounded-[10px] border border-stone-line bg-stone-surface p-6 text-[13px] text-stone-ink2">
-        <p className="font-medium text-stone-ink">Restricted</p>
-        <p className="mt-1 text-stone-muted">
+      <div className="rounded-[10px] border border-border-default bg-card p-6 text-[13px] text-ink-warm">
+        <p className="font-medium text-ink">Restricted</p>
+        <p className="mt-1 text-subtle">
           Team, Integrations, Security, and Billing are only available to owners and admins.
         </p>
       </div>

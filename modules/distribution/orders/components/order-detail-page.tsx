@@ -315,7 +315,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
+                className="size-[30px] border-border-default bg-card text-ink-warm shadow-none hover:bg-divider"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -470,7 +470,7 @@ function PrimaryBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+      className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-50"
     >
       {children}
     </Button>
@@ -489,7 +489,7 @@ function SecondaryBtn({
       type="button"
       onClick={onClick}
       variant="outline"
-      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2"
+      className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider"
     >
       {children}
     </Button>

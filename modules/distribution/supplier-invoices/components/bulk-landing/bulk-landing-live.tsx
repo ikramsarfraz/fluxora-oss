@@ -233,7 +233,7 @@ export function BulkLandingLive({
       return <InlineDropzone ref={dropzoneRef} variant="empty" />;
     }
     return (
-      <main className="-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg p-12">
+      <main className="-m-4 flex min-w-0 flex-1 flex-col bg-page p-12">
         <InlineDropzone ref={dropzoneRef} variant="empty" />
       </main>
     );

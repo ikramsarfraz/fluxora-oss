@@ -220,7 +220,7 @@ export function OrderNotesAttachmentsCard({ order }: OrderNotesAttachmentsCardPr
               type="button"
               variant="outline"
               size="xs"
-              className="ml-auto border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
+              className="ml-auto border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadMutation.isPending}
             >

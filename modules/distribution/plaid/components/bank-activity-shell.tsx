@@ -551,7 +551,7 @@ function MatchDetailBlock({
           size="sm"
           onClick={onConfirm}
           disabled={confirming}
-          className="h-8 bg-stone-ink px-4 text-[13px] text-white hover:bg-stone-ink/90"
+          className="h-8 bg-forest-mid px-4 text-[13px] text-white hover:bg-forest"
         >
           {confirming ? "Confirming…" : "Confirm match"}
         </Button>
@@ -566,7 +566,7 @@ function MatchDetailBlock({
           size="sm"
           onClick={onReject}
           disabled={rejecting}
-          className="h-8 px-3 text-[13px] text-stone-muted"
+          className="h-8 px-3 text-[13px] text-subtle"
         >
           {rejecting ? "…" : "Not a bill payment"}
         </Button>

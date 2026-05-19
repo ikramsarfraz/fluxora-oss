@@ -48,15 +48,15 @@ export function RoleListRail({
   }, [byRole, query]);
 
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-stone-line bg-stone-surface px-3.5 py-5">
+    <aside className="flex w-[260px] shrink-0 flex-col border-r border-border-default bg-card px-3.5 py-5">
       <div className="flex items-center justify-between px-2 pb-3">
-        <span className="text-[16px] font-semibold tracking-[-0.01em] text-stone-ink">Roles</span>
-        <span className="text-[11px] text-stone-muted">{ROLE_ORDER.length} total</span>
+        <span className="text-[16px] font-semibold tracking-[-0.01em] text-ink">Roles</span>
+        <span className="text-[11px] text-subtle">{ROLE_ORDER.length} total</span>
       </div>
 
       <div className="relative mx-1.5 mb-3">
         <Search
-          className="pointer-events-none absolute left-2 top-1/2 size-[13px] -translate-y-1/2 text-stone-muted"
+          className="pointer-events-none absolute left-2 top-1/2 size-[13px] -translate-y-1/2 text-subtle"
           strokeWidth={1.8}
         />
         <input
@@ -65,9 +65,9 @@ export function RoleListRail({
           placeholder="Search roles…"
           aria-label="Search roles"
           className={cn(
-            "w-full rounded-md border border-stone-line bg-stone-surface py-1.5 pl-7 pr-2 text-[12px]",
-            "placeholder:text-stone-muted",
-            "focus-visible:border-stone-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-stone-line2",
+            "w-full rounded-md border border-border-default bg-card py-1.5 pl-7 pr-2 text-[12px]",
+            "placeholder:text-subtle",
+            "focus-visible:border-forest-mid focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-divider",
           )}
         />
       </div>
@@ -89,7 +89,7 @@ export function RoleListRail({
                 "group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
                 isActive
                   ? "bg-primary/10 text-primary"
-                  : "text-stone-ink2 hover:bg-stone-line2",
+                  : "text-ink-warm hover:bg-divider",
               )}
               aria-current={isActive ? "true" : undefined}
             >
@@ -99,14 +99,14 @@ export function RoleListRail({
                 <div
                   className={cn(
                     "mt-px truncate text-[11px]",
-                    isActive ? "text-primary/70" : "text-stone-muted",
+                    isActive ? "text-primary/70" : "text-subtle",
                   )}
                 >
                   {item.memberCount} member{item.memberCount === 1 ? "" : "s"} · {summary}
                 </div>
               </div>
               <Lock
-                className={cn("size-3 shrink-0", isActive ? "text-primary/70" : "text-stone-muted")}
+                className={cn("size-3 shrink-0", isActive ? "text-primary/70" : "text-subtle")}
                 aria-hidden
                 strokeWidth={1.8}
               />
@@ -115,15 +115,15 @@ export function RoleListRail({
         })}
       </div>
 
-      <div className="mt-auto border-t border-dashed border-stone-line pt-3">
+      <div className="mt-auto border-t border-dashed border-border-default pt-3">
         <button
           type="button"
           onClick={onNewRole}
           disabled={!onNewRole}
           className={cn(
-            "flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-stone-line bg-transparent px-3 py-2 text-[12px] font-medium text-stone-muted transition-colors",
+            "flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border-default bg-transparent px-3 py-2 text-[12px] font-medium text-subtle transition-colors",
             onNewRole
-              ? "hover:border-stone-ink hover:bg-stone-line2 hover:text-stone-ink"
+              ? "hover:border-forest-mid hover:bg-divider hover:text-ink"
               : "cursor-not-allowed opacity-70",
           )}
           aria-disabled={!onNewRole}
@@ -138,7 +138,7 @@ export function RoleListRail({
 
 function RailSectionHeading({ label, count }: { label: string; count: number }) {
   return (
-    <div className="flex items-center justify-between px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+    <div className="flex items-center justify-between px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
       <span>{label}</span>
       <span className="font-normal">{count}</span>
     </div>

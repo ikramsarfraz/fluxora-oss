@@ -61,7 +61,7 @@ export function SupplierInvoicePdfPreviewCard({
         <iframe
           src={`${href}#view=FitH`}
           title={pdf.file.originalFilename ?? "Source PDF"}
-          className="h-[640px] w-full rounded-md border border-stone-line bg-stone-line2"
+          className="h-[640px] w-full rounded-md border border-border-default bg-divider"
         />
       </CardContent>
     </Card>

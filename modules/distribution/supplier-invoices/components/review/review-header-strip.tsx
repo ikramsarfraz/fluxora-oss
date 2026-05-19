@@ -25,15 +25,15 @@ export function ReviewHeaderStrip({
 }) {
   const blocked = counts.needsReview > 0 || submitDisabled === true;
   return (
-    <div className="flex items-center justify-between gap-[18px] border-b border-stone-line bg-stone-bg px-6 py-3.5">
+    <div className="flex items-center justify-between gap-[18px] border-b border-border-default bg-page px-6 py-3.5">
       <div className="flex min-w-0 items-center gap-3.5">
-        <div className="flex items-center gap-2.5 rounded-lg border border-stone-line bg-stone-surface py-[5px] pl-2 pr-2.5">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border-default bg-card py-[5px] pl-2 pr-2.5">
           <FileText
             className="size-4 shrink-0"
             strokeWidth={1.6}
             style={{ color: REVIEW_COLORS.danger }}
           />
-          <span className="max-w-[300px] truncate font-mono text-[12px] font-medium text-stone-ink">
+          <span className="max-w-[300px] truncate font-mono text-[12px] font-medium text-ink">
             {fileName}
           </span>
         </div>
@@ -64,7 +64,7 @@ export function ReviewHeaderStrip({
           size="sm"
           disabled={blocked}
           onClick={onSubmit}
-          className="h-8 border-stone-ink bg-stone-ink text-[12px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-60"
+          className="h-8 border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest disabled:opacity-60"
         >
           {blocked ? `Resolve ${counts.needsReview} to continue` : "Complete & receive"}
         </Button>

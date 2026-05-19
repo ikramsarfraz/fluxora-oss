@@ -17,7 +17,7 @@ export default async function BanksSettingsRoutePage() {
   }
 
   return (
-    <Suspense fallback={<div className="text-[13px] text-stone-muted">Loading…</div>}>
+    <Suspense fallback={<div className="text-[13px] text-subtle">Loading…</div>}>
       <BanksContent />
     </Suspense>
   );

@@ -96,25 +96,25 @@ export function BulkLandingScreen({
   const Outer = hideHeader ? "div" : "main";
   const outerClass = hideHeader
     ? "flex min-w-0 flex-1 flex-col"
-    : "-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg";
+    : "-m-4 flex min-w-0 flex-1 flex-col bg-page";
   const summaryPadding = hideHeader ? "" : "";
   const filesCardClass = hideHeader
-    ? "mb-7 overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface"
-    : "mx-8 mb-7 overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface";
+    ? "mb-7 overflow-hidden rounded-[12px] border border-border-default bg-card"
+    : "mx-8 mb-7 overflow-hidden rounded-[12px] border border-border-default bg-card";
 
   return (
     <Outer className={outerClass}>
       {hideHeader ? null : (
         <header className="flex items-end justify-between gap-6 px-8 pb-[22px] pt-[28px]">
           <div>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Bulk import · {view.summary.filesProcessed}{" "}
               {view.summary.filesProcessed === 1 ? "file" : "files"}
             </div>
-            <h1 className="mb-2 text-[26px] font-medium leading-tight tracking-[-0.015em] text-stone-ink">
+            <h1 className="mb-2 text-[26px] font-medium leading-tight tracking-[-0.015em] text-ink">
               Review parsed invoices
             </h1>
-            <p className="max-w-[640px] text-[14px] text-stone-muted">
+            <p className="max-w-[640px] text-[14px] text-subtle">
               Files were parsed and fields suggested by AI. Confirm each one before they post to inventory.
             </p>
           </div>
@@ -135,7 +135,7 @@ export function BulkLandingScreen({
                 type="button"
                 size="sm"
                 onClick={() => openFile(nextFile)}
-                className="h-9 gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
+                className="h-9 gap-1.5 border-forest-mid bg-forest-mid text-[13px] text-card-warm hover:bg-forest"
               >
                 Start with {startWithLabel(nextFile.name)}
                 <ArrowRight className="size-3" strokeWidth={1.8} />
@@ -153,7 +153,7 @@ export function BulkLandingScreen({
         <FilesCardHeader filter={filter} onFilterChange={setFilter} />
         <ColumnHeader />
         {visibleFiles.length === 0 ? (
-          <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
+          <div className="px-[22px] py-12 text-center text-[13px] text-subtle">
             No files match this filter.
           </div>
         ) : (
@@ -197,7 +197,7 @@ function SummaryStrip({
     <div
       // Drop the page-margin when embedded — parent shell handles padding.
       className={cn(
-        "mb-[18px] grid items-center gap-6 rounded-[12px] border border-stone-line bg-stone-surface px-6 py-[18px]",
+        "mb-[18px] grid items-center gap-6 rounded-[12px] border border-border-default bg-card px-6 py-[18px]",
         embedded ? "" : "mx-8",
       )}
       style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr auto" }}
@@ -216,10 +216,10 @@ function SummaryStrip({
       />
       <MetricCard label="Combined value" value={`$${fmtAmount(summary.combinedValue)}`} mono />
       <div className="flex flex-col items-end gap-1.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
           Batch progress
         </div>
-        <div className="h-1.5 w-40 overflow-hidden rounded-md bg-stone-line2">
+        <div className="h-1.5 w-40 overflow-hidden rounded-md bg-divider">
           <div
             className="h-full rounded-md"
             style={{ width: `${ratio * 100}%`, background: "oklch(58% 0.13 155)" }}
@@ -238,10 +238,10 @@ function FilesCardHeader({
   onFilterChange: (filter: BatchFilter) => void;
 }) {
   return (
-    <div className="flex items-center justify-between border-b border-stone-line bg-stone-line2 px-[22px] py-3">
+    <div className="flex items-center justify-between border-b border-border-default bg-divider px-[22px] py-3">
       <div className="flex items-center gap-3.5">
-        <div className="text-[13px] font-semibold text-stone-ink">Files in this batch</div>
-        <div className="flex gap-1 rounded-[7px] border border-stone-line bg-stone-surface p-[3px]">
+        <div className="text-[13px] font-semibold text-ink">Files in this batch</div>
+        <div className="flex gap-1 rounded-[7px] border border-border-default bg-card p-[3px]">
           {FILTER_OPTIONS.map(opt => {
             const active = filter === opt.value;
             return (
@@ -252,8 +252,8 @@ function FilesCardHeader({
                 className={cn(
                   "rounded-[5px] px-2.5 py-1 text-[11.5px] font-medium transition-colors",
                   active
-                    ? "bg-stone-ink text-stone-surface"
-                    : "text-stone-muted hover:text-stone-ink",
+                    ? "bg-forest-mid text-card-warm"
+                    : "text-subtle hover:text-ink",
                 )}
               >
                 {opt.label}
@@ -262,8 +262,8 @@ function FilesCardHeader({
           })}
         </div>
       </div>
-      <div className="text-[12px] text-stone-muted">
-        Sorted by: <span className="font-medium text-stone-ink">Lowest confidence first</span>
+      <div className="text-[12px] text-subtle">
+        Sorted by: <span className="font-medium text-ink">Lowest confidence first</span>
       </div>
     </div>
   );
@@ -272,7 +272,7 @@ function FilesCardHeader({
 function ColumnHeader() {
   return (
     <div
-      className="grid gap-[18px] border-b border-stone-line bg-stone-bg px-[22px] py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted"
+      className="grid gap-[18px] border-b border-border-default bg-page px-[22px] py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle"
       style={{ gridTemplateColumns: "1fr 180px 180px 130px 130px" }}
     >
       <div className="pl-[3px]">File · supplier · invoice</div>
@@ -298,9 +298,9 @@ function CardFooter({
   reparseAllPending?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-end bg-stone-bg px-[22px] py-3.5">
+    <div className="flex items-center justify-end bg-page px-[22px] py-3.5">
       <div className="flex items-center gap-2.5">
-        <span className="text-[12px] text-stone-muted">Bulk:</span>
+        <span className="text-[12px] text-subtle">Bulk:</span>
         <Button
           type="button"
           variant="ghost"

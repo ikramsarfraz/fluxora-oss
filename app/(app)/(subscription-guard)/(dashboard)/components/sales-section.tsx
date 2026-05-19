@@ -35,9 +35,9 @@ export function SalesSection({ overTime }: { overTime: SalesOverTimePoint[] }) {
   return (
     <div className="px-4 lg:px-6">
       <Card className="@container/card shadow-none">
-        <CardHeader className="border-b border-stone-line pb-3">
-          <CardTitle className="text-sm font-medium text-stone-ink">Sales over time</CardTitle>
-          <CardDescription className="text-xs text-stone-muted">
+        <CardHeader className="border-b border-border-default pb-3">
+          <CardTitle className="text-sm font-medium text-ink">Sales over time</CardTitle>
+          <CardDescription className="text-xs text-subtle">
             Daily invoiced sales, last 30 days.
           </CardDescription>
         </CardHeader>

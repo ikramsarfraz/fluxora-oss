@@ -156,7 +156,7 @@ export function LineRow({
           onClick();
         }
       }}
-      className="flex cursor-pointer flex-col border-b border-stone-line transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--stone-ink)]"
+      className="flex cursor-pointer flex-col border-b border-border-default transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--color-forest-mid)]"
       style={{
         background: palette.bg,
         borderLeft: `3px solid ${isActive ? palette.bar : "transparent"}`,
@@ -222,7 +222,7 @@ export function LineRow({
                 onDelete();
               }}
               title="Remove this line from the bill"
-              className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-md text-stone-muted transition-colors hover:bg-stone-line2 hover:text-stone-ink"
+              className="-mr-1 flex size-7 shrink-0 items-center justify-center rounded-md text-subtle transition-colors hover:bg-divider hover:text-ink"
             >
               <X className="size-[14px]" strokeWidth={1.8} />
             </button>
@@ -325,10 +325,10 @@ function LotExpiryChipButton({
       aria-label={baseLabel}
       aria-expanded={isOpen}
       className={cn(
-        "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
+        "inline-flex items-center gap-1 rounded-[7px] border bg-card px-2.5 py-1 text-[12px] transition-colors",
         hasOverride
-          ? "border-stone-ink text-stone-ink"
-          : "border-stone-line text-stone-muted hover:text-stone-ink",
+          ? "border-forest-mid text-ink"
+          : "border-border-default text-subtle hover:text-ink",
       )}
     >
       <Calendar className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
@@ -370,10 +370,10 @@ function WeightChipButton({
       aria-label={baseLabel}
       aria-expanded={isOpen}
       className={cn(
-        "inline-flex items-center gap-1 rounded-[7px] border bg-stone-surface px-2.5 py-1 text-[12px] transition-colors",
+        "inline-flex items-center gap-1 rounded-[7px] border bg-card px-2.5 py-1 text-[12px] transition-colors",
         hasOverride
-          ? "border-stone-ink text-stone-ink"
-          : "border-stone-line text-stone-muted hover:text-stone-ink",
+          ? "border-forest-mid text-ink"
+          : "border-border-default text-subtle hover:text-ink",
       )}
     >
       <Scale className="size-[12px]" strokeWidth={1.8} aria-hidden="true" />
@@ -394,8 +394,8 @@ function WeightChipButton({
 
 function RawText({ id, raw }: { id: number; raw: string }) {
   return (
-    <div className="mb-1 font-mono text-[11.5px] leading-[1.4] text-stone-muted">
-      <span className="mr-1.5 rounded bg-stone-line2 px-1.5 py-px text-[10.5px] font-semibold">
+    <div className="mb-1 font-mono text-[11.5px] leading-[1.4] text-subtle">
+      <span className="mr-1.5 rounded bg-divider px-1.5 py-px text-[10.5px] font-semibold">
         L{id}
       </span>
       {raw}
@@ -409,7 +409,7 @@ function DescriptionText({ description }: { description: string }) {
   // user can read it for context without confusing it with the matchable
   // product name.
   return (
-    <div className="mb-1 pl-[26px] text-[11.5px] italic leading-[1.4] text-stone-muted">
+    <div className="mb-1 pl-[26px] text-[11.5px] italic leading-[1.4] text-subtle">
       {description}
     </div>
   );
@@ -440,7 +440,7 @@ function MatchedStatus({
       <span className="text-[12px]" style={{ color: REVIEW_COLORS.mutedSoft }}>
         →
       </span>
-      <span className="text-[13px] font-semibold text-stone-ink">{match.product}</span>
+      <span className="text-[13px] font-semibold text-ink">{match.product}</span>
       <span className="font-mono text-[11px]" style={{ color: REVIEW_COLORS.mutedSoft }}>
         {match.sku}
       </span>
@@ -464,7 +464,7 @@ function UnmatchedStatus() {
         <AlertCircle className="size-[14px]" strokeWidth={1.6} />
         No match found
       </span>
-      <span className="text-[12px] text-stone-muted">· Pick a product or create new</span>
+      <span className="text-[12px] text-subtle">· Pick a product or create new</span>
     </div>
   );
 }
@@ -489,9 +489,9 @@ function FeeStatus({
 }) {
   const label = category ? FEE_CATEGORY_LABEL[category] : "Non-inventory charge";
   return (
-    <div className="inline-flex items-center gap-1.5 text-[12px] font-medium text-stone-muted">
+    <div className="inline-flex items-center gap-1.5 text-[12px] font-medium text-subtle">
       <span>{label}</span>
-      <span className="rounded bg-stone-line2 px-1.5 py-px text-[11px]">
+      <span className="rounded bg-divider px-1.5 py-px text-[11px]">
         {category ? "Fee" : "Uncategorized"}
       </span>
     </div>
@@ -511,7 +511,7 @@ function NumericSnapshot({
   const showStepper = !isFee && onCasesChange != null;
   return (
     <div className="flex shrink-0 flex-col items-end pl-3.5 text-right">
-      <div className="font-mono text-[15px] font-semibold tabular-nums text-stone-ink">
+      <div className="font-mono text-[15px] font-semibold tabular-nums text-ink">
         ${fmt(line.total)}
       </div>
       <div
@@ -554,7 +554,7 @@ function CasesStepper({
   return (
     <span
       onClick={e => e.stopPropagation()}
-      className="inline-flex items-stretch overflow-hidden rounded-md border border-stone-line bg-stone-surface"
+      className="inline-flex items-stretch overflow-hidden rounded-md border border-border-default bg-card"
     >
       <button
         type="button"
@@ -564,7 +564,7 @@ function CasesStepper({
         }}
         title="Decrease cases"
         aria-label="Decrease cases"
-        className="flex w-5 items-center justify-center text-stone-muted transition-colors hover:text-stone-ink"
+        className="flex w-5 items-center justify-center text-subtle transition-colors hover:text-ink"
       >
         −
       </button>
@@ -581,7 +581,7 @@ function CasesStepper({
         aria-label="Case count"
         // Width fits up to ~3 digits; longer typing scrolls inside the
         // input rather than expanding the row.
-        className="h-5 w-9 border-x border-stone-line bg-stone-surface text-center font-mono text-[11px] tabular-nums text-stone-ink outline-none focus:bg-stone-line2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="h-5 w-9 border-x border-border-default bg-card text-center font-mono text-[11px] tabular-nums text-ink outline-none focus:bg-divider [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         type="button"
@@ -591,7 +591,7 @@ function CasesStepper({
         }}
         title="Increase cases"
         aria-label="Increase cases"
-        className="flex w-5 items-center justify-center text-stone-muted transition-colors hover:text-stone-ink"
+        className="flex w-5 items-center justify-center text-subtle transition-colors hover:text-ink"
       >
         +
       </button>
@@ -613,7 +613,7 @@ function CandidateButton({
         e.stopPropagation();
         onClick?.();
       }}
-      className="inline-flex items-center gap-2 rounded-[7px] border border-stone-line bg-stone-surface py-1 pl-2.5 pr-1 text-[12px] text-stone-ink transition-colors hover:bg-stone-line2"
+      className="inline-flex items-center gap-2 rounded-[7px] border border-border-default bg-card py-1 pl-2.5 pr-1 text-[12px] text-ink transition-colors hover:bg-divider"
     >
       <Sparkles
         className="size-[12px]"
@@ -621,7 +621,7 @@ function CandidateButton({
         style={{ color: REVIEW_COLORS.accent }}
       />
       <span className="font-medium">{candidate.name}</span>
-      <span className="rounded bg-stone-line2 px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-stone-muted">
+      <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-subtle">
         {candidate.score}%
       </span>
     </button>
@@ -637,7 +637,7 @@ function CreateNewButton({ onClick }: { onClick?: () => void }) {
         onClick?.();
       }}
       className={cn(
-        "inline-flex items-center gap-1 rounded-[7px] bg-stone-surface px-2.5 py-1 text-[12px] text-stone-muted transition-colors hover:text-stone-ink",
+        "inline-flex items-center gap-1 rounded-[7px] bg-card px-2.5 py-1 text-[12px] text-subtle transition-colors hover:text-ink",
       )}
       style={{ border: `1px dashed ${REVIEW_COLORS.borderStrong}` }}
     >
@@ -655,7 +655,7 @@ function SkipButton({ onClick }: { onClick?: () => void }) {
         e.stopPropagation();
         onClick?.();
       }}
-      className="bg-transparent px-2.5 py-1 text-[12px] transition-colors hover:text-stone-ink"
+      className="bg-transparent px-2.5 py-1 text-[12px] transition-colors hover:text-ink"
       style={{ color: REVIEW_COLORS.mutedSoft }}
     >
       Skip this line

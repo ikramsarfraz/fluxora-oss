@@ -95,10 +95,10 @@ export function LineLotExpiryEditor({
       onClick={stop}
       role="region"
       aria-label="Lot number and expiration override"
-      className="mt-2 rounded-lg border border-stone-line bg-stone-line2/50 p-3 text-[12px]"
+      className="mt-2 rounded-lg border border-border-default bg-divider/50 p-3 text-[12px]"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-semibold uppercase tracking-[0.06em] text-[11px] text-stone-muted">
+        <span className="font-semibold uppercase tracking-[0.06em] text-[11px] text-subtle">
           Lot &amp; expiry override
         </span>
         {onClose ? (
@@ -108,7 +108,7 @@ export function LineLotExpiryEditor({
               e.stopPropagation();
               onClose();
             }}
-            className="rounded-md border border-stone-line bg-stone-surface px-2 py-0.5 text-[10.5px] font-medium text-stone-muted hover:text-stone-ink"
+            className="rounded-md border border-border-default bg-card px-2 py-0.5 text-[10.5px] font-medium text-subtle hover:text-ink"
           >
             Close
           </button>
@@ -116,9 +116,9 @@ export function LineLotExpiryEditor({
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-stone-muted">
+          <span className="text-[11px] text-subtle">
             Lot number
-            <span className="ml-1 font-mono text-stone-muted/70">
+            <span className="ml-1 font-mono text-subtle/70">
               (auto on receive if blank)
             </span>
           </span>
@@ -129,13 +129,13 @@ export function LineLotExpiryEditor({
             onChange={setLot}
             onClick={stop}
             placeholder="SUPP-YYYYMMDD-SKU"
-            className="h-9 rounded-md border border-stone-line bg-stone-surface px-3 font-mono text-[12px] outline-none focus:border-stone-ink"
+            className="h-9 rounded-md border border-border-default bg-card px-3 font-mono text-[12px] outline-none focus:border-forest-mid"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11px] text-stone-muted">
+          <span className="text-[11px] text-subtle">
             Expiration date
-            <span className="ml-1 font-mono text-stone-muted/70">
+            <span className="ml-1 font-mono text-subtle/70">
               (receive + 7d if blank)
             </span>
           </span>
@@ -144,7 +144,7 @@ export function LineLotExpiryEditor({
             value={state.expirationDateOverride}
             onChange={setExpiry}
             onClick={stop}
-            className="h-9 rounded-md border border-stone-line bg-stone-surface px-3 text-[12px] outline-none focus:border-stone-ink"
+            className="h-9 rounded-md border border-border-default bg-card px-3 text-[12px] outline-none focus:border-forest-mid"
           />
           {expiryWarning ? (
             <span

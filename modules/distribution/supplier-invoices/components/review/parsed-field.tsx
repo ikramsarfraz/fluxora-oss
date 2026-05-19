@@ -22,7 +22,7 @@ export function ParsedField({
   return (
     <div>
       <div className="mb-[5px] flex items-center justify-between">
-        <label className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-stone-muted">
+        <label className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-subtle">
           {label}
           {required ? (
             <span className="ml-[3px]" style={{ color: REVIEW_COLORS.warn }}>

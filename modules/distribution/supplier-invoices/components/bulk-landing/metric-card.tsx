@@ -26,7 +26,7 @@ export function MetricCard({
 }) {
   return (
     <div>
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
         {label}
       </div>
       <div className="flex items-baseline gap-1.5">
@@ -35,7 +35,7 @@ export function MetricCard({
             "text-[22px] font-semibold leading-none tracking-[-0.01em]",
             mono && "font-mono tabular-nums",
           )}
-          style={{ color: TONE_COLOR[tone] ?? "var(--stone-ink)" }}
+          style={{ color: TONE_COLOR[tone] ?? "var(--color-forest-mid)" }}
         >
           {value}
         </div>

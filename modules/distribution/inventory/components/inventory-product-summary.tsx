@@ -59,52 +59,52 @@ export function InventoryProductSummary() {
 
   if (error) {
     return (
-      <div className="rounded-md border border-stone-line bg-stone-surface px-4 py-3 text-[13px] text-stone-muted">
+      <div className="rounded-md border border-border-default bg-card px-4 py-3 text-[13px] text-subtle">
         Couldn’t load product totals.
       </div>
     );
   }
 
   return (
-    <section className="overflow-hidden rounded-md border border-stone-line bg-stone-surface">
+    <section className="overflow-hidden rounded-md border border-border-default bg-card">
       <button
         type="button"
         onClick={() => setCollapsed(c => !c)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-stone-line/40"
+        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-surface-deep/40"
       >
         <div className="flex items-center gap-2">
           {collapsed ? (
-            <ChevronRight className="size-3.5 text-stone-muted" />
+            <ChevronRight className="size-3.5 text-subtle" />
           ) : (
-            <ChevronDown className="size-3.5 text-stone-muted" />
+            <ChevronDown className="size-3.5 text-subtle" />
           )}
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted">
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-subtle">
             On-hand by product
           </span>
           {!isLoading && data ? (
-            <span className="text-[11px] text-stone-muted">· {data.length}</span>
+            <span className="text-[11px] text-subtle">· {data.length}</span>
           ) : null}
         </div>
       </button>
 
       {!collapsed ? (
-        <div className="border-t border-stone-line">
+        <div className="border-t border-border-default">
           {isLoading ? (
-            <div className="px-4 py-6 text-center text-[13px] text-stone-muted">Loading…</div>
+            <div className="px-4 py-6 text-center text-[13px] text-subtle">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-stone-muted">
+            <div className="px-4 py-6 text-center text-[13px] text-subtle">
               No products in stock.
             </div>
           ) : (
             <div className="max-h-[280px] overflow-auto">
               <table className="w-full border-collapse text-[13px]">
-                <thead className="sticky top-0 bg-stone-surface">
-                  <tr className="border-b border-stone-line">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="border-b border-border-default">
                     {HEADERS.map(h => (
                       <th
                         key={h.key}
                         className={cn(
-                          "px-4 py-2 text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted",
+                          "px-4 py-2 text-[11px] font-medium uppercase tracking-[0.05em] text-subtle",
                           h.align === "right" ? "text-right" : "text-left",
                         )}
                       >
@@ -112,7 +112,7 @@ export function InventoryProductSummary() {
                           type="button"
                           onClick={() => handleSort(h.key)}
                           className={cn(
-                            "inline-flex items-center gap-1 hover:text-stone-ink",
+                            "inline-flex items-center gap-1 hover:text-ink",
                             h.align === "right" ? "ml-auto" : "",
                           )}
                         >
@@ -127,11 +127,11 @@ export function InventoryProductSummary() {
                   {rows.map(row => (
                     <tr
                       key={row.productId}
-                      className="border-b border-stone-line/60 last:border-b-0 hover:bg-stone-line/30"
+                      className="border-b border-border-default/60 last:border-b-0 hover:bg-surface-deep/30"
                     >
-                      <td className="px-4 py-2 text-stone-ink">
+                      <td className="px-4 py-2 text-ink">
                         <div className="font-medium">{row.name}</div>
-                        <div className="mt-0.5 text-[11px] text-stone-muted">
+                        <div className="mt-0.5 text-[11px] text-subtle">
                           <MonoText>{row.sku}</MonoText>
                         </div>
                       </td>

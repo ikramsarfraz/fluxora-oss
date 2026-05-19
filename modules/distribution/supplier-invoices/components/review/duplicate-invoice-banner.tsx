@@ -61,7 +61,7 @@ export function DuplicateInvoiceBanner({
 
   return (
     <div
-      className="shrink-0 border-b border-stone-line"
+      className="shrink-0 border-b border-border-default"
       style={{
         background: allSoft
           ? `color-mix(in oklch, ${REVIEW_COLORS.danger} 4%, transparent)`
@@ -81,7 +81,7 @@ export function DuplicateInvoiceBanner({
           >
             {headline}
           </div>
-          <ul className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-stone-muted">
+          <ul className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-subtle">
             {matches.map(m => (
               <li key={m.id} className="inline-flex items-center gap-1.5">
                 <a
@@ -89,8 +89,8 @@ export function DuplicateInvoiceBanner({
                   target="_blank"
                   rel="noreferrer"
                   className={cn(
-                    "inline-flex items-center gap-1 font-mono text-stone-ink underline decoration-stone-line underline-offset-2 transition-colors",
-                    "hover:decoration-stone-ink",
+                    "inline-flex items-center gap-1 font-mono text-ink underline decoration-border-default underline-offset-2 transition-colors",
+                    "hover:decoration-forest",
                   )}
                 >
                   {m.referenceNumber}
@@ -104,12 +104,12 @@ export function DuplicateInvoiceBanner({
             ))}
           </ul>
           {showAck && (
-            <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-stone-ink">
+            <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-ink">
               <input
                 type="checkbox"
                 checked={acknowledged ?? false}
                 onChange={e => onAcknowledgedChange?.(e.target.checked)}
-                className="size-[13px] cursor-pointer accent-stone-ink"
+                className="size-[13px] cursor-pointer accent-forest-mid"
               />
               I&apos;ve compared the bills — post this anyway
             </label>
@@ -131,8 +131,8 @@ function StatusPill({ status }: { status: string }) {
       style={{
         background: isFinalized
           ? `color-mix(in oklch, ${REVIEW_COLORS.danger} 12%, transparent)`
-          : "var(--stone-line2)",
-        color: isFinalized ? REVIEW_COLORS.danger : "var(--stone-muted)",
+          : "var(--color-divider)",
+        color: isFinalized ? REVIEW_COLORS.danger : "var(--color-subtle)",
       }}
     >
       {status}

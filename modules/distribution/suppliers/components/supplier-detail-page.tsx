@@ -95,8 +95,8 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-status-warn"
-        : "text-stone-muted";
+        ? "text-warning-fg"
+        : "text-subtle";
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -107,7 +107,7 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
         <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight">
           {value}
         </CardTitle>
-        {helper ? <p className="mt-1 text-[11px] text-stone-muted">{helper}</p> : null}
+        {helper ? <p className="mt-1 text-[11px] text-subtle">{helper}</p> : null}
       </CardHeader>
     </Card>
   );
@@ -168,18 +168,18 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           {initials(supplier.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-medium leading-tight text-stone-ink">
+          <h1 className="truncate text-2xl font-medium leading-tight text-ink">
             {supplier.name}
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Badge variant="outline" className="text-xs tabular-nums">
               {formatPaymentTerms(supplier.netDays)}
             </Badge>
-            <span className="text-sm text-stone-muted">
+            <span className="text-sm text-subtle">
               Supplier since {formatMonthYear(supplier.createdAt)}
             </span>
             {metrics.lastInvoiceDate ? (
-              <span className="text-sm text-stone-muted">
+              <span className="text-sm text-subtle">
                 Last invoice {formatDisplayDate(metrics.lastInvoiceDate)}
               </span>
             ) : null}
@@ -237,7 +237,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       <Card className="overflow-hidden rounded-xl p-0 shadow-none">
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-stone-muted">Payment terms</p>
+            <p className="text-xs uppercase tracking-wide text-subtle">Payment terms</p>
             <p className="mt-0.5 text-sm font-medium tabular-nums">
               {formatPaymentTerms(supplier.netDays)}
             </p>
@@ -304,8 +304,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       {metrics.totalInvoicesCount < 5 && (
         <Card className="overflow-hidden rounded-xl p-6 shadow-none">
           <div className="mb-3">
-            <h3 className="text-sm font-semibold text-stone-ink">Reliability scoring</h3>
-            <p className="mt-0.5 text-xs text-stone-muted">
+            <h3 className="text-sm font-semibold text-ink">Reliability scoring</h3>
+            <p className="mt-0.5 text-xs text-subtle">
               Unlocks after 5 completed invoices with this supplier.
             </p>
           </div>
@@ -317,7 +317,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       )}
 
       {/* Tab bar */}
-      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-card px-4">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">
         <div className="flex">
           {TABS.map(t => (
             <button
@@ -326,8 +326,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
               className={cn(
                 "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                 tab === t.id
-                  ? "border-primary text-stone-ink"
-                  : "border-transparent text-stone-muted hover:text-stone-ink",
+                  ? "border-primary text-ink"
+                  : "border-transparent text-subtle hover:text-ink",
               )}
             >
               {t.label}
@@ -337,8 +337,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                   className={cn(
                     "h-5 rounded-full px-1.5 text-[11px]",
                     tab === t.id
-                      ? "bg-stone-ink text-stone-surface"
-                      : "bg-stone-line text-stone-muted",
+                      ? "bg-forest-mid text-card-warm"
+                      : "bg-surface-deep text-subtle",
                   )}
                 >
                   {t.count}
@@ -355,31 +355,31 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           {invoicesLoading ? (
             <PageLoading message="Loading invoices..." />
           ) : !invoicesData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No invoices on record.</p>
+            <p className="text-sm text-subtle">No invoices on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Received
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Balance
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -395,17 +395,17 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                     return (
                       <TableRow
                         key={inv.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {inv.invoiceNumber}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.invoiceDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.receiveDate)}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 align-middle">
@@ -432,7 +432,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link
                                 href={`/supplier-invoices/${inv.id}`}
@@ -465,37 +465,37 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           {lotsLoading ? (
             <PageLoading message="Loading lots..." />
           ) : !lotsData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No lots received from this supplier.</p>
+            <p className="text-sm text-subtle">No lots received from this supplier.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Lot #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Received
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Expires
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lotsData.data.map(lot => (
                     <TableRow
                       key={lot.id}
-                      className="group/row border-stone-line2 hover:bg-stone-line2"
+                      className="group/row border-divider hover:bg-divider"
                     >
                       <TableCell className="px-4 py-2.5 align-middle">
                         <span className="font-mono text-xs tabular-nums">{lot.lotNumber}</span>
                       </TableCell>
-                      <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                      <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                         {formatDisplayDate(lot.receiveDate)}
                       </TableCell>
-                      <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                      <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                         {formatDisplayDate(lot.expirationDate)}
                       </TableCell>
                       <TableCell className="px-4 py-2.5 whitespace-nowrap opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100">
@@ -504,7 +504,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                             asChild
                             variant="outline"
                             size="xs"
-                            className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                            className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                           >
                             <Link href={`/inventory/lots/${lot.id}`} onClick={e => e.stopPropagation()}>
                               View
