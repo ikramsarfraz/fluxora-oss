@@ -119,7 +119,7 @@ const COLUMNS: ListingColumn<InventoryRow>[] = [
     render: row =>
       row.lot.supplier
         ? { primary: row.lot.supplier.name }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
   },
 ];
 
@@ -152,7 +152,7 @@ export function InventoryPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

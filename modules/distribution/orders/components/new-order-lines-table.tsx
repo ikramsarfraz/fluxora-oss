@@ -61,16 +61,16 @@ import {
 } from "./new-order-line-utils";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
-  good: "oklch(58% 0.13 155)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
+  good: "var(--color-success-fg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -228,7 +228,7 @@ export function NewOrderLinesTable({
               height: "18px",
               borderRadius: "50%",
               background: isStep2Done ? C.good : C.line,
-              color: isStep2Done ? "#fff" : C.muted,
+              color: isStep2Done ? "var(--color-card)" : C.muted,
               display: "grid",
               placeItems: "center",
               fontSize: "10px",
@@ -600,7 +600,7 @@ function LineRow({
           border: "1px solid transparent",
           background: hasCases ? C.infoSoft : C.line2,
           borderColor: hasCases
-            ? "color-mix(in oklch, oklch(60% 0.15 240) 25%, transparent)"
+            ? "color-mix(in oklch, var(--color-info-border) 60%, transparent)"
             : "transparent",
           cursor: hasCases ? "pointer" : "default",
           minHeight: "36px",
@@ -747,7 +747,7 @@ function LineRow({
                 </Combobox>
                 {fieldState.invalid && (
                   <span
-                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                    style={{ fontSize: "11px", color: "var(--color-danger-fg)" }}
                   >
                     {fieldState.error?.message}
                   </span>
@@ -757,7 +757,7 @@ function LineRow({
                     style={{
                       fontSize: "11px",
                       color:
-                        casesOnHand === 0 ? "oklch(55% 0.22 25)" : C.muted,
+                        casesOnHand === 0 ? "var(--color-danger-fg)" : C.muted,
                     }}
                   >
                     {casesOnHand === 0
@@ -821,7 +821,7 @@ function LineRow({
                     <span
                       style={{
                         fontSize: "11px",
-                        color: "oklch(55% 0.22 25)",
+                        color: "var(--color-danger-fg)",
                       }}
                     >
                       No sales units configured
@@ -859,7 +859,7 @@ function LineRow({
                 />
                 {fieldState.invalid && (
                   <span
-                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                    style={{ fontSize: "11px", color: "var(--color-danger-fg)" }}
                   >
                     {fieldState.error?.message}
                   </span>
@@ -915,7 +915,7 @@ function LineRow({
                 )}
                 {fieldState.invalid && (
                   <span
-                    style={{ fontSize: "11px", color: "oklch(55% 0.22 25)" }}
+                    style={{ fontSize: "11px", color: "var(--color-danger-fg)" }}
                   >
                     {fieldState.error?.message}
                   </span>

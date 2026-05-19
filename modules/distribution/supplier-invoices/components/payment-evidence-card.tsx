@@ -4,20 +4,20 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
   goodBorder: "oklch(85% 0.08 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
   warnBorder: "oklch(88% 0.08 70)",
-  gray: "#52525b",
-  graySoft: "#f4f4f5",
-  grayBorder: "#d4d4d8",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
+  gray: "var(--color-subtle)",
+  graySoft: "var(--color-divider)",
+  grayBorder: "var(--color-border-default)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
 
@@ -136,7 +136,7 @@ function ManuallyLinkedEvidence({ match, txn }: { match: PaymentMatch; txn: Bank
         <DataItem label="Cleared" value={formatDate(txn.date)} />
         <DataItem label="Method" value={methodLabel} />
         <DataItem label="Bank transaction" value={
-          <a href="#" style={{ fontSize: 11, fontFamily: C.mono, color: "#2563eb", textDecoration: "none" }}>
+          <a href="#" style={{ fontSize: 11, fontFamily: C.mono, color: "var(--color-forest-mid)", textDecoration: "none" }}>
             View bank transaction →
           </a>
         } />
@@ -169,7 +169,7 @@ function ManuallyMarkedEvidence({ payment }: { payment: ManualPayment }) {
         <DataItem label="Bank record" value={
           <span style={{ fontSize: 11, color: C.muted }}>
             None attached ·{" "}
-            <a href="#" style={{ color: "#2563eb", textDecoration: "none" }}>Link one if it appears →</a>
+            <a href="#" style={{ color: "var(--color-forest-mid)", textDecoration: "none" }}>Link one if it appears →</a>
           </span>
         } />
       </div>
@@ -233,7 +233,7 @@ function CheckCircleIcon({ color }: { color: string }) {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <circle cx="7" cy="7" r="7" fill={color} />
-      <path d="M4 7l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 7l2 2 4-4" stroke="var(--color-card)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

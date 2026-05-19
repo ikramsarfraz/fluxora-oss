@@ -9,23 +9,23 @@ import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/c
 
 // ── Design tokens (mockup exact values) ───────────────────────────────────
 const C = {
-  bg: "#f7f7f8",
-  card: "#ffffff",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  bg: "var(--color-surface)",
+  card: "var(--color-card)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   amberBg: "#fffbeb",
   amberBorder: "#fde68a",
   red: "#dc2626",
   redBg: "#fef2f2",
   redBorder: "#fecaca",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
   purple: "#7c3aed",
@@ -66,7 +66,7 @@ function Pill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
     amber: { bg: C.amberBg, color: C.amber },
     blue: { bg: C.blueBg, color: C.blue },
     green: { bg: C.greenBg, color: C.green },
-    gray: { bg: "#f4f4f5", color: C.text2 },
+    gray: { bg: "var(--color-divider)", color: C.text2 },
     purple: { bg: C.purpleBg, color: C.purple },
     teal: { bg: C.tealBg, color: C.teal },
   };
@@ -125,7 +125,7 @@ function CardHead({
         justifyContent: "space-between",
         padding: "13px 16px",
         borderBottom: `1px solid ${C.border}`,
-        background: "#fafafa",
+        background: "var(--color-page)",
       }}
     >
       {left}
@@ -145,7 +145,7 @@ function CardTitle({ title, count, countTone = "default" }: { title: string; cou
         <span
           style={{
             background: countBg,
-            color: "#fff",
+            color: "var(--color-card)",
             fontSize: 10.5,
             fontWeight: 700,
             padding: "2px 7px",
@@ -185,8 +185,8 @@ function Btn({
         fontSize: size === "sm" ? 11.5 : 12.5,
         fontWeight: 500,
         border: variant === "primary" ? "none" : variant === "ghost" ? "none" : `1px solid ${C.borderStrong}`,
-        background: variant === "primary" ? C.text : variant === "ghost" ? "transparent" : "#fff",
-        color: variant === "primary" ? "#fff" : C.text,
+        background: variant === "primary" ? C.text : variant === "ghost" ? "transparent" : "var(--color-card)",
+        color: variant === "primary" ? "var(--color-card)" : C.text,
         cursor: "pointer",
         fontFamily: "inherit",
       }}
@@ -237,7 +237,7 @@ function FilterTabs({
             borderRadius: 5,
             fontSize: 11.5,
             fontWeight: 500,
-            color: active === tab.value ? "#fff" : C.text2,
+            color: active === tab.value ? "var(--color-card)" : C.text2,
             cursor: "pointer",
             border: "none",
             background: active === tab.value ? C.text : "transparent",
@@ -252,7 +252,7 @@ function FilterTabs({
             <span
               style={{
                 background: active === tab.value ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.08)",
-                color: active === tab.value ? "#fff" : C.text2,
+                color: active === tab.value ? "var(--color-card)" : C.text2,
                 fontSize: 10,
                 padding: "0 5px",
                 borderRadius: 3,
@@ -364,7 +364,7 @@ function ActionItem({ item, onSnooze, onDismiss }: { item: InboxItem; onSnooze?:
               color: C.text2,
               marginTop: 6,
               padding: "8px 10px",
-              background: item.detailTone === "red" ? C.redBg : item.detailTone === "amber" ? C.amberBg : "#fafafa",
+              background: item.detailTone === "red" ? C.redBg : item.detailTone === "amber" ? C.amberBg : "var(--color-page)",
               borderRadius: 6,
               borderLeft: `3px solid ${item.detailTone === "red" ? C.red : item.detailTone === "amber" ? C.amber : C.borderStrong}`,
             }}
@@ -692,7 +692,7 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
           onClick={() => router.push(`/supplier-invoices/new?fromTxn=${txn.id}`)}
           style={{
             padding: "7px 12px", borderRadius: 7, fontSize: 12.5, fontWeight: 600,
-            background: C.red, color: "#fff", border: "none", cursor: "pointer",
+            background: C.red, color: "var(--color-card)", border: "none", cursor: "pointer",
             fontFamily: "inherit", textAlign: "left",
           }}
         >
@@ -814,7 +814,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               padding: "5px 10px",
-              background: "#fff",
+              background: "var(--color-card)",
               border: `1px solid ${C.border}`,
               borderRadius: 999,
               fontSize: 11.5,
@@ -837,7 +837,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
               width: 34, height: 34,
               borderRadius: "50%",
               background: "linear-gradient(135deg, #18181b, #52525b)",
-              color: "#fff",
+              color: "var(--color-card)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontWeight: 600,
               fontSize: 13,
@@ -853,7 +853,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
         <div
           style={{
             background: "linear-gradient(135deg, #18181b 0%, #27272a 100%)",
-            color: "#fff",
+            color: "var(--color-card)",
             borderRadius: 14,
             padding: "20px 24px",
             marginBottom: 22,
@@ -886,7 +886,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
                     background: "rgba(255,255,255,0.12)",
                     padding: "2px 7px",
                     borderRadius: 4,
-                    color: "#fff",
+                    color: "var(--color-card)",
                     fontWeight: 500,
                   }}
                 >
@@ -899,7 +899,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             <button
               style={{
                 padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                background: "rgba(255,255,255,0.1)", color: "#fff",
+                background: "rgba(255,255,255,0.1)", color: "var(--color-card)",
                 border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", fontFamily: "inherit",
               }}
             >
@@ -908,7 +908,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             <button
               style={{
                 padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                background: "#fff", color: C.text,
+                background: "var(--color-card)", color: C.text,
                 border: "none", cursor: "pointer", fontFamily: "inherit",
               }}
             >
@@ -1007,7 +1007,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             key={i}
             onClick={() => stat.route && router.push(stat.route)}
             style={{
-              background: "#fff",
+              background: "var(--color-card)",
               border: `1px solid ${C.border}`,
               borderRadius: 10,
               padding: "12px 14px",
@@ -1128,7 +1128,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ width: 28, height: 28, background: accentCol, color: "#fff", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ width: 28, height: 28, background: accentCol, color: "var(--color-card)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               {isGreen ? <><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/></> : <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>}
                             </svg>
@@ -1183,7 +1183,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
           <div
             style={{
               padding: "18px 22px",
-              background: "#fff",
+              background: "var(--color-card)",
               border: `1px solid ${C.border}`,
               borderRadius: 12,
               display: "flex",
@@ -1201,7 +1201,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
                 : " Nothing else needs you today — focus time is yours."}
             </div>
             <button
-              style={{ padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: "none", background: C.text, color: "#fff", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+              style={{ padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: "none", background: C.text, color: "var(--color-card)", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
               onClick={() => router.push("/inbox/guided")}
             >
               Walk me through priorities →
@@ -1286,7 +1286,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
                       </span>
                     </span>
                   </div>
-                  <div style={{ height: 6, background: "#f4f4f5", borderRadius: 3, overflow: "visible", position: "relative" }}>
+                  <div style={{ height: 6, background: "var(--color-divider)", borderRadius: 3, overflow: "visible", position: "relative" }}>
                     <div style={{ height: "100%", width: `${item.pct}%`, background: item.color, borderRadius: 3 }} />
                     <div style={{ position: "absolute", top: -2, left: `${item.markerPct}%`, width: 2, height: 10, background: C.text, borderRadius: 1 }} />
                   </div>
@@ -1321,10 +1321,10 @@ function CashFlowCard({ cashFlow }: { cashFlow: CashFlowSummary }) {
         borderRadius: 12,
         padding: "18px 20px",
         marginBottom: 14,
-        color: "#fff",
+        color: "var(--color-card)",
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 600, color: "#a8a29e", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--color-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
         Cash position
       </div>
       <div style={{ fontSize: 26, fontWeight: 700, fontFamily: C.mono, marginBottom: 12 }}>
@@ -1337,7 +1337,7 @@ function CashFlowCard({ cashFlow }: { cashFlow: CashFlowSummary }) {
           { label: "Next 7d due", value: fmt(cashFlow.next7dScheduled), color: "#fbbf24" },
         ].map(({ label, value, color }) => (
           <div key={label}>
-            <div style={{ fontSize: 10, color: "#78716c", marginBottom: 2 }}>{label}</div>
+            <div style={{ fontSize: 10, color: "var(--color-subtle)", marginBottom: 2 }}>{label}</div>
             <div style={{ fontSize: 13, fontWeight: 600, color, fontFamily: C.mono }}>{value}</div>
           </div>
         ))}
@@ -1363,7 +1363,7 @@ function ConnectBankPromptCard() {
       <div style={{ marginBottom: 10 }}>Connect your bank to see real balances here.</div>
       <a
         href="/settings/integrations/banks"
-        style={{ fontSize: 12, color: "#2563eb", textDecoration: "none", fontWeight: 500 }}
+        style={{ fontSize: 12, color: "var(--color-forest-mid)", textDecoration: "none", fontWeight: 500 }}
       >
         Connect your bank →
       </a>
@@ -1408,7 +1408,7 @@ function ReauthBannerComponent({ banner }: { banner: ReauthBanner }) {
           flexShrink: 0,
           padding: "6px 14px",
           background: "#d97706",
-          color: "#fff",
+          color: "var(--color-card)",
           borderRadius: 7,
           fontSize: 12,
           fontWeight: 600,

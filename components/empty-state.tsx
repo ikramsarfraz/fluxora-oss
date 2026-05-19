@@ -43,9 +43,9 @@ const VARIANT_STYLES: Record<
     iconBg: "#dbeafe",
   },
   neutral: {
-    bg: "#fafaf9",
-    border: "#e7e5e4",
-    iconBg: "#f5f5f4",
+    bg: "var(--color-page)",
+    border: "var(--color-border-default)",
+    iconBg: "var(--color-divider)",
   },
 };
 
@@ -59,7 +59,7 @@ function UnlockProgress({ condition }: { condition: UnlockCondition }) {
       style={{
         marginTop: 16,
         padding: "12px 14px",
-        background: "#f4f4f5",
+        background: "var(--color-divider)",
         borderRadius: 8,
         fontSize: 12.5,
       }}
@@ -69,7 +69,7 @@ function UnlockProgress({ condition }: { condition: UnlockCondition }) {
           display: "flex",
           justifyContent: "space-between",
           marginBottom: 6,
-          color: "#52525b",
+          color: "var(--color-subtle)",
         }}
       >
         <span>{condition.label}</span>
@@ -81,7 +81,7 @@ function UnlockProgress({ condition }: { condition: UnlockCondition }) {
         style={{
           height: 6,
           borderRadius: 3,
-          background: "#e4e4e7",
+          background: "var(--color-border-default)",
           overflow: "hidden",
         }}
       >
@@ -89,7 +89,7 @@ function UnlockProgress({ condition }: { condition: UnlockCondition }) {
           style={{
             width: `${pct}%`,
             height: "100%",
-            background: pct >= 100 ? "#16a34a" : "#2563eb",
+            background: pct >= 100 ? "var(--color-success-fg)" : "var(--color-forest-mid)",
             borderRadius: 3,
             transition: "width .3s",
           }}
@@ -150,7 +150,7 @@ export function EmptyState({
         style={{
           fontSize: 17,
           fontWeight: 600,
-          color: "#18181b",
+          color: "var(--color-ink)",
           margin: "0 0 8px",
           letterSpacing: "-0.005em",
         }}
@@ -161,7 +161,7 @@ export function EmptyState({
       <p
         style={{
           fontSize: 14,
-          color: "#52525b",
+          color: "var(--color-subtle)",
           margin: 0,
           lineHeight: 1.55,
           maxWidth: 360,
@@ -192,9 +192,9 @@ export function EmptyState({
                 fontSize: 13,
                 fontWeight: 500,
                 cursor: "pointer",
-                border: cta.kind === "primary" ? "1px solid #18181b" : "1px solid #d4d4d8",
-                background: cta.kind === "primary" ? "#18181b" : "#fff",
-                color: cta.kind === "primary" ? "#fff" : "#52525b",
+                border: cta.kind === "primary" ? "1px solid #18181b" : "1px solid var(--color-border-default)",
+                background: cta.kind === "primary" ? "var(--color-ink)" : "var(--color-card)",
+                color: cta.kind === "primary" ? "var(--color-card)" : "var(--color-subtle)",
                 fontFamily: "inherit",
               }}
             >

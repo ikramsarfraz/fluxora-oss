@@ -38,9 +38,9 @@ export function RoleIcon({
 }
 
 const PALETTE: Record<PortalUserRole, { bg: string; fg: string }> = {
-  owner: { bg: "oklch(96% 0.02 265)", fg: "oklch(48% 0.16 265)" },
-  admin: { bg: "oklch(96% 0.03 240)", fg: "oklch(60% 0.15 240)" },
+  owner: { bg: "oklch(96% 0.02 265)", fg: "var(--color-forest-mid)" },
+  admin: { bg: "var(--color-info-bg)", fg: "var(--color-info-fg)" },
   sales: { bg: "oklch(94% 0.08 60)", fg: "oklch(45% 0.16 60)" },
   warehouse: { bg: "oklch(94% 0.06 30)", fg: "oklch(55% 0.18 25)" },
-  accounting: { bg: "oklch(94% 0.06 150)", fg: "oklch(58% 0.13 155)" },
+  accounting: { bg: "oklch(94% 0.06 150)", fg: "var(--color-success-fg)" },
 };

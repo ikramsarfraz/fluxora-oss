@@ -36,13 +36,13 @@ const COLUMNS: ListingColumn<UoMRow>[] = [
     render: row =>
       row.abbreviation
         ? { primary: <MonoText>{row.abbreviation}</MonoText> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
   },
   {
     key: "sortOrder",
     header: "Sort order",
     align: "right",
-    render: row => ({ primary: <span style={{ color: "#78716c" }}>{row.sortOrder ?? 0}</span> }),
+    render: row => ({ primary: <span style={{ color: "var(--color-subtle)" }}>{row.sortOrder ?? 0}</span> }),
   },
   {
     key: "isActive",
@@ -54,8 +54,8 @@ const COLUMNS: ListingColumn<UoMRow>[] = [
             fontSize: 11,
             padding: "2px 8px",
             borderRadius: 100,
-            background: row.isActive ? "oklch(96% 0.04 155)" : "#f5f5f4",
-            color: row.isActive ? "oklch(58% 0.13 155)" : "#78716c",
+            background: row.isActive ? "var(--color-success-bg)" : "var(--color-divider)",
+            color: row.isActive ? "var(--color-success-fg)" : "var(--color-subtle)",
             fontWeight: 500,
           }}
         >
@@ -81,7 +81,7 @@ export default function UnitsOfMeasure({
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

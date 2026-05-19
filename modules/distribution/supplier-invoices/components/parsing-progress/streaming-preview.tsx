@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { PreviewHeader, StreamingLine } from "./types";
 
 const COLORS = {
-  good: "oklch(58% 0.13 155)",
+  good: "var(--color-success-fg)",
   goodSoft: "oklch(96% 0.03 155)",
   accent: "oklch(58% 0.13 242)",
   mutedSoft: "#9a9a93",

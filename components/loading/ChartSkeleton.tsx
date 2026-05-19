@@ -105,7 +105,7 @@ export function ChartSkeleton({
           justifyContent: "space-between",
           alignItems: "center",
           fontSize: 11.5,
-          color: "#52525b",
+          color: "var(--color-subtle)",
         }}
       >
         <span>{label || "Loading chart data…"}</span>
@@ -113,7 +113,7 @@ export function ChartSkeleton({
           <span
             style={{
               fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
-              color: "#a1a1aa",
+              color: "var(--color-muted)",
             }}
           >
             ~{etaSeconds.toFixed(1)}s

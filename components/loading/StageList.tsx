@@ -56,14 +56,14 @@ export function StageList({ stages }: StageListProps) {
               flexShrink: 0,
               background:
                 stage.status === "done"
-                  ? "#16a34a"
+                  ? "var(--color-success-fg)"
                   : stage.status === "active"
-                  ? "#2563eb"
+                  ? "var(--color-forest-mid)"
                   : stage.status === "error"
                   ? "#dc2626"
-                  : "#e7e7ea",
+                  : "var(--color-border-default)",
               color:
-                stage.status === "queued" ? undefined : "#fff",
+                stage.status === "queued" ? undefined : "var(--color-card)",
             }}
           >
             {stage.status === "done" && CHECK}
@@ -80,10 +80,10 @@ export function StageList({ stages }: StageListProps) {
                 fontWeight: stage.status === "active" ? 600 : stage.status === "queued" ? 400 : 500,
                 color:
                   stage.status === "queued"
-                    ? "#a1a1aa"
+                    ? "var(--color-muted)"
                     : stage.status === "active"
-                    ? "#18181b"
-                    : "#18181b",
+                    ? "var(--color-ink)"
+                    : "var(--color-ink)",
                 fontSize: 13,
               }}
             >
@@ -97,7 +97,7 @@ export function StageList({ stages }: StageListProps) {
                   alignItems: "center",
                   gap: 8,
                   fontSize: 11.5,
-                  color: "#52525b",
+                  color: "var(--color-subtle)",
                 }}
               >
                 <ProgressBar value={stage.subProgress} height={3} />
@@ -118,7 +118,7 @@ export function StageList({ stages }: StageListProps) {
           <div
             style={{
               fontSize: 11.5,
-              color: "#a1a1aa",
+              color: "var(--color-muted)",
               fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
               fontVariantNumeric: "tabular-nums",
             }}

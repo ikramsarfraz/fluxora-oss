@@ -40,7 +40,7 @@ const COLUMNS: ListingColumn<PaymentRow>[] = [
       const customer = row.salesInvoice?.customer;
       return customer
         ? { primary: <span style={{ fontWeight: 500 }}>{customer.name}</span> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> };
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> };
     },
   },
   {
@@ -56,7 +56,7 @@ const COLUMNS: ListingColumn<PaymentRow>[] = [
               </Link>
             ),
           }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> };
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> };
     },
   },
   {
@@ -76,8 +76,8 @@ const COLUMNS: ListingColumn<PaymentRow>[] = [
             fontSize: 11,
             padding: "2px 8px",
             borderRadius: 100,
-            background: "#f5f5f4",
-            color: "#44403c",
+            background: "var(--color-divider)",
+            color: "var(--color-ink-warm)",
             fontWeight: 500,
             whiteSpace: "nowrap",
           }}
@@ -94,14 +94,14 @@ const COLUMNS: ListingColumn<PaymentRow>[] = [
       const ref = row.referenceNumber ?? row.checkNumber;
       return ref
         ? { primary: <MonoText>{ref}</MonoText> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> };
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> };
     },
   },
   {
     key: "recordedBy",
     header: "Recorded by",
     render: row => ({
-      primary: row.createdBy?.fullName ?? <span style={{ color: "#78716c" }}>—</span>,
+      primary: row.createdBy?.fullName ?? <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
 ];
@@ -124,7 +124,7 @@ export function PaymentsPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

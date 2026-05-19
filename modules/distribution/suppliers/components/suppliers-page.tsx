@@ -40,7 +40,7 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
     render: row => ({
       primary: row.netDays !== null && row.netDays !== undefined
         ? `Net ${row.netDays}`
-        : <span style={{ color: "#78716c" }}>—</span>,
+        : <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
   {
@@ -48,7 +48,7 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
     header: "Products",
     align: "right",
     render: row => ({
-      primary: <span style={{ color: "#78716c" }}>{row.productCosts?.length ?? 0}</span>,
+      primary: <span style={{ color: "var(--color-subtle)" }}>{row.productCosts?.length ?? 0}</span>,
     }),
   },
   {
@@ -81,7 +81,7 @@ export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) 
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry
@@ -101,7 +101,7 @@ export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) 
           <button onClick={openImport} style={{
             display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
             borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
-            background: "#fff", color: "#52525b", border: "1px solid #d4d4d8", fontFamily: "inherit",
+            background: "var(--color-card)", color: "var(--color-subtle)", border: "1px solid var(--color-border-default)", fontFamily: "inherit",
           }}>
             <Upload size={13} /> Import CSV
           </button>

@@ -42,31 +42,31 @@ interface PillConfig {
 const STATUS_PILL: Record<string, PillConfig> = {
   sales_order: {
     label: "Draft",
-    bg: "#f5f5f4",
-    color: "#78716c",
+    bg: "var(--color-divider)",
+    color: "var(--color-subtle)",
   },
   confirmed: {
     label: "Awaiting fulfillment",
-    bg: "oklch(96% 0.03 240)",
-    color: "oklch(60% 0.15 240)",
+    bg: "var(--color-info-bg)",
+    color: "var(--color-info-fg)",
   },
   fulfilled: {
     label: "Fulfilled",
-    bg: "oklch(96% 0.04 155)",
-    color: "oklch(58% 0.13 155)",
+    bg: "var(--color-success-bg)",
+    color: "var(--color-success-fg)",
   },
   cancelled: {
     label: "Cancelled",
-    bg: "oklch(97% 0.04 70)",
-    color: "oklch(70% 0.13 70)",
+    bg: "var(--color-warning-bg)",
+    color: "var(--color-warning-fg)",
   },
 };
 
 function OrderStatusPill({ status }: { status: string }) {
   const pill = STATUS_PILL[status] ?? {
     label: status.replaceAll("_", " "),
-    bg: "#f5f5f4",
-    color: "#78716c",
+    bg: "var(--color-divider)",
+    color: "var(--color-subtle)",
   };
   return (
     <span

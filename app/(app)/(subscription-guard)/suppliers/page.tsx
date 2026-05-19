@@ -31,13 +31,13 @@ export default async function SuppliersPage({
             <button style={{
               display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px",
               borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-              border: "1px solid #d4d4d8", background: "#ffffff", color: "#18181b",
+              border: "1px solid var(--color-border-default)", background: "var(--color-card)", color: "var(--color-ink)",
               cursor: "pointer", fontFamily: "inherit",
             }}>↑ Export</button>
             <button style={{
               display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px",
               borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-              background: "#18181b", color: "#fff", border: "none",
+              background: "var(--color-ink)", color: "var(--color-card)", border: "none",
               cursor: "pointer", fontFamily: "inherit",
             }}>→ Send RFQ</button>
           </div>

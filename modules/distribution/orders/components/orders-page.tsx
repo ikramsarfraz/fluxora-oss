@@ -25,10 +25,10 @@ import type { SalesOrderListSort } from "../services/orders";
 type OrderRow = NonNullable<ReturnType<typeof useSalesOrdersPage>["data"]>["data"][number];
 
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string }> = {
-  sales_order: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  confirmed: { label: "Awaiting fulfillment", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  fulfilled: { label: "Fulfilled", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  cancelled: { label: "Cancelled", bg: "oklch(97% 0.04 70)", color: "oklch(70% 0.13 70)" },
+  sales_order: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  confirmed: { label: "Awaiting fulfillment", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  fulfilled: { label: "Fulfilled", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  cancelled: { label: "Cancelled", bg: "var(--color-warning-bg)", color: "var(--color-warning-fg)" },
 };
 
 const COLUMNS: ListingColumn<OrderRow>[] = [
@@ -51,7 +51,7 @@ const COLUMNS: ListingColumn<OrderRow>[] = [
     render: row =>
       row.customer
         ? { primary: <span style={{ fontWeight: 500 }}>{row.customer.name}</span> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
   },
   {
     key: "orderDate",
@@ -65,14 +65,14 @@ const COLUMNS: ListingColumn<OrderRow>[] = [
     render: row =>
       row.dueDate
         ? { primary: <MonoText>{formatDisplayDate(row.dueDate)}</MonoText> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
   },
   {
     key: "status",
     header: "Status",
     sortKey: "status",
     render: row => {
-      const pill = STATUS_PILL[row.status] ?? { label: row.status, bg: "#f5f5f4", color: "#78716c" };
+      const pill = STATUS_PILL[row.status] ?? { label: row.status, bg: "var(--color-divider)", color: "var(--color-subtle)" };
       return { primary: <StatusPill label={pill.label} bg={pill.bg} color={pill.color} /> };
     },
   },
@@ -82,7 +82,7 @@ const COLUMNS: ListingColumn<OrderRow>[] = [
     align: "right",
     render: row => {
       const count = row.lines?.length ?? 0;
-      return { primary: <span style={{ color: "#78716c" }}>{count}</span> };
+      return { primary: <span style={{ color: "var(--color-subtle)" }}>{count}</span> };
     },
   },
 ];
@@ -122,7 +122,7 @@ export default function Orders() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

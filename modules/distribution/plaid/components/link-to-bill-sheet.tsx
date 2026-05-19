@@ -9,14 +9,14 @@ import type { ActivityTransaction } from "../services/bank-activity";
 // ── Design tokens ──────────────────────────────────────────────────────────
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
   goodBorder: "oklch(85% 0.08 155)",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
@@ -188,7 +188,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
                   fontWeight: active ? 600 : 400,
                   border: `1px solid ${active ? C.ink : C.line}`,
                   background: active ? C.ink : C.surface,
-                  color: active ? "#fff" : C.ink2,
+                  color: active ? "var(--color-card)" : C.ink2,
                   cursor: "pointer",
                   display: "inline-flex", alignItems: "center", gap: 5,
                 }}
@@ -211,7 +211,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
               No bills in this range.{" "}
               <button
                 onClick={() => handleProximityChange("all")}
-                style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}
+                style={{ color: "var(--color-forest-mid)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}
               >
                 Show all open bills →
               </button>
@@ -237,7 +237,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
                     <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
                       {bill.supplierName ?? "Unknown supplier"}
                       {isExact && (
-                        <span style={{ fontSize: 10.5, background: C.good, color: "#fff", padding: "1px 6px", borderRadius: 4 }}>
+                        <span style={{ fontSize: 10.5, background: C.good, color: "var(--color-card)", padding: "1px 6px", borderRadius: 4 }}>
                           exact match
                         </span>
                       )}
@@ -265,7 +265,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
                       style={{
                         marginTop: 6, padding: "4px 12px", borderRadius: 6, fontSize: 12, fontWeight: 600,
                         border: "none", cursor: linking ? "not-allowed" : "pointer",
-                        background: isExact ? C.good : C.ink, color: "#fff",
+                        background: isExact ? C.good : C.ink, color: "var(--color-card)",
                         fontFamily: "inherit",
                       }}
                     >
@@ -282,7 +282,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
         <div style={{ padding: "12px 22px", borderTop: `1px solid ${C.line}`, display: "flex", gap: 12, alignItems: "center" }}>
           <a
             href="/supplier-invoices?status=open"
-            style={{ fontSize: 12, color: "#2563eb", textDecoration: "none" }}
+            style={{ fontSize: 12, color: "var(--color-forest-mid)", textDecoration: "none" }}
           >
             Browse all open bills →
           </a>

@@ -67,18 +67,18 @@ import { CreateSupplierDialog } from "./create-supplier-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  bg: "#fafaf9",
-  surface: "#ffffff",
-  surfaceAlt: "#f5f5f4",
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  mutedSoft: "#a8a29e",
-  line: "#e7e5e4",
-  lineStrong: "#d4d1c7",
-  good: "oklch(58% 0.13 155)",
-  warn: "oklch(70% 0.13 70)",
-  accent: "#2563eb",
+  bg: "var(--color-page)",
+  surface: "var(--color-card)",
+  surfaceAlt: "var(--color-divider)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  mutedSoft: "var(--color-muted)",
+  line: "var(--color-border-default)",
+  lineStrong: "var(--color-border-default)",
+  good: "var(--color-success-fg)",
+  warn: "var(--color-warning-fg)",
+  accent: "var(--color-forest-mid)",
   mono: "var(--font-mono)",
 } as const;
 
@@ -293,7 +293,7 @@ function ChargeRow({
                 width: 30,
                 height: 17,
                 borderRadius: 99,
-                background: field.value ? "oklch(58% 0.13 155)" : C.lineStrong,
+                background: field.value ? "var(--color-success-fg)" : C.lineStrong,
                 position: "relative",
                 transition: "background 0.15s",
                 flexShrink: 0,
@@ -307,7 +307,7 @@ function ChargeRow({
                   width: 13,
                   height: 13,
                   borderRadius: "50%",
-                  background: "#fff",
+                  background: "var(--color-card)",
                   transition: "left 0.15s",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
                 }}
@@ -319,7 +319,7 @@ function ChargeRow({
                 fontWeight: 600,
                 letterSpacing: "0.04em",
                 textTransform: "uppercase",
-                color: field.value ? "oklch(58% 0.13 155)" : C.mutedSoft,
+                color: field.value ? "var(--color-success-fg)" : C.mutedSoft,
               }}
             >
               In cost
@@ -370,7 +370,7 @@ function ChargesSubtotal({ control }: { control: ReturnType<typeof useForm<Suppl
         {fmt(total)}
       </span>
       {inCostTotal > 0 && (
-        <span style={{ fontSize: 11, color: "oklch(58% 0.13 155)", fontFamily: C.mono }}>
+        <span style={{ fontSize: 11, color: "var(--color-success-fg)", fontFamily: C.mono }}>
           {fmt(inCostTotal)} capitalized
         </span>
       )}
@@ -1765,7 +1765,7 @@ function secondaryBtn(disabled: boolean): React.CSSProperties {
 function primaryBtn(disabled: boolean): React.CSSProperties {
   return {
     background: C.ink,
-    color: "#ffffff",
+    color: "var(--color-card)",
     border: "none",
     padding: "10px 20px",
     borderRadius: 8,

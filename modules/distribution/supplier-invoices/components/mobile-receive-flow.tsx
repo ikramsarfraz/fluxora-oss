@@ -9,24 +9,24 @@ import { formatMoney } from "@/lib/utils/currency";
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 const c = {
-  bg: "#f7f7f8",
-  card: "#ffffff",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  accent: "#18181b",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  bg: "var(--color-surface)",
+  card: "var(--color-card)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  accent: "var(--color-ink)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   amberBg: "#fffbeb",
   amberBorder: "#fde68a",
   red: "#dc2626",
   redBg: "#fef2f2",
   redBorder: "#fecaca",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
   mono: "var(--font-mono, ui-monospace, monospace)",
@@ -112,7 +112,7 @@ function SignatureCanvas({
         style={{
           width: "100%", height: 80,
           border: value ? `2px solid ${c.greenBorder}` : `2px dashed ${c.borderStrong}`,
-          borderRadius: 10, background: value ? c.greenBg : "#fafafa",
+          borderRadius: 10, background: value ? c.greenBg : "var(--color-page)",
           touchAction: "none", cursor: "crosshair",
         }}
         onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd}
@@ -182,7 +182,7 @@ function OfflineBanner() {
   return (
     <div style={{
       position: "fixed", top: 56, left: 12, right: 12, zIndex: 100,
-      background: c.text, color: "#fff", borderRadius: 10, padding: "8px 12px",
+      background: c.text, color: "var(--color-card)", borderRadius: 10, padding: "8px 12px",
       fontSize: 11.5, display: "flex", alignItems: "center", gap: 8,
       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
     }}>
@@ -196,7 +196,7 @@ function OfflineBanner() {
 function MobileProgressStrip({ ok, flagged, total }: { ok: number; flagged: number; total: number }) {
   if (total === 0) return null;
   return (
-    <div style={{ height: 6, background: "#f4f4f5", display: "flex", overflow: "hidden" }}>
+    <div style={{ height: 6, background: "var(--color-divider)", display: "flex", overflow: "hidden" }}>
       {ok > 0 && <div style={{ width: `${(ok / total) * 100}%`, background: c.green, transition: "width .3s" }} />}
       {flagged > 0 && <div style={{ width: `${(flagged / total) * 100}%`, background: c.amber, transition: "width .3s" }} />}
     </div>
@@ -366,7 +366,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
     background: c.card, flexShrink: 0,
   };
   const backBtn: React.CSSProperties = {
-    width: 32, height: 32, borderRadius: 8, background: "#f4f4f5",
+    width: 32, height: 32, borderRadius: 8, background: "var(--color-divider)",
     display: "inline-flex", alignItems: "center", justifyContent: "center",
     border: "none", cursor: "pointer", flexShrink: 0, color: c.text, fontSize: 18,
   };
@@ -379,10 +379,10 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
     background: variant === "primary" ? c.accent
       : variant === "green" ? c.green
       : variant === "danger" ? "transparent"
-      : variant === "disabled" ? "#d4d4d8"
-      : "#f4f4f5",
-    color: variant === "primary" ? "#fff"
-      : variant === "green" ? "#fff"
+      : variant === "disabled" ? "var(--color-border-default)"
+      : "var(--color-divider)",
+    color: variant === "primary" ? "var(--color-card)"
+      : variant === "green" ? "var(--color-card)"
       : variant === "danger" ? c.red
       : variant === "disabled" ? c.text2
       : c.text,
@@ -407,7 +407,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
           <h2 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.015em", margin: "0 0 4px" }}>Truck arrived</h2>
           <p style={{ fontSize: 13, color: c.text2, marginTop: 0, marginBottom: 18 }}>Quick check before we start walking the load.</p>
 
-          <div style={{ background: "#fafafa", border: `1px solid ${c.border}`, borderRadius: 12, padding: "13px 14px", marginBottom: 12 }}>
+          <div style={{ background: "var(--color-page)", border: `1px solid ${c.border}`, borderRadius: 12, padding: "13px 14px", marginBottom: 12 }}>
             {[
               { label: "Invoice", value: invoice.invoiceNumber },
               { label: "Supplier", value: invoice.supplier?.name ?? "—" },
@@ -463,7 +463,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
             { label: "OK", value: okCount, color: c.green, bg: c.greenBg },
             { label: "Short", value: flaggedCount, color: c.amber, bg: c.amberBg },
             { label: "Damage", value: Object.values(lineStates).filter(s => s.discrepancy === "damaged").length, color: c.red, bg: c.redBg },
-            { label: "Left", value: remaining, color: c.text, bg: "#fafafa" },
+            { label: "Left", value: remaining, color: c.text, bg: "var(--color-page)" },
           ].map(stat => (
             <div key={stat.label} style={{ textAlign: "center", padding: "7px 6px", borderRadius: 9, background: stat.bg }}>
               <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.02em", color: stat.color }}>{stat.value}</div>
@@ -480,14 +480,14 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
               </div>
               <div style={{ background: c.card, border: `2px solid ${c.accent}`, borderRadius: 14, padding: 14, marginBottom: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
-                  <div style={{ width: 46, height: 46, borderRadius: 11, background: "#fafafa", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧺</div>
+                  <div style={{ width: 46, height: 46, borderRadius: 11, background: "var(--color-page)", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🧺</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 16, fontWeight: 700 }}>{currentLine.productName}</div>
                     <div style={{ fontSize: 11, color: c.text3, fontFamily: c.mono, marginTop: 1 }}>{currentLine.sku}</div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: c.text, background: c.accent === "#18181b" ? "#f4f4f5" : "#fff", padding: "2px 7px", borderRadius: 4 }}>{currentLineIdx + 1}/{lines.length}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: c.text, background: c.accent === "var(--color-ink)" ? "var(--color-divider)" : "var(--color-card)", padding: "2px 7px", borderRadius: 4 }}>{currentLineIdx + 1}/{lines.length}</span>
                 </div>
-                <div style={{ background: "#fafafa", borderRadius: 10, padding: "10px 12px", marginBottom: 14, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                <div style={{ background: "var(--color-page)", borderRadius: 10, padding: "10px 12px", marginBottom: 14, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
                   {[
                     { l: "Cases", v: `${currentLine.quantityCases}` },
                     { l: "Weight", v: `${currentLine.weightLbs.toFixed(2)}` },
@@ -521,7 +521,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
                     borderRadius: 10, padding: "10px 12px", marginBottom: 6,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 9, background: "#fafafa", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>🧺</div>
+                      <div style={{ width: 36, height: 36, borderRadius: 9, background: "var(--color-page)", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19, flexShrink: 0 }}>🧺</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 600 }}>{line.productName}</div>
                         <div style={{ fontSize: 12.5, fontWeight: 600, color: isOk ? c.green : c.amber, marginTop: 2 }}>
@@ -577,8 +577,8 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
 
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
           {/* Product */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fafafa", borderRadius: 11, marginBottom: 14 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 9, background: "#fafafa", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🧺</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "var(--color-page)", borderRadius: 11, marginBottom: 14 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 9, background: "var(--color-page)", border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🧺</div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700 }}>{flaggingLine.productName}</div>
               <div style={{ fontSize: 11, color: c.text2, marginTop: 1 }}>{flaggingLine.sku} · expected {flaggingLine.quantityCases} cs · {flaggingLine.weightLbs.toFixed(2)} lb</div>
@@ -592,7 +592,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
               <button key={r.key} onClick={() => setLineState(flaggingLine.id, { status: "flagged", discrepancy: r.key })} style={{
                 padding: "11px 12px", borderRadius: 10,
                 background: selectedReason === r.key ? c.red : c.card,
-                color: selectedReason === r.key ? "#fff" : c.text,
+                color: selectedReason === r.key ? "var(--color-card)" : c.text,
                 border: selectedReason === r.key ? `1.5px solid ${c.red}` : `1.5px solid ${c.borderStrong}`,
                 fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer",
                 fontFamily: "inherit",
@@ -629,7 +629,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
             ))}
             {photos.length < 3 && (
               <button onClick={() => fileInputRef.current?.click()} style={{
-                width: 72, height: 72, borderRadius: 11, background: c.accent, color: "#fff",
+                width: 72, height: 72, borderRadius: 11, background: c.accent, color: "var(--color-card)",
                 flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center", gap: 3, fontSize: 10, fontWeight: 700,
                 border: "none", cursor: "pointer", fontFamily: "inherit",
@@ -649,7 +649,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
 
           {/* Voice note */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: c.blueBg, border: `1px solid ${c.blueBorder}`, borderRadius: 11, marginBottom: 14 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 9, background: c.blue, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>🎙</div>
+            <div style={{ width: 36, height: 36, borderRadius: 9, background: c.blue, color: "var(--color-card)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>🎙</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 600 }}>{voiceNote ? "Voice note recorded" : isRecording ? "Recording…" : "Add voice note"}</div>
               <div style={{ fontSize: 11, color: c.text2, marginTop: 1 }}>Tap to {isRecording ? "stop" : "record"} · transcribes automatically</div>
@@ -658,14 +658,14 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
               <audio src={voiceNote} controls style={{ height: 28, width: 100 }} />
             ) : (
               <button onClick={isRecording ? stopVoiceNote : startVoiceNote} style={{
-                padding: "5px 10px", background: isRecording ? c.red : c.blue, color: "#fff",
+                padding: "5px 10px", background: isRecording ? c.red : c.blue, color: "var(--color-card)",
                 border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
               }}>{isRecording ? "Stop" : "Record"}</button>
             )}
           </div>
 
           {/* Credit summary */}
-          <div style={{ background: c.amber, color: "#fff", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ background: c.amber, color: "var(--color-card)", borderRadius: 12, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
               <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700, opacity: 0.9 }}>Credit owed</div>
               <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>{flaggingLine.weightLbs.toFixed(2)} lb × ${flaggingLine.unitPrice.toFixed(2)}</div>
@@ -699,7 +699,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
         {/* Session summary */}
         <div style={{
           background: "linear-gradient(135deg,#18181b 0%,#27272a 100%)",
-          color: "#fff", borderRadius: 14, padding: 18, marginBottom: 16, textAlign: "center",
+          color: "var(--color-card)", borderRadius: 14, padding: 18, marginBottom: 16, textAlign: "center",
         }}>
           <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 700, color: "rgba(255,255,255,.6)", marginBottom: 6 }}>
             {invoice.invoiceNumber} receipt complete
@@ -713,7 +713,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
         {/* 2×2 summary grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
           {[
-            { l: "Adjusted total", v: formatMoney(adjustedTotal), bg: "#fafafa" },
+            { l: "Adjusted total", v: formatMoney(adjustedTotal), bg: "var(--color-page)" },
             { l: "Credit owed", v: formatMoney(creditOwed), bg: c.amberBg, color: c.amber },
           ].map(s => (
             <div key={s.l} style={{ background: s.bg, borderRadius: 10, padding: "11px 12px" }}>
@@ -732,7 +732,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
           <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", fontStyle: "normal", fontSize: 24, color: c.text, fontFamily: "cursive" }}>
             Driver
           </div>
-          <div style={{ padding: "7px 12px", background: "#fafafa", fontSize: 10, color: c.text3, display: "flex", justifyContent: "space-between", fontFamily: c.mono }}>
+          <div style={{ padding: "7px 12px", background: "var(--color-page)", fontSize: 10, color: c.text3, display: "flex", justifyContent: "space-between", fontFamily: c.mono }}>
             <span>{invoice.supplier?.name}</span>
             <span>{formatDisplayDate(invoice.receiveDate)}</span>
           </div>
@@ -740,7 +740,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
 
         {/* Receiver sig */}
         <div style={{ background: receiverSig ? c.greenBg : c.card, border: `1.5px solid ${receiverSig ? c.greenBorder : c.border}`, borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
-          <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${receiverSig ? c.greenBorder : c.border}`, background: receiverSig ? "rgba(187,247,208,.4)" : "#fafafa" }}>
+          <div style={{ padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${receiverSig ? c.greenBorder : c.border}`, background: receiverSig ? "rgba(187,247,208,.4)" : "var(--color-page)" }}>
             <span style={{ fontSize: 12, fontWeight: 700 }}>You · Receiver</span>
             <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 7px", background: receiverSig ? c.greenBg : c.amberBg, color: receiverSig ? c.green : c.amber, borderRadius: 4, fontSize: 10.5, fontWeight: 600 }}>
               {receiverSig ? "Signed" : "Tap to sign"}
@@ -749,7 +749,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
           <div style={{ padding: "6px" }}>
             <SignatureCanvas value={receiverSig} onSign={setReceiverSig} />
           </div>
-          <div style={{ padding: "7px 12px", background: "#fafafa", fontSize: 10, color: c.text3, display: "flex", justifyContent: "space-between", fontFamily: c.mono }}>
+          <div style={{ padding: "7px 12px", background: "var(--color-page)", fontSize: 10, color: c.text3, display: "flex", justifyContent: "space-between", fontFamily: c.mono }}>
             <span>Receiver</span>
             <span>{receiverSig ? new Date().toLocaleTimeString() : "—"}</span>
           </div>

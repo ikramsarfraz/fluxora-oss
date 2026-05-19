@@ -9,7 +9,7 @@ async function BankActivityContent() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div style={{ padding: "40px", color: "#78716c" }}>Loading…</div>}>
+    <Suspense fallback={<div style={{ padding: "40px", color: "var(--color-subtle)" }}>Loading…</div>}>
       <BankActivityContent />
     </Suspense>
   );

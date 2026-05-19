@@ -55,7 +55,7 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
       return {
         primary: (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-            {row.note ? row.note : <span style={{ color: "#78716c" }}>—</span>}
+            {row.note ? row.note : <span style={{ color: "var(--color-subtle)" }}>—</span>}
             {isSchedule ? (
               <span
                 style={{
@@ -79,8 +79,8 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
                   fontSize: 10,
                   padding: "1px 6px",
                   borderRadius: 100,
-                  background: "#f5f5f4",
-                  color: "#78716c",
+                  background: "var(--color-divider)",
+                  color: "var(--color-subtle)",
                   fontWeight: 500,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
@@ -113,8 +113,8 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
             fontSize: 11,
             padding: "2px 8px",
             borderRadius: 100,
-            background: "#f5f5f4",
-            color: "#44403c",
+            background: "var(--color-divider)",
+            color: "var(--color-ink-warm)",
             fontWeight: 500,
           }}
         >
@@ -127,7 +127,7 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
     key: "recordedBy",
     header: "Recorded by",
     render: row => ({
-      primary: row.createdBy?.fullName ?? <span style={{ color: "#78716c" }}>—</span>,
+      primary: row.createdBy?.fullName ?? <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
 ];
@@ -156,7 +156,7 @@ export function ExpensesPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

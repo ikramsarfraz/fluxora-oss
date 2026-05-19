@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 import type { ParseStage, StageStatus } from "./types";
 
 const COLORS = {
-  good: "oklch(58% 0.13 155)",
+  good: "var(--color-success-fg)",
   accent: "oklch(58% 0.13 242)",
   accentEnd: "oklch(70% 0.18 242)",
-  borderStrong: "#d4d1c7",
+  borderStrong: "var(--color-border-default)",
   mutedSoft: "#9a9a93",
-  danger: "oklch(58% 0.18 25)",
+  danger: "var(--color-danger-fg)",
 } as const;
 
 export function StageTimeline({

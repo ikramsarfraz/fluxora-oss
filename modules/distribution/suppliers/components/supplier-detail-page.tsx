@@ -57,9 +57,9 @@ import { SupplierReliabilityEmptyState } from "@/modules/distribution/components
 // ── Status / helpers ──────────────────────────────────────────────────────────
 
 const INVOICE_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  completed: { label: "Completed", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  void: { label: "Void", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  draft: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  completed: { label: "Completed", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  void: { label: "Void", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 function initials(name: string): string {
@@ -386,8 +386,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                   {invoicesData.data.map(inv => {
                     const s = INVOICE_STATUS[inv.status] ?? {
                       label: inv.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     const balance =
                       parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid);

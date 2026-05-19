@@ -8,16 +8,16 @@ import { useSalesOrderActivity } from "@/modules/distribution/hooks/use-activity
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
-  good: "oklch(58% 0.13 155)",
-  warn: "oklch(70% 0.13 70)",
-  info: "oklch(60% 0.15 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
+  good: "var(--color-success-fg)",
+  warn: "var(--color-warning-fg)",
+  info: "var(--color-info-fg)",
   radius: "10px",
 } as const;
 
@@ -82,7 +82,7 @@ export function OrderActivityCard({ orderId }: { orderId: string }) {
           Loading activity…
         </div>
       ) : isError ? (
-        <div style={{ padding: "20px", fontSize: "13px", color: "oklch(55% 0.22 25)" }}>
+        <div style={{ padding: "20px", fontSize: "13px", color: "var(--color-danger-fg)" }}>
           Failed to load activity.
         </div>
       ) : items.length === 0 ? (

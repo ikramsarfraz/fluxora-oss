@@ -15,24 +15,24 @@ import { switchPrimarySupplierAction } from "../actions";
 
 // ── Design tokens ────────────────────────────────────────────────────────────
 const c = {
-  bg: "#f7f7f8",
-  card: "#ffffff",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  accent: "#18181b",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  bg: "var(--color-surface)",
+  card: "var(--color-card)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  accent: "var(--color-ink)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   amberBg: "#fffbeb",
   amberBorder: "#fde68a",
   red: "#dc2626",
   redBg: "#fef2f2",
   redBorder: "#fecaca",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
   purple: "#7c3aed",
@@ -69,7 +69,7 @@ function Pill({ color, children }: { color: "blue" | "green" | "amber" | "gray" 
     green: { bg: c.greenBg, text: c.green },
     amber: { bg: c.amberBg, text: c.amber },
     red: { bg: c.redBg, text: c.red },
-    gray: { bg: "#f4f4f5", text: c.text2 },
+    gray: { bg: "var(--color-divider)", text: c.text2 },
   };
   const col = colors[color];
   return (
@@ -110,7 +110,7 @@ function PriceCellView({ cell, isAggregate }: { cell: PriceCell | null; isAggreg
       <td style={{
         border: `1px solid ${c.border}`,
         backgroundImage: "repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(0,0,0,0.025) 8px,rgba(0,0,0,0.025) 16px)",
-        background: "#fafafa",
+        background: "var(--color-page)",
         padding: "12px 14px",
         verticalAlign: "top",
         minWidth: 140,
@@ -145,13 +145,13 @@ function PriceCellView({ cell, isAggregate }: { cell: PriceCell | null; isAggreg
           <span style={{ fontSize: 10, color: c.text3, fontWeight: 500, marginLeft: 2 }}>/lb</span>
         </div>
         {status === "best" && (
-          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.green, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>✓</span>
+          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.green, color: "var(--color-card)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>✓</span>
         )}
         {status === "above" && (
-          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.amber, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>!</span>
+          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.amber, color: "var(--color-card)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>!</span>
         )}
         {status === "way-above" && (
-          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.red, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>↑</span>
+          <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.red, color: "var(--color-card)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>↑</span>
         )}
       </div>
       <div style={{ fontSize: 10.5, color: c.text3, display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
@@ -178,7 +178,7 @@ function InsightCard({
   return (
     <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: 12, overflow: "hidden" }}>
       <div style={{
-        padding: "11px 14px", borderBottom: `1px solid ${c.border}`, background: "#fafafa",
+        padding: "11px 14px", borderBottom: `1px solid ${c.border}`, background: "var(--color-page)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <h4 style={{ margin: 0, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text2 }}>
@@ -186,7 +186,7 @@ function InsightCard({
         </h4>
         {count !== undefined && (
           <span style={{
-            background: countColor ?? c.accent, color: "#fff",
+            background: countColor ?? c.accent, color: "var(--color-card)",
             fontSize: 10, padding: "1px 6px", borderRadius: 4,
             fontFamily: c.mono, fontWeight: 700,
           }}>{count}</span>
@@ -218,7 +218,7 @@ function OpportunityItem({ opp }: { opp: ComparisonOpportunity }) {
           <div style={{ marginTop: 9, display: "flex", gap: 6 }}>
             <button style={{
               display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px",
-              background: c.accent, color: "#fff", border: "none",
+              background: c.accent, color: "var(--color-card)", border: "none",
               borderRadius: 5, fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
             }}>
               {opp.type === "switch_primary" ? "Apply" : opp.type === "add_supplier" ? "Request quote" : "Explore"}
@@ -282,7 +282,7 @@ function SupplierScorecard({
 }) {
   const spendPct = totalSpend > 0 ? (supplier.totalSpend / totalSpend) * 100 : 0;
   const initial = supplier.name.charAt(0).toUpperCase();
-  const cardColors = ["#2563eb", "#7c3aed", "#0d9488", "#d97706", "#dc2626"];
+  const cardColors = ["var(--color-forest-mid)", "#7c3aed", "#0d9488", "#d97706", "#dc2626"];
   const colorIdx = supplier.name.charCodeAt(0) % cardColors.length;
   const badgeColor = cardColors[colorIdx]!;
   const priceCompPct = aggregate.skusCarried > 0 && totalSpend > 0
@@ -304,7 +304,7 @@ function SupplierScorecard({
     }}>
       <div style={{ padding: "14px 16px", borderBottom: `1px solid ${c.border}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 9, background: badgeColor, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 9, background: badgeColor, color: "var(--color-card)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
             {initial}
           </div>
           <div>
@@ -347,7 +347,7 @@ function SupplierScorecard({
           {bars.map(bar => (
             <div key={bar.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, fontSize: 11 }}>
               <span style={{ width: 92, color: c.text2 }}>{bar.label}</span>
-              <div style={{ flex: 1, height: 4, background: "#f4f4f5", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ flex: 1, height: 4, background: "var(--color-divider)", borderRadius: 2, overflow: "hidden" }}>
                 <div style={{ height: "100%", background: bar.value >= 80 ? c.green : c.amber, borderRadius: 2, width: `${bar.value}%` }} />
               </div>
               <span style={{ width: 28, textAlign: "right", fontFamily: c.mono, fontWeight: 600, fontSize: 11 }}>{bar.value}</span>
@@ -356,7 +356,7 @@ function SupplierScorecard({
         </div>
       </div>
 
-      <div style={{ padding: "11px 16px", background: "#fafafa", borderTop: `1px solid ${c.border}`, display: "flex", gap: 6 }}>
+      <div style={{ padding: "11px 16px", background: "var(--color-page)", borderTop: `1px solid ${c.border}`, display: "flex", gap: 6 }}>
         <Link href={`/suppliers/${supplier.id}`} style={{
           display: "inline-flex", alignItems: "center", padding: "3px 8px",
           background: c.card, color: c.text, border: `1px solid ${c.borderStrong}`,
@@ -368,7 +368,7 @@ function SupplierScorecard({
             disabled={promoting}
             style={{
               display: "inline-flex", alignItems: "center", padding: "3px 8px",
-              background: promoting ? "#52525b" : c.accent, color: "#fff", border: "none",
+              background: promoting ? "var(--color-subtle)" : c.accent, color: "var(--color-card)", border: "none",
               borderRadius: 5, fontSize: 11.5, fontWeight: 500,
               cursor: promoting ? "not-allowed" : "pointer",
               fontFamily: "inherit", marginLeft: "auto", opacity: promoting ? 0.7 : 1,
@@ -442,7 +442,7 @@ export function SupplierComparisonPage({
               <button style={{
                 display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px",
                 borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                background: c.accent, color: "#fff", border: "none",
+                background: c.accent, color: "var(--color-card)", border: "none",
                 cursor: "pointer", fontFamily: "inherit",
               }}>→ Send RFQ</button>
             </div>
@@ -469,7 +469,7 @@ export function SupplierComparisonPage({
         )}
         {categories.length > 0 && (
           <div style={{
-            display: "flex", gap: 4, padding: 4, background: "#f4f4f5", borderRadius: 9,
+            display: "flex", gap: 4, padding: 4, background: "var(--color-divider)", borderRadius: 9,
           }}>
             {categories.map(cat => (
               <button key={cat.id} onClick={() => onCategoryClick(cat.id)} style={{
@@ -497,7 +497,7 @@ export function SupplierComparisonPage({
           <div style={{ color: c.text2, fontSize: 14 }}>Upload a few supplier invoices to start comparing prices.</div>
           <Link href="/supplier-invoices/new" style={{
             display: "inline-flex", marginTop: 16, padding: "8px 16px",
-            background: c.accent, color: "#fff", borderRadius: 7,
+            background: c.accent, color: "var(--color-card)", borderRadius: 7,
             textDecoration: "none", fontSize: 13, fontWeight: 500,
           }}>Add first invoice →</Link>
         </div>
@@ -569,7 +569,7 @@ export function SupplierComparisonPage({
           {opportunities.length > 0 && opportunities[0]!.savingsPerYear > 0 && (
             <div style={{
               background: "linear-gradient(135deg,#18181b 0%,#27272a 100%)",
-              color: "#fff", borderRadius: 14, padding: "18px 22px", marginBottom: 22,
+              color: "var(--color-card)", borderRadius: 14, padding: "18px 22px", marginBottom: 22,
               display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20,
               position: "relative", overflow: "hidden",
             }}>
@@ -595,7 +595,7 @@ export function SupplierComparisonPage({
               <div style={{ position: "relative", display: "flex", gap: 8 }}>
                 <button style={{
                   display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px",
-                  background: "rgba(255,255,255,.1)", color: "#fff",
+                  background: "rgba(255,255,255,.1)", color: "var(--color-card)",
                   border: "1px solid rgba(255,255,255,.2)", borderRadius: 7,
                   fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
                 }}>See math</button>
@@ -609,7 +609,7 @@ export function SupplierComparisonPage({
                   disabled={promotingId !== null}
                   style={{
                     display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px",
-                    background: promotingId !== null ? "rgba(255,255,255,.7)" : "#fff",
+                    background: promotingId !== null ? "rgba(255,255,255,.7)" : "var(--color-card)",
                     color: c.text, border: "none", borderRadius: 7,
                     fontSize: 12.5, fontWeight: 500,
                     cursor: promotingId !== null ? "not-allowed" : "pointer",
@@ -627,11 +627,11 @@ export function SupplierComparisonPage({
             <div style={{ background: c.card, border: `1px solid ${c.border}`, borderRadius: 12, overflow: "hidden" }}>
               <div style={{
                 padding: "13px 18px", borderBottom: `1px solid ${c.border}`,
-                background: "#fafafa", display: "flex", alignItems: "center", justifyContent: "space-between",
+                background: "var(--color-page)", display: "flex", alignItems: "center", justifyContent: "space-between",
               }}>
                 <div style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text2, display: "flex", alignItems: "center", gap: 10 }}>
                   Price matrix · {products.length} SKU{products.length !== 1 ? "s" : ""} × {suppliers.length} supplier{suppliers.length !== 1 ? "s" : ""}
-                  <span style={{ display: "inline-flex", alignItems: "center", padding: "1px 6px", background: "#f4f4f5", color: c.text2, borderRadius: 4, fontSize: 10.5, fontWeight: 600 }}>last 12 months</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", padding: "1px 6px", background: "var(--color-divider)", color: c.text2, borderRadius: 4, fontSize: 10.5, fontWeight: 600 }}>last 12 months</span>
                 </div>
               </div>
 
@@ -644,7 +644,7 @@ export function SupplierComparisonPage({
                       </th>
                       {suppliers.map((supplier, idx) => {
                         const initial = supplier.name.charAt(0).toUpperCase();
-                        const cardColors = ["#2563eb", "#7c3aed", "#0d9488", "#d97706", "#dc2626"];
+                        const cardColors = ["var(--color-forest-mid)", "#7c3aed", "#0d9488", "#d97706", "#dc2626"];
                         const badgeColor = cardColors[supplier.name.charCodeAt(0) % cardColors.length]!;
                         const agg = aggregateBySupplier[supplier.id];
                         return (
@@ -655,7 +655,7 @@ export function SupplierComparisonPage({
                           }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 24, height: 24, borderRadius: 6, background: badgeColor, color: "#fff", fontWeight: 700, fontSize: 11.5, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initial}</div>
+                                <div style={{ width: 24, height: 24, borderRadius: 6, background: badgeColor, color: "var(--color-card)", fontWeight: 700, fontSize: 11.5, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initial}</div>
                                 <div style={{ fontWeight: 600, fontSize: 13.5 }}>
                                   {supplier.name}
                                   {idx === 0 && <span style={{ marginLeft: 6 }}><Pill color="blue">Primary</Pill></span>}
@@ -677,7 +677,7 @@ export function SupplierComparisonPage({
                         );
                       })}
                       <th style={{
-                        width: 140, background: "#fafafa",
+                        width: 140, background: "var(--color-page)",
                         borderLeft: `1px dashed ${c.borderStrong}`,
                         padding: "12px 14px", textAlign: "left",
                         borderBottom: `1px solid ${c.border}`, verticalAlign: "top",
@@ -697,7 +697,7 @@ export function SupplierComparisonPage({
                   <tbody>
                     {products.map(product => (
                       <tr key={product.id}>
-                        <td style={{ background: "#fafafa", padding: "12px 14px", borderBottom: `1px solid ${c.border}` }}>
+                        <td style={{ background: "var(--color-page)", padding: "12px 14px", borderBottom: `1px solid ${c.border}` }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div>
                               <div style={{ fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 6 }}>
@@ -716,7 +716,7 @@ export function SupplierComparisonPage({
                         {suppliers.map(supplier => (
                           <PriceCellView key={supplier.id} cell={priceMatrix[product.id]?.[supplier.id] ?? null} />
                         ))}
-                        <td style={{ background: "#fafafa", borderLeft: `1px dashed ${c.borderStrong}`, borderBottom: `1px solid ${c.border}` }}>
+                        <td style={{ background: "var(--color-page)", borderLeft: `1px dashed ${c.borderStrong}`, borderBottom: `1px solid ${c.border}` }}>
                           {product.isSingleSourced ? (
                             <div style={{ padding: "14px", textAlign: "center", fontSize: 11.5, color: c.amber, fontWeight: 500 }}>
                               Request quote for backup
@@ -730,14 +730,14 @@ export function SupplierComparisonPage({
 
                     {/* Aggregate row */}
                     <tr>
-                      <td style={{ background: "#fafafa", padding: "12px 14px", borderTop: `2px solid ${c.borderStrong}` }}>
+                      <td style={{ background: "var(--color-page)", padding: "12px 14px", borderTop: `2px solid ${c.borderStrong}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text2 }}>Category aggregate</div>
                         <div style={{ fontSize: 11, color: c.text3, marginTop: 4, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>avg $/lb · best-of-row wins</div>
                       </td>
                       {suppliers.map(supplier => {
                         const agg = aggregateBySupplier[supplier.id];
                         return (
-                          <td key={supplier.id} style={{ background: "#fafafa", padding: "12px 14px", borderTop: `2px solid ${c.borderStrong}`, borderLeft: `1px solid ${c.border}` }}>
+                          <td key={supplier.id} style={{ background: "var(--color-page)", padding: "12px 14px", borderTop: `2px solid ${c.borderStrong}`, borderLeft: `1px solid ${c.border}` }}>
                             {agg && agg.avgPrice > 0 ? (
                               <>
                                 <div style={{ fontFamily: c.mono, fontWeight: 700, fontSize: 14 }}>{fmtPrice(agg.avgPrice)}</div>
@@ -749,7 +749,7 @@ export function SupplierComparisonPage({
                           </td>
                         );
                       })}
-                      <td style={{ background: "#fafafa", borderTop: `2px solid ${c.borderStrong}`, borderLeft: `1px dashed ${c.borderStrong}`, padding: "12px 14px" }}>
+                      <td style={{ background: "var(--color-page)", borderTop: `2px solid ${c.borderStrong}`, borderLeft: `1px dashed ${c.borderStrong}`, padding: "12px 14px" }}>
                         <div style={{ fontSize: 10.5, color: c.text3 }}>add to compare</div>
                       </td>
                     </tr>
@@ -758,7 +758,7 @@ export function SupplierComparisonPage({
               </div>
 
               {/* Legend */}
-              <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "11px 18px", background: "#fafafa", borderTop: `1px solid ${c.border}`, fontSize: 11, color: c.text2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "11px 18px", background: "var(--color-page)", borderTop: `1px solid ${c.border}`, fontSize: 11, color: c.text2 }}>
                 {[{ color: c.green, label: "Best price" }, { color: c.amber, label: "+5–15% above best" }, { color: c.red, label: ">15% above best" }].map(item => (
                   <span key={item.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color, display: "inline-block" }} />

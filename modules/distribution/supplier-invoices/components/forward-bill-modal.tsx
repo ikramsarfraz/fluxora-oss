@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button";
 import { forwardBillAction } from "../actions/forward-bill";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
   radius: "10px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
@@ -358,8 +358,8 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid #e7e5e4`,
   borderRadius: 8,
   fontSize: 13,
-  color: "#0c0a09",
-  background: "#ffffff",
+  color: "var(--color-ink)",
+  background: "var(--color-card)",
   outline: "none",
   boxSizing: "border-box",
 };
@@ -367,7 +367,7 @@ const inputStyle: React.CSSProperties = {
 function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, color: "#78716c", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+      <label style={{ fontSize: 11, fontWeight: 600, color: "var(--color-subtle)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
         {label}
       </label>
       {children}

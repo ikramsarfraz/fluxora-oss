@@ -11,22 +11,22 @@ import type { PipelineResult } from "../services/parsing-pipeline";
 
 // ── Design tokens (match mockup exactly) ──────────────────────────────────
 const C = {
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  bg: "#f7f7f8",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  bg: "var(--color-surface)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   amberBg: "#fffbeb",
   amberBorder: "#fde68a",
   red: "#dc2626",
   redBg: "#fef2f2",
   redBorder: "#fecaca",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
   mono: "var(--font-geist-mono, 'JetBrains Mono', ui-monospace, monospace)",
@@ -224,7 +224,7 @@ export function IngestionPanel({
     : C.blueBorder;
 
   const iconColor = isDone
-    ? "#fff"
+    ? "var(--color-card)"
     : isError || isPartialFailure
     ? C.red
     : isSlow
@@ -248,7 +248,7 @@ export function IngestionPanel({
       <div
         style={{
           borderRadius: 14,
-          background: "#fff",
+          background: "var(--color-card)",
           border: `1px solid ${C.border}`,
           overflow: "hidden",
           boxShadow: "0 4px 24px rgba(0,0,0,0.04)",
@@ -262,7 +262,7 @@ export function IngestionPanel({
                 style={{
                   width: 36, height: 36,
                   borderRadius: 10,
-                  background: "#fff",
+                  background: "var(--color-card)",
                   border: `1px solid ${iconBorderColor}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   color: iconColor,
@@ -336,27 +336,27 @@ export function IngestionPanel({
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={onContinuePartial}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: "none", background: C.text, color: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: "none", background: C.text, color: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
             >
               {CHECK} Continue with {lineCount > 0 ? lineCount : "extracted"} lines
             </button>
             <button
               onClick={onRetryWithVision}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "#fff", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9"/><polyline points="3 4 3 9 8 9"/></svg>
               Retry with vision model
-              <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 600, background: "#f4f4f5", color: C.text2, marginLeft: 4 }}>+15s</span>
+              <span style={{ padding: "1px 6px", borderRadius: 4, fontSize: 10.5, fontWeight: 600, background: "var(--color-divider)", color: C.text2, marginLeft: 4 }}>+15s</span>
             </button>
             <button
               onClick={onAddManually}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "#fff", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
             >
               Add {reviewCount > 0 ? reviewCount : ""} lines manually
             </button>
             <button
               onClick={onViewPdf}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "#fff", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", color: C.text, cursor: "pointer", fontFamily: "inherit" }}
             >
               View PDF →
             </button>
@@ -378,7 +378,7 @@ export function IngestionPanel({
       <div
         style={{
           borderRadius: 14,
-          background: "#fff",
+          background: "var(--color-card)",
           border: `1px solid ${C.border}`,
           overflow: "hidden",
           boxShadow: "0 4px 24px rgba(0,0,0,0.04)",
@@ -408,14 +408,14 @@ export function IngestionPanel({
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
-                style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+                style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
               >
                 View extraction log
               </button>
               {reviewCount > 0 && (
                 <button
                   onClick={onJumpToFirstIssue}
-                  style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: "none", background: C.text, color: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+                  style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: "none", background: C.text, color: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
                 >
                   Jump to first issue ↓
                 </button>
@@ -431,7 +431,7 @@ export function IngestionPanel({
             gridTemplateColumns: "repeat(5, 1fr)",
             gap: 8,
             padding: "16px 20px",
-            background: "#fafafa",
+            background: "var(--color-page)",
             borderTop: `1px solid ${C.border}`,
           }}
         >
@@ -445,7 +445,7 @@ export function IngestionPanel({
             <div
               key={stat.label}
               style={{
-                background: "#fff",
+                background: "var(--color-card)",
                 border: `1px solid ${C.border}`,
                 borderRadius: 8,
                 padding: "9px 11px",
@@ -481,7 +481,7 @@ export function IngestionPanel({
     <div
       style={{
         borderRadius: 14,
-        background: "#fff",
+        background: "var(--color-card)",
         border: `1px solid ${C.border}`,
         overflow: "hidden",
         boxShadow: "0 4px 24px rgba(0,0,0,0.04)",
@@ -505,7 +505,7 @@ export function IngestionPanel({
               style={{
                 width: 36, height: 36,
                 borderRadius: 10,
-                background: "#fff",
+                background: "var(--color-card)",
                 border: `1px solid ${iconBorderColor}`,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: iconColor,
@@ -641,7 +641,7 @@ export function IngestionPanel({
                 padding: "9px 12px",
                 fontSize: 12.5,
                 borderBottom: i < Math.min(totalRows, 6) - 1 ? `1px solid ${C.border}` : undefined,
-                background: "#fafafa",
+                background: "var(--color-page)",
               }}
             >
               <div
@@ -664,7 +664,7 @@ export function IngestionPanel({
       <div
         style={{
           padding: "12px 20px",
-          background: "#fafafa",
+          background: "var(--color-page)",
           borderTop: `1px solid ${C.border}`,
           display: "flex",
           alignItems: "center",
@@ -686,13 +686,13 @@ export function IngestionPanel({
         <div style={{ display: "flex", gap: 8 }}>
           {isSlow && (
             <button
-              style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
             >
               Skip page 2
             </button>
           )}
           <button
-            style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+            style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: 4 }}>
               <rect x="6" y="4" width="4" height="16"/>
@@ -702,7 +702,7 @@ export function IngestionPanel({
           </button>
           <button
             onClick={onCancel}
-            style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "#fff", cursor: "pointer", fontFamily: "inherit" }}
+            style={{ padding: "3px 8px", fontSize: 11.5, borderRadius: 5, border: `1px solid ${C.borderStrong}`, background: "var(--color-card)", cursor: "pointer", fontFamily: "inherit" }}
           >
             {isSlow ? "Cancel & keep partial" : "Cancel"}
           </button>

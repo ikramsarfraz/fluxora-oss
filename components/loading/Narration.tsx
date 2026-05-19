@@ -9,7 +9,7 @@ interface NarrationProps {
 }
 
 export function Narration({ text, micro, tone = "blue" }: NarrationProps) {
-  const caretColor = tone === "amber" ? "#d97706" : "#2563eb";
+  const caretColor = tone === "amber" ? "#d97706" : "var(--color-forest-mid)";
   const borderColor = tone === "amber" ? "#fde68a" : "rgba(37,99,235,0.15)";
 
   return (
@@ -25,7 +25,7 @@ export function Narration({ text, micro, tone = "blue" }: NarrationProps) {
         borderRadius: 8,
         fontFamily: "var(--font-geist-mono, 'JetBrains Mono', ui-monospace, monospace)",
         fontSize: 12,
-        color: "#52525b",
+        color: "var(--color-subtle)",
       }}
     >
       <Spinner size="sm" color={tone === "amber" ? "amber" : "blue"} />
@@ -46,7 +46,7 @@ export function Narration({ text, micro, tone = "blue" }: NarrationProps) {
         }}
       />
       {micro && (
-        <span style={{ fontSize: 10.5, color: "#a1a1aa", flexShrink: 0 }}>
+        <span style={{ fontSize: 10.5, color: "var(--color-muted)", flexShrink: 0 }}>
           {micro}
         </span>
       )}

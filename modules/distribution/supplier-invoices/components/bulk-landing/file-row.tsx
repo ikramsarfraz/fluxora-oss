@@ -13,9 +13,9 @@ const fmtAmount = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const COLORS = {
-  danger: "oklch(58% 0.18 25)",
+  danger: "var(--color-danger-fg)",
   warn: "oklch(70% 0.16 70)",
-  good: "oklch(58% 0.13 155)",
+  good: "var(--color-success-fg)",
   mutedSoft: "#9a9a93",
 } as const;
 

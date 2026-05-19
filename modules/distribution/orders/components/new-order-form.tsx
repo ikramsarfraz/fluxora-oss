@@ -33,10 +33,10 @@ import {
 import { calculateLineTotal } from "./new-order-line-utils";
 
 const C = {
-  ink: "#0c0a09",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
+  ink: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -336,7 +336,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             style={{
               padding: "12px 16px",
               marginBottom: "20px",
-              background: "oklch(97% 0.04 25)",
+              background: "var(--color-danger-bg)",
               border: "1px solid oklch(80% 0.1 25)",
               borderRadius: C.radiusSm,
               fontSize: "13px",
@@ -364,7 +364,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             <NewOrderCustomerCard control={form.control} />
             <NewOrderLinesTable control={form.control} setValue={form.setValue} />
             {form.formState.errors.lines?.root && (
-              <p style={{ fontSize: "13px", color: "oklch(55% 0.22 25)" }}>
+              <p style={{ fontSize: "13px", color: "var(--color-danger-fg)" }}>
                 {form.formState.errors.lines.root.message}
               </p>
             )}
@@ -419,7 +419,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  background: "oklch(58% 0.13 155)",
+                  background: "var(--color-success-fg)",
                   flexShrink: 0,
                 }}
               />
@@ -427,7 +427,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             </span>
           )}
           {autoSaveStatus === "error" && (
-            <span style={{ fontSize: "12px", color: "oklch(70% 0.13 70)" }}>
+            <span style={{ fontSize: "12px", color: "var(--color-warning-fg)" }}>
               Auto-save failed
             </span>
           )}

@@ -3,14 +3,14 @@
 import { FileUp, Paperclip } from "lucide-react";
 
 const C = {
-  ink: "#0c0a09",
-  muted: "#78716c",
-  mutedSoft: "#a8a29e",
-  surface: "#ffffff",
-  surfaceAlt: "#f5f5f4",
-  line: "#e7e5e4",
-  lineStrong: "#d4d1c7",
-  accent: "oklch(60% 0.15 240)",
+  ink: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  mutedSoft: "var(--color-muted)",
+  surface: "var(--color-card)",
+  surfaceAlt: "var(--color-divider)",
+  line: "var(--color-border-default)",
+  lineStrong: "var(--color-border-default)",
+  accent: "var(--color-info-fg)",
 } as const;
 
 /**
