@@ -307,6 +307,7 @@ export function initialReelState(): ReelState {
     scanningElapsedSeconds: 0,
     headerCollapsed: false,
     dialog: { kind: "none" },
+    transition: { kind: "splash" },
   };
 }
 

@@ -4,6 +4,7 @@ import { BillsShell } from "./_real/bills-shell";
 import { ReelDialogs } from "./_real/dialogs";
 import { ReviewScreen } from "./_real/review";
 import { useReel } from "./_real/reel-state";
+import { TransitionLayer } from "./_real/transitions";
 
 import { FakeHeader, FakeSidebar } from "./fake-sidebar";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ export function ReelSurface() {
         </main>
       </div>
       <ReelDialogs />
+      <TransitionLayer />
     </div>
   );
 }

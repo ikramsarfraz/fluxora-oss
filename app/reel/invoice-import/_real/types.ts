@@ -118,6 +118,12 @@ export type DialogKind =
   | { kind: "create-supplier"; prefillName: string }
   | { kind: "create-product"; lineId: number; prefillName: string };
 
+export type Transition =
+  | { kind: "none" }
+  | { kind: "splash" }
+  | { kind: "chapter"; index: number; total: number; title: string; subtitle: string }
+  | { kind: "outro" };
+
 export type ReelState = {
   step: ReelStep;
   activeTab: Tab;
@@ -132,4 +138,7 @@ export type ReelState = {
   // Review screen extras
   headerCollapsed: boolean;
   dialog: DialogKind;
+  // Reel-only chrome — splash card on open, chapter pill at phase changes,
+  // outro at the end. Drawn over the surface, doesn't otherwise affect state.
+  transition: Transition;
 };
