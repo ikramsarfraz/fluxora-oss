@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { MOCK_PRODUCTS, fmtAmount, fmtDate } from "./mock-data";
+import { QueueStrip, ReviewQueueHeader } from "./queue";
 import { useReel } from "./reel-state";
 import type { ReviewLine } from "./types";
 
@@ -48,7 +49,8 @@ export function ReviewScreen() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page">
-      <ReviewTopBar submitDisabled={submitDisabled} />
+      <QueueStrip />
+      <ReviewQueueHeader />
 
       {/* Two-pane row */}
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -842,42 +844,3 @@ function NonInventoryDivider({ count }: { count: number }) {
   );
 }
 
-// ---------- Review top bar (back + filename + actions) ----------
-function ReviewTopBar({ submitDisabled }: { submitDisabled: boolean }) {
-  const { state, dispatch } = useReel();
-  const review = state.review;
-  if (!review) return null;
-
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-default bg-card px-4 py-2.5">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          data-reel="review-back"
-          className="text-[12.5px] font-medium text-subtle hover:text-ink"
-        >
-          ← Imports
-        </button>
-        <span className="text-subtle">/</span>
-        <span className="font-mono text-[12.5px] tabular-nums text-ink">
-          {review.fileName}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="h-8 text-[12px]">
-          Re-scan
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          data-reel="submit-review"
-          disabled={submitDisabled}
-          onClick={() => dispatch({ type: "SUBMIT_REVIEW" })}
-          className="h-8 gap-1.5 border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest"
-        >
-          {submitDisabled ? "Resolve to submit" : "Submit & post"}
-        </Button>
-      </div>
-    </div>
-  );
-}
