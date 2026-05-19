@@ -92,7 +92,13 @@
   --color-forest: #1F3A2E;
   --color-forest-mid: #2D5040;
   --color-forest-bright: #4A7A5E;
-  --color-forest-tint: #DCE5DD;
+  /* Bumped from #DCE5DD (G-R=9, G-B=8) to #CCE0D0 (G-R=20, G-B=16) on
+     2026-05. The previous near-achromatic green read as gray-blue
+     against the warm cream sidebar (#EDE5D2) via simultaneous-contrast
+     — perceptual hue shift away from the adjacent warm. The bumped
+     saturation asserts the green hue without making the tint heavier:
+     still ~84% lightness, still safely in the brand forest family. */
+  --color-forest-tint: #CCE0D0;
   --color-forest-tint-deep: #B8CDBE;
 
   /* Ring alias for @apply outline-ring (literal, see comment above). */
@@ -121,7 +127,7 @@
   --color-danger-border: #D49074;
   --color-danger-fg: #8B3415;
 
-  --color-info-bg: #DCE5DD;
+  --color-info-bg: #CCE0D0;
   --color-info-border: #B8CDBE;
   --color-info-fg: #1F3A2E;
 
