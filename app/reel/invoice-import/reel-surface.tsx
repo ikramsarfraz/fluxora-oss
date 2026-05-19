@@ -1,6 +1,7 @@
 "use client";
 
 import { BillsShell } from "./_real/bills-shell";
+import { ReelDialogs } from "./_real/dialogs";
 import { ReviewScreen } from "./_real/review";
 import { useReel } from "./_real/reel-state";
 
@@ -28,6 +29,7 @@ export function ReelSurface() {
           {inReview ? <ReviewScreen /> : <BillsShell />}
         </main>
       </div>
+      <ReelDialogs />
     </div>
   );
 }

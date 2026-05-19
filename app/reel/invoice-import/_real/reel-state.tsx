@@ -16,7 +16,7 @@ import {
   initialReelState,
   reviewedFileView,
 } from "./mock-data";
-import type { ReelState, ReelStep, ReviewLine, Tab } from "./types";
+import type { DialogKind, ReelState, ReelStep, ReviewLine, Tab } from "./types";
 
 type Action =
   | { type: "SET_STEP"; step: ReelStep }
@@ -25,6 +25,9 @@ type Action =
   | { type: "FINISH_SCAN" }
   | { type: "OPEN_REVIEW" }
   | { type: "SET_ACTIVE_LINE"; lineId: number | null }
+  | { type: "SET_HEADER_COLLAPSED"; collapsed: boolean }
+  | { type: "OPEN_DIALOG"; dialog: DialogKind }
+  | { type: "CLOSE_DIALOG" }
   | { type: "PICK_SUPPLIER"; supplierId: string; name: string }
   | { type: "FILL_LINE_COST"; lineId: number; unitCost: number }
   | { type: "CONFIRM_SUGGESTION"; lineId: number; productId: string }
@@ -55,6 +58,12 @@ function reducer(state: ReelState, action: Action): ReelState {
       };
     case "SET_ACTIVE_LINE":
       return { ...state, activeLineId: action.lineId };
+    case "SET_HEADER_COLLAPSED":
+      return { ...state, headerCollapsed: action.collapsed };
+    case "OPEN_DIALOG":
+      return { ...state, dialog: action.dialog };
+    case "CLOSE_DIALOG":
+      return { ...state, dialog: { kind: "none" } };
     case "PICK_SUPPLIER":
       if (!state.review) return state;
       return {

@@ -202,22 +202,46 @@ async function runScript(c: Controls) {
     });
     await c.sleep(2400);
 
-    // ---- Scene 7: Pick supplier (Create supplier inline) ----
+    // ---- Scene 7: Pick supplier — opens the production Create-supplier dialog ----
     c.setScene("supplier");
     c.setCaption({
       headline: "Supplier not in your catalog?",
-      body: "Create it inline. Name + terms are extracted from the PDF.",
+      body: "Create it inline. Same dialog as Settings → Suppliers — pre-filled from the invoice.",
     });
     c.setCursor({ selector: "[data-reel='create-supplier']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(200);
     c.dispatch({
-      type: "PICK_SUPPLIER",
-      supplierId: "sup_northwind",
-      name: "Northwind Trading Co.",
+      type: "OPEN_DIALOG",
+      dialog: { kind: "create-supplier", prefillName: "Northwind Trading Co." },
     });
-    await c.sleep(1500);
+    c.setCursor(null);
+    await c.sleep(1400);
+
+    c.setCursor({ selector: "[data-reel='dialog-create-supplier-submit']" });
+    await c.sleep(1000);
+    c.flash();
+    await c.sleep(200);
+    // The dialog's own submit handler runs PICK_SUPPLIER + CLOSE_DIALOG after a
+    // ~700ms pending state. Give it room.
+    await c.sleep(1100);
+    c.setCursor(null);
+    await c.sleep(400);
+
+    // ---- Scene 7b: Collapse the invoice header ----
+    c.setScene("collapse-header");
+    c.setCaption({
+      headline: "Collapse the header.",
+      body: "Once the supplier + dates are confirmed, fold them into a one-line strip — line items get more room.",
+    });
+    c.setCursor({ selector: "[data-reel='collapse-header']" });
+    await c.sleep(1100);
+    c.flash();
+    await c.sleep(200);
+    c.dispatch({ type: "SET_HEADER_COLLAPSED", collapsed: true });
+    c.setCursor(null);
+    await c.sleep(1000);
 
     // ---- Scene 8: Fix the partial-scan line (missing cost) ----
     c.setScene("fix-cost");
@@ -260,22 +284,35 @@ async function runScript(c: Controls) {
     });
     await c.sleep(1600);
 
-    // ---- Scene 10: Create new product on the unmatched line ----
+    // ---- Scene 10: Create new product — opens the production dialog ----
     c.setScene("create-product");
     c.setCaption({
-      headline: "New product? Create it from the line.",
-      body: "Name, SKU, category, cost — all pre-filled.",
+      headline: "Brand-new product? Add it to the catalog.",
+      body: "Same dialog as Settings → Products. The line resolves automatically.",
     });
     c.setCursor({ selector: "[data-reel='line-5-create']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(200);
     c.dispatch({
-      type: "CREATE_PRODUCT_FOR_LINE",
-      lineId: 5,
-      productId: "prod_pa15_new",
+      type: "OPEN_DIALOG",
+      dialog: {
+        kind: "create-product",
+        lineId: 5,
+        prefillName: 'Pneumatic actuator — 1.5" stroke',
+      },
     });
-    await c.sleep(1500);
+    c.setCursor(null);
+    await c.sleep(1700);
+
+    c.setCursor({ selector: "[data-reel='dialog-create-product-submit']" });
+    await c.sleep(1000);
+    c.flash();
+    await c.sleep(200);
+    // Dialog runs CREATE_PRODUCT_FOR_LINE + CLOSE_DIALOG after a ~700ms pending state.
+    await c.sleep(1100);
+    c.setCursor(null);
+    await c.sleep(400);
 
     // ---- Scene 11: Submit ----
     c.setScene("submit");
