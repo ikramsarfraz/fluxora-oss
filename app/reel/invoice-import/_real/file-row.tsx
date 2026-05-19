@@ -123,6 +123,7 @@ export function FileRow({
           type="button"
           size="sm"
           variant={file.status === "reviewed" ? "outline" : "default"}
+          data-reel={`${reelTarget}-review-button`}
           onClick={(e) => {
             e.stopPropagation();
             onOpen();

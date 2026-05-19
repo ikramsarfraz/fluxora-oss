@@ -96,6 +96,37 @@ export const FRESH_FILE: BatchFile = {
   elapsedLabel: "just now",
 };
 
+// Companion files that come up in the same batch. Surfaced as a queue
+// carousel on the review screen so the user can tell they're working through
+// a batch, not a one-off file.
+export const QUEUE_FILES: BatchFile[] = [
+  FRESH_FILE,
+  {
+    id: "file_inv4471",
+    name: "INV-4471 Apex backorder.pdf",
+    supplier: "Apex Industrial Supply",
+    invoiceNumber: "INV-4471",
+    lineCount: 4,
+    totalAmount: 412.6,
+    confidence: 94,
+    status: "attention",
+    issues: [{ tone: "warn", message: "Cost up 8% vs last bill" }],
+    elapsedLabel: "1m ago",
+  },
+  {
+    id: "file_inv8812",
+    name: "INV-8812 Meridian May.pdf",
+    supplier: "Meridian Parts Co.",
+    invoiceNumber: "INV-8812",
+    lineCount: 6,
+    totalAmount: 884.0,
+    confidence: 91,
+    status: "needs-review",
+    issues: [{ tone: "warn", message: "1 line missing cost" }],
+    elapsedLabel: "1m ago",
+  },
+];
+
 export function emptyView(): BatchView {
   return {
     files: [],
@@ -103,33 +134,37 @@ export function emptyView(): BatchView {
   };
 }
 
-export function singleFileView(): BatchView {
+export function batchView(): BatchView {
   return {
-    files: [FRESH_FILE],
+    files: QUEUE_FILES,
     summary: {
-      filesProcessed: 1,
+      filesProcessed: QUEUE_FILES.length,
       readyToPost: 0,
-      needsReview: 1,
-      combinedValue: FRESH_FILE.totalAmount,
+      needsReview: QUEUE_FILES.filter((f) => f.status !== "reviewed").length,
+      combinedValue: QUEUE_FILES.reduce((s, f) => s + f.totalAmount, 0),
     },
   };
 }
 
 export function reviewedFileView(): BatchView {
-  const reviewed: BatchFile = {
-    ...FRESH_FILE,
-    supplier: "Northwind Trading Co.",
-    confidence: 99,
-    status: "reviewed",
-    issues: [],
-  };
+  const reviewed = QUEUE_FILES.map((f) =>
+    f.id === FRESH_FILE.id
+      ? {
+          ...f,
+          supplier: "Northwind Trading Co.",
+          confidence: 99,
+          status: "reviewed" as const,
+          issues: [],
+        }
+      : f,
+  );
   return {
-    files: [reviewed],
+    files: reviewed,
     summary: {
-      filesProcessed: 1,
-      readyToPost: 1,
-      needsReview: 0,
-      combinedValue: reviewed.totalAmount,
+      filesProcessed: reviewed.length,
+      readyToPost: reviewed.filter((f) => f.status === "reviewed").length,
+      needsReview: reviewed.filter((f) => f.status !== "reviewed").length,
+      combinedValue: reviewed.reduce((s, f) => s + f.totalAmount, 0),
     },
   };
 }

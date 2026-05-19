@@ -11,7 +11,7 @@ import { ReelDirectorProvider } from "./autopilot";
 import { Caption } from "./caption";
 import { ReelControls } from "./reel-controls";
 import { ReelShell } from "./reel-shell";
-import { ReelSurface, useReelUrl } from "./reel-surface";
+import { ReelSurface } from "./reel-surface";
 import { VirtualCursor } from "./virtual-cursor";
 
 export function Reel() {
@@ -26,7 +26,6 @@ export function Reel() {
 
 function ReelLayout() {
   const frameRef = useRef<HTMLDivElement>(null);
-  const url = useReelUrl();
 
   return (
     <main className="min-h-screen bg-page py-10">
@@ -48,7 +47,7 @@ function ReelLayout() {
           </p>
         </header>
 
-        <ReelShell url={url} frameRef={frameRef}>
+        <ReelShell frameRef={frameRef}>
           <ReelSurface />
           <VirtualCursor frameRef={frameRef} />
         </ReelShell>
