@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  MOCK_PRODUCTS,
   REVIEW_DATA,
   batchView,
   emptyView,
@@ -102,19 +103,31 @@ function reducer(state: ReelState, action: Action): ReelState {
           ),
         },
       };
-    case "CONFIRM_SUGGESTION":
+    case "CONFIRM_SUGGESTION": {
       if (!state.review) return state;
+      const product = MOCK_PRODUCTS.find((p) => p.id === action.productId);
       return {
         ...state,
         review: {
           ...state.review,
           lines: state.review.lines.map((l): ReviewLine =>
             l.id === action.lineId
-              ? { ...l, match: { kind: "matched", productId: action.productId, aliasAdded: true } }
+              ? {
+                  ...l,
+                  match: {
+                    kind: "matched",
+                    productId: action.productId,
+                    productName: product?.name ?? l.description,
+                    sku: product?.sku ?? "NEW-SKU",
+                    score: 99,
+                    aliasAdded: true,
+                  },
+                }
               : l,
           ),
         },
       };
+    }
     case "CREATE_PRODUCT_FOR_LINE":
       if (!state.review) return state;
       return {
@@ -123,7 +136,17 @@ function reducer(state: ReelState, action: Action): ReelState {
           ...state.review,
           lines: state.review.lines.map((l): ReviewLine =>
             l.id === action.lineId
-              ? { ...l, match: { kind: "matched", productId: action.productId, aliasAdded: false } }
+              ? {
+                  ...l,
+                  match: {
+                    kind: "matched",
+                    productId: action.productId,
+                    productName: l.description,
+                    sku: "NEW-SKU",
+                    score: 100,
+                    aliasAdded: false,
+                  },
+                }
               : l,
           ),
         },
