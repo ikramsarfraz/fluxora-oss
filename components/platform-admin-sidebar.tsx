@@ -179,7 +179,9 @@ export function PlatformAdminSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2.5 mt-1.5 mb-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-subtle">
+            Platform
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map(item => {
