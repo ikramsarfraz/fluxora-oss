@@ -41,7 +41,7 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
       className="sticky top-0 flex h-[calc(100dvh-4rem)] w-[220px] shrink-0 flex-col gap-0 border-r border-stone-line bg-stone-surface px-3.5 py-6"
       aria-label="Settings"
     >
-      <h2 className="px-2 pb-3.5 text-[18px] font-semibold tracking-[-0.02em] text-stone-ink">
+      <h2 className="px-2 pb-3.5 text-[18px] font-medium tracking-[-0.02em] text-stone-ink">
         Settings
       </h2>
 

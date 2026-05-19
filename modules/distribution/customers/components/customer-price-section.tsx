@@ -93,7 +93,7 @@ function VendorPriceInput({
             "w-22 pl-5 pr-1.5 text-right font-mono tabular-nums text-[12.5px] h-7",
             "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
             focused
-              ? "border-ring bg-white ring-2 ring-ring/40"
+              ? "border-ring bg-card ring-2 ring-ring/40"
               : hasValue
                 ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
                 : "border-transparent bg-transparent shadow-none",
@@ -387,7 +387,7 @@ function ProductRow({
                     "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
                     "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
                     focused
-                      ? "border-ring bg-white ring-3 ring-ring/50"
+                      ? "border-ring bg-card ring-3 ring-ring/50"
                       : isOverride
                         ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
                         : "border-transparent bg-transparent shadow-none",
@@ -549,7 +549,7 @@ export function CustomerPriceSection({ customerId }: { customerId: string }) {
                       key={i}
                       className={cn(
                         align,
-                        "text-[11px] font-semibold text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
+                        "text-[11px] font-medium text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
                       )}
                       style={{ width: w === "auto" ? undefined : w }}
                     >

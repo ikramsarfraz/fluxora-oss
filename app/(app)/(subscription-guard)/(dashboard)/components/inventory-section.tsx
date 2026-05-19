@@ -64,7 +64,7 @@ export function InventorySection({ inventory }: Props) {
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
         <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-semibold text-stone-ink">Inventory &amp; lots</h2>
+          <h2 className="text-sm font-medium text-stone-ink">Inventory &amp; lots</h2>
           <p className="mt-0.5 text-xs text-stone-muted">
             Stock breakdown and expiration alerts.
           </p>
@@ -112,7 +112,7 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
   return (
     <Card className="shadow-none">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Inventory by status</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Inventory by status</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Item counts across all lots by lifecycle status.
         </CardDescription>
@@ -158,7 +158,7 @@ function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Top stocked products</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Top stocked products</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Highest active inventory item counts.
         </CardDescription>
@@ -219,7 +219,7 @@ function LotsTableCard({
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">{title}</CardTitle>
         <CardDescription className="text-xs text-stone-muted">{description}</CardDescription>
       </CardHeader>
       <CardContent className="px-0">

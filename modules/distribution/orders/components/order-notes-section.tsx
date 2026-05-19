@@ -20,10 +20,10 @@ export function OrderNotesSection({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="flex flex-col gap-2 rounded-md border bg-amber-500/5 p-3 dark:bg-amber-500/10">
+      <div className="flex flex-col gap-2 rounded-md border bg-warning-fg/5 p-3 dark:bg-warning-fg/10">
         <div className="flex items-center gap-2">
-          <Eye className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
-          <span className="text-xs font-medium uppercase tracking-wide text-amber-800 dark:text-amber-200">
+          <Eye className="h-3.5 w-3.5 text-warning-fg dark:text-warning-fg" />
+          <span className="text-xs font-medium uppercase tracking-wide text-warning-fg dark:text-warning-fg">
             Customer-facing notes
           </span>
           <span className="text-[10px] text-muted-foreground">

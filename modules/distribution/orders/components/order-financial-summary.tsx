@@ -228,7 +228,7 @@ export function OrderFinancialSummary({
       ) : null}
 
       {!hasInvoice && readyToInvoice ? (
-        <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+        <div className="flex items-start gap-2 rounded-md border border-success-border bg-success-bg/60 px-3 py-2 text-xs text-success-fg dark:border-emerald-900/40 dark:bg-success-fg/20 dark:text-success-fg">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Ready for invoicing. All order lines are closed, and billed weight
@@ -258,8 +258,8 @@ export function OrderFinancialSummary({
               className={cn(
                 "font-semibold",
                 totals.balanceDue > 0
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-emerald-600 dark:text-emerald-400",
+                  ? "text-warning-fg dark:text-warning-fg"
+                  : "text-success-fg dark:text-success-fg",
               )}
             />
             <div className="my-1 border-t" />

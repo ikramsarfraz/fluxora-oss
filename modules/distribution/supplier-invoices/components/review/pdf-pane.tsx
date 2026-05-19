@@ -359,7 +359,7 @@ function ToolbarButton({
       disabled={disabled}
       className={cn(
         "flex size-[26px] items-center justify-center rounded-[5px] bg-transparent transition-colors",
-        "enabled:hover:bg-white/10",
+        "enabled:hover:bg-card/10",
         "disabled:cursor-not-allowed disabled:opacity-40",
       )}
       style={{ color: "#d4d4d4" }}

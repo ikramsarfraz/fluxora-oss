@@ -35,7 +35,7 @@ export function QueueDone({ onBackToBulk }: { onBackToBulk: () => void }) {
           <Check className="size-[30px]" strokeWidth={2.4} />
         </div>
         <h1
-          className="mb-2 font-semibold text-stone-ink"
+          className="mb-2 font-medium text-stone-ink"
           style={{ fontSize: 24, letterSpacing: "-0.015em" }}
         >
           All caught up

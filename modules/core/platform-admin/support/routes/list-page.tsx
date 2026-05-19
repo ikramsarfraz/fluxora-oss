@@ -82,8 +82,8 @@ function FilterPills({
             })}
             className={
               current === option.value
-                ? "rounded-full border border-slate-900 bg-slate-900 px-3 py-1 text-xs font-medium text-white"
-                : "rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:border-slate-400 hover:text-foreground"
+                ? "rounded-full border border-slate-900 bg-ink-warm px-3 py-1 text-xs font-medium text-white"
+                : "rounded-full border px-3 py-1 text-xs font-medium text-muted-foreground hover:border-border-default hover:text-foreground"
             }
           >
             {option.label}

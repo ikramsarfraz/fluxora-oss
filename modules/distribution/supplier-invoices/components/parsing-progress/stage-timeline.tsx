@@ -174,7 +174,7 @@ function StageIndicator({ status }: { status: StageStatus }) {
         className="flex size-6 items-center justify-center rounded-full"
         style={{ background: COLORS.accent }}
       >
-        <span className="size-[10px] animate-pulse rounded-full bg-white" />
+        <span className="size-[10px] animate-pulse rounded-full bg-card" />
       </div>
     );
   }

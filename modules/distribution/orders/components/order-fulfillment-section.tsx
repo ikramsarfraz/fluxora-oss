@@ -180,9 +180,9 @@ function ProgressBar({
   const clamped = Math.max(0, Math.min(100, value));
   const barClass =
     tone === "complete"
-      ? "bg-emerald-500"
+      ? "bg-success-fg"
       : tone === "partial"
-        ? "bg-amber-500"
+        ? "bg-warning-fg"
         : "bg-muted-foreground/40";
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -286,11 +286,11 @@ export function OrderFulfillmentSection({
             className={cn(
               "flex h-9 w-9 items-center justify-center rounded-full",
               stats.status === "fulfilled" &&
-                "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+                "bg-success-fg/15 text-success-fg dark:text-success-fg",
               stats.status === "partial" &&
-                "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+                "bg-warning-fg/15 text-warning-fg dark:text-warning-fg",
               stats.status === "short_shipped" &&
-                "bg-slate-500/15 text-slate-700 dark:text-slate-300",
+                "bg-ink-warm/15 text-ink-warm dark:text-card-warm",
               stats.status === "not_started" &&
                 "bg-muted text-muted-foreground",
             )}
@@ -482,7 +482,7 @@ export function OrderFulfillmentSection({
                       {lineStatus.replaceAll("_", " ")}
                     </Badge>
                     {!reconciliation.reconciled ? (
-                      <div className="mt-1 text-[11px] text-amber-600">
+                      <div className="mt-1 text-[11px] text-warning-fg">
                         {reconciliation.warnings[0]}
                       </div>
                     ) : null}
@@ -491,11 +491,11 @@ export function OrderFulfillmentSection({
                     className={cn(
                       "text-right tabular-nums",
                       lineStatus === "fulfilled" &&
-                        "text-emerald-600 dark:text-emerald-400",
+                        "text-success-fg dark:text-success-fg",
                       lineStatus === "partial" &&
-                        "text-amber-600 dark:text-amber-400",
+                        "text-warning-fg dark:text-warning-fg",
                       lineStatus === "short_shipped" &&
-                        "text-slate-700 dark:text-slate-300",
+                        "text-ink-warm dark:text-card-warm",
                       lineStatus === "not_started" && "text-muted-foreground",
                     )}
                   >
@@ -721,7 +721,7 @@ function LotExpiryBadge({
         "text-[10px]",
         tone === "expired" && "border-destructive/40 text-destructive",
         tone === "warning" &&
-          "border-amber-400/40 text-amber-700 dark:text-amber-300",
+          "border-amber-400/40 text-warning-fg dark:text-warning-fg",
       )}
     >
       Exp {formatDisplayDate(date)}

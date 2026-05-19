@@ -39,7 +39,7 @@ export function LegalDocShell({
 
       <div className="relative z-10 mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
         <div className="mb-10 space-y-2 border-b border-border pb-8">
-          <h1 className="text-balance text-3xl font-semibold tracking-tight text-[oklch(0.22_0.03_230)] sm:text-4xl">
+          <h1 className="text-balance text-3xl font-medium tracking-tight text-[oklch(0.22_0.03_230)] sm:text-4xl">
             {title}
           </h1>
           <p className="text-sm text-muted-foreground">Effective / last updated: {lastUpdated}</p>

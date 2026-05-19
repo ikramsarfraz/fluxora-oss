@@ -55,7 +55,7 @@ export default async function AccountBillingPage(props: {
           </svg>
         </div>
         <div className="space-y-2">
-          <h2 className="text-xl font-semibold tracking-tight">No Profile Linked</h2>
+          <h2 className="text-xl font-medium tracking-tight">No Profile Linked</h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
             No portal profile is linked to this sign-in yet. Ask an administrator
             to invite you or complete onboarding before managing billing.

@@ -50,7 +50,7 @@ export function TenantSetupChecklistCard({ role }: Props) {
       <Card className="shadow-none border-dashed">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b border-stone-line pb-3">
           <div className="space-y-0.5">
-            <CardTitle className="text-sm font-semibold text-stone-ink">Get started</CardTitle>
+            <CardTitle className="text-sm font-medium text-stone-ink">Get started</CardTitle>
             <CardDescription className="text-xs text-stone-muted">
               Complete these steps to finish setting up your workspace (
               {data.completedCount}/{data.total}).

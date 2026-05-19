@@ -258,7 +258,7 @@ export function ListingPage<TRow>({
       {!hideHeader ? (
         <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
+            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-stone-ink">
               {title}
             </h1>
             {subtitle ? (

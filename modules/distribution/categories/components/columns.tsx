@@ -140,7 +140,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<Category>[] {
       cell: ({ row }) => {
         const isActive = row.getValue("isActive") as boolean;
         return isActive ? (
-          <Check className="h-4 w-4 text-green-600" />
+          <Check className="h-4 w-4 text-success-fg" />
         ) : (
           <X className="h-4 w-4 text-muted-foreground" />
         );

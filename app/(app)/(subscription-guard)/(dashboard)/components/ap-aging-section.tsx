@@ -38,7 +38,7 @@ export function ApAgingSection() {
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
         <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-semibold text-stone-ink">
+          <h2 className="text-sm font-medium text-stone-ink">
             Accounts payable aging
           </h2>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-muted">
@@ -85,7 +85,7 @@ function ApAgingContent({ data }: { data: ApAging }) {
     <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
       <Card className="shadow-none">
         <CardHeader className="border-b border-stone-line pb-3">
-          <CardTitle className="text-sm font-semibold text-stone-ink">Open balance</CardTitle>
+          <CardTitle className="text-sm font-medium text-stone-ink">Open balance</CardTitle>
           <CardDescription className="text-xs text-stone-muted">
             Completed supplier invoices with balance remaining.
           </CardDescription>
@@ -119,7 +119,7 @@ function TopSuppliersCard({ rows }: { rows: ApAgingSupplierRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Top unpaid suppliers</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Top unpaid suppliers</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           By overdue balance across open invoices.
         </CardDescription>
@@ -177,7 +177,7 @@ function RecentOverdueCard({ rows }: { rows: ApAgingInvoiceRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
       <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Recent overdue invoices</CardTitle>
+        <CardTitle className="text-sm font-medium text-stone-ink">Recent overdue invoices</CardTitle>
         <CardDescription className="text-xs text-stone-muted">
           Oldest past-due invoices, top 8.
         </CardDescription>

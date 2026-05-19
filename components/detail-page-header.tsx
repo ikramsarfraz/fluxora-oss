@@ -15,11 +15,11 @@ export function DetailPageHeader({
     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">{title}</h1>
+          <h1 className="font-serif text-[26px] font-medium tracking-[-0.02em] leading-tight text-balance text-ink">{title}</h1>
           {badge}
         </div>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm text-subtle mt-1">{description}</p>
         )}
       </div>
       {children && (

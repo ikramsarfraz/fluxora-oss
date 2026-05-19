@@ -34,7 +34,7 @@ export function TenantSubscriptionHealthBanner(props: {
 
   if (health === "trialing") {
     return (
-      <Alert className="border-amber-200 bg-amber-50/90 text-foreground dark:border-amber-900/70 dark:bg-amber-950/40 [&_svg]:text-amber-800 dark:[&_svg]:text-amber-200">
+      <Alert className="border-warning-border bg-warning-bg/90 text-foreground dark:border-amber-900/70 dark:bg-warning-fg/40 [&_svg]:text-warning-fg dark:[&_svg]:text-warning-fg">
         <AlertTriangle aria-hidden />
         <AlertTitle className="text-foreground">
           Trial ending soon

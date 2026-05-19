@@ -248,22 +248,22 @@ export function NewOrderLinesTable({
         <Table className="text-[13px]">
           <TableHeader>
             <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Product
               </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Unit
               </TableHead>
-              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Qty
               </TableHead>
-              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Weight (lbs)
               </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Price
               </TableHead>
-              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-semibold uppercase tracking-[0.04em] text-stone-muted">
+              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-stone-muted">
                 Total
               </TableHead>
               <TableHead className="h-auto w-7.5 px-2.5 pt-0 pb-2" />

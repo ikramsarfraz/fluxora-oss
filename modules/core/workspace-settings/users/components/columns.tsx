@@ -252,9 +252,9 @@ export function createColumns(
           <div className="flex items-center justify-center gap-1">
             <Badge variant="outline">
               {verified ? (
-                <Check className="h-4 w-4 text-green-700" />
+                <Check className="h-4 w-4 text-success-fg" />
               ) : (
-                <X className="h-4 w-4 text-red-700" />
+                <X className="h-4 w-4 text-danger-fg" />
               )}
               <span className="sr-only">
                 {verified ? "Verified" : "Not verified"}
@@ -329,9 +329,9 @@ export function createColumns(
           <div className="flex items-center justify-center gap-1">
             <Badge variant="outline">
               {user.isActive ? (
-                <Check className="h-4 w-4 text-green-700" />
+                <Check className="h-4 w-4 text-success-fg" />
               ) : (
-                <X className="h-4 w-4 text-red-700" />
+                <X className="h-4 w-4 text-danger-fg" />
               )}
               <span className="sr-only">
                 {user.isActive ? "Active" : "Inactive"}

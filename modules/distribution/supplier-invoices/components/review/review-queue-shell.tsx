@@ -490,7 +490,7 @@ function BulkImportLockBanner({
     <div
       role="status"
       aria-live="polite"
-      className="flex shrink-0 items-start gap-3 border-b border-stone-line bg-amber-50 px-4 py-2.5 text-[13px] text-stone-ink"
+      className="flex shrink-0 items-start gap-3 border-b border-stone-line bg-warning-bg px-4 py-2.5 text-[13px] text-stone-ink"
       style={{ background: "oklch(96% 0.06 80)" }}
     >
       <AlertTriangle

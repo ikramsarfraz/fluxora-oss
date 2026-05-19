@@ -248,7 +248,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
           <NewOrderCustomerCard control={form.control} />
           <div className="rounded-xl border bg-card p-6">
             <div className="mb-4">
-              <h2 className="text-lg font-semibold">Order details</h2>
+              <h2 className="text-lg font-medium">Order details</h2>
               <p className="text-sm text-muted-foreground">
                 Scheduling and notes for this order.
               </p>

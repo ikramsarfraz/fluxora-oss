@@ -225,11 +225,11 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
               expected === 0
                 ? "text-muted-foreground"
                 : lineStatus === "fulfilled"
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-success-fg dark:text-success-fg"
                   : lineStatus === "short_shipped"
-                    ? "text-slate-700 dark:text-slate-300"
+                    ? "text-ink-warm dark:text-card-warm"
                     : fulfilled > 0
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-warning-fg dark:text-warning-fg"
                     : "text-muted-foreground";
 
             return (
@@ -456,7 +456,7 @@ function LineBreakdown({
           </div>
         ) : null}
         {!reconciliation.reconciled ? (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="mb-3 rounded-md border border-warning-border bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg dark:border-amber-900/40 dark:bg-warning-fg/20 dark:text-warning-fg">
             {reconciliation.warnings.map(warning => (
               <div key={warning}>{warning}</div>
             ))}
@@ -501,7 +501,7 @@ function LineBreakdown({
             </div>
           ) : null}
           {traceability.warnings.length > 0 ? (
-            <div className="mt-2 space-y-1 text-xs text-amber-700 dark:text-amber-300">
+            <div className="mt-2 space-y-1 text-xs text-warning-fg dark:text-warning-fg">
               {traceability.warnings.map(warning => (
                 <div key={warning}>{warning}</div>
               ))}
@@ -743,7 +743,7 @@ function LotBadge({
         "text-[10px] font-mono",
         status === "expired" && "border-destructive/40 text-destructive",
         status === "warning" &&
-          "border-amber-400/40 text-amber-700 dark:text-amber-300",
+          "border-amber-400/40 text-warning-fg dark:text-warning-fg",
       )}
     >
       {label}

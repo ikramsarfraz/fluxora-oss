@@ -18,7 +18,7 @@ export function SettingsPageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-stone-line pb-5">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-stone-ink">
+        <h1 className="text-[22px] font-medium leading-tight tracking-[-0.02em] text-stone-ink">
           {title}
         </h1>
         {description ? (

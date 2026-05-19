@@ -113,7 +113,7 @@ export function PdfCanvas({
 
   return (
     <div ref={wrapperRef} className="relative inline-block">
-      <canvas ref={canvasRef} className="block bg-white shadow-[0_8px_24px_rgba(0,0,0,0.4)]" />
+      <canvas ref={canvasRef} className="block bg-card shadow-[0_8px_24px_rgba(0,0,0,0.4)]" />
       {result === null ? (
         <div
           className="absolute inset-0 flex items-center justify-center"
