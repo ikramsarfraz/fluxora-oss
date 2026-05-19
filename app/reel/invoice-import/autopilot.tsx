@@ -8,11 +8,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
   type ReactNode,
 } from "react";
 
-import { INITIAL_FILE } from "@/app/(app)/invoice-import/_demo/mock-data";
-import { useDemo } from "@/app/(app)/invoice-import/_demo/state";
+import { useReel } from "./_real/reel-state";
 
 type CursorTarget =
   | { selector: string; offsetX?: number; offsetY?: number }
@@ -41,8 +41,10 @@ export function useReelDirector(): DirectorContextValue {
   return ctx;
 }
 
+type ReelDispatch = ReturnType<typeof useReel>["dispatch"];
+
 type Controls = {
-  dispatch: ReturnType<typeof useDemo>["dispatch"];
+  dispatch: ReelDispatch;
   setCursor: (c: CursorTarget | null) => void;
   setCaption: (c: Caption) => void;
   setScene: (id: string | null) => void;
@@ -52,7 +54,7 @@ type Controls = {
 };
 
 export function ReelDirectorProvider({ children }: { children: ReactNode }) {
-  const { dispatch } = useDemo();
+  const { dispatch } = useReel();
   const [state, setState] = useState<DirectorState>({
     cursor: null,
     clickFlash: false,
@@ -101,9 +103,7 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
       isCancelled: () => cancelRef.current || cancelled,
     };
 
-    runScript(controls).catch(() => {
-      // Cancelled or interrupted — ignore.
-    });
+    runScript(controls).catch(() => {});
 
     return () => {
       cancelled = true;
@@ -122,210 +122,211 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
 async function runScript(c: Controls) {
   // Loop forever
   while (!c.isCancelled()) {
-    // ---- Scene 0: Reset to inventory ----
-    c.setScene("inventory");
+    // ---- Reset to Bills tab ----
     c.dispatch({ type: "RESTART" });
-    c.setCaption({
-      headline: "Stop typing invoices into your ERP.",
-      body: "Drop a supplier PDF — Fluxora handles the rest.",
-    });
     c.setCursor(null);
+
+    // ---- Scene 0: Hero / Bills archive ----
+    c.setScene("bills");
+    c.setCaption({
+      headline: "Stop typing invoices.",
+      body: "Bills lists what's already posted. Imports is where new PDFs land.",
+    });
     await c.sleep(2400);
     if (c.isCancelled()) return;
 
-    // ---- Scene 1: Click "Import invoice" ----
-    c.setCursor({ selector: "[data-reel='import-invoice']", offsetX: 60, offsetY: 16 });
+    // ---- Scene 1: Click "Bulk import" ----
+    c.setCaption({
+      headline: "Click Bulk import.",
+      body: "Bills moves out of the way; the Imports tab takes over.",
+    });
+    c.setCursor({ selector: "[data-reel='bulk-import']", offsetX: 60, offsetY: 16 });
     await c.sleep(1100);
     c.flash();
     await c.sleep(220);
-    c.dispatch({ type: "SET_STEP", step: "upload" });
+    c.dispatch({ type: "SET_TAB", tab: "inbox" });
+    c.dispatch({ type: "SET_STEP", step: "imports-empty" });
     c.setCursor(null);
-    await c.sleep(500);
+    await c.sleep(700);
 
-    // ---- Scene 2: Upload ----
-    c.setScene("upload");
+    // ---- Scene 2: Empty Imports tab — drop a file ----
+    c.setScene("imports-empty");
     c.setCaption({
       headline: "Drop in a supplier PDF.",
       body: "Single file or hundreds — they all import in parallel.",
     });
-    // Land on the cloud icon, roughly centered horizontally
-    c.setCursor({ selector: "[data-reel='dropzone']", offsetX: 260, offsetY: 70 });
-    await c.sleep(1100);
-    c.flash();
-    await c.sleep(180);
-    c.dispatch({ type: "ADD_FILES", files: [INITIAL_FILE] });
-    await c.sleep(900);
-
-    c.setCursor({ selector: "[data-reel='start-import']", offsetX: 50, offsetY: 16 });
-    await c.sleep(900);
+    c.setCursor({ selector: "[data-reel='dropzone']", offsetX: 320, offsetY: 130 });
+    await c.sleep(1300);
     c.flash();
     await c.sleep(200);
-    c.dispatch({ type: "SET_STEP", step: "scanning" });
+    c.dispatch({ type: "DROP_FILE" });
     c.setCursor(null);
-    await c.sleep(300);
+    await c.sleep(400);
 
-    // ---- Scene 3: Scanning auto-plays ----
-    c.setScene("scanning");
+    // ---- Scene 3: Scanning animation ----
+    c.setScene("imports-scanning");
     c.setCaption({
       headline: "AI reads the PDF.",
       body: "Header, line items, totals, and product matches — in seconds.",
     });
-    // ScanningStep auto-transitions to queue after ~4–5 s
-    await c.sleep(5200);
+    await c.sleep(3200);
+    c.dispatch({ type: "FINISH_SCAN" });
     if (c.isCancelled()) return;
 
-    // ---- Scene 4: Queue ----
-    c.setScene("queue");
+    // ---- Scene 4: Imports queue populated ----
+    c.setScene("imports-populated");
     c.setCaption({
-      headline: "Imports queued for review.",
-      body: "Open one to confirm matches and resolve any issues.",
+      headline: "One file in the queue.",
+      body: "Confidence, status, and the issues it found — at a glance.",
     });
-    await c.sleep(1200);
-    // Land on the supplier name cell, not the middle of the wide row
-    c.setCursor({ selector: "[data-reel='queue-row-first']", offsetX: 60, offsetY: 22 });
+    await c.sleep(2200);
+
+    // ---- Scene 5: Click the file row ----
+    c.setCursor({
+      selector: "[data-reel='file-row-file_inv2847']",
+      offsetX: 80,
+      offsetY: 22,
+    });
     await c.sleep(1000);
     c.flash();
     await c.sleep(180);
-    c.dispatch({ type: "SELECT_INVOICE", invoiceId: "inv_2847" });
-    c.dispatch({ type: "SET_STEP", step: "review" });
+    c.dispatch({ type: "OPEN_REVIEW" });
     c.setCursor(null);
-    await c.sleep(700);
+    await c.sleep(600);
 
-    // ---- Scene 5: Review — overview ----
+    // ---- Scene 6: Review screen — overview ----
     c.setScene("review-overview");
     c.setCaption({
-      headline: "Extracted data, alongside the source.",
-      body: "Hover any line to see where it came from on the PDF.",
+      headline: "The actual review screen.",
+      body: "Source PDF on the left, parsed data on the right. Click any line to follow it across.",
     });
-    await c.sleep(1600);
+    await c.sleep(2000);
 
-    // ---- Scene 6: Line highlight demo ----
-    c.setCursor({ selector: "[data-reel='line-line_1']", offsetX: 110, offsetY: 22 });
+    // Hover a clean line to show the cross-pane highlight
+    c.setCursor({ selector: "[data-reel='review-line-1']", offsetX: 120, offsetY: 28 });
     await c.sleep(700);
-    c.dispatch({ type: "SET_HIGHLIGHT", lineId: "line_1" });
+    c.dispatch({ type: "SET_ACTIVE_LINE", lineId: 1 });
     await c.sleep(1300);
-    c.dispatch({ type: "SET_HIGHLIGHT", lineId: null });
+    c.dispatch({ type: "SET_ACTIVE_LINE", lineId: null });
     await c.sleep(200);
 
-    // ---- Scene 7: Pick / create supplier ----
+    // ---- Scene 7: Pick supplier (Create supplier inline) ----
     c.setScene("supplier");
     c.setCaption({
-      headline: "Supplier not in your catalog? Create it inline.",
-      body: "Name, terms, currency — extracted and pre-filled.",
+      headline: "Supplier not in your catalog?",
+      body: "Create it inline. Name + terms are extracted from the PDF.",
     });
-    c.setCursor({ selector: "[data-reel='supplier-trigger']", offsetX: 80, offsetY: 18 });
+    c.setCursor({ selector: "[data-reel='create-supplier']", offsetX: 50, offsetY: 8 });
     await c.sleep(1100);
-    c.flash();
-    await c.sleep(220);
-    c.dispatch({
-      type: "CREATE_SUPPLIER",
-      supplier: {
-        id: "sup_northwind",
-        name: "Northwind Trading Co.",
-        defaultCurrency: "USD",
-        netDays: 30,
-      },
-    });
-    await c.sleep(1400);
-
-    // ---- Scene 8: Fix missing cost (line_2) ----
-    c.setScene("fix-cost");
-    c.setCaption({
-      headline: "Edit anything inline.",
-      body: "Line had a partial scan — fill in the cost and the total recomputes.",
-    });
-    c.setCursor({ selector: "[data-reel='line-line_2-cost']", offsetX: 40, offsetY: 16 });
-    await c.sleep(900);
     c.flash();
     await c.sleep(200);
     c.dispatch({
-      type: "UPDATE_LINE",
-      lineId: "line_2",
-      patch: { unitCost: 6.15, total: 221.4 },
+      type: "PICK_SUPPLIER",
+      supplierId: "sup_northwind",
+      name: "Northwind Trading Co.",
     });
-    await c.sleep(1300);
+    await c.sleep(1500);
 
-    // ---- Scene 9: Confirm suggestion + alias ----
+    // ---- Scene 8: Fix the partial-scan line (missing cost) ----
+    c.setScene("fix-cost");
+    c.setCaption({
+      headline: "Fill in what AI missed.",
+      body: "Line 2's cost didn't read — type 6.15 and the totals re-balance.",
+    });
+    c.setCursor({
+      selector: "[data-reel='line-2-fill-cost']",
+      offsetX: 40,
+      offsetY: 14,
+    });
+    await c.sleep(1100);
+    c.flash();
+    await c.sleep(200);
+    c.dispatch({ type: "FILL_LINE_COST", lineId: 2, unitCost: 6.15 });
+    await c.sleep(1500);
+
+    // ---- Scene 9: Confirm suggestion + alias added ----
     c.setScene("suggestion");
     c.setCaption({
       headline: "Confirm a suggested match.",
       body: "Fluxora remembers — next invoice from this supplier matches automatically.",
     });
-    c.setCursor({ selector: "[data-reel='line-line_3-picker']", offsetX: 70, offsetY: 22 });
+    c.setCursor({
+      selector: "[data-reel='line-3-candidate-0']",
+      offsetX: 60,
+      offsetY: 16,
+    });
     await c.sleep(1000);
     c.flash();
     await c.sleep(180);
-    c.dispatch({ type: "CONFIRM_SUGGESTION", lineId: "line_3", productId: "prod_bracket_l" });
-    await c.sleep(2000);
+    c.dispatch({
+      type: "CONFIRM_SUGGESTION",
+      lineId: 3,
+      productId: "prod_bracket_l",
+    });
+    await c.sleep(1800);
 
-    c.setCursor({ selector: "[data-reel='line-line_4-picker']", offsetX: 70, offsetY: 22 });
+    c.setCursor({
+      selector: "[data-reel='line-4-candidate-0']",
+      offsetX: 60,
+      offsetY: 16,
+    });
     await c.sleep(800);
     c.flash();
     await c.sleep(180);
-    c.dispatch({ type: "CONFIRM_SUGGESTION", lineId: "line_4", productId: "prod_fastener_kit" });
+    c.dispatch({
+      type: "CONFIRM_SUGGESTION",
+      lineId: 4,
+      productId: "prod_fastener_kit",
+    });
     await c.sleep(1600);
 
-    // ---- Scene 10: Create new product inline ----
+    // ---- Scene 10: Create new product on the unmatched line ----
     c.setScene("create-product");
     c.setCaption({
       headline: "New product? Create it from the line.",
-      body: "Name, SKU, category, unit, cost — all suggested.",
+      body: "Name, SKU, category, cost — all pre-filled.",
     });
-    c.setCursor({ selector: "[data-reel='line-line_5-create']", offsetX: 60, offsetY: 16 });
-    await c.sleep(1200);
+    c.setCursor({
+      selector: "[data-reel='line-5-create']",
+      offsetX: 50,
+      offsetY: 16,
+    });
+    await c.sleep(1100);
     c.flash();
     await c.sleep(200);
     c.dispatch({
-      type: "CREATE_PRODUCT",
-      lineId: "line_5",
-      draft: {
-        name: 'Pneumatic actuator — 1.5" stroke',
-        sku: "PA-1.5-NW",
-        category: "Drive components",
-        unit: "each",
-        cost: 62.5,
-      },
+      type: "CREATE_PRODUCT_FOR_LINE",
+      lineId: 5,
+      productId: "prod_pa15_new",
     });
-    await c.sleep(1400);
+    await c.sleep(1500);
 
-    // ---- Scene 11: Save ----
-    c.setScene("save");
+    // ---- Scene 11: Submit ----
+    c.setScene("submit");
     c.setCaption({
-      headline: "Save once. Everything updates.",
-      body: "Stock, costs, aliases, and expense charges in a single commit.",
+      headline: "Submit & post.",
+      body: "Stock, costs, aliases, and expense charges all commit at once.",
     });
-    c.setCursor({ selector: "[data-reel='save']", offsetX: 55, offsetY: 16 });
+    c.setCursor({ selector: "[data-reel='submit-review']", offsetX: 55, offsetY: 16 });
     await c.sleep(1200);
     c.flash();
     await c.sleep(200);
-    c.dispatch({ type: "SET_STEP", step: "saving" });
+    c.dispatch({ type: "SUBMIT_REVIEW" });
     c.setCursor(null);
-    // SaveStep auto-commits after ~1100ms
-    await c.sleep(1500);
-    if (c.isCancelled()) return;
+    await c.sleep(1200);
 
-    // ---- Scene 12: Saved ----
-    c.setScene("saved");
+    // ---- Scene 12: Back to Imports tab, row marked Reviewed ----
+    c.setScene("reviewed");
     c.setCaption({
-      headline: "Imported.",
-      body: "Products created, stock updated, aliases saved, charges posted.",
+      headline: "Posted.",
+      body: "Inventory's already updated. Aliases saved for next time.",
     });
-    await c.sleep(2400);
-
-    // ---- Scene 13: Back to inventory ----
-    c.dispatch({ type: "SET_STEP", step: "saved" });
-    await c.sleep(900);
-    c.setScene("inventory-post");
-    c.setCaption({
-      headline: "Back in inventory — already updated.",
-      body: "Newly affected rows are quietly marked.",
-    });
-    await c.sleep(2800);
+    await c.sleep(2600);
 
     // ---- Outro ----
     c.setScene("outro");
     c.setCaption({
-      headline: "Receive a PDF. Save an invoice. Stock is current.",
+      headline: "Receive a PDF. Post a bill. Stock is current.",
       body: "Try it free →",
     });
     await c.sleep(2200);
