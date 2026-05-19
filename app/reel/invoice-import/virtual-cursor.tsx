@@ -47,11 +47,11 @@ export function VirtualCursor({
         const el = frame.querySelector<HTMLElement>(cursor.selector);
         if (!el) return;
         const r = el.getBoundingClientRect();
-        // Default: 28% in from the left edge, 55% down. Lands near the start
-        // of the element's content (text/icon) rather than dead-center, which
-        // looks weird on wide table rows. Callers can override.
-        const offsetX = cursor.offsetX ?? Math.min(r.width * 0.28, 90);
-        const offsetY = cursor.offsetY ?? r.height * 0.55;
+        // Default: dead-center of the bounding rect — correct for buttons,
+        // chips, links, and dropzones. Override `offsetX`/`offsetY` for wide
+        // table rows where the cursor should land on the start (~20% in).
+        const offsetX = cursor.offsetX ?? r.width / 2;
+        const offsetY = cursor.offsetY ?? r.height / 2;
         setPos({
           x: r.left - frameRect.left + offsetX,
           y: r.top - frameRect.top + offsetY,

@@ -140,7 +140,8 @@ async function runScript(c: Controls) {
       headline: "Click Bulk import.",
       body: "Bills moves out of the way; the Imports tab takes over.",
     });
-    c.setCursor({ selector: "[data-reel='bulk-import']", offsetX: 60, offsetY: 16 });
+    // "Bulk import" button is ~110×32 (h-9 with the gap + icon + text)
+    c.setCursor({ selector: "[data-reel='bulk-import']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(220);
@@ -155,7 +156,8 @@ async function runScript(c: Controls) {
       headline: "Drop in a supplier PDF.",
       body: "Single file or hundreds — they all import in parallel.",
     });
-    c.setCursor({ selector: "[data-reel='dropzone']", offsetX: 320, offsetY: 130 });
+    // Dropzone is the full hero card (~880×280). Land near the upload icon.
+    c.setCursor({ selector: "[data-reel='dropzone']" });
     await c.sleep(1300);
     c.flash();
     await c.sleep(200);
@@ -181,34 +183,24 @@ async function runScript(c: Controls) {
     });
     await c.sleep(2200);
 
-    // ---- Scene 5: Click the file row ----
+    // ---- Scene 5: Click the file row's Review button ----
     c.setCursor({
-      selector: "[data-reel='file-row-file_inv2847']",
-      offsetX: 80,
-      offsetY: 22,
+      selector: "[data-reel='file-row-file_inv2847-review-button']",
     });
-    await c.sleep(1000);
+    await c.sleep(1100);
     c.flash();
-    await c.sleep(180);
+    await c.sleep(200);
     c.dispatch({ type: "OPEN_REVIEW" });
     c.setCursor(null);
     await c.sleep(600);
 
-    // ---- Scene 6: Review screen — overview ----
+    // ---- Scene 6: Review screen — overview + queue ----
     c.setScene("review-overview");
     c.setCaption({
       headline: "The actual review screen.",
-      body: "Source PDF on the left, parsed data on the right. Click any line to follow it across.",
+      body: "PDF on the left for reference. The whole batch sits in the queue strip up top — prev/next stays in flow.",
     });
-    await c.sleep(2000);
-
-    // Hover a clean line to show the cross-pane highlight
-    c.setCursor({ selector: "[data-reel='review-line-1']", offsetX: 120, offsetY: 28 });
-    await c.sleep(700);
-    c.dispatch({ type: "SET_ACTIVE_LINE", lineId: 1 });
-    await c.sleep(1300);
-    c.dispatch({ type: "SET_ACTIVE_LINE", lineId: null });
-    await c.sleep(200);
+    await c.sleep(2400);
 
     // ---- Scene 7: Pick supplier (Create supplier inline) ----
     c.setScene("supplier");
@@ -216,7 +208,7 @@ async function runScript(c: Controls) {
       headline: "Supplier not in your catalog?",
       body: "Create it inline. Name + terms are extracted from the PDF.",
     });
-    c.setCursor({ selector: "[data-reel='create-supplier']", offsetX: 50, offsetY: 8 });
+    c.setCursor({ selector: "[data-reel='create-supplier']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(200);
@@ -233,11 +225,7 @@ async function runScript(c: Controls) {
       headline: "Fill in what AI missed.",
       body: "Line 2's cost didn't read — type 6.15 and the totals re-balance.",
     });
-    c.setCursor({
-      selector: "[data-reel='line-2-fill-cost']",
-      offsetX: 40,
-      offsetY: 14,
-    });
+    c.setCursor({ selector: "[data-reel='line-2-fill-cost']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(200);
@@ -250,11 +238,7 @@ async function runScript(c: Controls) {
       headline: "Confirm a suggested match.",
       body: "Fluxora remembers — next invoice from this supplier matches automatically.",
     });
-    c.setCursor({
-      selector: "[data-reel='line-3-candidate-0']",
-      offsetX: 60,
-      offsetY: 16,
-    });
+    c.setCursor({ selector: "[data-reel='line-3-candidate-0']" });
     await c.sleep(1000);
     c.flash();
     await c.sleep(180);
@@ -265,11 +249,7 @@ async function runScript(c: Controls) {
     });
     await c.sleep(1800);
 
-    c.setCursor({
-      selector: "[data-reel='line-4-candidate-0']",
-      offsetX: 60,
-      offsetY: 16,
-    });
+    c.setCursor({ selector: "[data-reel='line-4-candidate-0']" });
     await c.sleep(800);
     c.flash();
     await c.sleep(180);
@@ -286,11 +266,7 @@ async function runScript(c: Controls) {
       headline: "New product? Create it from the line.",
       body: "Name, SKU, category, cost — all pre-filled.",
     });
-    c.setCursor({
-      selector: "[data-reel='line-5-create']",
-      offsetX: 50,
-      offsetY: 16,
-    });
+    c.setCursor({ selector: "[data-reel='line-5-create']" });
     await c.sleep(1100);
     c.flash();
     await c.sleep(200);
@@ -307,7 +283,7 @@ async function runScript(c: Controls) {
       headline: "Submit & post.",
       body: "Stock, costs, aliases, and expense charges all commit at once.",
     });
-    c.setCursor({ selector: "[data-reel='submit-review']", offsetX: 55, offsetY: 16 });
+    c.setCursor({ selector: "[data-reel='submit-review']" });
     await c.sleep(1200);
     c.flash();
     await c.sleep(200);

@@ -11,10 +11,10 @@ import {
 
 import {
   REVIEW_DATA,
+  batchView,
   emptyView,
   initialReelState,
   reviewedFileView,
-  singleFileView,
 } from "./mock-data";
 import type { ReelState, ReelStep, ReviewLine, Tab } from "./types";
 
@@ -43,7 +43,7 @@ function reducer(state: ReelState, action: Action): ReelState {
         ...state,
         step: "imports-scanning",
         activeTab: "inbox",
-        view: singleFileView(),
+        view: batchView(),
       };
     case "FINISH_SCAN":
       return { ...state, step: "imports-populated" };

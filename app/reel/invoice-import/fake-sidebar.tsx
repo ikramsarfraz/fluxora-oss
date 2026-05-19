@@ -68,7 +68,17 @@ const FOOTER: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
-export function FakeSidebar({ activeUrl = "/supplier-invoices" }: { activeUrl?: string }) {
+export function FakeSidebar({
+  activeUrl = "/supplier-invoices",
+  collapsed = false,
+}: {
+  activeUrl?: string;
+  collapsed?: boolean;
+}) {
+  if (collapsed) {
+    return <CollapsedSidebar activeUrl={activeUrl} />;
+  }
+
   return (
     <aside className="flex w-[16rem] shrink-0 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-2 text-sidebar-foreground">
       <div className="flex items-center gap-2 rounded-md p-2">
@@ -145,6 +155,57 @@ export function FakeSidebar({ activeUrl = "/supplier-invoices" }: { activeUrl?: 
             </span>
           </div>
           <ChevronsUpDown className="size-3 text-subtle" />
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function CollapsedSidebar({ activeUrl }: { activeUrl: string }) {
+  // Mirrors the production Sidebar `collapsible="icon"` width — 3rem rail
+  // with just the logomark + icon-only nav. Active item gets the same
+  // sidebar-accent treatment as the full sidebar.
+  const flat = NAV.flatMap((g) => g.items);
+  return (
+    <aside className="flex w-[3rem] shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-2 text-sidebar-foreground">
+      <div className="flex size-8 items-center justify-center">
+        <Logomark size={28} />
+      </div>
+      <div className="my-1 h-px w-6 bg-sidebar-border" />
+      <ul className="flex flex-col items-center gap-0.5">
+        {flat.map((item) => {
+          const Icon = item.icon;
+          const active = item.url === activeUrl;
+          return (
+            <li
+              key={item.url}
+              title={item.title}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md",
+                active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/80",
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-auto flex flex-col items-center gap-1">
+        {FOOTER.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div
+              key={item.url}
+              className="flex size-8 items-center justify-center rounded-md text-sidebar-foreground/80"
+            >
+              <Icon className="size-4 shrink-0" />
+            </div>
+          );
+        })}
+        <div className="flex size-7 items-center justify-center rounded-md bg-gold text-[10px] font-medium text-card-warm">
+          HR
         </div>
       </div>
     </aside>
