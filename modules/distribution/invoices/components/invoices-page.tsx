@@ -13,11 +13,11 @@ import type { SalesInvoiceListItem, SalesInvoiceListSort } from "../services/inv
 type InvoiceRow = SalesInvoiceListItem;
 
 const STATUS_PILL: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  sent: { label: "Sent", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  partially_paid: { label: "Partially paid", bg: "oklch(97% 0.04 70)", color: "oklch(60% 0.14 70)" },
-  paid: { label: "Paid", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  void: { label: "Void", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  draft: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  sent: { label: "Sent", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  partially_paid: { label: "Partially paid", bg: "var(--color-warning-bg)", color: "var(--color-warning-fg)" },
+  paid: { label: "Paid", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  void: { label: "Void", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 const COLUMNS: ListingColumn<InvoiceRow>[] = [
@@ -40,14 +40,14 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     render: row => ({
       primary: row.customer
         ? <span style={{ fontWeight: 500 }}>{row.customer.name}</span>
-        : <span style={{ color: "#78716c" }}>—</span>,
+        : <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
   {
     key: "status",
     header: "Status",
     render: row => {
-      const pill = STATUS_PILL[row.status] ?? { label: row.status, bg: "#f5f5f4", color: "#78716c" };
+      const pill = STATUS_PILL[row.status] ?? { label: row.status, bg: "var(--color-divider)", color: "var(--color-subtle)" };
       return { primary: <StatusPill label={pill.label} bg={pill.bg} color={pill.color} /> };
     },
   },
@@ -63,7 +63,7 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     render: row =>
       row.dueDate
         ? { primary: <MonoText>{formatDisplayDate(row.dueDate)}</MonoText> }
-        : { primary: <span style={{ color: "#78716c" }}>—</span> },
+        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
   },
   {
     key: "totalAmount",
@@ -79,7 +79,7 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
       const balance = Number(row.balanceDue);
       return {
         primary: (
-          <span style={{ fontWeight: balance > 0 ? 500 : 400, color: balance > 0 ? "#0c0a09" : "#78716c" }}>
+          <span style={{ fontWeight: balance > 0 ? 500 : 400, color: balance > 0 ? "var(--color-ink)" : "var(--color-subtle)" }}>
             <MonoText>{formatMoney(row.balanceDue)}</MonoText>
           </span>
         ),
@@ -114,7 +114,7 @@ export default function Invoices() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

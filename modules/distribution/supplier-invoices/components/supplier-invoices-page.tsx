@@ -54,7 +54,7 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
       primary: row.invoiceNumber ? (
         <MonoText>{row.invoiceNumber}</MonoText>
       ) : (
-        <span style={{ color: "#a8a29e" }}>—</span>
+        <span style={{ color: "var(--color-muted)" }}>—</span>
       ),
     }),
   },
@@ -64,7 +64,7 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     render: row => ({
       primary: row.supplier
         ? <span style={{ fontWeight: 500 }}>{row.supplier.name}</span>
-        : <span style={{ color: "#78716c" }}>—</span>,
+        : <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
   {
@@ -72,9 +72,9 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     header: "Status",
     render: row => {
       if (row.status === "completed") {
-        return { primary: <StatusPill label="Received" bg="oklch(96% 0.04 155)" color="oklch(58% 0.13 155)" /> };
+        return { primary: <StatusPill label="Received" bg="var(--color-success-bg)" color="var(--color-success-fg)" /> };
       }
-      return { primary: <StatusPill label="Draft" bg="#f5f5f4" color="#78716c" /> };
+      return { primary: <StatusPill label="Draft" bg="var(--color-divider)" color="var(--color-subtle)" /> };
     },
   },
   {
@@ -128,7 +128,7 @@ export default function SupplierInvoicesPage({
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

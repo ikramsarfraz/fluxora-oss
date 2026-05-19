@@ -4,11 +4,11 @@ import { Card } from "@/components/ui/card";
 import { Paperclip } from "lucide-react";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
   radius: "10px",
 } as const;
 

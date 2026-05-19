@@ -6,9 +6,9 @@ const TONES: Record<
   BatchFileStatus,
   { bg: string; fg: string; dot: string; label: string }
 > = {
-  reviewed:       { bg: "oklch(96% 0.03 155)", fg: "oklch(58% 0.13 155)", dot: "oklch(58% 0.13 155)", label: "Reviewed" },
+  reviewed:       { bg: "oklch(96% 0.03 155)", fg: "var(--color-success-fg)", dot: "var(--color-success-fg)", label: "Reviewed" },
   attention:      { bg: "oklch(96% 0.04 80)",  fg: "oklch(70% 0.16 70)",  dot: "oklch(70% 0.16 70)",  label: "Needs attention" },
-  "needs-review": { bg: "oklch(96% 0.03 25)",  fg: "oklch(58% 0.18 25)",  dot: "oklch(58% 0.18 25)",  label: "Needs review" },
+  "needs-review": { bg: "oklch(96% 0.03 25)",  fg: "var(--color-danger-fg)",  dot: "var(--color-danger-fg)",  label: "Needs review" },
   "parse-error":  { bg: "oklch(94% 0.05 25)",  fg: "oklch(48% 0.18 25)",  dot: "oklch(48% 0.18 25)",  label: "Couldn't read" },
 };
 

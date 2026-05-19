@@ -3,16 +3,16 @@
 import Link from "next/link";
 
 const c = {
-  card: "#ffffff",
-  text: "#18181b",
-  text2: "#52525b",
+  card: "var(--color-card)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
 } as const;
 
 export function ViewSwitcher({ activeView }: { activeView: "list" | "compare" }) {
   return (
     <div style={{
       display: "flex", gap: 4, padding: 4,
-      background: "#f4f4f5", borderRadius: 9,
+      background: "var(--color-divider)", borderRadius: 9,
       width: "fit-content", marginBottom: 20,
     }}>
       <Link href="/suppliers?view=list" style={{

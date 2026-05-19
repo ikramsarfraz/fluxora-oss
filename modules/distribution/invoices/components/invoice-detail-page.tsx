@@ -16,20 +16,20 @@ import { formatPhone } from "@/lib/utils/phone";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
-  bad: "oklch(58% 0.18 25)",
-  badSoft: "oklch(97% 0.04 25)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
+  bad: "var(--color-danger-fg)",
+  badSoft: "var(--color-danger-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -215,7 +215,7 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
             download
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", background: C.ink, color: "#fafaf9",
+              padding: "8px 14px", background: C.ink, color: "var(--color-page)",
               borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500, textDecoration: "none",
             }}
           >

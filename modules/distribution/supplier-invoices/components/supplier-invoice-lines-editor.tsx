@@ -38,16 +38,16 @@ import {
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 const T = {
-  surface: "#ffffff",
-  surfaceAlt: "#f5f5f4",
-  border: "#e7e5e4",
-  borderStrong: "#d4d1c7",
-  text: "#0c0a09",
-  muted: "#78716c",
-  mutedSoft: "#a8a29e",
-  accent: "oklch(60% 0.15 240)",
-  accentBorder: "oklch(60% 0.15 240 / 0.22)",
-  accentSoft: "oklch(96% 0.03 240)",
+  surface: "var(--color-card)",
+  surfaceAlt: "var(--color-divider)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  mutedSoft: "var(--color-muted)",
+  accent: "var(--color-info-fg)",
+  accentBorder: "color-mix(in oklch, var(--color-info-border) 80%, transparent)",
+  accentSoft: "var(--color-info-bg)",
   mono: "var(--font-mono)",
 } as const;
 
@@ -169,8 +169,8 @@ function Segmented({
           type="button"
           onClick={() => !disabled && onChange(o.v)}
           style={{
-            background: value === o.v ? "#0c0a09" : "transparent",
-            color: value === o.v ? "#fff" : T.muted,
+            background: value === o.v ? "var(--color-ink)" : "transparent",
+            color: value === o.v ? "var(--color-card)" : T.muted,
             border: "none",
             padding: "6px 12px",
             borderRadius: 5,
@@ -427,12 +427,14 @@ function CostDiffCallout({
       : null;
   const accent =
     variant === "new"
-      ? "oklch(58% 0.13 155)"
+      ? "var(--color-success-fg)"
       : "oklch(60% 0.16 35)";
   const accentSoft =
     variant === "new" ? "oklch(95% 0.04 155 / 0.55)" : "oklch(95% 0.05 60 / 0.6)";
   const accentBorder =
-    variant === "new" ? "oklch(58% 0.13 155 / 0.3)" : "oklch(60% 0.16 35 / 0.3)";
+    variant === "new"
+      ? "color-mix(in oklch, var(--color-success-fg) 30%, transparent)"
+      : "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)";
 
   return (
     <div
@@ -499,7 +501,7 @@ function CostDiffCallout({
             {deltaPct != null ? (
               <span
                 style={{
-                  color: deltaPct >= 0 ? accent : "oklch(58% 0.13 155)",
+                  color: deltaPct >= 0 ? accent : "var(--color-success-fg)",
                   fontWeight: 500,
                 }}
               >
@@ -788,7 +790,7 @@ function LineRow({
                     borderRadius: 8,
                     border: `1px solid ${
                       fieldState.invalid
-                        ? "oklch(0.55 0.22 25)"
+                        ? "var(--color-danger-fg)"
                         : T.border
                     }`,
                     fontSize: 14,

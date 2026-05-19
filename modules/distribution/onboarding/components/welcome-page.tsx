@@ -7,20 +7,20 @@ import { captureClientEvent } from "@/lib/posthog-client";
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const c = {
-  bg: "#f7f7f8",
-  card: "#ffffff",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
-  accent: "#18181b",
+  bg: "var(--color-surface)",
+  card: "var(--color-card)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
+  accent: "var(--color-ink)",
   purple: "#7c3aed",
   purpleBg: "#f5f3ff",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
 };
 
@@ -36,7 +36,7 @@ const CATEGORIES: Array<{
 }> = [
   { id: "meat_poultry", emoji: "🥩", label: "Meat & poultry", hint: "Variable weight, catch-weight, USDA grade tracking", bg: "#fecaca" },
   { id: "seafood", emoji: "🦞", label: "Seafood", hint: "Variable weight, COA required, 28°F target", bg: "#bfdbfe" },
-  { id: "produce", emoji: "🥦", label: "Produce", hint: "By case or weight, country-of-origin tracking", bg: "#bbf7d0" },
+  { id: "produce", emoji: "🥦", label: "Produce", hint: "By case or weight, country-of-origin tracking", bg: "var(--color-success-border)" },
   { id: "bakery_dry", emoji: "🥖", label: "Bakery / dry", hint: "Fixed cases, ambient storage, expiry windows", bg: "#fef3c7" },
 ];
 
@@ -51,8 +51,8 @@ const BILL_SOURCES: Array<{ id: BillSource; emoji: string; label: string }> = [
 
 function StepNum({ n, status }: { n: number; status: "done" | "active" | "pending" }) {
   const styles = {
-    done: { bg: c.green, color: "#fff" },
-    active: { bg: c.accent, color: "#fff" },
+    done: { bg: c.green, color: "var(--color-card)" },
+    active: { bg: c.accent, color: "var(--color-card)" },
     pending: { bg: c.border, color: c.text3 },
   }[status];
 
@@ -164,7 +164,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                   height: 28,
                   borderRadius: 7,
                   background: c.accent,
-                  color: "#fff",
+                  color: "var(--color-card)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -190,7 +190,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                 style={{
                   width: 80,
                   height: 4,
-                  background: "#f4f4f5",
+                  background: "var(--color-divider)",
                   borderRadius: 2,
                   overflow: "hidden",
                 }}
@@ -255,7 +255,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                       fontSize: 13.5,
                       fontFamily: "inherit",
                       width: "100%",
-                      background: "#fff",
+                      background: "var(--color-card)",
                     }}
                   />
                   <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 10 }}>
@@ -270,7 +270,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                         borderRadius: 8,
                         fontSize: 13.5,
                         fontFamily: "inherit",
-                        background: "#fff",
+                        background: "var(--color-card)",
                       }}
                     />
                     <select
@@ -282,7 +282,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                         borderRadius: 8,
                         fontSize: 13.5,
                         fontFamily: "inherit",
-                        background: "#fff",
+                        background: "var(--color-card)",
                       }}
                     >
                       <option value="">Team size</option>
@@ -335,7 +335,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                         padding: "10px 12px",
                         border: `1px solid ${category === cat.id ? c.accent : c.border}`,
                         borderRadius: 8,
-                        background: category === cat.id ? "#fafafa" : "#fff",
+                        background: category === cat.id ? "var(--color-page)" : "var(--color-card)",
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
@@ -403,7 +403,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                       padding: "10px 12px",
                       border: `1px solid ${billSource === src.id ? c.accent : c.border}`,
                       borderRadius: 8,
-                      background: billSource === src.id ? "#fafafa" : "#fff",
+                      background: billSource === src.id ? "var(--color-page)" : "var(--color-card)",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -442,7 +442,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                     borderRadius: 7,
                     fontSize: 13,
                     fontWeight: 500,
-                    background: "#fff",
+                    background: "var(--color-card)",
                     color: c.text,
                     cursor: "pointer",
                     fontFamily: "inherit",
@@ -460,8 +460,8 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                   borderRadius: 7,
                   fontSize: 13,
                   fontWeight: 600,
-                  background: canAdvance() ? c.accent : "#f4f4f5",
-                  color: canAdvance() ? "#fff" : c.text3,
+                  background: canAdvance() ? c.accent : "var(--color-divider)",
+                  color: canAdvance() ? "var(--color-card)" : c.text3,
                   cursor: canAdvance() && !isSubmitting ? "pointer" : "not-allowed",
                   fontFamily: "inherit",
                 }}
@@ -477,7 +477,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
           style={{
             background: "linear-gradient(135deg, #6d28d9 0%, #7c3aed 50%, #8b5cf6 100%)",
             padding: "40px 36px",
-            color: "#fff",
+            color: "var(--color-card)",
             display: "flex",
             flexDirection: "column",
           }}
@@ -550,7 +550,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                       fontSize: 10.5,
                       fontWeight: 700,
                       background: item.color,
-                      color: "#fff",
+                      color: "var(--color-card)",
                       flexShrink: 0,
                     }}
                   >

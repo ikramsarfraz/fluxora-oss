@@ -4,10 +4,10 @@ export function ConfidenceBar({ value }: { value: number }) {
   const clamped = Math.max(0, Math.min(100, value));
   const color =
     clamped >= 70
-      ? "oklch(58% 0.13 155)"
+      ? "var(--color-success-fg)"
       : clamped >= 50
         ? "oklch(70% 0.16 70)"
-        : "oklch(58% 0.18 25)";
+        : "var(--color-danger-fg)";
 
   return (
     <div className="flex items-center gap-2">

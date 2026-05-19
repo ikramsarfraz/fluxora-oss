@@ -40,7 +40,7 @@ const COLUMNS: ListingColumn<LotRow>[] = [
       return {
         primary: product
           ? <span style={{ fontWeight: 500 }}>{product.name}</span>
-          : <span style={{ color: "#78716c" }}>—</span>,
+          : <span style={{ color: "var(--color-subtle)" }}>—</span>,
         secondary: sourceInvoices[0]?.invoiceNumber,
       };
     },
@@ -70,7 +70,7 @@ const COLUMNS: ListingColumn<LotRow>[] = [
     align: "right",
     render: row => {
       const totals = getLotTotals(row);
-      return { primary: <span style={{ color: "#44403c" }}>{totals.inventoryItemCount}</span> };
+      return { primary: <span style={{ color: "var(--color-ink-warm)" }}>{totals.inventoryItemCount}</span> };
     },
   },
   {
@@ -147,7 +147,7 @@ export default function Lots() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
+      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
         {(error as Error).message}{" "}
         <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
           Retry

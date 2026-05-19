@@ -143,14 +143,14 @@ function downloadCsv(content: string, filename: string) {
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
 const c = {
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   red: "#dc2626",
   redBg: "#fef2f2",
@@ -173,8 +173,8 @@ function Stepper({ current }: { current: Step }) {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <div style={{
                 width: 24, height: 24, borderRadius: "50%",
-                background: done ? c.green : active ? c.text : "#e4e4e7",
-                color: done || active ? "#fff" : c.text3,
+                background: done ? c.green : active ? c.text : "var(--color-border-default)",
+                color: done || active ? "var(--color-card)" : c.text3,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 700, flexShrink: 0,
               }}>
@@ -185,7 +185,7 @@ function Stepper({ current }: { current: Step }) {
               </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ flex: 1, height: 1, background: done ? c.green : "#e4e4e7", margin: "0 8px", marginBottom: 18 }} />
+              <div style={{ flex: 1, height: 1, background: done ? c.green : "var(--color-border-default)", margin: "0 8px", marginBottom: 18 }} />
             )}
           </div>
         );
@@ -336,7 +336,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                 style={{
                   border: `2px dashed ${c.borderStrong}`, borderRadius: 10,
                   padding: "40px 24px", textAlign: "center", cursor: "pointer",
-                  background: "#fafafa", marginBottom: 16,
+                  background: "var(--color-page)", marginBottom: 16,
                   transition: "border-color 0.15s",
                 }}
               >
@@ -349,7 +349,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                 <span>Required columns: {config.columns.filter(c => c.required).map(c => c.label).join(", ")}</span>
                 <button onClick={downloadTemplate} style={{
                   display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
-                  border: `1px solid ${c.borderStrong}`, borderRadius: 6, background: "#fff",
+                  border: `1px solid ${c.borderStrong}`, borderRadius: 6, background: "var(--color-card)",
                   cursor: "pointer", fontSize: 12, color: c.text2, fontFamily: "inherit",
                 }}>
                   <Download size={12} /> Download template
@@ -368,7 +368,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
 
               {/* Preview of first 3 rows */}
               <div style={{ border: `1px solid ${c.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ padding: "8px 12px", background: "#f4f4f5", fontSize: 11, fontWeight: 600, color: c.text2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <div style={{ padding: "8px 12px", background: "var(--color-divider)", fontSize: 11, fontWeight: 600, color: c.text2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   CSV preview (first 3 rows)
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -376,7 +376,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                     <thead>
                       <tr>
                         {csvHeaders.slice(0, 5).map(h => (
-                          <th key={h} style={{ padding: "6px 10px", textAlign: "left", background: "#fafafa", borderBottom: `1px solid ${c.border}`, fontWeight: 600, color: c.text2, whiteSpace: "nowrap" }}>
+                          <th key={h} style={{ padding: "6px 10px", textAlign: "left", background: "var(--color-page)", borderBottom: `1px solid ${c.border}`, fontWeight: 600, color: c.text2, whiteSpace: "nowrap" }}>
                             {h}
                           </th>
                         ))}
@@ -426,12 +426,12 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={() => setStep(0)} style={{
-                  padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "#fff",
+                  padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "var(--color-card)",
                   color: c.text2, border: `1px solid ${c.borderStrong}`, cursor: "pointer", fontFamily: "inherit",
                 }}>Back</button>
                 <button onClick={handleMap} style={{
                   padding: "7px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600,
-                  background: c.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: "inherit",
+                  background: c.text, color: "var(--color-card)", border: "none", cursor: "pointer", fontFamily: "inherit",
                 }}>Validate →</button>
               </div>
             </div>
@@ -466,20 +466,20 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
               )}
 
               {validRows.length === 0 && (
-                <div style={{ padding: "16px", background: "#fafafa", border: `1px solid ${c.border}`, borderRadius: 8, fontSize: 13, color: c.text2, marginBottom: 16 }}>
+                <div style={{ padding: "16px", background: "var(--color-page)", border: `1px solid ${c.border}`, borderRadius: 8, fontSize: 13, color: c.text2, marginBottom: 16 }}>
                   No valid rows to import. Fix errors or check your column mapping.
                 </div>
               )}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button onClick={() => setStep(1)} style={{
-                  padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "#fff",
+                  padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "var(--color-card)",
                   color: c.text2, border: `1px solid ${c.borderStrong}`, cursor: "pointer", fontFamily: "inherit",
                 }}>Back</button>
                 {errors.length > 0 && (
                   <button onClick={downloadErrors} style={{
                     display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px",
-                    borderRadius: 7, fontSize: 12.5, background: "#fff", color: c.red,
+                    borderRadius: 7, fontSize: 12.5, background: "var(--color-card)", color: c.red,
                     border: `1px solid ${c.redBorder}`, cursor: "pointer", fontFamily: "inherit",
                   }}>
                     <Download size={13} /> Download errors
@@ -488,7 +488,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                 {validRows.length > 0 && (
                   <button onClick={() => setStep(3)} style={{
                     padding: "7px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600,
-                    background: c.text, color: "#fff", border: "none", cursor: "pointer", fontFamily: "inherit",
+                    background: c.text, color: "var(--color-card)", border: "none", cursor: "pointer", fontFamily: "inherit",
                   }}>Continue →</button>
                 )}
               </div>
@@ -504,7 +504,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                 </div>
               ) : (
                 <div>
-                  <div style={{ padding: "20px", background: "#fafafa", border: `1px solid ${c.border}`, borderRadius: 10, marginBottom: 20 }}>
+                  <div style={{ padding: "20px", background: "var(--color-page)", border: `1px solid ${c.border}`, borderRadius: 10, marginBottom: 20 }}>
                     <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
                       Import {validRows.length} {config.displayName.toLowerCase()}
                     </div>
@@ -516,12 +516,12 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
                   </div>
                   <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                     <button onClick={() => setStep(2)} style={{
-                      padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "#fff",
+                      padding: "7px 14px", borderRadius: 7, fontSize: 13, background: "var(--color-card)",
                       color: c.text2, border: `1px solid ${c.borderStrong}`, cursor: "pointer", fontFamily: "inherit",
                     }}>Back</button>
                     <button onClick={handleApply} style={{
                       padding: "7px 16px", borderRadius: 7, fontSize: 13, fontWeight: 600,
-                      background: c.green, color: "#fff", border: "none", cursor: "pointer", fontFamily: "inherit",
+                      background: c.green, color: "var(--color-card)", border: "none", cursor: "pointer", fontFamily: "inherit",
                     }}>
                       Import {validRows.length} rows →
                     </button>

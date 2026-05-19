@@ -38,15 +38,15 @@ export function LineCostDiffBanner({
       ? ((liveNum - recordedNum) / recordedNum) * 100
       : null;
   const accent =
-    variant === "new" ? "oklch(58% 0.13 155)" : "oklch(60% 0.16 35)";
+    variant === "new" ? "var(--color-success-fg)" : "oklch(60% 0.16 35)";
   const accentSoft =
     variant === "new"
-      ? "oklch(95% 0.04 155 / 0.55)"
-      : "oklch(95% 0.05 60 / 0.6)";
+      ? "color-mix(in oklch, var(--color-success-bg) 90%, transparent)"
+      : "color-mix(in oklch, var(--color-warning-bg) 90%, transparent)";
   const accentBorder =
     variant === "new"
-      ? "oklch(58% 0.13 155 / 0.3)"
-      : "oklch(60% 0.16 35 / 0.3)";
+      ? "color-mix(in oklch, var(--color-success-fg) 30%, transparent)"
+      : "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)";
 
   return (
     <div
@@ -100,7 +100,7 @@ export function LineCostDiffBanner({
               <span
                 className="font-medium"
                 style={{
-                  color: deltaPct >= 0 ? accent : "oklch(58% 0.13 155)",
+                  color: deltaPct >= 0 ? accent : "var(--color-success-fg)",
                 }}
               >
                 ({deltaPct >= 0 ? "+" : ""}

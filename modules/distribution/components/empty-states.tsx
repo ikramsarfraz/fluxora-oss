@@ -42,7 +42,7 @@ export function InboxEmptyState() {
           <div
             key={card.label}
             style={{
-              background: "#f5f5f4",
+              background: "var(--color-divider)",
               border: "1px dashed #d4d4d8",
               borderRadius: 12,
               padding: "20px 18px",
@@ -50,10 +50,10 @@ export function InboxEmptyState() {
             }}
           >
             <div style={{ fontSize: 28, marginBottom: 8 }}>{card.emoji}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#52525b", marginBottom: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-subtle)", marginBottom: 4 }}>
               {card.label}
             </div>
-            <div style={{ fontSize: 12, color: "#a1a1aa" }}>{card.hint}</div>
+            <div style={{ fontSize: 12, color: "var(--color-muted)" }}>{card.hint}</div>
           </div>
         ))}
       </div>

@@ -222,7 +222,7 @@ function SummaryStrip({
         <div className="h-1.5 w-40 overflow-hidden rounded-md bg-divider">
           <div
             className="h-full rounded-md"
-            style={{ width: `${ratio * 100}%`, background: "oklch(58% 0.13 155)" }}
+            style={{ width: `${ratio * 100}%`, background: "var(--color-success-fg)" }}
           />
         </div>
       </div>

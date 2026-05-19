@@ -23,10 +23,10 @@ function InboxSkeleton() {
         <Skeleton width={260} height={32} borderRadius={6} style={{ marginBottom: 8 }} />
         <Skeleton width={320} height={16} borderRadius={4} />
       </div>
-      <div style={{ height: 80, background: "#f4f4f5", borderRadius: 14, marginBottom: 22 }} />
+      <div style={{ height: 80, background: "var(--color-divider)", borderRadius: 14, marginBottom: 22 }} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 22 }}>
         {[0, 1, 2, 3, 4, 5].map(i => (
-          <div key={i} style={{ height: 76, background: "#fff", border: "1px solid #e7e7ea", borderRadius: 10 }} />
+          <div key={i} style={{ height: 76, background: "var(--color-card)", border: "1px solid #e7e7ea", borderRadius: 10 }} />
         ))}
       </div>
     </div>

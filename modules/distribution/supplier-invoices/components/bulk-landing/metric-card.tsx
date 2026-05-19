@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 type Tone = "good" | "warn" | "neutral";
 
 const TONE_COLOR: Record<Tone, string | undefined> = {
-  good: "oklch(58% 0.13 155)",
+  good: "var(--color-success-fg)",
   warn: "oklch(70% 0.16 70)",
   neutral: undefined,
 };

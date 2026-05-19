@@ -33,23 +33,23 @@ import { PageError } from "@/components/page-error";
 
 // ── Design tokens (inline, same pattern as inbox-shell) ───────────────────
 const c = {
-  bg: "#f7f7f8",
-  card: "#ffffff",
-  border: "#e7e7ea",
-  borderStrong: "#d4d4d8",
-  text: "#18181b",
-  text2: "#52525b",
-  text3: "#a1a1aa",
-  green: "#16a34a",
-  greenBg: "#f0fdf4",
-  greenBorder: "#bbf7d0",
+  bg: "var(--color-surface)",
+  card: "var(--color-card)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  text2: "var(--color-subtle)",
+  text3: "var(--color-muted)",
+  green: "var(--color-success-fg)",
+  greenBg: "var(--color-success-bg)",
+  greenBorder: "var(--color-success-border)",
   amber: "#d97706",
   amberBg: "#fffbeb",
   amberBorder: "#fde68a",
   red: "#dc2626",
   redBg: "#fef2f2",
   redBorder: "#fecaca",
-  blue: "#2563eb",
+  blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
   purple: "#7c3aed",
@@ -117,7 +117,7 @@ function Pill({
     green: { bg: c.greenBg, color: c.green, border: c.greenBorder },
     amber: { bg: c.amberBg, color: c.amber, border: c.amberBorder },
     blue: { bg: c.blueBg, color: c.blue, border: c.blueBorder },
-    gray: { bg: "#f4f4f5", color: c.text2, border: c.border },
+    gray: { bg: "var(--color-divider)", color: c.text2, border: c.border },
   }[tone];
 
   return (
@@ -153,13 +153,13 @@ function Btn({
 }) {
   const styles: Record<string, React.CSSProperties> = {
     default: {
-      background: "#fff",
+      background: "var(--color-card)",
       color: c.text,
       border: `1px solid ${c.borderStrong}`,
     },
     primary: {
       background: c.text,
-      color: "#fff",
+      color: "var(--color-card)",
       border: `1px solid ${c.text}`,
     },
     ghost: {
@@ -169,7 +169,7 @@ function Btn({
     },
     green: {
       background: c.green,
-      color: "#fff",
+      color: "var(--color-card)",
       border: `1px solid ${c.green}`,
     },
   };
@@ -245,7 +245,7 @@ function OptionCard({
             top: -8,
             right: 12,
             background: c.green,
-            color: "#fff",
+            color: "var(--color-card)",
             fontSize: 9,
             fontWeight: 700,
             letterSpacing: "0.05em",
@@ -457,7 +457,7 @@ function MarkdownDetailPanel({
               height: 38,
               borderRadius: 10,
               background: c.green,
-              color: "#fff",
+              color: "var(--color-card)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -613,7 +613,7 @@ function MarkdownDetailPanel({
                     fontSize: 11,
                     fontWeight: 600,
                     border: `1px solid ${pt === discountPct ? c.green : c.border}`,
-                    background: pt === discountPct ? c.greenBg : "#fff",
+                    background: pt === discountPct ? c.greenBg : "var(--color-card)",
                     color: pt === discountPct ? c.green : c.text2,
                     cursor: "pointer",
                     fontFamily: "ui-monospace,monospace",
@@ -639,7 +639,7 @@ function MarkdownDetailPanel({
                     padding: "8px 10px",
                     borderRadius: 7,
                     border: `1px solid ${channels.includes(ch.id) ? c.blue : c.border}`,
-                    background: channels.includes(ch.id) ? c.blueBg : "#fff",
+                    background: channels.includes(ch.id) ? c.blueBg : "var(--color-card)",
                     cursor: "pointer",
                     fontSize: 13,
                   }}
@@ -673,7 +673,7 @@ function MarkdownDetailPanel({
                     padding: "8px 10px",
                     borderRadius: 7,
                     border: `1px solid ${notifMethods.includes(n.id) ? c.blue : c.border}`,
-                    background: notifMethods.includes(n.id) ? c.blueBg : "#fff",
+                    background: notifMethods.includes(n.id) ? c.blueBg : "var(--color-card)",
                     cursor: "pointer",
                     fontSize: 13,
                   }}
@@ -695,7 +695,7 @@ function MarkdownDetailPanel({
         </div>
 
         {/* Right: live financial outcome */}
-        <div style={{ padding: "20px 22px", background: "#fafafa" }}>
+        <div style={{ padding: "20px 22px", background: "var(--color-page)" }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
             Live financial outcome
           </div>
@@ -703,7 +703,7 @@ function MarkdownDetailPanel({
           {/* Itemized math */}
           <div
             style={{
-              background: "#fff",
+              background: "var(--color-card)",
               border: `1px solid ${c.border}`,
               borderRadius: 10,
               overflow: "hidden",
@@ -770,7 +770,7 @@ function MarkdownDetailPanel({
           {/* Sell-through projection */}
           <div
             style={{
-              background: "#fff",
+              background: "var(--color-card)",
               border: `1px solid ${c.border}`,
               borderRadius: 10,
               padding: 14,
@@ -1228,7 +1228,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
                 <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
                   System recommends
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: "#fff" }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "var(--color-card)" }}>
                   {OPTION_META[recommendation.option.option as OptionKey].label} · {fmtUsd(recommendation.option.expectedNet)} expected net
                 </div>
                 <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.6)", marginTop: 3 }}>
@@ -1248,7 +1248,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
                   borderRadius: 7,
                   fontSize: 13,
                   fontWeight: 500,
-                  background: "#fff",
+                  background: "var(--color-card)",
                   color: c.text,
                   border: "1px solid #fff",
                   cursor: "pointer",
@@ -1382,7 +1382,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
                 { label: "Tax deduction", value: `$${(landedCostPerLb * qtyLbs).toFixed(2)}`, meta: "at cost · effective benefit at 30% tax rate" },
                 { label: "Documentation", value: "Auto-generated", meta: "COA + weight cert + receipt" },
               ].map(f => (
-                <div key={f.label} style={{ padding: "12px 14px", background: "#fafafa", borderRadius: 8 }}>
+                <div key={f.label} style={{ padding: "12px 14px", background: "var(--color-page)", borderRadius: 8 }}>
                   <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text3, marginBottom: 4 }}>
                     {f.label}
                   </div>
@@ -1440,7 +1440,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
           style={{
             position: "sticky",
             bottom: 16,
-            background: "#fff",
+            background: "var(--color-card)",
             border: `1px solid ${c.borderStrong}`,
             borderRadius: 14,
             padding: "14px 20px",
@@ -1492,7 +1492,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
                 fontSize: 14,
                 fontWeight: 600,
                 background: c.green,
-                color: "#fff",
+                color: "var(--color-card)",
                 border: `1px solid ${c.green}`,
                 cursor: isApplying ? "not-allowed" : "pointer",
                 opacity: isApplying ? 0.7 : 1,

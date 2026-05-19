@@ -37,7 +37,7 @@ export function ProgressBar({
         position: "relative",
         height,
         width: "100%",
-        background: "#f4f4f5",
+        background: "var(--color-divider)",
         borderRadius: height / 2,
         overflow: "hidden",
       }}

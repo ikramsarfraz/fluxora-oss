@@ -14,18 +14,18 @@ type Data = Awaited<ReturnType<typeof getBankActivity>>;
 type Transaction = Data["transactions"][number];
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
@@ -97,13 +97,13 @@ export function BankActivityShell({ data }: { data: Data }) {
             minWidth: 160,
           }}
         >
-          <div style={{ fontSize: 11, color: "#a8a29e", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
             Total cash
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", fontFamily: C.mono }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--color-card)", fontFamily: C.mono }}>
             ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: 11, color: "#78716c", marginTop: 4 }}>
+          <div style={{ fontSize: 11, color: "var(--color-subtle)", marginTop: 4 }}>
             {data.accounts.length} account{data.accounts.length !== 1 ? "s" : ""}
           </div>
         </div>
@@ -182,7 +182,7 @@ export function BankActivityShell({ data }: { data: Data }) {
                   ? isPending ? C.warnSoft : C.ink
                   : C.surface,
                 color: isActive
-                  ? isPending ? C.warn : "#fff"
+                  ? isPending ? C.warn : "var(--color-card)"
                   : isPending ? C.warn : C.ink2,
                 cursor: "pointer",
                 display: "flex",
@@ -302,7 +302,7 @@ function TransactionRow({
           alignItems: "center",
           padding: "12px 16px",
           borderBottom: isLast && !expanded ? "none" : `1px solid ${C.line2}`,
-          background: expanded ? "#fafaf9" : C.surface,
+          background: expanded ? "var(--color-page)" : C.surface,
           cursor: isPendingReview ? "pointer" : undefined,
         }}
         onClick={isPendingReview ? onToggle : undefined}
@@ -414,7 +414,7 @@ function TransactionRow({
               onClick={() => setLinkSheetOpen(true)}
               style={{
                 padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                background: C.ink, color: "#fff", border: "none", cursor: "pointer",
+                background: C.ink, color: "var(--color-card)", border: "none", cursor: "pointer",
                 fontFamily: "inherit",
               }}
             >
@@ -579,7 +579,7 @@ function StateIcon({ state, pending }: { state: string; pending: boolean }) {
   if (pending) {
     return (
       <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #a8a29e", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8a29e" }} />
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-muted)" }} />
       </div>
     );
   }
@@ -587,7 +587,7 @@ function StateIcon({ state, pending }: { state: string; pending: boolean }) {
     return (
       <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.good, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M2 5l2.5 2.5 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2 5l2.5 2.5 4-4" stroke="var(--color-card)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
     );
@@ -595,7 +595,7 @@ function StateIcon({ state, pending }: { state: string; pending: boolean }) {
   if (state === "pending_review") {
     return (
       <div style={{ width: 20, height: 20, borderRadius: "50%", background: C.warn, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>?</span>
+        <span style={{ color: "var(--color-card)", fontSize: 11, fontWeight: 700, lineHeight: 1 }}>?</span>
       </div>
     );
   }

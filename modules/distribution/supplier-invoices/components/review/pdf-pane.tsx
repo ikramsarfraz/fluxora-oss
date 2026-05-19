@@ -160,7 +160,7 @@ function PdfLoadingSkeleton() {
       className="flex flex-col gap-3"
       style={{
         width: 680,
-        background: "#fff",
+        background: "var(--color-card)",
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         padding: "42px 48px",
       }}
@@ -193,7 +193,7 @@ function PdfFetchErrorCard({ fileName }: { fileName: string }) {
     <div
       className="flex max-w-[480px] flex-col items-center gap-3 rounded-[12px] border text-center"
       style={{
-        background: "#fff",
+        background: "var(--color-card)",
         borderColor: "oklch(82% 0.06 25)",
         padding: "32px 28px",
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",

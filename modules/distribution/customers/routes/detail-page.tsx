@@ -47,18 +47,18 @@ import {
 // ── Status config ─────────────────────────────────────────────────────────────
 
 const ORDER_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  sales_order: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  confirmed: { label: "Confirmed", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  fulfilled: { label: "Fulfilled", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  cancelled: { label: "Cancelled", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  sales_order: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  confirmed: { label: "Confirmed", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  fulfilled: { label: "Fulfilled", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  cancelled: { label: "Cancelled", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 const INVOICE_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  sent: { label: "Sent", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  partially_paid: { label: "Partially paid", bg: "oklch(97% 0.04 70)", color: "oklch(60% 0.14 70)" },
-  paid: { label: "Paid", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  void: { label: "Void", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  draft: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  sent: { label: "Sent", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  partially_paid: { label: "Partially paid", bg: "var(--color-warning-bg)", color: "var(--color-warning-fg)" },
+  paid: { label: "Paid", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  void: { label: "Void", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -382,8 +382,8 @@ export default function CustomerPortfolioPage() {
                   {ordersData.data.map(order => {
                     const s = ORDER_STATUS[order.status] ?? {
                       label: order.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     return (
                       <TableRow
@@ -479,8 +479,8 @@ export default function CustomerPortfolioPage() {
                   {invoicesData.data.map(inv => {
                     const s = INVOICE_STATUS[inv.status] ?? {
                       label: inv.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     const hasBalance = parseFloat(inv.balanceDue) > 0;
                     return (
