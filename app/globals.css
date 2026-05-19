@@ -74,8 +74,11 @@
   --color-border-default: #DDD3B8;
   --color-border-soft: #E5DCC4;
   --color-divider: #F0EBDC;
-  --color-card: #FFFFFF;
-  --color-card-warm: #FBF7EC;
+  /* Card was #FFFFFF pre-2026-05; pure white read too sharp against the
+     cream page (#F5EFE0). Softened to a warm off-white in the same hue
+     family so cards lift gently from the page without floating. */
+  --color-card: #FBF7EC;
+  --color-card-warm: #FDF9F0;
 
   /* Aliases required by the @apply line in @layer base and a few shadcn
      utilities that hard-code the unprefixed name. Kept as literals to avoid
