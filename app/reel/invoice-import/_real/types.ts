@@ -75,24 +75,69 @@ export type Product = {
   lastCost: number;
 };
 
+export type FeeCategory =
+  | "fuel"
+  | "freight"
+  | "processing"
+  | "inspection"
+  | "cod"
+  | "refrigeration"
+  | "other";
+
 export type ReviewLineMatchState =
-  | { kind: "matched"; productId: string; viaAlias?: boolean; aliasAdded?: boolean }
-  | { kind: "candidates"; suggestions: { productId: string; score: number; reason: string }[] }
+  | {
+      kind: "matched";
+      productId: string;
+      productName: string;
+      sku: string;
+      score: number;
+      warning?: boolean;
+      viaAlias?: boolean;
+      aliasAdded?: boolean;
+    }
+  | {
+      kind: "candidates";
+      suggestions: { productId: string; productName: string; sku: string; score: number }[];
+    }
   | { kind: "unmatched" }
   | { kind: "fee"; account: string };
 
 export type ReviewLine = {
   id: number;
   pdfRowIndex: number;
+  raw: string; // raw OCR text — production renders as the monospace "RawText" line
   description: string;
   qty: number;
   unit: string;
   unitCost: number | null;
   total: number;
+  cases: number;
+  weight: number; // in lbs, 0 for fee lines
+  unitPrice: number; // $ per case or per lb
   confidence: number; // 0–100
   match: ReviewLineMatchState;
+  feeCategory?: FeeCategory; // only when match.kind === "fee"
   costDeltaPct?: number; // %, e.g. 25 = +25% vs last cost
   flags?: string[]; // e.g. ["partial-scan"]
+};
+
+// Price-change banner data
+export type PriceDeviation = {
+  productId: string;
+  productName: string;
+  lastUnitPrice: number;
+  parsedUnitPrice: number;
+  deviationPct: number;
+};
+
+// Duplicate-invoice banner data
+export type DuplicateMatch = {
+  id: string;
+  referenceNumber: string;
+  invoiceDate: string;
+  totalAmount: string;
+  status: string;
+  matchedBy?: "invoice_number" | "date_and_total";
 };
 
 export type ReviewData = {
@@ -109,6 +154,18 @@ export type ReviewData = {
   notes: string;
   lines: ReviewLine[];
   charges: { id: string; description: string; amount: number; account: string }[];
+  priceDeviations: PriceDeviation[];
+  duplicateMatches: DuplicateMatch[];
+};
+
+// Review filter — controls the line-items segmented filter
+export type ReviewFilter = "all" | "needs" | "matched" | "fees";
+
+export type ReviewCounts = {
+  total: number;
+  matched: number;
+  needsReview: number;
+  fees: number;
 };
 
 // ---------- Top-level reel state ----------

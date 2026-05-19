@@ -1,16 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  Check,
   ChevronDown,
   ChevronUp,
   Download,
-  Filter,
   Plus,
   Receipt,
   Sparkles,
-  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -18,34 +15,84 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { MOCK_PRODUCTS, fmtAmount, fmtDate } from "./mock-data";
+import { DuplicateInvoiceBanner, PdfHint, PriceChangeBanner } from "./banners";
+import { LineRow } from "./line-row";
+import { FilterSegmented, ReviewFooterStrip } from "./footer";
+import { fmtAmount, fmtDate } from "./mock-data";
 import { QueueStrip, ReviewQueueHeader } from "./queue";
 import { useReel } from "./reel-state";
-import type { ReviewLine } from "./types";
+import type { ReviewCounts, ReviewFilter, ReviewLine } from "./types";
 
 // Visual replica of
 // modules/distribution/supplier-invoices/components/review/review-screen.tsx
-// (745 LoC of production). Keeps the same JSX shell, header card, line-row
-// shape, and bill-total bar so the reel reads as the real product. Skips
-// the virtualizer, weight tray, lot/expiry editor, and charges panel — none
-// fire in the autopilot script.
+// Same chrome, same banners, same LineRow shape. Virtualizer + lot-expiry /
+// weight editor trays + charges panel are stubbed (chip buttons only) — the
+// autopilot never opens them.
+
+function lineNeedsReview(line: ReviewLine): boolean {
+  const kind = line.match.kind;
+  if (kind === "fee") return false;
+  if (kind === "matched" && !line.match.warning && line.unitCost != null)
+    return false;
+  return true;
+}
+
+function computeCounts(lines: ReviewLine[]): ReviewCounts {
+  let matched = 0;
+  let needsReview = 0;
+  let fees = 0;
+  for (const l of lines) {
+    if (l.match.kind === "fee") fees++;
+    else if (lineNeedsReview(l)) needsReview++;
+    else matched++;
+  }
+  return { matched, needsReview, fees, total: lines.length };
+}
 
 export function ReviewScreen() {
-  const { state, dispatch } = useReel();
+  const { state } = useReel();
   const review = state.review;
-  if (!review) return null;
+  const [filter, setFilter] = useState<ReviewFilter>("all");
 
-  const productLines = review.lines.filter((l) => l.match.kind !== "fee");
-  const feeLines = review.lines.filter((l) => l.match.kind === "fee");
-
-  const computedTotal = review.lines.reduce(
-    (s, l) => s + (l.unitCost == null ? 0 : l.qty * l.unitCost),
-    0,
+  const counts = useMemo<ReviewCounts>(
+    () => (review ? computeCounts(review.lines) : { total: 0, matched: 0, needsReview: 0, fees: 0 }),
+    [review],
   );
 
-  const hasUnmatched = review.lines.some((l) => l.match.kind === "unmatched");
-  const hasMissingCost = review.lines.some((l) => l.unitCost == null);
-  const submitDisabled = !review.supplierId || hasMissingCost || hasUnmatched;
+  const filteredLines = useMemo<ReviewLine[]>(() => {
+    if (!review) return [];
+    if (filter === "all") return review.lines;
+    if (filter === "matched")
+      return review.lines.filter(
+        (l) => l.match.kind === "matched" && !l.match.warning && l.unitCost != null,
+      );
+    if (filter === "fees")
+      return review.lines.filter((l) => l.match.kind === "fee");
+    return review.lines.filter(lineNeedsReview);
+  }, [review, filter]);
+
+  const footerTotals = useMemo(() => {
+    if (!review)
+      return {
+        totalLineCount: 0,
+        totalCases: 0,
+        totalWeightLbs: 0,
+        chargesTotal: 0,
+        linesTotal: 0,
+      };
+    const productLines = review.lines.filter((l) => l.match.kind !== "fee");
+    return {
+      totalLineCount: productLines.length,
+      totalCases: productLines.reduce((s, l) => s + (l.cases || 0), 0),
+      totalWeightLbs: productLines.reduce((s, l) => s + (l.weight || 0), 0),
+      chargesTotal: review.lines
+        .filter((l) => l.match.kind === "fee")
+        .reduce((s, l) => s + l.total, 0),
+      linesTotal: productLines.reduce((s, l) => s + l.total, 0),
+    };
+  }, [review]);
+
+  if (!review) return null;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page">
@@ -54,37 +101,15 @@ export function ReviewScreen() {
 
       {/* Two-pane row */}
       <div className="flex min-h-0 min-w-0 flex-1">
-        {/* PDF pane */}
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden border-r border-border-default bg-surface/30">
           <PdfPane />
         </div>
 
-        {/* Form pane */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page">
           <HeaderCard />
 
-          {/* Price-change banner (V-belt has 25% cost spike) */}
-          {review.lines.some((l) => (l.costDeltaPct ?? 0) >= 18) ? (
-            <div
-              className="flex items-center gap-2 border-b border-border-default px-4 py-2 text-[12px]"
-              style={{
-                background: "oklch(96% 0.04 80)",
-                color: "oklch(50% 0.14 70)",
-              }}
-            >
-              <AlertTriangle className="size-3.5 shrink-0" strokeWidth={1.8} />
-              <span>
-                <span className="font-semibold">1 cost change</span> — V-belt A52
-                up <span className="font-mono tabular-nums">25%</span> vs last bill
-              </span>
-              <button
-                type="button"
-                className="ml-auto text-[11.5px] font-medium hover:underline"
-              >
-                Review
-              </button>
-            </div>
-          ) : null}
+          <DuplicateInvoiceBanner matches={review.duplicateMatches} />
+          <PriceChangeBanner deviations={review.priceDeviations} />
 
           {/* Line items section */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -92,40 +117,77 @@ export function ReviewScreen() {
               <div className="flex items-center gap-2.5">
                 <h2 className="text-[15px] font-medium text-ink">Line items</h2>
                 <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[11px] text-subtle">
-                  {productLines.length}
+                  {counts.total - counts.fees}
                 </span>
               </div>
-              <FilterSegmented productCount={productLines.length} feeCount={feeLines.length} />
+              <FilterSegmented filter={filter} counts={counts} onChange={setFilter} />
             </div>
 
-            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-page pb-16">
-              {productLines.map((line) => (
-                <LineRow key={line.id} line={line} />
-              ))}
-              {feeLines.length > 0 ? (
-                <>
-                  <NonInventoryDivider count={feeLines.length} />
-                  {feeLines.map((line) => (
-                    <LineRow key={line.id} line={line} />
-                  ))}
-                </>
-              ) : null}
+            <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-page pb-2">
+              {filteredLines.length === 0 ? (
+                <div className="px-[22px] py-12 text-center text-[13px] text-subtle">
+                  No lines match this filter.
+                </div>
+              ) : (
+                renderLinesWithSection(filteredLines, filter)
+              )}
             </div>
           </div>
 
-          {/* Bill total bar */}
-          <BillTotalBar
-            computedTotal={computedTotal}
-            declaredTotal={review.declaredTotal}
-            lineCount={productLines.length}
-          />
+          {/* Bottom bar — production splits PdfHint + ReviewFooterStrip
+              50/50 below the panes. We mirror that with grid-cols-2 on the
+              right side of the form pane. (Production pins to viewport with
+              fixed; we don't need to because the reel surface itself is
+              already a bounded flex container.) */}
+          <div className="grid shrink-0 grid-cols-2 border-t border-border-default bg-card">
+            <PdfHint />
+            <ReviewFooterStrip
+              totalLineCount={footerTotals.totalLineCount}
+              totalCases={footerTotals.totalCases}
+              totalWeightLbs={footerTotals.totalWeightLbs}
+              chargesTotal={footerTotals.chargesTotal}
+              billTotal={review.declaredTotal}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ---------- PDF pane (styled mock — no real pdfjs) ----------
+function renderLinesWithSection(lines: ReviewLine[], filter: ReviewFilter) {
+  // When the filter is "all" we keep the "Non-inventory charges" section
+  // header above the fee lines so they're visually separated. Any other
+  // filter renders the list flat.
+  if (filter !== "all") {
+    return (
+      <>
+        {lines.map((l) => (
+          <LineRow key={l.id} line={l} />
+        ))}
+      </>
+    );
+  }
+  const productLines = lines.filter((l) => l.match.kind !== "fee");
+  const feeLines = lines.filter((l) => l.match.kind === "fee");
+  return (
+    <>
+      {productLines.map((l) => (
+        <LineRow key={l.id} line={l} />
+      ))}
+      {feeLines.length > 0 ? (
+        <>
+          <NonInventoryDivider count={feeLines.length} />
+          {feeLines.map((l) => (
+            <LineRow key={l.id} line={l} />
+          ))}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+// ---------- PDF pane ----------
 function PdfPane() {
   const { state } = useReel();
   const review = state.review;
@@ -134,13 +196,9 @@ function PdfPane() {
   return (
     <div className="flex h-full w-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-border-default bg-surface/60 px-3 py-2">
-        <span className="font-mono text-[11px] text-subtle">
-          {review.fileName}
-        </span>
+        <span className="font-mono text-[11px] text-subtle">{review.fileName}</span>
         <span className="text-subtle">·</span>
-        <span className="text-[11px] text-subtle">
-          Page 1 of {review.pages}
-        </span>
+        <span className="text-[11px] text-subtle">Page 1 of {review.pages}</span>
         <div className="ml-auto flex items-center gap-0.5">
           <Button variant="ghost" size="icon-xs" aria-label="Zoom out" disabled>
             <ZoomOut />
@@ -208,9 +266,7 @@ function PdfPane() {
                       {l.qty}
                     </div>
                     <div className="text-right text-zinc-700 tabular-nums">
-                      {l.unitCost == null
-                        ? "—"
-                        : `$${fmtAmount(l.unitCost)}`}
+                      {l.unitCost == null ? "—" : `$${fmtAmount(l.unitCost)}`}
                     </div>
                     <div className="text-right text-zinc-900 tabular-nums">
                       ${fmtAmount(lineTotal)}
@@ -228,8 +284,7 @@ function PdfPane() {
                 $
                 {fmtAmount(
                   review.lines.reduce(
-                    (s, l) =>
-                      s + (l.unitCost == null ? 0 : l.qty * l.unitCost),
+                    (s, l) => s + (l.unitCost == null ? 0 : l.qty * l.unitCost),
                     0,
                   ),
                 )}
@@ -284,7 +339,6 @@ function HeaderCard() {
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        {/* Supplier */}
         <ParsedField
           label="Supplier"
           required
@@ -328,14 +382,12 @@ function HeaderCard() {
             ) : (
               <span className="flex items-center gap-1.5">
                 <span className="size-1.5 rounded-full bg-warning-fg" />
-                {review.supplierTypedName} —{" "}
-                <span className="font-medium">not in catalog</span>
+                {review.supplierTypedName} — <span className="font-medium">not in catalog</span>
               </span>
             )}
           </div>
         </ParsedField>
 
-        {/* Invoice number */}
         <ParsedField label="Invoice number" chip={<FieldChip confidence={91} />}>
           <input
             value={review.parsedInvoiceNumber}
@@ -344,7 +396,6 @@ function HeaderCard() {
           />
         </ParsedField>
 
-        {/* Invoice date */}
         <ParsedField label="Invoice date" chip={<FieldChip confidence={96} />}>
           <input
             type="date"
@@ -354,7 +405,6 @@ function HeaderCard() {
           />
         </ParsedField>
 
-        {/* Receive date */}
         <ParsedField label="Receive date" chip={<FieldChip confidence={88} hint="same as invoice" />}>
           <input
             type="date"
@@ -364,7 +414,6 @@ function HeaderCard() {
           />
         </ParsedField>
 
-        {/* Payment method */}
         <ParsedField label="Payment method">
           <div className="flex h-[34px] w-full items-center rounded-lg border border-border-default bg-card px-3 text-[13px] text-ink">
             {review.paymentMethod}
@@ -434,329 +483,6 @@ function FieldChip({
       <span className="font-mono tabular-nums">{confidence}%</span>
       {hint ? <span className="font-normal opacity-70">· {hint}</span> : null}
     </span>
-  );
-}
-
-// ---------- Line row ----------
-function LineRow({ line }: { line: ReviewLine }) {
-  const { state, dispatch } = useReel();
-  const isActive = state.activeLineId === line.id;
-  const isFee = line.match.kind === "fee";
-  const isMatched = line.match.kind === "matched";
-  const isUnmatched = line.match.kind === "unmatched";
-  const isCandidates = line.match.kind === "candidates";
-  const missingCost = line.unitCost == null;
-
-  const matchedProductId =
-    line.match.kind === "matched" ? line.match.productId : null;
-  const product = matchedProductId
-    ? MOCK_PRODUCTS.find((p) => p.id === matchedProductId)
-    : null;
-
-  // Background tints — match production palette: warn (yellow) for issues,
-  // soft sage for matched, neutral for fees.
-  const tint =
-    missingCost || isUnmatched
-      ? "oklch(98% 0.025 25)"
-      : isCandidates
-        ? "oklch(98% 0.025 80)"
-        : "transparent";
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      data-reel={`review-line-${line.id}`}
-      aria-current={isActive ? "true" : undefined}
-      onMouseEnter={() => dispatch({ type: "SET_ACTIVE_LINE", lineId: line.id })}
-      onMouseLeave={() => dispatch({ type: "SET_ACTIVE_LINE", lineId: null })}
-      className="flex cursor-pointer flex-col border-b border-border-default transition-colors"
-      style={{
-        background: tint,
-        borderLeft: `3px solid ${isActive ? "var(--color-forest-mid)" : "transparent"}`,
-      }}
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-4 py-3.5">
-        <div className="flex items-start justify-between gap-3.5">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-[10.5px] text-subtle">
-              <span className="font-mono">L{line.pdfRowIndex + 1}</span>
-              <span>·</span>
-              <ConfidencePill value={line.confidence} />
-              {line.flags?.includes("partial-scan") ? (
-                <>
-                  <span>·</span>
-                  <span className="font-medium text-danger-fg">
-                    Partial scan
-                  </span>
-                </>
-              ) : null}
-            </div>
-            <div className="mt-0.5 text-[13px] font-medium text-ink">
-              {line.description}
-            </div>
-
-            {/* Match status row */}
-            <div className="mt-1.5 text-[11.5px]">
-              {isMatched && product ? (
-                <span className="inline-flex items-center gap-1.5 text-success-fg">
-                  <Check className="size-3" strokeWidth={2.4} />
-                  <span className="font-medium text-ink">{product.name}</span>
-                  <span className="font-mono text-subtle">· {product.sku}</span>
-                  {line.match.kind === "matched" && line.match.viaAlias ? (
-                    <span className="text-subtle">· matched via alias</span>
-                  ) : null}
-                  {line.match.kind === "matched" && line.match.aliasAdded ? (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full bg-forest-tint px-1.5 py-0.5 text-[10px] font-medium text-forest"
-                    >
-                      <Sparkles className="size-2.5" />
-                      alias added
-                    </span>
-                  ) : null}
-                </span>
-              ) : isFee && line.match.kind === "fee" ? (
-                <span className="inline-flex items-center gap-1.5 text-subtle">
-                  <span className="rounded bg-divider px-1.5 py-0.5 text-[10px] font-medium text-ink-warm">
-                    Fee
-                  </span>
-                  <span className="font-mono text-[11px]">
-                    {line.match.account}
-                  </span>
-                </span>
-              ) : isUnmatched ? (
-                <span className="inline-flex items-center gap-1.5 text-danger-fg">
-                  <span className="size-1.5 rounded-full bg-danger-fg" />
-                  <span className="font-medium">No product match</span>
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Numeric snapshot */}
-          <div className="flex flex-col items-end gap-0.5 text-right tabular-nums">
-            <div className="text-[10.5px] uppercase tracking-[0.06em] text-subtle">
-              Qty × Unit
-            </div>
-            <div className="text-[12px] text-ink-warm">
-              {line.qty} × {missingCost ? "—" : `$${fmtAmount(line.unitCost!)}`}
-            </div>
-            <div
-              className={cn(
-                "font-mono text-[14px] font-semibold",
-                missingCost ? "text-danger-fg" : "text-ink",
-              )}
-              data-financial
-            >
-              {missingCost ? "—" : `$${fmtAmount(line.qty * line.unitCost!)}`}
-            </div>
-          </div>
-        </div>
-
-        {/* Action chips for candidates / unmatched */}
-        {(isCandidates || isUnmatched) && (
-          <div className="flex flex-wrap items-stretch gap-2">
-            <div
-              data-reel={`line-${line.id}-picker`}
-              className="flex h-[34px] flex-1 min-w-[200px] items-center rounded-lg border border-border-default bg-card px-3 text-[12.5px] text-subtle"
-            >
-              Search product or paste SKU…
-            </div>
-            {isCandidates &&
-              line.match.kind === "candidates" &&
-              line.match.suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  data-reel={`line-${line.id}-candidate-${i}`}
-                  onClick={() =>
-                    dispatch({
-                      type: "CONFIRM_SUGGESTION",
-                      lineId: line.id,
-                      productId: s.productId,
-                    })
-                  }
-                  className="inline-flex items-center gap-2 rounded-lg border border-border-default bg-card py-1 pl-2.5 pr-1.5 text-[12px] text-ink transition-colors hover:bg-divider"
-                >
-                  <Sparkles
-                    className="size-[12px] text-forest-mid"
-                    strokeWidth={1.6}
-                  />
-                  <span className="font-medium">
-                    {productName(s.productId)}
-                  </span>
-                  <span className="rounded bg-divider px-1.5 py-px font-mono text-[10.5px] tabular-nums text-subtle">
-                    {s.score}%
-                  </span>
-                </button>
-              ))}
-            <button
-              type="button"
-              data-reel={`line-${line.id}-create`}
-              onClick={() =>
-                dispatch({
-                  type: "OPEN_DIALOG",
-                  dialog: {
-                    kind: "create-product",
-                    lineId: line.id,
-                    prefillName: line.description,
-                  },
-                })
-              }
-              className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-forest-mid bg-forest-tint/40 px-2.5 py-1 text-[12px] font-medium text-forest hover:bg-forest-tint/70"
-            >
-              <Plus className="size-[12px]" strokeWidth={1.8} />
-              Create new
-            </button>
-          </div>
-        )}
-
-        {/* Missing-cost inline editor */}
-        {missingCost && !isFee && (
-          <div className="flex items-center gap-2 rounded-md border border-danger-border/70 bg-danger-bg/30 px-3 py-2 text-[12px] text-danger-fg">
-            <AlertTriangle className="size-3.5" strokeWidth={1.8} />
-            <span className="font-medium">Cost missing</span>
-            <span>— fill in to compute totals.</span>
-            <div className="ml-auto flex items-center gap-1.5">
-              <span className="text-[10.5px] uppercase tracking-[0.06em] text-subtle">
-                Unit cost
-              </span>
-              <button
-                type="button"
-                data-reel={`line-${line.id}-fill-cost`}
-                onClick={() =>
-                  dispatch({
-                    type: "FILL_LINE_COST",
-                    lineId: line.id,
-                    unitCost: 6.15,
-                  })
-                }
-                className="flex h-7 w-20 items-center justify-end rounded-md border border-border-default bg-card pr-2 font-mono text-[12px] tabular-nums text-subtle"
-              >
-                $—
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConfidencePill({ value }: { value: number }) {
-  const color =
-    value >= 85
-      ? "var(--color-success-fg)"
-      : value >= 65
-        ? "oklch(70% 0.16 70)"
-        : "var(--color-danger-fg)";
-  return (
-    <span className="inline-flex items-center gap-1 tabular-nums" style={{ color }}>
-      <span className="size-1 rounded-full" style={{ background: color, opacity: 0.7 }} />
-      {value}% confidence
-    </span>
-  );
-}
-
-function productName(productId: string): string {
-  return MOCK_PRODUCTS.find((p) => p.id === productId)?.name ?? productId;
-}
-
-// ---------- Filter segmented ----------
-function FilterSegmented({
-  productCount,
-  feeCount,
-}: {
-  productCount: number;
-  feeCount: number;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Filter className="size-3.5 text-subtle" strokeWidth={1.6} />
-      <div className="flex gap-1 rounded-[7px] border border-border-default bg-card p-[3px]">
-        {[
-          { label: "All", count: productCount + feeCount },
-          { label: "Needs attention", count: 3 },
-          { label: "Fees", count: feeCount },
-        ].map((t, i) => (
-          <button
-            key={t.label}
-            type="button"
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-              i === 0
-                ? "bg-forest-mid text-card-warm"
-                : "text-subtle hover:text-ink",
-            )}
-          >
-            {t.label}
-            <span
-              className={cn(
-                "rounded px-1 py-px font-mono text-[10px] tabular-nums",
-                i === 0
-                  ? "bg-card-warm/20 text-card-warm"
-                  : "bg-divider text-subtle",
-              )}
-            >
-              {t.count}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Bill total bar ----------
-function BillTotalBar({
-  computedTotal,
-  declaredTotal,
-  lineCount,
-}: {
-  computedTotal: number;
-  declaredTotal: number;
-  lineCount: number;
-}) {
-  const delta = Number((declaredTotal - computedTotal).toFixed(2));
-  const matches = Math.abs(delta) <= 0.05;
-
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-4 border-t border-border-default bg-card px-[22px] py-2.5 text-[12px]">
-      <div className="flex items-center gap-4 text-subtle">
-        <span>
-          <span className="text-ink-warm">{lineCount}</span> line items
-        </span>
-        <span className="text-border-default">|</span>
-        <span className="inline-flex items-center gap-1.5">
-          <span>Bill total</span>
-          <span className="font-mono text-[13px] font-semibold tabular-nums text-ink">
-            ${fmtAmount(declaredTotal)}
-          </span>
-        </span>
-      </div>
-      <div className="flex items-center gap-3 text-[11.5px]">
-        <span className="text-subtle">Lines sum to</span>
-        <span
-          className={cn(
-            "font-mono text-[12.5px] font-semibold tabular-nums",
-            matches ? "text-ink" : "text-danger-fg",
-          )}
-        >
-          ${fmtAmount(computedTotal)}
-        </span>
-        {matches ? (
-          <span className="inline-flex items-center gap-1 text-success-fg">
-            <Check className="size-3" strokeWidth={2.4} />
-            matches
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 text-danger-fg">
-            <X className="size-3" strokeWidth={2.4} />
-            off by ${fmtAmount(Math.abs(delta))}
-          </span>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -843,4 +569,3 @@ function NonInventoryDivider({ count }: { count: number }) {
     </div>
   );
 }
-
