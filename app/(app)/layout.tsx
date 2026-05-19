@@ -1,6 +1,7 @@
 import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BreadcrumbLabelProvider } from "@/components/breadcrumb-label-provider";
+import { InboxBell } from "@/components/inbox-bell";
 import { PostHogIdentify } from "@/components/posthog-identify";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -57,6 +58,9 @@ export default async function AppGroupLayout({
                 className="mr-2 data-vertical:h-4 data-vertical:self-auto"
               />
               <AppBreadcrumb />
+              <div className="ml-auto flex items-center">
+                <InboxBell />
+              </div>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>
           </SidebarInset>
