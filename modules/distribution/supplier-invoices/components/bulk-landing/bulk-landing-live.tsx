@@ -71,9 +71,22 @@ export function BulkLandingLive({
   // from outside (e.g. the page header's "Bulk import" button). We fire it
   // whenever `pickFilesIntent` flips to true, then notify the shell so it
   // can reset the flag — keeps the picker from re-opening on every render.
+  //
+  // The `firedForIntentRef` guard makes the effect idempotent across React
+  // Strict Mode's double-invoke in dev: without it, the effect runs twice
+  // before the parent's `setPickFilesIntent(false)` flushes, so the same
+  // user click opens the native picker twice and cancelling once isn't
+  // enough. We latch on the rising edge and reset when the intent goes
+  // back to false.
   const dropzoneRef = useRef<InlineDropzoneHandle>(null);
+  const firedForIntentRef = useRef(false);
   useEffect(() => {
-    if (!pickFilesIntent) return;
+    if (!pickFilesIntent) {
+      firedForIntentRef.current = false;
+      return;
+    }
+    if (firedForIntentRef.current) return;
+    firedForIntentRef.current = true;
     dropzoneRef.current?.openFilePicker();
     onPickFilesIntentHandled?.();
   }, [pickFilesIntent, onPickFilesIntentHandled]);
