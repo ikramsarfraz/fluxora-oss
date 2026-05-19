@@ -73,7 +73,7 @@ export function ReviewStep() {
   }
 
   return (
-    <div className="flex h-full min-h-[560px] flex-col gap-3 lg:h-[calc(100vh-120px)]">
+    <div className="flex h-full min-h-[560px] flex-1 flex-col gap-3">
       <PageHeader
         title={`Review ${selectedInvoice.invoiceNumber}`}
         description={`${selectedInvoice.supplierName} · ${selectedInvoice.lines.length} extracted line${selectedInvoice.lines.length === 1 ? "" : "s"}`}

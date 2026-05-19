@@ -85,7 +85,7 @@ export function FakeSidebar() {
   const activeUrl = STEP_TO_ACTIVE[state.step] ?? "/inventory";
 
   return (
-    <aside className="flex w-[14rem] shrink-0 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-2 text-sidebar-foreground">
+    <aside className="flex w-[16rem] shrink-0 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-2 text-sidebar-foreground">
       <div className="flex items-center gap-2 rounded-md p-2">
         <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden">
           <Logomark size={32} />
@@ -180,7 +180,7 @@ export function FakeHeader() {
   const { state } = useDemo();
   const crumbs = BREADCRUMB_BY_STEP[state.step] ?? ["Inventory"];
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
+    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
       <PanelLeft className="size-4 text-subtle" />
       <span className="h-4 w-px bg-border-default" />
       <nav className="flex items-center gap-1.5 text-sm">

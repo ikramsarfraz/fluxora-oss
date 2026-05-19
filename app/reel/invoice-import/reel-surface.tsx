@@ -48,13 +48,13 @@ export function ReelSurface() {
   }
 
   return (
-    <div className="flex h-[760px] w-full">
+    <div className="flex h-[820px] w-full">
       <FakeSidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <FakeHeader />
         <main
           data-reel-scroll
-          className="min-h-0 flex-1 overflow-y-auto bg-page p-4"
+          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-page p-4"
         >
           {inner}
         </main>
