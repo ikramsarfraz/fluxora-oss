@@ -119,18 +119,45 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
   return <DirectorContext.Provider value={value}>{children}</DirectorContext.Provider>;
 }
 
+const TOTAL_CHAPTERS = 4;
+
 async function runScript(c: Controls) {
   // Loop forever
   while (!c.isCancelled()) {
     // ---- Reset to Bills tab ----
     c.dispatch({ type: "RESTART" });
     c.setCursor(null);
+    c.setCaption(null);
+
+    // ---- Opening splash ----
+    // initialReelState() already starts with transition: { kind: "splash" },
+    // so RESTART above puts us back to that state. Hold it briefly for the
+    // viewer, then fade out.
+    c.setScene("splash");
+    await c.sleep(3200);
+    if (c.isCancelled()) return;
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+    await c.sleep(350);
+
+    // ---- Chapter 1: Receive ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "chapter",
+        index: 1,
+        total: TOTAL_CHAPTERS,
+        title: "Receive",
+        subtitle: "Drop a PDF into the queue",
+      },
+    });
+    await c.sleep(1600);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Scene 0: Hero / Bills archive ----
     c.setScene("bills");
     c.setCaption({
-      headline: "Stop typing invoices.",
-      body: "Bills lists what's already posted. Imports is where new PDFs land.",
+      headline: "Bills are what's already posted.",
+      body: "Imports is where new PDFs land before they're confirmed.",
     });
     await c.sleep(2400);
     if (c.isCancelled()) return;
@@ -193,6 +220,20 @@ async function runScript(c: Controls) {
     c.dispatch({ type: "OPEN_REVIEW" });
     c.setCursor(null);
     await c.sleep(600);
+
+    // ---- Chapter 2: Review ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "chapter",
+        index: 2,
+        total: TOTAL_CHAPTERS,
+        title: "Review",
+        subtitle: "Match products, fix anything AI missed",
+      },
+    });
+    await c.sleep(1600);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Scene 6: Review screen — overview + queue ----
     c.setScene("review-overview");
@@ -326,6 +367,20 @@ async function runScript(c: Controls) {
     c.setCursor(null);
     await c.sleep(600);
 
+    // ---- Chapter 3: Post ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "chapter",
+        index: 3,
+        total: TOTAL_CHAPTERS,
+        title: "Post",
+        subtitle: "Stock, costs, aliases all commit at once",
+      },
+    });
+    await c.sleep(1600);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+
     // ---- Scene 11: Submit ----
     c.setScene("submit");
     c.setCaption({
@@ -340,22 +395,34 @@ async function runScript(c: Controls) {
     c.setCursor(null);
     await c.sleep(1200);
 
+    // ---- Chapter 4: Done ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "chapter",
+        index: 4,
+        total: TOTAL_CHAPTERS,
+        title: "Done",
+        subtitle: "Row moves to Reviewed, stock is current",
+      },
+    });
+    await c.sleep(1600);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+
     // ---- Scene 12: Back to Imports tab, row marked Reviewed ----
     c.setScene("reviewed");
     c.setCaption({
       headline: "Posted.",
       body: "Inventory's already updated. Aliases saved for next time.",
     });
-    await c.sleep(2600);
-
-    // ---- Outro ----
-    c.setScene("outro");
-    c.setCaption({
-      headline: "Receive a PDF. Post a bill. Stock is current.",
-      body: "Try it free →",
-    });
     await c.sleep(2200);
+
+    // ---- Outro splash ----
+    c.setScene("outro");
     c.setCaption(null);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "outro" } });
+    await c.sleep(3800);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
     await c.sleep(600);
   }
 }
