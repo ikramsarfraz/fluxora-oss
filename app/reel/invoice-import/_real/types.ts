@@ -113,6 +113,11 @@ export type ReviewData = {
 
 // ---------- Top-level reel state ----------
 
+export type DialogKind =
+  | { kind: "none" }
+  | { kind: "create-supplier"; prefillName: string }
+  | { kind: "create-product"; lineId: number; prefillName: string };
+
 export type ReelState = {
   step: ReelStep;
   activeTab: Tab;
@@ -124,4 +129,7 @@ export type ReelState = {
   activeLineId: number | null;
   // Cosmetic
   scanningElapsedSeconds: number;
+  // Review screen extras
+  headerCollapsed: boolean;
+  dialog: DialogKind;
 };

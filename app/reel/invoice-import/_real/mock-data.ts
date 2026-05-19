@@ -305,6 +305,8 @@ export function initialReelState(): ReelState {
     review: null,
     activeLineId: null,
     scanningElapsedSeconds: 0,
+    headerCollapsed: false,
+    dialog: { kind: "none" },
   };
 }
 

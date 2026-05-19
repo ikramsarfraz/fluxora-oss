@@ -3,12 +3,12 @@
 import {
   AlertTriangle,
   Check,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   ChevronUp,
   Download,
   Filter,
   Plus,
+  Receipt,
   Sparkles,
   X,
   ZoomIn,
@@ -48,7 +48,7 @@ export function ReviewScreen() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page">
-      <ReviewQueueStrip submitDisabled={submitDisabled} />
+      <ReviewTopBar submitDisabled={submitDisabled} />
 
       {/* Two-pane row */}
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -97,9 +97,17 @@ export function ReviewScreen() {
             </div>
 
             <div className="h-0 min-h-0 flex-1 overflow-y-auto bg-page pb-16">
-              {review.lines.map((line) => (
+              {productLines.map((line) => (
                 <LineRow key={line.id} line={line} />
               ))}
+              {feeLines.length > 0 ? (
+                <>
+                  <NonInventoryDivider count={feeLines.length} />
+                  {feeLines.map((line) => (
+                    <LineRow key={line.id} line={line} />
+                  ))}
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -249,15 +257,23 @@ function HeaderCard() {
   if (!review) return null;
   const hasSupplier = review.supplierId != null;
 
+  if (state.headerCollapsed) {
+    return <CollapsedHeaderStrip />;
+  }
+
   return (
-    <div className="border-b border-border-default bg-card px-4 py-3">
+    <div data-reel="header-card" className="border-b border-border-default bg-card px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
         <h2 className="text-[14px] font-medium text-ink">Invoice header</h2>
         <div className="flex items-center gap-2">
           <FieldChip confidence={94} hint="extracted by AI" />
           <button
             type="button"
-            title="Collapse header"
+            data-reel="collapse-header"
+            title="Collapse header to a summary strip"
+            onClick={() =>
+              dispatch({ type: "SET_HEADER_COLLAPSED", collapsed: true })
+            }
             className="flex size-7 items-center justify-center rounded-md text-subtle transition-colors hover:bg-divider hover:text-ink"
           >
             <ChevronUp className="size-[14px]" strokeWidth={1.8} />
@@ -283,9 +299,11 @@ function HeaderCard() {
               data-reel="create-supplier"
               onClick={() =>
                 dispatch({
-                  type: "PICK_SUPPLIER",
-                  supplierId: "sup_northwind",
-                  name: "Northwind Trading Co.",
+                  type: "OPEN_DIALOG",
+                  dialog: {
+                    kind: "create-supplier",
+                    prefillName: review.supplierTypedName,
+                  },
                 })
               }
               className="inline-flex items-center gap-1 text-[11px] font-medium text-forest-mid disabled:opacity-50"
@@ -575,9 +593,12 @@ function LineRow({ line }: { line: ReviewLine }) {
               data-reel={`line-${line.id}-create`}
               onClick={() =>
                 dispatch({
-                  type: "CREATE_PRODUCT_FOR_LINE",
-                  lineId: line.id,
-                  productId: `prod_new_${line.id}`,
+                  type: "OPEN_DIALOG",
+                  dialog: {
+                    kind: "create-product",
+                    lineId: line.id,
+                    prefillName: line.description,
+                  },
                 })
               }
               className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-forest-mid bg-forest-tint/40 px-2.5 py-1 text-[12px] font-medium text-forest hover:bg-forest-tint/70"
@@ -737,115 +758,125 @@ function BillTotalBar({
   );
 }
 
-// ---------- Review queue strip ----------
-function ReviewQueueStrip({ submitDisabled }: { submitDisabled: boolean }) {
+// ---------- Collapsed header strip ----------
+function CollapsedHeaderStrip() {
+  const { state, dispatch } = useReel();
+  const review = state.review;
+  if (!review) return null;
+  const hasSupplier = review.supplierId != null;
+  const fmtMoney = (n: number) =>
+    n.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  const fmtShortDate = (iso: string) => {
+    if (!iso) return "—";
+    const [, m, d] = iso.split("-");
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthIdx = Number(m) - 1;
+    if (!Number.isInteger(monthIdx) || !months[monthIdx]) return iso;
+    return `${months[monthIdx]} ${Number(d)}`;
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border-default bg-card px-4 py-2 text-[12px]">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span
+          className={
+            hasSupplier
+              ? "min-w-0 max-w-[280px] truncate text-[13px] font-semibold text-ink"
+              : "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold"
+          }
+          style={
+            hasSupplier
+              ? undefined
+              : { background: "oklch(95% 0.05 60 / 0.6)", color: "oklch(60% 0.16 35)" }
+          }
+        >
+          {hasSupplier ? review.supplierTypedName : "Supplier missing"}
+        </span>
+        <span className="text-subtle">·</span>
+        <span className="font-mono text-subtle">#{review.parsedInvoiceNumber}</span>
+        <span className="text-subtle">·</span>
+        <span className="font-mono text-subtle">{fmtShortDate(review.parsedInvoiceDate)}</span>
+        <span className="text-subtle">·</span>
+        <span className="font-mono font-semibold tabular-nums text-ink">
+          ${fmtMoney(review.declaredTotal)}
+        </span>
+        {review.paymentMethod ? (
+          <>
+            <span className="text-subtle">·</span>
+            <span className="text-subtle">{review.paymentMethod}</span>
+          </>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        data-reel="expand-header"
+        onClick={() => dispatch({ type: "SET_HEADER_COLLAPSED", collapsed: false })}
+        title="Expand header to edit"
+        className="inline-flex items-center gap-1 rounded-md border border-border-default bg-card px-2 py-0.5 text-[11px] font-medium text-subtle hover:text-ink"
+      >
+        Edit
+        <ChevronDown className="size-[12px]" strokeWidth={1.8} />
+      </button>
+    </div>
+  );
+}
+
+// ---------- Non-inventory section divider ----------
+function NonInventoryDivider({ count }: { count: number }) {
+  return (
+    <div className="flex items-center gap-3 border-y border-border-default bg-surface/50 px-[22px] py-2.5">
+      <Receipt className="size-3.5 text-subtle" strokeWidth={1.8} />
+      <span className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-subtle">
+        Non-inventory charges
+      </span>
+      <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[10.5px] text-subtle">
+        {count}
+      </span>
+      <span className="ml-auto text-[11px] text-subtle">
+        Posted to expense — no stock movement.
+      </span>
+    </div>
+  );
+}
+
+// ---------- Review top bar (back + filename + actions) ----------
+function ReviewTopBar({ submitDisabled }: { submitDisabled: boolean }) {
   const { state, dispatch } = useReel();
   const review = state.review;
   if (!review) return null;
 
-  const queueFiles = state.view.files;
-  const activeIndex = queueFiles.findIndex((f) => f.id === review.fileId);
-  const activeIndexClamped = activeIndex < 0 ? 0 : activeIndex;
-
   return (
-    <div className="shrink-0 border-b border-border-default bg-card">
-      {/* Top row: back, position, actions */}
-      <div className="flex items-center justify-between gap-3 px-4 pt-2.5">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            data-reel="review-back"
-            className="text-[12.5px] font-medium text-subtle hover:text-ink"
-          >
-            ← Imports
-          </button>
-          <span className="text-subtle">/</span>
-          <span className="font-mono text-[12.5px] tabular-nums text-ink">
-            {review.fileName}
-          </span>
-          <div className="ml-2 flex items-center gap-1">
-            <button
-              type="button"
-              disabled={activeIndexClamped === 0}
-              className="flex size-6 items-center justify-center rounded-md text-subtle disabled:opacity-30 hover:enabled:bg-divider hover:enabled:text-ink"
-              title="Previous file"
-            >
-              <ChevronLeft className="size-3.5" strokeWidth={1.8} />
-            </button>
-            <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[10.5px] text-subtle">
-              {activeIndexClamped + 1} of {queueFiles.length}
-            </span>
-            <button
-              type="button"
-              disabled={activeIndexClamped >= queueFiles.length - 1}
-              className="flex size-6 items-center justify-center rounded-md text-subtle disabled:opacity-30 hover:enabled:bg-divider hover:enabled:text-ink"
-              title="Next file"
-            >
-              <ChevronRight className="size-3.5" strokeWidth={1.8} />
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="h-8 text-[12px]">
-            Re-scan
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            data-reel="submit-review"
-            disabled={submitDisabled}
-            onClick={() => dispatch({ type: "SUBMIT_REVIEW" })}
-            className="h-8 gap-1.5 border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest"
-          >
-            {submitDisabled ? "Resolve to submit" : "Submit & post"}
-          </Button>
-        </div>
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-default bg-card px-4 py-2.5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          data-reel="review-back"
+          className="text-[12.5px] font-medium text-subtle hover:text-ink"
+        >
+          ← Imports
+        </button>
+        <span className="text-subtle">/</span>
+        <span className="font-mono text-[12.5px] tabular-nums text-ink">
+          {review.fileName}
+        </span>
       </div>
-
-      {/* Carousel: pills for every file in the batch */}
-      <div className="flex items-center gap-1.5 overflow-x-auto px-4 pt-2 pb-2.5">
-        {queueFiles.map((f, i) => {
-          const isActive = i === activeIndexClamped;
-          const supplierLabel = f.supplier ?? "Supplier missing";
-          return (
-            <div
-              key={f.id}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-md border px-2.5 py-1 text-[11.5px]",
-                isActive
-                  ? "border-forest-mid bg-forest-tint text-ink shadow-[0_0_0_2px_color-mix(in_oklch,var(--color-forest-mid)_15%,transparent)]"
-                  : f.status === "reviewed"
-                    ? "border-border-default bg-card text-subtle"
-                    : "border-border-default bg-card text-ink-warm",
-              )}
-            >
-              <span
-                className="size-1.5 rounded-full"
-                style={{
-                  background:
-                    f.status === "reviewed"
-                      ? "var(--color-success-fg)"
-                      : f.status === "needs-review"
-                        ? "var(--color-danger-fg)"
-                        : "oklch(70% 0.16 70)",
-                }}
-              />
-              <span className="font-mono tabular-nums">{f.invoiceNumber ?? f.name}</span>
-              <span className="text-subtle">·</span>
-              <span className={cn("truncate max-w-[140px]", !f.supplier && "text-danger-fg")}>
-                {supplierLabel}
-              </span>
-              <span
-                className={cn(
-                  "rounded px-1 py-px font-mono text-[10px] tabular-nums",
-                  isActive ? "bg-card text-ink" : "bg-divider text-subtle",
-                )}
-              >
-                {f.confidence}%
-              </span>
-            </div>
-          );
-        })}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="h-8 text-[12px]">
+          Re-scan
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          data-reel="submit-review"
+          disabled={submitDisabled}
+          onClick={() => dispatch({ type: "SUBMIT_REVIEW" })}
+          className="h-8 gap-1.5 border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest"
+        >
+          {submitDisabled ? "Resolve to submit" : "Submit & post"}
+        </Button>
       </div>
     </div>
   );
