@@ -79,6 +79,7 @@ export function UploadStep() {
         <div className="flex flex-col gap-4">
           <button
             type="button"
+            data-reel="dropzone"
             onClick={() => inputRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
@@ -173,7 +174,12 @@ export function UploadStep() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={start} disabled={state.files.length === 0}>
+            <Button
+              size="sm"
+              data-reel="start-import"
+              onClick={start}
+              disabled={state.files.length === 0}
+            >
               Start import
             </Button>
           </div>

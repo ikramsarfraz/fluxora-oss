@@ -185,9 +185,10 @@ export function QueueStep() {
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.map((row) => (
+            {table.getRowModel().rows.map((row, idx) => (
               <TableRow
                 key={row.id}
+                {...(idx === 0 ? { "data-reel": "queue-row-first" } : {})}
                 className="cursor-pointer border-t border-border-soft hover:bg-forest-tint/30"
                 onClick={() => open(row.original.id)}
               >

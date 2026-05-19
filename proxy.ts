@@ -91,7 +91,12 @@ function isSharedAuthPath(pathname: string) {
 }
 
 function isRootOnlyPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/features") || pathname.startsWith("/pricing");
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/features") ||
+    pathname.startsWith("/pricing") ||
+    pathname.startsWith("/reel")
+  );
 }
 
 function isTenantAdminPath(pathname: string) {

@@ -119,6 +119,7 @@ function LineRow({
         rowRef.current = el;
         registerRow(line.id, el);
       }}
+      data-reel={`line-${line.id}`}
       onMouseEnter={() => dispatch({ type: "SET_HIGHLIGHT", lineId: line.id })}
       onMouseLeave={() => dispatch({ type: "SET_HIGHLIGHT", lineId: null })}
       className={cn(
@@ -182,6 +183,7 @@ function LineRow({
         <Input
           type="number"
           step="0.01"
+          data-reel={`line-${line.id}-cost`}
           value={line.unitCost ?? ""}
           placeholder={line.unitCost == null ? "—" : ""}
           onChange={(e) =>

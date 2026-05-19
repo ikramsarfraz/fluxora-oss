@@ -68,6 +68,7 @@ export function ProductPicker({ line }: Props) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          data-reel={`line-${line.id}-picker`}
           className={cn(
             "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm",
             "hover:bg-surface focus-visible:bg-surface focus-visible:outline-none",
