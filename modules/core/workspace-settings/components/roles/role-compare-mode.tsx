@@ -30,17 +30,17 @@ export function RoleCompareMode() {
   }, []);
 
   return (
-    <div className="overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface">
+    <div className="overflow-hidden rounded-[10px] border border-border-default bg-card">
       <table className="w-full border-collapse text-[12px]">
         <thead>
-          <tr className="bg-stone-line2">
-            <th className="px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-stone-muted">
+          <tr className="bg-divider">
+            <th className="px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-subtle">
               Resource
             </th>
             {matrix.map(({ role }) => (
               <th
                 key={role}
-                className="px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-stone-muted"
+                className="px-3.5 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.06em] text-subtle"
               >
                 {capitalize(role)}
               </th>
@@ -51,12 +51,12 @@ export function RoleCompareMode() {
           {PERMISSION_GROUPS.map(group => (
             <Group key={group.key} label={group.label}>
               {group.resources.map(resource => (
-                <tr key={resource.key} className="border-t border-stone-line2">
+                <tr key={resource.key} className="border-t border-divider">
                   <td className="px-3.5 py-2.5">
-                    <div className="text-[13px] font-medium text-stone-ink">
+                    <div className="text-[13px] font-medium text-ink">
                       {resource.label}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-stone-muted">
+                    <div className="mt-0.5 text-[11px] text-subtle">
                       {resource.description}
                     </div>
                   </td>
@@ -72,12 +72,12 @@ export function RoleCompareMode() {
 
           <Group label="Workspace controls">
             {WORKSPACE_FLAG_ORDER.map(flag => (
-              <tr key={flag} className="border-t border-stone-line2">
+              <tr key={flag} className="border-t border-divider">
                 <td className="px-3.5 py-2.5">
-                  <div className="text-[13px] font-medium text-stone-ink">
+                  <div className="text-[13px] font-medium text-ink">
                     {WORKSPACE_FLAG_LABELS[flag].label}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-stone-muted">
+                  <div className="mt-0.5 text-[11px] text-subtle">
                     {WORKSPACE_FLAG_LABELS[flag].description}
                   </div>
                 </td>
@@ -105,7 +105,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
       <tr>
         <td
           colSpan={colSpan}
-          className="bg-stone-bg px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted"
+          className="bg-page px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle"
         >
           {label}
         </td>

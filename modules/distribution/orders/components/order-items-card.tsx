@@ -803,7 +803,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
           onClick={onClose}
           variant="outline"
           size="xs"
-          className="shrink-0 border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2"
+          className="shrink-0 border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider"
         >
           Cancel
         </Button>
@@ -818,7 +818,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               value={selectedLineId}
               onValueChange={setSelectedLineId}
             >
-              <SelectTrigger className="border-stone-line bg-stone-surface text-sm shadow-none">
+              <SelectTrigger className="border-border-default bg-card text-sm shadow-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -853,7 +853,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               step="1"
               value={casesValue}
               onChange={e => setCasesValue(e.target.value)}
-              className="min-w-0 flex-1 border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
+              className="min-w-0 flex-1 border-border-default bg-card font-mono text-sm text-ink shadow-none"
             />
             <span style={{ fontSize: "12px", color: C.muted, flexShrink: 0 }}>
               / {remaining}
@@ -871,7 +871,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             placeholder={isCatchWeight ? "required" : "optional"}
             value={weightValue}
             onChange={e => setWeightValue(e.target.value)}
-            className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
+            className="border-border-default bg-card font-mono text-sm text-ink shadow-none"
           />
         </label>
 
@@ -883,7 +883,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               value={effectiveSelectedLotId}
               onValueChange={setSelectedLotId}
             >
-              <SelectTrigger className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none">
+              <SelectTrigger className="border-border-default bg-card font-mono text-sm text-ink shadow-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -963,7 +963,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             onClick={() => void handleSubmit(true)}
             variant="outline"
             size="sm"
-            className="border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
+            className="border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
           >
             Save as partial
           </Button>
@@ -972,7 +972,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             disabled={isSubmitting || !actionState.canFulfill}
             onClick={() => void handleSubmit(false)}
             size="sm"
-            className="border-stone-ink bg-stone-ink text-xs text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+            className="border-forest-mid bg-forest-mid text-xs text-card-warm hover:bg-forest disabled:opacity-50"
           >
             {isSubmitting ? "Saving…" : "Confirm & fulfill"}
           </Button>

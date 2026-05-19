@@ -59,22 +59,22 @@ export function FileRow({
         }
       }}
       className={cn(
-        "group grid cursor-pointer items-center gap-[18px] border-b border-stone-line py-[18px] pl-[19px] pr-[22px] transition-colors hover:bg-stone-line2/40",
-        isFocused ? "bg-stone-line2" : "bg-stone-surface",
+        "group grid cursor-pointer items-center gap-[18px] border-b border-border-default py-[18px] pl-[19px] pr-[22px] transition-colors hover:bg-divider/40",
+        isFocused ? "bg-divider" : "bg-card",
       )}
       style={{
         gridTemplateColumns: "1fr 180px 180px 130px 130px",
-        borderLeft: `3px solid ${isFocused ? "var(--stone-ink)" : "transparent"}`,
+        borderLeft: `3px solid ${isFocused ? "var(--color-forest-mid)" : "transparent"}`,
       }}
     >
       <div className="min-w-0">
         <div className="mb-1.5 flex items-center gap-2.5">
-          <FileText className="size-4 shrink-0 text-stone-muted" strokeWidth={1.6} />
-          <span className="truncate font-mono text-[13px] font-medium text-stone-ink">
+          <FileText className="size-4 shrink-0 text-subtle" strokeWidth={1.6} />
+          <span className="truncate font-mono text-[13px] font-medium text-ink">
             {file.name}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 pl-6 text-[12px] text-stone-muted">
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 pl-6 text-[12px] text-subtle">
           {file.supplier ? (
             <span>{file.supplier}</span>
           ) : (
@@ -102,7 +102,7 @@ export function FileRow({
       </div>
 
       <div>
-        <div className="mb-[5px] text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+        <div className="mb-[5px] text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
           Parse confidence
         </div>
         <ConfidenceBar value={file.confidence} />
@@ -121,7 +121,7 @@ export function FileRow({
             {file.issues.slice(0, 2).map((iss, i) => (
               <div
                 key={i}
-                className="inline-flex items-center gap-1.5 text-[11.5px] text-stone-muted"
+                className="inline-flex items-center gap-1.5 text-[11.5px] text-subtle"
               >
                 <AlertTriangle
                   className="size-[14px] shrink-0"
@@ -181,7 +181,7 @@ export function FileRow({
             className={cn(
               "h-8 gap-1.5 text-[12px]",
               file.status !== "reviewed" &&
-                "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
+                "border-forest-mid bg-forest-mid text-card-warm hover:bg-forest",
             )}
           >
             {file.status === "reviewed" ? "Re-open" : "Review"}
@@ -197,7 +197,7 @@ export function FileRow({
             }}
             aria-label={`Dismiss ${file.name}`}
             className={cn(
-              "flex size-7 items-center justify-center rounded-md text-stone-muted transition-opacity hover:bg-stone-line2 hover:text-stone-ink",
+              "flex size-7 items-center justify-center rounded-md text-subtle transition-opacity hover:bg-divider hover:text-ink",
               isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-100",
             )}
           >

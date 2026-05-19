@@ -37,7 +37,7 @@ export function InventoryViewToggle({
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      <div className="inline-flex gap-1 rounded-lg bg-stone-line2 p-1">
+      <div className="inline-flex gap-1 rounded-lg bg-divider p-1">
         <ToggleTab
           href="/inventory/items"
           icon={Box}
@@ -53,7 +53,7 @@ export function InventoryViewToggle({
           active={view === "lots"}
         />
       </div>
-      <span className="text-[12px] text-stone-muted">{hint}</span>
+      <span className="text-[12px] text-subtle">{hint}</span>
     </div>
   );
 }
@@ -77,8 +77,8 @@ function ToggleTab({
       className={cn(
         "inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-medium transition-colors",
         active
-          ? "bg-stone-surface text-stone-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-          : "text-stone-ink2 hover:text-stone-ink",
+          ? "bg-card text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+          : "text-ink-warm hover:text-ink",
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -88,7 +88,7 @@ function ToggleTab({
         <span
           className={cn(
             "rounded-full px-1.5 py-px text-[11px] font-medium",
-            active ? "bg-primary/10 text-primary" : "bg-stone-line2 text-stone-muted",
+            active ? "bg-primary/10 text-primary" : "bg-divider text-subtle",
           )}
         >
           {count}

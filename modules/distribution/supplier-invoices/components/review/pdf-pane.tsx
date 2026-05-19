@@ -104,7 +104,7 @@ export function PdfPane({
       className={cn("relative flex min-w-0 flex-1 flex-col", paneEnterClass)}
       style={{
         background: "#1a1a1a",
-        borderRight: "1px solid var(--stone-line)",
+        borderRight: "1px solid var(--color-border-default)",
       }}
     >
       {accessory}
@@ -210,14 +210,14 @@ function PdfFetchErrorCard({ fileName }: { fileName: string }) {
         />
       </div>
       <div>
-        <div className="text-[15px] font-semibold text-stone-ink">
+        <div className="text-[15px] font-semibold text-ink">
           Couldn&apos;t load the original PDF
         </div>
-        <div className="mt-1 font-mono text-[12px] text-stone-muted">
+        <div className="mt-1 font-mono text-[12px] text-subtle">
           {fileName}
         </div>
       </div>
-      <p className="text-[13px] leading-[1.5] text-stone-muted">
+      <p className="text-[13px] leading-[1.5] text-subtle">
         We weren&apos;t able to fetch the source file from storage. Reviewing
         without the original isn&apos;t safe — skip this invoice or re-upload it
         from the Imports tab to retry.

@@ -63,7 +63,7 @@ export function SupplierPicker({
             <Button
               type="button"
               variant="outline"
-              className="h-[34px] w-full justify-start px-3 text-[13px] font-normal text-stone-ink shadow-none"
+              className="h-[34px] w-full justify-start px-3 text-[13px] font-normal text-ink shadow-none"
               style={
                 needsAttention
                   ? {
@@ -93,7 +93,7 @@ export function SupplierPicker({
           <ComboboxList>
             {(s: SupplierLookup) => (
               <ComboboxItem key={s.id} value={s}>
-                <span className="text-[13px] text-stone-ink">{s.name}</span>
+                <span className="text-[13px] text-ink">{s.name}</span>
               </ComboboxItem>
             )}
           </ComboboxList>

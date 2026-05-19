@@ -31,8 +31,8 @@ export function ReviewFooterStrip({
   billTotal: number;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3.5 border-t border-stone-line bg-stone-surface px-[22px] py-3">
-      <label className="flex cursor-pointer items-center gap-2 text-[12px] text-stone-muted">
+    <div className="flex items-center justify-between gap-3.5 border-t border-border-default bg-card px-[22px] py-3">
+      <label className="flex cursor-pointer items-center gap-2 text-[12px] text-subtle">
         <Checkbox
           checked={rememberAliases}
           onCheckedChange={value => onRememberAliasesChange(value === true)}
@@ -52,10 +52,10 @@ export function ReviewFooterStrip({
         ) : null}
 
         <div className="text-right">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
             Bill total
           </div>
-          <div className="font-mono text-[18px] font-bold tabular-nums text-stone-ink">
+          <div className="font-mono text-[18px] font-bold tabular-nums text-ink">
             ${fmt(billTotal)}
           </div>
         </div>
@@ -67,10 +67,10 @@ export function ReviewFooterStrip({
 function FooterStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-right">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
         {label}
       </div>
-      <div className="font-mono text-[13px] font-medium tabular-nums text-stone-ink">
+      <div className="font-mono text-[13px] font-medium tabular-nums text-ink">
         {value}
       </div>
     </div>

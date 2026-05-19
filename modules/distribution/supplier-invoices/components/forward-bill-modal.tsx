@@ -339,7 +339,7 @@ export function ForwardBillModal({
               type="button"
               onClick={handleSend}
               disabled={sending || recipients.length === 0 || invalidEmails.size > 0}
-              className="h-8 bg-stone-ink px-4 text-[13px] text-white hover:bg-stone-ink/90"
+              className="h-8 bg-forest-mid px-4 text-[13px] text-white hover:bg-forest"
             >
               {sending ? "Sending…" : "Send"}
             </Button>

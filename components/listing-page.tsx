@@ -143,7 +143,7 @@ function SortIcon({
 
 function LoadingBar() {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-stone-line2">
+    <div className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-divider">
       <div className="h-full w-2/5 animate-[listing-slide_1.2s_ease-in-out_infinite] rounded-sm bg-primary" />
     </div>
   );
@@ -167,7 +167,7 @@ export function ListingAction({
       variant={variant}
       className={cn(
         variant === "default" &&
-          "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
+          "border-forest-mid bg-forest-mid text-card-warm hover:bg-forest",
         "text-[13px]",
         className,
       )}
@@ -190,8 +190,8 @@ function HeaderToggleCount({
       className={cn(
         "h-5 rounded-full px-1.5 text-[11px]",
         active
-          ? "bg-stone-ink text-stone-surface"
-          : "bg-stone-line text-stone-muted",
+          ? "bg-forest-mid text-card-warm"
+          : "bg-surface-deep text-subtle",
       )}
     >
       {count}
@@ -258,11 +258,11 @@ export function ListingPage<TRow>({
       {!hideHeader ? (
         <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div>
-            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-stone-ink">
+            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-ink">
               {title}
             </h1>
             {subtitle ? (
-              <p className="mt-1 mb-0 text-[13px] text-stone-muted">
+              <p className="mt-1 mb-0 text-[13px] text-subtle">
                 {subtitle}
               </p>
             ) : null}
@@ -284,7 +284,7 @@ export function ListingPage<TRow>({
           onValueChange={value => {
             if (value) onViewChange?.(value);
           }}
-          className="mb-0 w-full justify-start rounded-none border-b border-stone-line"
+          className="mb-0 w-full justify-start rounded-none border-b border-border-default"
           variant="default"
           size="sm"
         >
@@ -295,7 +295,7 @@ export function ListingPage<TRow>({
                 key={view.id}
                 value={view.id}
                 className={cn(
-                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-stone-muted hover:bg-transparent hover:text-stone-ink data-[state=on]:border-stone-ink data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-stone-ink",
+                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-subtle hover:bg-transparent hover:text-ink data-[state=on]:border-forest-mid data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-ink",
                 )}
               >
                 {view.label}
@@ -310,22 +310,22 @@ export function ListingPage<TRow>({
 
       {kpis && kpis.length > 0 ? (
         <div
-          className="my-4 grid overflow-hidden rounded-md border border-stone-line bg-stone-line"
+          className="my-4 grid overflow-hidden rounded-md border border-border-default bg-surface-deep"
           style={{
             gridTemplateColumns: `repeat(${kpis.length}, minmax(0, 1fr))`,
             gap: 1,
           }}
         >
           {kpis.map((kpi, i) => (
-            <div key={i} className="bg-stone-surface px-4.5 py-3.5">
-              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted">
+            <div key={i} className="bg-card px-4.5 py-3.5">
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-subtle">
                 {kpi.label}
               </div>
-              <div className="font-mono text-[22px] font-semibold leading-tight text-stone-ink">
+              <div className="font-mono text-[22px] font-semibold leading-tight text-ink">
                 {kpi.value}
               </div>
               {kpi.sub ? (
-                <div className="mt-0.5 text-[11px] text-stone-muted">
+                <div className="mt-0.5 text-[11px] text-subtle">
                   {kpi.sub}
                 </div>
               ) : null}
@@ -336,9 +336,9 @@ export function ListingPage<TRow>({
 
       {headerExtra ? <div className="mb-4">{headerExtra}</div> : null}
 
-      <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-        <div className="flex flex-wrap items-center gap-2.5 border-b border-stone-line2 px-4 py-3">
-          <InputGroup className="h-8 max-w-80 flex-[1_1_180px] border-stone-line bg-stone-line2 shadow-none">
+      <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-divider px-4 py-3">
+          <InputGroup className="h-8 max-w-80 flex-[1_1_180px] border-border-default bg-divider shadow-none">
             <InputGroupAddon align="inline-start">
               <Search className="size-3.5" />
             </InputGroupAddon>
@@ -370,7 +370,7 @@ export function ListingPage<TRow>({
                 if (value) onSegmentChange?.(value);
               }}
               spacing={1}
-              className="rounded-md bg-stone-line2 p-0.5"
+              className="rounded-md bg-divider p-0.5"
               variant="default"
               size="sm"
             >
@@ -378,7 +378,7 @@ export function ListingPage<TRow>({
                 <ToggleGroupItem
                   key={seg.value}
                   value={seg.value}
-                  className="h-7 rounded px-2.5 text-xs font-normal text-stone-muted shadow-none hover:bg-transparent hover:text-stone-ink data-[state=on]:border data-[state=on]:border-stone-line data-[state=on]:bg-stone-surface data-[state=on]:font-medium data-[state=on]:text-stone-ink data-[state=on]:shadow-xs"
+                  className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
                 >
                   {seg.label}
                 </ToggleGroupItem>
@@ -386,7 +386,7 @@ export function ListingPage<TRow>({
             </ToggleGroup>
           ) : null}
 
-          <div className="ml-auto whitespace-nowrap text-xs text-stone-muted">
+          <div className="ml-auto whitespace-nowrap text-xs text-subtle">
             {isLoading
               ? "Loading..."
               : total > 0
@@ -399,12 +399,12 @@ export function ListingPage<TRow>({
           {isFetching && !isLoading ? <LoadingBar /> : null}
 
           {isLoading ? (
-            <div className="px-6 py-12 text-center text-[13px] text-stone-muted">
+            <div className="px-6 py-12 text-center text-[13px] text-subtle">
               <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton
                     key={i}
-                    className="h-3.5 rounded-sm bg-stone-line2"
+                    className="h-3.5 rounded-sm bg-divider"
                     style={{ width: `${60 + (i % 3) * 15}%`, opacity: 1 - i * 0.1 }}
                   />
                 ))}
@@ -412,11 +412,11 @@ export function ListingPage<TRow>({
             </div>
           ) : isEmpty ? (
             <div className="px-6 py-16 text-center">
-              <div className="mb-1.5 text-sm font-medium text-stone-ink">
+              <div className="mb-1.5 text-sm font-medium text-ink">
                 {emptyTitle}
               </div>
               {emptyDescription ? (
-                <div className="mb-4 text-[13px] text-stone-muted">
+                <div className="mb-4 text-[13px] text-subtle">
                   {emptyDescription}
                 </div>
               ) : null}
@@ -429,16 +429,16 @@ export function ListingPage<TRow>({
                 isFetching && "opacity-60",
               )}
             >
-              <Table className="text-[13px] text-stone-ink2">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
+                  <TableRow className="border-divider hover:bg-transparent">
                     {columns.map(col => (
                       <TableHead
                         key={col.key}
                         style={{ width: col.width }}
                         onClick={() => col.sortKey && handleSort(col)}
                         className={cn(
-                          "h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted",
+                          "h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle",
                           col.sortKey && "cursor-pointer",
                           col.align === "right" && "text-right",
                           col.align === "center" && "text-center",
@@ -459,7 +459,7 @@ export function ListingPage<TRow>({
                       </TableHead>
                     ))}
                     {rowActions && rowActions.length > 0 ? (
-                      <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                      <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                     ) : null}
                   </TableRow>
                 </TableHeader>
@@ -468,7 +468,7 @@ export function ListingPage<TRow>({
                     <TableRow>
                       <TableCell
                         colSpan={columns.length + (rowActions ? 1 : 0)}
-                        className="px-6 py-8 text-center text-[13px] text-stone-muted"
+                        className="px-6 py-8 text-center text-[13px] text-subtle"
                       >
                         No results match your search.
                       </TableCell>
@@ -484,7 +484,7 @@ export function ListingPage<TRow>({
                           key={rowId}
                           onClick={onRowClick ? () => onRowClick(row) : undefined}
                           className={cn(
-                            "group/row border-stone-line2 hover:bg-stone-line2",
+                            "group/row border-divider hover:bg-divider",
                             onRowClick && "cursor-pointer",
                           )}
                         >
@@ -503,7 +503,7 @@ export function ListingPage<TRow>({
                                   <div>
                                     <div>{value.primary}</div>
                                     {value.secondary !== undefined ? (
-                                      <div className="mt-px text-[11px] text-stone-muted">
+                                      <div className="mt-px text-[11px] text-subtle">
                                         {value.secondary}
                                       </div>
                                     ) : null}
@@ -529,7 +529,7 @@ export function ListingPage<TRow>({
                                         variant="outline"
                                         size="xs"
                                         className={cn(
-                                          "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                          "border-border-default bg-card text-xs text-ink-warm hover:bg-divider",
                                           isDestructive &&
                                             "text-destructive hover:text-destructive",
                                         )}
@@ -550,7 +550,7 @@ export function ListingPage<TRow>({
                                       variant="outline"
                                       size="xs"
                                       className={cn(
-                                        "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                        "border-border-default bg-card text-xs text-ink-warm hover:bg-divider",
                                         isDestructive &&
                                           "text-destructive hover:text-destructive",
                                       )}
@@ -577,8 +577,8 @@ export function ListingPage<TRow>({
         </div>
 
         {!hidePagination && !isLoading && !isEmpty ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-line2 px-4 py-2.5">
-            <div className="flex items-center gap-1.5 text-xs text-stone-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-4 py-2.5">
+            <div className="flex items-center gap-1.5 text-xs text-subtle">
               <span>Rows</span>
               <Select
                 value={String(pageSize)}
@@ -586,7 +586,7 @@ export function ListingPage<TRow>({
               >
                 <SelectTrigger
                   size="sm"
-                  className="h-7 w-[72px] border-stone-line bg-stone-surface px-2 text-xs text-stone-ink2 shadow-none"
+                  className="h-7 w-[72px] border-border-default bg-card px-2 text-xs text-ink-warm shadow-none"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -600,7 +600,7 @@ export function ListingPage<TRow>({
               </Select>
             </div>
 
-            <div className="text-xs text-stone-muted">
+            <div className="text-xs text-subtle">
               {total > 0 ? `${start}-${end} of ${total.toLocaleString()}` : "0 records"}
             </div>
 
@@ -611,12 +611,12 @@ export function ListingPage<TRow>({
                 size="icon-xs"
                 aria-label="Previous"
                 disabled={page <= 1}
-                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
                 onClick={() => onPageChange(page - 1)}
               >
                 <ChevronLeft className="size-3.5" />
               </Button>
-              <span className="px-1.5 text-xs text-stone-muted">
+              <span className="px-1.5 text-xs text-subtle">
                 {page} / {pageCount || 1}
               </span>
               <Button
@@ -625,7 +625,7 @@ export function ListingPage<TRow>({
                 size="icon-xs"
                 aria-label="Next"
                 disabled={page >= pageCount}
-                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
                 onClick={() => onPageChange(page + 1)}
               >
                 <ChevronRight className="size-3.5" />

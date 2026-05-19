@@ -55,7 +55,7 @@ export function LineCostDiffBanner({
       style={{
         background: accentSoft,
         borderColor: accentBorder,
-        color: "var(--stone-ink)",
+        color: "var(--color-forest-mid)",
       }}
     >
       <div className="inline-flex items-center gap-1.5 font-medium">
@@ -77,7 +77,7 @@ export function LineCostDiffBanner({
             ? "New cost for this supplier"
             : "Cost changed for this supplier"}
           {productName ? (
-            <span className="text-stone-muted"> · {productName}</span>
+            <span className="text-subtle"> · {productName}</span>
           ) : null}
         </span>
       </div>
@@ -85,16 +85,16 @@ export function LineCostDiffBanner({
       <div className="inline-flex items-baseline gap-1.5 font-mono tabular-nums">
         {variant === "new" ? (
           <>
-            <span className="text-stone-muted">—</span>
-            <span className="text-stone-muted">→</span>
+            <span className="text-subtle">—</span>
+            <span className="text-subtle">→</span>
             <span className="font-semibold">${liveNum.toFixed(4)}</span>
           </>
         ) : (
           <>
-            <span className="text-stone-muted">
+            <span className="text-subtle">
               ${recordedNum != null ? recordedNum.toFixed(4) : "0.0000"}
             </span>
-            <span className="text-stone-muted">→</span>
+            <span className="text-subtle">→</span>
             <span className="font-semibold">${liveNum.toFixed(4)}</span>
             {deltaPct != null ? (
               <span
@@ -112,9 +112,9 @@ export function LineCostDiffBanner({
       </div>
 
       {dependentCustomerCount > 0 ? (
-        <div className="text-[11.5px] text-stone-muted">
+        <div className="text-[11.5px] text-subtle">
           Affects{" "}
-          <span className="font-semibold text-stone-ink">
+          <span className="font-semibold text-ink">
             {dependentCustomerCount} customer
             {dependentCustomerCount === 1 ? "" : "s"}
           </span>{" "}
@@ -130,7 +130,7 @@ export function LineCostDiffBanner({
           </Link>
         </div>
       ) : (
-        <div className="text-[11.5px] text-stone-muted">
+        <div className="text-[11.5px] text-subtle">
           No customer prices pinned to this supplier yet.
         </div>
       )}
@@ -138,7 +138,7 @@ export function LineCostDiffBanner({
       <label
         className="ml-auto inline-flex cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] font-medium"
         style={{
-          color: acknowledged ? accent : "var(--stone-ink)",
+          color: acknowledged ? accent : "var(--color-forest-mid)",
           background: acknowledged ? "rgba(255,255,255,0.6)" : "transparent",
           border: `1px solid ${acknowledged ? accentBorder : "transparent"}`,
         }}

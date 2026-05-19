@@ -23,7 +23,7 @@ export function FilterSegmented({
   onChange: (filter: ReviewFilter) => void;
 }) {
   return (
-    <div className="flex gap-1 rounded-[7px] border border-stone-line bg-stone-line2 p-[3px]">
+    <div className="flex gap-1 rounded-[7px] border border-border-default bg-divider p-[3px]">
       <FilterBtn
         active={filter === "all"}
         onClick={() => onChange("all")}
@@ -83,8 +83,8 @@ function FilterBtn({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-[5px] text-[12px] font-medium transition-colors",
         active
-          ? "bg-stone-ink text-stone-surface"
-          : "bg-transparent text-stone-muted hover:text-stone-ink",
+          ? "bg-forest-mid text-card-warm"
+          : "bg-transparent text-subtle hover:text-ink",
       )}
     >
       {children}
@@ -95,8 +95,8 @@ function FilterBtn({
             ? "rgba(255,255,255,0.2)"
             : fg
               ? `color-mix(in oklch, ${fg} 12%, transparent)`
-              : "var(--stone-line2)",
-          color: active ? "var(--stone-surface)" : (fg ?? "var(--stone-muted)"),
+              : "var(--color-divider)",
+          color: active ? "var(--color-card)" : (fg ?? "var(--color-subtle)"),
         }}
       >
         {count}

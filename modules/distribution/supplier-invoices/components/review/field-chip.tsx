@@ -31,9 +31,9 @@ export function FieldChip({
   const label = status === "warn" ? "Low" : LEVEL_LABEL[level];
 
   return (
-    <div className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-stone-muted">
+    <div className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-subtle">
       <span className="size-[5px] rounded-full" style={{ background: color }} />
-      <span className="font-mono tabular-nums text-stone-muted">{confidence}%</span>
+      <span className="font-mono tabular-nums text-subtle">{confidence}%</span>
       <span style={{ color: REVIEW_COLORS.mutedSoft }}>{label} confidence</span>
       {sourceHint ? (
         <span style={{ color: REVIEW_COLORS.mutedSoft }}>· {sourceHint}</span>

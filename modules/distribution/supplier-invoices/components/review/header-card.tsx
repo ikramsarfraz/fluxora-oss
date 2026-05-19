@@ -117,9 +117,9 @@ export function HeaderCard({
   const receiveDateSameAsInvoice = receiveDate === invoiceDate;
 
   return (
-    <div className="border-b border-stone-line bg-stone-surface px-4 py-3">
+    <div className="border-b border-border-default bg-card px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
-        <h2 className="text-[14px] font-medium text-stone-ink">Invoice header</h2>
+        <h2 className="text-[14px] font-medium text-ink">Invoice header</h2>
         <div className="flex items-center gap-2">
           <FieldChip
             confidence={parsed.total.confidence}
@@ -129,7 +129,7 @@ export function HeaderCard({
             type="button"
             onClick={onToggleCollapse}
             title="Collapse header to a summary strip"
-            className="flex size-7 items-center justify-center rounded-md text-stone-muted transition-colors hover:bg-stone-line2 hover:text-stone-ink"
+            className="flex size-7 items-center justify-center rounded-md text-subtle transition-colors hover:bg-divider hover:text-ink"
           >
             <ChevronUp className="size-[14px]" strokeWidth={1.8} />
           </button>
@@ -175,7 +175,7 @@ export function HeaderCard({
                   key={i}
                   type="button"
                   onClick={() => onSupplierCandidate?.(candidate)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-stone-line bg-stone-surface py-1 pl-2.5 pr-1.5 text-[12px] text-stone-ink transition-colors hover:bg-stone-line2"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border-default bg-card py-1 pl-2.5 pr-1.5 text-[12px] text-ink transition-colors hover:bg-divider"
                 >
                   <Sparkles
                     className="size-[12px]"
@@ -183,7 +183,7 @@ export function HeaderCard({
                     style={{ color: REVIEW_COLORS.accent }}
                   />
                   <span className="font-medium">{candidate.name}</span>
-                  <span className="rounded bg-stone-line2 px-1.5 py-px font-mono text-[10.5px] tabular-nums text-stone-muted">
+                  <span className="rounded bg-divider px-1.5 py-px font-mono text-[10.5px] tabular-nums text-subtle">
                     {candidate.score}%
                   </span>
                 </button>
@@ -200,7 +200,7 @@ export function HeaderCard({
             value={invoiceNumber}
             onChange={e => onInvoiceNumberChange(e.target.value)}
             maxLength={128}
-            className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 font-mono text-[13px] tabular-nums outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+            className="block h-[34px] w-full rounded-lg border border-border-default bg-card px-3 font-mono text-[13px] tabular-nums outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
             style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
           />
         </ParsedField>
@@ -213,7 +213,7 @@ export function HeaderCard({
             type="date"
             value={invoiceDate}
             onChange={e => onInvoiceDateChange(e.target.value)}
-            className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+            className="block h-[34px] w-full rounded-lg border border-border-default bg-card px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
             style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
           />
         </ParsedField>
@@ -237,7 +237,7 @@ export function HeaderCard({
               type="date"
               value={receiveDate}
               onChange={e => onReceiveDateChange(e.target.value)}
-              className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+              className="block h-[34px] w-full rounded-lg border border-border-default bg-card px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
               style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
             />
           </ParsedField>
@@ -253,7 +253,7 @@ export function HeaderCard({
                   : (e.target.value as PaymentMethod),
               )
             }
-            className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+            className="block h-[34px] w-full rounded-lg border border-border-default bg-card px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
             style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
           >
             {PAYMENT_METHOD_OPTIONS.map(opt => (
@@ -269,7 +269,7 @@ export function HeaderCard({
           parser's prefill (e.g. PO #, special instructions found on the
           invoice). Empty string maps to null at submit. */}
       <div className="mt-2.5">
-        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-stone-muted">
+        <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle">
           Notes
         </label>
         <textarea
@@ -278,7 +278,7 @@ export function HeaderCard({
           rows={2}
           maxLength={2000}
           placeholder="Optional notes for this bill (PO #, special instructions, etc.)"
-          className="block w-full resize-y rounded-lg border border-stone-line bg-stone-surface px-3 py-2 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+          className="block w-full resize-y rounded-lg border border-border-default bg-card px-3 py-2 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
           style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
         />
       </div>
@@ -335,12 +335,12 @@ function CollapsedHeaderStrip({
   };
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-stone-line bg-stone-surface px-4 py-2 text-[12px]">
+    <div className="flex items-center justify-between gap-3 border-b border-border-default bg-card px-4 py-2 text-[12px]">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <span
           className={
             supplierSelected
-              ? "min-w-0 max-w-[280px] truncate text-[13px] font-semibold text-stone-ink"
+              ? "min-w-0 max-w-[280px] truncate text-[13px] font-semibold text-ink"
               : "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-semibold"
           }
           style={
@@ -356,24 +356,24 @@ function CollapsedHeaderStrip({
             ? supplierValue || parsed.supplier.value || "—"
             : "Supplier missing"}
         </span>
-        <span className="text-stone-muted">·</span>
-        <span className="font-mono text-stone-muted">
+        <span className="text-subtle">·</span>
+        <span className="font-mono text-subtle">
           {parsed.invoiceNumber.value
             ? `#${parsed.invoiceNumber.value}`
             : "no invoice #"}
         </span>
-        <span className="text-stone-muted">·</span>
-        <span className="font-mono text-stone-muted">
+        <span className="text-subtle">·</span>
+        <span className="font-mono text-subtle">
           {fmtDate(parsed.invoiceDate.value)}
         </span>
-        <span className="text-stone-muted">·</span>
-        <span className="font-mono font-semibold tabular-nums text-stone-ink">
+        <span className="text-subtle">·</span>
+        <span className="font-mono font-semibold tabular-nums text-ink">
           ${fmtMoney(parsed.total.value)}
         </span>
         {paymentMethod ? (
           <>
-            <span className="text-stone-muted">·</span>
-            <span className="text-stone-muted">
+            <span className="text-subtle">·</span>
+            <span className="text-subtle">
               {PAYMENT_METHOD_LABEL[paymentMethod]}
             </span>
           </>
@@ -383,7 +383,7 @@ function CollapsedHeaderStrip({
         type="button"
         onClick={onToggleCollapse}
         title="Expand header to edit"
-        className="inline-flex items-center gap-1 rounded-md border border-stone-line bg-stone-surface px-2 py-0.5 text-[11px] font-medium text-stone-muted hover:text-stone-ink"
+        className="inline-flex items-center gap-1 rounded-md border border-border-default bg-card px-2 py-0.5 text-[11px] font-medium text-subtle hover:text-ink"
       >
         Edit
         <ChevronDown className="size-[12px]" strokeWidth={1.8} />
@@ -413,19 +413,19 @@ function ReceiveDateSameStub({
           type="date"
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="block h-[34px] w-full rounded-lg border border-stone-line bg-stone-surface px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
+          className="block h-[34px] w-full rounded-lg border border-border-default bg-card px-3 text-[13px] outline-none focus:border-[var(--input-focus)] focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--input-focus)_12%,transparent)]"
           style={{ ["--input-focus" as never]: REVIEW_COLORS.accent }}
         />
       </ParsedField>
     );
   }
   return (
-    <div className="flex items-end pb-1.5 text-[11.5px] text-stone-muted">
+    <div className="flex items-end pb-1.5 text-[11.5px] text-subtle">
       Receive date: same as invoice ·{" "}
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="ml-1 font-medium text-stone-ink underline-offset-2 hover:underline"
+        className="ml-1 font-medium text-ink underline-offset-2 hover:underline"
       >
         Edit
       </button>

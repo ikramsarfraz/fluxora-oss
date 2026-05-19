@@ -36,14 +36,14 @@ export function PriceChangeBanner({
 
   return (
     <div
-      className="shrink-0 border-b border-stone-line"
+      className="shrink-0 border-b border-border-default"
       // Soft warning tone — informational, not blocking.
       style={{ background: REVIEW_COLORS.warnSoft }}
     >
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
-        className="flex w-full items-center justify-between gap-3 px-[22px] py-2.5 text-left transition-colors hover:bg-[color:var(--stone-line2)]"
+        className="flex w-full items-center justify-between gap-3 px-[22px] py-2.5 text-left transition-colors hover:bg-[color:var(--color-divider)]"
         aria-expanded={expanded}
       >
         <div className="flex min-w-0 items-center gap-2.5">
@@ -64,7 +64,7 @@ export function PriceChangeBanner({
             {deviations.length}{" "}
             {deviations.length === 1 ? "price changed" : "prices changed"}
             {" "}
-            <span className="font-normal text-stone-muted">
+            <span className="font-normal text-subtle">
               since the last invoice from this supplier
               {ups > 0 && downs > 0
                 ? ` (${ups} up · ${downs} down)`
@@ -76,7 +76,7 @@ export function PriceChangeBanner({
         </div>
         <ChevronDown
           className={cn(
-            "size-[14px] shrink-0 text-stone-muted transition-transform",
+            "size-[14px] shrink-0 text-subtle transition-transform",
             expanded && "rotate-180",
           )}
           strokeWidth={1.6}
@@ -84,7 +84,7 @@ export function PriceChangeBanner({
       </button>
 
       {expanded ? (
-        <ul className="border-t border-stone-line bg-stone-surface">
+        <ul className="border-t border-border-default bg-card">
           {sorted.map(d => (
             <DeviationRow key={d.productId} deviation={d} />
           ))}
@@ -99,8 +99,8 @@ function DeviationRow({ deviation }: { deviation: ParsedPriceDeviation }) {
   const arrowColor = up ? REVIEW_COLORS.danger : REVIEW_COLORS.good;
 
   return (
-    <li className="flex items-center justify-between gap-3 border-b border-stone-line px-[22px] py-2 last:border-b-0">
-      <span className="min-w-0 truncate text-[12.5px] text-stone-ink">
+    <li className="flex items-center justify-between gap-3 border-b border-border-default px-[22px] py-2 last:border-b-0">
+      <span className="min-w-0 truncate text-[12.5px] text-ink">
         {deviation.productName}
       </span>
       <div className="flex shrink-0 items-center gap-2.5 text-[12px] tabular-nums">
@@ -108,7 +108,7 @@ function DeviationRow({ deviation }: { deviation: ParsedPriceDeviation }) {
           ${deviation.lastUnitPrice.toFixed(2)}
         </span>
         <span style={{ color: REVIEW_COLORS.mutedSoft }}>→</span>
-        <span className="font-semibold text-stone-ink">
+        <span className="font-semibold text-ink">
           ${deviation.parsedUnitPrice.toFixed(2)}
         </span>
         <span

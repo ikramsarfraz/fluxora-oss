@@ -30,7 +30,7 @@ export function ForwardHistoryCard({ forwards }: { forwards: BillForward[] }) {
   if (forwards.length === 0) return null;
 
   return (
-    <Card className="gap-0 overflow-hidden rounded-[10px] border-stone-line bg-stone-surface py-0 shadow-none ring-0">
+    <Card className="gap-0 overflow-hidden rounded-[10px] border-border-default bg-card py-0 shadow-none ring-0">
       <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.line}` }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Forward history</div>
         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>

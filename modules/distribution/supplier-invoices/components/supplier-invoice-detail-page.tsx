@@ -510,7 +510,7 @@ export function SupplierInvoiceDetailPage({
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
+                  className="size-[30px] border-border-default bg-card text-ink-warm shadow-none hover:bg-divider"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -607,7 +607,7 @@ export function SupplierInvoiceDetailPage({
                                     }
                                     variant="ghost"
                                     size="icon-xs"
-                                    className="size-6 shrink-0 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
+                                    className="size-6 shrink-0 text-subtle hover:bg-divider hover:text-ink"
                                   >
                                     {isExpanded ? (
                                       <ChevronDown className="size-3.5" />
@@ -1186,7 +1186,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="gap-0 overflow-hidden rounded-[10px] border-stone-line bg-stone-surface py-0 shadow-none ring-0">
+    <Card className="gap-0 overflow-hidden rounded-[10px] border-border-default bg-card py-0 shadow-none ring-0">
       <div
         style={{
           padding: "16px 20px",
@@ -1209,7 +1209,7 @@ function Section({
 
 function SideCard({ children }: { children: React.ReactNode }) {
   return (
-    <Card className="rounded-[10px] border-stone-line bg-stone-surface px-[18px] py-4 shadow-none ring-0">
+    <Card className="rounded-[10px] border-border-default bg-card px-[18px] py-4 shadow-none ring-0">
       {children}
     </Card>
   );
@@ -1251,7 +1251,7 @@ function PrimaryBtn({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+      className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-50"
     >
       {children}
     </Button>
@@ -1276,7 +1276,7 @@ function SecondaryBtn({
       disabled={disabled}
       title={title}
       variant="outline"
-      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
+      className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-50"
     >
       {children}
     </Button>

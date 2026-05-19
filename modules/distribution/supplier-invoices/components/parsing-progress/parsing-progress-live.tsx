@@ -143,16 +143,16 @@ export function ParsingProgressLive({
 
   if (error) {
     return (
-      <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-stone-bg p-12 text-center">
+      <main className="-m-4 flex min-w-0 flex-1 flex-col items-center justify-center bg-page p-12 text-center">
         <div className="max-w-[480px]">
-          <h1 className="mb-2 text-[22px] font-medium tracking-[-0.015em] text-stone-ink">
+          <h1 className="mb-2 text-[22px] font-medium tracking-[-0.015em] text-ink">
             Couldn&apos;t read this invoice
           </h1>
-          <p className="mb-6 text-[14px] text-stone-muted">{error}</p>
+          <p className="mb-6 text-[14px] text-subtle">{error}</p>
           <button
             type="button"
             onClick={() => router.replace("/supplier-invoices/bulk-import")}
-            className="rounded-md border border-stone-ink bg-stone-ink px-4 py-2 text-[13px] text-stone-surface hover:bg-stone-ink/90"
+            className="rounded-md border border-forest-mid bg-forest-mid px-4 py-2 text-[13px] text-card-warm hover:bg-forest"
           >
             Back to upload
           </button>

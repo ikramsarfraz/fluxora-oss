@@ -38,10 +38,10 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
 
   return (
     <aside
-      className="sticky top-0 flex h-[calc(100dvh-4rem)] w-[220px] shrink-0 flex-col gap-0 border-r border-stone-line bg-stone-surface px-3.5 py-6"
+      className="sticky top-0 flex h-[calc(100dvh-4rem)] w-[220px] shrink-0 flex-col gap-0 border-r border-border-default bg-card px-3.5 py-6"
       aria-label="Settings"
     >
-      <h2 className="px-2 pb-3.5 text-[18px] font-medium tracking-[-0.02em] text-stone-ink">
+      <h2 className="px-2 pb-3.5 text-[18px] font-medium tracking-[-0.02em] text-ink">
         Settings
       </h2>
 
@@ -50,7 +50,7 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
           .filter(g => g.visible)
           .map(group => (
             <div key={group.key} className="flex flex-col">
-              <div className="px-2 pb-1.5 pt-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+              <div className="px-2 pb-1.5 pt-3.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
                 {group.label}
               </div>
               {group.items.map(item => {
@@ -64,7 +64,7 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
                       "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-colors",
                       isActive
                         ? "bg-primary/10 font-medium text-primary"
-                        : "text-stone-ink2 hover:bg-stone-line2",
+                        : "text-ink-warm hover:bg-divider",
                     )}
                     aria-current={isActive ? "page" : undefined}
                   >
@@ -76,7 +76,7 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
                           "rounded-full px-1.5 py-px text-[10px] font-medium",
                           item.soon
                             ? "bg-primary/10 text-primary"
-                            : "bg-stone-line2 text-stone-muted",
+                            : "bg-divider text-subtle",
                         )}
                       >
                         {item.badge}

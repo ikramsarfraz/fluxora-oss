@@ -314,7 +314,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
               onClick={() => router.push("/orders")}
               disabled={isPending}
               variant="outline"
-              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+              className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
             >
               Cancel
             </Button>
@@ -323,7 +323,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
               onClick={() => void handleSubmit("draft")}
               disabled={isPending}
               variant="outline"
-              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+              className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
             >
               {pendingMode === "draft" ? "Saving…" : "Save draft"}
             </Button>
@@ -437,7 +437,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           onClick={() => void handleSubmit("draft")}
           disabled={isPending}
           variant="outline"
-          className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+          className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
         >
           {pendingMode === "draft" ? "Saving…" : "Save draft"}
         </Button>
@@ -445,7 +445,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           type="button"
           onClick={() => void handleSubmit("confirm")}
           disabled={isPending}
-          className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-60"
+          className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-60"
         >
           {pendingMode === "confirm" ? "Confirming…" : "Confirm order"}
         </Button>

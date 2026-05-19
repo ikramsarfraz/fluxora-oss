@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 
 function ProgressBar({ value }: { value: number }) {
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-line2">
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-divider">
       <div
         className="h-full rounded-full bg-primary transition-[width]"
         style={{ width: `${Math.min(100, Math.max(0, value * 100))}%` }}
@@ -48,10 +48,10 @@ export function TenantSetupChecklistCard({ role }: Props) {
   return (
     <div className="px-4 lg:px-6">
       <Card className="shadow-none border-dashed">
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b border-stone-line pb-3">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 border-b border-border-default pb-3">
           <div className="space-y-0.5">
-            <CardTitle className="text-sm font-medium text-stone-ink">Get started</CardTitle>
-            <CardDescription className="text-xs text-stone-muted">
+            <CardTitle className="text-sm font-medium text-ink">Get started</CardTitle>
+            <CardDescription className="text-xs text-subtle">
               Complete these steps to finish setting up your workspace (
               {data.completedCount}/{data.total}).
             </CardDescription>
@@ -61,7 +61,7 @@ export function TenantSetupChecklistCard({ role }: Props) {
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 text-stone-muted hover:text-stone-ink2"
+              className="shrink-0 text-subtle hover:text-ink-warm"
               title="Hide checklist"
               disabled={dismiss.isPending}
               onClick={() => dismiss.mutate()}
@@ -84,14 +84,14 @@ export function TenantSetupChecklistCard({ role }: Props) {
                     "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
                     item.done
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-stone-line text-stone-muted",
+                      : "border-border-default text-subtle",
                   )}
                   aria-hidden
                 >
                   {item.done ? <Check className="size-3" /> : null}
                 </span>
                 {item.done ? (
-                  <span className="text-stone-muted line-through">
+                  <span className="text-subtle line-through">
                     {item.label}
                   </span>
                 ) : (

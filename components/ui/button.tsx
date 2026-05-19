@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-forest text-card-warm border border-forest hover:bg-forest-mid",
+          "bg-forest-mid text-card-warm border border-forest-mid hover:bg-forest hover:border-forest",
         secondary:
           "bg-card-warm text-ink-warm border border-border-default hover:bg-card hover:border-subtle",
         ghost:

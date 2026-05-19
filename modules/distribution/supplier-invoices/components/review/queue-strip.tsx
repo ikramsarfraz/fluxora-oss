@@ -98,14 +98,14 @@ export function QueueStrip({
 
   return (
     <div
-      className="flex shrink-0 items-stretch border-b border-stone-line"
+      className="flex shrink-0 items-stretch border-b border-border-default"
       // The strip uses a warmer neutral than the page bg to anchor itself as
       // an inset chrome bar. Matches the design system's "sidebar" tone.
       style={{ padding: "10px 14px", background: "#f3f1ea" }}
     >
       {/* Caption block — label + counter, divided from the cards on its right. */}
       <div
-        className="flex flex-col justify-center border-r border-stone-line"
+        className="flex flex-col justify-center border-r border-border-default"
         style={{ paddingRight: 14, marginRight: 14, minWidth: 140 }}
       >
         <div
@@ -119,10 +119,10 @@ export function QueueStrip({
           Review queue
         </div>
         <div className="mt-[3px] flex items-baseline gap-[6px]">
-          <span className="font-mono text-[18px] font-bold tabular-nums text-stone-ink">
+          <span className="font-mono text-[18px] font-bold tabular-nums text-ink">
             {queue.length}
           </span>
-          <span className="text-[12px] text-stone-muted">
+          <span className="text-[12px] text-subtle">
             {queue.length === 1 ? "invoice left" : "invoices left"}
           </span>
         </div>
@@ -274,8 +274,8 @@ function QueueCard({
           style={{
             width: 18,
             height: 18,
-            background: isCurrent ? "var(--stone-ink)" : "var(--stone-line2)",
-            color: isCurrent ? "var(--stone-surface)" : "var(--stone-muted)",
+            background: isCurrent ? "var(--color-forest-mid)" : "var(--color-divider)",
+            color: isCurrent ? "var(--color-card)" : "var(--color-subtle)",
           }}
         >
           {position}
@@ -284,15 +284,15 @@ function QueueCard({
           className="size-[14px] shrink-0"
           strokeWidth={1.6}
           style={{
-            color: isCurrent ? "var(--stone-ink)" : "var(--stone-muted)",
+            color: isCurrent ? "var(--color-forest-mid)" : "var(--color-subtle)",
           }}
         />
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-[12px]",
             isCurrent
-              ? "font-semibold text-stone-ink"
-              : "font-medium text-stone-muted",
+              ? "font-semibold text-ink"
+              : "font-medium text-subtle",
           )}
         >
           {entry.supplierShort}
@@ -315,7 +315,7 @@ function QueueCard({
           {entry.invoiceShort}
         </span>
         <span style={{ color: REVIEW_COLORS.mutedSoft }}>·</span>
-        <span className="font-mono tabular-nums text-stone-muted">
+        <span className="font-mono tabular-nums text-subtle">
           ${fmt(entry.total)}
         </span>
       </div>
@@ -384,10 +384,10 @@ function ArrowButton({
       onClick={onClick}
       title={title}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center self-center rounded-[8px] border border-stone-line bg-stone-surface text-stone-ink transition-colors",
-        "enabled:hover:bg-[color:var(--stone-line2)]",
+        "inline-flex shrink-0 items-center justify-center self-center rounded-[8px] border border-border-default bg-card text-ink transition-colors",
+        "enabled:hover:bg-[color:var(--color-divider)]",
         "disabled:cursor-not-allowed disabled:opacity-35",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--stone-ink)]",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-forest-mid)]",
         className,
       )}
       style={{ width: 34, height: 34 }}

@@ -15,7 +15,7 @@ export function QueueDone({ onBackToBulk }: { onBackToBulk: () => void }) {
   return (
     <div className="flex flex-1 items-center justify-center p-10">
       <div
-        className="review-done-burst rounded-2xl border border-stone-line bg-stone-surface text-center"
+        className="review-done-burst rounded-2xl border border-border-default bg-card text-center"
         style={{
           maxWidth: 520,
           padding: "48px 40px",
@@ -35,13 +35,13 @@ export function QueueDone({ onBackToBulk }: { onBackToBulk: () => void }) {
           <Check className="size-[30px]" strokeWidth={2.4} />
         </div>
         <h1
-          className="mb-2 font-medium text-stone-ink"
+          className="mb-2 font-medium text-ink"
           style={{ fontSize: 24, letterSpacing: "-0.015em" }}
         >
           All caught up
         </h1>
         <p
-          className="mb-6 text-stone-muted"
+          className="mb-6 text-subtle"
           style={{ fontSize: 14 }}
         >
           Every invoice in this batch has been reviewed and posted. Inventory
@@ -50,7 +50,7 @@ export function QueueDone({ onBackToBulk }: { onBackToBulk: () => void }) {
         <Button
           type="button"
           onClick={onBackToBulk}
-          className="h-9 gap-1.5 border-stone-ink bg-stone-ink text-[13px] text-stone-surface hover:bg-stone-ink/90"
+          className="h-9 gap-1.5 border-forest-mid bg-forest-mid text-[13px] text-card-warm hover:bg-forest"
         >
           Back to bulk import
           <ArrowRight className="size-[14px]" strokeWidth={1.8} />

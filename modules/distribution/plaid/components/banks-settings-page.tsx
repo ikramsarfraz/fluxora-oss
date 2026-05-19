@@ -86,7 +86,7 @@ function ConnectBankButton({ onSuccess }: { onSuccess: () => void }) {
       type="button"
       onClick={handleClick}
       disabled={fetching || (!!linkToken && !ready)}
-      className="h-9 bg-stone-ink px-4 text-[13px] text-white hover:bg-stone-ink/90"
+      className="h-9 bg-forest-mid px-4 text-[13px] text-white hover:bg-forest"
     >
       {fetching ? "Preparing…" : "Connect your bank"}
     </Button>
@@ -322,7 +322,7 @@ function BankCard({
             size="icon-sm"
             onClick={onDisconnect}
             disabled={disconnecting}
-            className="size-7 text-stone-muted hover:text-danger-fg"
+            className="size-7 text-subtle hover:text-danger-fg"
           >
             <Trash2 size={13} />
           </Button>

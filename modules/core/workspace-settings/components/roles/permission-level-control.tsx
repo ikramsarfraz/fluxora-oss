@@ -33,7 +33,7 @@ export function PermissionLevelControl({
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "grid grid-cols-4 gap-0 rounded-lg bg-stone-line2 p-[3px]",
+        "grid grid-cols-4 gap-0 rounded-lg bg-divider p-[3px]",
         disabled && "opacity-90",
       )}
     >
@@ -53,10 +53,10 @@ export function PermissionLevelControl({
               disabled && "cursor-not-allowed",
               isActive
                 ? cn(
-                    "bg-stone-surface shadow-[0_1px_2px_rgba(0,0,0,.06)]",
+                    "bg-card shadow-[0_1px_2px_rgba(0,0,0,.06)]",
                     LEVEL_TEXT_CLASS[lvl],
                   )
-                : "text-stone-ink2 hover:text-stone-ink",
+                : "text-ink-warm hover:text-ink",
             )}
           >
             {isActive && lvl !== "none" ? (
@@ -74,14 +74,14 @@ export function PermissionLevelControl({
 }
 
 const LEVEL_TEXT_CLASS: Record<PermissionLevel, string> = {
-  none: "text-stone-muted",
+  none: "text-subtle",
   view: "text-[oklch(60%_0.15_240)]",
   edit: "text-primary",
   full: "text-[oklch(58%_0.13_155)]",
 };
 
 const LEVEL_DOT_CLASS: Record<PermissionLevel, string> = {
-  none: "bg-stone-line",
+  none: "bg-surface-deep",
   view: "bg-[oklch(60%_0.15_240)]",
   edit: "bg-primary",
   full: "bg-[oklch(58%_0.13_155)]",
@@ -105,12 +105,12 @@ export function PermissionLevelChip({
       <span
         className={cn(
           "inline-flex items-center gap-1.5 text-[12px] font-medium",
-          on ? "text-[oklch(58%_0.13_155)]" : "text-stone-muted",
+          on ? "text-[oklch(58%_0.13_155)]" : "text-subtle",
         )}
       >
         <span
           aria-hidden
-          className={cn("size-1.5 rounded-full", on ? "bg-[oklch(58%_0.13_155)]" : "bg-stone-line")}
+          className={cn("size-1.5 rounded-full", on ? "bg-[oklch(58%_0.13_155)]" : "bg-surface-deep")}
         />
         {on ? "Yes" : "No"}
       </span>

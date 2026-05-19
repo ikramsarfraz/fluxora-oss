@@ -263,7 +263,7 @@ export function ReviewQueueShell({
   // `review-done-burst` keyframe class.
   if (queue.length === 0) {
     return (
-      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-page">
         <QueueDone
           onBackToBulk={goBackToBulk}
         />
@@ -282,7 +282,7 @@ export function ReviewQueueShell({
   // and (b) can navigate past it without being misled by an empty form.
   if (pipelineResult.parseStatus === "parse_error") {
     return (
-      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
+      <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-page">
         <QueueStrip
           queue={queue}
           currentKey={currentKey}
@@ -366,7 +366,7 @@ export function ReviewQueueShell({
   );
 
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-page">
       <QueueStrip
         queue={queue}
         currentKey={currentKey}
@@ -490,7 +490,7 @@ function BulkImportLockBanner({
     <div
       role="status"
       aria-live="polite"
-      className="flex shrink-0 items-start gap-3 border-b border-stone-line bg-warning-bg px-4 py-2.5 text-[13px] text-stone-ink"
+      className="flex shrink-0 items-start gap-3 border-b border-border-default bg-warning-bg px-4 py-2.5 text-[13px] text-ink"
       style={{ background: "oklch(96% 0.06 80)" }}
     >
       <AlertTriangle
@@ -501,7 +501,7 @@ function BulkImportLockBanner({
       />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="font-semibold">{heading}</span>
-        <span className="text-stone-muted">{body}</span>
+        <span className="text-subtle">{body}</span>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {isForeign ? (
@@ -569,7 +569,7 @@ function QueueFailedCard({
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-      <div className="flex max-w-[480px] flex-col gap-4 rounded-[12px] border border-stone-line bg-stone-surface p-6 text-center">
+      <div className="flex max-w-[480px] flex-col gap-4 rounded-[12px] border border-border-default bg-card p-6 text-center">
         <div
           className="mx-auto flex size-10 items-center justify-center rounded-full"
           style={{ background: "oklch(94% 0.05 25)" }}
@@ -581,16 +581,16 @@ function QueueFailedCard({
           />
         </div>
         <div>
-          <div className="text-[15px] font-semibold text-stone-ink">Couldn&apos;t read this invoice</div>
-          <div className="mt-1 font-mono text-[12px] text-stone-muted">{fileName}</div>
+          <div className="text-[15px] font-semibold text-ink">Couldn&apos;t read this invoice</div>
+          <div className="mt-1 font-mono text-[12px] text-subtle">{fileName}</div>
         </div>
-        <p className="text-[13px] leading-[1.5] text-stone-muted">
+        <p className="text-[13px] leading-[1.5] text-subtle">
           {primaryMessage} Re-upload this PDF from the bulk-import panel to
           retry. The original file is preserved in your batch history.
         </p>
         {parseErrorCodes.length > 0 ? (
           <p
-            className="font-mono text-[10px] uppercase tracking-[0.08em] text-stone-muted"
+            className="font-mono text-[10px] uppercase tracking-[0.08em] text-subtle"
             aria-label="Failure codes"
           >
             {parseErrorCodes.join(" · ")}
@@ -619,10 +619,10 @@ function QueueFailedCard({
  */
 function ReviewQueueSkeleton() {
   return (
-    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-stone-bg">
+    <main className="-m-4 flex h-[calc(100dvh-4rem)] min-w-0 shrink-0 flex-col overflow-hidden bg-page">
       {/* Queue strip */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-stone-line bg-stone-surface px-4 py-3">
-        <div className="flex flex-col gap-1.5 border-r border-stone-line pr-4">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border-default bg-card px-4 py-3">
+        <div className="flex flex-col gap-1.5 border-r border-border-default pr-4">
           <Skeleton className="h-2.5 w-24" />
           <Skeleton className="h-4 w-16" />
         </div>
@@ -640,9 +640,9 @@ function ReviewQueueSkeleton() {
         </div>
 
         {/* Right pane */}
-        <div className="flex min-w-0 flex-1 flex-col gap-4 bg-stone-surface p-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-4 bg-card p-4">
           {/* Header card */}
-          <div className="flex flex-col gap-3 rounded-md border border-stone-line bg-stone-bg p-4">
+          <div className="flex flex-col gap-3 rounded-md border border-border-default bg-page p-4">
             <Skeleton className="h-4 w-32" />
             <div className="grid grid-cols-2 gap-3">
               <Skeleton className="h-9 w-full" />

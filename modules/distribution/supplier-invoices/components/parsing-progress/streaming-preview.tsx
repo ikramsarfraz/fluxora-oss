@@ -26,7 +26,7 @@ export function StreamingPreview({
   onCancel?: () => void;
 }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface">
+    <div className="flex flex-col overflow-hidden rounded-[12px] border border-border-default bg-card">
       <PreviewHeaderStrip />
 
       <div className="flex-1 px-[22px] py-[14px]">
@@ -51,8 +51,8 @@ export function StreamingPreview({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-stone-line bg-stone-bg px-[22px] py-[14px]">
-        <div className="text-[12px] text-stone-muted">
+      <div className="flex items-center justify-between border-t border-border-default bg-page px-[22px] py-[14px]">
+        <div className="text-[12px] text-subtle">
           {averageParseLabel ?? ""}
         </div>
         {onCancel ? (
@@ -73,9 +73,9 @@ export function StreamingPreview({
 
 function PreviewHeaderStrip() {
   return (
-    <div className="flex items-center justify-between border-b border-stone-line px-[22px] py-[16px]">
+    <div className="flex items-center justify-between border-b border-border-default px-[22px] py-[16px]">
       <div>
-        <div className="text-[14px] font-semibold text-stone-ink">Streaming preview</div>
+        <div className="text-[14px] font-semibold text-ink">Streaming preview</div>
         <div className="mt-0.5 text-[11px]" style={{ color: COLORS.mutedSoft }}>
           Lines appear as they&apos;re extracted. You can start reviewing now.
         </div>
@@ -110,7 +110,7 @@ function PreviewChip({
   highlight?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-stone-line bg-stone-line2 px-3 py-2.5">
+    <div className="rounded-lg border border-border-default bg-divider px-3 py-2.5">
       <div
         className="mb-1 text-[10px] font-semibold uppercase tracking-[0.05em]"
         style={{ color: COLORS.mutedSoft }}
@@ -119,7 +119,7 @@ function PreviewChip({
       </div>
       <div
         className={cn(
-          "truncate text-stone-ink",
+          "truncate text-ink",
           mono && "font-mono tabular-nums",
           highlight ? "text-[16px] font-semibold" : "text-[13px] font-medium",
         )}
@@ -138,10 +138,10 @@ function LineRow({ line }: { line: StreamingLine }) {
     <div
       className={cn(
         "flex items-center gap-2.5 rounded-[7px] px-2.5 py-2",
-        pending ? "bg-stone-line2 opacity-40" : "bg-stone-surface",
+        pending ? "bg-divider opacity-40" : "bg-card",
       )}
       style={{
-        border: `1px solid ${parsing ? COLORS.accent : "var(--stone-line)"}`,
+        border: `1px solid ${parsing ? COLORS.accent : "var(--color-border-default)"}`,
       }}
     >
       <span
@@ -160,13 +160,13 @@ function LineRow({ line }: { line: StreamingLine }) {
           }}
         />
       ) : (
-        <span className="flex-1 truncate font-mono text-[11.5px] text-stone-ink">
+        <span className="flex-1 truncate font-mono text-[11.5px] text-ink">
           {line.raw}
         </span>
       )}
 
       {line.state === "parsed" && line.total ? (
-        <span className="font-mono text-[12px] font-semibold tabular-nums text-stone-ink">
+        <span className="font-mono text-[12px] font-semibold tabular-nums text-ink">
           {line.total}
         </span>
       ) : null}

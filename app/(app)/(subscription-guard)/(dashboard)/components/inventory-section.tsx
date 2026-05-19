@@ -63,9 +63,9 @@ export function InventorySection({ inventory }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-medium text-stone-ink">Inventory &amp; lots</h2>
-          <p className="mt-0.5 text-xs text-stone-muted">
+        <div className="border-b border-border-default pb-3">
+          <h2 className="text-sm font-medium text-ink">Inventory &amp; lots</h2>
+          <p className="mt-0.5 text-xs text-subtle">
             Stock breakdown and expiration alerts.
           </p>
         </div>
@@ -111,9 +111,9 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
 
   return (
     <Card className="shadow-none">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-medium text-stone-ink">Inventory by status</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Inventory by status</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Item counts across all lots by lifecycle status.
         </CardDescription>
       </CardHeader>
@@ -133,12 +133,12 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
               return (
                 <li key={row.status} className="flex flex-col gap-1">
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium text-stone-ink">{statusLabel(row.status)}</span>
-                    <span className="tabular-nums text-stone-muted text-xs">
+                    <span className="font-medium text-ink">{statusLabel(row.status)}</span>
+                    <span className="tabular-nums text-subtle text-xs">
                       {row.itemCount.toLocaleString()} items
                     </span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-stone-line2">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-divider">
                     <div
                       className="h-full rounded-full bg-primary"
                       style={{ width: `${pct}%` }}
@@ -157,9 +157,9 @@ function InventoryByStatusCard({ rows }: { rows: InventoryStatusRow[] }) {
 function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-medium text-stone-ink">Top stocked products</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Top stocked products</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Highest active inventory item counts.
         </CardDescription>
       </CardHeader>
@@ -184,7 +184,7 @@ function TopStockedProductsCard({ rows }: { rows: TopStockedProductRow[] }) {
                     >
                       {row.name}
                     </Link>
-                    <div className="text-xs text-stone-muted">
+                    <div className="text-xs text-subtle">
                       {row.sku}
                     </div>
                   </TableCell>
@@ -214,13 +214,13 @@ function LotsTableCard({
   emptyMessage: string;
   tone: "warning" | "danger";
 }) {
-  const dateClass = tone === "danger" ? "text-destructive" : "text-status-warn";
+  const dateClass = tone === "danger" ? "text-destructive" : "text-warning-fg";
 
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-medium text-stone-ink">{title}</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">{description}</CardDescription>
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">{title}</CardTitle>
+        <CardDescription className="text-xs text-subtle">{description}</CardDescription>
       </CardHeader>
       <CardContent className="px-0">
         {rows.length === 0 ? (
@@ -267,7 +267,7 @@ function LotsTableCard({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-xs text-stone-muted">
+    <p className="px-6 py-6 text-center text-xs text-subtle">
       {children}
     </p>
   );

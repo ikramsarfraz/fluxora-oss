@@ -224,7 +224,7 @@ export function OrderSidebar({
           <Button
             type="button"
             onClick={onOpenFulfillDrawer}
-            className="h-9 w-full border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90"
+            className="h-9 w-full border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest"
           >
             Record fulfillment
           </Button>

@@ -12,15 +12,15 @@ export function ParsingProgressScreen({
   onCancel?: () => void;
 }) {
   return (
-    <main className="-m-4 flex min-w-0 flex-1 flex-col bg-stone-bg">
+    <main className="-m-4 flex min-w-0 flex-1 flex-col bg-page">
       <header className="px-8 pb-[22px] pt-[28px]">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-subtle">
           Step 1 of 2 · Scanning
         </div>
-        <h1 className="mb-1.5 text-[26px] font-medium leading-tight tracking-[-0.015em] text-stone-ink">
+        <h1 className="mb-1.5 text-[26px] font-medium leading-tight tracking-[-0.015em] text-ink">
           Reading invoice
         </h1>
-        <p className="max-w-[640px] text-[14px] text-stone-muted">
+        <p className="max-w-[640px] text-[14px] text-subtle">
           We extract supplier, line items, weights and prices using OCR + AI matching against your
           catalog. You&apos;ll get to review every field before posting.
         </p>

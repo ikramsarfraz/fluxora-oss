@@ -446,7 +446,7 @@ export function ReviewScreen({
     // nested <main>) that just fills whatever space the shell gives it via
     // `flex-1 min-h-0`. `overflow-hidden` keeps any in-pane overflow inside
     // the line-items scroll context.
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page">
       {topSlot}
       {header}
 
@@ -486,7 +486,7 @@ export function ReviewScreen({
 
         <div
           className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-stone-bg",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-page",
             paneEnterClass,
           )}
         >
@@ -542,15 +542,15 @@ export function ReviewScreen({
               content far exceeds available space can still push the wrapper
               past the parent's allotment in some flexbox edge cases. */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-stone-line bg-stone-surface px-[22px] py-3">
+            <div className="flex shrink-0 items-center justify-between gap-3.5 border-b border-border-default bg-card px-[22px] py-3">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-[15px] font-medium text-stone-ink">
+                <h2 className="text-[15px] font-medium text-ink">
                   Line items
                 </h2>
                 {/* Show only the product-line count here. Fees are surfaced
                     separately via the Fees filter tab and the per-tab count
                     chip — counting them in the header would double-count. */}
-                <span className="rounded bg-stone-line2 px-1.5 py-0.5 font-mono text-[11px] text-stone-muted">
+                <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[11px] text-subtle">
                   {counts.total - counts.fees}
                 </span>
               </div>
@@ -567,10 +567,10 @@ export function ReviewScreen({
                 tall inner spacer; this outer div is the scroll port. */}
             <div
               ref={scrollContainerRef}
-              className="h-0 min-h-0 flex-1 overflow-y-auto bg-stone-bg pb-20"
+              className="h-0 min-h-0 flex-1 overflow-y-auto bg-page pb-20"
             >
               {filteredLines.length === 0 ? (
-                <div className="px-[22px] py-12 text-center text-[13px] text-stone-muted">
+                <div className="px-[22px] py-12 text-center text-[13px] text-subtle">
                   No lines match this filter.
                 </div>
               ) : (
@@ -685,7 +685,7 @@ export function ReviewScreen({
                   + the submit payload, but leave a small footer so an
                   accidental click is one-step recoverable. */}
               {deletedLineIds && deletedLineIds.size > 0 && onRestoreAllLines ? (
-                <div className="flex items-center justify-between gap-3 border-t border-stone-line bg-stone-bg px-[22px] py-2 text-[12px] text-stone-muted">
+                <div className="flex items-center justify-between gap-3 border-t border-border-default bg-page px-[22px] py-2 text-[12px] text-subtle">
                   <span>
                     {deletedLineIds.size} line
                     {deletedLineIds.size === 1 ? "" : "s"} removed from this bill
@@ -693,7 +693,7 @@ export function ReviewScreen({
                   <button
                     type="button"
                     onClick={onRestoreAllLines}
-                    className="font-medium text-stone-ink underline-offset-2 hover:underline"
+                    className="font-medium text-ink underline-offset-2 hover:underline"
                   >
                     Restore all
                   </button>

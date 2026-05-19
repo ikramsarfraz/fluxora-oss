@@ -31,7 +31,7 @@ export function StageTimeline({
   stages: ParseStage[];
 }) {
   return (
-    <div className="overflow-hidden rounded-[12px] border border-stone-line bg-stone-surface">
+    <div className="overflow-hidden rounded-[12px] border border-border-default bg-card">
       <FileStrip
         fileName={fileName}
         fileSizeLabel={fileSizeLabel}
@@ -60,15 +60,15 @@ function FileStrip({
   elapsedSeconds: number;
 }) {
   return (
-    <div className="flex items-center gap-[14px] border-b border-stone-line px-[22px] py-[16px]">
+    <div className="flex items-center gap-[14px] border-b border-border-default px-[22px] py-[16px]">
       <div
-        className="flex size-[38px] items-center justify-center rounded-[10px] border border-stone-line bg-stone-line2"
+        className="flex size-[38px] items-center justify-center rounded-[10px] border border-border-default bg-divider"
         style={{ color: COLORS.danger }}
       >
         <FileText className="size-4" strokeWidth={1.6} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-mono text-[12.5px] font-medium text-stone-ink">
+        <div className="truncate font-mono text-[12.5px] font-medium text-ink">
           {fileName}
         </div>
         <div className="mt-0.5 text-[11px]" style={{ color: COLORS.mutedSoft }}>
@@ -76,7 +76,7 @@ function FileStrip({
         </div>
       </div>
       <div className="text-right">
-        <div className="font-mono text-[12px] text-stone-muted tabular-nums">
+        <div className="font-mono text-[12px] text-subtle tabular-nums">
           {elapsedSeconds.toFixed(1)}s
         </div>
         <div className="text-[10px]" style={{ color: COLORS.mutedSoft }}>
@@ -92,12 +92,12 @@ function OverallProgress({ percent }: { percent: number }) {
   return (
     <div className="px-[22px] pb-[6px] pt-[18px]">
       <div className="mb-[10px] flex items-baseline justify-between">
-        <div className="text-[13px] font-medium text-stone-ink">Overall progress</div>
+        <div className="text-[13px] font-medium text-ink">Overall progress</div>
         <div className="font-mono text-[13px] font-semibold tabular-nums">
           {Math.round(clamped)}%
         </div>
       </div>
-      <div className="h-2 overflow-hidden rounded bg-stone-line2">
+      <div className="h-2 overflow-hidden rounded bg-divider">
         <div
           className="h-full rounded transition-[width] duration-150"
           style={{
@@ -117,7 +117,7 @@ function StageRow({ stage }: { stage: ParseStage }) {
     <div
       className={cn(
         "flex items-center gap-3 rounded-lg px-[10px] py-[10px]",
-        running ? "bg-stone-line2" : "bg-transparent",
+        running ? "bg-divider" : "bg-transparent",
       )}
     >
       <StageIndicator status={stage.status} />
@@ -127,7 +127,7 @@ function StageRow({ stage }: { stage: ParseStage }) {
             className={cn(
               "text-[13px]",
               stage.status === "done" ? "font-medium" : "font-semibold",
-              queued ? "text-stone-muted" : "text-stone-ink",
+              queued ? "text-subtle" : "text-ink",
             )}
           >
             {stage.label}
@@ -180,7 +180,7 @@ function StageIndicator({ status }: { status: StageStatus }) {
   }
   return (
     <div
-      className="flex size-6 items-center justify-center rounded-full bg-stone-line2"
+      className="flex size-6 items-center justify-center rounded-full bg-divider"
       style={{ border: `1px solid ${COLORS.borderStrong}` }}
     >
       <span

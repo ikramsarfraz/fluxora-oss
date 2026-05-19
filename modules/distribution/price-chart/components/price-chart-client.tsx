@@ -88,9 +88,9 @@ function CustomerList({
       className="w-75 shrink-0 gap-0 p-0 rounded-[10px] overflow-hidden sticky top-20 flex-col"
       style={{ maxHeight: "calc(100vh - 110px)" }}
     >
-      <div className="px-4 pt-3.5 pb-2.5 border-b border-stone-line">
+      <div className="px-4 pt-3.5 pb-2.5 border-b border-border-default">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold text-stone-muted uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">
             Customers
           </span>
           <Badge variant="secondary" className="text-[11px] px-2">{filtered.length}</Badge>
@@ -127,16 +127,16 @@ function CustomerList({
               <div
                 className={cn(
                   "w-7 h-7 shrink-0 rounded-[7px] grid place-items-center text-[11px] font-semibold",
-                  isActive ? "bg-primary text-white" : "bg-muted text-stone-ink2",
+                  isActive ? "bg-primary text-white" : "bg-muted text-ink-warm",
                 )}
               >
                 {initials(c.name)}
               </div>
               <div className="min-w-0 flex-1 text-left">
-                <div className="text-[13px] font-medium leading-snug truncate text-stone-ink">
+                <div className="text-[13px] font-medium leading-snug truncate text-ink">
                   {c.name}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-stone-muted">
+                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-subtle">
                   {fuel && Number(fuel) > 0 && <span>${fmt(fuel)} fuel</span>}
                   {ovr > 0 && (
                     <span className="text-primary font-medium flex items-center gap-1">
@@ -213,11 +213,11 @@ function CustomerCard({
         {initials(customer.name)}
       </div>
       <div>
-        <div className="text-lg font-semibold tracking-tight text-stone-ink">{customer.name}</div>
+        <div className="text-lg font-semibold tracking-tight text-ink">{customer.name}</div>
       </div>
       <div className="flex-1" />
 
-      <div className="flex border border-stone-line rounded-md overflow-hidden">
+      <div className="flex border border-border-default rounded-md overflow-hidden">
         <Button
           variant="ghost"
           onClick={() => {
@@ -226,9 +226,9 @@ function CustomerCard({
             setTimeout(() => inputRef.current?.select(), 0);
           }}
           title="Click to edit bulk markup"
-          className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-stone-line px-3.5 py-2.5 hover:bg-muted/60"
+          className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-border-default px-3.5 py-2.5 hover:bg-muted/60"
         >
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Bulk markup
           </span>
           {editingMarkup ? (
@@ -249,38 +249,38 @@ function CustomerCard({
                 }}
                 className="w-14 h-7 text-sm font-semibold px-2"
               />
-              <span className="text-xs text-stone-muted">%</span>
+              <span className="text-xs text-subtle">%</span>
             </div>
           ) : (
-            <div className="text-base font-semibold tracking-tight text-stone-ink">
+            <div className="text-base font-semibold tracking-tight text-ink">
               {markup}
-              <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+              <span className="text-xs text-subtle font-medium ml-px">%</span>
             </div>
           )}
         </Button>
 
-        <div className="px-3.5 py-2.5 min-w-32.5 border-r border-stone-line flex flex-col gap-0.5">
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+        <div className="px-3.5 py-2.5 min-w-32.5 border-r border-border-default flex flex-col gap-0.5">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Customer prices
           </span>
-          <div className="text-base font-semibold tracking-tight text-stone-ink">
+          <div className="text-base font-semibold tracking-tight text-ink">
             {ovr}
-            <span className="text-xs text-stone-muted font-medium ml-0.5">/ {totalProducts}</span>
+            <span className="text-xs text-subtle font-medium ml-0.5">/ {totalProducts}</span>
           </div>
         </div>
 
         <div className="px-3.5 py-2.5 min-w-30 flex flex-col gap-0.5">
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Avg margin
           </span>
-          <div className="text-base font-semibold tracking-tight text-stone-ink">
+          <div className="text-base font-semibold tracking-tight text-ink">
             {avgMargin == null ? (
-              <span className="text-stone-muted/60 text-sm font-normal">—</span>
+              <span className="text-subtle/60 text-sm font-normal">—</span>
             ) : (
               <>
                 {avgMargin >= 0 ? "+" : ""}
                 {avgMargin.toFixed(1)}
-                <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+                <span className="text-xs text-subtle font-medium ml-px">%</span>
               </>
             )}
           </div>
@@ -316,13 +316,13 @@ function FuelCard({
   const [val, setVal] = useState(current);
 
   return (
-    <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-status-warn-soft ring-status-warn/20">
-      <div className="w-8 h-8 shrink-0 rounded-lg bg-status-warn/20 text-status-warn grid place-items-center">
+    <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-warning-bg ring-warning-border/20">
+      <div className="w-8 h-8 shrink-0 rounded-lg bg-warning-fg/20 text-warning-fg grid place-items-center">
         <Truck size={16} />
       </div>
       <div className="flex-1">
-        <div className="text-[12.5px] font-medium text-stone-ink">Fuel surcharge</div>
-        <div className="text-[11.5px] text-stone-muted mt-0.5">
+        <div className="text-[12.5px] font-medium text-ink">Fuel surcharge</div>
+        <div className="text-[11.5px] text-subtle mt-0.5">
           Flat fee added to every order. Set to 0 to waive.
         </div>
       </div>
@@ -370,7 +370,7 @@ function VendorPriceInput({
   return (
     <div className="inline-flex items-center gap-1.5">
       <div className="relative inline-flex items-center">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-muted/70 text-[10.5px] font-mono pointer-events-none">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-subtle/70 text-[10.5px] font-mono pointer-events-none">
           $
         </span>
         <Input
@@ -459,17 +459,17 @@ function VendorSubRows({
         return (
           <TableRow
             key={`${customerId}:${productId}:${v.supplier_id}`}
-            className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2"
+            className="bg-divider/60 hover:bg-divider/80 border-divider"
           >
             <TableCell className="py-2 pl-8 pr-4">
               <div className="flex items-center gap-2">
-                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-stone-line" />
+                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-surface-deep" />
                 <div>
-                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
                     {v.supplier_name}
                   </div>
                   {v.last_received_at && (
-                    <div className="text-[11px] text-stone-muted/70 mt-0.5">
+                    <div className="text-[11px] text-subtle/70 mt-0.5">
                       Last received{" "}
                       {new Date(v.last_received_at).toLocaleDateString(undefined, {
                         month: "short",
@@ -485,7 +485,7 @@ function VendorSubRows({
               <span
                 className={cn(
                   "font-mono tabular-nums text-[13px]",
-                  isCheapest ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                  isCheapest ? "font-semibold text-ink" : "font-medium text-subtle",
                 )}
               >
                 ${fmt(v.cost_per_lb)}
@@ -494,7 +494,7 @@ function VendorSubRows({
                 <div
                   className={cn(
                     "text-[10.5px] font-mono tabular-nums mt-0.5",
-                    delta > 0 ? "text-destructive" : "text-status-good",
+                    delta > 0 ? "text-destructive" : "text-success-fg",
                   )}
                 >
                   {delta > 0 ? "+" : ""}${Math.abs(delta).toFixed(2)} ({deltaPct > 0 ? "+" : ""}
@@ -516,16 +516,16 @@ function VendorSubRows({
             <TableCell className="py-2 text-right">
               {(() => {
                 if (v.customer_price == null) {
-                  return <span className="text-[11px] text-stone-muted/60">—</span>;
+                  return <span className="text-[11px] text-subtle/60">—</span>;
                 }
                 const m = marginPct(Number(v.customer_price), cost);
-                if (m == null) return <span className="text-[11px] text-stone-muted/60">—</span>;
+                if (m == null) return <span className="text-[11px] text-subtle/60">—</span>;
                 const cls =
                   m >= 5
-                    ? "text-status-good"
+                    ? "text-success-fg"
                     : m < 0
                       ? "text-destructive"
-                      : "text-stone-muted";
+                      : "text-subtle";
                 return (
                   <span className={cn("font-mono tabular-nums text-[11.5px]", cls)}>
                     {m >= 0 ? "+" : ""}
@@ -580,12 +580,12 @@ function ProductRow({
 
   const marginClass =
     displayMargin == null
-      ? "text-stone-muted/60"
+      ? "text-subtle/60"
       : displayMargin >= 5
-        ? "text-status-good"
+        ? "text-success-fg"
         : displayMargin < 0
           ? "text-destructive"
-          : "text-stone-muted";
+          : "text-subtle";
 
   const multiVendor = prod.vendors.length > 1;
 
@@ -602,13 +602,13 @@ function ProductRow({
       <TableRow className={expanded ? "border-0" : undefined}>
         <TableCell className="py-3 px-4">
           <div className="flex items-center gap-3.5">
-            <div className="font-mono text-[10.5px] text-stone-muted bg-muted px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
+            <div className="font-mono text-[10.5px] text-subtle bg-muted px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
               {prod.sku}
             </div>
             <div>
-              <div className="text-[13px] font-medium text-stone-ink">{prod.name}</div>
+              <div className="text-[13px] font-medium text-ink">{prod.name}</div>
               {multiVendor && (
-                <div className="text-[11px] text-stone-muted/70 mt-0.5">
+                <div className="text-[11px] text-subtle/70 mt-0.5">
                   {prod.vendors.length} suppliers
                 </div>
               )}
@@ -626,15 +626,15 @@ function ProductRow({
                 className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
                 title="Expand to see each supplier"
               >
-                <span className="text-stone-muted">
+                <span className="text-subtle">
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
-                <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+                <span className="font-mono tabular-nums text-[13px] font-medium text-ink-warm">
                   {costsDiffer && minCost != null && maxCost != null ? (
                     <>
-                      <span className="text-[11px] text-stone-muted font-normal mr-0.5">from</span>
+                      <span className="text-[11px] text-subtle font-normal mr-0.5">from</span>
                       ${fmt(minCost)}
-                      <span className="text-stone-muted/60 mx-0.5">–</span>${fmt(maxCost)}
+                      <span className="text-subtle/60 mx-0.5">–</span>${fmt(maxCost)}
                     </>
                   ) : (
                     <>${fmt(minCost ?? prod.cost)}</>
@@ -642,13 +642,13 @@ function ProductRow({
                 </span>
               </Button>
             ) : (
-              <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+              <span className="font-mono tabular-nums text-[13px] font-medium text-ink-warm">
                 ${fmt(prod.cost)}
-                <span className="text-[11px] text-stone-muted ml-0.5">/lb</span>
+                <span className="text-[11px] text-subtle ml-0.5">/lb</span>
               </span>
             )
           ) : (
-            <span className="text-[12px] text-stone-muted/60">No cost</span>
+            <span className="text-[12px] text-subtle/60">No cost</span>
           )}
         </TableCell>
 
@@ -658,7 +658,7 @@ function ProductRow({
               variant="ghost"
               size="sm"
               onClick={onToggleExpand}
-              className="h-8 px-2 text-[12px] font-normal text-stone-muted hover:text-stone-ink gap-1"
+              className="h-8 px-2 text-[12px] font-normal text-subtle hover:text-ink gap-1"
             >
               {expanded ? "Hide suppliers" : "Set per supplier"}
               {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -666,7 +666,7 @@ function ProductRow({
           ) : (
             <div className="inline-flex items-center gap-2">
               <div className="relative inline-flex items-center">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle/70 text-xs font-mono pointer-events-none">
                   $
                 </span>
                 <Input
@@ -718,14 +718,14 @@ function ProductRow({
 
         <TableCell className="py-3 px-4 text-right">
           {multiVendor ? (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-subtle/60">—</span>
           ) : displayMargin != null ? (
             <span className={cn("font-mono tabular-nums text-[12px]", marginClass)}>
               {displayMargin >= 0 ? "+" : ""}
               {displayMargin.toFixed(1)}%
             </span>
           ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-subtle/60">—</span>
           )}
         </TableCell>
 
@@ -761,7 +761,7 @@ function ProductRow({
       )}
       {expanded && (
         <TableRow className="hover:bg-transparent border-0">
-          <TableCell colSpan={5} className="h-px bg-stone-line p-0" />
+          <TableCell colSpan={5} className="h-px bg-surface-deep p-0" />
         </TableRow>
       )}
     </>
@@ -859,7 +859,7 @@ function ProductTable({
   return (
     <Card className="gap-0 p-0 rounded-[10px] overflow-hidden">
       {/* toolbar */}
-      <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-stone-line bg-stone-line2/40">
+      <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border-default bg-divider/40">
         <InputGroup className="flex-none w-70 min-w-50">
           <InputGroupAddon align="inline-start">
             <Search size={14} />
@@ -908,7 +908,7 @@ function ProductTable({
         </ToggleGroup>
 
         <div className="flex-1" />
-        <span className="text-[12px] text-stone-muted">{pageData?.total ?? 0} products</span>
+        <span className="text-[12px] text-subtle">{pageData?.total ?? 0} products</span>
       </div>
 
       <Table>
@@ -927,7 +927,7 @@ function ProductTable({
                 key={i}
                 className={cn(
                   align,
-                  "text-[11px] font-medium text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
+                  "text-[11px] font-medium text-subtle uppercase tracking-[0.04em] bg-divider/40 px-4 py-2.5 h-auto",
                 )}
                 style={{ width: w }}
               >
@@ -939,7 +939,7 @@ function ProductTable({
         <TableBody>
           {grouped.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="py-16 text-center text-[13px] text-stone-muted">
+              <TableCell colSpan={5} className="py-16 text-center text-[13px] text-subtle">
                 No products match.
               </TableCell>
             </TableRow>
@@ -950,12 +950,12 @@ function ProductTable({
                 <TableCell
                   colSpan={5}
                   className={cn(
-                    "bg-stone-line2/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-stone-muted uppercase tracking-widest",
-                    gi > 0 && "border-t border-stone-line",
+                    "bg-divider/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-subtle uppercase tracking-widest",
+                    gi > 0 && "border-t border-border-default",
                   )}
                 >
                   {cat}
-                  <span className="text-stone-muted/60 ml-2 font-medium">{prods.length}</span>
+                  <span className="text-subtle/60 ml-2 font-medium">{prods.length}</span>
                 </TableCell>
               </TableRow>
               {prods.map(prod => (
@@ -1030,7 +1030,7 @@ export function PriceChartClient() {
   if (error) return <PageError message={(error as Error).message} />;
   if (!customer) {
     return (
-      <p className="py-16 text-center text-[13px] text-stone-muted">
+      <p className="py-16 text-center text-[13px] text-subtle">
         No customers yet. Add a customer to get started.
       </p>
     );

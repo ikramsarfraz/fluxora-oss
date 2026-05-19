@@ -108,22 +108,22 @@ export function ParseErrorDialog({
           <DialogTitle className="text-center">{detail.title}</DialogTitle>
           <DialogDescription className="text-center">
             {file ? (
-              <span className="mt-2 block font-mono text-[12px] text-stone-muted">
+              <span className="mt-2 block font-mono text-[12px] text-subtle">
                 {file.name}
               </span>
             ) : null}
-            <span className="mt-3 block text-[13px] leading-[1.5] text-stone-muted">
+            <span className="mt-3 block text-[13px] leading-[1.5] text-subtle">
               {detail.body}
             </span>
           </DialogDescription>
         </DialogHeader>
 
         {parseErrorCodes.length > 0 ? (
-          <div className="rounded-md border border-stone-line bg-stone-line2 px-3 py-2 text-center">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-muted">
+          <div className="rounded-md border border-border-default bg-divider px-3 py-2 text-center">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
               Error codes
             </div>
-            <div className="mt-1 font-mono text-[11px] text-stone-ink">
+            <div className="mt-1 font-mono text-[11px] text-ink">
               {parseErrorCodes.join(" · ")}
             </div>
           </div>
@@ -143,7 +143,7 @@ export function ParseErrorDialog({
               onReupload();
               onOpenChange(false);
             }}
-            className="border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90"
+            className="border-forest-mid bg-forest-mid text-card-warm hover:bg-forest"
           >
             Re-upload PDF
           </Button>

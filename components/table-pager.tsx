@@ -32,8 +32,8 @@ export function TablePager({
   const end = Math.min(page * perPage, total);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-line2 px-4 py-2.5">
-      <div className="flex items-center gap-1.5 text-xs text-stone-muted">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-4 py-2.5">
+      <div className="flex items-center gap-1.5 text-xs text-subtle">
         <span>Rows</span>
         <Select
           value={String(perPage)}
@@ -41,7 +41,7 @@ export function TablePager({
         >
           <SelectTrigger
             size="sm"
-            className="h-7 w-18 border-stone-line bg-stone-surface px-2 text-xs text-stone-ink2 shadow-none"
+            className="h-7 w-18 border-border-default bg-card px-2 text-xs text-ink-warm shadow-none"
           >
             <SelectValue />
           </SelectTrigger>
@@ -55,7 +55,7 @@ export function TablePager({
         </Select>
       </div>
 
-      <div className="text-xs text-stone-muted">
+      <div className="text-xs text-subtle">
         {total > 0 ? `${start}–${end} of ${total.toLocaleString()}` : "0 records"}
       </div>
 
@@ -66,12 +66,12 @@ export function TablePager({
           size="icon-xs"
           aria-label="Previous page"
           disabled={page <= 1}
-          className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+          className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
           onClick={() => onPageChange(page - 1)}
         >
           <ChevronLeft className="size-3.5" />
         </Button>
-        <span className="px-1.5 text-xs text-stone-muted">
+        <span className="px-1.5 text-xs text-subtle">
           {page} / {pageCount}
         </span>
         <Button
@@ -80,7 +80,7 @@ export function TablePager({
           size="icon-xs"
           aria-label="Next page"
           disabled={page >= pageCount}
-          className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+          className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
           onClick={() => onPageChange(page + 1)}
         >
           <ChevronRight className="size-3.5" />

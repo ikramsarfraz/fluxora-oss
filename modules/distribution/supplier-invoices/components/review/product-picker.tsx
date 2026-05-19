@@ -51,7 +51,7 @@ export function ProductPicker({
               type="button"
               variant="outline"
               onClick={e => e.stopPropagation()}
-              className="h-8 w-full justify-start pl-8 pr-2.5 text-[12.5px] font-normal text-stone-ink shadow-none"
+              className="h-8 w-full justify-start pl-8 pr-2.5 text-[12.5px] font-normal text-ink shadow-none"
             >
               <Search
                 className="pointer-events-none absolute left-2.5 top-1/2 size-[14px] -translate-y-1/2"
@@ -71,7 +71,7 @@ export function ProductPicker({
             {(p: ProductLookup) => (
               <ComboboxItem key={p.id} value={p}>
                 <div className="flex w-full items-center justify-between gap-2.5">
-                  <span className="truncate text-[13px] text-stone-ink">{p.name}</span>
+                  <span className="truncate text-[13px] text-ink">{p.name}</span>
                   {p.sku ? (
                     <span
                       className="font-mono text-[11px]"

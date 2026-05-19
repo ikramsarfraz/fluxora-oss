@@ -95,39 +95,39 @@ export function ChargesPanel({
     .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
   return (
-    <div className="border-t border-stone-line bg-stone-surface">
-      <div className="flex items-center justify-between border-b border-stone-line bg-stone-line2 px-[22px] py-3">
+    <div className="border-t border-border-default bg-card">
+      <div className="flex items-center justify-between border-b border-border-default bg-divider px-[22px] py-3">
         <div className="flex items-baseline gap-3">
-          <h2 className="text-[13px] font-medium text-stone-ink">
+          <h2 className="text-[13px] font-medium text-ink">
             Non-inventory charges
           </h2>
-          <span className="font-mono text-[11px] text-stone-muted">
+          <span className="font-mono text-[11px] text-subtle">
             {charges.length}
           </span>
         </div>
-        <div className="flex items-baseline gap-3 text-[11px] text-stone-muted">
+        <div className="flex items-baseline gap-3 text-[11px] text-subtle">
           {inInventoryTotal > 0 ? (
             <span>
               ${inInventoryTotal.toFixed(2)}{" "}
-              <span className="text-stone-muted/70">in COGS</span>
+              <span className="text-subtle/70">in COGS</span>
             </span>
           ) : null}
           {otherTotal > 0 ? (
             <span>
               ${otherTotal.toFixed(2)}{" "}
-              <span className="text-stone-muted/70">off-cost</span>
+              <span className="text-subtle/70">off-cost</span>
             </span>
           ) : null}
         </div>
       </div>
 
       {charges.length === 0 ? (
-        <div className="px-[22px] py-6 text-center text-[12px] text-stone-muted">
+        <div className="px-[22px] py-6 text-center text-[12px] text-subtle">
           No charges on this bill. Add freight, fuel, tax, or other
           non-inventory amounts here.
         </div>
       ) : (
-        <div className="divide-y divide-stone-line">
+        <div className="divide-y divide-border-default">
           {charges.map(charge => (
             <ChargeRow
               key={charge.id}
@@ -139,11 +139,11 @@ export function ChargesPanel({
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-stone-line bg-stone-bg px-[22px] py-2.5">
+      <div className="flex items-center justify-between border-t border-border-default bg-page px-[22px] py-2.5">
         <button
           type="button"
           onClick={addRow}
-          className="inline-flex items-center gap-1.5 rounded-[7px] border border-dashed border-stone-line bg-stone-surface px-2.5 py-1 text-[12px] text-stone-muted transition-colors hover:text-stone-ink"
+          className="inline-flex items-center gap-1.5 rounded-[7px] border border-dashed border-border-default bg-card px-2.5 py-1 text-[12px] text-subtle transition-colors hover:text-ink"
         >
           <Plus className="size-[12px]" strokeWidth={1.8} />
           Add charge
@@ -177,7 +177,7 @@ function ChargeRow({
         onChange={e => onChange({ description: e.target.value })}
         placeholder="Description (e.g. Freight)"
         maxLength={256}
-        className="h-8 rounded-md border border-stone-line bg-stone-surface px-2.5 text-[12px] outline-none focus:border-stone-ink"
+        className="h-8 rounded-md border border-border-default bg-card px-2.5 text-[12px] outline-none focus:border-forest-mid"
       />
       <select
         value={charge.chargeType}
@@ -191,7 +191,7 @@ function ChargeRow({
                 : "",
           })
         }
-        className="h-8 rounded-md border border-stone-line bg-stone-surface px-2.5 text-[12px] outline-none focus:border-stone-ink"
+        className="h-8 rounded-md border border-border-default bg-card px-2.5 text-[12px] outline-none focus:border-forest-mid"
       >
         {CHARGE_TYPE_OPTIONS.map(opt => (
           <option key={opt.value} value={opt.value}>
@@ -209,12 +209,12 @@ function ChargeRow({
         disabled={!isTax}
         title={isTax ? "Tax rate %" : "Rate is only used for Tax"}
         className={cn(
-          "h-8 rounded-md border border-stone-line bg-stone-surface px-2 text-right font-mono text-[12px] tabular-nums outline-none focus:border-stone-ink",
+          "h-8 rounded-md border border-border-default bg-card px-2 text-right font-mono text-[12px] tabular-nums outline-none focus:border-forest-mid",
           !isTax && "opacity-40",
         )}
       />
       <div className="relative">
-        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-stone-muted">
+        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-subtle">
           $
         </span>
         <input
@@ -224,15 +224,15 @@ function ChargeRow({
           value={charge.amount}
           onChange={e => onChange({ amount: e.target.value })}
           placeholder="0.00"
-          className="h-8 w-full rounded-md border border-stone-line bg-stone-surface pl-5 pr-2 text-right font-mono text-[12px] tabular-nums outline-none focus:border-stone-ink"
+          className="h-8 w-full rounded-md border border-border-default bg-card pl-5 pr-2 text-right font-mono text-[12px] tabular-nums outline-none focus:border-forest-mid"
         />
       </div>
       <label
         className={cn(
           "inline-flex cursor-pointer select-none items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
           charge.includeInInventoryCost
-            ? "border-stone-ink bg-stone-ink/5 text-stone-ink"
-            : "border-stone-line text-stone-muted hover:text-stone-ink",
+            ? "border-forest-mid bg-forest-mid/5 text-ink"
+            : "border-border-default text-subtle hover:text-ink",
         )}
         title="When on, this charge is capitalized into product costs."
       >
@@ -250,7 +250,7 @@ function ChargeRow({
         type="button"
         onClick={onRemove}
         title="Remove charge"
-        className="flex size-7 items-center justify-center rounded-md text-stone-muted transition-colors hover:bg-stone-line2 hover:text-stone-ink"
+        className="flex size-7 items-center justify-center rounded-md text-subtle transition-colors hover:bg-divider hover:text-ink"
       >
         <Trash2 className="size-[14px]" strokeWidth={1.6} />
       </button>

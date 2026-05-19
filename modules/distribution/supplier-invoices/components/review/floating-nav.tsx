@@ -53,8 +53,8 @@ function FloatingArrow({
       title={title}
       aria-label={title}
       className={cn(
-        "absolute top-1/2 z-10 inline-flex items-center justify-center rounded-full text-stone-ink transition-colors",
-        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--stone-ink)]",
+        "absolute top-1/2 z-10 inline-flex items-center justify-center rounded-full text-ink transition-colors",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-forest-mid)]",
         "enabled:hover:bg-card",
       )}
       style={{

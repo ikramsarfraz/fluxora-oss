@@ -65,16 +65,16 @@ export function ReviewQueueHeader({
   const showCompleteArrow = !blocked && hasNext;
 
   return (
-    <div className="flex items-center justify-between gap-[18px] border-b border-stone-line bg-stone-bg px-6 py-3">
+    <div className="flex items-center justify-between gap-[18px] border-b border-border-default bg-page px-6 py-3">
       <div className="flex min-w-0 items-center gap-3.5">
         {/* File chip with red PDF icon. */}
-        <div className="flex items-center gap-2.5 rounded-lg border border-stone-line bg-stone-surface py-[5px] pl-2 pr-2.5">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border-default bg-card py-[5px] pl-2 pr-2.5">
           <FileText
             className="size-4 shrink-0"
             strokeWidth={1.6}
             style={{ color: REVIEW_COLORS.danger }}
           />
-          <span className="max-w-[300px] truncate font-mono text-[12px] font-medium text-stone-ink">
+          <span className="max-w-[300px] truncate font-mono text-[12px] font-medium text-ink">
             {fileName}
           </span>
         </div>
@@ -84,7 +84,7 @@ export function ReviewQueueHeader({
           className="rounded font-mono text-[11px]"
           style={{
             color: REVIEW_COLORS.mutedSoft,
-            background: "var(--stone-line2)",
+            background: "var(--color-divider)",
             padding: "4px 8px",
           }}
         >
@@ -141,7 +141,7 @@ export function ReviewQueueHeader({
             aria-live="polite"
             aria-disabled={blocked}
             className={cn(
-              "h-8 gap-1.5 rounded-l-none border-stone-ink bg-stone-ink text-[12px] text-stone-surface hover:bg-stone-ink/90",
+              "h-8 gap-1.5 rounded-l-none border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest",
               blocked && "cursor-not-allowed opacity-50",
             )}
           >
