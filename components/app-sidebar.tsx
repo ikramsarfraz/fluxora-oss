@@ -35,6 +35,7 @@ import {
   CircleDollarSign,
   LifeBuoy,
   LogOut,
+  MoreVertical,
   Sparkles,
   TableProperties,
   Activity,
@@ -304,9 +305,9 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {visibleGroups.map(group => (
-          <SidebarGroup key={group.title} className="py-1">
+          <SidebarGroup key={group.title} className="py-0">
             {!group.hideLabel && (
-              <SidebarGroupLabel className="px-2.5 mt-3 mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+              <SidebarGroupLabel className="px-2.5 mt-1.5 mb-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
                 {group.title}
               </SidebarGroupLabel>
             )}
@@ -336,7 +337,7 @@ export function AppSidebar({
         ))}
 
         {/* Standalone Settings entry, pinned just above the user card. */}
-        <SidebarGroup className="mt-auto border-t border-sidebar-border py-1">
+        <SidebarGroup className="mt-auto py-0">
           <SidebarGroupContent>
             <SidebarMenu>
               {navFooter.items.map(item => {
@@ -381,14 +382,14 @@ export function AppSidebar({
                         {user.email}
                       </span>
                     </div>
-                    <ChevronsUpDown className="ml-auto size-4" />
+                    <MoreVertical className="ml-auto size-4" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                  side="top"
-                  align="start"
-                  sideOffset={4}
+                  className="min-w-56 rounded-lg"
+                  side="right"
+                  align="end"
+                  sideOffset={8}
                 >
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
