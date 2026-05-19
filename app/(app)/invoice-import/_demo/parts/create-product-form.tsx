@@ -134,7 +134,12 @@ export function CreateProductForm({ line }: { line: LineItem }) {
         <Button variant="ghost" size="sm" onClick={cancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={create} disabled={!draft.name.trim() || !draft.sku.trim()}>
+        <Button
+          size="sm"
+          data-reel={`line-${line.id}-create`}
+          onClick={create}
+          disabled={!draft.name.trim() || !draft.sku.trim()}
+        >
           <Plus className="size-3" />
           Create product
         </Button>

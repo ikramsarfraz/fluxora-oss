@@ -73,7 +73,7 @@ export function ReviewStep() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-100px)] flex-col gap-3">
+    <div className="flex h-full min-h-[560px] flex-col gap-3 lg:h-[calc(100vh-120px)]">
       <PageHeader
         title={`Review ${selectedInvoice.invoiceNumber}`}
         description={`${selectedInvoice.supplierName} · ${selectedInvoice.lines.length} extracted line${selectedInvoice.lines.length === 1 ? "" : "s"}`}
@@ -104,7 +104,12 @@ export function ReviewStep() {
             {formatCurrency(selectedInvoice.declaredTotal, selectedInvoice.currency)}
           </span>
         </div>
-        <Button size="sm" onClick={commit} disabled={summary.errors > 0}>
+        <Button
+          size="sm"
+          data-reel="save"
+          onClick={commit}
+          disabled={summary.errors > 0}
+        >
           <Save className="size-3.5" />
           {summary.errors > 0 ? "Resolve errors to save" : "Save invoice"}
         </Button>

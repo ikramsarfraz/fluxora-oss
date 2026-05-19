@@ -148,6 +148,7 @@ export function InventoryStep() {
         </Button>
         <Button
           size="sm"
+          data-reel="import-invoice"
           onClick={() => dispatch({ type: "SET_STEP", step: "upload" })}
         >
           <FileText className="size-3.5" />

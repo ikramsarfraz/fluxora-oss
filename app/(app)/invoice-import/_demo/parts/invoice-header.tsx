@@ -102,6 +102,7 @@ function SupplierField({ invoice }: Props) {
         <DropdownMenuTrigger asChild>
           <Button
             id="supplier-trigger"
+            data-reel="supplier-trigger"
             variant="secondary"
             className={cn(
               "h-9 w-full justify-between font-normal",
