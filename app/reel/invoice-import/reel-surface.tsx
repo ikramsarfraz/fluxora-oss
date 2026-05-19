@@ -1,62 +1,31 @@
 "use client";
 
-import { useDemo } from "@/app/(app)/invoice-import/_demo/state";
-import { InventoryStep } from "@/app/(app)/invoice-import/_demo/steps/inventory-step";
-import { QueueStep } from "@/app/(app)/invoice-import/_demo/steps/queue-step";
-import { ReviewStep } from "@/app/(app)/invoice-import/_demo/steps/review-step";
-import { SaveStep } from "@/app/(app)/invoice-import/_demo/steps/save-step";
-import { ScanningStep } from "@/app/(app)/invoice-import/_demo/steps/scanning-step";
-import { UploadStep } from "@/app/(app)/invoice-import/_demo/steps/upload-step";
+import { BillsShell } from "./_real/bills-shell";
+import { ReviewScreen } from "./_real/review";
+import { useReel } from "./_real/reel-state";
 
 import { FakeHeader, FakeSidebar } from "./fake-sidebar";
 
 const URL_BY_STEP: Record<string, string> = {
-  inventory: "fluxora.app/inventory",
-  upload: "fluxora.app/invoice-import",
-  scanning: "fluxora.app/invoice-import",
-  queue: "fluxora.app/invoice-import",
-  review: "fluxora.app/invoice-import/inv-2847",
-  saving: "fluxora.app/invoice-import/inv-2847",
-  saved: "fluxora.app/inventory",
+  bills: "fluxora.app/supplier-invoices",
+  "imports-empty": "fluxora.app/supplier-invoices?tab=inbox",
+  "imports-scanning": "fluxora.app/supplier-invoices?tab=inbox",
+  "imports-populated": "fluxora.app/supplier-invoices?tab=inbox",
+  review: "fluxora.app/supplier-invoices/inv-2847/review",
+  "imports-reviewed": "fluxora.app/supplier-invoices?tab=inbox",
 };
 
 export function ReelSurface() {
-  const { state } = useDemo();
-  let inner: React.ReactNode;
-  switch (state.step) {
-    case "inventory":
-      inner = <InventoryStep />;
-      break;
-    case "upload":
-      inner = <UploadStep />;
-      break;
-    case "scanning":
-      inner = <ScanningStep />;
-      break;
-    case "queue":
-      inner = <QueueStep />;
-      break;
-    case "review":
-      inner = <ReviewStep />;
-      break;
-    case "saving":
-      inner = <SaveStep />;
-      break;
-    case "saved":
-      inner = <InventoryStep />;
-      break;
-  }
+  const { state } = useReel();
+  const inReview = state.step === "review";
 
   return (
     <div className="flex h-[820px] w-full">
-      <FakeSidebar />
+      <FakeSidebar activeUrl="/supplier-invoices" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <FakeHeader />
-        <main
-          data-reel-scroll
-          className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-page p-4"
-        >
-          {inner}
+        <FakeHeader crumbs={crumbsForStep(state.step)} />
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-page p-4">
+          {inReview ? <ReviewScreen /> : <BillsShell />}
         </main>
       </div>
     </div>
@@ -64,6 +33,15 @@ export function ReelSurface() {
 }
 
 export function useReelUrl(): string {
-  const { state } = useDemo();
+  const { state } = useReel();
   return URL_BY_STEP[state.step] ?? "fluxora.app";
+}
+
+function crumbsForStep(step: string): string[] {
+  switch (step) {
+    case "review":
+      return ["Purchasing", "Bills", "INV-2847"];
+    default:
+      return ["Purchasing", "Bills"];
+  }
 }

@@ -22,8 +22,6 @@ import {
 import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
-import { useDemo } from "@/app/(app)/invoice-import/_demo/state";
-
 type NavItem = { title: string; url: string; icon: LucideIcon };
 type NavGroup = { title: string; hideLabel?: boolean; items: NavItem[] };
 
@@ -70,20 +68,7 @@ const FOOTER: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
-const STEP_TO_ACTIVE: Record<string, string> = {
-  inventory: "/inventory",
-  upload: "/inventory",
-  scanning: "/inventory",
-  queue: "/supplier-invoices",
-  review: "/supplier-invoices",
-  saving: "/supplier-invoices",
-  saved: "/inventory",
-};
-
-export function FakeSidebar() {
-  const { state } = useDemo();
-  const activeUrl = STEP_TO_ACTIVE[state.step] ?? "/inventory";
-
+export function FakeSidebar({ activeUrl = "/supplier-invoices" }: { activeUrl?: string }) {
   return (
     <aside className="flex w-[16rem] shrink-0 flex-col gap-2 border-r border-sidebar-border bg-sidebar p-2 text-sidebar-foreground">
       <div className="flex items-center gap-2 rounded-md p-2">
@@ -166,19 +151,7 @@ export function FakeSidebar() {
   );
 }
 
-const BREADCRUMB_BY_STEP: Record<string, string[]> = {
-  inventory: ["Catalog", "Inventory"],
-  upload: ["Purchasing", "Import invoice"],
-  scanning: ["Purchasing", "Import invoice"],
-  queue: ["Purchasing", "Imports"],
-  review: ["Purchasing", "Imports", "INV-2847"],
-  saving: ["Purchasing", "Imports", "INV-2847"],
-  saved: ["Catalog", "Inventory"],
-};
-
-export function FakeHeader() {
-  const { state } = useDemo();
-  const crumbs = BREADCRUMB_BY_STEP[state.step] ?? ["Inventory"];
+export function FakeHeader({ crumbs }: { crumbs: string[] }) {
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
       <PanelLeft className="size-4 text-subtle" />

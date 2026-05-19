@@ -5,8 +5,8 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { DemoProvider } from "@/app/(app)/invoice-import/_demo/state";
 
+import { ReelStateProvider } from "./_real/reel-state";
 import { ReelDirectorProvider } from "./autopilot";
 import { Caption } from "./caption";
 import { ReelControls } from "./reel-controls";
@@ -16,11 +16,11 @@ import { VirtualCursor } from "./virtual-cursor";
 
 export function Reel() {
   return (
-    <DemoProvider>
+    <ReelStateProvider>
       <ReelDirectorProvider>
         <ReelLayout />
       </ReelDirectorProvider>
-    </DemoProvider>
+    </ReelStateProvider>
   );
 }
 
@@ -38,7 +38,7 @@ function ReelLayout() {
           <h1 className="mt-3 font-serif text-[40px] font-medium leading-[1.1] tracking-tight text-ink md:text-[52px]">
             Receive a PDF.
             <br />
-            Save an invoice.
+            Post a bill.
             <br />
             <span className="text-forest-mid">Stock is current.</span>
           </h1>
