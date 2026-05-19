@@ -222,12 +222,18 @@ async function runScript(c: Controls) {
     c.setCursor({ selector: "[data-reel='dialog-create-supplier-submit']" });
     await c.sleep(1000);
     c.flash();
-    await c.sleep(200);
-    // The dialog's own submit handler runs PICK_SUPPLIER + CLOSE_DIALOG after a
-    // ~700ms pending state. Give it room.
-    await c.sleep(1100);
+    await c.sleep(220);
+    // The cursor flash is visual-only — the dialog's real onClick never fires
+    // in autopilot. Drive the same state changes ourselves so the modal
+    // actually closes before the next scene starts.
+    c.dispatch({
+      type: "PICK_SUPPLIER",
+      supplierId: "sup_northwind",
+      name: "Northwind Trading Co.",
+    });
+    c.dispatch({ type: "CLOSE_DIALOG" });
     c.setCursor(null);
-    await c.sleep(400);
+    await c.sleep(600);
 
     // ---- Scene 7b: Collapse the invoice header ----
     c.setScene("collapse-header");
@@ -308,11 +314,17 @@ async function runScript(c: Controls) {
     c.setCursor({ selector: "[data-reel='dialog-create-product-submit']" });
     await c.sleep(1000);
     c.flash();
-    await c.sleep(200);
-    // Dialog runs CREATE_PRODUCT_FOR_LINE + CLOSE_DIALOG after a ~700ms pending state.
-    await c.sleep(1100);
+    await c.sleep(220);
+    // Same as supplier — close the dialog explicitly so the next scene sees
+    // it gone.
+    c.dispatch({
+      type: "CREATE_PRODUCT_FOR_LINE",
+      lineId: 5,
+      productId: "prod_pa15_new",
+    });
+    c.dispatch({ type: "CLOSE_DIALOG" });
     c.setCursor(null);
-    await c.sleep(400);
+    await c.sleep(600);
 
     // ---- Scene 11: Submit ----
     c.setScene("submit");
