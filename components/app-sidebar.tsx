@@ -33,7 +33,9 @@ import {
   Shield,
   BadgeCheck,
   CircleDollarSign,
+  LifeBuoy,
   LogOut,
+  Sparkles,
   TableProperties,
   Activity,
   Settings,
@@ -422,49 +424,29 @@ export function AppSidebar({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem asChild>
+                      <Link href="/support">
+                        <LifeBuoy className="size-4" />
+                        Help &amp; support
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/changelog">
+                        <Sparkles className="size-4" />
+                        What&apos;s new
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
                     <LogOut className="size-4" />
-                    Sign Out
+                    Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
-          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
-            <Link
-              href="/support"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Support
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/changelog"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Changelog
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/privacy"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Privacy
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/terms"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Terms
-            </Link>
-          </div>
         </SidebarFooter>
       )}
       <SidebarRail />
