@@ -250,14 +250,29 @@ function Stepper({ current }: { current: Step }) {
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 
+export type CsvApplyResult = {
+  created: number;
+  failed: Array<{ row: number; name: string; message: string }>;
+};
+
 interface CsvImportModalProps {
   importType: ImportType;
   open: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  /**
+   * Called with the validated, mapped rows when the user clicks Apply.
+   * When provided, the modal replaces its built-in mock-success stub with
+   * the real result of this call — including per-row failures rendered
+   * as errors so the user can fix and re-upload.
+   *
+   * Pass this from the importing domain (e.g. supplier-page wires a
+   * bulkCreateSuppliersAction) to keep the modal generic across types.
+   */
+  onApply?: (rows: ParsedRow[]) => Promise<CsvApplyResult>;
 }
 
-export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImportModalProps) {
+export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }: CsvImportModalProps) {
   const config = CONFIGS[importType];
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -333,10 +348,51 @@ export function CsvImportModal({ importType, open, onClose, onSuccess }: CsvImpo
     setStep(2);
   }
 
-  function handleApply() {
+  async function handleApply() {
     setApplying(true);
     setStep(3);
-    // TODO: wire to actual server action
+
+    // Domain-specific wiring path: caller provided a real apply handler
+    // (e.g. supplier page passes bulkCreateSuppliersAction).
+    if (onApply) {
+      try {
+        const result = await onApply(validRows);
+        if (result.created > 0) {
+          toast.success(
+            `Imported ${result.created} ${config.displayName.toLowerCase()}.`,
+          );
+        }
+        if (result.failed.length > 0) {
+          // Surface per-row failures as validation errors so the user can
+          // fix their CSV and re-upload. Row numbers are +2 to match the
+          // existing validate-step display (header row + 1-based index).
+          const newErrors: ValidationError[] = result.failed.map(f => ({
+            row: f.row + 2,
+            errors: [f.message],
+          }));
+          setErrors(newErrors);
+          setStep(2);
+          setApplying(false);
+          toast.error(
+            `${result.failed.length} row${result.failed.length === 1 ? "" : "s"} failed — see errors`,
+          );
+          return;
+        }
+        setApplying(false);
+        onSuccess?.();
+        onClose();
+        reset();
+      } catch (e) {
+        setApplying(false);
+        setStep(2);
+        toast.error(e instanceof Error ? e.message : "Import failed.");
+      }
+      return;
+    }
+
+    // Fallback stub for import types that haven't been wired up yet (products
+    // and customers still go through this path). See GH #160-adjacent
+    // follow-ups for those.
     setTimeout(() => {
       setApplying(false);
       toast.success(`Imported ${validRows.length} ${config.displayName.toLowerCase()}`);

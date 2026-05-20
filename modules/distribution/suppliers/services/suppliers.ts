@@ -283,8 +283,10 @@ function applyContactPatch(
   }
 }
 
-export async function createSupplier(input: CreateSupplierInput) {
-  const tenant = await getCurrentTenant();
+async function createSupplierForTenant(
+  tenantId: string,
+  input: CreateSupplierInput,
+) {
   const name = input.name?.trim();
   if (!name) {
     throw new Error("Supplier name is required.");
@@ -292,7 +294,7 @@ export async function createSupplier(input: CreateSupplierInput) {
   const netDays = normalizeNetDays(input.netDays ?? null);
 
   const values: typeof suppliers.$inferInsert = {
-    tenantId: tenant.id,
+    tenantId,
     name,
     netDays,
   };
@@ -302,6 +304,59 @@ export async function createSupplier(input: CreateSupplierInput) {
 
   if (!row) throw new Error("Failed to create supplier.");
   return row;
+}
+
+export async function createSupplier(input: CreateSupplierInput) {
+  const tenant = await getCurrentTenant();
+  return createSupplierForTenant(tenant.id, input);
+}
+
+export type BulkCreateSuppliersResult = {
+  total: number;
+  created: number;
+  failed: Array<{ row: number; name: string; message: string }>;
+};
+
+function formatBulkRowError(error: unknown): string {
+  if (error instanceof Error) {
+    // Postgres unique violation on the (tenant_id, name) index — surface a
+    // friendlier message than the raw constraint text.
+    if (/duplicate key.*suppliers_tenant_name_unique/i.test(error.message)) {
+      return "A supplier with this name already exists.";
+    }
+    return error.message;
+  }
+  return "Unknown error.";
+}
+
+/**
+ * Insert N suppliers in one call. Per-row failures are caught and returned in
+ * `failed`; successful rows are committed. Partial success is intentional —
+ * the CSV import flow lets the user re-upload after fixing the bad rows
+ * without having to re-add the rows that succeeded.
+ */
+export async function bulkCreateSuppliers(
+  rows: CreateSupplierInput[],
+): Promise<BulkCreateSuppliersResult> {
+  const tenant = await getCurrentTenant();
+  let created = 0;
+  const failed: BulkCreateSuppliersResult["failed"] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    try {
+      await createSupplierForTenant(tenant.id, row);
+      created++;
+    } catch (error) {
+      failed.push({
+        row: i,
+        name: typeof row.name === "string" ? row.name : "",
+        message: formatBulkRowError(error),
+      });
+    }
+  }
+
+  return { total: rows.length, created, failed };
 }
 
 export async function updateSupplier(input: UpdateSupplierInput) {

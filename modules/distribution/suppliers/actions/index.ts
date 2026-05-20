@@ -5,6 +5,8 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
+  bulkCreateSuppliers,
+  type BulkCreateSuppliersResult,
   createSupplier,
   deleteSupplier,
   getSupplierById,
@@ -53,6 +55,17 @@ export async function deleteSupplierAction(id: string) {
 
 export async function createSupplierAction(input: CreateSupplierInput) {
   return await createSupplier(input);
+}
+
+export async function bulkCreateSuppliersAction(
+  rows: CreateSupplierInput[],
+): Promise<BulkCreateSuppliersResult> {
+  const result = await bulkCreateSuppliers(rows);
+  if (result.created > 0) {
+    revalidatePath("/suppliers");
+    revalidatePath("/dashboard");
+  }
+  return result;
 }
 
 export async function updateSupplierAction(input: UpdateSupplierInput) {

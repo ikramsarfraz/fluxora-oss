@@ -1,10 +1,19 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
+import {
+  CsvImportModal,
+  useCsvImportModal,
+  type CsvApplyResult,
+} from "@/modules/distribution/onboarding/components/csv-import-modal";
+
+import { bulkCreateSuppliersAction } from "@/modules/distribution/suppliers/actions";
+import { queryKeys } from "@/lib/query/keys";
+import type { CreateSupplierInput } from "../services/suppliers";
 
 import {
   AlertDialog,
@@ -59,10 +68,41 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
   },
 ];
 
+function csvRowToSupplierInput(row: Record<string, string>): CreateSupplierInput {
+  return {
+    name: row.name ?? "",
+    netDays:
+      row.net_days && row.net_days.trim() !== "" ? Number(row.net_days) : null,
+    primaryContactName: row.primary_contact_name || null,
+    primaryContactEmail: row.primary_contact_email || null,
+    primaryContactPhone: row.primary_contact_phone || null,
+    taxId: row.tax_id || null,
+    accountNumber: row.account_number || null,
+    addressLine1: row.address_line1 || null,
+    addressLine2: row.address_line2 || null,
+    addressCity: row.address_city || null,
+    addressRegion: row.address_region || null,
+    addressPostalCode: row.address_postal_code || null,
+    websiteUrl: row.website_url || null,
+    notes: row.notes || null,
+  };
+}
+
 export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierRow | null>(null);
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("suppliers");
+
+  async function handleBulkImport(rows: Record<string, string>[]): Promise<CsvApplyResult> {
+    const inputs = rows.map(csvRowToSupplierInput);
+    const result = await bulkCreateSuppliersAction(inputs);
+    if (result.created > 0) {
+      // refresh the listing without waiting for a route revalidation roundtrip
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
+    }
+    return { created: result.created, failed: result.failed };
+  }
 
   const pagination = useUrlPaginationState<SupplierListSort>({
     defaultSort: "createdAt",
@@ -92,7 +132,12 @@ export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) 
 
   return (
     <>
-      <CsvImportModal importType="suppliers" open={importOpen} onClose={closeImport} />
+      <CsvImportModal
+        importType="suppliers"
+        open={importOpen}
+        onClose={closeImport}
+        onApply={handleBulkImport}
+      />
       <ListingPage
         title="Suppliers"
         subtitle="Manage your supplier accounts."
