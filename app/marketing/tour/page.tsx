@@ -294,8 +294,8 @@ export default function TourLanding() {
 
             {/* Chapters */}
             <div className="space-y-24">
-              {CHAPTERS.map((c, idx) => (
-                <Chapter key={c.n} chapter={c} flip={idx % 2 === 1} />
+              {CHAPTERS.map((c) => (
+                <Chapter key={c.n} chapter={c} />
               ))}
             </div>
           </div>
@@ -424,7 +424,7 @@ export default function TourLanding() {
 
 // ---------- atoms ----------
 
-function Chapter({ chapter, flip }: { chapter: Chapter; flip: boolean }) {
+function Chapter({ chapter }: { chapter: Chapter; flip?: boolean }) {
   const Icon = chapter.icon;
   return (
     <article id={`chapter-${chapter.n}`} className="scroll-mt-24">
@@ -435,37 +435,36 @@ function Chapter({ chapter, flip }: { chapter: Chapter; flip: boolean }) {
         <span className="h-px flex-1 bg-border-default" />
       </div>
 
-      <div
-        className={cn(
-          "mt-6 grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center",
-          flip && "md:[&>*:first-child]:order-2",
-        )}
-      >
-        <div>
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
-            <Icon className="size-3" strokeWidth={2.2} />
-            {chapter.module}
-          </div>
-          <h3 className="mt-3 font-serif text-[30px] font-medium leading-[1.1] tracking-tight text-ink md:text-[40px]">
-            {chapter.title}
-          </h3>
-          <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
-            {chapter.body}
-          </p>
-          <ul className="mt-5 space-y-1.5">
-            {chapter.bullets.map((b) => (
-              <li key={b} className="flex items-start gap-2 text-[12.5px] text-ink-warm">
-                <Check
-                  className="mt-0.5 size-3 shrink-0 text-forest-mid"
-                  strokeWidth={2.4}
-                />
-                {b}
-              </li>
-            ))}
-          </ul>
+      {/* Text lead, full-width moment below. Each moment carries its own
+          sidebar + header — can't share a half-column with body copy. */}
+      <div className="mt-6 max-w-2xl">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-subtle">
+          <Icon className="size-3" strokeWidth={2.2} />
+          {chapter.module}
         </div>
-        <div>{chapter.moment}</div>
+        <h3 className="mt-3 font-serif text-[28px] font-medium leading-[1.1] tracking-tight text-ink md:text-[36px]">
+          {chapter.title}
+        </h3>
+        <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
+          {chapter.body}
+        </p>
+        <ul className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          {chapter.bullets.map((b) => (
+            <li
+              key={b}
+              className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-warm"
+            >
+              <Check
+                className="size-3 shrink-0 text-forest-mid"
+                strokeWidth={2.4}
+              />
+              {b}
+            </li>
+          ))}
+        </ul>
       </div>
+
+      <div className="mt-8">{chapter.moment}</div>
     </article>
   );
 }

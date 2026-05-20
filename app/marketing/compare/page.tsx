@@ -579,12 +579,12 @@ function CounterStat({
 
 function PainBlock({
   order,
-  flip,
   pain,
   solution,
 }: {
   order: number;
-  flip: boolean;
+  /** Kept for callsite compatibility; layout is now always stacked. */
+  flip?: boolean;
   pain: {
     kicker: string;
     title: string;
@@ -606,19 +606,19 @@ function PainBlock({
         </span>
         <span className="h-px flex-1 bg-border-default" />
       </div>
-      <div
-        className={cn(
-          "mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8",
-          flip && "md:[&>*:first-child]:order-2",
-        )}
-      >
+
+      {/* Pain + solution headers in a two-column row (compact, text-only),
+          then the moment as a full-width app screenshot below. The moment
+          carries its own sidebar/header, so it shouldn't share a column
+          with a half-width text card. */}
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
         {/* Pain card */}
         <div className="rounded-2xl border-2 border-danger-border/40 bg-card-warm/60 p-6">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-danger-fg">
             <X className="size-3" strokeWidth={2.4} />
             {pain.kicker}
           </div>
-          <h3 className="mt-3 font-serif text-[24px] font-medium leading-[1.2] tracking-tight text-ink md:text-[28px]">
+          <h3 className="mt-3 font-serif text-[22px] font-medium leading-[1.2] tracking-tight text-ink md:text-[26px]">
             {pain.title}
           </h3>
           <ul className="mt-4 space-y-1.5 text-[12.5px] text-ink-warm">
@@ -634,9 +634,9 @@ function PainBlock({
           </ul>
         </div>
 
-        {/* Solution */}
+        {/* Solution headers (no moment yet — that's full-width below) */}
         <div>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-forest-mid">
               <Sparkles className="size-3" strokeWidth={2.4} />
               {solution.kicker}
@@ -646,10 +646,10 @@ function PainBlock({
               {solution.stat}
             </div>
           </div>
-          <h3 className="mb-3 font-serif text-[24px] font-medium leading-[1.2] tracking-tight text-ink md:text-[28px]">
+          <h3 className="mt-3 font-serif text-[22px] font-medium leading-[1.2] tracking-tight text-ink md:text-[26px]">
             {solution.title}
           </h3>
-          <ul className="mb-5 space-y-1.5 text-[12.5px] text-ink-warm">
+          <ul className="mt-4 space-y-1.5 text-[12.5px] text-ink-warm">
             {solution.bullets.map((b) => (
               <li key={b} className="flex items-start gap-1.5">
                 <Check
@@ -660,9 +660,11 @@ function PainBlock({
               </li>
             ))}
           </ul>
-          {solution.moment}
         </div>
       </div>
+
+      {/* Full-width app-shell moment */}
+      <div className="mt-8">{solution.moment}</div>
     </article>
   );
 }
