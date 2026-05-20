@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   DollarSign,
   Pencil,
@@ -11,10 +13,30 @@ import {
   Plus,
   Receipt,
   ShoppingCart,
+  Trash2,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { queryKeys } from "@/lib/query/keys";
+import {
+  archiveCustomerAction,
+  permanentlyDeleteCustomerAction,
+  restoreCustomerAction,
+} from "@/modules/distribution/customers/actions";
 
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
@@ -127,6 +149,11 @@ export default function CustomerPortfolioPage() {
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<
+    "archive" | "restore" | "permanent-delete" | null
+  >(null);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
+  const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentPortalUser();
   const canRecordPayment = can(currentUser?.role, "record_payment");
   useEffect(() => {
@@ -169,6 +196,36 @@ export default function CustomerPortfolioPage() {
     });
   }
 
+  const isArchived = !!customer.archivedAt;
+
+  async function handleLifecycleConfirm() {
+    if (!lifecycleAction) return;
+    setLifecyclePending(true);
+    try {
+      if (lifecycleAction === "archive") {
+        await archiveCustomerAction(customer.id);
+        toast.success("Customer archived.");
+      } else if (lifecycleAction === "restore") {
+        await restoreCustomerAction(customer.id);
+        toast.success("Customer restored.");
+      } else {
+        await permanentlyDeleteCustomerAction(customer.id);
+        toast.success("Customer deleted.");
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      setLifecycleAction(null);
+      if (lifecycleAction === "permanent-delete") {
+        router.push("/customers");
+      } else {
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed.");
+    } finally {
+      setLifecyclePending(false);
+    }
+  }
+
   const primaryAddress =
     customer.addresses.find(a => a.isDefault) ?? customer.addresses[0] ?? null;
   const city = primaryAddress
@@ -192,9 +249,19 @@ export default function CustomerPortfolioPage() {
           {initials(customer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-medium leading-tight text-ink">
-            {customer.name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-2xl font-medium leading-tight text-ink">
+              {customer.name}
+            </h1>
+            {isArchived ? (
+              <Badge
+                variant="secondary"
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+              >
+                Archived
+              </Badge>
+            ) : null}
+          </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             {customer.phoneNumber && (
               <span className="flex items-center gap-1 text-sm text-subtle">
@@ -206,31 +273,66 @@ export default function CustomerPortfolioPage() {
             <span className="text-sm text-subtle">
               Customer since {formatMonthYear(customer.createdAt)}
             </span>
+            {isArchived && customer.archivedAt ? (
+              <span className="text-sm text-subtle">
+                Archived {formatDisplayDate(customer.archivedAt)}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {canRecordPayment && parseFloat(metrics.balanceDue) > 0 ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBulkPaymentOpen(true)}
-            >
-              <Receipt className="size-4" />
-              Record payment
-            </Button>
-          ) : null}
-          <Button size="sm" asChild>
-            <Link href={`/orders/new?customerId=${customer.id}`}>
-              <Plus className="size-4" />
-              New order
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/customers/${customer.id}/edit`}>
-              <Pencil className="size-4" />
-              Edit
-            </Link>
-          </Button>
+          {isArchived ? (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setLifecycleAction("restore")}
+              >
+                <ArchiveRestore className="size-4" />
+                Restore
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLifecycleAction("permanent-delete")}
+              >
+                <Trash2 className="size-4" />
+                Delete permanently
+              </Button>
+            </>
+          ) : (
+            <>
+              {canRecordPayment && parseFloat(metrics.balanceDue) > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBulkPaymentOpen(true)}
+                >
+                  <Receipt className="size-4" />
+                  Record payment
+                </Button>
+              ) : null}
+              <Button size="sm" asChild>
+                <Link href={`/orders/new?customerId=${customer.id}`}>
+                  <Plus className="size-4" />
+                  New order
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/customers/${customer.id}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLifecycleAction("archive")}
+              >
+                <Archive className="size-4" />
+                Archive
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -240,6 +342,77 @@ export default function CustomerPortfolioPage() {
         customerId={customer.id}
         customerName={customer.name}
       />
+
+      <AlertDialog
+        open={!!lifecycleAction}
+        onOpenChange={open => {
+          if (!open && !lifecyclePending) setLifecycleAction(null);
+        }}
+      >
+        <AlertDialogContent>
+          {lifecycleAction === "archive" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Archive customer</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Archive <strong>{customer.name}</strong>? They&apos;ll be hidden from
+                  order and invoice lookups, but past orders, invoices, and payments
+                  stay intact. You can restore them later from the Archived tab.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Archive
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : lifecycleAction === "restore" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Restore customer</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Restore <strong>{customer.name}</strong>? They&apos;ll be visible
+                  again everywhere customers appear.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Restore
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : lifecycleAction === "permanent-delete" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete permanently</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Delete <strong>{customer.name}</strong> permanently? This can&apos;t
+                  be undone. If the customer has any orders or invoices, the delete
+                  will fail — archive them instead.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Delete permanently
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : null}
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

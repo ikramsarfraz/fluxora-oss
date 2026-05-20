@@ -6,9 +6,9 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
+  archiveCustomer,
   bulkCreateCustomers,
   createCustomer,
-  deleteCustomer,
   deleteCustomerPrice,
   getCustomerById,
   getCustomerInvoicesPage,
@@ -17,6 +17,8 @@ import {
   getCustomerPrices,
   getCustomers,
   getCustomersPage,
+  permanentlyDeleteCustomer,
+  restoreCustomer,
   setCustomerPrice,
   updateCustomer,
   type BulkCreateCustomerInput,
@@ -84,12 +86,52 @@ export async function updateCustomerAction(
   return customer;
 }
 
-export async function deleteCustomerAction(customerId: string) {
+export async function archiveCustomerAction(customerId: string) {
   const [user, customer] = await Promise.all([
     getCurrentPortalUser(),
     getCustomerById(customerId),
   ]);
-  const result = await deleteCustomer(customerId);
+  const result = await archiveCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.archive",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  return result;
+}
+
+export async function restoreCustomerAction(customerId: string) {
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await restoreCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.restore",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  return result;
+}
+
+export async function permanentlyDeleteCustomerAction(customerId: string) {
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await permanentlyDeleteCustomer(customerId);
   await logAuditEvent({
     tenantId: user.tenantId,
     actorUserId: user.id,
@@ -99,6 +141,7 @@ export async function deleteCustomerAction(customerId: string) {
     resourceId: customerId,
     metadata: customer ? { name: customer.name } : {},
   });
+  revalidatePath("/customers");
   return result;
 }
 

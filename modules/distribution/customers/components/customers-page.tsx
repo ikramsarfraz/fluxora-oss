@@ -21,10 +21,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import {
+  ListingAction,
+  ListingPage,
+  MonoText,
+  type ListingColumn,
+} from "@/components/listing-page";
+import { Badge } from "@/components/ui/badge";
+import {
+  archiveCustomerAction,
   bulkCreateCustomersAction,
-  deleteCustomerAction,
+  permanentlyDeleteCustomerAction,
+  restoreCustomerAction,
 } from "@/modules/distribution/customers/actions";
 import { useCustomersPage } from "../hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
@@ -33,6 +41,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
 import type {
   BulkCreateCustomerInput,
+  CustomerArchivedFilter,
   CustomerListItem,
   CustomerListSort,
 } from "../services/customers";
@@ -45,7 +54,19 @@ const COLUMNS: ListingColumn<CustomerRow>[] = [
     header: "Customer",
     sortKey: "name",
     render: row => ({
-      primary: <span style={{ fontWeight: 500 }}>{row.name}</span>,
+      primary: (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontWeight: 500 }}>{row.name}</span>
+          {row.archivedAt ? (
+            <Badge
+              variant="secondary"
+              className="h-5 rounded-full px-1.5 text-[10px] font-medium uppercase tracking-wide"
+            >
+              Archived
+            </Badge>
+          ) : null}
+        </span>
+      ),
       secondary: row.phoneNumber ? formatPhone(row.phoneNumber) : undefined,
     }),
   },
@@ -84,6 +105,11 @@ const COLUMNS: ListingColumn<CustomerRow>[] = [
   },
 ];
 
+const STATUS_SEGMENTS = [
+  { value: "active", label: "Active" },
+  { value: "archived", label: "Archived" },
+] as const;
+
 function csvRowToCustomerInput(row: Record<string, string>): BulkCreateCustomerInput {
   // Only construct an address block when the user gave us a street —
   // any of city/state/zip alone is meaningless without a line 1 and
@@ -117,10 +143,17 @@ function csvRowToCustomerInput(row: Record<string, string>): BulkCreateCustomerI
   };
 }
 
+type LifecycleAction = "archive" | "restore" | "permanent-delete";
+
+type LifecycleTarget = {
+  action: LifecycleAction;
+  customer: CustomerRow;
+};
+
 export default function Customers() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [deletingCustomer, setDeletingCustomer] = useState<CustomerRow | null>(null);
+  const [lifecycleTarget, setLifecycleTarget] = useState<LifecycleTarget | null>(null);
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("customers");
 
   async function handleBulkImport(rows: Record<string, string>[]): Promise<CsvApplyResult> {
@@ -132,10 +165,16 @@ export default function Customers() {
     return { created: result.created, failed: result.failed };
   }
 
-  const pagination = useUrlPaginationState<CustomerListSort>({
+  const pagination = useUrlPaginationState<
+    CustomerListSort,
+    { archived: CustomerArchivedFilter }
+  >({
     defaultSort: "createdAt",
     defaultDirection: "desc",
+    defaultFilters: { archived: "active" },
   });
+
+  const archivedFilter = pagination.filters.archived ?? "active";
 
   const { data, isLoading, isFetching, error, refetch } = useCustomersPage({
     page: pagination.page,
@@ -143,6 +182,7 @@ export default function Customers() {
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
+    archived: archivedFilter,
   });
 
   if (error) {
@@ -156,6 +196,69 @@ export default function Customers() {
     );
   }
 
+  function lifecycleCopy(target: LifecycleTarget) {
+    switch (target.action) {
+      case "archive":
+        return {
+          title: "Archive customer",
+          description: (
+            <>
+              Archive <strong>{target.customer.name}</strong>? They&apos;ll be hidden from
+              order and invoice lookups, but past orders, invoices, and payments stay intact.
+              You can restore them later from the Archived tab.
+            </>
+          ),
+          confirm: "Archive",
+          variant: "default" as const,
+        };
+      case "restore":
+        return {
+          title: "Restore customer",
+          description: (
+            <>
+              Restore <strong>{target.customer.name}</strong>? They&apos;ll be visible again
+              everywhere customers appear.
+            </>
+          ),
+          confirm: "Restore",
+          variant: "default" as const,
+        };
+      case "permanent-delete":
+        return {
+          title: "Delete permanently",
+          description: (
+            <>
+              Delete <strong>{target.customer.name}</strong> permanently? This can&apos;t be
+              undone. If the customer has any orders or invoices, the delete will fail —
+              archive them instead.
+            </>
+          ),
+          confirm: "Delete permanently",
+          variant: "destructive" as const,
+        };
+    }
+  }
+
+  async function runLifecycleAction(target: LifecycleTarget) {
+    const { action, customer } = target;
+    try {
+      if (action === "archive") {
+        await archiveCustomerAction(customer.id);
+        toast.success("Customer archived.");
+      } else if (action === "restore") {
+        await restoreCustomerAction(customer.id);
+        toast.success("Customer restored.");
+      } else {
+        await permanentlyDeleteCustomerAction(customer.id);
+        toast.success("Customer deleted.");
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed.");
+    }
+    setLifecycleTarget(null);
+  }
+
   return (
     <>
       <CsvImportModal
@@ -167,6 +270,11 @@ export default function Customers() {
       <ListingPage
         title="Customers"
         subtitle="Manage your customer accounts and contact information."
+        statusSegments={[...STATUS_SEGMENTS]}
+        activeSegment={archivedFilter}
+        onSegmentChange={value =>
+          pagination.setFilter("archived", value as CustomerArchivedFilter)
+        }
         secondaryActions={
           <button onClick={openImport} style={{
             display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
@@ -187,20 +295,42 @@ export default function Customers() {
         onRowClick={row => router.push(`/customers/${row.id}`)}
         rowActions={[
           { label: "View", href: row => `/customers/${row.id}` },
-          { label: "Delete", variant: "destructive", onClick: row => setDeletingCustomer(row) },
+          {
+            label: "Archive",
+            isVisible: row => !row.archivedAt,
+            onClick: row => setLifecycleTarget({ action: "archive", customer: row }),
+          },
+          {
+            label: "Restore",
+            isVisible: row => !!row.archivedAt,
+            onClick: row => setLifecycleTarget({ action: "restore", customer: row }),
+          },
+          {
+            label: "Delete permanently",
+            variant: "destructive",
+            isVisible: row => !!row.archivedAt,
+            onClick: row =>
+              setLifecycleTarget({ action: "permanent-delete", customer: row }),
+          },
         ]}
         rows={data?.data ?? []}
         total={data?.total ?? 0}
         isLoading={isLoading}
         isFetching={isFetching}
         searchPlaceholder="Search customers…"
-        emptyTitle="No customers yet"
-        emptyDescription="Get started by adding your first customer."
+        emptyTitle={archivedFilter === "archived" ? "No archived customers" : "No customers yet"}
+        emptyDescription={
+          archivedFilter === "archived"
+            ? "When you archive a customer, they'll show up here."
+            : "Get started by adding your first customer."
+        }
         emptyAction={
-          <ListingAction href="/customers/new">
-            <Plus className="size-3.5" />
-            Add customer
-          </ListingAction>
+          archivedFilter === "active" ? (
+            <ListingAction href="/customers/new">
+              <Plus className="size-3.5" />
+              Add customer
+            </ListingAction>
+          ) : undefined
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}
@@ -214,33 +344,32 @@ export default function Customers() {
         onSortChange={(key, dir) => pagination.setSort(key as CustomerListSort, dir)}
       />
 
-      <AlertDialog open={!!deletingCustomer} onOpenChange={open => { if (!open) setDeletingCustomer(null); }}>
+      <AlertDialog
+        open={!!lifecycleTarget}
+        onOpenChange={open => {
+          if (!open) setLifecycleTarget(null);
+        }}
+      >
         <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete customer</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete <strong>{deletingCustomer?.name}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={async () => {
-                if (!deletingCustomer) return;
-                try {
-                  await deleteCustomerAction(deletingCustomer.id);
-                  await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
-                  toast.success("Customer deleted.");
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Failed to delete customer.");
-                }
-                setDeletingCustomer(null);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          {lifecycleTarget ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{lifecycleCopy(lifecycleTarget).title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {lifecycleCopy(lifecycleTarget).description}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant={lifecycleCopy(lifecycleTarget).variant}
+                  onClick={() => runLifecycleAction(lifecycleTarget)}
+                >
+                  {lifecycleCopy(lifecycleTarget).confirm}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : null}
         </AlertDialogContent>
       </AlertDialog>
     </>

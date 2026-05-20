@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customerAddresses,
@@ -16,6 +16,7 @@ import {
   logSubscriptionEnforcementBlock,
 } from "@/lib/subscription-enforcement";
 import { countActiveCustomersForTenant } from "@/modules/core/billing/services/subscription-usage";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   buildTextSearchCondition,
@@ -284,12 +285,19 @@ export type CustomerDetail = NonNullable<
 >;
 
 export type CustomerListSort = "name" | "createdAt";
-export type CustomerListParams = PaginatedQueryInput<CustomerListSort>;
 
+/**
+ * Active (non-archived) customers in the tenant. Used by order/invoice
+ * lookups — archived customers must not be selectable for new business
+ * activity.
+ */
 export async function getCustomers() {
   const tenant = await getCurrentTenant();
   const result = await db.query.customers.findMany({
-    where: eq(customers.tenantId, tenant.id),
+    where: and(
+      eq(customers.tenantId, tenant.id),
+      isNull(customers.archivedAt),
+    ),
     with: {
       addresses: true,
       productPrices: true,
@@ -299,19 +307,40 @@ export async function getCustomers() {
   return result;
 }
 
+/**
+ * Filter for the paginated list page.
+ *   - "active"   (default): only non-archived customers
+ *   - "archived": only archived customers
+ *   - "all":      everything
+ */
+export type CustomerArchivedFilter = "active" | "archived" | "all";
+
+export type CustomerListParams = PaginatedQueryInput<CustomerListSort> & {
+  archived?: CustomerArchivedFilter;
+};
+
 export async function getCustomersPage(input?: CustomerListParams) {
   const tenant = await getCurrentTenant();
+  const archived = input?.archived ?? "active";
   const query = normalizePaginatedQuery(input, {
     defaultSort: "createdAt",
     defaultDirection: "desc",
     defaultFilters: {},
   });
+  const archivedCondition =
+    archived === "active"
+      ? isNull(customers.archivedAt)
+      : archived === "archived"
+        ? isNotNull(customers.archivedAt)
+        : undefined;
   const where = and(
     eq(customers.tenantId, tenant.id),
+    archivedCondition,
     buildTextSearchCondition(query.search, [
       customers.name,
       customers.phoneNumber,
       customers.abbreviation,
+      customers.email,
     ]),
   );
   const [{ count }] = await db
@@ -344,8 +373,102 @@ export async function getCustomersPage(input?: CustomerListParams) {
   });
 }
 
-export async function deleteCustomer(customerId: string) {
+/**
+ * Soft-delete a customer. Sets `archivedAt` + `archivedByUserId`; the row
+ * stays in the table so historical orders / invoices / payments keep
+ * working. Archived customers are hidden from list pages and order
+ * lookups by default, but are restorable.
+ */
+export async function archiveCustomer(customerId: string) {
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
+  const [row] = await db
+    .update(customers)
+    .set({
+      archivedAt: new Date(),
+      archivedByUserId: user.id,
+    })
+    .where(
+      and(
+        eq(customers.id, customerId),
+        eq(customers.tenantId, tenant.id),
+        isNull(customers.archivedAt),
+      ),
+    )
+    .returning({ id: customers.id });
+  if (!row) {
+    throw new Error("Customer not found or already archived.");
+  }
+  return row;
+}
+
+/**
+ * Reverse an archive. Clears `archivedAt` / `archivedByUserId`. Fails if
+ * another active customer already holds this customer's name — the
+ * (tenant_id, name) unique constraint applies to active and archived
+ * rows alike, but UX-wise it's worth surfacing this clearly.
+ */
+export async function restoreCustomer(customerId: string) {
   const tenant = await getCurrentTenant();
+  const [row] = await db
+    .update(customers)
+    .set({
+      archivedAt: null,
+      archivedByUserId: null,
+    })
+    .where(
+      and(
+        eq(customers.id, customerId),
+        eq(customers.tenantId, tenant.id),
+        isNotNull(customers.archivedAt),
+      ),
+    )
+    .returning({ id: customers.id });
+  if (!row) {
+    throw new Error("Customer not found or not archived.");
+  }
+  return row;
+}
+
+/**
+ * Permanently remove a customer. Only allowed when no orders or invoices
+ * reference the customer (both FKs are ON DELETE RESTRICT, so attempting
+ * this against a customer with history would fail at the DB anyway —
+ * checking first lets us give a human-readable error). For customers
+ * with history, use {@link archiveCustomer}.
+ */
+export async function permanentlyDeleteCustomer(customerId: string) {
+  const tenant = await getCurrentTenant();
+  const [orderCountRow] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(salesOrders)
+    .where(
+      and(
+        eq(salesOrders.customerId, customerId),
+        eq(salesOrders.tenantId, tenant.id),
+      ),
+    );
+  const [invoiceCountRow] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(salesInvoices)
+    .where(
+      and(
+        eq(salesInvoices.customerId, customerId),
+        eq(salesInvoices.tenantId, tenant.id),
+      ),
+    );
+  const orderCount = orderCountRow?.n ?? 0;
+  const invoiceCount = invoiceCountRow?.n ?? 0;
+  if (orderCount > 0 || invoiceCount > 0) {
+    const parts: string[] = [];
+    if (orderCount > 0) parts.push(`${orderCount} order${orderCount === 1 ? "" : "s"}`);
+    if (invoiceCount > 0) parts.push(`${invoiceCount} invoice${invoiceCount === 1 ? "" : "s"}`);
+    throw new Error(
+      `This customer has ${parts.join(" and ")} on record and can't be permanently deleted. Archive instead — historical records will be preserved.`,
+    );
+  }
   await db
     .delete(customers)
     .where(and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)));

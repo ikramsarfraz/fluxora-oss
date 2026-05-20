@@ -2,14 +2,16 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  archiveCustomerAction,
+  createCustomerAction,
   getCustomerAction,
   getCustomerInvoicesPageAction,
   getCustomerOrdersPageAction,
   getCustomerPortfolioAction,
-  createCustomerAction,
-  deleteCustomerAction,
   getCustomersAction,
   getCustomersPageAction,
+  permanentlyDeleteCustomerAction,
+  restoreCustomerAction,
 } from "@/modules/distribution/customers/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
@@ -67,11 +69,33 @@ export function useCreateCustomer() {
   });
 }
 
-export function useDeleteCustomer() {
+export function useArchiveCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteCustomerAction,
+    mutationFn: archiveCustomerAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    },
+  });
+}
+
+export function useRestoreCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: restoreCustomerAction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    },
+  });
+}
+
+export function usePermanentlyDeleteCustomer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: permanentlyDeleteCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     },
