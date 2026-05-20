@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   BookOpen,
+  Film,
   GitCompare,
   Map,
 } from "lucide-react";
@@ -14,12 +15,12 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = {
   title: "Fluxora — landing page mocks",
   description:
-    "Three variations of the Fluxora marketing landing page — editorial, comparison, product tour.",
+    "Four variations of the Fluxora marketing landing page — editorial, comparison, product tour, single-narrative walkthrough.",
 };
 
 type Variant = {
   slug: string;
-  letter: "A" | "B" | "C";
+  letter: "A" | "B" | "C" | "D";
   name: string;
   tag: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -114,6 +115,32 @@ const VARIANTS: Variant[] = [
       chip: "bg-info-bg/40 text-info-fg border-info-border/70",
     },
   },
+  {
+    slug: "walkthrough",
+    letter: "D",
+    name: "Walkthrough",
+    tag: "One demo · single narrative · cinematic",
+    icon: Film,
+    oneLiner: "One Tuesday morning, autopilot.",
+    whoFor:
+      "For visitors who want the story, not the catalog. Hero is a single merged demo that walks through five workflows with side-by-side Manual vs Fluxora comparisons. Rest of the page is short.",
+    bestFor: [
+      "Cold visitors who skim",
+      "Mobile-first audiences",
+      "Demo-led sales conversations",
+    ],
+    tradeoffs: [
+      "Less feature coverage than Editorial / Tour",
+      "Hero auto-plays — visitors who hate that will pause",
+      "One scene at a time → narrower SEO surface per scroll",
+    ],
+    tone: {
+      head: "text-ink",
+      body: "text-ink-warm",
+      accent: "text-forest-mid",
+      chip: "bg-forest-tint/40 text-forest-mid border-forest-tint-deep/60",
+    },
+  },
 ];
 
 export default function MarketingMocksIndex() {
@@ -159,7 +186,7 @@ export default function MarketingMocksIndex() {
 
       {/* Variant cards */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           {VARIANTS.map((v) => (
             <VariantCard key={v.slug} variant={v} />
           ))}
@@ -181,7 +208,7 @@ export default function MarketingMocksIndex() {
               variant to open it full-screen.
             </p>
           </header>
-          <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
             {VARIANTS.map((v) => (
               <PreviewFrame key={v.slug} variant={v} />
             ))}
