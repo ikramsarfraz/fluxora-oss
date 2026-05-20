@@ -1847,6 +1847,79 @@ export async function updateSupplierInvoicePayment(
   return { supplierInvoiceId: existing.supplierInvoiceId };
 }
 
+/* -------------------------------------------------------------------------- */
+/* AP bulk reconciliation                                                     */
+/* -------------------------------------------------------------------------- */
+
+export type BulkReconcileSupplierPaymentsResult = {
+  updated: number;
+};
+
+/**
+ * Mark N AP payments as reconciled against a bank statement line.
+ * Tenant-scoped, skips already-reconciled rows. Mirrors
+ * bulkReconcilePayments on the AR side.
+ */
+export async function bulkReconcileSupplierInvoicePayments(
+  ids: string[],
+  reference: string | null,
+): Promise<BulkReconcileSupplierPaymentsResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const trimmedRef = reference?.trim() || null;
+
+  const result = await db
+    .update(supplierInvoicePayments)
+    .set({
+      reconciledAt: new Date(),
+      reconciledByUserId: currentUser.id,
+      reconciliationReference: trimmedRef,
+    })
+    .where(
+      and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        inArray(supplierInvoicePayments.id, ids),
+        sql`${supplierInvoicePayments.reconciledAt} IS NULL`,
+      ),
+    )
+    .returning({ id: supplierInvoicePayments.id });
+
+  return { updated: result.length };
+}
+
+/** Reverse of bulkReconcileSupplierInvoicePayments. */
+export async function bulkUnreconcileSupplierInvoicePayments(
+  ids: string[],
+): Promise<BulkReconcileSupplierPaymentsResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const result = await db
+    .update(supplierInvoicePayments)
+    .set({
+      reconciledAt: null,
+      reconciledByUserId: null,
+      reconciliationReference: null,
+    })
+    .where(
+      and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        inArray(supplierInvoicePayments.id, ids),
+        sql`${supplierInvoicePayments.reconciledAt} IS NOT NULL`,
+      ),
+    )
+    .returning({ id: supplierInvoicePayments.id });
+
+  return { updated: result.length };
+}
+
 // -------------------- Attachments --------------------
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB

@@ -45,7 +45,11 @@ export type AuditAction =
   | "payment_match.confirmed"
   | "payment_match.unmatched"
   | "payment.void"
-  | "payment.update";
+  | "payment.update"
+  | "payment.bulk_reconcile"
+  | "payment.bulk_unreconcile"
+  | "supplier_payment.bulk_reconcile"
+  | "supplier_payment.bulk_unreconcile";
 
 export type LogAuditEventInput = {
   tenantId: string;

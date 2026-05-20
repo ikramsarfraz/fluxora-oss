@@ -30,6 +30,12 @@ export type PaymentFilters = {
   dateFrom?: string;
   /** Inclusive upper bound on payment_date (YYYY-MM-DD). */
   dateTo?: string;
+  /**
+   * "unreconciled" (default), "reconciled", or "all". Drives the
+   * end-of-month workflow — ops sees the unmatched queue by default,
+   * can flip to all/reconciled for audits.
+   */
+  reconciled?: "all" | "reconciled" | "unreconciled";
 };
 
 /**
@@ -47,6 +53,14 @@ function buildPaymentFilterClauses(filters: PaymentFilters): SQL[] {
   }
   if (filters.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateTo)) {
     clauses.push(lte(payments.paymentDate, filters.dateTo));
+  }
+  // Default is "unreconciled" (the end-of-month working queue).
+  // Explicit "all" or "reconciled" override.
+  const reconciled = filters.reconciled ?? "unreconciled";
+  if (reconciled === "unreconciled") {
+    clauses.push(sql`${payments.reconciledAt} IS NULL`);
+  } else if (reconciled === "reconciled") {
+    clauses.push(sql`${payments.reconciledAt} IS NOT NULL`);
   }
   return clauses;
 }
@@ -424,4 +438,73 @@ export async function updatePayment(
   await recomputeInvoiceTotals(existing.salesInvoiceId);
 
   return { invoiceId: existing.salesInvoiceId };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bulk reconciliation                                                        */
+/* -------------------------------------------------------------------------- */
+
+export type BulkReconcileResult = {
+  /** How many rows were actually updated — excludes any already in the target state. */
+  updated: number;
+};
+
+/**
+ * Mark N customer payments as reconciled against a bank statement line.
+ * `reference` is optional (sometimes ops just wants the audit trail of
+ * "we checked these"). Already-reconciled rows are passed over silently;
+ * the count returned reflects only the new updates.
+ */
+export async function bulkReconcilePayments(
+  ids: string[],
+  reference: string | null,
+  reconciledByUserId: string,
+): Promise<BulkReconcileResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const trimmedRef = reference?.trim() || null;
+
+  const result = await db
+    .update(payments)
+    .set({
+      reconciledAt: new Date(),
+      reconciledByUserId,
+      reconciliationReference: trimmedRef,
+    })
+    .where(
+      and(
+        eq(payments.tenantId, tenant.id),
+        inArray(payments.id, ids),
+        sql`${payments.reconciledAt} IS NULL`,
+      ),
+    )
+    .returning({ id: payments.id });
+
+  return { updated: result.length };
+}
+
+/** Reverse of bulkReconcilePayments — clears the three reconciliation columns. */
+export async function bulkUnreconcilePayments(
+  ids: string[],
+): Promise<BulkReconcileResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+
+  const result = await db
+    .update(payments)
+    .set({
+      reconciledAt: null,
+      reconciledByUserId: null,
+      reconciliationReference: null,
+    })
+    .where(
+      and(
+        eq(payments.tenantId, tenant.id),
+        inArray(payments.id, ids),
+        sql`${payments.reconciledAt} IS NOT NULL`,
+      ),
+    )
+    .returning({ id: payments.id });
+
+  return { updated: result.length };
 }

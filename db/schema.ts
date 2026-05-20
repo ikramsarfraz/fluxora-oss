@@ -1251,6 +1251,16 @@ export const supplierInvoicePayments = pgTable(
     /** Bank reference / transaction ID. Mirrors AR `payments.reference_number`. */
     referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /* Reconciliation columns — set when ops marks the AP payment as
+     * matching a bank statement outflow. Mirrors AR `payments`. */
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    reconciledByUserId: uuid("reconciled_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    reconciliationReference: varchar("reconciliation_reference", {
+      length: 255,
+    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1267,6 +1277,9 @@ export const supplierInvoicePayments = pgTable(
       table.tenantId,
       table.paymentDate,
     ),
+    index("supplier_invoice_payments_unreconciled_idx")
+      .on(table.tenantId, table.paymentDate)
+      .where(sql`${table.reconciledAt} IS NULL`),
     check(
       "supplier_invoice_payments_amount_positive",
       sql`${table.amount} > 0`,
@@ -1809,6 +1822,16 @@ export const payments = pgTable(
     checkNumber: varchar("check_number", { length: 64 }),
     referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /* Reconciliation columns — set when ops marks a payment as matching
+     * a bank statement line. Cleared on un-reconcile. Migration 0050. */
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    reconciledByUserId: uuid("reconciled_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    reconciliationReference: varchar("reconciliation_reference", {
+      length: 255,
+    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1823,6 +1846,10 @@ export const payments = pgTable(
       table.tenantId,
       table.paymentDate,
     ),
+    // Speeds up the default "show unreconciled" filter on /payments.
+    index("payments_unreconciled_idx")
+      .on(table.tenantId, table.paymentDate)
+      .where(sql`${table.reconciledAt} IS NULL`),
   ],
 );
 

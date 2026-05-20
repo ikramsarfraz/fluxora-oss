@@ -39,6 +39,8 @@ import {
   getSupplierInvoiceCostDiffContext,
   getSupplierInvoices,
   getSupplierInvoicesPage,
+  bulkReconcileSupplierInvoicePayments,
+  bulkUnreconcileSupplierInvoicePayments,
   recordSupplierInvoicePayment,
   removeSupplierInvoiceAttachment,
   reverseSupplierInvoice,
@@ -941,4 +943,47 @@ export async function saveFirstBillAction(input: {
   });
 
   return { invoiceId };
+}
+
+export async function bulkReconcileSupplierInvoicePaymentsAction(
+  ids: string[],
+  reference: string | null,
+) {
+  const user = await getCurrentPortalUser();
+  const result = await bulkReconcileSupplierInvoicePayments(ids, reference);
+  if (result.updated > 0) {
+    await logAuditEvent({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "supplier_payment.bulk_reconcile",
+      resourceType: "supplier_invoice_payment",
+      resourceId: null,
+      metadata: {
+        count: result.updated,
+        reference: reference?.trim() || null,
+        paymentIds: ids,
+      },
+    });
+  }
+  return result;
+}
+
+export async function bulkUnreconcileSupplierInvoicePaymentsAction(
+  ids: string[],
+) {
+  const user = await getCurrentPortalUser();
+  const result = await bulkUnreconcileSupplierInvoicePayments(ids);
+  if (result.updated > 0) {
+    await logAuditEvent({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "supplier_payment.bulk_unreconcile",
+      resourceType: "supplier_invoice_payment",
+      resourceId: null,
+      metadata: { count: result.updated, paymentIds: ids },
+    });
+  }
+  return result;
 }

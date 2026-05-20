@@ -51,7 +51,14 @@ function isTwoLine(v: unknown): v is TwoLineCell {
 
 export interface ListingColumn<TRow> {
   key: string;
-  header: string;
+  /**
+   * Column header. Most callers pass a string label. ReactNode is
+   * accepted so callers that need an interactive header element (e.g.
+   * a select-all checkbox on a multi-select listing) can render it.
+   * When non-string, `sortKey` should not be set — the sort UI assumes
+   * a label it can wrap with a button.
+   */
+  header: React.ReactNode;
   sortKey?: string;
   align?: "left" | "right" | "center";
   width?: string;

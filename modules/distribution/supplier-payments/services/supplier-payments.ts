@@ -44,6 +44,11 @@ export type BillPaymentFilters = {
   method?: string;
   dateFrom?: string;
   dateTo?: string;
+  /**
+   * "unreconciled" (default), "reconciled", or "all". Default shows the
+   * end-of-month working queue.
+   */
+  reconciled?: "all" | "reconciled" | "unreconciled";
 };
 
 function buildBillPaymentFilterClauses(
@@ -63,6 +68,12 @@ function buildBillPaymentFilterClauses(
   }
   if (filters.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateTo)) {
     clauses.push(lte(supplierInvoicePayments.paymentDate, filters.dateTo));
+  }
+  const reconciled = filters.reconciled ?? "unreconciled";
+  if (reconciled === "unreconciled") {
+    clauses.push(sql`${supplierInvoicePayments.reconciledAt} IS NULL`);
+  } else if (reconciled === "reconciled") {
+    clauses.push(sql`${supplierInvoicePayments.reconciledAt} IS NOT NULL`);
   }
   return clauses;
 }

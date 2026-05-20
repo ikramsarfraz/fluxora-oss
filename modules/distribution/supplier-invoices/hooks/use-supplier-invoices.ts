@@ -16,6 +16,8 @@ import {
   getSupplierInvoicesPageAction,
   bulkImportSupplierInvoicesAction,
   parseSupplierInvoicePdfAction,
+  bulkReconcileSupplierInvoicePaymentsAction,
+  bulkUnreconcileSupplierInvoicePaymentsAction,
   recordSupplierInvoicePaymentAction,
   recordManualProductSelectionAction,
   removeSupplierInvoiceAttachmentAction,
@@ -359,6 +361,28 @@ export function useRemoveSupplierInvoiceAttachment(supplierInvoiceId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
       });
+    },
+  });
+}
+
+export function useBulkReconcileSupplierInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, reference }: { ids: string[]; reference: string | null }) =>
+      bulkReconcileSupplierInvoicePaymentsAction(ids, reference),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+    },
+  });
+}
+
+export function useBulkUnreconcileSupplierInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      bulkUnreconcileSupplierInvoicePaymentsAction(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
     },
   });
 }

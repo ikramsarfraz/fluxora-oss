@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  bulkReconcilePaymentsAction,
+  bulkUnreconcilePaymentsAction,
   getPaymentByIdAction,
   getPaymentsAction,
   getPaymentsPageAction,
@@ -91,6 +93,29 @@ export function useUpdatePayment() {
     mutationFn: updatePaymentAction,
     onSuccess: (result, variables) => {
       invalidatePaymentCaches(queryClient, variables.id, result.invoiceId);
+    },
+  });
+}
+
+export function useBulkReconcilePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, reference }: { ids: string[]; reference: string | null }) =>
+      bulkReconcilePaymentsAction(ids, reference),
+    onSuccess: () => {
+      // Listing + summary both need to reflect the new state; detail
+      // pages of the touched rows pick up via the umbrella all-key.
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+    },
+  });
+}
+
+export function useBulkUnreconcilePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => bulkUnreconcilePaymentsAction(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
     },
   });
 }

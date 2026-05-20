@@ -5,6 +5,8 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
+  bulkReconcilePayments,
+  bulkUnreconcilePayments,
   getPaymentById,
   getPayments,
   getPaymentsPage,
@@ -102,5 +104,55 @@ export async function updatePaymentAction(input: UpdatePaymentInput) {
     },
   });
 
+  return result;
+}
+
+export async function bulkReconcilePaymentsAction(
+  ids: string[],
+  reference: string | null,
+) {
+  const user = await getCurrentPortalUser();
+  requirePermission(user.role, "record_payment");
+
+  const result = await bulkReconcilePayments(ids, reference, user.id);
+
+  if (result.updated > 0) {
+    await logAuditEvent({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "payment.bulk_reconcile",
+      resourceType: "payment",
+      resourceId: null,
+      metadata: {
+        count: result.updated,
+        reference: reference?.trim() || null,
+        paymentIds: ids,
+      },
+    });
+  }
+  return result;
+}
+
+export async function bulkUnreconcilePaymentsAction(ids: string[]) {
+  const user = await getCurrentPortalUser();
+  requirePermission(user.role, "record_payment");
+
+  const result = await bulkUnreconcilePayments(ids);
+
+  if (result.updated > 0) {
+    await logAuditEvent({
+      tenantId: user.tenantId,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "payment.bulk_unreconcile",
+      resourceType: "payment",
+      resourceId: null,
+      metadata: {
+        count: result.updated,
+        paymentIds: ids,
+      },
+    });
+  }
   return result;
 }
