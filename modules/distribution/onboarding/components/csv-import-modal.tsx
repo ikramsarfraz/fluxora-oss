@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { CheckCircle2, XCircle, Download, Upload, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Download, Upload, ArrowRight, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+
+import { parseCsv as parseRfcCsv } from "@/lib/csv/parse";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,15 +159,10 @@ const CONFIGS: Record<ImportType, {
 
 // ── CSV utils ─────────────────────────────────────────────────────────────────
 
+// RFC 4180-ish parser. Handles quoted fields with commas / newlines /
+// escaped quotes, plus BOM and CRLF. Tested in lib/csv/parse.test.ts.
 function parseCsv(text: string): { headers: string[]; rows: ParsedRow[] } {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 1) return { headers: [], rows: [] };
-  const headers = (lines[0] ?? "").split(",").map(h => h.trim().replace(/^"|"$/g, ""));
-  const rows = lines.slice(1).map(line => {
-    const values = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
-    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? ""]));
-  });
-  return { headers, rows };
+  return parseRfcCsv(text);
 }
 
 function autoMap(csvHeaders: string[], expected: ColumnSpec[]): Record<string, string> {
@@ -318,6 +315,20 @@ export type CsvApplyResult = {
   failed: Array<{ row: number; name: string; message: string }>;
 };
 
+/**
+ * Result of a server-side preflight check on the mapped rows. Returned
+ * row numbers are 1-based with the header row counted (so the first data
+ * row is `2`) to match how local validation errors are surfaced.
+ *
+ * `severity: "warning"` is informational ("we'll skip this row" or "this
+ * matches an existing record"); `"error"` blocks the row from importing.
+ */
+export type CsvPreflightIssue = {
+  row: number;
+  message: string;
+  severity: "warning" | "error";
+};
+
 interface CsvImportModalProps {
   importType: ImportType;
   open: boolean;
@@ -333,9 +344,23 @@ interface CsvImportModalProps {
    * bulkCreateSuppliersAction) to keep the modal generic across types.
    */
   onApply?: (rows: ParsedRow[]) => Promise<CsvApplyResult>;
+  /**
+   * Optional server-side check run after local validation. Lets the
+   * importing domain surface conflicts that depend on existing data
+   * (e.g. "an active customer with this name already exists") before
+   * the user commits — vs. failing per-row at apply time.
+   */
+  onPreflight?: (rows: ParsedRow[]) => Promise<CsvPreflightIssue[]>;
 }
 
-export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }: CsvImportModalProps) {
+export function CsvImportModal({
+  importType,
+  open,
+  onClose,
+  onSuccess,
+  onApply,
+  onPreflight,
+}: CsvImportModalProps) {
   const config = CONFIGS[importType];
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -346,6 +371,8 @@ export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [mappedRows, setMappedRows] = useState<ParsedRow[]>([]);
   const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [warnings, setWarnings] = useState<ValidationError[]>([]);
+  const [preflightRunning, setPreflightRunning] = useState(false);
   const [applying, setApplying] = useState(false);
 
   function reset() {
@@ -356,6 +383,8 @@ export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }
     setMapping({});
     setMappedRows([]);
     setErrors([]);
+    setWarnings([]);
+    setPreflightRunning(false);
     setApplying(false);
   }
 
@@ -403,12 +432,58 @@ export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }
     reader.readAsText(file);
   }
 
-  function handleMap() {
+  async function handleMap() {
     const mapped = applyMapping(rawRows, mapping);
-    const errs = validate(mapped, importType);
+    const localErrs = validate(mapped, importType);
     setMappedRows(mapped);
-    setErrors(errs);
+    setErrors(localErrs);
+    setWarnings([]);
     setStep(2);
+
+    // Server-side conflict check (e.g. duplicate customer names). Runs
+    // after local validation so the user sees the cheap errors first
+    // even on a slow network.
+    if (onPreflight) {
+      setPreflightRunning(true);
+      try {
+        const issues = await onPreflight(mapped);
+        const errFromPreflight: ValidationError[] = [];
+        const warnFromPreflight: ValidationError[] = [];
+        // Group by row so the UI doesn't render a separate entry per
+        // issue from the same row.
+        const byRowErr = new Map<number, string[]>();
+        const byRowWarn = new Map<number, string[]>();
+        for (const issue of issues) {
+          const target = issue.severity === "error" ? byRowErr : byRowWarn;
+          const list = target.get(issue.row) ?? [];
+          list.push(issue.message);
+          target.set(issue.row, list);
+        }
+        for (const [row, msgs] of byRowErr) errFromPreflight.push({ row, errors: msgs });
+        for (const [row, msgs] of byRowWarn) warnFromPreflight.push({ row, errors: msgs });
+        // Merge preflight errors with the local ones (concat per row).
+        setErrors(prev => {
+          const merged = new Map<number, string[]>();
+          for (const e of prev) merged.set(e.row, [...e.errors]);
+          for (const e of errFromPreflight) {
+            const existing = merged.get(e.row) ?? [];
+            merged.set(e.row, [...existing, ...e.errors]);
+          }
+          return Array.from(merged.entries())
+            .map(([row, errors]) => ({ row, errors }))
+            .sort((a, b) => a.row - b.row);
+        });
+        setWarnings(warnFromPreflight.sort((a, b) => a.row - b.row));
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? `Conflict check failed: ${e.message}`
+            : "Conflict check failed.",
+        );
+      } finally {
+        setPreflightRunning(false);
+      }
+    }
   }
 
   async function handleApply() {
@@ -613,7 +688,7 @@ export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }
           {/* Step 2: Validate */}
           {step === 2 && (
             <div>
-              <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: c.green, fontWeight: 500 }}>
                   <CheckCircle2 size={15} /> {validRows.length} rows OK
                 </div>
@@ -622,17 +697,41 @@ export function CsvImportModal({ importType, open, onClose, onSuccess, onApply }
                     <XCircle size={15} /> {errors.length} rows with errors
                   </div>
                 )}
+                {warnings.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: c.amber, fontWeight: 500 }}>
+                    <AlertTriangle size={15} /> {warnings.length} rows flagged
+                  </div>
+                )}
+                {preflightRunning && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: c.text3 }}>
+                    Checking for conflicts…
+                  </div>
+                )}
               </div>
 
               {errors.length > 0 && (
                 <div style={{ border: `1px solid ${c.redBorder}`, borderRadius: 8, overflow: "hidden", marginBottom: 16, maxHeight: 220, overflowY: "auto" }}>
                   <div style={{ padding: "8px 12px", background: c.redBg, fontSize: 11, fontWeight: 600, color: c.red, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${c.redBorder}` }}>
-                    Errors
+                    Errors — these rows will be skipped
                   </div>
                   {errors.map(e => (
                     <div key={e.row} style={{ padding: "7px 12px", borderBottom: `1px solid ${c.border}`, fontSize: 12.5 }}>
                       <span style={{ fontWeight: 600, color: c.text }}>Row {e.row}:</span>{" "}
                       <span style={{ color: c.red }}>{e.errors.join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {warnings.length > 0 && (
+                <div style={{ border: `1px solid color-mix(in oklch, ${c.amber} 35%, transparent)`, borderRadius: 8, overflow: "hidden", marginBottom: 16, maxHeight: 220, overflowY: "auto" }}>
+                  <div style={{ padding: "8px 12px", background: `color-mix(in oklch, ${c.amber} 12%, transparent)`, fontSize: 11, fontWeight: 600, color: c.amber, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid color-mix(in oklch, ${c.amber} 35%, transparent)` }}>
+                    Heads up — these rows match existing records
+                  </div>
+                  {warnings.map(w => (
+                    <div key={w.row} style={{ padding: "7px 12px", borderBottom: `1px solid ${c.border}`, fontSize: 12.5 }}>
+                      <span style={{ fontWeight: 600, color: c.text }}>Row {w.row}:</span>{" "}
+                      <span style={{ color: c.amber }}>{w.errors.join(", ")}</span>
                     </div>
                   ))}
                 </div>

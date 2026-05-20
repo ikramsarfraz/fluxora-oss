@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customerAddresses,
@@ -132,6 +132,121 @@ async function createCustomerForTenant(
 export type BulkCreateCustomerInput = Omit<NewCustomer, "tenantId"> & {
   addresses?: Omit<NewCustomerAddress, "customerId">[];
 };
+
+/**
+ * One conflict found between a row in a bulk-import payload and an
+ * existing customer record. `rowIndex` is 0-based against the input
+ * array; the modal converts to 1-based + header for display.
+ *
+ * `reason`:
+ *   - "duplicate-name-active"   — an active customer with this name
+ *     already exists; insert would be rejected by the unique index.
+ *   - "duplicate-name-archived" — an archived customer with this name
+ *     exists; insert would still be rejected, but the user might prefer
+ *     to restore rather than create a new one.
+ *   - "duplicate-email-active"  — an active customer with this email
+ *     already exists. Email isn't unique, but importing the same
+ *     contact twice is usually a mistake worth flagging.
+ */
+export type CustomerImportConflict = {
+  rowIndex: number;
+  reason:
+    | "duplicate-name-active"
+    | "duplicate-name-archived"
+    | "duplicate-email-active";
+  existingCustomerId: string;
+  existingCustomerName: string;
+};
+
+export async function findCustomerImportConflicts(
+  rows: ReadonlyArray<{ name?: string; email?: string }>,
+): Promise<CustomerImportConflict[]> {
+  const tenant = await getCurrentTenant();
+  const names = Array.from(
+    new Set(
+      rows
+        .map(r => r.name?.trim().toLowerCase())
+        .filter((n): n is string => !!n && n.length > 0),
+    ),
+  );
+  const emails = Array.from(
+    new Set(
+      rows
+        .map(r => r.email?.trim().toLowerCase())
+        .filter((e): e is string => !!e && e.length > 0),
+    ),
+  );
+  if (names.length === 0 && emails.length === 0) return [];
+
+  const nameCondition =
+    names.length > 0
+      ? sql`lower(${customers.name}) in (${sql.join(
+          names.map(n => sql`${n}`),
+          sql`, `,
+        )})`
+      : null;
+  const emailCondition =
+    emails.length > 0 ? inArray(customers.email, emails) : null;
+  const matchCondition =
+    nameCondition && emailCondition
+      ? or(nameCondition, emailCondition)
+      : (nameCondition ?? emailCondition);
+  const existing = await db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      archivedAt: customers.archivedAt,
+    })
+    .from(customers)
+    .where(and(eq(customers.tenantId, tenant.id), matchCondition!));
+
+  const byName = new Map<
+    string,
+    { id: string; name: string; archived: boolean }
+  >();
+  const byEmail = new Map<string, { id: string; name: string }>();
+  for (const row of existing) {
+    const lowerName = row.name.toLowerCase();
+    if (!byName.has(lowerName)) {
+      byName.set(lowerName, { id: row.id, name: row.name, archived: !!row.archivedAt });
+    }
+    if (row.email && !row.archivedAt) {
+      const lowerEmail = row.email.toLowerCase();
+      if (!byEmail.has(lowerEmail)) {
+        byEmail.set(lowerEmail, { id: row.id, name: row.name });
+      }
+    }
+  }
+
+  const conflicts: CustomerImportConflict[] = [];
+  rows.forEach((row, idx) => {
+    const lname = row.name?.trim().toLowerCase();
+    const lemail = row.email?.trim().toLowerCase();
+    if (lname && byName.has(lname)) {
+      const hit = byName.get(lname)!;
+      conflicts.push({
+        rowIndex: idx,
+        reason: hit.archived
+          ? "duplicate-name-archived"
+          : "duplicate-name-active",
+        existingCustomerId: hit.id,
+        existingCustomerName: hit.name,
+      });
+      return;
+    }
+    if (lemail && byEmail.has(lemail)) {
+      const hit = byEmail.get(lemail)!;
+      conflicts.push({
+        rowIndex: idx,
+        reason: "duplicate-email-active",
+        existingCustomerId: hit.id,
+        existingCustomerName: hit.name,
+      });
+    }
+  });
+  return conflicts;
+}
 
 export type BulkCreateCustomersResult = {
   total: number;

@@ -8,6 +8,7 @@ import {
   CsvImportModal,
   useCsvImportModal,
   type CsvApplyResult,
+  type CsvPreflightIssue,
 } from "@/modules/distribution/onboarding/components/csv-import-modal";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -31,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   archiveCustomerAction,
   bulkCreateCustomersAction,
+  findCustomerImportConflictsAction,
   permanentlyDeleteCustomerAction,
   restoreCustomerAction,
 } from "@/modules/distribution/customers/actions";
@@ -165,6 +167,41 @@ export default function Customers() {
     return { created: result.created, failed: result.failed };
   }
 
+  async function handlePreflight(
+    rows: Record<string, string>[],
+  ): Promise<CsvPreflightIssue[]> {
+    const conflicts = await findCustomerImportConflictsAction(
+      rows.map(r => ({
+        name: r.name?.trim(),
+        email: r.email?.trim() || undefined,
+      })),
+    );
+    return conflicts.map(c => {
+      // Row numbers in the modal are 1-based with header counted, so the
+      // first data row is index 0 here → row 2 in the UI.
+      const uiRow = c.rowIndex + 2;
+      if (c.reason === "duplicate-name-active") {
+        return {
+          row: uiRow,
+          severity: "error" as const,
+          message: `An active customer named "${c.existingCustomerName}" already exists — this row will be skipped.`,
+        };
+      }
+      if (c.reason === "duplicate-name-archived") {
+        return {
+          row: uiRow,
+          severity: "error" as const,
+          message: `An archived customer named "${c.existingCustomerName}" already exists. Restore it from the Archived tab instead of re-importing.`,
+        };
+      }
+      return {
+        row: uiRow,
+        severity: "warning" as const,
+        message: `Email matches an existing customer "${c.existingCustomerName}". Continuing will create a second record sharing this email.`,
+      };
+    });
+  }
+
   const pagination = useUrlPaginationState<
     CustomerListSort,
     { archived: CustomerArchivedFilter }
@@ -266,6 +303,7 @@ export default function Customers() {
         open={importOpen}
         onClose={closeImport}
         onApply={handleBulkImport}
+        onPreflight={handlePreflight}
       />
       <ListingPage
         title="Customers"

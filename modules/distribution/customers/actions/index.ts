@@ -10,6 +10,7 @@ import {
   bulkCreateCustomers,
   createCustomer,
   deleteCustomerPrice,
+  findCustomerImportConflicts,
   getCustomerById,
   getCustomerInvoicesPage,
   getCustomerOrdersPage,
@@ -24,6 +25,7 @@ import {
   updateCustomer,
   type BulkCreateCustomerInput,
   type BulkCreateCustomersResult,
+  type CustomerImportConflict,
   type CustomerInvoicesParams,
   type CustomerListParams,
   type CustomerOrdersParams,
@@ -72,6 +74,12 @@ export async function bulkCreateCustomersAction(
     revalidatePath("/dashboard");
   }
   return result;
+}
+
+export async function findCustomerImportConflictsAction(
+  rows: ReadonlyArray<{ name?: string; email?: string }>,
+): Promise<CustomerImportConflict[]> {
+  return await findCustomerImportConflicts(rows);
 }
 
 export async function updateCustomerAction(
