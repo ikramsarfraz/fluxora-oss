@@ -1,7 +1,13 @@
 "use client";
 
 import { motion, useInView } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ChevronRight } from "lucide-react";
 
 import { Logomark } from "@/components/brand/logomark";
@@ -9,28 +15,41 @@ import { cn } from "@/lib/utils";
 
 // Hand-crafted "marketing-scale" Fluxora app shell for product moments.
 // Wraps each moment in a believable app frame — but no sidebar. Marketing
-// pages have already advertised the other surfaces via chapter tabs or
-// section grids; the sidebar inside each moment was just stealing pixels.
+// pages already advertise the other surfaces via chapter tabs or section
+// grids; the sidebar inside each moment was just stealing pixels.
 //
-// What stays:
-// - Header strip with brand + workspace chip on the left, breadcrumb in the
-//   middle, optional right-slot action area
-// - Main content area that gets the full frame width
-// - Looping motion: re-runs the focal animation while in view, paused
-//   offscreen (same pattern as before)
-// - Scroll-anchoring guard so the loop's key bump doesn't yank the page
+// Two rendering modes:
 //
-// What's gone:
-// - The 220px left sidebar with all nav items. The breadcrumb still names
-//   the page, and the visitor isn't trying to navigate inside an iframe-
-//   sized demo — they're absorbing the focal interaction.
+// 1. **Card mode** (default). The shell is a standalone card with rounded
+//    corners, border, drop shadow — sized to its content. Used on the
+//    editorial / compare / tour pages where each moment sits in natural
+//    page flow.
+//
+// 2. **Bare mode** (via BareShellProvider). The shell drops its own
+//    border / rounded corners / shadow and stretches to fill the parent's
+//    height. Used inside the walkthrough's fixed 640px hero frame so the
+//    moment fills the frame the same way the transition cards do — no
+//    inset white gap from nested chromes.
 
 const DEFAULT_LOOP_MS = 7000;
 
-// Kept as a narrow string type so existing moments continue to satisfy the
-// `activeNav` prop. We don't render the nav anymore, but the prop documents
-// which page each moment belongs to and lets the breadcrumb logic stay
-// consistent if we ever want to re-introduce a navigation surface.
+// Bare-mode context. When `true`, MarketingAppShell suppresses its own
+// card chrome and stretches `h-full` so the parent (e.g. the walkthrough
+// hero's 640px frame) provides the chrome instead.
+const BareShellContext = createContext(false);
+
+export function BareShellProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <BareShellContext.Provider value={true}>
+      {children}
+    </BareShellContext.Provider>
+  );
+}
+
 type NavKey =
   | "dashboard"
   | "customers"
@@ -53,7 +72,7 @@ export function MarketingAppShell({
   label,
   tone = "forest",
   loopMs = DEFAULT_LOOP_MS,
-  /** Visible vertical space the main area should occupy. Default ~460px. */
+  /** Visible vertical space the main area should occupy in card mode. */
   bodyHeight = "min-h-[460px]",
 }: {
   activeNav: NavKey;
@@ -65,7 +84,9 @@ export function MarketingAppShell({
   loopMs?: number;
   bodyHeight?: string;
 }) {
-  void _activeNav; // see comment on NavKey — kept for documentation
+  void _activeNav;
+
+  const bare = useContext(BareShellContext);
 
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.2 });
@@ -94,10 +115,13 @@ export function MarketingAppShell({
   return (
     <div
       ref={ref}
-      className="relative"
+      className={cn("relative", bare && "h-full")}
       style={{ overflowAnchor: "none" }}
     >
-      {label ? (
+      {/* Floating label tab — only shown in card mode. In bare mode the
+          parent frame already carries chapter context (e.g. the
+          walkthrough's caption strip). */}
+      {label && !bare ? (
         <div
           className={cn(
             "absolute left-6 -top-3 z-10 inline-flex items-center gap-1.5 rounded-full border bg-card-warm px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] shadow-sm",
@@ -109,11 +133,15 @@ export function MarketingAppShell({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-border-default bg-card-warm shadow-[0_22px_50px_-30px_rgba(31,58,46,0.35)]">
-        {/* Header strip: brand chip · breadcrumb · right slot. No sidebar. */}
-        <header className="flex items-center justify-between gap-3 border-b border-border-default bg-surface/40 px-5 py-3 backdrop-blur">
-          {/* Brand + workspace chip — keeps "this is a real app" context
-              without the sidebar's visual weight. */}
+      <div
+        className={cn(
+          "flex flex-col overflow-hidden bg-card-warm",
+          bare
+            ? "h-full"
+            : "rounded-2xl border border-border-default shadow-[0_22px_50px_-30px_rgba(31,58,46,0.35)]",
+        )}
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border-default bg-surface/40 px-5 py-3 backdrop-blur">
           <div className="flex items-center gap-2.5">
             <Logomark size={18} />
             <span className="font-serif text-[14px] font-medium text-ink">
@@ -158,10 +186,15 @@ export function MarketingAppShell({
           ) : null}
         </header>
 
-        <main className={cn("flex flex-col bg-page", bodyHeight)}>
-          {/* Key bump on each loopMs remounts the focal-animation subtree,
-              replaying motion variants. Header stays stable so the frame
-              never blinks. */}
+        <main
+          className={cn(
+            "flex flex-col bg-page",
+            // Card mode keeps a min-height so the moment doesn't collapse
+            // when its content is short. Bare mode stretches via flex-1 so
+            // the moment fills the parent frame.
+            bare ? "flex-1" : bodyHeight,
+          )}
+        >
           <div key={loopKey} className="flex flex-1 flex-col">
             {children}
           </div>

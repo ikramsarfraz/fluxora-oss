@@ -1,5 +1,5 @@
 export { AiExtractMoment, BulkImportMoment } from "./ai-extract";
-export { MarketingAppShell, PulseDot } from "./app-shell";
+export { BareShellProvider, MarketingAppShell, PulseDot } from "./app-shell";
 export { PlaidMoment } from "./bank-sync";
 export { DashboardMoment } from "./dashboard";
 export { InvoicePdfMoment } from "./invoice-pdf";

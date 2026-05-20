@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 
 import {
   AiExtractMoment,
+  BareShellProvider,
   InventoryLotsMoment,
   InvoicePdfMoment,
   PaymentsMoment,
@@ -447,7 +448,15 @@ export function WalkthroughHero() {
 }
 
 function SceneFrame({ children }: { children: React.ReactNode }) {
-  return <div className="absolute inset-0">{children}</div>;
+  // Wrap every scene in BareShellProvider so any moment using
+  // MarketingAppShell drops its own card chrome and stretches to fill the
+  // 640px parent. Cards that don't use the shell (Intro, Outro, Before,
+  // After) ignore the context — no-op for them.
+  return (
+    <div className="absolute inset-0">
+      <BareShellProvider>{children}</BareShellProvider>
+    </div>
+  );
 }
 
 function ProgressBar({ phase, paused }: { phase: Phase; paused: boolean }) {
