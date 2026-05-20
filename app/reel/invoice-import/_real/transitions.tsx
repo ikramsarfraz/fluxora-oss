@@ -48,7 +48,11 @@ export function TransitionLayer() {
   const t = state.transition;
 
   return (
-    <AnimatePresence mode="wait">
+    // No `mode` — let the outgoing card finish its exit while the incoming
+    // card already starts its entry. Trying `mode="wait"` caused the
+    // underlying surface to flash through during the dead frame between
+    // exit-complete and the next mount.
+    <AnimatePresence>
       {t.kind === "splash" && <OpeningSplash key="splash" />}
       {t.kind === "outro" && <OutroSplash key="outro" />}
       {t.kind === "chapter" && (
