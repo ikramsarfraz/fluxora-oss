@@ -223,59 +223,67 @@ function ChapterCard({
         )}
         transition={SPRING_GENTLE}
       >
-        {phase === "hero" ? (
-          <motion.div
-            key="hero"
-            className="flex items-center gap-5"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: easeOut, delay: 0.1 }}
-          >
-            <div className="flex flex-col items-center gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
-                Step
-              </span>
-              <span className="font-serif text-[40px] font-medium leading-none text-forest-mid">
+        {/* Inner phase swap. Without AnimatePresence the hero content vanishes
+            hard mid-morph as `phase` flips — the outer layoutId animates the
+            container shape but the children unmount instantly. Wrap in
+            AnimatePresence so the hero's exit actually plays. popLayout lets
+            the pill mount in place while the hero fades out on top. */}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {phase === "hero" ? (
+            <motion.div
+              key="hero"
+              className="flex items-center gap-5"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.35, ease: easeOut }}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
+                  Step
+                </span>
+                <span className="font-serif text-[40px] font-medium leading-none text-forest-mid">
+                  {chapter.index}
+                </span>
+                <span className="font-mono text-[10px] text-subtle">
+                  of {chapter.total}
+                </span>
+              </div>
+              <div className="h-12 w-px bg-border-default" />
+              <div className="flex flex-col gap-1">
+                <h2 className="font-serif text-[26px] font-medium leading-tight tracking-tight text-ink">
+                  {chapter.title}
+                </h2>
+                <p className="max-w-[360px] text-[13px] text-subtle">
+                  {chapter.subtitle}
+                </p>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="pill"
+              className="flex items-center gap-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-forest-mid text-[11px] font-bold text-card-warm">
                 {chapter.index}
               </span>
-              <span className="font-mono text-[10px] text-subtle">
-                of {chapter.total}
-              </span>
-            </div>
-            <div className="h-12 w-px bg-border-default" />
-            <div className="flex flex-col gap-1">
-              <h2 className="font-serif text-[26px] font-medium leading-tight tracking-tight text-ink">
-                {chapter.title}
-              </h2>
-              <p className="max-w-[360px] text-[13px] text-subtle">
-                {chapter.subtitle}
-              </p>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="pill"
-            className="flex items-center gap-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-          >
-            <span className="flex size-6 items-center justify-center rounded-full bg-forest-mid text-[11px] font-bold text-card-warm">
-              {chapter.index}
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-subtle">
-                Step {chapter.index} of {chapter.total}
-              </span>
-              <span className="text-subtle">·</span>
-              <span className="text-[13px] font-medium text-ink">
-                {chapter.title}
-              </span>
-            </div>
-            <span className="text-[12px] text-subtle">— {chapter.subtitle}</span>
-          </motion.div>
-        )}
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-subtle">
+                  Step {chapter.index} of {chapter.total}
+                </span>
+                <span className="text-subtle">·</span>
+                <span className="text-[13px] font-medium text-ink">
+                  {chapter.title}
+                </span>
+              </div>
+              <span className="text-[12px] text-subtle">— {chapter.subtitle}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </motion.div>
   );
