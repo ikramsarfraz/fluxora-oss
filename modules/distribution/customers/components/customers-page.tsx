@@ -41,8 +41,8 @@ import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
+import { csvRowToCustomerInput } from "../utils/csv-row-mapping";
 import type {
-  BulkCreateCustomerInput,
   CustomerArchivedFilter,
   CustomerListItem,
   CustomerListSort,
@@ -112,38 +112,6 @@ const STATUS_SEGMENTS = [
   { value: "archived", label: "Archived" },
 ] as const;
 
-function csvRowToCustomerInput(row: Record<string, string>): BulkCreateCustomerInput {
-  // Only construct an address block when the user gave us a street —
-  // any of city/state/zip alone is meaningless without a line 1 and
-  // would fail the customer_addresses NOT NULL constraint.
-  const street = row.address_line1?.trim() || "";
-  const addresses = street
-    ? [
-        {
-          addressType: "shipping" as const,
-          street,
-          city: row.address_city?.trim() || null,
-          state: row.address_state?.trim() || null,
-          zip: row.address_zip?.trim() || null,
-          isDefault: true,
-        },
-      ]
-    : undefined;
-
-  const netDaysRaw = row.net_days?.trim();
-  const netDays = netDaysRaw ? Number(netDaysRaw) : null;
-
-  return {
-    name: row.name?.trim() ?? "",
-    abbreviation: row.abbreviation?.trim() || null,
-    email: row.email?.trim().toLowerCase() || null,
-    phoneNumber: row.phone?.trim() || null,
-    taxId: row.tax_id?.trim() || null,
-    netDays: netDays != null && Number.isFinite(netDays) ? netDays : null,
-    fuelSurchargeAmount: row.fuel_surcharge?.trim() || null,
-    addresses,
-  };
-}
 
 type LifecycleAction = "archive" | "restore" | "permanent-delete";
 

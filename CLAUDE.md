@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Node** pinned in `.nvmrc` (currently `v24.14.1`). **pnpm 11.1.1** is the package manager — never use `npm` or `yarn`.
 - Path alias: `@/*` resolves to the repo root (see [tsconfig.json](tsconfig.json)). All in-repo imports use `@/…`.
 - Multi-tenant SaaS: tenants on subdomains, a reserved `admin.` host for platform admins, plus a root host for marketing/shared auth.
+- **Auth: Better Auth** — config in [lib/auth.ts](lib/auth.ts), client in [lib/auth-client.ts](lib/auth-client.ts), DB schema in [db/auth-schema.ts](db/auth-schema.ts). Sessions resolve per-host (root vs tenant vs `admin.`); do not call `cookies()` directly for auth — go through the Better Auth helpers.
+- **DB: Neon serverless Postgres + Drizzle ORM.** Schema entry at [db/schema.ts](db/schema.ts) with relations in [db/relations.ts](db/relations.ts) and the driver wired in [db/index.ts](db/index.ts). Both `@neondatabase/serverless` and `pg` are installed; production/edge paths use Neon, scripts under `db/*.ts` use `pg`.
 
 ## Common commands
 
@@ -103,6 +105,7 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 
 ## Conventions worth knowing
 
+- **Client data goes through TanStack Query.** React Query hooks live in `hooks/use-*` (cross-cutting) or `modules/<domain>/hooks/` (domain-specific) and wrap `"use server"` actions exported from the module. Query keys are centralized in [lib/query/keys.ts](lib/query/keys.ts) — reuse existing factories rather than inlining tuple keys so invalidation stays consistent.
 - **Compat re-exports** in `lib/` exist during the in-flight migration to modules — root-level `actions/` and `services/` have been removed entirely (server logic now lives inside the owning `modules/<domain>/services/` and `modules/<domain>/actions/`). New code imports from the module directly; if you touch a compat shim in `lib/`, prefer migrating callers over expanding the shim.
 - **`types.ts` per module** re-exports the practical domain types (inferred from services / Zod / Drizzle `$inferSelect`) rather than redefining them. The service/schema is the source of truth.
 - **`@react-pdf/renderer` and `pdf-parse`** are marked `serverExternalPackages` in [next.config.ts](next.config.ts) — needed because the RSC bundler otherwise resolves `react` to the server build and breaks PDF rendering. Don't remove without testing PDF output.
