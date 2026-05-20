@@ -44,7 +44,7 @@ export function InboxBell() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label={hasUnread ? `Inbox — ${unread} new` : "Inbox"}
+          aria-label={hasUnread ? `Inbox — ${unread} open` : "Inbox"}
           className={cn(
             "relative grid size-8 shrink-0 place-items-center rounded-md text-ink-warm transition-colors",
             "hover:bg-card/60 hover:text-ink",
@@ -77,7 +77,7 @@ export function InboxBell() {
           <div className="flex items-center justify-between border-b border-border-default px-4 py-3">
             <span className="text-[14px] font-medium text-ink">Inbox</span>
             {hasUnread ? (
-              <span className="text-[11px] text-subtle">{unread} new</span>
+              <span className="text-[11px] text-subtle">{unread} open</span>
             ) : null}
           </div>
 

@@ -270,7 +270,7 @@ function FilterTabs({
 
 // ── Action item ───────────────────────────────────────────────────────────
 
-function ActionItem({ item, onSnooze, onDismiss }: { item: InboxItem; onSnooze?: (id: string) => void; onDismiss?: (id: string) => void }) {
+function ActionItem({ item }: { item: InboxItem }) {
   const router = useRouter();
   const iconColor: Record<string, { bg: string; color: string }> = {
     blocking_others: { bg: C.redBg, color: C.red },
@@ -755,19 +755,13 @@ interface InboxShellProps {
 export function InboxShell({ data, firstName }: InboxShellProps) {
   const router = useRouter();
   const [filter, setFilter] = useState<"all" | "urgent" | "can_wait">("all");
-  const [snoozed, setSnoozed] = useState<Set<string>>(new Set());
 
   const allItems = [...data.blockingItems, ...data.actionItems];
   const visibleItems = allItems.filter(item => {
-    if (snoozed.has(item.id)) return false;
     if (filter === "urgent") return item.urgency === "blocking_others" || item.urgency === "today";
     if (filter === "can_wait") return item.urgency === "this_week";
     return true;
   });
-
-  function handleSnooze(id: string) {
-    setSnoozed(prev => new Set([...prev, id]));
-  }
 
   const hasPriorityBanner = data.blockingItems.length > 0;
   const stats = data.stats;
@@ -809,29 +803,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Live sync status */}
-          <div
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "5px 10px",
-              background: "var(--color-card)",
-              border: `1px solid ${C.border}`,
-              borderRadius: 999,
-              fontSize: 11.5,
-              color: C.text2,
-            }}
-          >
-            <span
-              style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, animation: "loading-pulse 1.6s infinite" }}
-            />
-            Live · synced just now
-          </div>
-          <Btn>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            Search
-          </Btn>
           <div
             style={{
               width: 34, height: 34,
@@ -895,26 +866,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
               ))}
             </div>
           </div>
-          <div style={{ position: "relative", display: "flex", gap: 8, flexShrink: 0 }}>
-            <button
-              style={{
-                padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                background: "rgba(255,255,255,0.1)", color: "var(--color-card)",
-                border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Snooze all
-            </button>
-            <button
-              style={{
-                padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                background: "var(--color-card)", color: C.text,
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-              }}
-            >
-              Walk me through them →
-            </button>
-          </div>
         </div>
       ) : (
         <div
@@ -943,7 +894,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(6, 1fr)",
+          gridTemplateColumns: "repeat(5, 1fr)",
           gap: 10,
           marginBottom: 22,
         }}
@@ -973,15 +924,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             alert: false,
             route: "/supplier-invoices",
             mono: true,
-          },
-          {
-            label: "Credits open",
-            value: stats.creditsOpenAmount > 0 ? `$${stats.creditsOpenAmount.toFixed(0)}` : "—",
-            color: stats.creditsOpenAmount > 0 ? C.amber : C.text,
-            delta: `${stats.creditsOpenCount} memo${stats.creditsOpenCount !== 1 ? "s" : ""}${stats.creditsOverdue > 0 ? ` · ${stats.creditsOverdue} overdue` : ""}`,
-            alert: stats.creditsOverdue > 0,
-            mono: true,
-            route: "/supplier-invoices",
           },
           {
             label: "Week spend",
@@ -1083,101 +1025,10 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
               </div>
             ) : (
               visibleItems.map(item => (
-                <ActionItem
-                  key={item.id}
-                  item={item}
-                  onSnooze={handleSnooze}
-                />
+                <ActionItem key={item.id} item={item} />
               ))
             )}
           </Card>
-
-          {/* Card 2: Active right now */}
-          {data.activeSessions.length > 0 && (
-            <Card>
-              <CardHead
-                left={
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <CardTitle title="Active right now" count={data.activeSessions.length} countTone="green" />
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 600, color: C.green, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: C.green, animation: "loading-pulse 1.6s infinite", display: "inline-block" }} />
-                      live
-                    </span>
-                  </div>
-                }
-                right={<Btn variant="ghost" size="sm">View all sessions</Btn>}
-              />
-              <div style={{ padding: 12 }}>
-                {data.activeSessions.map(session => {
-                  const isGreen = session.type === "receiving";
-                  const isBlue = session.type === "ingestion";
-                  const borderCol = isGreen ? C.greenBorder : isBlue ? C.blueBorder : C.amberBorder;
-                  const bgCol = isGreen ? C.greenBg : isBlue ? C.blueBg : C.amberBg;
-                  const accentCol = isGreen ? C.green : isBlue ? C.blue : C.amber;
-                  const fillCol = isGreen ? C.green : isBlue ? C.blue : C.amber;
-                  return (
-                    <div
-                      key={session.id}
-                      style={{
-                        border: `1px solid ${borderCol}`,
-                        background: bgCol,
-                        borderRadius: 10,
-                        padding: "14px 16px",
-                        marginBottom: 10,
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ width: 28, height: 28, background: accentCol, color: "var(--color-card)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              {isGreen ? <><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/></> : <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>}
-                            </svg>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 13.5 }}>{session.detail}</div>
-                          </div>
-                        </div>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 600, color: accentCol, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: accentCol, animation: "loading-pulse 1.6s infinite", display: "inline-block" }} />
-                          {session.type === "receiving" ? "Receiving" : session.type === "ingestion" ? "Parsing" : "Background"}
-                        </div>
-                      </div>
-                      <div style={{ height: 5, background: "rgba(255,255,255,0.6)", borderRadius: 3, overflow: "hidden", marginBottom: 8 }}>
-                        <div style={{ height: "100%", width: `${session.progress}%`, background: fillCol, borderRadius: 3 }} />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11.5, color: C.text2 }}>
-                        <span>{session.blockingUser ? "Waiting on you" : "Won't block anything"}</span>
-                        {session.eta && (
-                          <span style={{ fontFamily: C.mono }}>~{session.eta.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          )}
-
-          {/* Card 3: For your information */}
-          {data.informationalItems.length > 0 && (
-            <Card>
-              <CardHead
-                left={<CardTitle title="For your information" count={data.informationalItems.length} />}
-                right={<Btn variant="ghost" size="sm">Mark all read</Btn>}
-              />
-              {data.informationalItems.slice(0, 3).map(item => (
-                <ActionItem key={item.id} item={item} onDismiss={id => setSnoozed(prev => new Set([...prev, id]))} />
-              ))}
-              {data.informationalItems.length > 3 && (
-                <div style={{ textAlign: "center", padding: 10, fontSize: 11.5, color: C.text3 }}>
-                  + {data.informationalItems.length - 3} more ·{" "}
-                  <button style={{ color: C.blue, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-                    show all
-                  </button>
-                </div>
-              )}
-            </Card>
-          )}
 
           {/* Closing digest */}
           <div
@@ -1186,26 +1037,16 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
               background: "var(--color-card)",
               border: `1px solid ${C.border}`,
               borderRadius: 12,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
               marginTop: 24,
-              gap: 16,
             }}
           >
             <div style={{ fontSize: 13, color: C.text2, maxWidth: 720, lineHeight: 1.55 }}>
               <strong style={{ color: C.text }}>End of inbox.</strong>{" "}
-              You&apos;ve reviewed {allItems.length} decision{allItems.length !== 1 ? "s" : ""} and {data.activeSessions.length} active process{data.activeSessions.length !== 1 ? "es" : ""}.
+              You&apos;ve reviewed {allItems.length} decision{allItems.length !== 1 ? "s" : ""}.
               {data.expiringLots.length > 0
                 ? ` Your next must-do is the ${data.expiringLots[0].productName} markdown by end of day.`
                 : " Nothing else needs you today — focus time is yours."}
             </div>
-            <button
-              style={{ padding: "6px 11px", borderRadius: 7, fontSize: 12.5, fontWeight: 500, border: "none", background: C.text, color: "var(--color-card)", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-              onClick={() => router.push("/inbox/guided")}
-            >
-              Walk me through priorities →
-            </button>
           </div>
         </div>
 
@@ -1230,7 +1071,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             <Card>
               <CardHead
                 left={<CardTitle title="Expiring this week" count={data.expiringLots.length} countTone="amber" />}
-                right={<Btn variant="ghost" size="sm">FIFO →</Btn>}
               />
               {data.expiringLots.slice(0, 5).map(lot => (
                 <ExpiringItem key={lot.lotId} lot={lot} />
@@ -1243,7 +1083,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             <Card>
               <CardHead
                 left={<CardTitle title="Top price movers · 7d" count={data.priceMovers.length} />}
-                right={<Btn variant="ghost" size="sm">See all</Btn>}
               />
               {data.priceMovers.map(mover => (
                 <PriceMoverRow key={mover.productId} mover={mover} />
