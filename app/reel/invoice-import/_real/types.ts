@@ -178,6 +178,13 @@ export type DialogKind =
 export type Transition =
   | { kind: "none" }
   | { kind: "splash" }
+  | {
+      kind: "explainer";
+      eyebrow: string;
+      title: string;
+      body: string;
+      visual: ExplainerVisual;
+    }
   | { kind: "chapter"; index: number; total: number; title: string; subtitle: string }
   | { kind: "interstitial"; icon: InterstitialIcon; title: string; body: string }
   | { kind: "outro" };
@@ -187,6 +194,13 @@ export type InterstitialIcon =
   | "sparkle" // forest sparkle
   | "package" // box icon (post / inventory updated)
   | "scan"; // OCR / scanning glyph
+
+/** Decorative glyph trio shown at the top of an explainer card. */
+export type ExplainerVisual =
+  | "pdf-to-stock" // PDF → arrow → Boxes (frames the whole flow)
+  | "ai-match" // Sparkles surrounded by candidate chips (matching story)
+  | "five-effects" // single button → five fanning-out outcome icons (submit story)
+  | "memory"; // database/repeat glyph (next time is faster)
 
 export type ReelState = {
   step: ReelStep;

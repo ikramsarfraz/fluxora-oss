@@ -137,7 +137,23 @@ async function runScript(c: Controls) {
     await c.sleep(3200);
     if (c.isCancelled()) return;
     c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(350);
+    await c.sleep(300);
+
+    // ---- Explainer 1: frame the whole flow ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "explainer",
+        eyebrow: "What you'll see",
+        title: "Drop. Confirm. Done.",
+        visual: "pdf-to-stock",
+        body:
+          "Three steps. No spreadsheets. The AI does the typing, you do the judgment — and stock, costs, and aliases all update in a single submit.",
+      },
+    });
+    await c.sleep(4200);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+    await c.sleep(300);
 
     // ---- Chapter 1: Receive ----
     c.dispatch({
@@ -234,6 +250,22 @@ async function runScript(c: Controls) {
     c.dispatch({ type: "OPEN_REVIEW" });
     c.setCursor(null);
     await c.sleep(600);
+
+    // ---- Explainer 2: how matching works ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "explainer",
+        eyebrow: "How matching works",
+        title: "AI suggests. You confirm.",
+        visual: "ai-match",
+        body:
+          "Every line gets a confidence score. Spend your time on the 2 that need attention — not the 47 already right. Fluxora remembers your choices so the next invoice from this supplier matches itself.",
+      },
+    });
+    await c.sleep(4400);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+    await c.sleep(300);
 
     // ---- Chapter 2: Review ----
     c.dispatch({
@@ -407,6 +439,22 @@ async function runScript(c: Controls) {
     await c.sleep(1700);
     c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
+    // ---- Explainer 3: what submit does ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "explainer",
+        eyebrow: "What submit does",
+        title: "One click. Five updates.",
+        visual: "five-effects",
+        body:
+          "Stock rises. Costs update. Aliases save for next time. Non-inventory charges hit the right expense accounts. The bill ships to AP — all in a single transaction.",
+      },
+    });
+    await c.sleep(4400);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+    await c.sleep(300);
+
     // ---- Chapter 3: Post ----
     c.dispatch({
       type: "SET_TRANSITION",
@@ -469,6 +517,22 @@ async function runScript(c: Controls) {
       body: "Inventory's already updated. Aliases saved for next time.",
     });
     await c.sleep(2200);
+
+    // ---- Explainer 4: what gets remembered ----
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "explainer",
+        eyebrow: "Next time",
+        title: "Fluxora remembers.",
+        visual: "memory",
+        body:
+          "Every product alias, supplier alias, and cost pattern is saved. The next invoice from this supplier walks in already matched — you just confirm and submit.",
+      },
+    });
+    await c.sleep(4200);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+    await c.sleep(300);
 
     // ---- Outro splash ----
     c.setScene("outro");
