@@ -15,6 +15,7 @@ import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -85,9 +86,16 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
 export function AddCustomerForm(props?: {
   mode?: "create" | "edit";
   customer?: CustomerDetail;
+  /**
+   * Stick the save/cancel bar to the viewport bottom. Pass `true` from
+   * route pages so the actions stay reachable on long forms; leave off
+   * inside modals where the dialog already manages footer placement.
+   */
+  stickyFooter?: boolean;
 }) {
   const mode = props?.mode ?? "create";
   const customer = props?.customer;
+  const stickyFooter = props?.stickyFooter ?? false;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -127,409 +135,484 @@ export function AddCustomerForm(props?: {
 
   const isPending = form.formState.isSubmitting;
 
+  const footer = (
+    <FormActionFooter
+      formId="form-add-customer"
+      isPending={isPending}
+      onCancel={() =>
+        router.push(
+          mode === "edit" && customer
+            ? `/customers/${customer.id}`
+            : "/customers",
+        )
+      }
+      pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
+      submitLabel={mode === "edit" ? "Save changes" : "Create customer"}
+      sticky={stickyFooter}
+    />
+  );
+
   return (
-    <Card className="w-full max-w-xl">
-      <CardContent className="pt-6">
-        <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
-          {error ? (
-            <FormErrorAlert
-              title={
-                mode === "edit"
-                  ? "We couldn't save your changes."
-                  : "We couldn't create the customer."
-              }
-            >
-              {isLimitReachedMessage(error, "maxCustomers") ? (
-                <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
-              ) : (
-                stripSubscriptionEnforcementPrefix(error)
-              )}
-            </FormErrorAlert>
-          ) : null}
-          <FieldGroup>
-            {/* Customer name */}
-            <Controller
-              name="name"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-name">
-                    Customer name *
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-name"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. Acme Meats Inc."
-                    autoComplete="organization"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
+    <div className="flex flex-col gap-3">
+      <Card className="w-full">
+        <CardContent className="pt-6">
+          <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
+            {error ? (
+              <FormErrorAlert
+                title={
+                  mode === "edit"
+                    ? "We couldn't save your changes."
+                    : "We couldn't create the customer."
+                }
+              >
+                {isLimitReachedMessage(error, "maxCustomers") ? (
+                  <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
+                ) : (
+                  stripSubscriptionEnforcementPrefix(error)
+                )}
+              </FormErrorAlert>
+            ) : null}
 
-            {/* Invoice prefix (stored as `abbreviation` for historical reasons) */}
-            <Controller
-              name="abbreviation"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-invoice-prefix">
-                    Invoice prefix *
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-invoice-prefix"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. ACME"
-                    maxLength={32}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Email */}
-            <Controller
-              name="email"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-email">
-                    Email
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-email"
-                    type="email"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. ap@acme.com"
-                    autoComplete="email"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Phone */}
-            <Controller
-              name="phoneNumber"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-phone">
-                    Phone number
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-phone"
-                    type="tel"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. (555) 123-4567"
-                    autoComplete="tel"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Tax ID */}
-            <Controller
-              name="taxId"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-tax-id">
-                    Tax ID (EIN)
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-tax-id"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. 12-3456789"
-                    maxLength={10}
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Payment terms (net days) */}
-            <Controller
-              name="netDays"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-net-days">
-                    Payment terms (net days)
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value == null ? "" : String(field.value)}
-                    id="form-add-customer-net-days"
-                    type="number"
-                    min="0"
-                    max="365"
-                    step="1"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. 30"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Fuel surcharge */}
-            <Controller
-              name="fuelSurchargeAmount"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-fuel">
-                    Fuel surcharge
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    id="form-add-customer-fuel"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. 0.05"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            {/* Addresses */}
-            {fields.length > 0 && (
-              <div className="flex flex-col gap-6">
-                {fields.map((addressField, index) => (
-                  <div
-                    key={addressField.id}
-                    className="rounded-md border p-4 flex flex-col gap-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-muted-foreground">
-                        Address {index + 1}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => remove(index)}
-                        aria-label={`Remove address ${index + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {/* Address type */}
-                    <Controller
-                      name={`addresses.${index}.addressType`}
-                      control={form.control}
-                      render={({ field, fieldState }) => (
-                        <Field data-invalid={fieldState.invalid}>
-                          <FieldLabel htmlFor={`addresses-${index}-type`}>
-                            Type
-                          </FieldLabel>
-                          <Select
-                            value={field.value ?? "shipping"}
-                            onValueChange={field.onChange}
-                          >
-                            <SelectTrigger
-                              id={`addresses-${index}-type`}
-                              aria-invalid={fieldState.invalid}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="shipping">Shipping</SelectItem>
-                              <SelectItem value="billing">Billing</SelectItem>
-                              <SelectItem value="warehouse">
-                                Warehouse
-                              </SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {fieldState.invalid && (
-                            <FieldError errors={[fieldState.error]} />
-                          )}
-                        </Field>
-                      )}
-                    />
-
-                    {/* Street */}
-                    <Controller
-                      name={`addresses.${index}.street`}
-                      control={form.control}
-                      render={({ field, fieldState }) => (
-                        <Field data-invalid={fieldState.invalid}>
-                          <FieldLabel htmlFor={`addresses-${index}-street`}>
-                            Street *
-                          </FieldLabel>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            id={`addresses-${index}-street`}
-                            aria-invalid={fieldState.invalid}
-                            placeholder="Street address"
-                            autoComplete="street-address"
-                          />
-                          {fieldState.invalid && (
-                            <FieldError errors={[fieldState.error]} />
-                          )}
-                        </Field>
-                      )}
-                    />
-
-                    {/* City / State / ZIP */}
-                    <div className="flex flex-wrap gap-3">
-                      <Controller
-                        name={`addresses.${index}.city`}
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                          <Field
-                            data-invalid={fieldState.invalid}
-                            className="max-w-60 flex-1"
-                          >
-                            <FieldLabel htmlFor={`addresses-${index}-city`}>
-                              City *
-                            </FieldLabel>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              id={`addresses-${index}-city`}
-                              aria-invalid={fieldState.invalid}
-                              placeholder="City"
-                              autoComplete="address-level2"
-                            />
-                            {fieldState.invalid && (
-                              <FieldError errors={[fieldState.error]} />
-                            )}
-                          </Field>
+            <FieldGroup>
+              <FormSection title="Identity">
+                <div className="grid gap-6 @md/field-group:grid-cols-[2fr_1fr]">
+                  <Controller
+                    name="name"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-name">
+                          Customer name *
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-name"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="e.g. Acme Meats Inc."
+                          autoComplete="organization"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
                         )}
-                      />
-                      <Controller
-                        name={`addresses.${index}.state`}
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                          <Field
-                            data-invalid={fieldState.invalid}
-                            className="max-w-40"
-                          >
-                            <FieldLabel htmlFor={`addresses-${index}-state`}>
-                              State *
-                            </FieldLabel>
-                            <Select
-                              value={field.value ?? ""}
-                              onValueChange={field.onChange}
-                            >
-                              <SelectTrigger
-                                id={`addresses-${index}-state`}
-                                aria-invalid={fieldState.invalid}
-                              >
-                                <SelectValue placeholder="State" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {US_STATES.map(s => (
-                                  <SelectItem key={s.code} value={s.code}>
-                                    {s.code} — {s.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {fieldState.invalid && (
-                              <FieldError errors={[fieldState.error]} />
-                            )}
-                          </Field>
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="abbreviation"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-invoice-prefix">
+                          Invoice prefix *
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-invoice-prefix"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="e.g. ACME"
+                          maxLength={32}
+                        />
+                        <FieldDescription>
+                          Short code that prefixes invoice numbers (ACME-001).
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
                         )}
-                      />
-                      <Controller
-                        name={`addresses.${index}.zip`}
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                          <Field
-                            data-invalid={fieldState.invalid}
-                            className="max-w-28"
-                          >
-                            <FieldLabel htmlFor={`addresses-${index}-zip`}>
-                              ZIP *
-                            </FieldLabel>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              id={`addresses-${index}-zip`}
-                              aria-invalid={fieldState.invalid}
-                              placeholder="12345"
-                              autoComplete="postal-code"
-                              maxLength={5}
-                            />
-                            {fieldState.invalid && (
-                              <FieldError errors={[fieldState.error]} />
-                            )}
-                          </Field>
+                      </Field>
+                    )}
+                  />
+                </div>
+              </FormSection>
+
+              <FormSection title="Contact">
+                <div className="grid gap-6 @md/field-group:grid-cols-2">
+                  <Controller
+                    name="email"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-email">
+                          Email
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-email"
+                          type="email"
+                          inputMode="email"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="ap@acme.com"
+                          autoComplete="email"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
                         )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="phoneNumber"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-phone">
+                          Phone
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-phone"
+                          type="tel"
+                          inputMode="tel"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="(555) 123-4567"
+                          autoComplete="tel"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+                </div>
+              </FormSection>
+
+              <FormSection title="Payment & accounting">
+                <div className="grid gap-6 @md/field-group:grid-cols-3">
+                  <Controller
+                    name="netDays"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-net-days">
+                          Payment terms (net days)
+                        </FieldLabel>
+                        <Input
+                          id="form-add-customer-net-days"
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={365}
+                          step={1}
+                          placeholder="e.g. 30"
+                          value={field.value == null ? "" : String(field.value)}
+                          onChange={e => field.onChange(e.target.value)}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          aria-invalid={fieldState.invalid}
+                        />
+                        <FieldDescription>
+                          Days until invoice is due. Blank = due on receipt.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="taxId"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-tax-id">
+                          Tax ID (EIN)
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-tax-id"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="12-3456789"
+                          inputMode="numeric"
+                          maxLength={10}
+                        />
+                        <FieldDescription>
+                          9-digit US EIN. Optional.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+
+                  <Controller
+                    name="fuelSurchargeAmount"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-fuel">
+                          Fuel surcharge ($)
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-fuel"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="0.00"
+                        />
+                        <FieldDescription>
+                          Flat add-on per order, when enabled on the order.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+                </div>
+              </FormSection>
+
+              <FormSection
+                title="Addresses"
+                description="Shipping is what drivers route to; billing shows on invoices. The default one auto-fills new orders. US only."
+              >
+                {fields.length > 0 ? (
+                  <div className="flex flex-col gap-4">
+                    {fields.map((addressField, index) => (
+                      <AddressFields
+                        key={addressField.id}
+                        index={index}
+                        control={form.control}
+                        onRemove={() => remove(index)}
                       />
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <p className="text-xs text-subtle">
+                    No addresses yet. Add one if you ship to or invoice this customer.
+                  </p>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() =>
+                    append({
+                      ...emptyAddress,
+                      isDefault: fields.length === 0,
+                    })
+                  }
+                >
+                  <Plus className="h-4 w-4" />
+                  Add address
+                </Button>
+              </FormSection>
+            </FieldGroup>
+          </form>
+        </CardContent>
+        {!stickyFooter ? footer : null}
+      </Card>
+      {stickyFooter ? footer : null}
+    </div>
+  );
+}
+
+function AddressFields({
+  index,
+  control,
+  onRemove,
+}: {
+  index: number;
+  control: ReturnType<typeof useForm<CreateCustomerInput>>["control"];
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-md border border-border-default p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Controller
+            name={`addresses.${index}.addressType`}
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value ?? "shipping"}
+                onValueChange={field.onChange}
+              >
+                <SelectTrigger
+                  id={`addresses-${index}-type`}
+                  className="h-8 w-36 text-xs"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="shipping">Shipping</SelectItem>
+                  <SelectItem value="billing">Billing</SelectItem>
+                  <SelectItem value="warehouse">Warehouse</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             )}
+          />
+          <Controller
+            name={`addresses.${index}.isDefault`}
+            control={control}
+            render={({ field }) => (
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs text-subtle">
+                <input
+                  type="checkbox"
+                  checked={!!field.value}
+                  onChange={e => field.onChange(e.target.checked)}
+                  className="size-3.5 rounded border-border-default"
+                />
+                Default
+              </label>
+            )}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRemove}
+          aria-label={`Remove address ${index + 1}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() =>
-                append({
-                  ...emptyAddress,
-                  isDefault: fields.length === 0,
-                })
-              }
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Add address
-            </Button>
+      <div className="flex flex-col gap-4">
+        <Controller
+          name={`addresses.${index}.street`}
+          control={control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={`addresses-${index}-street`}>
+                Street *
+              </FieldLabel>
+              <Input
+                {...field}
+                value={field.value ?? ""}
+                id={`addresses-${index}-street`}
+                aria-invalid={fieldState.invalid}
+                placeholder="123 Main St"
+                autoComplete="street-address"
+              />
+              {fieldState.invalid && (
+                <FieldError errors={[fieldState.error]} />
+              )}
+            </Field>
+          )}
+        />
 
-          </FieldGroup>
-        </form>
-      </CardContent>
-      <FormActionFooter
-        formId="form-add-customer"
-        isPending={isPending}
-        onCancel={() =>
-          router.push(
-            mode === "edit" && customer
-              ? `/customers/${customer.id}`
-              : "/customers",
-          )
-        }
-        pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
-        submitLabel={mode === "edit" ? "Save changes" : "Create customer"}
-      />
-    </Card>
+        <div className="grid gap-4 @md/field-group:grid-cols-[2fr_1fr_1fr]">
+          <Controller
+            name={`addresses.${index}.city`}
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-city`}>
+                  City *
+                </FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id={`addresses-${index}-city`}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="San Francisco"
+                  autoComplete="address-level2"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name={`addresses.${index}.state`}
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-state`}>
+                  State *
+                </FieldLabel>
+                <Select
+                  value={field.value ?? ""}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger
+                    id={`addresses-${index}-state`}
+                    aria-invalid={fieldState.invalid}
+                  >
+                    <SelectValue placeholder="State" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {US_STATES.map(s => (
+                      <SelectItem key={s.code} value={s.code}>
+                        {s.code} — {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+          <Controller
+            name={`addresses.${index}.zip`}
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-zip`}>
+                  ZIP *
+                </FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id={`addresses-${index}-zip`}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="94103"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={5}
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
+            )}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <header>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-subtle">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-0.5 text-xs text-subtle">{description}</p>
+        ) : null}
+      </header>
+      <div className="flex flex-col gap-6">{children}</div>
+    </section>
   );
 }
