@@ -523,6 +523,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "success",
     icon: Wallet,
+    liveDemoHref: "/reel/payments",
   },
   {
     slug: "supplier-invoices",
