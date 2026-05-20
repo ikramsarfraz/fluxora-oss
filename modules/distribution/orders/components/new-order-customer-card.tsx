@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Controller, useWatch, type Control } from "react-hook-form";
 
 import {
@@ -17,8 +18,11 @@ import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/utils/currency";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
-import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
+import {
+  useCustomer,
+  useCustomerSearch,
+} from "@/modules/distribution/customers/hooks/use-customers";
+import type { CustomerSearchResult } from "@/modules/distribution/customers/services/customers";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 
@@ -43,9 +47,13 @@ interface NewOrderCustomerCardProps {
 }
 
 export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
-  const { data: customers, isLoading } = useCustomers();
   const customerId = useWatch({ control, name: "customerId" });
-  const selected = customers?.find(c => c.id === customerId) ?? null;
+  const [query, setQuery] = useState("");
+  const { data: searchResults, isFetching } = useCustomerSearch(query);
+  // When a customer is already selected (e.g. ?customerId= deep-link or
+  // editing an existing order), resolve the full record by id so we can
+  // render the chip without waiting for the user to type.
+  const { data: selected, isLoading: selectedLoading } = useCustomer(customerId);
   const isStep1Done = !!selected;
 
   const defaultAddress = selected
@@ -110,10 +118,15 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
             {!selected ? (
               <div>
                 <Combobox
-                  items={customers ?? []}
-                  itemToStringValue={(c: CustomerListItem) => c.name}
+                  items={searchResults ?? []}
+                  itemToStringValue={(c: CustomerSearchResult) => c.name}
+                  inputValue={query}
+                  onInputValueChange={setQuery}
+                  // Server is the filter — don't run the built-in client filter
+                  // on top of results, otherwise paginated results disappear.
+                  filter={null}
                   value={null}
-                  onValueChange={(c: CustomerListItem | null) =>
+                  onValueChange={(c: CustomerSearchResult | null) =>
                     field.onChange(c?.id ?? "")
                   }
                 >
@@ -124,25 +137,27 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                         variant="outline"
                         aria-invalid={fieldState.invalid}
                         className="h-auto w-full justify-start border-border-default bg-card px-3.5 py-2.5 text-sm font-normal text-subtle shadow-none hover:bg-divider"
-                        disabled={isLoading}
+                        disabled={selectedLoading}
                       >
                         <ComboboxValue>
-                          {isLoading
-                            ? "Loading customers…"
-                            : "Search customers by name, ID, or phone…"}
+                          {selectedLoading
+                            ? "Loading customer…"
+                            : "Search customers by name, phone, or email…"}
                         </ComboboxValue>
                       </Button>
                     }
                   />
                   <ComboboxContent>
                     <ComboboxInput showTrigger={false} placeholder="Search customers…" />
-                    <ComboboxEmpty>No customers found.</ComboboxEmpty>
+                    <ComboboxEmpty>
+                      {isFetching ? "Searching…" : "No customers found."}
+                    </ComboboxEmpty>
                     <ComboboxList>
-                      {(c: CustomerListItem) => {
-                        const addr =
-                          c.addresses?.find(a => a.isDefault) ?? c.addresses?.[0];
-                        const loc = addr
-                          ? [addr.city, addr.state].filter(Boolean).join(", ")
+                      {(c: CustomerSearchResult) => {
+                        const loc = c.defaultAddress
+                          ? [c.defaultAddress.city, c.defaultAddress.state]
+                              .filter(Boolean)
+                              .join(", ")
                           : null;
                         return (
                           <ComboboxItem key={c.id} value={c}>
@@ -158,7 +173,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                               <div>
                                 <div style={{ fontWeight: 500 }}>{c.name}</div>
                                 <div style={{ fontSize: "12px", color: C.muted }}>
-                                  {[c.phoneNumber, loc].filter(Boolean).join(" · ") || "No contact info"}
+                                  {[c.phoneNumber, c.email, loc].filter(Boolean).join(" · ") || "No contact info"}
                                 </div>
                               </div>
                             </div>

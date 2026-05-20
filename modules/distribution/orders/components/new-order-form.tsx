@@ -15,7 +15,7 @@ import {
   useUpdateSalesOrderStatus,
 } from "../hooks/use-orders";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
 import { formatMoney } from "@/lib/utils/currency";
 import {
   isLimitReachedMessage,
@@ -90,7 +90,6 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   );
 
   const { data: products } = useProducts();
-  const { data: customers } = useCustomers();
 
   const createOrder = useCreateSalesOrder();
   const updateOrder = useUpdateSalesOrder();
@@ -110,11 +109,11 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
   const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
+  const { data: selectedCustomer } = useCustomer(customerId);
   const { lineCount, estTotal } = useMemo(() => {
     const productsById = new Map<string, ProductListItem>();
     for (const p of products ?? []) productsById.set(p.id, p);
 
-    const customer = customers?.find(c => c.id === customerId) ?? null;
     const filledLines = (lines ?? []).filter(l => l.productId);
 
     let subtotal = 0;
@@ -123,7 +122,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
     }
 
     const fuel = addFuelSurcharge
-      ? Number(customer?.fuelSurchargeAmount ?? 0) || 0
+      ? Number(selectedCustomer?.fuelSurchargeAmount ?? 0) || 0
       : 0;
     const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
 
@@ -131,7 +130,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
       lineCount: filledLines.length,
       estTotal: Math.max(0, subtotal + fuel - disc),
     };
-  }, [lines, products, customers, customerId, addFuelSurcharge, discountAmount]);
+  }, [lines, products, selectedCustomer, addFuelSurcharge, discountAmount]);
 
   useEffect(() => {
     isPendingRef.current = pendingMode !== null;

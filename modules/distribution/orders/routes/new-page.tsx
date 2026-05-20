@@ -5,7 +5,10 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
-import { getCustomers } from "@/modules/distribution/customers/services/customers";
+import {
+  getCustomerById,
+  searchCustomers,
+} from "@/modules/distribution/customers/services/customers";
 import { getProducts } from "@/modules/distribution/products/services/products";
 import { getProductCasesOnHand } from "@/modules/distribution/inventory/services/inventory";
 
@@ -20,11 +23,11 @@ export default async function OrdersNewPage({
   const initialCustomerId = typeof customerId === "string" ? customerId : "";
   const queryClient = new QueryClient();
 
-  await Promise.all([
+  const prefetches: Promise<unknown>[] = [
     queryClient
       .prefetchQuery({
-        queryKey: queryKeys.customers.all,
-        queryFn: getCustomers,
+        queryKey: queryKeys.customers.search(""),
+        queryFn: () => searchCustomers("", 20),
       })
       .catch(() => {}),
     queryClient
@@ -39,7 +42,22 @@ export default async function OrdersNewPage({
         queryFn: getProductCasesOnHand,
       })
       .catch(() => {}),
-  ]);
+  ];
+
+  // Deep-linked customer (?customerId=…): preload just that one so the
+  // selected chip renders immediately instead of "Loading customer…".
+  if (initialCustomerId) {
+    prefetches.push(
+      queryClient
+        .prefetchQuery({
+          queryKey: queryKeys.customers.detail(initialCustomerId),
+          queryFn: () => getCustomerById(initialCustomerId),
+        })
+        .catch(() => {}),
+    );
+  }
+
+  await Promise.all(prefetches);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

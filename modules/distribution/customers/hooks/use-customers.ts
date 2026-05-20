@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   archiveCustomerAction,
@@ -12,6 +13,7 @@ import {
   getCustomersPageAction,
   permanentlyDeleteCustomerAction,
   restoreCustomerAction,
+  searchCustomersAction,
 } from "@/modules/distribution/customers/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
@@ -22,11 +24,42 @@ import type {
   CustomerOrdersParams,
 } from "@/modules/distribution/customers/services/customers";
 
+/**
+ * @deprecated Loads every active customer into the client. Past a few
+ * hundred rows this becomes a real perf problem. Prefer
+ * {@link useCustomerSearch} for typeahead and {@link useCustomer} for
+ * single-customer lookups by id.
+ */
 export function useCustomers() {
   return useQuery({
     queryKey: queryKeys.customers.all,
     queryFn: getCustomersAction,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
+/**
+ * Server-paginated typeahead. Returns up to ~20 matching active customers
+ * (lightweight rows: id, name, abbreviation, phone, email, fuel surcharge,
+ * net days, default address). Use the resulting `id` to look up the full
+ * customer record via {@link useCustomer} when needed.
+ */
+export function useCustomerSearch(query: string, limit?: number) {
+  const debouncedQuery = useDebouncedValue(query.trim(), 200);
+  return useQuery({
+    queryKey: queryKeys.customers.search(debouncedQuery),
+    queryFn: () => searchCustomersAction(debouncedQuery, limit),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 30,
   });
 }
 

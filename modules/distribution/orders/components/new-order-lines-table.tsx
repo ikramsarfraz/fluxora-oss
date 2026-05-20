@@ -39,13 +39,13 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
 import {
   useFifoAllocation,
   useProductCasesOnHand,
 } from "@/modules/distribution/inventory/hooks/use-inventory";
 import { formatMoney } from "@/lib/utils/currency";
-import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
+import type { CustomerDetail } from "@/modules/distribution/customers/services/customers";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import type { FifoAllocationResult } from "@/modules/distribution/inventory/services/inventory";
 
@@ -116,13 +116,9 @@ export function NewOrderLinesTable({
   const lines = useWatch({ control, name: "lines" });
 
   const { data: products } = useProducts();
-  const { data: customers } = useCustomers();
+  const { data: customerData } = useCustomer(customerId);
+  const customer: CustomerDetail | null = customerData ?? null;
   const { data: casesOnHandData } = useProductCasesOnHand();
-
-  const customer: CustomerListItem | null = useMemo(
-    () => customers?.find((c) => c.id === customerId) ?? null,
-    [customers, customerId],
-  );
 
   const productsById = useMemo(() => {
     const map = new Map<string, ProductListItem>();

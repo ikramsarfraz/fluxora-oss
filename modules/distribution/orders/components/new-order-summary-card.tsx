@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
@@ -39,7 +39,6 @@ export function NewOrderSummaryCard({
 }: NewOrderSummaryCardProps) {
   const [discountOpen, setDiscountOpen] = useState(false);
 
-  const { data: customers } = useCustomers();
   const { data: products } = useProducts();
 
   const customerId = useWatch({ control, name: "customerId" });
@@ -47,10 +46,7 @@ export function NewOrderSummaryCard({
   const addFuelSurcharge = useWatch({ control, name: "addFuelSurcharge" });
   const discountInput = useWatch({ control, name: "discountAmount" });
 
-  const customer = useMemo(
-    () => customers?.find(c => c.id === customerId) ?? null,
-    [customers, customerId],
-  );
+  const { data: customer } = useCustomer(customerId);
 
   const productsById = useMemo(() => {
     const map = new Map<string, ProductListItem>();

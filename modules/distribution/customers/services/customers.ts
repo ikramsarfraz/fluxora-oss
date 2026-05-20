@@ -287,9 +287,108 @@ export type CustomerDetail = NonNullable<
 export type CustomerListSort = "name" | "createdAt";
 
 /**
+ * Lightweight typeahead row for order/invoice/payment customer lookups.
+ * Carries enough to render the selector option and the post-selection
+ * chip without a follow-up fetch, but skips heavy joins (addresses[],
+ * productPrices[]) — those are fetched on demand via `getCustomerById`.
+ */
+export type CustomerSearchResult = {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  fuelSurchargeAmount: string | null;
+  netDays: number | null;
+  defaultAddress: {
+    street: string;
+    city: string | null;
+    state: string | null;
+    zip: string | null;
+  } | null;
+};
+
+const DEFAULT_SEARCH_LIMIT = 20;
+const MAX_SEARCH_LIMIT = 50;
+
+/**
+ * Typeahead query for the customer combobox. Returns up to `limit` active
+ * (non-archived) customers matching the query against name / abbreviation
+ * / phone / email. Empty query returns the most recent N customers, so
+ * the popover isn't empty before the user types.
+ */
+export async function searchCustomers(
+  query: string = "",
+  limit: number = DEFAULT_SEARCH_LIMIT,
+): Promise<CustomerSearchResult[]> {
+  const tenant = await getCurrentTenant();
+  const cappedLimit = Math.min(Math.max(limit, 1), MAX_SEARCH_LIMIT);
+  const where = and(
+    eq(customers.tenantId, tenant.id),
+    isNull(customers.archivedAt),
+    buildTextSearchCondition(query, [
+      customers.name,
+      customers.abbreviation,
+      customers.phoneNumber,
+      customers.email,
+    ]),
+  );
+  const rows = await db.query.customers.findMany({
+    where,
+    columns: {
+      id: true,
+      name: true,
+      abbreviation: true,
+      phoneNumber: true,
+      email: true,
+      fuelSurchargeAmount: true,
+      netDays: true,
+    },
+    with: {
+      addresses: {
+        columns: {
+          street: true,
+          city: true,
+          state: true,
+          zip: true,
+          isDefault: true,
+        },
+      },
+    },
+    orderBy: [desc(customers.createdAt)],
+    limit: cappedLimit,
+  });
+  return rows.map(row => {
+    const def =
+      row.addresses.find(a => a.isDefault) ?? row.addresses[0] ?? null;
+    return {
+      id: row.id,
+      name: row.name,
+      abbreviation: row.abbreviation,
+      phoneNumber: row.phoneNumber,
+      email: row.email,
+      fuelSurchargeAmount: row.fuelSurchargeAmount,
+      netDays: row.netDays,
+      defaultAddress: def
+        ? {
+            street: def.street,
+            city: def.city,
+            state: def.state,
+            zip: def.zip,
+          }
+        : null,
+    };
+  });
+}
+
+/**
  * Active (non-archived) customers in the tenant. Used by order/invoice
  * lookups — archived customers must not be selectable for new business
  * activity.
+ *
+ * @deprecated Prefer {@link searchCustomers} for typeahead and
+ * {@link getCustomerById} for single-customer lookups. Loading every
+ * customer into the client is unsafe past a few hundred rows.
  */
 export async function getCustomers() {
   const tenant = await getCurrentTenant();

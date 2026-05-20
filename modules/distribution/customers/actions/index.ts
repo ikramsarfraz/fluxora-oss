@@ -19,6 +19,7 @@ import {
   getCustomersPage,
   permanentlyDeleteCustomer,
   restoreCustomer,
+  searchCustomers,
   setCustomerPrice,
   updateCustomer,
   type BulkCreateCustomerInput,
@@ -43,6 +44,10 @@ export async function getCustomersAction() {
 
 export async function getCustomersPageAction(input?: CustomerListParams) {
   return await getCustomersPage(input);
+}
+
+export async function searchCustomersAction(query?: string, limit?: number) {
+  return await searchCustomers(query ?? "", limit);
 }
 
 export async function getCustomerAction(customerId: string) {

@@ -26,6 +26,7 @@ export const queryKeys = {
   customers: {
     all: ["customers"] as const,
     list: (params: unknown) => ["customers", "list", params] as const,
+    search: (query: string) => ["customers", "search", query] as const,
     detail: (id: string) => ["customers", id] as const,
     portfolio: (id: string) => ["customers", id, "portfolio"] as const,
     prices: (id: string) => ["customers", id, "prices"] as const,
