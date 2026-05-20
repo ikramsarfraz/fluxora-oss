@@ -479,6 +479,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "forest",
     icon: ShoppingCart,
+    liveDemoHref: "/reel/sales-order-fifo",
   },
   {
     slug: "sales-invoices",
