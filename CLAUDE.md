@@ -40,8 +40,9 @@ Domain logic lives under `modules/`, organized by namespace. The flat `services/
 modules/
   core/           # tenant-agnostic infra: feature-flags, tenants, billing, platform-admin, workspace-settings
   distribution/   # the business vertical: orders, customers, products, inventory, lots,
-                  # invoices, supplier-invoices, suppliers, payments, expenses,
-                  # categories, units-of-measure, price-chart, configuration, plaid, inbox, onboarding
+                  # invoices, supplier-invoices, suppliers, payments, supplier-payments,
+                  # expenses, categories, units-of-measure, price-chart, configuration,
+                  # plaid, inbox, onboarding
   shared/         # domain-agnostic primitives used by 2+ modules
 ```
 
@@ -106,6 +107,7 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 - **`types.ts` per module** re-exports the practical domain types (inferred from services / Zod / Drizzle `$inferSelect`) rather than redefining them. The service/schema is the source of truth.
 - **`@react-pdf/renderer` and `pdf-parse`** are marked `serverExternalPackages` in [next.config.ts](next.config.ts) — needed because the RSC bundler otherwise resolves `react` to the server build and breaks PDF rendering. Don't remove without testing PDF output.
 - **Sentry** is wired via `withSentryConfig` in `next.config.ts` plus `instrumentation*.ts` and `sentry.*.config.ts`. Source map upload is gated on `SENTRY_AUTH_TOKEN`.
+- **File storage is Cloudflare R2** (S3-compatible, accessed via `@aws-sdk/client-s3`). Uploads go through presigned URLs; never assume local-disk storage when wiring file features.
 
 ## Further reading
 
