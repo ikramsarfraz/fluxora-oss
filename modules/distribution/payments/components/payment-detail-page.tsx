@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,13 +14,26 @@ import {
   DetailGrid,
   DetailSection,
 } from "@/components/detail-section";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-import { usePayment } from "../hooks/use-payments";
+import { usePayment, useVoidPayment } from "../hooks/use-payments";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { can } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { PaymentDetail } from "../services/payments";
+import { PaymentEditDialog } from "./payment-edit-dialog";
 
 function paymentMethodLabel(
   method: PaymentDetail["paymentMethod"],
@@ -43,7 +59,14 @@ function formatDateTime(value: string | Date | null | undefined): string {
 }
 
 export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
+  const router = useRouter();
   const { data: payment, isLoading, error, refetch } = usePayment(paymentId);
+  const { data: currentUser } = useCurrentPortalUser();
+  const voidPayment = useVoidPayment();
+  const canModify = can(currentUser?.role, "record_payment");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
 
   useSetBreadcrumbLabel(
     `/payments/${paymentId}`,
@@ -85,12 +108,35 @@ export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
           </Badge>
         }
       >
-        <Button variant="outline" asChild>
-          <Link href="/payments">
-            <ArrowLeft className="size-4" />
-            Back to payments
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/payments">
+              <ArrowLeft className="size-4" />
+              Back to payments
+            </Link>
+          </Button>
+          {canModify ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="size-4" />
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setVoidOpen(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+                Void
+              </Button>
+            </>
+          ) : null}
+        </div>
       </DetailPageHeader>
 
       <DetailSection title="Summary" description="Payment amount and method.">
@@ -248,6 +294,57 @@ export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      <PaymentEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        payment={payment}
+      />
+
+      <AlertDialog open={voidOpen} onOpenChange={setVoidOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {invoice ? (
+                <>
+                  This permanently removes the{" "}
+                  <strong className="tabular-nums">
+                    {formatMoney(payment.amount)}
+                  </strong>{" "}
+                  payment from invoice{" "}
+                  <strong className="font-mono">
+                    {invoice.invoiceNumber}
+                  </strong>
+                  . The invoice&apos;s paid amount, balance due, and status will
+                  recalculate automatically. The action is captured in the
+                  audit log.
+                </>
+              ) : (
+                <>This permanently removes the payment. The action is captured in the audit log.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={voidPayment.isPending}
+              onClick={() => {
+                voidPayment.mutate(payment.id, {
+                  onSuccess: result => {
+                    toast.success("Payment voided.");
+                    router.push(`/invoices/${result.invoiceId}`);
+                  },
+                  onError: e => toast.error(e.message),
+                });
+              }}
+            >
+              {voidPayment.isPending ? "Voiding…" : "Void payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

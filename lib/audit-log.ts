@@ -43,7 +43,9 @@ export type AuditAction =
   | "tenant.member_removed"
   | "tenant.member_role_changed"
   | "payment_match.confirmed"
-  | "payment_match.unmatched";
+  | "payment_match.unmatched"
+  | "payment.void"
+  | "payment.update";
 
 export type LogAuditEventInput = {
   tenantId: string;
