@@ -66,21 +66,24 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-// Compare cards now walk the visitor through reading every line. Each card's
-// choreography:
-//   0.0s   card fades in (0.7s)
-//   1.3s   first tool tile / Fluxora panel lands
-//   1.3 → 3.7s   tool tiles land one every 0.6s (or action items inside the
-//                Fluxora panel land at the same cadence)
-//   ~4.2s   italic voiceover fades in over 1s — visitor reads the sentence
-//   6.7s   big time stat punches in (the punchline)
-//   8.0s   green callout (After only, the closing beat)
-//   ~3s of reading rest before the next card
+// Compare cards now open with a big centered title reveal ("The old way" /
+// "The Fluxora way") that pops up large, sits for a beat, then shrinks
+// toward the top-right corner where the small side pill takes over. Only
+// after the title settles does the rest of the card start appearing.
 //
-// 11000ms gives ~2-3s of rest after the last beat, which feels generous
-// without being slow. The visitor can pause if they want longer.
-const BEFORE_MS = 11000;
-const AFTER_MS = 11000;
+//   0.0 → 0.4s   card fades in
+//   0.0 → 2.0s   BIG TITLE: scales up, sits centered, shrinks + drifts up-right
+//   1.5 → 2.3s   header (chapter label + topic + side pill) fades in
+//   2.9s   first tool tile / Fluxora panel mounts
+//   2.9 → 5.3s   tools/actions land at 0.6s reading-beat cadence
+//   5.8 → 6.4s   voiceover fades in over 1s
+//   8.3s   HUGE time stat punches in (punchline)
+//   9.6s   green callout (After only)
+//   ~3s of rest before the next card
+//
+// 12500ms hits ~3s of rest after the last beat. Visitors can pause longer.
+const BEFORE_MS = 12500;
+const AFTER_MS = 12500;
 const INTRO_MS = 3500;
 const OUTRO_MS = 6000;
 
