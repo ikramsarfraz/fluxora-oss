@@ -7,7 +7,10 @@ import {
   Boxes,
   DollarSign,
   FileText,
+  Globe,
+  Mail,
   Pencil,
+  Phone,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -159,7 +162,15 @@ function DetailItem({
   );
 }
 
-function SupplierContactCard({ supplier }: { supplier: SupplierContactSlice }) {
+function SupplierContactCard({
+  supplier,
+  supplierId,
+  archived,
+}: {
+  supplier: SupplierContactSlice;
+  supplierId: string;
+  archived: boolean;
+}) {
   const hasContact =
     supplier.primaryContactName ||
     supplier.primaryContactEmail ||
@@ -168,16 +179,22 @@ function SupplierContactCard({ supplier }: { supplier: SupplierContactSlice }) {
   const hasAccounting = supplier.accountNumber || supplier.taxId || supplier.websiteUrl;
   const hasNotes = Boolean(supplier.notes);
 
-  // If nothing is populated, skip the card entirely — empty supplier records
-  // shouldn't show four em-dashes.
   if (!hasContact && !address && !hasAccounting && !hasNotes) {
-    return null;
+    return <SupplierContactCardEmpty supplierId={supplierId} archived={archived} />;
   }
 
   return (
     <Card className="overflow-hidden rounded-xl p-6 shadow-none">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
+        {!archived ? (
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/suppliers/${supplierId}/edit`}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit details
+            </Link>
+          </Button>
+        ) : null}
       </div>
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {hasContact ? (
@@ -281,6 +298,94 @@ function SupplierContactCard({ supplier }: { supplier: SupplierContactSlice }) {
   );
 }
 
+function SupplierQuickContactActions({
+  supplier,
+}: {
+  supplier: {
+    primaryContactEmail: string | null;
+    primaryContactPhone: string | null;
+    websiteUrl: string | null;
+  };
+}) {
+  const items: Array<{ href: string; label: string; icon: LucideIcon; external?: boolean }> = [];
+  if (supplier.primaryContactEmail) {
+    items.push({
+      href: `mailto:${supplier.primaryContactEmail}`,
+      label: `Email ${supplier.primaryContactEmail}`,
+      icon: Mail,
+    });
+  }
+  if (supplier.primaryContactPhone) {
+    items.push({
+      href: `tel:${supplier.primaryContactPhone}`,
+      label: `Call ${supplier.primaryContactPhone}`,
+      icon: Phone,
+    });
+  }
+  if (supplier.websiteUrl) {
+    items.push({
+      href: supplier.websiteUrl,
+      label: `Open ${supplier.websiteUrl}`,
+      icon: Globe,
+      external: true,
+    });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mr-1 flex items-center gap-1 border-r border-border-default pr-2">
+      {items.map(({ href, label, icon: Icon, external }) => (
+        <Button
+          key={label}
+          variant="ghost"
+          size="icon-sm"
+          asChild
+          title={label}
+          aria-label={label}
+        >
+          <a
+            href={href}
+            {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          >
+            <Icon className="size-4" />
+          </a>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SupplierContactCardEmpty({
+  supplierId,
+  archived,
+}: {
+  supplierId: string;
+  archived: boolean;
+}) {
+  return (
+    <Card className="overflow-hidden rounded-xl border-dashed p-6 shadow-none">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
+          <p className="mt-0.5 text-xs leading-relaxed text-subtle">
+            Add a primary contact, remit-to address, and tax ID to unlock
+            AP-chase emails, check printing, and 1099-NEC reporting.
+          </p>
+        </div>
+        {!archived ? (
+          <Button variant="outline" size="sm" asChild className="shrink-0">
+            <Link href={`/suppliers/${supplierId}/edit`}>
+              <Pencil className="h-3.5 w-3.5" />
+              Complete profile
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
@@ -354,6 +459,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <SupplierQuickContactActions supplier={supplier} />
           {!supplier.archivedAt ? (
             <>
               <Button size="sm" asChild>
@@ -400,6 +506,12 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           helper="All-time supplier invoices."
         />
       </div>
+
+      <SupplierContactCard
+        supplier={supplier}
+        supplierId={supplierId}
+        archived={Boolean(supplier.archivedAt)}
+      />
 
       {/* Payment terms editor + delete (compact, below KPIs) */}
       <Card className="overflow-hidden rounded-xl p-0 shadow-none">
@@ -468,8 +580,6 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         open={editTermsOpen}
         onOpenChange={setEditTermsOpen}
       />
-
-      <SupplierContactCard supplier={supplier} />
 
       {/* Tab bar */}
       <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">
