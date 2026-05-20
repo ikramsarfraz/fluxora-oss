@@ -6,9 +6,11 @@ import { db } from "@/db";
 import {
   bankAccounts,
   bankTransactions,
+  customers,
   payeeAliases,
   paymentMatches,
   plaidConnections,
+  salesInvoices,
   supplierInvoices,
   suppliers,
 } from "@/db/schema";
@@ -294,6 +296,148 @@ export async function getOpenBillsForLinkingAction(txnId: string, proximity: "ex
     })),
     transactionAmount: amount,
   };
+}
+
+/**
+ * AR-side equivalent of getOpenBillsForLinkingAction. Returns open
+ * sales_invoices candidate to link an INFLOW bank transaction to. The
+ * UI uses the absolute value of the txn's negative amount for matching.
+ */
+export async function getOpenSalesInvoicesForLinkingAction(
+  txnId: string,
+  proximity: "exact" | "5pct" | "15pct" | "all",
+) {
+  const tenant = await getCurrentTenant();
+
+  const txn = await db.query.bankTransactions.findFirst({
+    where: and(
+      eq(bankTransactions.id, txnId),
+      eq(bankTransactions.tenantId, tenant.id),
+    ),
+  });
+  if (!txn) throw new Error("Transaction not found");
+
+  const amount = Math.abs(Number(txn.amount));
+  const toleranceMap = { exact: 0.001, "5pct": 0.05, "15pct": 0.15, all: 10 };
+  const tolerance = toleranceMap[proximity];
+
+  const invoices = await db
+    .select({
+      id: salesInvoices.id,
+      invoiceNumber: salesInvoices.invoiceNumber,
+      invoiceDate: salesInvoices.invoiceDate,
+      balanceDue: salesInvoices.balanceDue,
+      totalAmount: salesInvoices.totalAmount,
+      customerId: customers.id,
+      customerName: customers.name,
+    })
+    .from(salesInvoices)
+    .leftJoin(customers, eq(salesInvoices.customerId, customers.id))
+    .where(
+      and(
+        eq(salesInvoices.tenantId, tenant.id),
+        sql`${salesInvoices.balanceDue}::numeric > 0`,
+        sql`${salesInvoices.status} != 'void'`,
+        proximity === "all"
+          ? sql`1=1`
+          : and(
+              gte(
+                salesInvoices.balanceDue,
+                (amount * (1 - tolerance)).toFixed(2),
+              ),
+              lte(
+                salesInvoices.balanceDue,
+                (amount * (1 + tolerance)).toFixed(2),
+              ),
+            ),
+      ),
+    )
+    .orderBy(sql`abs(${salesInvoices.balanceDue}::numeric - ${amount})`)
+    .limit(50);
+
+  return {
+    invoices: invoices.map(i => ({
+      ...i,
+      balanceDue: Number(i.balanceDue),
+      totalAmount: Number(i.totalAmount),
+      delta: Number(i.balanceDue) - amount,
+      deltaPct:
+        amount > 0 ? ((Number(i.balanceDue) - amount) / amount) * 100 : 0,
+    })),
+    transactionAmount: amount,
+  };
+}
+
+/**
+ * AR-side equivalent of linkTransactionToBillAction. Confirms the
+ * user's chosen sales_invoice → bank_transaction match and triggers
+ * the AR payment-record path via confirmMatch (which calls
+ * applyArInflowToInvoice under the hood).
+ */
+export async function linkTransactionToSalesInvoiceAction(
+  txnId: string,
+  salesInvoiceId: string,
+) {
+  const user = await getCurrentPortalUser();
+  const tenant = await getCurrentTenant();
+
+  const [txn, invoice] = await Promise.all([
+    db.query.bankTransactions.findFirst({
+      where: and(
+        eq(bankTransactions.id, txnId),
+        eq(bankTransactions.tenantId, tenant.id),
+      ),
+    }),
+    db.query.salesInvoices.findFirst({
+      where: and(
+        eq(salesInvoices.id, salesInvoiceId),
+        eq(salesInvoices.tenantId, tenant.id),
+      ),
+    }),
+  ]);
+  if (!txn) throw new Error("Transaction not found");
+  if (!invoice) throw new Error("Invoice not found");
+
+  // Reject any existing pending/auto match for this transaction so the
+  // user's explicit pick replaces it.
+  const existing = await db.query.paymentMatches.findFirst({
+    where: and(
+      eq(paymentMatches.bankTransactionId, txnId),
+      eq(paymentMatches.tenantId, tenant.id),
+      or(
+        eq(paymentMatches.status, "pending_review"),
+        eq(paymentMatches.status, "auto_applied"),
+      ),
+    ),
+  });
+  if (existing) {
+    await rejectMatch(existing.id, tenant.id);
+  }
+
+  // Create the confirmed match at max confidence (user explicitly chose
+  // it) — then run confirmMatch to execute the AR side effects (record
+  // payment, update invoice totals).
+  const [inserted] = await db
+    .insert(paymentMatches)
+    .values({
+      tenantId: tenant.id,
+      bankTransactionId: txnId,
+      salesInvoiceId,
+      status: "pending_review", // confirmMatch will flip to confirmed
+      confidence: "1.0000",
+      autoApplied: false,
+      amountScore: "1.0000",
+      payeeScore: "0.0000",
+      timingScore: "1.0000",
+    })
+    .returning({ id: paymentMatches.id });
+
+  await confirmMatch(inserted.id, user.id, tenant.id);
+
+  revalidatePath("/bank-activity");
+  revalidatePath("/invoices", "layout");
+  revalidatePath("/payments");
+  return { matchId: inserted.id };
 }
 
 export async function getConnectedBanks() {

@@ -3,7 +3,12 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { getOpenBillsForLinkingAction, linkTransactionToBillAction } from "../actions";
+import {
+  getOpenBillsForLinkingAction,
+  getOpenSalesInvoicesForLinkingAction,
+  linkTransactionToBillAction,
+  linkTransactionToSalesInvoiceAction,
+} from "../actions";
 import type { ActivityTransaction } from "../services/bank-activity";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
@@ -30,7 +35,10 @@ type Bill = {
   invoiceNumber: string;
   invoiceDate: string;
   totalAmount: number;
+  // For AP rows, the supplier name. For AR rows, the customer name.
+  // Kept on the same field so the rendering loop doesn't have to branch.
   supplierName: string | null;
+  // AP has lineCount; AR has none — UI hides the chip when 0.
   lineCount: number;
   delta: number;
   deltaPct: number;
@@ -46,6 +54,10 @@ interface LinkToBillSheetProps {
 
 export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
   const router = useRouter();
+  // Direction is derived from the txn amount sign. Positive = outflow
+  // (we paid a bill, AP path). Negative = inflow (a customer paid us,
+  // AR path). The sheet branches its action calls + labels accordingly.
+  const isInflow = txn.amount < 0;
   const [proximity, setProximity] = useState<Proximity>("exact");
   const [bills, setBills] = useState<Bill[]>([]);
   const [transactionAmount, setTransactionAmount] = useState(Math.abs(txn.amount));
@@ -60,22 +72,45 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
     const loadCounts = async () => {
       const results = await Promise.all(
         (["exact", "5pct", "15pct", "all"] as Proximity[]).map(p =>
-          getOpenBillsForLinkingAction(txn.id, p).then(r => [p, r.bills.length] as const),
+          (isInflow
+            ? getOpenSalesInvoicesForLinkingAction(txn.id, p).then(r => r.invoices.length)
+            : getOpenBillsForLinkingAction(txn.id, p).then(r => r.bills.length)
+          ).then(n => [p, n] as const),
         ),
       );
       setCounts(Object.fromEntries(results) as Record<Proximity, number>);
     };
     loadCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, txn.id]);
 
   async function loadBills(p: Proximity) {
     setLoading(true);
     try {
-      const result = await getOpenBillsForLinkingAction(txn.id, p);
-      setBills(result.bills);
-      setTransactionAmount(result.transactionAmount);
+      if (isInflow) {
+        const result = await getOpenSalesInvoicesForLinkingAction(txn.id, p);
+        setBills(
+          result.invoices.map(inv => ({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            invoiceDate: inv.invoiceDate,
+            // For AR, "totalAmount" in the row UI represents the
+            // applicable balance — what the user is matching against.
+            totalAmount: inv.balanceDue,
+            supplierName: inv.customerName,
+            lineCount: 0,
+            delta: inv.delta,
+            deltaPct: inv.deltaPct,
+          })),
+        );
+        setTransactionAmount(result.transactionAmount);
+      } else {
+        const result = await getOpenBillsForLinkingAction(txn.id, p);
+        setBills(result.bills);
+        setTransactionAmount(result.transactionAmount);
+      }
     } catch {
-      toast.error("Failed to load bills.");
+      toast.error(isInflow ? "Failed to load invoices." : "Failed to load bills.");
     } finally {
       setLoading(false);
     }
@@ -86,11 +121,18 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
     loadBills(p);
   }
 
-  function handleLink(billId: string) {
+  function handleLink(rowId: string) {
     startLink(async () => {
       try {
-        await linkTransactionToBillAction(txn.id, billId);
-        toast.success("Transaction linked. Bill marked as paid.");
+        if (isInflow) {
+          await linkTransactionToSalesInvoiceAction(txn.id, rowId);
+          toast.success(
+            "Transaction linked. Payment recorded against the invoice.",
+          );
+        } else {
+          await linkTransactionToBillAction(txn.id, rowId);
+          toast.success("Transaction linked. Bill marked as paid.");
+        }
         onClose();
         router.refresh();
       } catch {
@@ -128,7 +170,11 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
         {/* Header */}
         <div style={{ padding: "18px 22px 14px", borderBottom: `1px solid ${C.line}` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700 }}>Link this payment to a bill</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>
+              {isInflow
+                ? "Link this deposit to an invoice"
+                : "Link this payment to a bill"}
+            </span>
             <button
               onClick={onClose}
               style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 18, lineHeight: 1 }}
@@ -137,7 +183,9 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
             </button>
           </div>
           <div style={{ fontSize: 12, color: C.muted }}>
-            Choose which open bill this bank transaction paid.
+            {isInflow
+              ? "Choose which open invoice this bank deposit pays. We'll record an AR payment and update the invoice's balance."
+              : "Choose which open bill this bank transaction paid."}
           </div>
         </div>
 
@@ -171,7 +219,9 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
 
         {/* Filter chips */}
         <div style={{ padding: "10px 22px", borderBottom: `1px solid ${C.line}`, display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: C.muted, marginRight: 4 }}>Show bills within:</span>
+          <span style={{ fontSize: 11, color: C.muted, marginRight: 4 }}>
+            {isInflow ? "Show invoices within:" : "Show bills within:"}
+          </span>
           {([
             { key: "exact", label: "Exact match" },
             { key: "5pct", label: "±5%" },
@@ -208,12 +258,12 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
             </div>
           ) : bills.length === 0 ? (
             <div style={{ padding: "28px 22px", textAlign: "center", color: C.muted, fontSize: 13 }}>
-              No bills in this range.{" "}
+              {isInflow ? "No invoices in this range." : "No bills in this range."}{" "}
               <button
                 onClick={() => handleProximityChange("all")}
                 style={{ color: "var(--color-forest-mid)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}
               >
-                Show all open bills →
+                {isInflow ? "Show all open invoices →" : "Show all open bills →"}
               </button>
             </div>
           ) : (
@@ -235,7 +285,7 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
                 >
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                      {bill.supplierName ?? "Unknown supplier"}
+                      {bill.supplierName ?? (isInflow ? "Unknown customer" : "Unknown supplier")}
                       {isExact && (
                         <span style={{ fontSize: 10.5, background: C.good, color: "var(--color-card)", padding: "1px 6px", borderRadius: 4 }}>
                           exact match
@@ -244,10 +294,14 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
                     </div>
                     <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1, display: "flex", gap: 6 }}>
                       <span style={{ fontFamily: C.mono }}>{bill.invoiceNumber}</span>
+                      {bill.lineCount > 0 ? (
+                        <>
+                          <span>·</span>
+                          <span>{bill.lineCount} line{bill.lineCount !== 1 ? "s" : ""}</span>
+                        </>
+                      ) : null}
                       <span>·</span>
-                      <span>{bill.lineCount} line{bill.lineCount !== 1 ? "s" : ""}</span>
-                      <span>·</span>
-                      <span>due {new Date(bill.invoiceDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                      <span>{isInflow ? "issued" : "due"} {new Date(bill.invoiceDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                     </div>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -281,10 +335,10 @@ export function LinkToBillSheet({ txn, open, onClose }: LinkToBillSheetProps) {
         {/* Footer */}
         <div style={{ padding: "12px 22px", borderTop: `1px solid ${C.line}`, display: "flex", gap: 12, alignItems: "center" }}>
           <a
-            href="/supplier-invoices?status=open"
+            href={isInflow ? "/invoices?status=sent" : "/supplier-invoices?status=open"}
             style={{ fontSize: 12, color: "var(--color-forest-mid)", textDecoration: "none" }}
           >
-            Browse all open bills →
+            {isInflow ? "Browse all open invoices →" : "Browse all open bills →"}
           </a>
           <span style={{ color: C.line, fontSize: 14 }}>|</span>
           <button
