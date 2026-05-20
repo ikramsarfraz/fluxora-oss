@@ -18,12 +18,9 @@ type CursorTarget =
   | { selector: string; offsetX?: number; offsetY?: number }
   | { x: number; y: number };
 
-type Caption = { headline: string; body?: string } | null;
-
 type DirectorState = {
   cursor: CursorTarget | null;
   clickFlash: boolean;
-  caption: Caption;
   sceneId: string | null;
   isPaused: boolean;
 };
@@ -46,7 +43,6 @@ type ReelDispatch = ReturnType<typeof useReel>["dispatch"];
 type Controls = {
   dispatch: ReelDispatch;
   setCursor: (c: CursorTarget | null) => void;
-  setCaption: (c: Caption) => void;
   setScene: (id: string | null) => void;
   flash: () => void;
   sleep: (ms: number) => Promise<void>;
@@ -58,7 +54,6 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DirectorState>({
     cursor: null,
     clickFlash: false,
-    caption: null,
     sceneId: null,
     isPaused: false,
   });
@@ -74,7 +69,7 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
   const restart = useCallback(() => {
     cancelRef.current = true;
     pausedRef.current = false;
-    setState({ cursor: null, clickFlash: false, caption: null, sceneId: null, isPaused: false });
+    setState({ cursor: null, clickFlash: false, sceneId: null, isPaused: false });
     setRestartTick((t) => t + 1);
   }, []);
 
@@ -84,7 +79,6 @@ export function ReelDirectorProvider({ children }: { children: ReactNode }) {
     const controls: Controls = {
       dispatch,
       setCursor: (c) => setState((s) => ({ ...s, cursor: c })),
-      setCaption: (c) => setState((s) => ({ ...s, caption: c })),
       setScene: (id) => setState((s) => ({ ...s, sceneId: id })),
       flash: () => {
         setState((s) => ({ ...s, clickFlash: true }));
@@ -127,7 +121,6 @@ async function runScript(c: Controls) {
     // ---- Reset to Bills tab ----
     c.dispatch({ type: "RESTART" });
     c.setCursor(null);
-    c.setCaption(null);
 
     // ---- Opening splash ----
     // initialReelState() already starts with transition: { kind: "splash" },
@@ -171,18 +164,10 @@ async function runScript(c: Controls) {
 
     // ---- Scene 0: Hero / Bills archive ----
     c.setScene("bills");
-    c.setCaption({
-      headline: "Bills are what's already posted.",
-      body: "Imports is where new PDFs land before they're confirmed.",
-    });
     await c.sleep(2400);
     if (c.isCancelled()) return;
 
     // ---- Scene 1: Click "Bulk import" ----
-    c.setCaption({
-      headline: "Click Bulk import.",
-      body: "Bills moves out of the way; the Imports tab takes over.",
-    });
     // "Bulk import" button is ~110×32 (h-9 with the gap + icon + text)
     c.setCursor({ selector: "[data-reel='bulk-import']" });
     await c.sleep(1100);
@@ -195,10 +180,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 2: Empty Imports tab — drop a file ----
     c.setScene("imports-empty");
-    c.setCaption({
-      headline: "Drop in a supplier PDF.",
-      body: "Single file or hundreds — they all import in parallel.",
-    });
     // Dropzone is the full hero card (~880×280). Land near the upload icon.
     c.setCursor({ selector: "[data-reel='dropzone']" });
     await c.sleep(1300);
@@ -210,10 +191,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 3: Scanning animation ----
     c.setScene("imports-scanning");
-    c.setCaption({
-      headline: "AI reads the PDF.",
-      body: "Header, line items, totals, and product matches — in seconds.",
-    });
     await c.sleep(2800);
 
     // Scanning result interstitial — small confirmation card before queue fills
@@ -234,10 +211,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 4: Imports queue populated ----
     c.setScene("imports-populated");
-    c.setCaption({
-      headline: "One file in the queue.",
-      body: "Confidence, status, and the issues it found — at a glance.",
-    });
     await c.sleep(2200);
 
     // ---- Scene 5: Click the file row's Review button ----
@@ -283,18 +256,10 @@ async function runScript(c: Controls) {
 
     // ---- Scene 6: Review screen — overview + queue ----
     c.setScene("review-overview");
-    c.setCaption({
-      headline: "The actual review screen.",
-      body: "PDF on the left for reference. The whole batch sits in the queue strip up top — prev/next stays in flow.",
-    });
     await c.sleep(2400);
 
     // ---- Scene 7: Pick supplier — opens the production Create-supplier dialog ----
     c.setScene("supplier");
-    c.setCaption({
-      headline: "Supplier not in your catalog?",
-      body: "Create it inline. Same dialog as Settings → Suppliers — pre-filled from the invoice.",
-    });
     c.setCursor({ selector: "[data-reel='create-supplier']" });
     await c.sleep(1100);
     c.flash();
@@ -337,10 +302,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 7b: Collapse the invoice header ----
     c.setScene("collapse-header");
-    c.setCaption({
-      headline: "Collapse the header.",
-      body: "Once the supplier + dates are confirmed, fold them into a one-line strip — line items get more room.",
-    });
     c.setCursor({ selector: "[data-reel='collapse-header']" });
     await c.sleep(1100);
     c.flash();
@@ -351,10 +312,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 8: Fix the partial-scan line (missing cost) ----
     c.setScene("fix-cost");
-    c.setCaption({
-      headline: "Fill in what AI missed.",
-      body: "Line 2's cost didn't read — type 6.15 and the totals re-balance.",
-    });
     c.setCursor({ selector: "[data-reel='line-2-fill-cost']" });
     await c.sleep(1100);
     c.flash();
@@ -364,10 +321,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 9: Confirm suggestion + alias added ----
     c.setScene("suggestion");
-    c.setCaption({
-      headline: "Confirm a suggested match.",
-      body: "Fluxora remembers — next invoice from this supplier matches automatically.",
-    });
     c.setCursor({ selector: "[data-reel='line-3-candidate-0']" });
     await c.sleep(1000);
     c.flash();
@@ -392,10 +345,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 10: Create new product — opens the production dialog ----
     c.setScene("create-product");
-    c.setCaption({
-      headline: "Brand-new product? Add it to the catalog.",
-      body: "Same dialog as Settings → Products. The line resolves automatically.",
-    });
     c.setCursor({ selector: "[data-reel='line-5-create']" });
     await c.sleep(1100);
     c.flash();
@@ -471,10 +420,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 11: Submit ----
     c.setScene("submit");
-    c.setCaption({
-      headline: "Submit & post.",
-      body: "Stock, costs, aliases, and expense charges all commit at once.",
-    });
     c.setCursor({ selector: "[data-reel='submit-review']" });
     await c.sleep(1200);
     c.flash();
@@ -512,10 +457,6 @@ async function runScript(c: Controls) {
 
     // ---- Scene 12: Back to Imports tab, row marked Reviewed ----
     c.setScene("reviewed");
-    c.setCaption({
-      headline: "Posted.",
-      body: "Inventory's already updated. Aliases saved for next time.",
-    });
     await c.sleep(2200);
 
     // ---- Explainer 4: what gets remembered ----
@@ -536,7 +477,6 @@ async function runScript(c: Controls) {
 
     // ---- Outro splash ----
     c.setScene("outro");
-    c.setCaption(null);
     c.dispatch({ type: "SET_TRANSITION", transition: { kind: "outro" } });
     await c.sleep(3800);
     c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
