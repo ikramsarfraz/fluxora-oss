@@ -11,15 +11,20 @@ export function FormActionFooter(props: {
   pendingLabel: string;
   onCancel: () => void;
   /**
-   * When true, the footer renders as a standalone bar that sticks to the
-   * bottom of the page scroll container — keeps Save/Cancel visible on
-   * long forms. Callers must render this OUTSIDE the wrapping Card (as a
-   * sibling), because shadcn Card sets `overflow-hidden` which silently
-   * clips sticky descendants.
+   * When true, the footer is pinned to the bottom of the viewport using
+   * position:fixed — Save/Cancel are visible from the moment the page
+   * loads, regardless of scroll position or form length. Offsets for the
+   * shadcn app sidebar via the `--sidebar-width` CSS variable that the
+   * SidebarProvider exposes on its root wrapper.
    *
-   * When false (default), the footer renders as a CardFooter and should
-   * sit inside the form Card — used by modal embedments where the dialog
-   * already manages footer placement.
+   * On mobile the sidebar is off-canvas and the bar spans the full width.
+   * Caller should render this OUTSIDE the wrapping Card (as a sibling),
+   * since the Card's overflow-hidden would otherwise establish a
+   * containing block for fixed descendants.
+   *
+   * When false (default), the footer renders as a CardFooter inside the
+   * form Card — used by modal embedments where the dialog already
+   * manages footer placement.
    */
   sticky?: boolean;
 }) {
@@ -46,15 +51,23 @@ export function FormActionFooter(props: {
 
   if (props.sticky) {
     return (
-      <div
-        className={cn(
-          "sticky bottom-2 z-10 flex items-center justify-end gap-2",
-          "rounded-lg border border-border-soft bg-card px-4.5 py-3",
-          "shadow-[0_4px_16px_-6px_rgba(15,23,42,0.12)]",
-        )}
-      >
-        {buttons}
-      </div>
+      <>
+        {/* Spacer in normal flow so the form content can scroll above the
+            fixed bar without the last fields disappearing behind it. */}
+        <div aria-hidden className="h-16" />
+        <div
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-30",
+            "border-t border-border-soft bg-card/95 backdrop-blur",
+            "shadow-[0_-2px_8px_-4px_rgba(15,23,42,0.06)]",
+            "md:left-(--sidebar-width)",
+          )}
+        >
+          <div className="flex items-center justify-end gap-2 px-4 py-3 lg:px-6">
+            {buttons}
+          </div>
+        </div>
+      </>
     );
   }
 
