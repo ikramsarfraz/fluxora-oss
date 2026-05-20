@@ -800,6 +800,9 @@ export const customers = pgTable(
     uniqueIndex("customers_tenant_name_unique").on(table.tenantId, table.name),
     index("customers_archived_at_idx").on(table.archivedAt),
     index("customers_tenant_email_idx").on(table.tenantId, table.email),
+    uniqueIndex("customers_tenant_invoice_prefix_unique")
+      .on(table.tenantId, table.abbreviation)
+      .where(sql`${table.abbreviation} IS NOT NULL`),
   ],
 );
 

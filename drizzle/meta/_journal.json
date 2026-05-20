@@ -365,6 +365,13 @@
 			"when": 1779101100000,
 			"tag": "0051_payment_reconciliation",
 			"breakpoints": true
+		},
+		{
+			"idx": 52,
+			"version": "7",
+			"when": 1779101200000,
+			"tag": "0052_customer_invoice_prefix_unique",
+			"breakpoints": true
 		}
 	]
 }

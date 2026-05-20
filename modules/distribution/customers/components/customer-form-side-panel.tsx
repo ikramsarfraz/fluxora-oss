@@ -20,7 +20,7 @@ const SECTIONS: ReadonlyArray<SectionExplainer> = [
   {
     icon: IdCard,
     title: "Identity",
-    body: "The customer name is what shows on invoices, AR aging, and order history. Invoice prefix is the short code that gets stamped on every invoice number — e.g. ACME-001 — so route drivers and AP teams can pick the right one in a hurry.",
+    body: "The customer name shows on invoices, AR aging, and order history. Invoice prefix is the short code stamped on every invoice number (ACME-001) so route drivers and AP teams can pick the right one in a hurry. Has to be unique per workspace — hit Generate to get an available one.",
   },
   {
     icon: MailOpen,

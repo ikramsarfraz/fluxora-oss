@@ -22,6 +22,7 @@ import {
   restoreCustomer,
   searchCustomers,
   setCustomerPrice,
+  suggestInvoicePrefix,
   updateCustomer,
   type BulkCreateCustomerInput,
   type BulkCreateCustomersResult,
@@ -50,6 +51,13 @@ export async function getCustomersPageAction(input?: CustomerListParams) {
 
 export async function searchCustomersAction(query?: string, limit?: number) {
   return await searchCustomers(query ?? "", limit);
+}
+
+export async function suggestInvoicePrefixAction(
+  fromName: string,
+  excludeCustomerId?: string,
+): Promise<string> {
+  return await suggestInvoicePrefix(fromName, excludeCustomerId);
 }
 
 export async function getCustomerAction(customerId: string) {

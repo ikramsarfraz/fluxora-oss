@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customerAddresses,
@@ -27,6 +27,79 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+
+/**
+ * Build a candidate invoice-prefix from a free-text customer name —
+ * strip non-letters/digits, uppercase, cap at MAX. Always returns at
+ * least one character (falls back to "ACME" when the input has no
+ * usable characters at all, e.g. "***").
+ */
+const PREFIX_MAX = 5;
+function basePrefixFrom(name: string): string {
+  const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!cleaned) return "ACME";
+  return cleaned.slice(0, PREFIX_MAX);
+}
+
+/**
+ * Find the first available invoice prefix for this tenant derived from
+ * the customer name. Suggests the base ("ACME"), then "ACME2", "ACME3",
+ * ... up to "ACME99". `excludeCustomerId` skips the row being edited
+ * so its own prefix doesn't count as a conflict.
+ *
+ * Reads from a single SELECT and decides client-side rather than
+ * looping with N queries.
+ */
+export async function suggestInvoicePrefix(
+  fromName: string,
+  excludeCustomerId?: string,
+): Promise<string> {
+  const base = basePrefixFrom(fromName);
+  const tenant = await getCurrentTenant();
+  const where = and(
+    eq(customers.tenantId, tenant.id),
+    isNotNull(customers.abbreviation),
+    sql`${customers.abbreviation} ILIKE ${`${base}%`}`,
+    excludeCustomerId ? ne(customers.id, excludeCustomerId) : undefined,
+  );
+  const rows = await db
+    .select({ abbreviation: customers.abbreviation })
+    .from(customers)
+    .where(where);
+  const taken = new Set(
+    rows
+      .map(r => (r.abbreviation ?? "").toUpperCase())
+      .filter(p => p === base || new RegExp(`^${base}\\d+$`).test(p)),
+  );
+  if (!taken.has(base)) return base;
+  for (let i = 2; i <= 99; i++) {
+    const candidate = `${base}${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  // Extremely unlikely — 99 collisions on the same base. Tack on a
+  // timestamp-derived suffix so the user gets *something* unique.
+  return `${base}${Date.now().toString().slice(-4)}`;
+}
+
+/**
+ * Translates raw Postgres unique-violation errors into a message the
+ * form can show inline. Returns the input untouched for any other error.
+ */
+function rethrowUniqueViolation(error: unknown): never {
+  if (error instanceof Error) {
+    if (/customers_tenant_invoice_prefix_unique/i.test(error.message)) {
+      throw new Error(
+        "Another customer in this workspace already uses that invoice prefix. Pick a different one.",
+      );
+    }
+    if (/customers_tenant_name_unique/i.test(error.message)) {
+      throw new Error(
+        "A customer with this name already exists in this workspace.",
+      );
+    }
+  }
+  throw error;
+}
 
 export async function createCustomer(
   input: Omit<NewCustomer, "tenantId"> & {
@@ -68,7 +141,8 @@ export async function createCustomer(
       netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
     })
-    .returning();
+    .returning()
+    .catch(rethrowUniqueViolation);
 
   if (input.addresses?.length) {
     await db.insert(customerAddresses).values(
@@ -119,7 +193,8 @@ async function createCustomerForTenant(
       netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
     })
-    .returning();
+    .returning()
+    .catch(rethrowUniqueViolation);
 
   if (input.addresses?.length) {
     await db.insert(customerAddresses).values(
@@ -364,7 +439,8 @@ export async function updateCustomer(
         : {}),
     })
     .where(and(eq(customers.id, input.id), eq(customers.tenantId, tenant.id)))
-    .returning();
+    .returning()
+    .catch(rethrowUniqueViolation);
 
   if (!customer) {
     throw new Error("Failed to update customer.");

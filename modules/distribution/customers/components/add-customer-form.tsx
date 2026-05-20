@@ -6,7 +6,7 @@ import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,11 @@ import {
   createCustomerInputSchema,
   type CreateCustomerInput,
 } from "../validators/customer.schemas";
-import { createCustomerAction, updateCustomerAction } from "@/modules/distribution/customers/actions";
+import {
+  createCustomerAction,
+  suggestInvoicePrefixAction,
+  updateCustomerAction,
+} from "@/modules/distribution/customers/actions";
 import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { US_STATES } from "@/lib/constants/us-states";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
@@ -111,6 +115,34 @@ export function AddCustomerForm(props?: {
     control: form.control,
     name: "addresses",
   });
+
+  const [generatingPrefix, setGeneratingPrefix] = useState(false);
+
+  async function handleGeneratePrefix() {
+    const name = (form.getValues("name") ?? "").trim();
+    if (!name) {
+      form.setError("name", {
+        type: "required",
+        message: "Enter a customer name first, then we can generate a prefix.",
+      });
+      form.setFocus("name");
+      return;
+    }
+    setGeneratingPrefix(true);
+    try {
+      const suggestion = await suggestInvoicePrefixAction(name, customer?.id);
+      form.setValue("abbreviation", suggestion, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't suggest a prefix.",
+      );
+    } finally {
+      setGeneratingPrefix(false);
+    }
+  }
 
   async function onSubmit(data: CreateCustomerInput) {
     setError(null);
@@ -208,16 +240,35 @@ export function AddCustomerForm(props?: {
                         <FieldLabel htmlFor="form-add-customer-invoice-prefix">
                           Invoice prefix *
                         </FieldLabel>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          id="form-add-customer-invoice-prefix"
-                          aria-invalid={fieldState.invalid}
-                          placeholder="e.g. ACME"
-                          maxLength={32}
-                        />
+                        <div className="flex items-stretch gap-2">
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            id="form-add-customer-invoice-prefix"
+                            aria-invalid={fieldState.invalid}
+                            placeholder="e.g. ACME"
+                            maxLength={32}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleGeneratePrefix}
+                            disabled={generatingPrefix}
+                            className="shrink-0"
+                          >
+                            {generatingPrefix ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="size-3.5" />
+                            )}
+                            Generate
+                          </Button>
+                        </div>
                         <FieldDescription>
                           Short code that prefixes invoice numbers (ACME-001).
+                          Must be unique per workspace.
                         </FieldDescription>
                         {fieldState.invalid && (
                           <FieldError errors={[fieldState.error]} />
