@@ -54,7 +54,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-dialog";
@@ -121,6 +120,7 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
 // ── Contact / address card ───────────────────────────────────────────────────
 
 type SupplierContactSlice = {
+  netDays: number | null;
   primaryContactName: string | null;
   primaryContactEmail: string | null;
   primaryContactPhone: string | null;
@@ -169,10 +169,14 @@ function SupplierContactCard({
   supplier,
   supplierId,
   archived,
+  onEditTerms,
+  onDelete,
 }: {
   supplier: SupplierContactSlice;
   supplierId: string;
   archived: boolean;
+  onEditTerms: () => void;
+  onDelete: () => void;
 }) {
   const hasContact =
     supplier.primaryContactName ||
@@ -181,22 +185,36 @@ function SupplierContactCard({
   const address = formatUsAddress(supplier);
   const hasAccounting = supplier.accountNumber || supplier.taxId || supplier.websiteUrl;
   const hasNotes = Boolean(supplier.notes);
+  const hasPaymentTerms = supplier.netDays !== null;
 
-  if (!hasContact && !address && !hasAccounting && !hasNotes) {
+  if (!hasContact && !address && !hasAccounting && !hasNotes && !hasPaymentTerms) {
     return <SupplierContactCardEmpty supplierId={supplierId} archived={archived} />;
   }
 
+  const hasGridContent = Boolean(hasContact || address || hasAccounting);
+
   return (
     <Card className="overflow-hidden rounded-xl p-6 shadow-none">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
         {!archived ? (
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/suppliers/${supplierId}/edit`}>
-              <Pencil className="h-3.5 w-3.5" />
-              Edit details
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/suppliers/${supplierId}/edit`}>
+                <Pencil className="h-3.5 w-3.5" />
+                Edit details
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              className="text-destructive hover:text-destructive"
+            >
+              Delete
+            </Button>
+          </div>
         ) : null}
       </div>
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -286,6 +304,28 @@ function SupplierContactCard({
               }
             />
           </dl>
+        ) : null}
+      </div>
+
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          hasGridContent && "mt-6 border-t border-border-default pt-4",
+        )}
+      >
+        <div>
+          <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+            Payment terms
+          </h4>
+          <p className="mt-0.5 text-sm font-medium tabular-nums text-ink">
+            {formatPaymentTerms(supplier.netDays)}
+          </p>
+        </div>
+        {!archived ? (
+          <Button type="button" variant="outline" size="sm" onClick={onEditTerms}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit terms
+          </Button>
         ) : null}
       </div>
 
@@ -395,6 +435,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [editTermsOpen, setEditTermsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const tab = (searchParams.get("tab") ?? "invoices") as "invoices" | "lots";
   const invoicesPage = Math.max(1, Number(searchParams.get("invoicesPage") ?? 1));
@@ -514,67 +555,35 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         supplier={supplier}
         supplierId={supplierId}
         archived={Boolean(supplier.archivedAt)}
+        onEditTerms={() => setEditTermsOpen(true)}
+        onDelete={() => setDeleteOpen(true)}
       />
 
-      {/* Payment terms editor + delete (compact, below KPIs) */}
-      <Card className="overflow-hidden rounded-xl p-0 shadow-none">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-subtle">Payment terms</p>
-            <p className="mt-0.5 text-sm font-medium tabular-nums">
-              {formatPaymentTerms(supplier.netDays)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!supplier.archivedAt ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setEditTermsOpen(true)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit terms
-              </Button>
-            ) : null}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                >
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete <strong>{supplier.name}</strong> and all associated
-                    data. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    disabled={deleteSupplier.isPending}
-                    onClick={() => {
-                      deleteSupplier.mutate(supplierId, {
-                        onSuccess: () => router.push("/suppliers"),
-                      });
-                    }}
-                  >
-                    {deleteSupplier.isPending ? "Deleting…" : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </div>
-      </Card>
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{supplier.name}</strong> and all associated
+              data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteSupplier.isPending}
+              onClick={() => {
+                deleteSupplier.mutate(supplierId, {
+                  onSuccess: () => router.push("/suppliers"),
+                });
+              }}
+            >
+              {deleteSupplier.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <SupplierEditPaymentTermsDialog
         supplierId={supplierId}
