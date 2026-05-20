@@ -22,6 +22,11 @@ import { cn } from "@/lib/utils";
 //
 // Both cards have a HUGE time stat as the right-side focal point so the
 // real comparison (25 min vs 4 sec) reads in under half a second.
+//
+// Each card opens with a FULL-FRAME TAKEOVER slate — a cinematic title
+// card carrying the chapter label, the giant Before/After word, and the
+// moment's topic as subtext. The slate owns the entire 640px frame for
+// ~2.4s, then slides up and dissolves to reveal the comparison underneath.
 
 type IconType = React.ComponentType<{
   className?: string;
@@ -73,9 +78,15 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
     >
       <Backdrop tone="danger" />
 
-      {/* Big centered title reveal — plays first, then shrinks toward the
-          header where the small pill takes over. */}
-      <TitleReveal tone="danger" label="Before" />
+      {/* Full-frame takeover slate — owns the screen for ~2.4s, then slides
+          up and dissolves to reveal the comparison underneath. */}
+      <TitleReveal
+        tone="danger"
+        label="Before"
+        step={compare.step}
+        topic={compare.topic}
+        icon={FileSpreadsheet}
+      />
 
       <CardHeader
         tone="danger"
@@ -164,9 +175,15 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
     >
       <Backdrop tone="success" />
 
-      {/* Big centered title reveal — plays first, then shrinks toward the
-          header where the small pill takes over. */}
-      <TitleReveal tone="success" label="After" />
+      {/* Full-frame takeover slate — owns the screen for ~2.4s, then slides
+          up and dissolves to reveal the comparison underneath. */}
+      <TitleReveal
+        tone="success"
+        label="After"
+        step={compare.step}
+        topic={compare.topic}
+        icon={Sparkles}
+      />
 
       <CardHeader
         tone="success"
@@ -460,17 +477,18 @@ function CardHeader({
       ? "border-danger-border/70 bg-danger-bg/50 text-danger-fg"
       : "border-success-border/70 bg-success-bg/50 text-success-fg";
 
-  // Header fades in just as the big title reveal is wrapping up its move
-  // to the corner. The chapter label + topic glide in from the left;
-  // the side pill scales in from a small starting point so it reads as
-  // the destination the big title "settled into."
+  // Header lands as the takeover slate is finishing its slide-up. The
+  // chapter label + topic glide in from the left; the side pill scales in
+  // from a small starting point. By the time the slate is fully gone (~2.8s)
+  // the header is in place and grounds the visitor as a recap of what the
+  // slate just announced.
   return (
     <div className="relative flex items-start justify-between px-10 pb-5 pt-9">
       <motion.div
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{
-          delay: 1.7,
+          delay: 2.9,
           duration: 0.55,
           ease: [0.22, 1, 0.36, 1],
         }}
@@ -486,7 +504,7 @@ function CardHeader({
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{
-          delay: 1.5,
+          delay: 2.7,
           type: "spring",
           stiffness: 280,
           damping: 22,
@@ -506,59 +524,126 @@ function CardHeader({
 }
 
 // =========================================================================
-// TitleReveal — big centered phrase that plays first
+// TitleReveal — full-frame takeover slate
 // =========================================================================
-// "Before" / "After" pop up large and centered, sit for a beat so the
-// visitor reads them, then shrink + drift toward the top-right corner
-// where the small side pill takes over. The whole reveal takes ~1.8s;
-// after it, the rest of the card's choreography begins.
+// Cinematic title card that owns the entire 640px frame for ~2.8s before
+// sliding up and dissolving away. Stack (top → bottom):
+//
+//   chapter pill    e.g. "STEP 1 OF 5"
+//   BIG TITLE       e.g. "Before"     ← the takeover word
+//   accent line     drawn left-to-right
+//   subtext         the moment's topic ("A supplier PDF lands at 8:42")
+//
+// The slate's background is an opaque tinted radial — pure red for Before,
+// pure green for After — so the comparison underneath is hidden until the
+// slate slides off-screen. Timing:
+//
+//   0.0 → 0.1   pre-roll
+//   0.1 → 0.6   chapter pill drops in
+//   0.3 → 1.0   title scales up
+//   0.9 → 1.4   accent line sweeps
+//   1.3 → 1.9   subtext fades in
+//   1.9 → 2.4   HOLD (visitor reads the topic)
+//   2.4 → 2.8   slate slides up + fades out, revealing the comparison
+//
+// By 2.8s the slate is gone and the card's header/tiles take over.
 function TitleReveal({
   tone,
   label,
+  step,
+  topic,
+  icon: Icon,
 }: {
   tone: "danger" | "success";
   label: string;
+  step: string;
+  topic: string;
+  icon: IconType;
 }) {
+  const isDanger = tone === "danger";
+
+  const slateBackground = isDanger
+    ? "radial-gradient(ellipse 95% 70% at 50% 45%, color-mix(in oklch, var(--color-danger-bg) 92%, var(--color-page)) 0%, color-mix(in oklch, var(--color-danger-bg) 55%, var(--color-page)) 55%, var(--color-page) 100%)"
+    : "radial-gradient(ellipse 95% 70% at 50% 45%, color-mix(in oklch, var(--color-success-bg) 92%, var(--color-page)) 0%, color-mix(in oklch, var(--color-success-bg) 55%, var(--color-page)) 55%, var(--color-page) 100%)";
+
+  const titleColor = isDanger ? "text-danger-fg" : "text-success-fg";
+  const accentColor = isDanger ? "bg-danger-fg" : "bg-success-fg";
+  const pillBorder = isDanger
+    ? "border-danger-border/70 bg-danger-bg/60 text-danger-fg"
+    : "border-success-border/70 bg-success-bg/60 text-success-fg";
+
   return (
     <motion.div
       aria-hidden
-      // Layered above the backdrop and below the loop's key-bumped children
-      // (which live below in the main grid). pointer-events-none so the
-      // visitor's click never lands on it.
-      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
-      initial={{ opacity: 0, scale: 0.86 }}
+      // The slate sits above the Backdrop and the card header (which
+      // begins fading in around 2.7s — slightly before the slate leaves,
+      // for a clean cross-fade).
+      className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center px-12"
+      style={{ background: slateBackground }}
+      initial={{ opacity: 1, y: 0 }}
       animate={{
-        // Three beats squeezed into one keyframe sequence:
-        //   0 → 0.20  fade + scale up to full size (enters big)
-        //   0.20 → 0.74  sit at full size (visitor reads it)
-        //   0.74 → 1.0   shrink down + drift up-right toward the header's
-        //                side pill, fading out
-        opacity: [0, 1, 1, 0],
-        scale: [0.86, 1, 1, 0.35],
-        x: [0, 0, 0, 240],
-        y: [0, 0, 0, -210],
+        opacity: [1, 1, 0],
+        y: [0, 0, -36],
       }}
       transition={{
-        duration: 2.0,
-        times: [0, 0.2, 0.74, 1],
+        duration: 2.8,
+        times: [0, 0.86, 1],
         ease: [0.22, 1, 0.36, 1],
       }}
     >
-      <span
+      {/* Chapter pill — drops in from above */}
+      <motion.div
+        initial={{ opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "font-serif font-medium tracking-tight",
-          "text-[68px] leading-[1.0] md:text-[96px]",
-          tone === "danger" ? "text-danger-fg" : "text-success-fg",
+          "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.22em] shadow-sm",
+          pillBorder,
+        )}
+      >
+        <Icon className="size-3" strokeWidth={2.2} />
+        {step}
+      </motion.div>
+
+      {/* The big word — scales up and settles */}
+      <motion.h2
+        initial={{ opacity: 0, scale: 0.82, letterSpacing: "0.04em" }}
+        animate={{ opacity: 1, scale: 1, letterSpacing: "-0.02em" }}
+        transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className={cn(
+          "mt-6 font-serif font-medium leading-[0.92]",
+          "text-[88px] md:text-[132px]",
+          titleColor,
         )}
         style={{
-          textShadow:
-            tone === "danger"
-              ? "0 6px 24px rgba(139, 52, 21, 0.18)"
-              : "0 6px 24px rgba(74, 107, 47, 0.18)",
+          textShadow: isDanger
+            ? "0 12px 40px rgba(139, 52, 21, 0.28)"
+            : "0 12px 40px rgba(74, 107, 47, 0.28)",
         }}
       >
         {label}
-      </span>
+      </motion.h2>
+
+      {/* Accent line — sweeps from center outward */}
+      <motion.div
+        initial={{ scaleX: 0, opacity: 0 }}
+        animate={{ scaleX: 1, opacity: 1 }}
+        transition={{ duration: 0.55, delay: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        className={cn(
+          "mt-6 h-[3px] w-28 origin-center rounded-full",
+          accentColor,
+        )}
+      />
+
+      {/* Subtext — the moment's topic, in italic serif */}
+      <motion.p
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 1.3, ease: [0.22, 1, 0.36, 1] }}
+        className="mt-6 max-w-[600px] text-center font-serif italic leading-snug text-ink-warm text-[22px] md:text-[26px]"
+      >
+        {topic}
+      </motion.p>
     </motion.div>
   );
 }

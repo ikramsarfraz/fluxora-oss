@@ -66,15 +66,17 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-// Compare cards now open with a big centered title reveal ("Before" /
-// "After") that pops up large, sits for a beat, then shrinks toward the
-// top-right corner where the small side pill takes over. Only after the
-// title settles does the rest of the card start appearing.
+// Compare cards now open with a FULL-FRAME TAKEOVER slate that owns the
+// entire 640px frame: chapter pill, giant Before/After word, accent line,
+// and the moment's topic as italic-serif subtext. The slate sits for the
+// visitor to read, then slides up and dissolves to reveal the comparison
+// underneath.
 //
 //   0.0 → 0.4s   card fades in
-//   0.0 → 2.0s   BIG TITLE: scales up, sits centered, shrinks + drifts up-right
-//   1.5 → 2.3s   header (chapter label + topic + side pill) fades in
-//   2.9s   first tool tile / Fluxora panel mounts
+//   0.0 → 2.8s   FULL-FRAME SLATE: chapter pill, big word, accent, subtext;
+//                holds 1.9 → 2.4, then slides up + fades 2.4 → 2.8
+//   2.7 → 3.2s   header (side pill spring; chapter label + topic slide in)
+//   2.9s   first tool tile / Fluxora panel mounts (cross-fades with slate exit)
 //   2.9 → 5.3s   tools/actions land at 0.6s reading-beat cadence
 //   5.8 → 6.4s   voiceover fades in over 1s
 //   8.3s   HUGE time stat punches in (punchline)
