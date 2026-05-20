@@ -224,6 +224,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "warning",
     icon: CreditCard,
+    liveDemoHref: "/reel/stripe-billing",
   },
   {
     slug: "stripe-portal",
