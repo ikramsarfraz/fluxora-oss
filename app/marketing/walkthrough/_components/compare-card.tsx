@@ -14,11 +14,11 @@ import { cn } from "@/lib/utils";
 
 // Compare cards, marketing-redesign edition. Two stitched cards per beat:
 //
-//   Before → "The old way" — visual chaos: a row of 4-5 tool tiles, each
-//   with a timestamp badge. The eye reads "5 systems open, time piling up."
+//   Before → visual chaos: a row of 4-5 tool tiles, each with a timestamp
+//   badge. The eye reads "5 systems open, time piling up."
 //
-//   After  → "The Fluxora way" — visual calm: ONE Fluxora panel with check-
-//   row actions. ONE moment, one tool.
+//   After  → visual calm: ONE Fluxora panel with check-row actions. ONE
+//   moment, one tool.
 //
 // Both cards have a HUGE time stat as the right-side focal point so the
 // real comparison (25 min vs 4 sec) reads in under half a second.
@@ -75,12 +75,12 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
 
       {/* Big centered title reveal — plays first, then shrinks toward the
           header where the small pill takes over. */}
-      <TitleReveal tone="danger" label="The old way" />
+      <TitleReveal tone="danger" label="Before" />
 
       <CardHeader
         tone="danger"
         chapterLabel={compare.step}
-        sideLabel="The old way"
+        sideLabel="Before"
         topic={compare.topic}
         icon={FileSpreadsheet}
       />
@@ -141,7 +141,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
             {compare.before.tools.length} systems · alt-tab fatigue
           </span>
           <span className="font-mono">
-            up next · the Fluxora way →
+            up next · after →
           </span>
         </div>
       </div>
@@ -166,12 +166,12 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
 
       {/* Big centered title reveal — plays first, then shrinks toward the
           header where the small pill takes over. */}
-      <TitleReveal tone="success" label="The Fluxora way" />
+      <TitleReveal tone="success" label="After" />
 
       <CardHeader
         tone="success"
         chapterLabel={compare.step}
-        sideLabel="The Fluxora way"
+        sideLabel="After"
         topic={compare.topic}
         icon={Sparkles}
       />
@@ -508,10 +508,10 @@ function CardHeader({
 // =========================================================================
 // TitleReveal — big centered phrase that plays first
 // =========================================================================
-// "The old way" / "The Fluxora way" pop up large and centered, sit for a
-// beat so the visitor reads them, then shrink + drift toward the top-right
-// corner where the small side pill takes over. The whole reveal takes
-// ~1.8s; after it, the rest of the card's choreography begins.
+// "Before" / "After" pop up large and centered, sit for a beat so the
+// visitor reads them, then shrink + drift toward the top-right corner
+// where the small side pill takes over. The whole reveal takes ~1.8s;
+// after it, the rest of the card's choreography begins.
 function TitleReveal({
   tone,
   label,
