@@ -24,6 +24,7 @@ import {
 import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
+import { TransitionBackdrop } from "./backdrop";
 import { useReel } from "./reel-state";
 import type { ExplainerVisual, InterstitialIcon } from "./types";
 
@@ -93,6 +94,7 @@ function OpeningSplash() {
       exit="exit"
       variants={splashContainer}
     >
+      <TransitionBackdrop tone="forest" density="high" />
       <motion.div
         aria-hidden
         className="absolute inset-0"
@@ -404,6 +406,7 @@ function OutroSplash() {
       exit="exit"
       variants={outroContainer}
     >
+      <TransitionBackdrop tone="success" density="high" />
       <motion.div
         aria-hidden
         className="absolute inset-0"
@@ -538,6 +541,7 @@ function Explainer({
       exit="exit"
       variants={explainerContainer}
     >
+      <TransitionBackdrop tone="forest" density="medium" />
       <motion.div
         aria-hidden
         className="absolute inset-0"

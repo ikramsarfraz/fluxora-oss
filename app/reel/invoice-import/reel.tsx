@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 
 import { ReelStateProvider } from "./_real/reel-state";
 import { ReelDirectorProvider } from "./autopilot";
-import { Caption } from "./caption";
 import { ReelControls } from "./reel-controls";
 import { ReelShell } from "./reel-shell";
 import { ReelSurface } from "./reel-surface";
@@ -52,7 +51,6 @@ function ReelLayout() {
           <VirtualCursor frameRef={frameRef} />
         </ReelShell>
 
-        <Caption />
         <ReelControls />
 
         <div className="mt-12 flex flex-col items-center justify-center gap-3">
