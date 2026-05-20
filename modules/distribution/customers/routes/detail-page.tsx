@@ -288,9 +288,31 @@ export default function CustomerPortfolioPage() {
                 <p className="mt-0.5 text-sm font-medium">{customer.abbreviation ?? "—"}</p>
               </div>
               <div>
+                <p className="text-xs text-subtle">Email</p>
+                <p className="mt-0.5 text-sm font-medium break-all">
+                  {customer.email ?? "—"}
+                </p>
+              </div>
+              <div>
                 <p className="text-xs text-subtle">Phone</p>
                 <p className="mt-0.5 text-sm font-medium">
                   {customer.phoneNumber ? formatPhone(customer.phoneNumber) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Tax ID</p>
+                <p className="mt-0.5 text-sm font-medium font-mono tabular-nums">
+                  {customer.taxId ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Payment terms</p>
+                <p className="mt-0.5 text-sm font-medium">
+                  {customer.netDays == null
+                    ? "—"
+                    : customer.netDays === 0
+                      ? "Due on receipt"
+                      : `Net ${customer.netDays}`}
                 </p>
               </div>
               <div>

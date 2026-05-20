@@ -114,7 +114,10 @@ const CONFIGS: Record<ImportType, {
     columns: [
       { key: "name", label: "Name", required: true },
       { key: "abbreviation", label: "Invoice prefix" },
+      { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
+      { key: "tax_id", label: "Tax ID (EIN)" },
+      { key: "net_days", label: "Payment terms (net days)" },
       { key: "fuel_surcharge", label: "Fuel surcharge ($)" },
       { key: "address_line1", label: "Street" },
       { key: "address_city", label: "City" },
@@ -125,7 +128,10 @@ const CONFIGS: Record<ImportType, {
       {
         name: "City Diner",
         abbreviation: "CD",
+        email: "ap@citydiner.com",
         phone: "(555) 123-4567",
+        tax_id: "12-3456789",
+        net_days: "30",
         fuel_surcharge: "15.00",
         address_line1: "123 Main St",
         address_city: "San Francisco",
@@ -135,7 +141,10 @@ const CONFIGS: Record<ImportType, {
       {
         name: "Fast Eats Truck",
         abbreviation: "",
+        email: "",
         phone: "(555) 567-8910",
+        tax_id: "",
+        net_days: "",
         fuel_surcharge: "",
         address_line1: "",
         address_city: "",
@@ -203,6 +212,18 @@ function validate(rows: ParsedRow[], importType: ImportType): ValidationError[] 
       }
     } else if (importType === "customers") {
       if (!row.name) rowErrors.push("name is required");
+      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+        rowErrors.push("email is not a valid email address");
+      }
+      if (row.tax_id && !/^\d{2}-?\d{7}$/.test(row.tax_id)) {
+        rowErrors.push("tax_id must be a 9-digit US EIN (e.g. 12-3456789)");
+      }
+      if (row.net_days) {
+        const n = Number(row.net_days);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 365) {
+          rowErrors.push("net_days must be a whole number between 0 and 365");
+        }
+      }
       if (row.fuel_surcharge) {
         const n = Number(row.fuel_surcharge);
         if (!Number.isFinite(n) || n < 0) {

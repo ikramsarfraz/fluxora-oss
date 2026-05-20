@@ -754,12 +754,20 @@ export const customers = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "restrict" }),
     name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 320 }),
     phoneNumber: varchar("phone_number", { length: 64 }),
     fuelSurchargeAmount: numeric("fuel_surcharge_amount", {
       precision: 10,
       scale: 2,
     }),
     abbreviation: varchar("invoice_prefix", { length: 32 }),
+    taxId: varchar("tax_id", { length: 64 }),
+    /**
+     * AR payment terms in days (net N). `null` means no terms configured;
+     * AR aging falls back to Net-0 (invoice date) in that case — mirrors
+     * how `suppliers.net_days` works on the AP side.
+     */
+    netDays: integer("net_days"),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {
@@ -791,6 +799,7 @@ export const customers = pgTable(
     index("customers_tenant_id_idx").on(table.tenantId),
     uniqueIndex("customers_tenant_name_unique").on(table.tenantId, table.name),
     index("customers_archived_at_idx").on(table.archivedAt),
+    index("customers_tenant_email_idx").on(table.tenantId, table.email),
   ],
 );
 

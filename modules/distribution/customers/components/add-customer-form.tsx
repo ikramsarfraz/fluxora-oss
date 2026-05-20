@@ -54,7 +54,10 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
     return {
       name: "",
       abbreviation: "",
+      email: "",
       phoneNumber: "",
+      taxId: "",
+      netDays: "",
       fuelSurchargeAmount: "",
       addresses: [],
     };
@@ -63,7 +66,10 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
   return {
     name: customer.name,
     abbreviation: customer.abbreviation ?? "",
+    email: customer.email ?? "",
     phoneNumber: customer.phoneNumber ?? "",
+    taxId: customer.taxId ?? "",
+    netDays: customer.netDays == null ? "" : String(customer.netDays),
     fuelSurchargeAmount: customer.fuelSurchargeAmount ?? "",
     addresses: customer.addresses.map(address => ({
       addressType: address.addressType,
@@ -189,6 +195,31 @@ export function AddCustomerForm(props?: {
               )}
             />
 
+            {/* Email */}
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-customer-email">
+                    Email
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    id="form-add-customer-email"
+                    type="email"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. ap@acme.com"
+                    autoComplete="email"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
             {/* Phone */}
             <Controller
               name="phoneNumber"
@@ -206,6 +237,57 @@ export function AddCustomerForm(props?: {
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. (555) 123-4567"
                     autoComplete="tel"
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Tax ID */}
+            <Controller
+              name="taxId"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-customer-tax-id">
+                    Tax ID (EIN)
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    id="form-add-customer-tax-id"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. 12-3456789"
+                    maxLength={10}
+                  />
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
+                </Field>
+              )}
+            />
+
+            {/* Payment terms (net days) */}
+            <Controller
+              name="netDays"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-add-customer-net-days">
+                    Payment terms (net days)
+                  </FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value == null ? "" : String(field.value)}
+                    id="form-add-customer-net-days"
+                    type="number"
+                    min="0"
+                    max="365"
+                    step="1"
+                    aria-invalid={fieldState.invalid}
+                    placeholder="e.g. 30"
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />

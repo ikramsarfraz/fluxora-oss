@@ -102,10 +102,16 @@ function csvRowToCustomerInput(row: Record<string, string>): BulkCreateCustomerI
       ]
     : undefined;
 
+  const netDaysRaw = row.net_days?.trim();
+  const netDays = netDaysRaw ? Number(netDaysRaw) : null;
+
   return {
     name: row.name?.trim() ?? "",
     abbreviation: row.abbreviation?.trim() || null,
+    email: row.email?.trim().toLowerCase() || null,
     phoneNumber: row.phone?.trim() || null,
+    taxId: row.tax_id?.trim() || null,
+    netDays: netDays != null && Number.isFinite(netDays) ? netDays : null,
     fuelSurchargeAmount: row.fuel_surcharge?.trim() || null,
     addresses,
   };

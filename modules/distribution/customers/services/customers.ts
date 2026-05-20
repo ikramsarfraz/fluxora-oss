@@ -60,7 +60,10 @@ export async function createCustomer(
       tenantId: tenant.id,
       name: input.name,
       abbreviation: input.abbreviation,
+      email: input.email,
       phoneNumber: input.phoneNumber,
+      taxId: input.taxId,
+      netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
     })
     .returning();
@@ -100,7 +103,10 @@ async function createCustomerForTenant(
       tenantId,
       name: input.name,
       abbreviation: input.abbreviation,
+      email: input.email,
       phoneNumber: input.phoneNumber,
+      taxId: input.taxId,
+      netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
     })
     .returning();
@@ -219,9 +225,12 @@ export async function updateCustomer(
     .update(customers)
     .set({
       ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.email !== undefined ? { email: input.email } : {}),
       ...(input.phoneNumber !== undefined
         ? { phoneNumber: input.phoneNumber }
         : {}),
+      ...(input.taxId !== undefined ? { taxId: input.taxId } : {}),
+      ...(input.netDays !== undefined ? { netDays: input.netDays } : {}),
       ...(input.fuelSurchargeAmount !== undefined
         ? { fuelSurchargeAmount: input.fuelSurchargeAmount }
         : {}),

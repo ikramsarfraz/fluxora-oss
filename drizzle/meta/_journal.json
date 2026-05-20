@@ -351,6 +351,13 @@
 			"when": 1779100900000,
 			"tag": "0049_payment_matches_ar",
 			"breakpoints": true
+		},
+		{
+			"idx": 50,
+			"version": "7",
+			"when": 1779101000000,
+			"tag": "0050_customer_billing_fields",
+			"breakpoints": true
 		}
 	]
 }
