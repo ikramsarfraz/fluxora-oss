@@ -66,8 +66,12 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-const BEFORE_MS = 4500;
-const AFTER_MS = 4500;
+// Compare cards run ~2.6s of entrance choreography (tool tiles / panel
+// stagger, then voiceover, then big stat, then callout). Each card lingers
+// for ~4-5s afterwards so visitors can read the voiceover and absorb the
+// stat. 7500ms hits that beat without overstaying.
+const BEFORE_MS = 7500;
+const AFTER_MS = 7500;
 const INTRO_MS = 3500;
 const OUTRO_MS = 6000;
 
