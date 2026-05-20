@@ -179,7 +179,14 @@ export type Transition =
   | { kind: "none" }
   | { kind: "splash" }
   | { kind: "chapter"; index: number; total: number; title: string; subtitle: string }
+  | { kind: "interstitial"; icon: InterstitialIcon; title: string; body: string }
   | { kind: "outro" };
+
+export type InterstitialIcon =
+  | "check" // green checkmark
+  | "sparkle" // forest sparkle
+  | "package" // box icon (post / inventory updated)
+  | "scan"; // OCR / scanning glyph
 
 export type ReelState = {
   step: ReelStep;

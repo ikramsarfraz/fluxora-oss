@@ -198,7 +198,21 @@ async function runScript(c: Controls) {
       headline: "AI reads the PDF.",
       body: "Header, line items, totals, and product matches — in seconds.",
     });
-    await c.sleep(3200);
+    await c.sleep(2800);
+
+    // Scanning result interstitial — small confirmation card before queue fills
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "interstitial",
+        icon: "scan",
+        title: "Parsed in 4.2 seconds",
+        body: "9 line items · 1 supplier match needed · 1 cost spike detected",
+      },
+    });
+    await c.sleep(1400);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
+
     c.dispatch({ type: "FINISH_SCAN" });
     if (c.isCancelled()) return;
 
@@ -274,7 +288,20 @@ async function runScript(c: Controls) {
     });
     c.dispatch({ type: "CLOSE_DIALOG" });
     c.setCursor(null);
-    await c.sleep(600);
+    await c.sleep(500);
+
+    // Interstitial: supplier linked
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "interstitial",
+        icon: "sparkle",
+        title: "Northwind Trading Co. created",
+        body: "Linked to this bill · Net-30 terms saved for next time.",
+      },
+    });
+    await c.sleep(1500);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Scene 7b: Collapse the invoice header ----
     c.setScene("collapse-header");
@@ -365,7 +392,20 @@ async function runScript(c: Controls) {
     });
     c.dispatch({ type: "CLOSE_DIALOG" });
     c.setCursor(null);
-    await c.sleep(600);
+    await c.sleep(500);
+
+    // Interstitial: all lines matched
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "interstitial",
+        icon: "check",
+        title: "All lines matched",
+        body: "5 to products you already had · 1 brand-new · 3 fees · aliases saved.",
+      },
+    });
+    await c.sleep(1700);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Chapter 3: Post ----
     c.dispatch({
@@ -393,7 +433,20 @@ async function runScript(c: Controls) {
     await c.sleep(200);
     c.dispatch({ type: "SUBMIT_REVIEW" });
     c.setCursor(null);
-    await c.sleep(1200);
+    await c.sleep(900);
+
+    // Interstitial: posted
+    c.dispatch({
+      type: "SET_TRANSITION",
+      transition: {
+        kind: "interstitial",
+        icon: "package",
+        title: "Posted · Stock updated",
+        body: "5 products received · 2 aliases saved · 3 expense charges posted.",
+      },
+    });
+    await c.sleep(1700);
+    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Chapter 4: Done ----
     c.dispatch({
