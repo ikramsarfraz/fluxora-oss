@@ -2,37 +2,35 @@
 
 import { motion, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import {
-  Boxes,
-  ChevronRight,
-  FileText,
-  Landmark,
-  LayoutDashboard,
-  Package,
-  Receipt,
-  Truck,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
-// Hand-crafted "marketing-scale" Fluxora app shell. Used to wrap every
-// product moment so each one shows real app context — sidebar, header,
-// breadcrumb — not just an isolated card.
+// Hand-crafted "marketing-scale" Fluxora app shell for product moments.
+// Wraps each moment in a believable app frame — but no sidebar. Marketing
+// pages have already advertised the other surfaces via chapter tabs or
+// section grids; the sidebar inside each moment was just stealing pixels.
 //
-// Sized for marketing density, not in-app density:
-// - Sidebar: 220px wide (vs 200px in app), 13px nav text (vs 12px)
-// - Header / breadcrumb: 13.5px (vs 12px)
-// - Main content area gets generous padding so the focal animation has room
+// What stays:
+// - Header strip with brand + workspace chip on the left, breadcrumb in the
+//   middle, optional right-slot action area
+// - Main content area that gets the full frame width
+// - Looping motion: re-runs the focal animation while in view, paused
+//   offscreen (same pattern as before)
+// - Scroll-anchoring guard so the loop's key bump doesn't yank the page
 //
-// Re-runs the focal animation on a loop while in view (same pattern as the
-// previous MomentFrame). Paused offscreen so visitors don't pay for
-// animations they can't see.
+// What's gone:
+// - The 220px left sidebar with all nav items. The breadcrumb still names
+//   the page, and the visitor isn't trying to navigate inside an iframe-
+//   sized demo — they're absorbing the focal interaction.
 
 const DEFAULT_LOOP_MS = 7000;
 
+// Kept as a narrow string type so existing moments continue to satisfy the
+// `activeNav` prop. We don't render the nav anymore, but the prop documents
+// which page each moment belongs to and lets the breadcrumb logic stay
+// consistent if we ever want to re-introduce a navigation surface.
 type NavKey =
   | "dashboard"
   | "customers"
@@ -45,36 +43,17 @@ type NavKey =
   | "bills"
   | "banking";
 
-type NavItem = {
-  key: NavKey;
-  label: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-};
-
-const NAV: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "customers", label: "Customers", icon: Users },
-  { key: "suppliers", label: "Suppliers", icon: Truck },
-  { key: "products", label: "Products", icon: Package },
-  { key: "inventory", label: "Inventory", icon: Boxes },
-  { key: "orders", label: "Orders", icon: FileText },
-  { key: "invoices", label: "Invoices", icon: Receipt },
-  { key: "payments", label: "Payments", icon: Wallet },
-  { key: "bills", label: "Bills", icon: Receipt },
-  { key: "banking", label: "Banking", icon: Landmark },
-];
-
 export type AppShellTone = "forest" | "success" | "warning" | "info";
 
 export function MarketingAppShell({
-  activeNav,
+  activeNav: _activeNav,
   crumbs,
   rightSlot,
   children,
   label,
   tone = "forest",
   loopMs = DEFAULT_LOOP_MS,
-  /** Visible vertical space the main area should occupy. Default is ~500px. */
+  /** Visible vertical space the main area should occupy. Default ~460px. */
   bodyHeight = "min-h-[460px]",
 }: {
   activeNav: NavKey;
@@ -86,6 +65,8 @@ export function MarketingAppShell({
   loopMs?: number;
   bodyHeight?: string;
 }) {
+  void _activeNav; // see comment on NavKey — kept for documentation
+
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.2 });
   const [loopKey, setLoopKey] = useState(0);
@@ -93,8 +74,6 @@ export function MarketingAppShell({
 
   useEffect(() => {
     if (!inView) return;
-    // Replay on re-entry (after being scrolled past) — but not on initial
-    // mount, since motion's `initial → animate` already plays once.
     if (hasBeenSeen.current) {
       setLoopKey((k) => k + 1);
     }
@@ -116,9 +95,6 @@ export function MarketingAppShell({
     <div
       ref={ref}
       className="relative"
-      // Disable browser scroll-anchoring on the wrapper. Without this, the
-      // looping main-area key bump can cause the browser to "anchor" scroll
-      // to the changing element and yank the visitor's position.
       style={{ overflowAnchor: "none" }}
     >
       {label ? (
@@ -133,90 +109,63 @@ export function MarketingAppShell({
         </div>
       ) : null}
 
-      {/* The shell itself */}
       <div className="overflow-hidden rounded-2xl border border-border-default bg-card-warm shadow-[0_22px_50px_-30px_rgba(31,58,46,0.35)]">
-        <div className="grid grid-cols-[220px_1fr]">
-          {/* Sidebar */}
-          <aside className="flex flex-col border-r border-border-default bg-surface">
-            <div className="flex items-center gap-2 px-4 py-4">
-              <Logomark size={22} />
-              <span className="font-serif text-[16px] font-medium text-ink">
-                Fluxora
-              </span>
-            </div>
-            <nav className="flex flex-col gap-0.5 px-2 pb-3">
-              {NAV.map(({ key, label: navLabel, icon: Icon }) => {
-                const active = key === activeNav;
+        {/* Header strip: brand chip · breadcrumb · right slot. No sidebar. */}
+        <header className="flex items-center justify-between gap-3 border-b border-border-default bg-surface/40 px-5 py-3 backdrop-blur">
+          {/* Brand + workspace chip — keeps "this is a real app" context
+              without the sidebar's visual weight. */}
+          <div className="flex items-center gap-2.5">
+            <Logomark size={18} />
+            <span className="font-serif text-[14px] font-medium text-ink">
+              Fluxora
+            </span>
+            <span className="rounded-full border border-border-default bg-card-warm px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-subtle">
+              pacificwharf
+            </span>
+
+            {crumbs.length > 0 ? (
+              <span className="hidden h-3 w-px bg-border-default md:block" />
+            ) : null}
+
+            <nav className="hidden items-center gap-1.5 text-[13px] md:flex">
+              {crumbs.map((crumb, idx) => {
+                const last = idx === crumbs.length - 1;
                 return (
-                  <div
-                    key={key}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px]",
-                      active
-                        ? "bg-forest-mid/10 font-medium text-forest-mid"
-                        : "text-ink-warm",
-                    )}
-                  >
-                    <Icon className="size-3.5" strokeWidth={1.8} />
-                    <span>{navLabel}</span>
-                  </div>
+                  <span key={crumb} className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        last
+                          ? "font-medium text-ink"
+                          : "text-subtle hover:text-ink-warm",
+                      )}
+                    >
+                      {crumb}
+                    </span>
+                    {!last ? (
+                      <ChevronRight
+                        className="size-3 text-subtle"
+                        strokeWidth={2}
+                      />
+                    ) : null}
+                  </span>
                 );
               })}
             </nav>
-            <div className="mt-auto border-t border-border-default px-4 py-3">
-              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
-                Workspace
-              </div>
-              <div className="mt-1 text-[12px] font-medium text-ink-warm">
-                pacificwharf
-              </div>
-            </div>
-          </aside>
-
-          {/* Main column */}
-          <div className="flex min-w-0 flex-col">
-            {/* Header */}
-            <header className="flex items-center justify-between border-b border-border-default bg-card-warm/80 px-5 py-3 backdrop-blur">
-              <nav className="flex items-center gap-1.5 text-[13.5px]">
-                {crumbs.map((crumb, idx) => {
-                  const last = idx === crumbs.length - 1;
-                  return (
-                    <span key={crumb} className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          last
-                            ? "font-medium text-ink"
-                            : "text-subtle hover:text-ink-warm",
-                        )}
-                      >
-                        {crumb}
-                      </span>
-                      {!last ? (
-                        <ChevronRight
-                          className="size-3 text-subtle"
-                          strokeWidth={2}
-                        />
-                      ) : null}
-                    </span>
-                  );
-                })}
-              </nav>
-              {rightSlot ? (
-                <div className="flex items-center gap-2">{rightSlot}</div>
-              ) : null}
-            </header>
-
-            {/* Looping main area */}
-            <main className={cn("flex flex-1 flex-col bg-page", bodyHeight)}>
-              {/* Key bump on each loopMs remounts the focal-animation
-                  subtree, replaying motion variants. Sidebar + header stay
-                  stable so the shell never blinks. */}
-              <div key={loopKey} className="flex flex-1 flex-col">
-                {children}
-              </div>
-            </main>
           </div>
-        </div>
+
+          {rightSlot ? (
+            <div className="flex items-center gap-2">{rightSlot}</div>
+          ) : null}
+        </header>
+
+        <main className={cn("flex flex-col bg-page", bodyHeight)}>
+          {/* Key bump on each loopMs remounts the focal-animation subtree,
+              replaying motion variants. Header stays stable so the frame
+              never blinks. */}
+          <div key={loopKey} className="flex flex-1 flex-col">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );
