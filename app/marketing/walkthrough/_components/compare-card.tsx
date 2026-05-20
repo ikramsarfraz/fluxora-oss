@@ -72,6 +72,11 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="danger" />
+
+      {/* Big centered title reveal — plays first, then shrinks toward the
+          header where the small pill takes over. */}
+      <TitleReveal tone="danger" label="The old way" />
+
       <CardHeader
         tone="danger"
         chapterLabel={compare.step}
@@ -94,12 +99,11 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
                   icon={t.icon}
                   label={t.label}
                   badge={t.badge}
-                  // First tile lands 1.3s in (after card fade + header
-                  // settle), then each subsequent tile lands 0.6s later.
-                  // 0.6s is roughly the read time for "Inbox · 8:42" or
-                  // "PDF reader · 8:44" — gives the visitor a beat to
-                  // register each tool before the next one appears.
-                  delay={1.3 + idx * 0.6}
+                  // First tile lands 2.9s in — AFTER the big TitleReveal
+                  // has finished (~2.0s) and the header has settled
+                  // (~2.3s). Then each subsequent tile lands 0.6s later.
+                  // 0.6s ≈ reading time for "Inbox · 8:42".
+                  delay={2.9 + idx * 0.6}
                   askew={idx % 2 === 0}
                 />
               ))}
@@ -109,13 +113,10 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                // Lands AFTER all tool tiles have settled, with an extra
-                // beat for the visitor to scan the row. For 5 tools at
-                // 0.6s stagger: last tile lands at 1.3 + 4*0.6 = 3.7s.
-                // Voiceover fades in at 4.5s, takes ~1s to fully appear,
-                // then the visitor has another ~3s to read it before the
-                // stat punches in.
-                delay: 1.3 + compare.before.tools.length * 0.6 + 0.5,
+                // Lands AFTER all tool tiles. For 5 tools at 0.6s stagger
+                // starting at 2.9s: last tile = 2.9 + 4*0.6 = 5.3s. Add
+                // ~0.5s reading buffer before voiceover starts fading in.
+                delay: 2.9 + compare.before.tools.length * 0.6 + 0.5,
                 duration: 1.0,
                 ease: [0.22, 1, 0.36, 1],
               }}
@@ -162,6 +163,11 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="success" />
+
+      {/* Big centered title reveal — plays first, then shrinks toward the
+          header where the small pill takes over. */}
+      <TitleReveal tone="success" label="The Fluxora way" />
+
       <CardHeader
         tone="success"
         chapterLabel={compare.step}
@@ -183,11 +189,11 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                // After all 4 actions have ticked in: panel mounts at 1.3,
-                // delayChildren 0.4, stagger 0.6 → last action lands at
-                // 1.3 + 0.4 + 3*0.6 = 3.5s. Add a beat of reading time
-                // before the voiceover fades in slowly.
-                delay: 4.2,
+                // Panel mounts at 2.9s (matches Before's first tool tile,
+                // after TitleReveal). delayChildren 0.4 + stagger 0.6 →
+                // last (4th) action lands at 2.9 + 0.4 + 3*0.6 = 5.1s.
+                // Voiceover fades in shortly after.
+                delay: 5.8,
                 duration: 1.0,
                 ease: [0.22, 1, 0.36, 1],
               }}
@@ -211,11 +217,9 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            // Callout is the closing punctuation — lands last, after the
-            // voiceover (4.2s) has had time to be read AND the big stat
-            // (6.7s) has landed. Visitor's eye has somewhere fresh to go
-            // for the final beat.
-            delay: 8.0,
+            // Callout = final punctuation. Voiceover lands at 5.8s,
+            // stat lands at 8.3s, callout closes the beat at 9.6s.
+            delay: 9.6,
             duration: 0.7,
             ease: [0.22, 1, 0.36, 1],
           }}
@@ -283,10 +287,8 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
   const list: Variants = {
     hidden: {},
     show: {
-      // 0.6s between actions = roughly one item per "reading beat." Each
-      // action label is 3-5 words, easy to register in that window before
-      // the next one slides in. delayChildren 0.4s relative to the panel
-      // mount.
+      // 0.6s between actions = roughly one reading beat. delayChildren
+      // 0.4s relative to the panel mount.
       transition: { staggerChildren: 0.6, delayChildren: 0.4 },
     },
   };
@@ -302,9 +304,9 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      // Panel mounts 1.3s in — after card fade + header settle. Matches
-      // the timing of the first tool tile on the Before card.
-      transition={{ duration: 0.7, delay: 1.3, ease: [0.22, 1, 0.36, 1] }}
+      // Panel mounts 2.9s in — after the TitleReveal sequence + header
+      // settle. Matches the Before card's first tool tile.
+      transition={{ duration: 0.7, delay: 2.9, ease: [0.22, 1, 0.36, 1] }}
       className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
     >
       {/* Mini app shell header */}
@@ -377,15 +379,10 @@ function HeroStat({
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{
-        // Lands as the closing punctuation on each card — AFTER the
-        // voiceover has had ~2s of reading time. The visitor reads "5
-        // windows open. You're 9 lines into a 12-line invoice..." then
-        // the big "25 min" punches in as the confirmation.
-        //
-        // 6.7s = voiceover lands at ~4.5s (Before) or 4.2s (After), then
-        // ~2s of read time, then the stat. Tuned for both cards to feel
-        // like the same beat.
-        delay: 6.7,
+        // The big number is the punchline. Lands AFTER the voiceover has
+        // had ~2s of reading time. Voiceover Before = 6.4s, voiceover
+        // After = 5.8s; stat lands at 8.3s on both for a consistent beat.
+        delay: 8.3,
         type: "spring",
         stiffness: 200,
         damping: 20,
@@ -462,17 +459,38 @@ function CardHeader({
     tone === "danger"
       ? "border-danger-border/70 bg-danger-bg/50 text-danger-fg"
       : "border-success-border/70 bg-success-bg/50 text-success-fg";
+
+  // Header fades in just as the big title reveal is wrapping up its move
+  // to the corner. The chapter label + topic glide in from the left;
+  // the side pill scales in from a small starting point so it reads as
+  // the destination the big title "settled into."
   return (
     <div className="relative flex items-start justify-between px-10 pb-5 pt-9">
-      <div>
+      <motion.div
+        initial={{ opacity: 0, x: -8 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{
+          delay: 1.7,
+          duration: 0.55,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+      >
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
           {chapterLabel}
         </div>
         <h2 className="mt-2 font-serif text-[24px] font-medium leading-tight tracking-tight text-ink md:text-[30px]">
           {topic}
         </h2>
-      </div>
-      <div
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{
+          delay: 1.5,
+          type: "spring",
+          stiffness: 280,
+          damping: 22,
+        }}
         className={cn(
           "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5",
           sidePill,
@@ -482,7 +500,65 @@ function CardHeader({
         <span className="font-mono text-[10.5px] uppercase tracking-[0.14em]">
           {sideLabel}
         </span>
-      </div>
+      </motion.div>
     </div>
+  );
+}
+
+// =========================================================================
+// TitleReveal — big centered phrase that plays first
+// =========================================================================
+// "The old way" / "The Fluxora way" pop up large and centered, sit for a
+// beat so the visitor reads them, then shrink + drift toward the top-right
+// corner where the small side pill takes over. The whole reveal takes
+// ~1.8s; after it, the rest of the card's choreography begins.
+function TitleReveal({
+  tone,
+  label,
+}: {
+  tone: "danger" | "success";
+  label: string;
+}) {
+  return (
+    <motion.div
+      aria-hidden
+      // Layered above the backdrop and below the loop's key-bumped children
+      // (which live below in the main grid). pointer-events-none so the
+      // visitor's click never lands on it.
+      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+      initial={{ opacity: 0, scale: 0.86 }}
+      animate={{
+        // Three beats squeezed into one keyframe sequence:
+        //   0 → 0.20  fade + scale up to full size (enters big)
+        //   0.20 → 0.74  sit at full size (visitor reads it)
+        //   0.74 → 1.0   shrink down + drift up-right toward the header's
+        //                side pill, fading out
+        opacity: [0, 1, 1, 0],
+        scale: [0.86, 1, 1, 0.35],
+        x: [0, 0, 0, 240],
+        y: [0, 0, 0, -210],
+      }}
+      transition={{
+        duration: 2.0,
+        times: [0, 0.2, 0.74, 1],
+        ease: [0.22, 1, 0.36, 1],
+      }}
+    >
+      <span
+        className={cn(
+          "font-serif font-medium tracking-tight",
+          "text-[68px] leading-[1.0] md:text-[96px]",
+          tone === "danger" ? "text-danger-fg" : "text-success-fg",
+        )}
+        style={{
+          textShadow:
+            tone === "danger"
+              ? "0 6px 24px rgba(139, 52, 21, 0.18)"
+              : "0 6px 24px rgba(74, 107, 47, 0.18)",
+        }}
+      >
+        {label}
+      </span>
+    </motion.div>
   );
 }
