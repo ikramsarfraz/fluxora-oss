@@ -352,6 +352,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "forest",
     icon: Users,
+    liveDemoHref: "/reel/customer-bulk-import",
   },
   {
     slug: "suppliers",
