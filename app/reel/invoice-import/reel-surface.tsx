@@ -1,5 +1,7 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
+
 import { BillsShell } from "./_real/bills-shell";
 import { ReelDialogs } from "./_real/dialogs";
 import { ReviewScreen } from "./_real/review";
@@ -8,6 +10,8 @@ import { TransitionLayer } from "./_real/transitions";
 
 import { FakeHeader, FakeSidebar } from "./fake-sidebar";
 import { cn } from "@/lib/utils";
+
+const easeOut = [0.16, 1, 0.3, 1] as const;
 
 export function ReelSurface() {
   const { state } = useReel();
@@ -36,7 +40,26 @@ export function ReelSurface() {
               inReview ? "p-0" : "gap-4 p-4",
             )}
           >
-            {inReview ? <ReviewScreen /> : <BillsShell />}
+            {/* Cross-fade the inner screen whenever the demo step changes.
+                Sidebar + header stay put across the transition. mode="wait"
+                makes sure the outgoing screen fully leaves before the new
+                one arrives so they don't fight for space. */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${state.step}-${state.activeTab}`}
+                initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                transition={{
+                  opacity: { duration: 0.45, ease: easeOut },
+                  y: { duration: 0.55, ease: easeOut },
+                  scale: { duration: 0.55, ease: easeOut },
+                }}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                {inReview ? <ReviewScreen /> : <BillsShell />}
+              </motion.div>
+            </AnimatePresence>
           </main>
         </div>
       </div>
