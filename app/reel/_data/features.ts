@@ -607,6 +607,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "forest",
     icon: Wallet,
+    liveDemoHref: "/reel/expenses",
   },
 
   // ---------- Ops ----------
