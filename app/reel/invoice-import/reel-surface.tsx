@@ -51,8 +51,9 @@ function backingTreatmentFor(kind: string) {
   switch (kind) {
     case "splash":
     case "outro":
-      // Splash + outro fully take over the frame. Don't double-fade the
-      // backing — let the transition's own bg-page do the cover.
+    case "explainer":
+      // Splash + outro + explainer fully take over the frame. Don't double-
+      // fade the backing — let the transition's own bg-page do the cover.
       return { dim: 0, blur: 0, transitioning: false } as const;
     case "chapter":
       return { dim: 0.45, blur: 4, transitioning: true } as const;

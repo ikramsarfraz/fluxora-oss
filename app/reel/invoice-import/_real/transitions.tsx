@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  Boxes,
   Check,
+  Database,
   FileText,
   Package,
+  Receipt,
+  RotateCw,
   ScanLine,
   Sparkles,
   TrendingUp,
@@ -15,7 +19,7 @@ import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
 import { useReel } from "./reel-state";
-import type { InterstitialIcon } from "./types";
+import type { ExplainerVisual, InterstitialIcon } from "./types";
 
 // Layered transition chrome — drawn on top of the reel surface. Four flavors:
 //
@@ -33,6 +37,7 @@ export function TransitionLayer() {
   if (t.kind === "splash") return <OpeningSplash />;
   if (t.kind === "outro") return <OutroSplash />;
   if (t.kind === "chapter") return <ChapterCard chapter={t} />;
+  if (t.kind === "explainer") return <Explainer explainer={t} />;
   return <Interstitial icon={t.icon} title={t.title} body={t.body} />;
 }
 
@@ -400,5 +405,163 @@ function StatDivider({ delay }: { delay: string }) {
     >
       ·
     </span>
+  );
+}
+
+// ---------- Explainer (full-frame narrative card) ----------
+function Explainer({
+  explainer,
+}: {
+  explainer: {
+    eyebrow: string;
+    title: string;
+    body: string;
+    visual: ExplainerVisual;
+  };
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-0 z-50",
+        "flex items-center justify-center bg-page/95 backdrop-blur-sm",
+        "animate-in fade-in zoom-in-95 duration-500",
+      )}
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 65% 50% at center, color-mix(in oklch, var(--color-forest-tint) 55%, transparent) 0%, transparent 70%)",
+        }}
+      />
+
+      <div className="relative flex flex-col items-center gap-7 px-8 text-center">
+        {/* Decorative visual at the top */}
+        <div className="animate-in fade-in slide-in-from-top-1 duration-700 delay-100 fill-mode-both">
+          <ExplainerVisualGlyph kind={explainer.visual} />
+        </div>
+
+        {/* Eyebrow */}
+        <div className="flex animate-in fade-in items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-forest-mid duration-700 delay-300 fill-mode-both">
+          <span className="size-1 rounded-full bg-forest-mid" />
+          <span>{explainer.eyebrow}</span>
+          <span className="size-1 rounded-full bg-forest-mid" />
+        </div>
+
+        {/* Title */}
+        <h2 className="max-w-[680px] animate-in fade-in slide-in-from-bottom-3 font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-ink duration-700 delay-500 md:text-[44px] fill-mode-both">
+          {explainer.title}
+        </h2>
+
+        {/* Body */}
+        <p className="max-w-[540px] animate-in fade-in text-[14px] leading-[1.6] text-subtle duration-700 delay-700 md:text-[15px] fill-mode-both">
+          {explainer.body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ExplainerVisualGlyph({ kind }: { kind: ExplainerVisual }) {
+  switch (kind) {
+    case "pdf-to-stock":
+      return (
+        <div className="flex items-center gap-3">
+          <GlyphTile icon={FileText} tone="warn" />
+          <GlyphArrow />
+          <GlyphTile icon={Sparkles} tone="forest" />
+          <GlyphArrow />
+          <GlyphTile icon={Boxes} tone="success" />
+        </div>
+      );
+    case "ai-match":
+      return (
+        <div className="flex items-center gap-3">
+          <GlyphTile icon={Sparkles} tone="forest" />
+          <div className="flex flex-col gap-1.5">
+            <CandidatePill score={86} />
+            <CandidatePill score={71} muted />
+          </div>
+        </div>
+      );
+    case "five-effects":
+      return (
+        <div className="flex items-center gap-4">
+          <GlyphTile icon={Check} tone="success" />
+          <GlyphArrow />
+          <div className="grid grid-cols-3 gap-1.5">
+            <MiniDot icon={Boxes} />
+            <MiniDot icon={TrendingUp} />
+            <MiniDot icon={Sparkles} />
+            <MiniDot icon={Receipt} />
+            <MiniDot icon={Package} />
+            <span className="block size-7" />
+          </div>
+        </div>
+      );
+    case "memory":
+      return (
+        <div className="flex items-center gap-3">
+          <GlyphTile icon={Database} tone="forest" />
+          <GlyphArrow />
+          <GlyphTile icon={RotateCw} tone="success" />
+        </div>
+      );
+  }
+}
+
+function GlyphTile({
+  icon: Icon,
+  tone,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  tone: "forest" | "success" | "warn";
+}) {
+  const palette = {
+    forest: { bg: "var(--color-forest-tint)", fg: "var(--color-forest)" },
+    success: { bg: "var(--color-success-bg)", fg: "var(--color-success-fg)" },
+    warn: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" },
+  }[tone];
+  return (
+    <div
+      className="flex size-14 items-center justify-center rounded-2xl border border-border-default shadow-sm"
+      style={{ background: palette.bg, color: palette.fg }}
+    >
+      <Icon className="size-6" strokeWidth={1.6} />
+    </div>
+  );
+}
+
+function GlyphArrow() {
+  return <ArrowRight className="size-4 text-subtle" strokeWidth={1.6} />;
+}
+
+function CandidatePill({ score, muted = false }: { score: number; muted?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-[7px] border border-border-default bg-card px-2.5 py-1 text-[11px]",
+        muted && "opacity-60",
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-forest-mid" />
+      <span className="text-ink">Suggested match</span>
+      <span className="rounded bg-divider px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-subtle">
+        {score}%
+      </span>
+    </div>
+  );
+}
+
+function MiniDot({
+  icon: Icon,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+}) {
+  return (
+    <div className="flex size-7 items-center justify-center rounded-md border border-border-default bg-card text-forest-mid shadow-xs">
+      <Icon className="size-3.5" strokeWidth={1.8} />
+    </div>
   );
 }
