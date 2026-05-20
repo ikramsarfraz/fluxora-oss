@@ -45,7 +45,7 @@ export default async function FeatureTransitionPage({
 
   return (
     <FeatureTransition
-      feature={feature}
+      slug={feature.slug}
       total={total}
       prevSlug={prevSlug}
       nextSlug={nextSlug}
