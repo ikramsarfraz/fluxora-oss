@@ -48,6 +48,18 @@ type PillConfig = { label: string; bg: string; color: string };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  check: "Check",
+  ach: "ACH",
+  zelle: "Zelle",
+  credit_card: "Credit card",
+};
+
+function paymentMethodLabel(method: string): string {
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
+
 function getStatusPill(
   status: string,
   balanceDue: number,
@@ -367,6 +379,55 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
               <TotalsRow label="Balance due" value={formatMoney(balanceDue)} bold accent={balanceDue > 0} />
             </div>
           </div>
+
+          {/* Payment history — visible once any payment has been recorded */}
+          {(invoice.payments?.length ?? 0) > 0 ? (
+            <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 28 : 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.muted, marginBottom: 10 }}>
+                Payment history
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Method</th>
+                    <th style={thStyle}>Reference</th>
+                    <th style={thStyle}>Recorded by</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(invoice.payments ?? []).map((payment, i) => {
+                    const ref = payment.referenceNumber ?? payment.checkNumber ?? null;
+                    return (
+                      <tr key={payment.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
+                        <td style={{ padding: "8px 0", fontSize: 13, fontFamily: C.mono, color: C.ink2 }}>
+                          <Link
+                            href={`/payments/${payment.id}`}
+                            style={{ color: "inherit", textDecoration: "none", borderBottom: `1px dashed ${C.line}` }}
+                          >
+                            {formatDisplayDate(payment.paymentDate)}
+                          </Link>
+                        </td>
+                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                          {paymentMethodLabel(payment.paymentMethod)}
+                        </td>
+                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2, fontFamily: ref ? C.mono : "inherit" }}>
+                          {ref ?? <span style={{ color: C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                          {payment.createdBy?.fullName ?? <span style={{ color: C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding: "8px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, color: C.ink, fontWeight: 500 }}>
+                          {formatMoney(payment.amount)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
 
           {/* Footer */}
           {(tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault) ? (

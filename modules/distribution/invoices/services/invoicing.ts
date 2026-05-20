@@ -299,7 +299,12 @@ export async function getSalesInvoiceById(id: string) {
           product: true,
         },
       },
-      payments: true,
+      payments: {
+        with: {
+          createdBy: true,
+        },
+        orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+      },
       createdBy: true,
       updatedBy: true,
     },
