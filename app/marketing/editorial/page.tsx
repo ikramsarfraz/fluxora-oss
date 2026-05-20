@@ -5,8 +5,8 @@ import {
   Boxes,
   CheckCircle2,
   FileText,
-  LayoutDashboard,
   Landmark,
+  LayoutDashboard,
   Quote,
   Receipt,
   ShoppingCart,
@@ -16,6 +16,15 @@ import {
 
 import { Button } from "@/components/ui/button";
 
+import {
+  BulkImportMoment,
+  DashboardMoment,
+  InventoryLotsMoment,
+  InvoicePdfMoment,
+  PaymentsMoment,
+  RolesMoment,
+  SalesOrderMoment,
+} from "../_components/moments";
 import { MarketingFooter, MarketingNav } from "../_components/nav";
 import { ReelEmbed } from "../_components/reel-embed";
 
@@ -76,9 +85,12 @@ export default function EditorialLanding() {
           </p>
         </div>
 
-        {/* Big inline reel */}
+        {/* Big inline hero reel — the only iframe on the page */}
         <div className="mx-auto max-w-5xl px-6 pb-16">
-          <ReelEmbed slug="invoice-import" caption="The PDF invoice import flow, autoplaying" />
+          <ReelEmbed
+            slug="invoice-import"
+            caption="The PDF invoice import flow, autoplaying — open it full-screen for the full reel"
+          />
         </div>
 
         {/* Logo bar */}
@@ -131,86 +143,95 @@ export default function EditorialLanding() {
             sub="Not a feature list — the flow that runs Tuesday morning."
           />
 
-          <div className="mt-12 grid grid-cols-1 gap-12 md:grid-cols-2">
+          <div className="mt-14 space-y-20">
             <EverydayBlock
+              flip={false}
               icon={ShoppingCart}
               kicker="Sales orders"
               title="Take the order. Pull the stock. Done."
               body="Search the customer, watch FIFO pull lots oldest-first, lock in tier pricing — margin live the whole way."
-              slug="sales-order-fifo"
+              moment={<SalesOrderMoment />}
             />
             <EverydayBlock
+              flip
               icon={Receipt}
               kicker="Invoices"
               title="Beautiful PDFs. In your brand. By email."
               body="One click and the invoice composes itself with your letterhead, attaches, and lands in your customer's inbox."
-              slug="invoice-pdf"
+              moment={<InvoicePdfMoment />}
             />
             <EverydayBlock
+              flip={false}
               icon={Wallet}
               kicker="Payments"
               title="Money in. Matched to invoices."
               body="Drop one payment, watch Fluxora apply it FIFO across open invoices and clear the aging buckets in real time."
-              slug="payments"
+              moment={<PaymentsMoment />}
             />
             <EverydayBlock
+              flip
               icon={Boxes}
               kicker="Inventory"
               title="Every lot. Every move. Every dollar."
               body="Track lots from receipt to ship. Expiry warnings before they bite. Spoilage adjustments audit-trailed."
-              slug="inventory-lots"
+              moment={<InventoryLotsMoment />}
             />
           </div>
         </div>
       </section>
 
-      {/* ============================ UNIQUE ============================ */}
+      {/* ============================ DASHBOARD ============================ */}
       <section className="border-t border-border-default/50">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <SectionHeader
-            eyebrow="The unique parts"
-            title="The reasons people actually switch."
-            sub="Two things every other ERP we evaluated couldn't do."
-          />
+          <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-[1fr_1.1fr]">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-forest-mid">
+                The morning glance
+              </p>
+              <h2 className="mt-3 font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-ink md:text-[48px]">
+                Open the laptop.
+                <br />
+                <span className="text-forest-mid">Know the day.</span>
+              </h2>
+              <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
+                Revenue today. Margin. Aging. Stock at risk. Today&apos;s
+                biggest win. Every number you check first thing, on one
+                screen, refreshed on load.
+              </p>
+              <ul className="mt-5 space-y-1.5 text-[13px] text-ink-warm">
+                <Check2 text="Live KPIs · drill any number" />
+                <Check2 text="Trend charts that draw in" />
+                <Check2 text="Spotlight card for what to chase" />
+              </ul>
+            </div>
+            <DashboardMoment />
+          </div>
+        </div>
+      </section>
 
-          <div className="mt-12 space-y-16">
-            <UniqueBlock
-              flip={false}
-              kicker="AI invoice import"
-              title="Drop a supplier PDF. We do the typing."
-              body="Drag in a supplier invoice. Fluxora reads every line, matches each item to your catalog, learns the aliases, and posts the bill against the right lots. Drop the next one and it already knows."
-              points={[
-                "Reads PDFs at >94% accuracy",
-                "Learns supplier line aliases forever",
-                "Posts to AP + receives into inventory",
-              ]}
-              slug="invoice-import"
-            />
-            <UniqueBlock
-              flip
-              kicker="FIFO inventory"
-              title="Lots that explain themselves."
-              body="Every receipt grows a lot. Every order draws it down, oldest-first. Expiry warnings two days before they bite. A movement ledger for every gram in and out — auditors love it."
-              points={[
-                "FIFO allocation on every order",
-                "Expiry-aware filters and alerts",
-                "Audit-trailed movement ledger",
-              ]}
-              slug="inventory-lots"
-            />
+      {/* ============================ TEAM + IMPORT ============================ */}
+      <section className="border-t border-border-default/50 bg-surface/20">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <SectionHeader
+            eyebrow="Run a real team"
+            title="Roles, imports, banking — the boring parts done well."
+          />
+          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
+            <RolesMoment />
+            <BulkImportMoment />
           </div>
         </div>
       </section>
 
       {/* ============================ MORE ============================ */}
-      <section className="border-t border-border-default/50 bg-surface/20">
+      <section className="border-t border-border-default/50">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <SectionHeader
             eyebrow="Everything else"
-            title="The parts that make a real team."
+            title="The parts that make a real business."
           />
 
-          <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
             <SmallCard
               icon={LayoutDashboard}
               title="Dashboard KPIs"
@@ -219,8 +240,8 @@ export default function EditorialLanding() {
             />
             <SmallCard
               icon={Landmark}
-              title="Bank linking"
-              body="Plaid pulls daily and auto-matches every transaction."
+              title="Plaid bank linking"
+              body="Daily sync and auto-match against invoices, bills, and expenses."
               slug="plaid-link"
             />
             <SmallCard
@@ -254,7 +275,7 @@ export default function EditorialLanding() {
               href="/reel"
               className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-forest-mid hover:text-forest"
             >
-              See every feature
+              See every feature run
               <ArrowRight className="size-3" />
             </Link>
           </div>
@@ -262,7 +283,7 @@ export default function EditorialLanding() {
       </section>
 
       {/* ============================ PRICING ============================ */}
-      <section id="pricing" className="border-t border-border-default/50">
+      <section id="pricing" className="border-t border-border-default/50 bg-surface/20">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <SectionHeader
             eyebrow="Pricing"
@@ -315,7 +336,7 @@ export default function EditorialLanding() {
       </section>
 
       {/* ============================ FINAL CTA ============================ */}
-      <section className="border-t border-border-default/50 bg-surface/30">
+      <section className="border-t border-border-default/50">
         <div className="mx-auto max-w-3xl px-6 py-20 text-center">
           <h2 className="font-serif text-[40px] font-medium leading-[1.1] tracking-tight text-ink md:text-[52px]">
             One quiet platform.
@@ -376,79 +397,50 @@ function LogoText({ name }: { name: string }) {
 }
 
 function EverydayBlock({
+  flip,
   icon: Icon,
   kicker,
   title,
   body,
-  slug,
+  moment,
 }: {
+  flip: boolean;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   kicker: string;
   title: string;
   body: string;
-  slug: string;
-}) {
-  return (
-    <article>
-      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-forest-mid">
-        <Icon className="size-3" strokeWidth={2.2} />
-        {kicker}
-      </div>
-      <h3 className="mt-3 font-serif text-[24px] font-medium leading-[1.18] tracking-tight text-ink md:text-[28px]">
-        {title}
-      </h3>
-      <p className="mt-3 text-[14px] leading-[1.65] text-ink-warm">{body}</p>
-      <div className="mt-6">
-        <ReelEmbed slug={slug} aspect="video" />
-      </div>
-    </article>
-  );
-}
-
-function UniqueBlock({
-  flip,
-  kicker,
-  title,
-  body,
-  points,
-  slug,
-}: {
-  flip: boolean;
-  kicker: string;
-  title: string;
-  body: string;
-  points: string[];
-  slug: string;
+  moment: React.ReactNode;
 }) {
   return (
     <article
       className={`grid grid-cols-1 items-center gap-10 md:grid-cols-2 ${flip ? "md:[&>*:first-child]:order-2" : ""}`}
     >
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-forest-mid">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-forest-mid">
+          <Icon className="size-3" strokeWidth={2.2} />
           {kicker}
-        </p>
-        <h3 className="mt-3 font-serif text-[32px] font-medium leading-[1.1] tracking-tight text-ink md:text-[40px]">
+        </div>
+        <h3 className="mt-3 font-serif text-[28px] font-medium leading-[1.15] tracking-tight text-ink md:text-[34px]">
           {title}
         </h3>
-        <p className="mt-4 text-[15px] leading-[1.65] text-ink-warm">{body}</p>
-        <ul className="mt-6 space-y-2">
-          {points.map((p) => (
-            <li
-              key={p}
-              className="flex items-center gap-2 text-[13.5px] text-ink"
-            >
-              <CheckCircle2
-                className="size-3.5 text-forest-mid"
-                strokeWidth={2}
-              />
-              {p}
-            </li>
-          ))}
-        </ul>
+        <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
+          {body}
+        </p>
       </div>
-      <ReelEmbed slug={slug} aspect="video" />
+      <div>{moment}</div>
     </article>
+  );
+}
+
+function Check2({ text }: { text: string }) {
+  return (
+    <li className="flex items-start gap-1.5">
+      <CheckCircle2
+        className="mt-0.5 size-3.5 shrink-0 text-forest-mid"
+        strokeWidth={2}
+      />
+      <span>{text}</span>
+    </li>
   );
 }
 

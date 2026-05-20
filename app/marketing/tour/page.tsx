@@ -17,6 +17,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import {
+  AiExtractMoment,
+  DashboardMoment,
+  InventoryLotsMoment,
+  InvoicePdfMoment,
+  PaymentsMoment,
+  PlaidMoment,
+  RolesMoment,
+  SalesOrderMoment,
+} from "../_components/moments";
 import { MarketingFooter, MarketingNav } from "../_components/nav";
 import { ReelEmbed } from "../_components/reel-embed";
 
@@ -32,7 +42,7 @@ type Chapter = {
   title: string;
   body: string;
   bullets: string[];
-  slug: string;
+  moment: React.ReactNode;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 };
 
@@ -48,7 +58,7 @@ const CHAPTERS: Chapter[] = [
       "Aliases persist across receipts",
       "Posts to AP + receives into inventory",
     ],
-    slug: "invoice-import",
+    moment: <AiExtractMoment />,
     icon: Sparkles,
   },
   {
@@ -62,7 +72,7 @@ const CHAPTERS: Chapter[] = [
       "Visual lot allocation per line",
       "Live margin tracker in the header",
     ],
-    slug: "sales-order-fifo",
+    moment: <SalesOrderMoment />,
     icon: FileText,
   },
   {
@@ -76,7 +86,7 @@ const CHAPTERS: Chapter[] = [
       "Email send with delivery tracking",
       "Audit-ready, signed PDFs",
     ],
-    slug: "invoice-pdf",
+    moment: <InvoicePdfMoment />,
     icon: Receipt,
   },
   {
@@ -90,7 +100,7 @@ const CHAPTERS: Chapter[] = [
       "Aging before / after split-screen",
       "Overpayments → credit, untouched",
     ],
-    slug: "payments",
+    moment: <PaymentsMoment />,
     icon: Wallet,
   },
   {
@@ -104,7 +114,7 @@ const CHAPTERS: Chapter[] = [
       "Expiry-aware filters",
       "Movement ledger for every gram",
     ],
-    slug: "inventory-lots",
+    moment: <InventoryLotsMoment />,
     icon: Boxes,
   },
   {
@@ -118,7 +128,7 @@ const CHAPTERS: Chapter[] = [
       "Daily sync, on a cron",
       "Auto-match with confidence bars",
     ],
-    slug: "plaid-link",
+    moment: <PlaidMoment />,
     icon: Landmark,
   },
   {
@@ -132,7 +142,7 @@ const CHAPTERS: Chapter[] = [
       "Per-person sidebar morphs",
       "Audit log of allowed + denied",
     ],
-    slug: "roles-permissions",
+    moment: <RolesMoment />,
     icon: Users,
   },
   {
@@ -146,7 +156,7 @@ const CHAPTERS: Chapter[] = [
       "Aging buckets + top owing",
       "Today's wins spotlight",
     ],
-    slug: "dashboard-kpis",
+    moment: <DashboardMoment />,
     icon: BarChart3,
   },
 ];
@@ -217,7 +227,8 @@ export default function TourLanding() {
               </div>
             </div>
 
-            <ReelEmbed slug="dashboard-kpis" aspect="video" />
+            {/* The single iframe — only one on the page */}
+            <ReelEmbed slug="invoice-import" aspect="video" />
           </div>
         </div>
       </section>
@@ -426,7 +437,7 @@ function Chapter({ chapter, flip }: { chapter: Chapter; flip: boolean }) {
 
       <div
         className={cn(
-          "mt-6 grid grid-cols-1 gap-10 md:grid-cols-2 md:items-start",
+          "mt-6 grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center",
           flip && "md:[&>*:first-child]:order-2",
         )}
       >
@@ -452,18 +463,8 @@ function Chapter({ chapter, flip }: { chapter: Chapter; flip: boolean }) {
               </li>
             ))}
           </ul>
-          <div className="mt-5">
-            <Link
-              href={`/reel/${chapter.slug}`}
-              target="_blank"
-              className="inline-flex items-center gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] text-forest-mid hover:text-forest"
-            >
-              Open this chapter full-screen
-              <ArrowRight className="size-3" />
-            </Link>
-          </div>
         </div>
-        <ReelEmbed slug={chapter.slug} aspect="video" />
+        <div>{chapter.moment}</div>
       </div>
     </article>
   );
