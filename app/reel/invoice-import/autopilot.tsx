@@ -129,10 +129,11 @@ async function runScript(c: Controls) {
     c.setScene("splash");
     await c.sleep(3200);
     if (c.isCancelled()) return;
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(300);
 
     // ---- Explainer 1: frame the whole flow ----
+    // No "none" handoff between back-to-back transitions — let the splash's
+    // exit overlap with the explainer's entry so the surface never flashes
+    // through. Same pattern below for every consecutive transition pair.
     c.dispatch({
       type: "SET_TRANSITION",
       transition: {
@@ -145,8 +146,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(4200);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(300);
 
     // ---- Chapter 1: Receive ----
     c.dispatch({
@@ -237,8 +236,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(4400);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(300);
 
     // ---- Chapter 2: Review ----
     c.dispatch({
@@ -386,7 +383,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(1700);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Explainer 3: what submit does ----
     c.dispatch({
@@ -401,8 +397,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(4400);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(300);
 
     // ---- Chapter 3: Post ----
     c.dispatch({
@@ -439,7 +433,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(1700);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
 
     // ---- Chapter 4: Done ----
     c.dispatch({
@@ -472,8 +465,6 @@ async function runScript(c: Controls) {
       },
     });
     await c.sleep(4200);
-    c.dispatch({ type: "SET_TRANSITION", transition: { kind: "none" } });
-    await c.sleep(300);
 
     // ---- Outro splash ----
     c.setScene("outro");
