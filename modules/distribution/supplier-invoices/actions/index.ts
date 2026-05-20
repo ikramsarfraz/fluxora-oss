@@ -43,8 +43,11 @@ import {
   removeSupplierInvoiceAttachment,
   reverseSupplierInvoice,
   updateSupplierInvoice,
+  updateSupplierInvoicePayment,
   uploadSupplierInvoiceAttachment,
+  voidSupplierInvoicePayment,
   type ExistingSupplierInvoiceMatch,
+  type UpdateSupplierInvoicePaymentInput,
 } from "../services/receiving";
 import { parseSupplierInvoicePdf } from "../services/pdf-prefill";
 import { recordAiUsageEvents } from "../services/ai-usage-events";
@@ -265,6 +268,16 @@ export async function recordSupplierInvoicePaymentAction(
     metadata: { amount: input.amount, paymentDate: input.paymentDate },
   });
   return result;
+}
+
+export async function voidSupplierInvoicePaymentAction(id: string) {
+  return await voidSupplierInvoicePayment(id);
+}
+
+export async function updateSupplierInvoicePaymentAction(
+  input: UpdateSupplierInvoicePaymentInput,
+) {
+  return await updateSupplierInvoicePayment(input);
 }
 
 export async function deleteSupplierInvoiceAction(id: string) {

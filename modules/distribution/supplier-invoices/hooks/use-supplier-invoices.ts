@@ -23,7 +23,9 @@ import {
   reverseSupplierInvoiceAction,
   saveConfirmedAiAliasAction,
   updateSupplierInvoiceAction,
+  updateSupplierInvoicePaymentAction,
   uploadSupplierInvoiceAttachmentAction,
+  voidSupplierInvoicePaymentAction,
 } from "@/modules/distribution/supplier-invoices/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
@@ -195,19 +197,61 @@ export function useReverseSupplierInvoice() {
   });
 }
 
+/**
+ * Invalidate every cache touched when a supplier-invoice payment row
+ * mutates. Mirrors the AR invalidatePaymentCaches helper — keeps the
+ * dashboard AP aging, supplier portfolio, and any future bill-payment
+ * listing in sync.
+ */
+function invalidateSupplierPaymentCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  supplierInvoiceId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.supplierInvoices.all });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.supplierInvoices.detail(supplierInvoiceId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
+  });
+  // Bill-payments listing + KPI strip (new in the AP parity pass).
+  queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+  // AP aging + dashboard summary depend on bill paid-totals.
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apAging });
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary });
+}
+
 export function useRecordSupplierInvoicePayment() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: recordSupplierInvoicePaymentAction,
     onSuccess: (_data, variables) => {
+      invalidateSupplierPaymentCaches(queryClient, variables.supplierInvoiceId);
+    },
+  });
+}
+
+export function useVoidSupplierInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: voidSupplierInvoicePaymentAction,
+    onSuccess: result => {
+      invalidateSupplierPaymentCaches(queryClient, result.supplierInvoiceId);
+      // The voided payment row's detail key should drop too — listings will
+      // refetch via the umbrella billPayments.all invalidation.
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+    },
+  });
+}
+
+export function useUpdateSupplierInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateSupplierInvoicePaymentAction,
+    onSuccess: (result, variables) => {
+      invalidateSupplierPaymentCaches(queryClient, result.supplierInvoiceId);
       queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.all,
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.detail(variables.supplierInvoiceId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
+        queryKey: queryKeys.billPayments.detail(variables.id),
       });
     },
   });

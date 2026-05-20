@@ -1582,6 +1582,189 @@ export async function recordSupplierInvoicePayment(
   return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
 }
 
+/**
+ * Hard-delete a supplier-invoice payment. The parent bill's paid total is
+ * derived (computePaymentSummary scans payments[] on read) so there's no
+ * denormalized counter to maintain — the next read recomputes from the
+ * remaining rows. Action is captured in the audit log; the void itself
+ * is permanent.
+ */
+export async function voidSupplierInvoicePayment(id: string) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const existing = await db.query.supplierInvoicePayments.findFirst({
+    where: and(
+      eq(supplierInvoicePayments.id, id),
+      eq(supplierInvoicePayments.tenantId, tenant.id),
+    ),
+    with: {
+      supplierInvoice: {
+        columns: { id: true, invoiceNumber: true },
+      },
+    },
+  });
+  if (!existing) {
+    throw new Error("Supplier payment not found.");
+  }
+
+  await db.transaction(async tx => {
+    await tx
+      .delete(supplierInvoicePayments)
+      .where(
+        and(
+          eq(supplierInvoicePayments.id, id),
+          eq(supplierInvoicePayments.tenantId, tenant.id),
+        ),
+      );
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "delete",
+      entityTable: "supplier_invoice_payments",
+      entityId: id,
+      entityLabel: existing.supplierInvoice?.invoiceNumber ?? null,
+      contextJson: JSON.stringify({
+        amount: existing.amount,
+        paymentMethod: existing.paymentMethod,
+        reference: existing.reference,
+        paymentDate: existing.paymentDate,
+      }),
+    });
+  });
+
+  return { supplierInvoiceId: existing.supplierInvoiceId };
+}
+
+export type UpdateSupplierInvoicePaymentInput = {
+  id: string;
+  paymentDate?: string;
+  amount?: string;
+  paymentMethod?: "cash" | "check" | "ach" | "zelle" | "credit_card";
+  reference?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Edit an AP payment in place. Only the supplied fields are written.
+ * Amount changes are server-side-bounded: newAmount + sum of *other*
+ * payments on the same bill must not exceed the bill's totalAmount.
+ */
+export async function updateSupplierInvoicePayment(
+  input: UpdateSupplierInvoicePaymentInput,
+) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const existing = await db.query.supplierInvoicePayments.findFirst({
+    where: and(
+      eq(supplierInvoicePayments.id, input.id),
+      eq(supplierInvoicePayments.tenantId, tenant.id),
+    ),
+    with: {
+      supplierInvoice: {
+        columns: { id: true, invoiceNumber: true, totalAmount: true },
+        with: { payments: { columns: { id: true, amount: true } } },
+      },
+    },
+  });
+  if (!existing) {
+    throw new Error("Supplier payment not found.");
+  }
+
+  const patch: Partial<typeof supplierInvoicePayments.$inferInsert> = {};
+
+  if (input.paymentDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) {
+      throw new Error("Payment date must be a valid YYYY-MM-DD value.");
+    }
+    patch.paymentDate = input.paymentDate;
+  }
+
+  if (input.amount !== undefined) {
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Payment amount must be greater than 0.");
+    }
+    const otherSum = (existing.supplierInvoice?.payments ?? [])
+      .filter(p => p.id !== input.id)
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const totalAmount = Number(existing.supplierInvoice?.totalAmount ?? 0);
+    if (otherSum + amount - totalAmount > 0.01) {
+      throw new Error(
+        "Amount would push paid total over the bill's grand total.",
+      );
+    }
+    patch.amount = amount.toFixed(2);
+  }
+
+  if (input.paymentMethod !== undefined) {
+    patch.paymentMethod = input.paymentMethod;
+  }
+
+  if (input.reference !== undefined) {
+    patch.reference = input.reference?.trim() || null;
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { supplierInvoiceId: existing.supplierInvoiceId };
+  }
+
+  await db.transaction(async tx => {
+    await tx
+      .update(supplierInvoicePayments)
+      .set(patch)
+      .where(
+        and(
+          eq(supplierInvoicePayments.id, input.id),
+          eq(supplierInvoicePayments.tenantId, tenant.id),
+        ),
+      );
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "update",
+      entityTable: "supplier_invoice_payments",
+      entityId: input.id,
+      entityLabel: existing.supplierInvoice?.invoiceNumber ?? null,
+      contextJson: JSON.stringify({
+        changes: Object.fromEntries(
+          (
+            [
+              "paymentDate",
+              "amount",
+              "paymentMethod",
+              "reference",
+              "notes",
+            ] as const
+          )
+            .filter(
+              key => input[key] !== undefined && input[key] !== existing[key],
+            )
+            .map(key => [key, { from: existing[key], to: input[key] }]),
+        ),
+      }),
+    });
+  });
+
+  return { supplierInvoiceId: existing.supplierInvoiceId };
+}
+
 // -------------------- Attachments --------------------
 
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25 MB

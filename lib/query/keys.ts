@@ -89,6 +89,17 @@ export const queryKeys = {
     list: (params: unknown) => ["payments", "list", params] as const,
     detail: (id: string) => ["payments", id] as const,
   },
+  /**
+   * AP-side (supplier-invoice) payments. Mirrors the AR `payments` keys.
+   * Surfaces at /bill-payments. Kept separate from `payments` because the
+   * underlying tables and query shapes are different — sharing the prefix
+   * would cause inadvertent cross-invalidation.
+   */
+  billPayments: {
+    all: ["bill-payments"] as const,
+    list: (params: unknown) => ["bill-payments", "list", params] as const,
+    detail: (id: string) => ["bill-payments", id] as const,
+  },
   expenses: {
     all: ["expenses"] as const,
     list: (params: unknown) => ["expenses", "list", params] as const,
