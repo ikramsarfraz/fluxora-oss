@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Receipt } from "lucide-react";
 
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
@@ -10,6 +10,7 @@ import { PageError } from "@/components/page-error";
 import { useSalesInvoice } from "../hooks/use-invoices";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
+import { InvoicePaymentEntryDialog } from "./invoice-payment-entry-dialog";
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
@@ -128,6 +129,7 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
   const { data: currentUser } = useCurrentPortalUser();
 
   const [profitExpanded, setProfitExpanded] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
 
   useSetBreadcrumbLabel(`/invoices/${invoiceId}`, invoice?.invoiceNumber);
 
@@ -168,6 +170,9 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
 
   const pdfUrl = `/api/invoices/${invoiceId}/pdf`;
   const balancePaid = balanceDue <= 0;
+  const canRecordPayment = can(currentUser?.role, "record_payment");
+  const showRecordPaymentCta =
+    !balancePaid && invoice.status !== "void" && canRecordPayment;
 
   function toggleProfit() {
     const next = !profitExpanded;
@@ -222,12 +227,30 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {showRecordPaymentCta ? (
+            <button
+              type="button"
+              onClick={() => setRecordPaymentOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 14px", background: C.ink, color: "var(--color-page)",
+                borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500,
+                border: "none", cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Receipt style={{ width: 14, height: 14 }} />
+              Record payment
+            </button>
+          ) : null}
           <a
             href={pdfUrl}
             download
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", background: C.ink, color: "var(--color-page)",
+              padding: "8px 14px",
+              background: showRecordPaymentCta ? C.surface : C.ink,
+              color: showRecordPaymentCta ? C.ink2 : "var(--color-page)",
+              border: showRecordPaymentCta ? `1px solid ${C.line}` : "none",
               borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500, textDecoration: "none",
             }}
           >
@@ -532,6 +555,19 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
           ) : null}
         </div>
       </div>
+
+      <InvoicePaymentEntryDialog
+        open={recordPaymentOpen}
+        onOpenChange={setRecordPaymentOpen}
+        invoice={{
+          id: invoice.id,
+          salesOrderId: invoice.salesOrderId,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate ?? null,
+          status: invoice.status,
+          balanceDue: invoice.balanceDue ?? "0",
+        }}
+      />
     </div>
   );
 }
