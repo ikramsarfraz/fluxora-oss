@@ -15,7 +15,7 @@ export function ReelSurface() {
   const treatment = backingTreatmentFor(state.transition.kind);
 
   return (
-    <div className="relative flex h-[820px] w-full overflow-hidden">
+    <div className="relative flex h-full w-full overflow-hidden">
       {/* Surface content — fades/blurs underneath active transitions. */}
       <div
         className={cn(
