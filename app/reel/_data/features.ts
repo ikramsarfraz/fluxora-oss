@@ -437,6 +437,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "success",
     icon: Boxes,
+    liveDemoHref: "/reel/inventory-lots",
   },
   {
     slug: "price-chart",
