@@ -501,6 +501,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "success",
     icon: FileText,
+    liveDemoHref: "/reel/invoice-pdf",
   },
   {
     slug: "payments",
