@@ -21,14 +21,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Production server (after build) | `pnpm start` |
 | Lint | `pnpm lint` |
 | Unit tests (all) | `pnpm test:unit` |
-| Single unit test | `node --import tsx --test path/to/file.test.ts` |
+| Single unit test | `node --conditions=react-server --import tsx --test path/to/file.test.ts` |
 | Generate Drizzle migration | `pnpm db:generate` |
 | Apply migrations | `pnpm db:migrate` |
 | Reset DB (destructive) | `pnpm db:reset` |
 | Seed DB | `pnpm db:seed` |
 | Enforce import boundaries | `pnpm check:boundaries` |
 
-Tests use the **Node built-in test runner** with `tsx` — there is no Vitest/Jest. The list of test files is hard-coded in `package.json` under `test:unit`; **adding a new `*.test.ts` file requires appending it to that script** or it will not run in CI.
+Tests use the **Node built-in test runner** with `tsx` — there is no Vitest/Jest. The list of test files is hard-coded in `package.json` under `test:unit`; **adding a new `*.test.ts` file requires appending it to that script** or it will not run in CI. The `--conditions=react-server` flag is required for any test that pulls in `server-only` or React Server Component code paths — leave it on by default to avoid resolution surprises.
 
 Local dev requires `ROOT_DOMAIN` set (e.g. `localtest.me`) so the proxy can resolve tenant subdomains — see [docs/local-development.md](docs/local-development.md).
 
@@ -68,6 +68,19 @@ Client components (`"use client"` files and everything in `components/`) **must 
 
 Full rule: [.cursor/rules/client-imports.mdc](.cursor/rules/client-imports.mdc).
 
+### `app/` route groups
+
+The App Router is split by host audience, not just navigation grouping:
+
+- `app/(app)/` — authenticated tenant app shell (sidebar + breadcrumb); most distribution routes live here.
+- `app/(auth)/` — unauthenticated pages (sign-in, sign-up, invite, password reset) on the root host.
+- `app/(marketing)/`, `app/pricing/`, `app/features/`, `app/changelog/`, `app/reel/` — public marketing on the root host.
+- `app/(onboarding)/`, `app/onboarding/`, `app/select-destination/` — post-signup tenant bootstrap.
+- `app/admin/` — platform-admin routes; the `admin.` host restricts everything to this segment via `proxy.ts`.
+- `app/api/` — Next.js route handlers (Better Auth, ERP APIs, Stripe + Plaid webhooks).
+
+When adding a tenant-app page, place it under `app/(app)/<feature>/` and gate it with the owning module's `FEATURE` constant. Route group boundaries (`(group)`) do not affect URLs but do select the layout that wraps the page.
+
 ### Routing and host resolution
 
 This codebase uses **`proxy.ts` at the repo root** (Next.js 16's renamed middleware) — not `middleware.ts`. It handles:
@@ -89,7 +102,7 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 
 ## Conventions worth knowing
 
-- **Compat re-exports** in `lib/` and (formerly) `actions/`, `services/` exist during the in-flight migration to modules. New code imports from the module directly; if you touch a compat shim, prefer migrating callers over expanding the shim.
+- **Compat re-exports** in `lib/` exist during the in-flight migration to modules — root-level `actions/` and `services/` have been removed entirely (server logic now lives inside the owning `modules/<domain>/services/` and `modules/<domain>/actions/`). New code imports from the module directly; if you touch a compat shim in `lib/`, prefer migrating callers over expanding the shim.
 - **`types.ts` per module** re-exports the practical domain types (inferred from services / Zod / Drizzle `$inferSelect`) rather than redefining them. The service/schema is the source of truth.
 - **`@react-pdf/renderer` and `pdf-parse`** are marked `serverExternalPackages` in [next.config.ts](next.config.ts) — needed because the RSC bundler otherwise resolves `react` to the server build and breaks PDF rendering. Don't remove without testing PDF output.
 - **Sentry** is wired via `withSentryConfig` in `next.config.ts` plus `instrumentation*.ts` and `sentry.*.config.ts`. Source map upload is gated on `SENTRY_AUTH_TOKEN`.
