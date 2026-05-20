@@ -369,24 +369,27 @@ export function AddCustomerForm(props?: {
                   />
 
                   <Controller
-                    name="taxId"
+                    name="fuelSurchargeAmount"
                     control={form.control}
                     render={({ field, fieldState }) => (
                       <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="form-add-customer-tax-id">
-                          Tax ID (EIN)
+                        <FieldLabel htmlFor="form-add-customer-fuel">
+                          Fuel surcharge ($)
                         </FieldLabel>
                         <Input
                           {...field}
                           value={field.value ?? ""}
-                          id="form-add-customer-tax-id"
+                          id="form-add-customer-fuel"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
                           aria-invalid={fieldState.invalid}
-                          placeholder="12-3456789"
-                          inputMode="numeric"
-                          maxLength={10}
+                          placeholder="0.00"
                         />
                         <FieldDescription>
-                          9-digit US EIN. Optional.
+                          Flat add-on per order, when the order has &ldquo;Add
+                          fuel surcharge&rdquo; ticked.
                         </FieldDescription>
                         {fieldState.invalid && (
                           <FieldError errors={[fieldState.error]} />
@@ -399,30 +402,25 @@ export function AddCustomerForm(props?: {
                 <NetTermsLegend />
 
                 <Controller
-                  name="fuelSurchargeAmount"
+                  name="taxId"
                   control={form.control}
                   render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="@md/field-group:max-w-xs"
-                    >
-                      <FieldLabel htmlFor="form-add-customer-fuel">
-                        Fuel surcharge ($)
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-customer-tax-id">
+                        Tax ID (EIN)
                       </FieldLabel>
                       <Input
                         {...field}
                         value={field.value ?? ""}
-                        id="form-add-customer-fuel"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
+                        id="form-add-customer-tax-id"
                         aria-invalid={fieldState.invalid}
-                        placeholder="0.00"
+                        placeholder="12-3456789"
+                        inputMode="numeric"
+                        maxLength={10}
                       />
                       <FieldDescription>
-                        Flat add-on per order, when the order has &ldquo;Add fuel
-                        surcharge&rdquo; ticked.
+                        9-digit US EIN. Optional — required if you need to
+                        include it on B2B invoices.
                       </FieldDescription>
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
