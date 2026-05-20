@@ -225,6 +225,14 @@ export async function getPaymentById(id: string) {
       salesInvoice: {
         with: {
           customer: true,
+          // All payment events on this invoice — the detail page shows the
+          // current event prominently and the rest as "other payments on
+          // this invoice" so partial-payment context is visible without a
+          // separate roundtrip.
+          payments: {
+            with: { createdBy: true },
+            orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+          },
         },
       },
       createdBy: true,
