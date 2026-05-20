@@ -581,39 +581,82 @@ export type InboxBellSummary = {
   items: InboxBellItem[];
 };
 
-function relatedEntityHref(entity: InboxItem["relatedEntity"]): string {
-  switch (entity.type) {
-    case "bill":
-      return `/supplier-invoices/${entity.id}`;
-    case "lot":
-      // After the catalog redesign, lots live under inventory.
-      return `/inventory/lots/${entity.id}`;
-    case "memo":
-      return `/inbox`;
-    case "sku":
-      return `/products/${entity.id}`;
-    default:
-      return "/inbox";
-  }
-}
-
+// Slim path: just the two cheap, time-sensitive sources (drafts + urgent lots).
+// Price spikes are excluded because the only way to detect one is the same
+// 200-row line scan + per-product math the full inbox does, which we want to
+// avoid on every header render. They still surface on /inbox.
 export async function getInboxBellSummary(): Promise<InboxBellSummary> {
-  const data = await getInboxData();
-  const all = [...data.blockingItems, ...data.actionItems];
-  const items = all
-    .slice()
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 5)
-    .map<InboxBellItem>(item => ({
-      id: item.id,
-      title: item.title,
-      meta: item.meta,
-      href: relatedEntityHref(item.relatedEntity),
-      createdAt: item.createdAt,
-      urgency: item.urgency,
-    }));
+  const tenant = await getCurrentTenant();
+  const tenantId = tenant.id;
+  const now = new Date();
+  const in2Days = daysFromNow(2);
+
+  const [draftBills, urgentLots] = await Promise.all([
+    db
+      .select({
+        id: supplierInvoices.id,
+        invoiceNumber: supplierInvoices.referenceNumber,
+        totalAmount: supplierInvoices.totalAmount,
+        createdAt: supplierInvoices.createdAt,
+        supplierName: suppliers.name,
+      })
+      .from(supplierInvoices)
+      .leftJoin(suppliers, eq(supplierInvoices.supplierId, suppliers.id))
+      .where(and(
+        eq(supplierInvoices.tenantId, tenantId),
+        eq(supplierInvoices.status, "draft"),
+      ))
+      .orderBy(desc(supplierInvoices.createdAt))
+      .limit(10),
+    db
+      .select({
+        lotId: lots.id,
+        lotNumber: lots.lotNumber,
+        expirationDate: lots.expirationDate,
+        productName: products.name,
+      })
+      .from(lots)
+      .innerJoin(inventoryItems, and(
+        eq(inventoryItems.lotId, lots.id),
+        eq(inventoryItems.status, "in_stock"),
+      ))
+      .innerJoin(products, eq(inventoryItems.productId, products.id))
+      .where(and(
+        eq(lots.tenantId, tenantId),
+        lte(lots.expirationDate, in2Days.toISOString().split("T")[0]),
+        gte(lots.expirationDate, now.toISOString().split("T")[0]),
+      ))
+      .groupBy(lots.id, lots.lotNumber, lots.expirationDate, products.name)
+      .orderBy(lots.expirationDate)
+      .limit(5),
+  ]);
+
+  // Urgent lots lead — they're the most time-bound source. Then newest drafts
+  // fill the rest of the 5-slot list.
+  const lotItems: InboxBellItem[] = urgentLots.map(lot => {
+    const hours = hoursUntil(lot.expirationDate);
+    return {
+      id: `expiring_lot_${lot.lotId}`,
+      title: `${lot.productName} lot expires ${hours < 24 ? "today" : "tomorrow"}`,
+      meta: `Lot ${lot.lotNumber} · ${hours}h left`,
+      href: `/inventory/lots/${lot.lotId}`,
+      createdAt: now,
+      urgency: hours < 24 ? "blocking_others" : "today",
+    };
+  });
+
+  const draftItems: InboxBellItem[] = draftBills.map(bill => ({
+    id: `new_bill_${bill.id}`,
+    title: `New bill from ${bill.supplierName ?? "supplier"}`,
+    meta: `${bill.invoiceNumber} · $${parseFloat(bill.totalAmount).toFixed(2)}`,
+    href: `/supplier-invoices/${bill.id}`,
+    createdAt: new Date(bill.createdAt),
+    urgency: "today",
+  }));
+
+  const items = [...lotItems, ...draftItems].slice(0, 5);
   return {
-    unreadCount: all.length,
+    unreadCount: draftBills.length + urgentLots.length,
     items,
   };
 }
