@@ -82,23 +82,36 @@ function Pill({ color, children }: { color: "blue" | "green" | "amber" | "gray" 
   );
 }
 
-// ── Reliability donut ────────────────────────────────────────────────────────
-function ReliabilityDot({ score }: { score: number }) {
+// ── Engagement donut ────────────────────────────────────────────────────────
+// Shows a 0-100 "how active is this relationship" score (recency + invoice
+// volume). NOT a reliability/quality score — we don't track delivery
+// timeliness, weight accuracy, or defects yet. See GH issue #157.
+function EngagementDot({ score, label = true }: { score: number; label?: boolean }) {
   const pct = Math.max(0, Math.min(100, score));
   const color = pct >= 85 ? c.green : pct >= 70 ? c.amber : c.red;
   const circumference = 2 * Math.PI * 16;
   const dash = (pct / 100) * circumference;
   return (
-    <div style={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
-      <svg width={40} height={40} viewBox="0 0 40 40" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={20} cy={20} r={16} fill="none" stroke="#e5e7eb" strokeWidth={4} />
-        <circle cx={20} cy={20} r={16} fill="none" stroke={color} strokeWidth={4}
-          strokeDasharray={`${dash} ${circumference - dash}`} strokeLinecap="round" />
-      </svg>
-      <span style={{
-        position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 11, fontWeight: 700, color: c.text,
-      }}>{score}</span>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0 }}>
+      <div style={{ position: "relative", width: 40, height: 40 }}>
+        <svg width={40} height={40} viewBox="0 0 40 40" style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={20} cy={20} r={16} fill="none" stroke="#e5e7eb" strokeWidth={4} />
+          <circle cx={20} cy={20} r={16} fill="none" stroke={color} strokeWidth={4}
+            strokeDasharray={`${dash} ${circumference - dash}`} strokeLinecap="round" />
+        </svg>
+        <span style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 11, fontWeight: 700, color: c.text,
+        }}>{score}</span>
+      </div>
+      {label ? (
+        <span
+          title="Combines recency of the last invoice with invoice volume. Not a quality/reliability score."
+          style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: c.text3 }}
+        >
+          Engagement
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -285,17 +298,6 @@ function SupplierScorecard({
   const cardColors = ["var(--color-forest-mid)", "#7c3aed", "#0d9488", "#d97706", "#dc2626"];
   const colorIdx = supplier.name.charCodeAt(0) % cardColors.length;
   const badgeColor = cardColors[colorIdx]!;
-  const priceCompPct = aggregate.skusCarried > 0 && totalSpend > 0
-    ? ((aggregate.avgPrice - 1) * 100)
-    : null;
-
-  const bars = [
-    { label: "Price stability", value: supplier.reliability },
-    { label: "On-time", value: Math.min(100, supplier.reliability + 8) },
-    { label: "Accuracy", value: Math.min(100, supplier.reliability + 2) },
-    { label: "Weight accuracy", value: Math.max(60, supplier.reliability - 8) },
-  ];
-
   return (
     <div style={{
       background: c.card,
@@ -319,7 +321,7 @@ function SupplierScorecard({
             </div>
           </div>
         </div>
-        <ReliabilityDot score={supplier.reliability} />
+        <EngagementDot score={supplier.engagement} />
       </div>
 
       <div style={{ padding: "14px 16px" }}>
@@ -343,17 +345,6 @@ function SupplierScorecard({
           </div>
         </div>
 
-        <div style={{ marginBottom: 14 }}>
-          {bars.map(bar => (
-            <div key={bar.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, fontSize: 11 }}>
-              <span style={{ width: 92, color: c.text2 }}>{bar.label}</span>
-              <div style={{ flex: 1, height: 4, background: "var(--color-divider)", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ height: "100%", background: bar.value >= 80 ? c.green : c.amber, borderRadius: 2, width: `${bar.value}%` }} />
-              </div>
-              <span style={{ width: 28, textAlign: "right", fontFamily: c.mono, fontWeight: 600, fontSize: 11 }}>{bar.value}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div style={{ padding: "11px 16px", background: "var(--color-page)", borderTop: `1px solid ${c.border}`, display: "flex", gap: 6 }}>
@@ -662,7 +653,7 @@ export function SupplierComparisonPage({
                                 </div>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                                <ReliabilityDot score={supplier.reliability} />
+                                <EngagementDot score={supplier.engagement} label={false} />
                                 <div>
                                   <div style={{ fontSize: 10.5, color: c.text2 }}>
                                     <span style={{ color: c.text, fontFamily: c.mono, fontWeight: 600 }}>${(supplier.totalSpend / 1000).toFixed(0)}K</span> 12mo
@@ -793,7 +784,7 @@ export function SupplierComparisonPage({
           <div style={{ marginBottom: 32 }}>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
               <h2 style={{ fontSize: 17, fontWeight: 600, margin: 0, letterSpacing: "-0.01em" }}>Suppliers at a glance</h2>
-              <span style={{ fontSize: 13, color: c.text2 }}>Reliability stabilizes after 8+ invoices</span>
+              <span style={{ fontSize: 13, color: c.text2 }}>Engagement reflects invoice cadence — not delivery quality</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, suppliers.length)}, 1fr)`, gap: 14 }}>
               {suppliers.map((supplier, idx) => (

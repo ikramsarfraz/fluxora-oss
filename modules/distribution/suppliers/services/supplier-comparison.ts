@@ -14,7 +14,14 @@ export type SupplierInComparison = {
   totalSpend: number;
   lastInvoiceDate: string | null;
   daysSinceLast: number | null;
-  reliability: number; // 0-100
+  /**
+   * Engagement score 0–100 — a coarse "is this relationship active" signal
+   * derived from recency of the last invoice and total invoice volume. NOT
+   * a reliability metric: we don't track on-time delivery, weight variance,
+   * or quality defects yet. See GH issue #157 for the planned reliability
+   * scoring work.
+   */
+  engagement: number;
   skuCoverage: number; // # products in category
 };
 
@@ -88,7 +95,12 @@ function twelveMonthsAgo() {
   return d.toISOString().split("T")[0]!;
 }
 
-function computeReliability(
+/**
+ * Coarse engagement score combining recency of the last invoice (40%) and
+ * total invoice volume capped at 20 invoices (60%). Useful for spotting
+ * dormant suppliers — NOT a reliability/quality metric.
+ */
+function computeEngagement(
   invs: { totalAmount: string; invoiceDate: string }[],
   daysSinceLast: number | null,
 ): number {
@@ -247,7 +259,7 @@ export async function getSupplierComparisonData(
         id: supplier.id, name: supplier.name,
         invoiceCount: invs.length, totalSpend,
         lastInvoiceDate: lastDate, daysSinceLast,
-        reliability: computeReliability(invs, daysSinceLast),
+        engagement: computeEngagement(invs, daysSinceLast),
         skuCoverage,
       };
     })

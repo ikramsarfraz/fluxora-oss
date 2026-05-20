@@ -52,7 +52,6 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-dialog";
-import { SupplierReliabilityEmptyState } from "@/modules/distribution/components/empty-states";
 
 // ── Status / helpers ──────────────────────────────────────────────────────────
 
@@ -471,21 +470,6 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       />
 
       <SupplierContactCard supplier={supplier} />
-
-      {metrics.totalInvoicesCount < 5 && (
-        <Card className="overflow-hidden rounded-xl p-6 shadow-none">
-          <div className="mb-3">
-            <h3 className="text-sm font-semibold text-ink">Reliability scoring</h3>
-            <p className="mt-0.5 text-xs text-subtle">
-              Unlocks after 5 completed invoices with this supplier.
-            </p>
-          </div>
-          <SupplierReliabilityEmptyState
-            invoiceCount={metrics.totalInvoicesCount}
-            supplierName={supplier.name}
-          />
-        </Card>
-      )}
 
       {/* Tab bar */}
       <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">

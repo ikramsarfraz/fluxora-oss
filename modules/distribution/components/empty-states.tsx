@@ -144,30 +144,6 @@ export function MarkdownColdStartBanner({
   );
 }
 
-// ── Supplier reliability: fewer than 5 invoices ───────────────────────────
-
-export function SupplierReliabilityEmptyState({
-  invoiceCount,
-  supplierName,
-}: {
-  invoiceCount: number;
-  supplierName: string;
-}) {
-  return (
-    <EmptyState
-      variant="neutral"
-      icon="🔄"
-      title={`Building reliability score for ${supplierName}`}
-      body="Reliability scores require at least 5 completed invoices — enough to distinguish a bad shipment from a bad supplier. Keep recording invoices and the score will appear automatically."
-      unlockCondition={{
-        current: invoiceCount,
-        needed: 5,
-        label: "invoices needed for reliability score",
-      }}
-    />
-  );
-}
-
 // ── Price alerts: fewer than 30 days of history ───────────────────────────
 
 export function PriceAlertsEmptyState({ dayCount }: { dayCount: number }) {
