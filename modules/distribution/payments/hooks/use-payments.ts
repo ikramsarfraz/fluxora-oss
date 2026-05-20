@@ -6,10 +6,14 @@ import {
   getPaymentByIdAction,
   getPaymentsAction,
   getPaymentsPageAction,
+  getPaymentsSummaryAction,
 } from "@/modules/distribution/payments/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import type { PaymentListParams } from "@/modules/distribution/payments/services/payments";
+import type {
+  PaymentFilters,
+  PaymentListParams,
+} from "@/modules/distribution/payments/services/payments";
 
 export function usePayments() {
   return useQuery({
@@ -33,6 +37,15 @@ export function usePayment(id: string) {
     queryKey: queryKeys.payments.detail(id),
     queryFn: () => getPaymentByIdAction(id),
     enabled: isUuid(id),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function usePaymentsSummary(filters: PaymentFilters, search: string) {
+  return useQuery({
+    queryKey: [...queryKeys.payments.all, "summary", filters, search] as const,
+    queryFn: () => getPaymentsSummaryAction(filters, search),
+    placeholderData: previousData => previousData,
     staleTime: 1000 * 60,
   });
 }

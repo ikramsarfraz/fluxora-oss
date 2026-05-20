@@ -4,6 +4,8 @@ import {
   getPaymentById,
   getPayments,
   getPaymentsPage,
+  getPaymentsSummary,
+  type PaymentFilters,
 } from "../services/payments";
 
 export async function getPaymentsAction() {
@@ -18,4 +20,11 @@ export async function getPaymentsPageAction(
 
 export async function getPaymentByIdAction(id: string) {
   return await getPaymentById(id);
+}
+
+export async function getPaymentsSummaryAction(
+  filters: PaymentFilters = {},
+  search: string = "",
+) {
+  return await getPaymentsSummary(filters, search);
 }
