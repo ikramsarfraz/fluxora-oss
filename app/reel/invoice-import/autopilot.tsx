@@ -269,15 +269,19 @@ async function runScript(c: Controls) {
       dialog: { kind: "create-supplier", prefillName: "Northwind Trading Co." },
     });
     c.setCursor(null);
-    await c.sleep(1400);
+    // Let the user read the modal before the cursor moves.
+    await c.sleep(2000);
 
     c.setCursor({ selector: "[data-reel='dialog-create-supplier-submit']" });
-    await c.sleep(1000);
+    await c.sleep(1200);
     c.flash();
-    await c.sleep(220);
-    // The cursor flash is visual-only — the dialog's real onClick never fires
-    // in autopilot. Drive the same state changes ourselves so the modal
-    // actually closes before the next scene starts.
+    // Flip the dialog into its "Creating…" pending state so the user sees
+    // the click register before the modal closes — matches production's
+    // FormActionFooter UX. The cursor flash is visual-only; this is what
+    // gives the click *consequence*.
+    c.dispatch({ type: "SET_DIALOG_PENDING", pending: true });
+    await c.sleep(800);
+
     c.dispatch({
       type: "PICK_SUPPLIER",
       supplierId: "sup_northwind",
@@ -358,14 +362,15 @@ async function runScript(c: Controls) {
       },
     });
     c.setCursor(null);
-    await c.sleep(1700);
+    // Product dialog has more fields than supplier — give it longer to read.
+    await c.sleep(2400);
 
     c.setCursor({ selector: "[data-reel='dialog-create-product-submit']" });
-    await c.sleep(1000);
+    await c.sleep(1200);
     c.flash();
-    await c.sleep(220);
-    // Same as supplier — close the dialog explicitly so the next scene sees
-    // it gone.
+    c.dispatch({ type: "SET_DIALOG_PENDING", pending: true });
+    await c.sleep(800);
+
     c.dispatch({
       type: "CREATE_PRODUCT_FOR_LINE",
       lineId: 5,

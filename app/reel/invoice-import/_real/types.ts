@@ -216,6 +216,10 @@ export type ReelState = {
   // Review screen extras
   headerCollapsed: boolean;
   dialog: DialogKind;
+  // When true, the open dialog shows its "Creating…" pending state. The
+  // autopilot flips this between the cursor click and the actual close so
+  // the user visibly sees the dialog react before disappearing.
+  dialogPending: boolean;
   // Reel-only chrome — splash card on open, chapter pill at phase changes,
   // outro at the end. Drawn over the surface, doesn't otherwise affect state.
   transition: Transition;

@@ -44,17 +44,21 @@ export function ReelDialogs() {
 
 // ---------- Create supplier dialog ----------
 function CreateSupplierDialog({ prefillName }: { prefillName: string }) {
-  const { dispatch } = useReel();
+  const { state, dispatch } = useReel();
   const [name, setName] = useState(prefillName);
   const [netDays, setNetDays] = useState("30");
-  const [pending, setPending] = useState(false);
+  // For manual clicks the dialog still owns local pending; for autopilot
+  // clicks the reel-state flag drives the pending UI so the user sees
+  // "Creating…" between the cursor flash and the close.
+  const [localPending, setLocalPending] = useState(false);
+  const pending = localPending || state.dialogPending;
 
   useEffect(() => {
     setName(prefillName);
   }, [prefillName]);
 
   function submit() {
-    setPending(true);
+    setLocalPending(true);
     window.setTimeout(() => {
       dispatch({
         type: "PICK_SUPPLIER",
@@ -62,7 +66,7 @@ function CreateSupplierDialog({ prefillName }: { prefillName: string }) {
         name: name.trim() || "Northwind Trading Co.",
       });
       dispatch({ type: "CLOSE_DIALOG" });
-      setPending(false);
+      setLocalPending(false);
     }, 700);
   }
 
@@ -150,20 +154,21 @@ function CreateProductDialog({
   lineId: number;
   prefillName: string;
 }) {
-  const { dispatch } = useReel();
+  const { state, dispatch } = useReel();
   const [name, setName] = useState(prefillName);
   const [categories, setCategories] = useState<string[]>(["Drive components"]);
   const [sellingMethod, setSellingMethod] = useState<"weight" | "unit">("unit");
   const [sellByLb, setSellByLb] = useState(false);
   const [sellByCase, setSellByCase] = useState(false);
-  const [pending, setPending] = useState(false);
+  const [localPending, setLocalPending] = useState(false);
+  const pending = localPending || state.dialogPending;
 
   useEffect(() => {
     setName(prefillName);
   }, [prefillName]);
 
   function submit() {
-    setPending(true);
+    setLocalPending(true);
     window.setTimeout(() => {
       dispatch({
         type: "CREATE_PRODUCT_FOR_LINE",
@@ -171,7 +176,7 @@ function CreateProductDialog({
         productId: `prod_new_${lineId}`,
       });
       dispatch({ type: "CLOSE_DIALOG" });
-      setPending(false);
+      setLocalPending(false);
     }, 700);
   }
 

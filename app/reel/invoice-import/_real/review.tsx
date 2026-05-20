@@ -99,7 +99,8 @@ export function ReviewScreen() {
       <QueueStrip />
       <ReviewQueueHeader />
 
-      {/* Two-pane row */}
+      {/* Two-pane row — fills the space between the queue header and the
+          bottom bar. */}
       <div className="flex min-h-0 min-w-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden border-r border-border-default bg-surface/30">
           <PdfPane />
@@ -133,23 +134,26 @@ export function ReviewScreen() {
               )}
             </div>
           </div>
-
-          {/* Bottom bar — production splits PdfHint + ReviewFooterStrip
-              50/50 below the panes. We mirror that with grid-cols-2 on the
-              right side of the form pane. (Production pins to viewport with
-              fixed; we don't need to because the reel surface itself is
-              already a bounded flex container.) */}
-          <div className="grid shrink-0 grid-cols-2 border-t border-border-default bg-card">
-            <PdfHint />
-            <ReviewFooterStrip
-              totalLineCount={footerTotals.totalLineCount}
-              totalCases={footerTotals.totalCases}
-              totalWeightLbs={footerTotals.totalWeightLbs}
-              chargesTotal={footerTotals.chargesTotal}
-              billTotal={review.declaredTotal}
-            />
-          </div>
         </div>
+      </div>
+
+      {/* Bottom totals bar — production pins this fixed at the viewport
+          bottom and splits the panes 50/50 (PdfHint under the PDF, totals
+          under the form). We mirror the 50/50 grid as a sibling of the
+          two-pane row so it spans the full review width edge-to-edge,
+          matching the production look without the fixed-positioning
+          complexity (the reel surface is already a bounded container). */}
+      <div className="grid shrink-0 grid-cols-2 border-t border-border-default bg-card">
+        <div className="border-r border-border-default">
+          <PdfHint />
+        </div>
+        <ReviewFooterStrip
+          totalLineCount={footerTotals.totalLineCount}
+          totalCases={footerTotals.totalCases}
+          totalWeightLbs={footerTotals.totalWeightLbs}
+          chargesTotal={footerTotals.chargesTotal}
+          billTotal={review.declaredTotal}
+        />
       </div>
     </div>
   );

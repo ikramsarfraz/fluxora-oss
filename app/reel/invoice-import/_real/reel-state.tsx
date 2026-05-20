@@ -35,6 +35,7 @@ type Action =
   | { type: "SET_ACTIVE_LINE"; lineId: number | null }
   | { type: "SET_HEADER_COLLAPSED"; collapsed: boolean }
   | { type: "OPEN_DIALOG"; dialog: DialogKind }
+  | { type: "SET_DIALOG_PENDING"; pending: boolean }
   | { type: "CLOSE_DIALOG" }
   | { type: "SET_TRANSITION"; transition: Transition }
   | { type: "PICK_SUPPLIER"; supplierId: string; name: string }
@@ -70,9 +71,11 @@ function reducer(state: ReelState, action: Action): ReelState {
     case "SET_HEADER_COLLAPSED":
       return { ...state, headerCollapsed: action.collapsed };
     case "OPEN_DIALOG":
-      return { ...state, dialog: action.dialog };
+      return { ...state, dialog: action.dialog, dialogPending: false };
+    case "SET_DIALOG_PENDING":
+      return { ...state, dialogPending: action.pending };
     case "CLOSE_DIALOG":
-      return { ...state, dialog: { kind: "none" } };
+      return { ...state, dialog: { kind: "none" }, dialogPending: false };
     case "SET_TRANSITION":
       return { ...state, transition: action.transition };
     case "PICK_SUPPLIER":

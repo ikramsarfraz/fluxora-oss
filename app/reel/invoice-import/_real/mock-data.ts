@@ -404,6 +404,7 @@ export function initialReelState(): ReelState {
     scanningElapsedSeconds: 0,
     headerCollapsed: false,
     dialog: { kind: "none" },
+    dialogPending: false,
     transition: { kind: "splash" },
   };
 }
