@@ -3,16 +3,28 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import {
+  AlertTriangle,
   Boxes,
+  Building2,
+  Calculator,
+  ClipboardList,
+  FileCheck2,
+  FileSpreadsheet,
   FileText,
   Inbox,
   Landmark,
   Mail,
+  Notebook,
   Pause,
   Play,
+  Printer,
   Receipt,
+  Send,
   ShoppingCart,
   Sparkles,
+  StickyNote,
+  Tag,
+  Truck,
   Wallet,
 } from "lucide-react";
 
@@ -58,141 +70,97 @@ const AFTER_MS = 4500;
 const INTRO_MS = 3500;
 const OUTRO_MS = 6000;
 
-// Each compare step provides the data for the Before card and the After
-// card. They render back-to-back in the SEQUENCE below.
+// Each compare beat now leads with VISUALS, not prose. The Before card
+// shows a row of tool tiles (what's on the operator's desk right now);
+// the After card shows ONE Fluxora panel with a checklist of actions. A
+// huge time stat owns the right side of both. One short voiceover line
+// carries the brand voice.
 const COMPARES: CompareStep[] = [
   {
     step: "Step 1 of 5",
-    topic: "A supplier PDF lands in your inbox",
+    topic: "A supplier PDF lands at 8:42",
     before: {
-      title: "Open the PDF. Retype every line.",
-      detail:
-        "Bay Area Seafood emailed an invoice at 8:42. Yesterday's stock is supposedly already on the shelf, and today's bills need to match.",
-      tag: "Across 3 systems · 9 lines",
-      events: [
-        { at: "8:42", what: "Email lands. Open the PDF.", icon: Inbox },
-        { at: "8:46", what: "Open AP system. Find Bay Area Seafood vendor." },
-        {
-          at: "8:51",
-          what: "Retype 9 lines, one at a time. Aliases out of memory.",
-        },
-        {
-          at: "9:02",
-          what: "Manually receive each line into inventory. Forget two.",
-        },
-        { at: "9:07", what: "Post the bill. Realise lot dates are missing." },
+      tools: [
+        { icon: Inbox, label: "Inbox", badge: "8:42" },
+        { icon: FileText, label: "PDF reader", badge: "8:44" },
+        { icon: FileSpreadsheet, label: "AP sheet", badge: "8:51" },
+        { icon: Calculator, label: "Calculator", badge: "8:58" },
+        { icon: ClipboardList, label: "Receiving log", badge: "9:02" },
       ],
-      statLabel: "Manual time",
-      statValue: "25 min",
+      voiceover:
+        "Five windows open. You're 9 lines into a 12-line invoice. The salmon SKU is named three different things across them.",
+      stat: { value: "25 min", label: "Manual time" },
+      statHint: "+ 14 alt-tabs",
     },
     after: {
-      title: "Drop the PDF. Walk away.",
-      detail:
-        "Same email, dragged into Fluxora's import surface. AI reads every line, matches to the catalog, posts the bill, and receives the lots — all in one beat.",
-      tag: "1 click · 94% match rate",
-      events: [
-        { at: "8:42:00", what: "PDF dropped onto the Bills inbox." },
-        {
-          at: "8:42:01",
-          what: "AI extracts 9 lines · 3 lots auto-created.",
-          icon: Sparkles,
-        },
-        { at: "8:42:03", what: "Aliases learned from prior receipts apply." },
-        {
-          at: "8:42:04",
-          what: "Posted to AP + received into inventory.",
-        },
+      actions: [
+        { icon: Sparkles, label: "AI extracts 9 lines", meta: "94% match" },
+        { icon: Boxes, label: "3 lots auto-created" },
+        { icon: Tag, label: "Aliases persisted forever" },
+        { icon: FileCheck2, label: "Posted to AP + received" },
       ],
-      statLabel: "Fluxora time",
-      statValue: "4 sec",
-      callout: "9 lines posted. 3 lots received. Aliases persisted.",
+      voiceover:
+        "Drop the PDF. Walk away. By the time the kettle boils, the bill is posted and the lots are on the shelf.",
+      stat: { value: "4 sec", label: "Fluxora time" },
+      statHint: "1 click",
+      callout: "9 lines posted · 3 lots received · aliases persisted.",
     },
   },
   {
     step: "Step 2 of 5",
     topic: "Anchor Tavern phones in their order",
     before: {
-      title: "Look up pricing. Pick lots by sticky note.",
-      detail:
-        "Mateo from Anchor wants the usual — salmon, wagyu, heirlooms. Their Tier 2 prices live in a separate spreadsheet, and the warehouse FIFO is a Post-it.",
-      tag: "FIFO on a wall · margin unknown",
-      events: [
-        { at: "9:08", what: "Open the customer pricing spreadsheet." },
-        { at: "9:10", what: "Find Anchor's Tier 2 line for each product." },
-        {
-          at: "9:14",
-          what: "Walk to the warehouse to read the FIFO sticky.",
-        },
-        {
-          at: "9:18",
-          what: "Write the order out by hand on a paper pad.",
-        },
-        {
-          at: "9:20",
-          what: "Calculate margin in your head. Skip half of it.",
-        },
+      tools: [
+        { icon: FileSpreadsheet, label: "Tier prices", badge: "9:08" },
+        { icon: StickyNote, label: "FIFO Post-it", badge: "9:14" },
+        { icon: Notebook, label: "Paper pad", badge: "9:18" },
+        { icon: Calculator, label: "Margin math", badge: "9:20" },
       ],
-      statLabel: "Manual time",
-      statValue: "12 min",
+      voiceover:
+        "Tier prices on one sheet. Lots on the wall. Margin in your head. You'll find out next month if any of it was right.",
+      stat: { value: "12 min", label: "Manual time" },
+      statHint: "+ 1 walk to the warehouse",
     },
     after: {
-      title: "Tier 2 pre-fills. FIFO pulls live.",
-      detail:
-        "Type three letters of Anchor's name. Tier 2 pricing snaps in. As you add each product, Fluxora pulls the oldest lots first and shows margin in real time.",
-      tag: "Margin live · oldest-first allocation",
-      events: [
-        { at: "9:08:00", what: 'Type "Anch" — Anchor Tavern pre-fills.' },
-        {
-          at: "9:08:25",
-          what: "Add 3 lines · FIFO allocates 6 lots automatically.",
-          icon: ShoppingCart,
-        },
-        { at: "9:09:10", what: "Tier 2 prices apply per line." },
-        { at: "9:09:30", what: "Margin chip lands at 42.7%." },
+      actions: [
+        { icon: Building2, label: "Anchor pre-fills · Tier 2" },
+        { icon: ShoppingCart, label: "FIFO allocates 6 lots" },
+        { icon: Tag, label: "Tier price per line" },
+        { icon: Sparkles, label: "Margin chip · 42.7%", meta: "live" },
       ],
-      statLabel: "Fluxora time",
-      statValue: "90 sec",
-      callout: "3 lines · 6 lots · 42.7% margin · all on one screen.",
+      voiceover:
+        "Type three letters. Add three lines. The margin tells you it was a good order before the truck loads.",
+      stat: { value: "90 sec", label: "Fluxora time" },
+      statHint: "margin live",
+      callout: "3 lines · 6 lots · 42.7% margin · one screen.",
     },
   },
   {
     step: "Step 3 of 5",
-    topic: "Anchor wants the invoice for their books",
+    topic: "Anchor needs the invoice for their books",
     before: {
-      title: "Word template. Copy lines. Attach. Pray.",
-      detail:
-        "The accountant needs the invoice for AR matching. The Word letterhead is on the shared drive — someone keeps updating the wrong copy.",
-      tag: "Word + email · no tracking",
-      events: [
-        { at: "9:20", what: 'Open invoice-template-FINAL-v3.docx.' },
-        {
-          at: "9:21",
-          what: "Copy each order line into the table. Misalign two.",
-        },
-        { at: "9:24", what: "Update the totals manually. Tax was wrong." },
-        { at: "9:25", what: "Export to PDF, attach to a Gmail draft.", icon: Mail },
-        { at: "9:26", what: "Send. Hope the email address is current." },
+      tools: [
+        { icon: FileText, label: "Word template", badge: "9:20" },
+        { icon: Calculator, label: "Tax math", badge: "9:24" },
+        { icon: Printer, label: "Export PDF", badge: "9:25" },
+        { icon: Mail, label: "Gmail draft", badge: "9:26" },
       ],
-      statLabel: "Manual time",
-      statValue: "6 min",
+      voiceover:
+        "Hope you grabbed the right letterhead. Hope you got the tax math right. Hope the email address is current.",
+      stat: { value: "6 min", label: "Manual time" },
+      statHint: "3 hopes",
     },
     after: {
-      title: "One click. Branded. In the inbox.",
-      detail:
-        "Save the order in Fluxora — a branded PDF composes on the tenant letterhead and emails to the customer's saved billing address. Open + delivery tracked.",
-      tag: "Branded · audit-ready · tracked",
-      events: [
-        { at: "9:09:31", what: "Click Save order on SO-2847." },
-        {
-          at: "9:09:32",
-          what: "Branded PDF generated with letterhead.",
-          icon: Receipt,
-        },
-        { at: "9:09:33", what: "Emailed to mateo@anchortavern.com." },
-        { at: "9:10:18", what: "Anchor opens the invoice on his phone." },
+      actions: [
+        { icon: Receipt, label: "Branded PDF · letterhead applied" },
+        { icon: Send, label: "Emailed to billing contact" },
+        { icon: FileCheck2, label: "Delivery + open tracked" },
+        { icon: Sparkles, label: "Anchor opens it on his phone", meta: "47s" },
       ],
-      statLabel: "Fluxora time",
-      statValue: "1 click",
+      voiceover:
+        "Save the order. The PDF builds itself, the email goes out, the read receipt comes back before you finish your stretch.",
+      stat: { value: "1 click", label: "Fluxora time" },
+      statHint: "no template hunting",
       callout: "Sent in 2 sec. Opened in under a minute. Audit-ready.",
     },
   },
@@ -200,40 +168,29 @@ const COMPARES: CompareStep[] = [
     step: "Step 4 of 5",
     topic: "Lighthouse Cafe wires $4,880",
     before: {
-      title: "Open five invoices. Edit each one.",
-      detail:
-        "An ACH lands and now five old invoices need to be reconciled. Aging gets exported again, the overpayment slips out of mind.",
-      tag: "Per-invoice edits · stale aging",
-      events: [
-        { at: "9:30", what: "See the ACH on the bank feed. Hunt the customer." },
-        { at: "9:33", what: "Open invoice #1. Apply the payment. Save." },
-        {
-          at: "9:36",
-          what: "Open invoice #2. Apply. Save. Repeat 3 more times.",
-        },
-        { at: "9:39", what: "Re-export the aging report for the boss." },
-        { at: "9:42", what: "Forget the overpayment exists. Discover it later." },
+      tools: [
+        { icon: Landmark, label: "Bank feed", badge: "9:30" },
+        { icon: Receipt, label: "Invoice #1", badge: "9:33" },
+        { icon: Receipt, label: "Invoice #2", badge: "9:36" },
+        { icon: Receipt, label: "+3 more", badge: "9:39" },
+        { icon: FileSpreadsheet, label: "Aging report", badge: "9:41" },
       ],
-      statLabel: "Manual time",
-      statValue: "12 min",
+      voiceover:
+        "Five invoices, one ACH, no clear order. By the time you finish, the aging report you sent the boss is already wrong.",
+      stat: { value: "12 min", label: "Manual time" },
+      statHint: "0 auto-matches",
     },
     after: {
-      title: "Match the payment. FIFO does the rest.",
-      detail:
-        "The ACH lines up to Lighthouse automatically. One click applies it to the oldest invoices first; aging buckets shift across the dashboard instantly.",
-      tag: "FIFO across invoices · zero manual edits",
-      events: [
-        { at: "9:30:00", what: "ACH auto-matched to Lighthouse Cafe." },
-        {
-          at: "9:30:01",
-          what: "FIFO applies $4,880 across 3 oldest invoices.",
-          icon: Wallet,
-        },
-        { at: "9:30:02", what: "Aging buckets shift on the dashboard." },
-        { at: "9:30:03", what: "$0 overpayment — clean apply." },
+      actions: [
+        { icon: Landmark, label: "ACH auto-matched · Lighthouse" },
+        { icon: Wallet, label: "FIFO across 3 oldest invoices" },
+        { icon: Sparkles, label: "Aging buckets shift live" },
+        { icon: FileCheck2, label: "$0 overpayment · clean apply" },
       ],
-      statLabel: "Fluxora time",
-      statValue: "auto",
+      voiceover:
+        "The bank feed hits, FIFO does the math, the aging report on the dashboard is correct before you set the coffee down.",
+      stat: { value: "auto", label: "Fluxora time" },
+      statHint: "0 manual edits",
       callout: "3 invoices cleared · aging current · zero manual edits.",
     },
   },
@@ -241,49 +198,28 @@ const COMPARES: CompareStep[] = [
     step: "Step 5 of 5",
     topic: "A lot is about to expire",
     before: {
-      title: "Find out when the truck rolls back.",
-      detail:
-        "Nothing flags expiring stock. The driver returns with 18 lb of salmon that's now garbage, the GL takes the hit, and no audit trail catches it.",
-      tag: "Discover late · no audit trail",
-      events: [
-        { at: "9:42", what: "Driver heads out. No expiry alert anywhere." },
-        { at: "10:35", what: "Driver calls — the salmon smells off." },
-        { at: "10:48", what: "Anchor refuses the order. Truck heads back." },
-        { at: "11:20", what: "Write off 18 lb. Boss never sees the loss." },
-        {
-          at: "Tuesday next",
-          what: "Same lot expires somewhere else. Repeat.",
-        },
+      tools: [
+        { icon: Truck, label: "Truck rolls out", badge: "9:42" },
+        { icon: AlertTriangle, label: "Driver calls", badge: "10:35" },
+        { icon: Inbox, label: "Customer refuses", badge: "10:48" },
+        { icon: FileSpreadsheet, label: "Write-off ledger", badge: "11:20" },
       ],
-      statLabel: "Discovered",
-      statValue: "Too late",
+      voiceover:
+        "Nothing flagged the salmon. You find out from the driver. The 18 lb write-off goes in a spreadsheet no one reads.",
+      stat: { value: "too late", label: "Discovered" },
+      statHint: "18 lb gone",
     },
     after: {
-      title: "Two days ahead. Highlighted in amber.",
-      detail:
-        "Fluxora flagged L-1245 forty-eight hours before its expiry date. The next-out FIFO indicator surfaces it on every order screen.",
-      tag: "Expiry-aware · audit-trailed",
-      events: [
-        {
-          at: "Sunday",
-          what: "L-1245 enters the 2-day expiry window.",
-          icon: Boxes,
-        },
-        {
-          at: "Sunday",
-          what: 'Dashboard "stock at risk" lifts to 1 lot.',
-        },
-        {
-          at: "Monday",
-          what: "FIFO indicator surfaces L-1245 on every order screen.",
-        },
-        {
-          at: "Tuesday",
-          what: "Anchor's order naturally pulls it. Loss avoided.",
-        },
+      actions: [
+        { icon: AlertTriangle, label: "L-1245 · 2 days to expiry" },
+        { icon: Sparkles, label: 'Dashboard "stock at risk" lights up' },
+        { icon: Boxes, label: "FIFO next-out on every order screen" },
+        { icon: FileCheck2, label: "Anchor's order pulls it naturally" },
       ],
-      statLabel: "Caught",
-      statValue: "2 days ahead",
+      voiceover:
+        "The system tells you on Sunday. By Tuesday the lot is in a fridge in Tiburon — not in a write-off spreadsheet.",
+      stat: { value: "48 hrs", label: "Caught ahead" },
+      statHint: "0 write-offs",
       callout: "1 lot rescued · 18 lb saved · audit-trailed.",
     },
   },
