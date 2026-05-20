@@ -41,19 +41,20 @@ export function ReelSurface() {
             )}
           >
             {/* Cross-fade the inner screen whenever the demo step changes.
-                Sidebar + header stay put across the transition. mode="wait"
-                makes sure the outgoing screen fully leaves before the new
-                one arrives so they don't fight for space. */}
-            <AnimatePresence mode="wait">
+                mode="popLayout" gives the exiting screen position:absolute
+                so the new screen renders into the same space — both stack
+                during the cross-fade instead of fighting for layout.
+                mode="wait" caused a dead frame between exit-complete and
+                enter-start where the surface was visibly empty. */}
+            <AnimatePresence mode="popLayout" initial={false}>
               <motion.div
                 key={`${state.step}-${state.activeTab}`}
-                initial={{ opacity: 0, y: 10, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.99 }}
+                initial={{ opacity: 0, scale: 0.992 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.996 }}
                 transition={{
-                  opacity: { duration: 0.45, ease: easeOut },
-                  y: { duration: 0.55, ease: easeOut },
-                  scale: { duration: 0.55, ease: easeOut },
+                  opacity: { duration: 0.4, ease: easeOut },
+                  scale: { duration: 0.5, ease: easeOut },
                 }}
                 className="flex min-h-0 flex-1 flex-col"
               >
