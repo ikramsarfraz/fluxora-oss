@@ -2626,9 +2626,23 @@ export const paymentMatches = pgTable(
     bankTransactionId: uuid("bank_transaction_id")
       .notNull()
       .references(() => bankTransactions.id, { onDelete: "restrict" }),
-    supplierInvoiceId: uuid("supplier_invoice_id")
-      .notNull()
-      .references(() => supplierInvoices.id, { onDelete: "restrict" }),
+    /**
+     * For OUTFLOW txn matches (we paid a bill). NULL for AR matches.
+     * Exactly one of supplier_invoice_id / sales_invoice_id is non-null;
+     * CHECK constraint enforces it (migration 0049).
+     */
+    supplierInvoiceId: uuid("supplier_invoice_id").references(
+      () => supplierInvoices.id,
+      { onDelete: "restrict" },
+    ),
+    /**
+     * For INFLOW txn matches (a customer paid us). NULL for AP matches.
+     * Added in migration 0049 to extend the bill-only matcher with AR.
+     */
+    salesInvoiceId: uuid("sales_invoice_id").references(
+      () => salesInvoices.id,
+      { onDelete: "restrict" },
+    ),
     status: paymentMatchStatusEnum("status").notNull().default("pending_review"),
     confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
     autoApplied: boolean("auto_applied").notNull().default(false),
@@ -2649,7 +2663,13 @@ export const paymentMatches = pgTable(
     index("payment_matches_tenant_id_idx").on(table.tenantId),
     index("payment_matches_txn_id_idx").on(table.bankTransactionId),
     index("payment_matches_invoice_id_idx").on(table.supplierInvoiceId),
+    index("payment_matches_sales_invoice_id_idx").on(table.salesInvoiceId),
     index("payment_matches_status_idx").on(table.status),
+    // Exactly one of the two FK columns must be set.
+    check(
+      "payment_matches_one_invoice_only",
+      sql`(${table.supplierInvoiceId} IS NOT NULL AND ${table.salesInvoiceId} IS NULL) OR (${table.supplierInvoiceId} IS NULL AND ${table.salesInvoiceId} IS NOT NULL)`,
+    ),
   ],
 );
 

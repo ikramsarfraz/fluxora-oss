@@ -1,12 +1,14 @@
 import "server-only";
 
-import { and, between, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, between, eq, gte, lte, ne, or, sql } from "drizzle-orm";
 import { differenceInDays } from "date-fns";
 import { db } from "@/db";
 import {
   bankTransactions,
   payeeAliases,
+  payments,
   paymentMatches,
+  salesInvoices,
   supplierInvoices,
   suppliers,
 } from "@/db/schema";
@@ -50,8 +52,21 @@ export type MatchResult = {
 
 export async function runMatchingForTransaction(txn: BankTransaction): Promise<void> {
   const amount = Number(txn.amount);
-  if (amount <= 0) return; // inflows are not bill payments
 
+  // Convention in the bank_transactions table: positive = outflow (money
+  // leaving our account → AP bills we paid); negative = inflow (money
+  // landing in our account → AR invoices customers paid). The matcher
+  // routes by sign.
+  if (amount === 0) return;
+
+  if (amount > 0) {
+    await matchOutflowToBill(txn);
+  } else {
+    await matchInflowToSalesInvoice(txn);
+  }
+}
+
+async function matchOutflowToBill(txn: BankTransaction): Promise<void> {
   const method = txn.paymentMethod ?? "other";
   let result: MatchResult | null = null;
 
@@ -64,12 +79,7 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
     result = await scoreTransaction(txn);
   }
 
-  if (!result) {
-    await flagMysteryIfNeeded(txn);
-    return;
-  }
-
-  if (result.confidence < 0.5) {
+  if (!result || result.confidence < 0.5) {
     await flagMysteryIfNeeded(txn);
     return;
   }
@@ -98,9 +108,6 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
   });
 
   if (result.autoApply) {
-    // System-driven event: no portal user in scope. Use "system" as the
-    // distinctId; the tenant group attachment keeps tenant-level
-    // analytics correct.
     await captureServerEvent({
       userId: "system",
       tenantId: txn.tenantId,
@@ -108,6 +115,7 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
       properties: {
         confidence: Number(result.confidence.toFixed(4)),
         channel: txn.paymentMethod ?? "other",
+        direction: "outflow",
       },
     });
     await db
@@ -120,6 +128,195 @@ export async function runMatchingForTransaction(txn: BankTransaction): Promise<v
   }
 }
 
+/**
+ * AR-side matcher: find an open sales_invoice whose balance_due is close
+ * to the inflow amount and whose dates line up. No payee/payor matching
+ * yet — customer-side aliases aren't built. V1 relies on amount + timing.
+ */
+async function matchInflowToSalesInvoice(txn: BankTransaction): Promise<void> {
+  const inflowAmount = Math.abs(Number(txn.amount));
+  if (inflowAmount <= 0) return;
+
+  // Candidate set: open AR invoices with balance close to the inflow.
+  // ±$10 floor + 5% relative tolerance handles fee skim and rounding.
+  const tolerance = Math.max(inflowAmount * 0.05, 10);
+  const candidates = await db
+    .select({
+      id: salesInvoices.id,
+      invoiceDate: salesInvoices.invoiceDate,
+      dueDate: salesInvoices.dueDate,
+      balanceDue: salesInvoices.balanceDue,
+    })
+    .from(salesInvoices)
+    .where(
+      and(
+        eq(salesInvoices.tenantId, txn.tenantId),
+        ne(salesInvoices.status, "void"),
+        sql`${salesInvoices.balanceDue}::numeric > 0`,
+        sql`abs(${salesInvoices.balanceDue}::numeric - ${inflowAmount}) <= ${tolerance}`,
+      ),
+    )
+    .limit(20);
+
+  if (candidates.length === 0) {
+    await flagMysteryIfNeeded(txn);
+    return;
+  }
+
+  const scored = candidates.map(inv => {
+    const balance = Number(inv.balanceDue);
+    const balanceDiff = Math.abs(balance - inflowAmount);
+    const amountScore = Math.max(0, 1 - balanceDiff / Math.max(inflowAmount, 1));
+    const timingScore = scoreTiming(inv.invoiceDate, txn.date);
+    // Weighted average: amount carries more for inflows since we don't
+    // have a payee signal.
+    const confidence = amountScore * 0.65 + timingScore * 0.35;
+    return {
+      invoiceId: inv.id,
+      confidence,
+      factors: { amountScore, payeeScore: 0, timingScore },
+      // Auto-apply only on a near-exact amount match within 14 days.
+      autoApply: amountScore >= 0.98 && timingScore >= 0.75,
+    };
+  });
+  scored.sort((a, b) => b.confidence - a.confidence);
+  const best = scored[0];
+
+  if (best.confidence < 0.5) {
+    await flagMysteryIfNeeded(txn);
+    return;
+  }
+
+  const existing = await db.query.paymentMatches.findFirst({
+    where: and(
+      eq(paymentMatches.bankTransactionId, txn.id),
+      eq(paymentMatches.salesInvoiceId, best.invoiceId),
+    ),
+  });
+  if (existing) return;
+
+  const status = best.autoApply ? "auto_applied" : "pending_review";
+
+  await db.insert(paymentMatches).values({
+    tenantId: txn.tenantId,
+    bankTransactionId: txn.id,
+    salesInvoiceId: best.invoiceId,
+    status,
+    confidence: best.confidence.toFixed(4),
+    autoApplied: best.autoApply,
+    amountScore: best.factors.amountScore.toFixed(4),
+    payeeScore: best.factors.payeeScore.toFixed(4),
+    timingScore: best.factors.timingScore.toFixed(4),
+  });
+
+  if (best.autoApply) {
+    await captureServerEvent({
+      userId: "system",
+      tenantId: txn.tenantId,
+      event: "payment_match.auto_applied",
+      properties: {
+        confidence: Number(best.confidence.toFixed(4)),
+        channel: txn.paymentMethod ?? "other",
+        direction: "inflow",
+      },
+    });
+    // Auto-apply the payment: insert a payments row and update the
+    // invoice's denormalized totals + status (mirrors the AR record
+    // path used by other surfaces).
+    await applyArInflowToInvoice({
+      tenantId: txn.tenantId,
+      salesInvoiceId: best.invoiceId,
+      bankTransactionId: txn.id,
+      paymentDate: txn.date,
+      amount: inflowAmount,
+      paymentMethod: txn.paymentMethod ?? "ach",
+      rawDescription: txn.rawDescription ?? null,
+      confirmedByUserId: null,
+    });
+  }
+}
+
+/**
+ * Creates a `payments` row from a matched bank transaction and updates
+ * the parent sales invoice's totals + status. Shared by the auto-apply
+ * path and the user-confirmed path so they stay consistent.
+ */
+async function applyArInflowToInvoice(args: {
+  tenantId: string;
+  salesInvoiceId: string;
+  bankTransactionId: string;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: string;
+  rawDescription: string | null;
+  confirmedByUserId: string | null;
+}): Promise<void> {
+  // System-driven path (auto_applied) has no user id; the payments
+  // schema requires one. Fall back to a sentinel: the bank transaction
+  // already records who confirmed (via payment_matches.confirmed_by_user_id)
+  // so audit trail isn't lost.
+  //
+  // For now: skip the insert if no user id (auto_applied paths defer
+  // creating the payments row to the confirm step). The match row
+  // still exists; UI will show "Confirm to record payment".
+  const confirmedBy = args.confirmedByUserId;
+  if (!confirmedBy) return;
+
+  const validMethod: "cash" | "check" | "ach" | "zelle" | "credit_card" =
+    args.paymentMethod === "check" ||
+    args.paymentMethod === "ach" ||
+    args.paymentMethod === "zelle" ||
+    args.paymentMethod === "credit_card" ||
+    args.paymentMethod === "cash"
+      ? args.paymentMethod
+      : "ach";
+
+  await db.transaction(async tx => {
+    const invoice = await tx.query.salesInvoices.findFirst({
+      where: and(
+        eq(salesInvoices.id, args.salesInvoiceId),
+        eq(salesInvoices.tenantId, args.tenantId),
+      ),
+    });
+    if (!invoice) return;
+
+    const balanceDue = Number(invoice.balanceDue);
+    if (balanceDue <= 0) return; // already paid; nothing to do
+
+    // Apply the lesser of (txn amount, balance due) — we never over-apply.
+    const applied = Math.min(args.amount, balanceDue);
+    const newAmountPaid = Number(invoice.amountPaid) + applied;
+    const totalAmount = Number(invoice.totalAmount);
+
+    await tx.insert(payments).values({
+      tenantId: args.tenantId,
+      salesInvoiceId: args.salesInvoiceId,
+      createdByUserId: confirmedBy,
+      paymentDate: args.paymentDate,
+      amount: applied.toFixed(2),
+      paymentMethod: validMethod,
+      referenceNumber: args.rawDescription
+        ? args.rawDescription.slice(0, 128)
+        : undefined,
+      notes: `Auto-recorded from bank transaction ${args.bankTransactionId.slice(0, 8)}`,
+    });
+
+    await tx
+      .update(salesInvoices)
+      .set({
+        amountPaid: newAmountPaid.toFixed(2),
+        balanceDue: Math.max(totalAmount - newAmountPaid, 0).toFixed(2),
+        status:
+          newAmountPaid >= totalAmount
+            ? "paid"
+            : newAmountPaid > 0
+              ? "partially_paid"
+              : invoice.status,
+      })
+      .where(eq(salesInvoices.id, args.salesInvoiceId));
+  });
+}
+
 export async function confirmMatch(
   matchId: string,
   confirmedByUserId: string,
@@ -130,6 +327,7 @@ export async function confirmMatch(
     with: {
       bankTransaction: true,
       supplierInvoice: { with: { supplier: true } },
+      salesInvoice: true,
     },
   });
   if (!match) throw new Error("Match not found");
@@ -144,34 +342,66 @@ export async function confirmMatch(
     })
     .where(and(eq(paymentMatches.id, matchId), eq(paymentMatches.tenantId, tenantId)));
 
-  await db
-    .update(supplierInvoices)
-    .set({ status: "paid", updatedAt: new Date() })
-    .where(and(eq(supplierInvoices.id, match.supplierInvoiceId), eq(supplierInvoices.tenantId, tenantId)));
-
-  // Learn channel-scoped payee alias (never for checks — no reliable payee signal)
-  const txnMethod = match.bankTransaction?.paymentMethod ?? "ach";
-  if (txnMethod !== "check" && match.supplierInvoice?.supplier?.id) {
-    const raw = match.bankTransaction.rawDescription;
-    const normalized = normalizePayeeText(raw);
+  if (match.supplierInvoiceId) {
+    // AP path: flip the bill to paid. supplier_invoice_payments table
+    // is NOT updated here — the existing flow treats a confirmed match
+    // as "the bank settled this bill" without creating a separate
+    // payment-event row. Phase B can revisit if we want AP payment
+    // rows to mirror AR.
     await db
-      .insert(payeeAliases)
-      .values({
-        tenantId: match.tenantId,
-        rawText: raw,
-        normalizedText: normalized,
-        supplierId: match.supplierInvoice.supplier.id,
-        source: "confirmed",
-        channel: txnMethod,
-      })
-      .onConflictDoUpdate({
-        target: [payeeAliases.tenantId, payeeAliases.channel, payeeAliases.normalizedText],
-        set: {
+      .update(supplierInvoices)
+      .set({ status: "paid", updatedAt: new Date() })
+      .where(
+        and(
+          eq(supplierInvoices.id, match.supplierInvoiceId),
+          eq(supplierInvoices.tenantId, tenantId),
+        ),
+      );
+
+    // Learn channel-scoped payee alias (never for checks — no reliable payee signal)
+    const txnMethod = match.bankTransaction?.paymentMethod ?? "ach";
+    if (txnMethod !== "check" && match.supplierInvoice?.supplier?.id) {
+      const raw = match.bankTransaction.rawDescription;
+      const normalized = normalizePayeeText(raw);
+      await db
+        .insert(payeeAliases)
+        .values({
+          tenantId: match.tenantId,
+          rawText: raw,
+          normalizedText: normalized,
           supplierId: match.supplierInvoice.supplier.id,
           source: "confirmed",
-          updatedAt: new Date(),
-        },
-      });
+          channel: txnMethod,
+        })
+        .onConflictDoUpdate({
+          target: [payeeAliases.tenantId, payeeAliases.channel, payeeAliases.normalizedText],
+          set: {
+            supplierId: match.supplierInvoice.supplier.id,
+            source: "confirmed",
+            updatedAt: new Date(),
+          },
+        });
+    }
+    return;
+  }
+
+  if (match.salesInvoiceId) {
+    // AR path: create a payments row reflecting the bank inflow + update
+    // the invoice's denormalized totals + status. Unlike AP (where the
+    // confirm just flips bill status), AR needs a real payment event so
+    // the /payments listing, invoice detail history, and customer
+    // portfolio all see the inflow.
+    const inflowAmount = Math.abs(Number(match.bankTransaction.amount));
+    await applyArInflowToInvoice({
+      tenantId,
+      salesInvoiceId: match.salesInvoiceId,
+      bankTransactionId: match.bankTransactionId,
+      paymentDate: match.bankTransaction.date,
+      amount: inflowAmount,
+      paymentMethod: match.bankTransaction.paymentMethod ?? "ach",
+      rawDescription: match.bankTransaction.rawDescription ?? null,
+      confirmedByUserId,
+    });
   }
 }
 

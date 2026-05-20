@@ -1003,6 +1003,12 @@ export const paymentMatchesRelations = relations(paymentMatches, ({ one }) => ({
     fields: [paymentMatches.supplierInvoiceId],
     references: [supplierInvoices.id],
   }),
+  // AR-side relation added in migration 0049. Nullable FK; exactly one
+  // of supplierInvoice / salesInvoice is non-null per the table's CHECK.
+  salesInvoice: one(salesInvoices, {
+    fields: [paymentMatches.salesInvoiceId],
+    references: [salesInvoices.id],
+  }),
   confirmedBy: one(portalUsers, {
     fields: [paymentMatches.confirmedByUserId],
     references: [portalUsers.id],
