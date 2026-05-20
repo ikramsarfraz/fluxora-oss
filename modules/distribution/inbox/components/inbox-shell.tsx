@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOutflow, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
-import { dismissMysteryOutflowAction, markAsNonBillExpenseAction } from "@/modules/distribution/plaid/actions";
+import { dismissMysteryOutflowAction } from "@/modules/distribution/plaid";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
 
 // ── Design tokens (mockup exact values) ───────────────────────────────────
@@ -610,7 +610,6 @@ function TodayScheduleCard({ entries }: { entries: TodayScheduleEntry[] }) {
 function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
   const router = useRouter();
   const [dismissing, startDismiss] = useTransition();
-  const [marking, startMark] = useTransition();
 
   if (outflows.length === 0) return null;
 
@@ -697,27 +696,6 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
           }}
         >
           Create bill for this payment
-        </button>
-        <button
-          disabled={marking}
-          onClick={() => {
-            startMark(async () => {
-              try {
-                await markAsNonBillExpenseAction(txn.id);
-                toast.success("Marked as non-bill expense.");
-                router.refresh();
-              } catch {
-                toast.error("Failed to update.");
-              }
-            });
-          }}
-          style={{
-            padding: "7px 12px", borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-            background: "rgba(0,0,0,0.05)", color: C.text, border: `1px solid ${C.redBorder}`,
-            cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-          }}
-        >
-          Mark as non-bill expense
         </button>
         <button
           disabled={dismissing}

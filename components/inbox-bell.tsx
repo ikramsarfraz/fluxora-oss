@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 
-import { getInboxBellSummaryAction } from "@/modules/distribution/inbox/actions";
+import { getInboxBellSummaryAction } from "@/modules/distribution/inbox";
 import { queryKeys } from "@/lib/query/keys";
 import { cn } from "@/lib/utils";
 import {
