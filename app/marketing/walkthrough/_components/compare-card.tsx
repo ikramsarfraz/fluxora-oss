@@ -2,7 +2,6 @@
 
 import { motion, type Variants } from "motion/react";
 import {
-  AlertTriangle,
   Check,
   Clock,
   FileSpreadsheet,
@@ -10,56 +9,66 @@ import {
   Timer,
 } from "lucide-react";
 
+import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
-// "Before" and "After" cards stitched into a sequence. Each takes the full
-// frame and has room to breathe — vertical narrative timelines with real
-// timestamps, specific friction descriptions, and a single stat ribbon at
-// the bottom. The walkthrough autopilot plays them back-to-back.
+// Compare cards, marketing-redesign edition. Two stitched cards per beat:
+//
+//   Before → "The old way" — visual chaos: a row of 4-5 tool tiles, each
+//   with a timestamp badge. The eye reads "5 systems open, time piling up."
+//
+//   After  → "The Fluxora way" — visual calm: ONE Fluxora panel with check-
+//   row actions. ONE moment, one tool.
+//
+// Both cards have a HUGE time stat as the right-side focal point so the
+// real comparison (25 min vs 4 sec) reads in under half a second.
 
-export type TimelineEvent = {
-  at: string;
-  what: string;
-  /** Optional icon for the row. Defaults to a dot. */
-  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-};
+type IconType = React.ComponentType<{
+  className?: string;
+  strokeWidth?: number;
+}>;
 
 export type CompareStep = {
-  /** Cross-card chapter label, e.g. "Step 1 of 5". */
   step: string;
-  /** Headline shown on both cards so visitors know it's the same beat. */
   topic: string;
-  before: {
-    title: string;
-    detail: string;
-    events: TimelineEvent[];
-    statLabel: string;
-    statValue: string;
-    tag?: string;
-  };
-  after: {
-    title: string;
-    detail: string;
-    events: TimelineEvent[];
-    statLabel: string;
-    statValue: string;
-    tag?: string;
-    /** Single takeaway under the timeline. */
-    callout: string;
-  };
+  before: BeforePayload;
+  after: AfterPayload;
+};
+
+export type BeforePayload = {
+  /** 4-5 tool tiles representing what's "open" on the operator's desk. */
+  tools: { icon: IconType; label: string; badge?: string }[];
+  /** Single sentence shown beneath the tools — the "chaos summary". */
+  voiceover: string;
+  /** Big stat at the right-side focal point (e.g. "25 min"). */
+  stat: { value: string; label: string };
+  /** Small detail under the stat (e.g. "+ 14 alt-tabs"). */
+  statHint?: string;
+};
+
+export type AfterPayload = {
+  /** 3-4 actions Fluxora performs inside one panel. */
+  actions: { icon: IconType; label: string; meta?: string }[];
+  /** One-line voiceover under the panel. */
+  voiceover: string;
+  /** Big stat at the right (e.g. "4 sec"). */
+  stat: { value: string; label: string };
+  statHint?: string;
+  /** Final takeaway shown as a green callout at the bottom. */
+  callout: string;
 };
 
 // =========================================================================
-// BeforeCard — the spreadsheet pain, broken out
+// BeforeCard
 // =========================================================================
 export function BeforeCard({ compare }: { compare: CompareStep }) {
   return (
     <motion.div
       key={`before-${compare.step}`}
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -24 }}
-      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="danger" />
@@ -71,35 +80,51 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
         icon={FileSpreadsheet}
       />
 
-      <div className="relative flex flex-1 flex-col gap-5 px-10 pb-8">
-        {/* Detail + tag */}
-        <div>
-          <h2 className="font-serif text-[28px] font-medium leading-[1.1] tracking-tight text-ink md:text-[32px]">
-            {compare.before.title}
-          </h2>
-          <p className="mt-2 max-w-[640px] text-[14px] leading-[1.6] text-ink-warm">
-            {compare.before.detail}
-          </p>
-          {compare.before.tag ? (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-danger-bg/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-danger-fg">
-              <AlertTriangle className="size-3" strokeWidth={2.2} />
-              {compare.before.tag}
+      <div className="relative flex flex-1 flex-col px-10 pb-8">
+        <div className="grid flex-1 grid-cols-[1.6fr_1fr] items-center gap-8">
+          {/* Tool chaos */}
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-subtle">
+              What&apos;s open on your desk
+            </p>
+            <div className="mt-3 flex flex-wrap items-end gap-2">
+              {compare.before.tools.map((t, idx) => (
+                <ToolTile
+                  key={t.label}
+                  icon={t.icon}
+                  label={t.label}
+                  badge={t.badge}
+                  delay={0.15 + idx * 0.1}
+                  askew={idx % 2 === 0}
+                />
+              ))}
             </div>
-          ) : null}
+
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.65 + compare.before.tools.length * 0.1 }}
+              className="mt-5 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
+            >
+              &ldquo;{compare.before.voiceover}&rdquo;
+            </motion.p>
+          </div>
+
+          {/* Hero stat — the focal point */}
+          <HeroStat
+            tone="danger"
+            label={compare.before.stat.label}
+            value={compare.before.stat.value}
+            hint={compare.before.statHint}
+            icon={Clock}
+          />
         </div>
 
-        {/* Timeline — where the extra info lives */}
-        <Timeline events={compare.before.events} tone="danger" />
-
-        {/* Stat ribbon at the bottom */}
-        <div className="mt-auto flex items-end justify-between gap-4 border-t-2 border-dashed border-danger-border/50 pt-4">
-          <StatBlock
-            label={compare.before.statLabel}
-            value={compare.before.statValue}
-            tone="danger"
-            strikethrough
-          />
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-subtle">
+        <div className="mt-6 flex items-center justify-between border-t-2 border-dashed border-danger-border/40 pt-3 text-[10.5px] uppercase tracking-[0.18em] text-subtle">
+          <span className="font-mono">
+            {compare.before.tools.length} systems · alt-tab fatigue
+          </span>
+          <span className="font-mono">
             up next · the Fluxora way →
           </span>
         </div>
@@ -109,16 +134,16 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
 }
 
 // =========================================================================
-// AfterCard — the Fluxora outcome
+// AfterCard
 // =========================================================================
 export function AfterCard({ compare }: { compare: CompareStep }) {
   return (
     <motion.div
       key={`after-${compare.step}`}
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -24 }}
-      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.4 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="success" />
@@ -130,56 +155,231 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
         icon={Sparkles}
       />
 
-      <div className="relative flex flex-1 flex-col gap-5 px-10 pb-8">
-        <div>
-          <h2 className="font-serif text-[28px] font-medium leading-[1.1] tracking-tight text-ink md:text-[32px]">
-            {compare.after.title}
-          </h2>
-          <p className="mt-2 max-w-[640px] text-[14px] leading-[1.6] text-ink-warm">
-            {compare.after.detail}
-          </p>
-          {compare.after.tag ? (
-            <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-success-bg/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-success-fg">
-              <Sparkles className="size-3" strokeWidth={2.2} />
-              {compare.after.tag}
-            </div>
-          ) : null}
+      <div className="relative flex flex-1 flex-col px-10 pb-8">
+        <div className="grid flex-1 grid-cols-[1.6fr_1fr] items-center gap-8">
+          {/* Fluxora panel */}
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-success-fg">
+              One tool · one moment
+            </p>
+            <FluxoraPanel actions={compare.after.actions} />
+
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              className="mt-4 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
+            >
+              &ldquo;{compare.after.voiceover}&rdquo;
+            </motion.p>
+          </div>
+
+          {/* Hero stat — the focal point */}
+          <HeroStat
+            tone="success"
+            label={compare.after.stat.label}
+            value={compare.after.stat.value}
+            hint={compare.after.statHint}
+            icon={Timer}
+          />
         </div>
 
-        <Timeline events={compare.after.events} tone="success" />
-
-        {/* Callout — single most important takeaway */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
+          transition={{ delay: 0.95 }}
+          className="mt-6 flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
         >
-          <Check className="size-3.5 text-success-fg" strokeWidth={2.6} />
+          <Check
+            className="size-3.5 shrink-0 text-success-fg"
+            strokeWidth={2.6}
+          />
           <span className="text-[13px] font-medium text-success-fg">
             {compare.after.callout}
           </span>
         </motion.div>
-
-        <div className="mt-auto flex items-end justify-between gap-4 border-t-2 border-success-border/40 pt-4">
-          <StatBlock
-            label={compare.after.statLabel}
-            value={compare.after.statValue}
-            tone="success"
-          />
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-subtle">
-            next step →
-          </span>
-        </div>
       </div>
     </motion.div>
   );
 }
 
 // =========================================================================
-// Atoms
+// Tool tile (Before)
 // =========================================================================
+function ToolTile({
+  icon: Icon,
+  label,
+  badge,
+  delay,
+  askew,
+}: {
+  icon: IconType;
+  label: string;
+  badge?: string;
+  delay: number;
+  askew?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, rotate: askew ? -3 : 2 }}
+      animate={{ opacity: 1, y: 0, rotate: askew ? -1 : 1 }}
+      transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}
+      className="relative flex flex-col items-center gap-1 rounded-lg border border-danger-border/40 bg-card-warm px-3 py-2.5 shadow-sm"
+      style={{ minWidth: 84 }}
+    >
+      <div className="flex size-9 items-center justify-center rounded-md bg-danger-bg/50 text-danger-fg">
+        <Icon className="size-[18px]" strokeWidth={1.8} />
+      </div>
+      <div className="text-center text-[10.5px] font-medium text-ink">
+        {label}
+      </div>
+      {badge ? (
+        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-danger-fg">
+          {badge}
+        </div>
+      ) : null}
+    </motion.div>
+  );
+}
 
+// =========================================================================
+// Fluxora panel (After)
+// =========================================================================
+function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
+  const list: Variants = {
+    hidden: {},
+    show: {
+      transition: { staggerChildren: 0.12, delayChildren: 0.3 },
+    },
+  };
+  const item: Variants = {
+    hidden: { opacity: 0, x: -8 },
+    show: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+    },
+  };
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+      className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
+    >
+      {/* Mini app shell header */}
+      <div className="flex items-center gap-2 border-b border-success-border/40 bg-success-bg/30 px-4 py-2.5">
+        <Logomark size={18} />
+        <span className="font-serif text-[13px] font-medium text-ink">
+          Fluxora
+        </span>
+        <span className="text-subtle">·</span>
+        <span className="font-mono text-[11px] text-subtle">workspace</span>
+        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success-fg px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-card-warm">
+          <Sparkles className="size-2.5" strokeWidth={2.4} />
+          working
+        </span>
+      </div>
+
+      {/* Action checklist */}
+      <motion.ul
+        variants={list}
+        initial="hidden"
+        animate="show"
+        className="divide-y divide-success-border/30 px-4 py-1.5"
+      >
+        {actions.map((a) => (
+          <motion.li
+            key={a.label}
+            variants={item}
+            className="flex items-center gap-3 py-2.5"
+          >
+            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-success-bg text-success-fg">
+              <Check className="size-3.5" strokeWidth={2.6} />
+            </div>
+            <a.icon
+              className="size-4 shrink-0 text-success-fg"
+              strokeWidth={1.8}
+            />
+            <span className="flex-1 text-[13px] font-medium text-ink">
+              {a.label}
+            </span>
+            {a.meta ? (
+              <span className="font-mono text-[10.5px] text-subtle">
+                {a.meta}
+              </span>
+            ) : null}
+          </motion.li>
+        ))}
+      </motion.ul>
+    </motion.div>
+  );
+}
+
+// =========================================================================
+// Hero stat — the focal point of each card
+// =========================================================================
+function HeroStat({
+  tone,
+  label,
+  value,
+  hint,
+  icon: Icon,
+}: {
+  tone: "danger" | "success";
+  label: string;
+  value: string;
+  hint?: string;
+  icon: IconType;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{
+        delay: 0.45,
+        type: "spring",
+        stiffness: 220,
+        damping: 22,
+      }}
+      className="flex flex-col items-end text-right"
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em]",
+          tone === "danger" ? "text-danger-fg" : "text-success-fg",
+        )}
+      >
+        <Icon className="size-3" strokeWidth={2} />
+        {label}
+      </div>
+      <div
+        className={cn(
+          "font-serif text-[88px] font-medium leading-[0.95] tracking-tight tabular-nums md:text-[112px]",
+          tone === "danger"
+            ? "text-danger-fg line-through decoration-[3px]"
+            : "text-success-fg",
+        )}
+      >
+        {value}
+      </div>
+      {hint ? (
+        <div
+          className={cn(
+            "mt-1 font-mono text-[10.5px] uppercase tracking-[0.16em]",
+            tone === "danger" ? "text-danger-fg/70" : "text-success-fg/80",
+          )}
+        >
+          {hint}
+        </div>
+      ) : null}
+    </motion.div>
+  );
+}
+
+// =========================================================================
+// Backdrop + header
+// =========================================================================
 function Backdrop({ tone }: { tone: "danger" | "success" }) {
   const tint =
     tone === "danger" ? "var(--color-danger-bg)" : "var(--color-success-bg)";
@@ -191,7 +391,7 @@ function Backdrop({ tone }: { tone: "danger" | "success" }) {
       animate={{ opacity: 0.5 }}
       transition={{ duration: 0.8 }}
       style={{
-        background: `radial-gradient(ellipse 75% 60% at 50% 35%, color-mix(in oklch, ${tint} 60%, transparent) 0%, transparent 70%)`,
+        background: `radial-gradient(ellipse 80% 60% at 50% 35%, color-mix(in oklch, ${tint} 55%, transparent) 0%, transparent 70%)`,
       }}
     />
   );
@@ -208,25 +408,25 @@ function CardHeader({
   chapterLabel: string;
   sideLabel: string;
   topic: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: IconType;
 }) {
   const sidePill =
     tone === "danger"
       ? "border-danger-border/70 bg-danger-bg/50 text-danger-fg"
       : "border-success-border/70 bg-success-bg/50 text-success-fg";
   return (
-    <div className="relative flex items-center justify-between px-10 pb-6 pt-10">
+    <div className="relative flex items-start justify-between px-10 pb-5 pt-9">
       <div>
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-subtle">
           {chapterLabel}
         </div>
-        <div className="mt-1 font-serif text-[17px] font-medium text-ink-warm">
+        <h2 className="mt-2 font-serif text-[24px] font-medium leading-tight tracking-tight text-ink md:text-[30px]">
           {topic}
-        </div>
+        </h2>
       </div>
       <div
         className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-3 py-1.5",
+          "inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5",
           sidePill,
         )}
       >
@@ -234,132 +434,6 @@ function CardHeader({
         <span className="font-mono text-[10.5px] uppercase tracking-[0.14em]">
           {sideLabel}
         </span>
-      </div>
-    </div>
-  );
-}
-
-const timelineList: Variants = {
-  hidden: {},
-  show: {
-    transition: { staggerChildren: 0.12, delayChildren: 0.2 },
-  },
-};
-
-const timelineItem: Variants = {
-  hidden: { opacity: 0, x: -10 },
-  show: {
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-  },
-};
-
-function Timeline({
-  events,
-  tone,
-}: {
-  events: TimelineEvent[];
-  tone: "danger" | "success";
-}) {
-  return (
-    <motion.ol
-      variants={timelineList}
-      initial="hidden"
-      animate="show"
-      className="relative flex flex-col"
-    >
-      {/* Vertical rail running through the timestamps */}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute left-[68px] top-3 bottom-3 w-px",
-          tone === "danger" ? "bg-danger-border/40" : "bg-success-border/50",
-        )}
-      />
-
-      {events.map((e, idx) => (
-        <motion.li
-          key={`${e.at}-${idx}`}
-          variants={timelineItem}
-          className="relative flex items-start gap-3 py-1.5"
-        >
-          {/* Timestamp */}
-          <span className="w-[60px] shrink-0 pt-0.5 text-right font-mono text-[10.5px] uppercase tracking-[0.12em] text-subtle tabular-nums">
-            {e.at}
-          </span>
-
-          {/* Node */}
-          <span
-            className={cn(
-              "relative z-10 mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2",
-              tone === "danger"
-                ? "border-danger-border bg-card-warm"
-                : "border-success-border bg-card-warm",
-            )}
-          >
-            {e.icon ? (
-              <e.icon
-                className={cn(
-                  "size-2",
-                  tone === "danger" ? "text-danger-fg" : "text-success-fg",
-                )}
-                strokeWidth={2.4}
-              />
-            ) : (
-              <span
-                className={cn(
-                  "size-1 rounded-full",
-                  tone === "danger" ? "bg-danger-fg" : "bg-success-fg",
-                )}
-              />
-            )}
-          </span>
-
-          {/* What */}
-          <span className="pt-0 text-[13px] leading-[1.4] text-ink-warm">
-            {e.what}
-          </span>
-        </motion.li>
-      ))}
-    </motion.ol>
-  );
-}
-
-function StatBlock({
-  label,
-  value,
-  tone,
-  strikethrough,
-}: {
-  label: string;
-  value: string;
-  tone: "danger" | "success";
-  strikethrough?: boolean;
-}) {
-  return (
-    <div>
-      <div
-        className={cn(
-          "flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em]",
-          tone === "danger" ? "text-danger-fg" : "text-success-fg",
-        )}
-      >
-        {tone === "danger" ? (
-          <Clock className="size-3" strokeWidth={2} />
-        ) : (
-          <Timer className="size-3" strokeWidth={2} />
-        )}
-        {label}
-      </div>
-      <div
-        className={cn(
-          "mt-1 font-serif text-[44px] font-medium leading-none tabular-nums",
-          tone === "danger" ? "text-danger-fg" : "text-success-fg",
-          strikethrough && "line-through decoration-2",
-        )}
-      >
-        {value}
       </div>
     </div>
   );
