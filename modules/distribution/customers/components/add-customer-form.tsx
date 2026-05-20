@@ -33,6 +33,7 @@ import {
   type CreateCustomerInput,
 } from "../validators/customer.schemas";
 import { createCustomerAction, updateCustomerAction } from "@/modules/distribution/customers/actions";
+import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { US_STATES } from "@/lib/constants/us-states";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import {
@@ -282,7 +283,7 @@ export function AddCustomerForm(props?: {
               </FormSection>
 
               <FormSection title="Payment & accounting">
-                <div className="grid gap-6 @md/field-group:grid-cols-3">
+                <div className="grid gap-6 @md/field-group:grid-cols-2">
                   <Controller
                     name="netDays"
                     control={form.control}
@@ -342,36 +343,42 @@ export function AddCustomerForm(props?: {
                       </Field>
                     )}
                   />
-
-                  <Controller
-                    name="fuelSurchargeAmount"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="form-add-customer-fuel">
-                          Fuel surcharge ($)
-                        </FieldLabel>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          id="form-add-customer-fuel"
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          step="0.01"
-                          aria-invalid={fieldState.invalid}
-                          placeholder="0.00"
-                        />
-                        <FieldDescription>
-                          Flat add-on per order, when enabled on the order.
-                        </FieldDescription>
-                        {fieldState.invalid && (
-                          <FieldError errors={[fieldState.error]} />
-                        )}
-                      </Field>
-                    )}
-                  />
                 </div>
+
+                <NetTermsLegend />
+
+                <Controller
+                  name="fuelSurchargeAmount"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      data-invalid={fieldState.invalid}
+                      className="@md/field-group:max-w-xs"
+                    >
+                      <FieldLabel htmlFor="form-add-customer-fuel">
+                        Fuel surcharge ($)
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-fuel"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="0.00"
+                      />
+                      <FieldDescription>
+                        Flat add-on per order, when the order has &ldquo;Add fuel
+                        surcharge&rdquo; ticked.
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
               </FormSection>
 
               <FormSection

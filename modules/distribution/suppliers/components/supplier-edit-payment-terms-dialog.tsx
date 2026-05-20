@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { useUpdateSupplier } from "../hooks/use-suppliers";
-import { NetTermsLegend } from "./net-terms-legend";
+import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

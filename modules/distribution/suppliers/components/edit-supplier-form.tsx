@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { useUpdateSupplier } from "../hooks/use-suppliers";
-import { NetTermsLegend } from "./net-terms-legend";
+import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
