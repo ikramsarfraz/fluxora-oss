@@ -68,7 +68,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.6 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="danger" />
@@ -94,16 +94,24 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
                   icon={t.icon}
                   label={t.label}
                   badge={t.badge}
-                  delay={0.15 + idx * 0.1}
+                  delay={0.25 + idx * 0.22}
                   askew={idx % 2 === 0}
                 />
               ))}
             </div>
 
             <motion.p
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.65 + compare.before.tools.length * 0.1 }}
+              transition={{
+                // Lands AFTER all tool tiles have settled. Each tile takes
+                // ~0.6s to animate; with stagger 0.22 between them, the last
+                // (5th) tile finishes ~1.7s in. Voiceover then fades in
+                // slowly so it reads as commentary on the chaos above it.
+                delay: 0.4 + compare.before.tools.length * 0.22,
+                duration: 0.7,
+                ease: [0.22, 1, 0.36, 1],
+              }}
               className="mt-5 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
             >
               &ldquo;{compare.before.voiceover}&rdquo;
@@ -143,7 +151,7 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.6 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="success" />
@@ -165,9 +173,18 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
             <FluxoraPanel actions={compare.after.actions} />
 
             <motion.p
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
+              transition={{
+                // Lands after the Fluxora panel's action checklist has fully
+                // ticked in. Panel itself enters at 0.15, then the list
+                // staggers at delayChildren 0.45 + 4 actions × 0.22 stagger
+                // × 0.5s each ≈ finishes 1.6s in. Voiceover fades in just
+                // after, reads as the brand voiceover.
+                delay: 1.9,
+                duration: 0.7,
+                ease: [0.22, 1, 0.36, 1],
+              }}
               className="mt-4 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
             >
               &ldquo;{compare.after.voiceover}&rdquo;
@@ -185,9 +202,15 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
         </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.95 }}
+          transition={{
+            // Callout is the closing punctuation — lands last, after
+            // voiceover has settled. Slow fade so it reads as final.
+            delay: 2.6,
+            duration: 0.55,
+            ease: [0.22, 1, 0.36, 1],
+          }}
           className="mt-6 flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
         >
           <Check
@@ -221,9 +244,12 @@ function ToolTile({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10, rotate: askew ? -3 : 2 }}
+      initial={{ opacity: 0, y: 14, rotate: askew ? -3 : 2 }}
       animate={{ opacity: 1, y: 0, rotate: askew ? -1 : 1 }}
-      transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}
+      // Slow enough that each tile reads as a separate beat. Earlier
+      // 0.45s+0.1s-stagger blurred together; new 0.6s+0.22s gives the
+      // visitor time to register each tool one at a time.
+      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
       className="relative flex flex-col items-center gap-1 rounded-lg border border-danger-border/40 bg-card-warm px-3 py-2.5 shadow-sm"
       style={{ minWidth: 84 }}
     >
@@ -249,22 +275,25 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
   const list: Variants = {
     hidden: {},
     show: {
-      transition: { staggerChildren: 0.12, delayChildren: 0.3 },
+      // Slower than the previous 0.3 / 0.12. Each action item lands as a
+      // distinct beat; visitor has time to read the label before the next
+      // one slides in.
+      transition: { staggerChildren: 0.22, delayChildren: 0.45 },
     },
   };
   const item: Variants = {
-    hidden: { opacity: 0, x: -8 },
+    hidden: { opacity: 0, x: -10 },
     show: {
       opacity: 1,
       x: 0,
-      transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
+      transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
     },
   };
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
       className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
     >
       {/* Mini app shell header */}
@@ -334,13 +363,17 @@ function HeroStat({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.85 }}
+      initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{
-        delay: 0.45,
+        // Lands LAST — after the tool tiles / Fluxora panel have settled.
+        // The big number is the punchline; it should arrive when the visual
+        // context is already in place. Spring for a small bounce so the
+        // landing feels confident.
+        delay: 1.6,
         type: "spring",
-        stiffness: 220,
-        damping: 22,
+        stiffness: 200,
+        damping: 20,
       }}
       className="flex flex-col items-end text-right"
     >
