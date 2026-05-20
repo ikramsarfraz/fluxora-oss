@@ -58,6 +58,7 @@ import {
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/utils/payment-summary";
+import { getSupplierInvoiceStatusInfo } from "@/modules/distribution/supplier-invoices/utils/status";
 
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
 import { SupplierInvoicePdfPreviewCard } from "./supplier-invoice-pdf-preview-card";
@@ -324,10 +325,27 @@ export function SupplierInvoiceDetailPage({
     : undefined;
 
   // ── Status pill ──────────────────────────────────────────────────────────
+  // Driven by the shared utils/status.ts mapping so the listing column,
+  // detail header pill, and lifecycle stepper all read from one source.
 
-  const statusPill = isDraft
-    ? { label: "Draft", bg: C.line2, color: C.muted }
-    : { label: "Received", bg: C.goodSoft, color: C.good };
+  const statusInfo = getSupplierInvoiceStatusInfo(invoice.status);
+  const statusPill = (() => {
+    switch (statusInfo.tone) {
+      case "neutral":
+        return { label: statusInfo.label, bg: C.line2, color: C.muted };
+      case "info":
+        return {
+          label: statusInfo.label,
+          bg: "var(--color-info-bg)",
+          color: "var(--color-info-fg)",
+        };
+      case "success":
+        return { label: statusInfo.label, bg: C.goodSoft, color: C.good };
+      case "default":
+      default:
+        return { label: statusInfo.label, bg: C.goodSoft, color: C.good };
+    }
+  })();
 
   const paymentStatusPill: Record<
     typeof paymentSummary.paymentStatus,
