@@ -47,9 +47,9 @@ import { IntroCard, OutroCard } from "./intro-outro";
 
 // One merged demo. Auto-sequences through five core workflows. Between each
 // workflow, the visitor sees TWO stitched compare cards back-to-back:
-// "the old way" (Before) → "the Fluxora way" (After). Each card has a
-// vertical timeline with timestamped events — letting more info filter
-// through than the previous single-divider design.
+// Before → After. Each card has a vertical timeline with timestamped events
+// — letting more info filter through than the previous single-divider
+// design.
 
 type SceneKey =
   | "ai-import"
@@ -66,10 +66,10 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-// Compare cards now open with a big centered title reveal ("The old way" /
-// "The Fluxora way") that pops up large, sits for a beat, then shrinks
-// toward the top-right corner where the small side pill takes over. Only
-// after the title settles does the rest of the card start appearing.
+// Compare cards now open with a big centered title reveal ("Before" /
+// "After") that pops up large, sits for a beat, then shrinks toward the
+// top-right corner where the small side pill takes over. Only after the
+// title settles does the rest of the card start appearing.
 //
 //   0.0 → 0.4s   card fades in
 //   0.0 → 2.0s   BIG TITLE: scales up, sits centered, shrinks + drifts up-right
@@ -442,12 +442,12 @@ export function WalkthroughHero() {
         ) : phase.kind === "before" ? (
           <span className="inline-flex items-center gap-1.5">
             <Landmark className="size-3" strokeWidth={2} />
-            {phase.compare.step} · the old way
+            {phase.compare.step} · Before
           </span>
         ) : phase.kind === "after" ? (
           <span className="inline-flex items-center gap-1.5 text-success-fg">
             <Sparkles className="size-3" strokeWidth={2} />
-            {phase.compare.step} · the Fluxora way
+            {phase.compare.step} · After
           </span>
         ) : (
           <span>
