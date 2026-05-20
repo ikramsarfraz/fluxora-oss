@@ -205,6 +205,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "forest",
     icon: ShieldCheck,
+    liveDemoHref: "/reel/roles-permissions",
   },
 
   // ---------- Billing ----------
