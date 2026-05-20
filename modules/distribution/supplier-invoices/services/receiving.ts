@@ -1565,6 +1565,28 @@ export async function recordSupplierInvoicePayment(
       createdByUserId: currentUser.id,
     }).returning({ id: supplierInvoicePayments.id });
 
+    // Flip the bill from "completed" → "paid" when this payment fully
+    // covers the remaining balance. The detail page UI gates the
+    // "Download PDF as paid", Plaid-match, and fully-paid banner on the
+    // status column — without this flip those surfaces stay stale even
+    // after the balance is zero.
+    const newPaidTotal = Number(summary.totalPaid) + amount;
+    const totalAmount = Number(invoice.totalAmount);
+    if (
+      newPaidTotal + 0.005 >= totalAmount &&
+      invoice.status === "completed"
+    ) {
+      await tx
+        .update(supplierInvoices)
+        .set({ status: "paid", updatedAt: new Date() })
+        .where(
+          and(
+            eq(supplierInvoices.id, input.supplierInvoiceId),
+            eq(supplierInvoices.tenantId, tenant.id),
+          ),
+        );
+    }
+
     const paymentSummaryMethod = input.paymentMethod.replace(/_/g, " ");
     await tx.insert(auditLogs).values({
       tenantId: tenant.id,
@@ -1625,6 +1647,24 @@ export async function voidSupplierInvoicePayment(id: string) {
           eq(supplierInvoicePayments.tenantId, tenant.id),
         ),
       );
+
+    // If voiding this payment drops the bill below fully-paid, revert
+    // "paid" → "completed" so the UI gates (PDF download, fully-paid
+    // banner) flip back accordingly.
+    const remaining = await tx.query.supplierInvoices.findFirst({
+      where: eq(supplierInvoices.id, existing.supplierInvoiceId),
+      columns: { id: true, status: true, totalAmount: true },
+      with: { payments: { columns: { amount: true } } },
+    });
+    if (remaining && remaining.status === "paid") {
+      const summary = computePaymentSummary(remaining);
+      if (summary.paymentStatus !== "paid") {
+        await tx
+          .update(supplierInvoices)
+          .set({ status: "completed", updatedAt: new Date() })
+          .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+      }
+    }
 
     await tx.insert(auditLogs).values({
       tenantId: tenant.id,
@@ -1742,6 +1782,38 @@ export async function updateSupplierInvoicePayment(
           eq(supplierInvoicePayments.tenantId, tenant.id),
         ),
       );
+
+    // Edits that change amount can flip the bill's status in either
+    // direction: a raise can push completed → paid; a reduction can
+    // drop paid → completed. Recompute against the post-update payments
+    // set so both transitions are covered.
+    if (input.amount !== undefined) {
+      const refreshed = await tx.query.supplierInvoices.findFirst({
+        where: eq(supplierInvoices.id, existing.supplierInvoiceId),
+        columns: { id: true, status: true, totalAmount: true },
+        with: { payments: { columns: { amount: true } } },
+      });
+      if (refreshed) {
+        const summary = computePaymentSummary(refreshed);
+        if (
+          summary.paymentStatus === "paid" &&
+          refreshed.status === "completed"
+        ) {
+          await tx
+            .update(supplierInvoices)
+            .set({ status: "paid", updatedAt: new Date() })
+            .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+        } else if (
+          summary.paymentStatus !== "paid" &&
+          refreshed.status === "paid"
+        ) {
+          await tx
+            .update(supplierInvoices)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+        }
+      }
+    }
 
     await tx.insert(auditLogs).values({
       tenantId: tenant.id,
