@@ -1,9 +1,5 @@
 import { SupplierFormSkeleton } from "@/modules/distribution/suppliers/components/supplier-form-skeleton";
 
 export default function Loading() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 px-4 pt-2 lg:px-6">
-      <SupplierFormSkeleton />
-    </div>
-  );
+  return <SupplierFormSkeleton />;
 }
