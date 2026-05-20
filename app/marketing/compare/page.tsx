@@ -19,6 +19,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import {
+  BulkImportMoment,
+  InventoryLotsMoment,
+  PaymentsMoment,
+  SalesOrderMoment,
+} from "../_components/moments";
 import { MarketingFooter, MarketingNav } from "../_components/nav";
 import { ReelEmbed } from "../_components/reel-embed";
 
@@ -81,9 +87,23 @@ export default function CompareLanding() {
           </div>
         </div>
 
-        {/* Split-screen hero */}
-        <div className="mx-auto max-w-6xl px-6 pb-14">
-          <SplitHero />
+        {/* Single hero — the only iframe on the page */}
+        <div className="mx-auto max-w-5xl px-6 pb-14">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <PainPanelHero />
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="inline-flex items-center gap-1 rounded-full bg-forest-mid px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-card-warm">
+                  <Check className="size-2.5" strokeWidth={2.6} />
+                  The Fluxora way
+                </div>
+                <span className="font-mono text-[10px] text-subtle">
+                  live demo
+                </span>
+              </div>
+              <ReelEmbed slug="invoice-import" aspect="video" caption="The PDF invoice import flow" />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -131,30 +151,6 @@ export default function CompareLanding() {
               order={1}
               flip={false}
               pain={{
-                kicker: "Supplier invoices",
-                title: "You're typing PDFs into a system, one line at a time.",
-                bullets: [
-                  "30+ minutes per invoice",
-                  "Aliases lost every time someone leaves",
-                  "Bills posted to wrong vendor (still)",
-                ],
-              }}
-              solution={{
-                kicker: "What Fluxora does",
-                title: "Drop the PDF. We do the typing.",
-                bullets: [
-                  "<94% accuracy across 12 supplier formats",
-                  "Aliases learn and persist forever",
-                  "Posts to AP + receives into inventory in one click",
-                ],
-                slug: "invoice-import",
-                stat: "Average time: 26s",
-              }}
-            />
-            <PainBlock
-              order={2}
-              flip
-              pain={{
                 kicker: "Customer book",
                 title: "Your customer list is in three places. None of them agree.",
                 bullets: [
@@ -171,8 +167,32 @@ export default function CompareLanding() {
                   "Tier pricing + Net terms per customer",
                   "Aging, balance, lifetime — all on the card",
                 ],
-                slug: "customer-bulk-import",
+                moment: <BulkImportMoment />,
                 stat: "18 customers in 4.2s",
+              }}
+            />
+            <PainBlock
+              order={2}
+              flip
+              pain={{
+                kicker: "Order entry",
+                title: "Order entry is copy-paste from email into a sheet.",
+                bullets: [
+                  "Repricing on the spot, in your head",
+                  "No way to see margin per line",
+                  "FIFO is a sticky note on the warehouse wall",
+                ],
+              }}
+              solution={{
+                kicker: "What Fluxora does",
+                title: "Pull stock oldest-first. Margin live.",
+                bullets: [
+                  "FIFO allocates per line, per lot",
+                  "Tier pricing pre-applied per customer",
+                  "Running margin chip in the header",
+                ],
+                moment: <SalesOrderMoment />,
+                stat: "Margin live as you build",
               }}
             />
             <PainBlock
@@ -195,7 +215,7 @@ export default function CompareLanding() {
                   "FIFO allocation on every order",
                   "Spoilage adjustments, audit-trailed",
                 ],
-                slug: "inventory-lots",
+                moment: <InventoryLotsMoment />,
                 stat: "4 at-risk lots caught this week",
               }}
             />
@@ -219,7 +239,7 @@ export default function CompareLanding() {
                   "Payments apply oldest invoice first",
                   "Watch-list spotlights overdue accounts on the dashboard",
                 ],
-                slug: "payments",
+                moment: <PaymentsMoment />,
                 stat: "3 invoices cleared from one payment",
               }}
             />
@@ -411,83 +431,60 @@ export default function CompareLanding() {
   );
 }
 
-// ============================ HERO SPLIT ============================
+// ============================ HERO PAIN PANEL ============================
+// Hand-crafted left side of the hero, paired with the iframe reel on right.
 
-function SplitHero() {
+function PainPanelHero() {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      {/* Spreadsheet side */}
-      <div className="relative overflow-hidden rounded-2xl border-2 border-danger-border/40 bg-card-warm/70 p-5">
-        <div className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-danger-bg/70 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-danger-fg">
+    <div className="relative overflow-hidden rounded-2xl border-2 border-danger-border/40 bg-card-warm/70 p-5">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="inline-flex items-center gap-1 rounded-full bg-danger-bg/70 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-danger-fg">
           <X className="size-2.5" strokeWidth={2.6} />
           The old way
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex size-7 items-center justify-center rounded-md bg-[#217346] text-card-warm">
-            <FileSpreadsheet className="size-3.5" strokeWidth={2.2} />
-          </div>
-          <span className="font-mono text-[11px] text-ink-warm">
-            tuesday-orders-FINAL-v3.xlsx
-          </span>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
-          <PainPanel
-            icon={Inbox}
-            title="9 emails"
-            sub="3 vendors, 2 customers, 4 questions"
-          />
-          <PainPanel
-            icon={Mail}
-            title="2 forwards"
-            sub="from the dispatcher this hour"
-          />
-          <PainPanel
-            icon={ShoppingCart}
-            title="Order chaos"
-            sub="6 in the spreadsheet, 2 on sticky notes"
-          />
-          <PainPanel
-            icon={Receipt}
-            title="Invoice TODO"
-            sub="14 still to type up"
-          />
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <Big
-            label="Manual entry"
-            value="36 min"
-            tone="danger"
-          />
-          <Big
-            label="Errors caught"
-            value="0 of 3"
-            tone="danger"
-          />
-        </div>
+        <span className="font-mono text-[10px] text-subtle">
+          tuesday, 9:42 AM
+        </span>
       </div>
-
-      {/* Fluxora side */}
-      <div className="relative overflow-hidden rounded-2xl border-2 border-forest-mid/50 bg-card-warm">
-        <div className="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-forest-mid px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-card-warm">
-          <Check className="size-2.5" strokeWidth={2.6} />
-          The Fluxora way
+      <div className="flex items-center gap-2">
+        <div className="flex size-7 items-center justify-center rounded-md bg-[#217346] text-card-warm">
+          <FileSpreadsheet className="size-3.5" strokeWidth={2.2} />
         </div>
-        <ReelEmbed
-          slug="invoice-import"
-          aspect="video"
-          showOpen={false}
-          className="!shadow-none [&>div:first-child]:rounded-none [&>div:first-child]:border-0"
+        <span className="font-mono text-[11px] text-ink-warm">
+          tuesday-orders-FINAL-v3.xlsx
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3 text-[11px]">
+        <Pain
+          icon={Inbox}
+          title="9 emails"
+          sub="3 vendors, 2 customers, 4 questions"
         />
-        <div className="grid grid-cols-2 gap-3 px-5 pb-5">
-          <Big label="Time spent" value="4 sec" tone="success" />
-          <Big label="Lines posted" value="9 of 9" tone="success" />
-        </div>
+        <Pain
+          icon={Mail}
+          title="2 forwards"
+          sub="from the dispatcher this hour"
+        />
+        <Pain
+          icon={ShoppingCart}
+          title="Order chaos"
+          sub="6 in the spreadsheet, 2 on stickies"
+        />
+        <Pain
+          icon={Receipt}
+          title="Invoice TODO"
+          sub="14 still to type up"
+        />
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <Big label="Manual entry" value="36 min" tone="danger" />
+        <Big label="Errors caught" value="0 of 3" tone="danger" />
       </div>
     </div>
   );
 }
 
-function PainPanel({
+function Pain({
   icon: Icon,
   title,
   sub,
@@ -597,7 +594,7 @@ function PainBlock({
     kicker: string;
     title: string;
     bullets: string[];
-    slug: string;
+    moment: React.ReactNode;
     stat: string;
   };
 }) {
@@ -637,35 +634,33 @@ function PainBlock({
           </ul>
         </div>
 
-        {/* Solution card */}
-        <div className="overflow-hidden rounded-2xl border-2 border-forest-mid/50 bg-card-warm shadow-[0_22px_50px_-25px_rgba(31,58,46,0.4)]">
-          <div className="border-b border-border-default p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-forest-mid">
-                <Sparkles className="size-3" strokeWidth={2.4} />
-                {solution.kicker}
-              </div>
-              <div className="inline-flex items-center gap-1.5 rounded-full bg-success-bg/60 px-2 py-0.5 font-mono text-[10px] text-success-fg">
-                <Zap className="size-2.5" strokeWidth={2.4} />
-                {solution.stat}
-              </div>
+        {/* Solution */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-forest-mid">
+              <Sparkles className="size-3" strokeWidth={2.4} />
+              {solution.kicker}
             </div>
-            <h3 className="mt-3 font-serif text-[24px] font-medium leading-[1.2] tracking-tight text-ink md:text-[28px]">
-              {solution.title}
-            </h3>
-            <ul className="mt-4 space-y-1.5 text-[12.5px] text-ink-warm">
-              {solution.bullets.map((b) => (
-                <li key={b} className="flex items-start gap-1.5">
-                  <Check
-                    className="mt-1 size-2.5 shrink-0 text-success-fg"
-                    strokeWidth={2.8}
-                  />
-                  <span dangerouslySetInnerHTML={{ __html: b }} />
-                </li>
-              ))}
-            </ul>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-success-bg/60 px-2 py-0.5 font-mono text-[10px] text-success-fg">
+              <Zap className="size-2.5" strokeWidth={2.4} />
+              {solution.stat}
+            </div>
           </div>
-          <ReelEmbed slug={solution.slug} aspect="video" showOpen={false} className="!shadow-none [&>div:first-child]:rounded-none [&>div:first-child]:border-0" />
+          <h3 className="mb-3 font-serif text-[24px] font-medium leading-[1.2] tracking-tight text-ink md:text-[28px]">
+            {solution.title}
+          </h3>
+          <ul className="mb-5 space-y-1.5 text-[12.5px] text-ink-warm">
+            {solution.bullets.map((b) => (
+              <li key={b} className="flex items-start gap-1.5">
+                <Check
+                  className="mt-1 size-2.5 shrink-0 text-success-fg"
+                  strokeWidth={2.8}
+                />
+                <span dangerouslySetInnerHTML={{ __html: b }} />
+              </li>
+            ))}
+          </ul>
+          {solution.moment}
         </div>
       </div>
     </article>
@@ -725,9 +720,7 @@ function Testimonial({
         )}
         strokeWidth={1.6}
       />
-      <p
-        className="mt-3 font-serif text-[17px] leading-[1.4] tracking-tight text-ink"
-      >
+      <p className="mt-3 font-serif text-[17px] leading-[1.4] tracking-tight text-ink">
         “{quote}”
       </p>
       <div className="mt-5 flex items-center gap-2.5">
