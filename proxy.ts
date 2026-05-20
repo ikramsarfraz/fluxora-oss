@@ -95,7 +95,8 @@ function isRootOnlyPath(pathname: string) {
     pathname === "/" ||
     pathname.startsWith("/features") ||
     pathname.startsWith("/pricing") ||
-    pathname.startsWith("/reel")
+    pathname.startsWith("/reel") ||
+    pathname.startsWith("/marketing")
   );
 }
 
@@ -197,7 +198,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/features" || pathname === "/pricing") {
+  if (
+    pathname === "/features" ||
+    pathname === "/pricing" ||
+    pathname.startsWith("/marketing")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
