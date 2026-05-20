@@ -586,6 +586,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "info",
     icon: Landmark,
+    liveDemoHref: "/reel/plaid-link",
   },
   {
     slug: "expenses",
