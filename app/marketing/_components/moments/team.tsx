@@ -3,146 +3,188 @@
 import { motion } from "motion/react";
 import {
   Boxes,
+  Check,
   Crown,
+  Eye,
+  EyeOff,
   FileText,
   LayoutDashboard,
-  Lock,
+  Receipt,
+  Truck,
   Users,
   Wallet,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { MomentFrame } from "./moment-frame";
+import { MarketingAppShell } from "./app-shell";
 
-// Roles moment: three teammate cards side-by-side, each showing their
-// own sidebar visibility — same workspace, different eyes.
-type Pane = {
-  name: string;
-  avatar: string;
-  role: "Owner" | "Member" | "Warehouse";
-  visible: string[];
+// Roles & permissions moment: full settings page showing the permission
+// matrix as a real table. Stays inside the app shell context.
+
+const ROLES = ["Owner", "Admin", "Member", "Warehouse"] as const;
+type Role = (typeof ROLES)[number];
+
+type PermRow = {
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  access: Record<Role, "full" | "read" | "none">;
 };
 
-const ALL = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Customers", icon: Users },
-  { label: "Inventory", icon: Boxes },
-  { label: "Orders", icon: FileText },
-  { label: "Payments", icon: Wallet },
+const PERMISSIONS: PermRow[] = [
+  {
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    access: { Owner: "full", Admin: "full", Member: "read", Warehouse: "none" },
+  },
+  {
+    label: "Customers",
+    icon: Users,
+    access: { Owner: "full", Admin: "full", Member: "read", Warehouse: "none" },
+  },
+  {
+    label: "Suppliers",
+    icon: Truck,
+    access: { Owner: "full", Admin: "full", Member: "read", Warehouse: "read" },
+  },
+  {
+    label: "Inventory",
+    icon: Boxes,
+    access: { Owner: "full", Admin: "full", Member: "read", Warehouse: "full" },
+  },
+  {
+    label: "Orders",
+    icon: FileText,
+    access: { Owner: "full", Admin: "full", Member: "full", Warehouse: "read" },
+  },
+  {
+    label: "Invoices",
+    icon: Receipt,
+    access: { Owner: "full", Admin: "full", Member: "read", Warehouse: "none" },
+  },
+  {
+    label: "Payments",
+    icon: Wallet,
+    access: { Owner: "full", Admin: "full", Member: "none", Warehouse: "none" },
+  },
 ];
 
-const PANES: Pane[] = [
-  {
-    name: "Sarah",
-    avatar: "SC",
-    role: "Owner",
-    visible: ["Dashboard", "Customers", "Inventory", "Orders", "Payments"],
-  },
-  {
-    name: "Mateo",
-    avatar: "MR",
-    role: "Member",
-    visible: ["Dashboard", "Customers", "Orders"],
-  },
-  {
-    name: "Diego",
-    avatar: "DP",
-    role: "Warehouse",
-    visible: ["Inventory", "Orders"],
-  },
-];
+const ACCESS_LABEL: Record<"full" | "read" | "none", string> = {
+  full: "Full",
+  read: "Read",
+  none: "—",
+};
 
-const ROLE_TONE: Record<Pane["role"], string> = {
-  Owner: "bg-forest-tint text-forest-mid",
-  Member: "bg-info-bg text-info-fg",
-  Warehouse: "bg-warning-bg text-warning-fg",
+const ACCESS_TONE: Record<"full" | "read" | "none", string> = {
+  full: "bg-success-bg/70 text-success-fg",
+  read: "bg-info-bg/60 text-info-fg",
+  none: "bg-surface text-subtle",
 };
 
 export function RolesMoment() {
   return (
-    <MomentFrame label="Roles · per-person view" tone="forest">
-      <div className="p-6">
-        <h3 className="font-serif text-[20px] font-medium tracking-tight text-ink">
-          Same workspace. Three pairs of eyes.
-        </h3>
-        <p className="mt-1 text-[12.5px] text-subtle">
-          The sidebar morphs per role. Server-enforced.
-        </p>
-
-        <div className="mt-5 grid grid-cols-3 gap-3">
-          {PANES.map((p, idx) => (
-            <Card key={p.name} pane={p} delay={0.2 + idx * 0.12} />
-          ))}
+    <MarketingAppShell
+      activeNav="dashboard"
+      crumbs={["Workspace settings", "Roles & permissions"]}
+      label="Roles · server-enforced"
+      tone="forest"
+      rightSlot={
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-forest-tint/60 px-2.5 py-1 font-mono text-[11px] text-forest-mid">
+          <Check className="size-3" strokeWidth={2.4} />
+          Saved · enforced live
+        </span>
+      }
+    >
+      <div className="flex h-full flex-col p-5">
+        <div>
+          <h2 className="font-serif text-[20px] font-medium tracking-tight text-ink">
+            Permission matrix
+          </h2>
+          <p className="mt-1 text-[12.5px] text-subtle">
+            Same workspace. Four different views. Server-enforced row-by-row.
+          </p>
         </div>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-border-default bg-card-warm">
+          <table className="w-full text-[12px]">
+            <thead className="bg-surface/60 text-[10px] uppercase tracking-[0.12em] text-subtle">
+              <tr>
+                <th className="px-3 py-2.5 text-left font-medium">Module</th>
+                {ROLES.map((r) => (
+                  <th key={r} className="px-3 py-2.5 text-center font-medium">
+                    <span className="inline-flex items-center gap-1">
+                      {r === "Owner" ? (
+                        <Crown className="size-3 text-forest-mid" strokeWidth={2} />
+                      ) : null}
+                      {r}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PERMISSIONS.map((perm, idx) => (
+                <motion.tr
+                  key={perm.label}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: 0.15 + idx * 0.08,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="border-t border-border-default"
+                >
+                  <td className="px-3 py-2.5">
+                    <span className="flex items-center gap-2 font-medium text-ink">
+                      <perm.icon
+                        className="size-3.5 text-subtle"
+                        strokeWidth={1.8}
+                      />
+                      {perm.label}
+                    </span>
+                  </td>
+                  {ROLES.map((r) => (
+                    <td key={r} className="px-3 py-2.5 text-center">
+                      <AccessPill access={perm.access[r]} />
+                    </td>
+                  ))}
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0 }}
+          className="mt-4 inline-flex items-center gap-2 rounded-md border border-forest-tint-deep/60 bg-forest-tint/40 px-3 py-2 text-[12px] font-medium text-forest-mid"
+        >
+          <Check className="size-3.5" strokeWidth={2.4} />
+          Warehouse sees lots &amp; orders only. CFO sees the full P&amp;L.
+        </motion.div>
       </div>
-    </MomentFrame>
+    </MarketingAppShell>
   );
 }
 
-function Card({ pane, delay }: { pane: Pane; delay: number }) {
+function AccessPill({ access }: { access: "full" | "read" | "none" }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
-      className="rounded-xl border border-border-default bg-card-warm p-3"
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10.5px] font-medium",
+        ACCESS_TONE[access],
+      )}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div className="flex size-7 items-center justify-center rounded-full bg-forest-tint font-mono text-[10px] font-bold text-forest-mid">
-          {pane.avatar}
-        </div>
-        <div className="flex-1">
-          <div className="text-[12px] font-medium text-ink">{pane.name}</div>
-          <span
-            className={cn(
-              "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em]",
-              ROLE_TONE[pane.role],
-            )}
-          >
-            {pane.role === "Owner" ? (
-              <Crown className="size-2" strokeWidth={2.4} />
-            ) : null}
-            {pane.role}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 font-mono text-[8.5px] uppercase tracking-[0.14em] text-subtle">
-        Sidebar
-      </div>
-      <ul className="mt-1.5 space-y-0.5">
-        {ALL.map((nav, i) => {
-          const visible = pane.visible.includes(nav.label);
-          const Icon = nav.icon;
-          return (
-            <motion.li
-              key={nav.label}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: visible ? 1 : 0.35, x: 0 }}
-              transition={{ delay: delay + 0.15 + i * 0.03 }}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10.5px]",
-                visible ? "bg-card-warm text-ink-warm" : "text-subtle",
-              )}
-            >
-              {visible ? (
-                <Icon className="size-2.5" strokeWidth={1.8} />
-              ) : (
-                <Lock className="size-2.5" strokeWidth={1.8} />
-              )}
-              <span className={cn(!visible && "line-through")}>
-                {nav.label}
-              </span>
-            </motion.li>
-          );
-        })}
-      </ul>
-
-      <div className="mt-2 rounded bg-surface/40 px-2 py-1 text-center font-mono text-[8.5px] text-subtle">
-        {pane.visible.length} / {ALL.length} modules
-      </div>
-    </motion.div>
+      {access === "full" ? (
+        <Check className="size-2.5" strokeWidth={2.6} />
+      ) : access === "read" ? (
+        <Eye className="size-2.5" strokeWidth={2.4} />
+      ) : (
+        <EyeOff className="size-2.5" strokeWidth={2.4} />
+      )}
+      {ACCESS_LABEL[access]}
+    </span>
   );
 }

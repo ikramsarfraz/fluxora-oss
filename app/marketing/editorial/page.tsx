@@ -183,27 +183,27 @@ export default function EditorialLanding() {
       {/* ============================ DASHBOARD ============================ */}
       <section className="border-t border-border-default/50">
         <div className="mx-auto max-w-6xl px-6 py-20">
-          <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-[1fr_1.1fr]">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-forest-mid">
-                The morning glance
-              </p>
-              <h2 className="mt-3 font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-ink md:text-[48px]">
-                Open the laptop.
-                <br />
-                <span className="text-forest-mid">Know the day.</span>
-              </h2>
-              <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
-                Revenue today. Margin. Aging. Stock at risk. Today&apos;s
-                biggest win. Every number you check first thing, on one
-                screen, refreshed on load.
-              </p>
-              <ul className="mt-5 space-y-1.5 text-[13px] text-ink-warm">
-                <Check2 text="Live KPIs · drill any number" />
-                <Check2 text="Trend charts that draw in" />
-                <Check2 text="Spotlight card for what to chase" />
-              </ul>
-            </div>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-forest-mid">
+              The morning glance
+            </p>
+            <h2 className="mt-3 font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-ink md:text-[48px]">
+              Open the laptop.
+              <br />
+              <span className="text-forest-mid">Know the day.</span>
+            </h2>
+            <p className="mt-4 text-[15px] leading-[1.65] text-ink-warm">
+              Revenue today. Margin. Aging. Stock at risk. Today&apos;s
+              biggest win. Every number you check first thing, on one
+              screen, refreshed on load.
+            </p>
+            <ul className="mx-auto mt-5 flex max-w-md flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[13px] text-ink-warm">
+              <Check2 text="Live KPIs" />
+              <Check2 text="Trend charts" />
+              <Check2 text="Spotlight cards" />
+            </ul>
+          </div>
+          <div className="mt-10">
             <DashboardMoment />
           </div>
         </div>
@@ -216,7 +216,7 @@ export default function EditorialLanding() {
             eyebrow="Run a real team"
             title="Roles, imports, banking — the boring parts done well."
           />
-          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="mt-12 space-y-12">
             <RolesMoment />
             <BulkImportMoment />
           </div>
@@ -397,14 +397,14 @@ function LogoText({ name }: { name: string }) {
 }
 
 function EverydayBlock({
-  flip,
   icon: Icon,
   kicker,
   title,
   body,
   moment,
 }: {
-  flip: boolean;
+  /** Kept for callsite compatibility; layout is now always text-above-moment. */
+  flip?: boolean;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   kicker: string;
   title: string;
@@ -412,22 +412,23 @@ function EverydayBlock({
   moment: React.ReactNode;
 }) {
   return (
-    <article
-      className={`grid grid-cols-1 items-center gap-10 md:grid-cols-2 ${flip ? "md:[&>*:first-child]:order-2" : ""}`}
-    >
-      <div>
-        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-forest-mid">
+    <article>
+      {/* Text leads. The moment below is a real app screenshot at full width —
+          no longer crammed into a half-column where the sidebar text would be
+          unreadable. */}
+      <div className="mx-auto max-w-2xl text-center">
+        <div className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-forest-mid">
           <Icon className="size-3" strokeWidth={2.2} />
           {kicker}
         </div>
-        <h3 className="mt-3 font-serif text-[28px] font-medium leading-[1.15] tracking-tight text-ink md:text-[34px]">
+        <h3 className="mt-3 font-serif text-[28px] font-medium leading-[1.15] tracking-tight text-ink md:text-[36px]">
           {title}
         </h3>
-        <p className="mt-4 text-[14.5px] leading-[1.65] text-ink-warm">
+        <p className="mx-auto mt-4 max-w-[560px] text-[15px] leading-[1.65] text-ink-warm">
           {body}
         </p>
       </div>
-      <div>{moment}</div>
+      <div className="mt-8">{moment}</div>
     </article>
   );
 }

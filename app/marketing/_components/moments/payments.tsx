@@ -1,13 +1,19 @@
 "use client";
 
 import { motion } from "motion/react";
-import { ArrowDown, Check, Sparkles, Zap } from "lucide-react";
+import {
+  ArrowDown,
+  Building2,
+  Check,
+  CreditCard,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-import { MomentFrame } from "./moment-frame";
+import { MarketingAppShell } from "./app-shell";
 
-// Before / after aging bars, with the headline payment chip up top.
 type Bucket = {
   label: string;
   before: number;
@@ -35,33 +41,65 @@ export function PaymentsMoment() {
   const max = Math.max(...BUCKETS.map((b) => b.before));
 
   return (
-    <MomentFrame label="Payments · FIFO" tone="success">
-      <div className="p-6">
-        {/* Payment chip */}
-        <div className="flex items-center gap-3 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2.5">
-          <div className="flex size-8 items-center justify-center rounded-full bg-success-fg text-card-warm">
-            <Zap className="size-3.5" strokeWidth={2.2} />
+    <MarketingAppShell
+      activeNav="payments"
+      crumbs={["Payments", "Apply payment", "Lighthouse Cafe"]}
+      label="Payments · FIFO match"
+      tone="success"
+      rightSlot={
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-success-border/60 bg-success-bg/40 px-2.5 py-1 text-[11.5px] font-medium text-success-fg">
+          <Sparkles className="size-3" strokeWidth={2} />3 invoices cleared
+        </span>
+      }
+    >
+      <div className="flex h-full flex-col p-5">
+        {/* Payment ribbon */}
+        <div className="flex items-center gap-3 rounded-lg border border-success-border/60 bg-success-bg/40 px-4 py-3">
+          <div className="flex size-9 items-center justify-center rounded-full bg-success-fg text-card-warm">
+            <Zap className="size-4" strokeWidth={2.2} />
           </div>
           <div className="flex-1">
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-success-fg">
-              Payment in · Lighthouse Cafe
+              Payment received
             </div>
-            <div className="font-serif text-[18px] font-medium text-ink">
-              $4,880.00
+            <div className="flex items-baseline gap-2">
+              <span className="font-serif text-[20px] font-medium text-ink">
+                $4,880.00
+              </span>
+              <span className="font-mono text-[11px] text-subtle">
+                from Lighthouse Cafe
+              </span>
             </div>
           </div>
           <div className="text-right">
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
-              Applied
+              Method
             </div>
-            <div className="font-serif text-[18px] font-medium text-success-fg">
-              3 invoices
+            <div className="flex items-center justify-end gap-1.5 text-[12px] text-ink">
+              <CreditCard className="size-3" strokeWidth={2} />
+              ACH · •••• 0142
             </div>
           </div>
         </div>
 
-        {/* Before / After columns */}
-        <div className="mt-5 grid grid-cols-2 gap-5">
+        {/* Customer chip */}
+        <div className="mt-4 flex items-center gap-2.5 rounded-md border border-border-default bg-card-warm px-3 py-2">
+          <div className="flex size-7 items-center justify-center rounded-md bg-forest-tint">
+            <Building2 className="size-3.5 text-forest-mid" strokeWidth={1.8} />
+          </div>
+          <span className="text-[12.5px] font-medium text-ink">
+            Lighthouse Cafe
+          </span>
+          <span className="font-mono text-[10px] text-subtle">
+            San Francisco · LCH
+          </span>
+          <span className="ml-auto font-mono text-[10.5px] text-ink-warm">
+            $4,880 open balance
+          </span>
+        </div>
+
+        {/* Before/after aging buckets */}
+        <div className="mt-5 grid flex-1 grid-cols-2 gap-5">
           <Column
             title="Before"
             total={totalBefore}
@@ -70,7 +108,7 @@ export function PaymentsMoment() {
             max={max}
           />
           <Column
-            title="After"
+            title="After FIFO apply"
             total={totalAfter}
             buckets={BUCKETS}
             phase="after"
@@ -81,14 +119,15 @@ export function PaymentsMoment() {
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 1.4 }}
-          className="mt-4 inline-flex items-center gap-2 rounded-md border border-success-border/60 bg-success-bg/40 px-3 py-1.5 text-[11.5px] font-medium text-success-fg"
+          transition={{ delay: 1.5 }}
+          className="mt-4 flex items-center gap-2 rounded-lg border border-success-border/60 bg-success-bg/30 px-3 py-2 text-[11.5px] font-medium text-success-fg"
         >
-          <Sparkles className="size-3" strokeWidth={2.2} />
-          61–90 cleared · 31–60 cleared · 1–30 reduced
+          <Sparkles className="size-3.5" strokeWidth={2} />
+          61–90 cleared · 31–60 cleared · 1–30 reduced · 0 manual matches
+          required
         </motion.div>
       </div>
-    </MomentFrame>
+    </MarketingAppShell>
   );
 }
 
@@ -115,17 +154,15 @@ function Column({
           ${total.toLocaleString()}
         </span>
       </div>
-
       <div className="mt-3 space-y-2.5">
         {buckets.map((b, idx) => {
           const value = phase === "after" ? b.after : b.before;
           const cleared = phase === "after" && b.before > 0 && b.after === 0;
-          const partial =
-            phase === "after" && b.after > 0 && b.after !== b.before;
+          const partial = phase === "after" && b.after > 0 && b.after !== b.before;
           const fillPct = (value / max) * 100;
           return (
             <div key={b.label}>
-              <div className="flex items-baseline justify-between text-[11px]">
+              <div className="flex items-baseline justify-between text-[11.5px]">
                 <span className="text-ink-warm">{b.label}</span>
                 <div className="flex items-center gap-1.5">
                   {cleared ? (
@@ -134,31 +171,29 @@ function Column({
                       cleared
                     </span>
                   ) : partial ? (
-                    <span className="inline-flex items-center gap-0.5 font-mono text-[9.5px] text-success-fg">
-                      <ArrowDown className="size-2" strokeWidth={2.4} />
+                    <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-success-fg">
+                      <ArrowDown className="size-2.5" strokeWidth={2.4} />
                       ${(b.before - b.after).toLocaleString()}
                     </span>
                   ) : null}
                   <span
                     className={cn(
-                      "font-mono text-[11.5px] tabular-nums",
-                      cleared
-                        ? "text-success-fg line-through"
-                        : "text-ink",
+                      "font-mono text-[12px] tabular-nums",
+                      cleared ? "text-success-fg line-through" : "text-ink",
                     )}
                   >
                     ${value.toLocaleString()}
                   </span>
                 </div>
               </div>
-              <div className="mt-1 h-2 overflow-hidden rounded-md border border-border-default bg-card-warm">
+              <div className="mt-1 h-2.5 overflow-hidden rounded-md border border-border-default bg-card-warm">
                 <motion.div
                   className={cn("h-full", TONE_BG[b.tone])}
                   initial={false}
                   animate={{ width: `${fillPct}%` }}
                   transition={{
                     duration: 0.85,
-                    delay: phase === "after" ? 0.5 + idx * 0.08 : 0.15 + idx * 0.06,
+                    delay: phase === "after" ? 0.6 + idx * 0.08 : 0.15 + idx * 0.06,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                 />
