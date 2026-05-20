@@ -146,6 +146,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "info",
     icon: Building2,
+    liveDemoHref: "/reel/onboarding",
   },
   {
     slug: "multi-tenant-routing",
