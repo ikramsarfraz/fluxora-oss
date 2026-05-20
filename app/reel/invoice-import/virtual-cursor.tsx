@@ -22,15 +22,29 @@ export function VirtualCursor({
       return;
     }
 
-    // Scroll target into view on first sight so it's actually visible when the
-    // cursor lands. We only do this once per target change, not on every
-    // re-measure, otherwise the page would jitter forever.
+    // Scroll the target into view inside the reel — but ONLY when the reel
+    // is running standalone (at /reel/invoice-import on its own host page),
+    // not when iframe-embedded on a marketing page. `scrollIntoView`
+    // traverses every scrolling ancestor, including the parent document,
+    // so calling it inside an iframe yanks the marketing page back to the
+    // demo every time the cursor moves. The reel surface is sized to fit
+    // the iframe viewport, so the target is already visible — no scroll
+    // needed. We also use `block: "nearest"` so even the standalone case
+    // only scrolls when the target is actually offscreen.
     if ("selector" in cursor && cursor.selector !== lastSelectorRef.current) {
-      const frame = frameRef.current;
-      if (frame) {
-        const el = frame.querySelector<HTMLElement>(cursor.selector);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      const isEmbedded =
+        typeof window !== "undefined" && window.parent !== window;
+      if (!isEmbedded) {
+        const frame = frameRef.current;
+        if (frame) {
+          const el = frame.querySelector<HTMLElement>(cursor.selector);
+          if (el) {
+            el.scrollIntoView({
+              behavior: "smooth",
+              block: "nearest",
+              inline: "nearest",
+            });
+          }
         }
       }
       lastSelectorRef.current = cursor.selector;

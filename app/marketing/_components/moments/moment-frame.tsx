@@ -65,7 +65,14 @@ export function MomentFrame({
   }, [inView, loopMs]);
 
   return (
-    <div ref={ref} className={cn("relative", className)}>
+    <div
+      ref={ref}
+      className={cn("relative", className)}
+      // Disable browser scroll-anchoring. When the inner key bumps every
+      // loopMs the subtree remounts; without this, the browser may try to
+      // "anchor" scroll position to the changing element and yank the page.
+      style={{ overflowAnchor: "none" }}
+    >
       {label ? (
         <div
           className={cn(
