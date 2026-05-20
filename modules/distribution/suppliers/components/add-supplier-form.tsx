@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { useCreateSupplier } from "../hooks/use-suppliers";
+import { NetTermsLegend } from "./net-terms-legend";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
@@ -141,11 +142,12 @@ export function AddSupplierForm(props?: {
                   />
                   <FieldDescription>
                     Days from invoice date until payment is due. Leave blank
-                    for Net-0 (due on invoice date). Common values: 0, 7, 15, 30.
+                    for Net-0 (due on invoice date).
                   </FieldDescription>
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />
                   )}
+                  <NetTermsLegend />
                 </Field>
               )}
             />

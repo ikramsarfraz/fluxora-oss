@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 
 import { updateSupplierAction } from "@/modules/distribution/suppliers/actions";
+import { NetTermsLegend } from "./net-terms-legend";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
@@ -135,6 +136,7 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
                   {fieldState.invalid ? (
                     <FieldError errors={[fieldState.error]} />
                   ) : null}
+                  <NetTermsLegend />
                 </Field>
               )}
             />
