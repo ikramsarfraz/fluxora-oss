@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { csvRowToCustomerInput } from "./csv-row-mapping";
 
-test("maps a full row with name + contact + address", () => {
+test("maps a full row with name + contact + address + extras", () => {
   const out = csvRowToCustomerInput({
     name: "Acme Meats",
     abbreviation: "ACME",
@@ -12,6 +12,8 @@ test("maps a full row with name + contact + address", () => {
     tax_id: "12-3456789",
     net_days: "30",
     fuel_surcharge: "15.00",
+    credit_limit: "10000.00",
+    notes: "Back-dock only",
     address_line1: "123 Main St",
     address_city: "San Francisco",
     address_state: "CA",
@@ -24,6 +26,8 @@ test("maps a full row with name + contact + address", () => {
   assert.equal(out.taxId, "12-3456789");
   assert.equal(out.netDays, 30);
   assert.equal(out.fuelSurchargeAmount, "15.00");
+  assert.equal(out.creditLimit, "10000.00");
+  assert.equal(out.notes, "Back-dock only");
   assert.equal(out.addresses!.length, 1);
   assert.equal(out.addresses![0]!.street, "123 Main St");
   assert.equal(out.addresses![0]!.city, "San Francisco");
@@ -42,6 +46,8 @@ test("collapses empty optional fields to null", () => {
     tax_id: "",
     net_days: "",
     fuel_surcharge: "",
+    credit_limit: "",
+    notes: "",
     address_line1: "",
   });
   assert.equal(out.abbreviation, null);
@@ -50,6 +56,8 @@ test("collapses empty optional fields to null", () => {
   assert.equal(out.taxId, null);
   assert.equal(out.netDays, null);
   assert.equal(out.fuelSurchargeAmount, null);
+  assert.equal(out.creditLimit, null);
+  assert.equal(out.notes, null);
   assert.equal(out.addresses, undefined);
 });
 

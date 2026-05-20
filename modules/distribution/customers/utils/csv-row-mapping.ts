@@ -46,6 +46,8 @@ export function csvRowToCustomerInput(
     netDays:
       netDaysNum != null && Number.isFinite(netDaysNum) ? netDaysNum : null,
     fuelSurchargeAmount: row.fuel_surcharge?.trim() || null,
+    creditLimit: row.credit_limit?.trim() || null,
+    notes: row.notes?.trim() || null,
     addresses,
   };
 }

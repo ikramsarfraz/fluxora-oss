@@ -199,6 +199,77 @@ test("rejects netDays over 365", () => {
   assert.equal(result.success, false);
 });
 
+// ── creditLimit (optional, non-negative dollar amount) ────────────────────────
+
+test("accepts a valid credit limit", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    creditLimit: "5000.00",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.creditLimit, "5000.00");
+});
+
+test("coerces empty-string credit limit to null", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    creditLimit: "",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.creditLimit, null);
+});
+
+test("rejects a negative credit limit", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    creditLimit: "-100",
+  });
+  assert.equal(result.success, false);
+});
+
+test("rejects a credit limit with more than 2 decimals", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    creditLimit: "100.123",
+  });
+  assert.equal(result.success, false);
+});
+
+// ── notes (optional, ≤ 4,000 chars) ───────────────────────────────────────────
+
+test("accepts a notes field", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    notes: "Back-dock only. Ask for Maria.",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.notes, "Back-dock only. Ask for Maria.");
+});
+
+test("coerces empty notes to null", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    notes: "",
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.notes, null);
+});
+
+test("rejects notes over 4,000 chars", () => {
+  const result = createCustomerInputSchema.safeParse({
+    name: "Acme",
+    abbreviation: "ACME",
+    notes: "x".repeat(4001),
+  });
+  assert.equal(result.success, false);
+});
+
 // ── addresses (nested) ────────────────────────────────────────────────────────
 
 test("accepts a valid address", () => {

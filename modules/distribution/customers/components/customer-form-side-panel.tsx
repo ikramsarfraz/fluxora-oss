@@ -43,9 +43,19 @@ const SECTIONS: ReadonlyArray<SectionExplainer> = [
     body: "A flat per-order amount auto-added when you tick &lsquo;Add fuel surcharge&rsquo; on a new sales order. Set 0 (or leave blank) to skip.",
   },
   {
+    icon: CircleDollarSign,
+    title: "Credit limit",
+    body: "A soft cap on open AR. The detail page flags when this customer's balance due is over the limit, so ops can see risk at a glance. Not enforced at order submit — informational only for v1.",
+  },
+  {
     icon: MapPin,
     title: "Addresses",
     body: "Shipping address is what drivers route to; billing address is what shows on invoices; warehouse for receiving teams. The default one auto-fills new orders.",
+  },
+  {
+    icon: ClipboardList,
+    title: "Notes",
+    body: "Workspace-internal memo — delivery quirks, after-hours numbers, the name to ask for at the back dock. Shown on the detail page. Up to 4,000 chars.",
   },
 ];
 

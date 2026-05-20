@@ -120,11 +120,13 @@ const CONFIGS: Record<ImportType, {
       { key: "phone", label: "Phone" },
       { key: "tax_id", label: "Tax ID (EIN)" },
       { key: "net_days", label: "Payment terms (net days)" },
+      { key: "credit_limit", label: "Credit limit ($)" },
       { key: "fuel_surcharge", label: "Fuel surcharge ($)" },
       { key: "address_line1", label: "Street" },
       { key: "address_city", label: "City" },
       { key: "address_state", label: "State" },
       { key: "address_zip", label: "ZIP" },
+      { key: "notes", label: "Notes" },
     ],
     templateRows: [
       {
@@ -134,11 +136,13 @@ const CONFIGS: Record<ImportType, {
         phone: "(555) 123-4567",
         tax_id: "12-3456789",
         net_days: "30",
+        credit_limit: "5000.00",
         fuel_surcharge: "15.00",
         address_line1: "123 Main St",
         address_city: "San Francisco",
         address_state: "CA",
         address_zip: "94103",
+        notes: "Back-dock delivery only. Ask for Maria.",
       },
       {
         name: "Fast Eats Truck",
@@ -147,11 +151,13 @@ const CONFIGS: Record<ImportType, {
         phone: "(555) 567-8910",
         tax_id: "",
         net_days: "",
+        credit_limit: "",
         fuel_surcharge: "",
         address_line1: "",
         address_city: "",
         address_state: "",
         address_zip: "",
+        notes: "",
       },
     ],
   },
@@ -225,6 +231,12 @@ function validate(rows: ParsedRow[], importType: ImportType): ValidationError[] 
         const n = Number(row.fuel_surcharge);
         if (!Number.isFinite(n) || n < 0) {
           rowErrors.push("fuel_surcharge must be a non-negative number");
+        }
+      }
+      if (row.credit_limit) {
+        const n = Number(row.credit_limit);
+        if (!Number.isFinite(n) || n < 0) {
+          rowErrors.push("credit_limit must be a non-negative number");
         }
       }
       // Address columns are co-required: if any sub-field is filled, the

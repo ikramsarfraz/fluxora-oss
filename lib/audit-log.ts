@@ -36,6 +36,8 @@ export type AuditAction =
   | "product.delete"
   | "product.bulk_import"
   | "customer.delete"
+  | "customer.archive"
+  | "customer.restore"
   | "customer.bulk_import"
   | "plaid.connection_added"
   | "plaid.connection_removed"

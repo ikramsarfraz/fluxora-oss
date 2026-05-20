@@ -372,6 +372,13 @@
 			"when": 1779101200000,
 			"tag": "0052_customer_invoice_prefix_unique",
 			"breakpoints": true
+		},
+		{
+			"idx": 53,
+			"version": "7",
+			"when": 1779101300000,
+			"tag": "0053_customer_notes_credit_limit",
+			"breakpoints": true
 		}
 	]
 }

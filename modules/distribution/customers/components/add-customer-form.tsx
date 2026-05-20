@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   createCustomerInputSchema,
   type CreateCustomerInput,
@@ -65,6 +66,8 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
       taxId: "",
       netDays: "",
       fuelSurchargeAmount: "",
+      creditLimit: "",
+      notes: "",
       addresses: [],
     };
   }
@@ -77,6 +80,8 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
     taxId: customer.taxId ?? "",
     netDays: customer.netDays == null ? "" : String(customer.netDays),
     fuelSurchargeAmount: customer.fuelSurchargeAmount ?? "",
+    creditLimit: customer.creditLimit ?? "",
+    notes: customer.notes ?? "",
     addresses: customer.addresses.map(address => ({
       addressType: address.addressType,
       street: address.street,
@@ -402,6 +407,39 @@ export function AddCustomerForm(props?: {
                 <NetTermsLegend />
 
                 <Controller
+                  name="creditLimit"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      data-invalid={fieldState.invalid}
+                      className="@md/field-group:max-w-xs"
+                    >
+                      <FieldLabel htmlFor="form-add-customer-credit-limit">
+                        Credit limit ($)
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-credit-limit"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="0.00"
+                      />
+                      <FieldDescription>
+                        Soft cap on open AR. Detail page flags when the
+                        customer is over. Leave blank for no limit.
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <Controller
                   name="taxId"
                   control={form.control}
                   render={({ field, fieldState }) => (
@@ -466,6 +504,36 @@ export function AddCustomerForm(props?: {
                   <Plus className="h-4 w-4" />
                   Add address
                 </Button>
+              </FormSection>
+
+              <FormSection title="Internal notes">
+                <Controller
+                  name="notes"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel
+                        htmlFor="form-add-customer-notes"
+                        className="sr-only"
+                      >
+                        Internal notes
+                      </FieldLabel>
+                      <Textarea
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-notes"
+                        rows={4}
+                        placeholder="Anything worth remembering — delivery quirks, contact preferences, payment habits, etc."
+                      />
+                      <FieldDescription>
+                        Visible only to your workspace. Up to 4,000 characters.
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
               </FormSection>
             </FieldGroup>
           </form>

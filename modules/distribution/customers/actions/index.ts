@@ -10,6 +10,7 @@ import {
   bulkCreateCustomers,
   createCustomer,
   deleteCustomerPrice,
+  exportCustomersCsv,
   findCustomerImportConflicts,
   getCustomerById,
   getCustomerInvoicesPage,
@@ -26,6 +27,7 @@ import {
   updateCustomer,
   type BulkCreateCustomerInput,
   type BulkCreateCustomersResult,
+  type CustomerArchivedFilter,
   type CustomerImportConflict,
   type CustomerInvoicesParams,
   type CustomerListParams,
@@ -58,6 +60,12 @@ export async function suggestInvoicePrefixAction(
   excludeCustomerId?: string,
 ): Promise<string> {
   return await suggestInvoicePrefix(fromName, excludeCustomerId);
+}
+
+export async function exportCustomersCsvAction(
+  archived: CustomerArchivedFilter = "all",
+): Promise<{ filename: string; csv: string }> {
+  return await exportCustomersCsv(archived);
 }
 
 export async function getCustomerAction(customerId: string) {

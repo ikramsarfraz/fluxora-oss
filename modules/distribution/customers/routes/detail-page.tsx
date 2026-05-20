@@ -197,19 +197,23 @@ export default function CustomerPortfolioPage() {
   }
 
   const isArchived = !!customer.archivedAt;
+  // Capture narrowed values into locals so the async closure sees
+  // non-nullable types — function-declaration closures don't always
+  // inherit the narrowing from the outer `if (!customer) return`.
+  const customerIdForActions = customer.id;
 
   async function handleLifecycleConfirm() {
     if (!lifecycleAction) return;
     setLifecyclePending(true);
     try {
       if (lifecycleAction === "archive") {
-        await archiveCustomerAction(customer.id);
+        await archiveCustomerAction(customerIdForActions);
         toast.success("Customer archived.");
       } else if (lifecycleAction === "restore") {
-        await restoreCustomerAction(customer.id);
+        await restoreCustomerAction(customerIdForActions);
         toast.success("Customer restored.");
       } else {
-        await permanentlyDeleteCustomerAction(customer.id);
+        await permanentlyDeleteCustomerAction(customerIdForActions);
         toast.success("Customer deleted.");
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
@@ -232,7 +236,25 @@ export default function CustomerPortfolioPage() {
     ? [primaryAddress.city, primaryAddress.state].filter(Boolean).join(", ")
     : null;
 
-  const balanceTone = parseFloat(metrics.balanceDue) > 0 ? "danger" : "default";
+  const balanceDueNum = parseFloat(metrics.balanceDue);
+  const creditLimitNum = customer.creditLimit
+    ? parseFloat(customer.creditLimit)
+    : null;
+  const overLimit =
+    creditLimitNum != null && balanceDueNum > creditLimitNum;
+  const balanceTone =
+    overLimit
+      ? "danger"
+      : balanceDueNum > 0
+        ? creditLimitNum != null && balanceDueNum > creditLimitNum * 0.8
+          ? "warning"
+          : "danger"
+        : "default";
+  const balanceHelper = overLimit
+    ? `Over limit by ${formatMoney(String(balanceDueNum - creditLimitNum!))}.`
+    : creditLimitNum != null
+      ? `of ${formatMoney(customer.creditLimit!)} credit limit.`
+      : "Open balance on non-void invoices.";
   const openOrdersTone = metrics.openOrdersCount > 0 ? "warning" : "default";
 
   const TABS = [
@@ -420,7 +442,7 @@ export default function CustomerPortfolioPage() {
           icon={Wallet}
           label="Balance due"
           value={formatMoney(metrics.balanceDue)}
-          helper="Open balance on non-void invoices."
+          helper={balanceHelper}
           tone={balanceTone}
         />
         <MetricCard
@@ -496,7 +518,23 @@ export default function CustomerPortfolioPage() {
                     : "—"}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-subtle">Credit limit</p>
+                <p className="mt-0.5 text-sm font-medium">
+                  {customer.creditLimit != null
+                    ? formatMoney(customer.creditLimit)
+                    : "No limit"}
+                </p>
+              </div>
             </div>
+            {customer.notes ? (
+              <div className="mt-5 border-t border-border-default pt-5">
+                <p className="mb-2 text-xs font-medium text-subtle">Notes</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                  {customer.notes}
+                </p>
+              </div>
+            ) : null}
             {customer.addresses.length > 0 && (
               <div className="mt-5 border-t border-border-default pt-5">
                 <p className="mb-3 text-xs font-medium text-subtle">Addresses</p>

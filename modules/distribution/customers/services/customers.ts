@@ -18,7 +18,8 @@ import {
 import { countActiveCustomersForTenant } from "@/modules/core/billing/services/subscription-usage";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
-import { normalizePhone } from "@/lib/utils/phone";
+import { serializeCsv } from "@/lib/csv/serialize";
+import { normalizePhone, formatPhone } from "@/lib/utils/phone";
 import {
   buildTextSearchCondition,
   createPaginatedResult,
@@ -140,6 +141,8 @@ export async function createCustomer(
       taxId: input.taxId,
       netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
+      creditLimit: input.creditLimit,
+      notes: input.notes,
     })
     .returning()
     .catch(rethrowUniqueViolation);
@@ -192,6 +195,8 @@ async function createCustomerForTenant(
       taxId: input.taxId,
       netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,
+      creditLimit: input.creditLimit,
+      notes: input.notes,
     })
     .returning()
     .catch(rethrowUniqueViolation);
@@ -437,6 +442,10 @@ export async function updateCustomer(
       ...(input.abbreviation !== undefined
         ? { abbreviation: input.abbreviation }
         : {}),
+      ...(input.creditLimit !== undefined
+        ? { creditLimit: input.creditLimit }
+        : {}),
+      ...(input.notes !== undefined ? { notes: input.notes } : {}),
     })
     .where(and(eq(customers.id, input.id), eq(customers.tenantId, tenant.id)))
     .returning()
@@ -579,6 +588,90 @@ export async function searchCustomers(
         : null,
     };
   });
+}
+
+/**
+ * Stream customers as a CSV string. Column keys mirror the
+ * customers CSV import config so an export can be re-imported
+ * verbatim. Phone is emitted in its formatted display form so
+ * humans editing the export in Excel see "(555) 123-4567" instead
+ * of the canonical "5551234567" — the importer normalizes either
+ * shape back on the way in.
+ *
+ * `archived`: same filter the list page exposes ("active" by
+ * default, "archived" or "all" if requested).
+ */
+export async function exportCustomersCsv(
+  archived: CustomerArchivedFilter = "all",
+): Promise<{ filename: string; csv: string }> {
+  const tenant = await getCurrentTenant();
+  const archivedCondition =
+    archived === "active"
+      ? isNull(customers.archivedAt)
+      : archived === "archived"
+        ? isNotNull(customers.archivedAt)
+        : undefined;
+  const rows = await db.query.customers.findMany({
+    where: and(eq(customers.tenantId, tenant.id), archivedCondition),
+    with: {
+      addresses: {
+        columns: {
+          street: true,
+          city: true,
+          state: true,
+          zip: true,
+          isDefault: true,
+        },
+      },
+    },
+    orderBy: [desc(customers.createdAt)],
+  });
+
+  // Header keys match the importer's column keys so the round-trip
+  // works without renaming columns by hand.
+  const headers = [
+    { key: "name", label: "name" },
+    { key: "abbreviation", label: "abbreviation" },
+    { key: "email", label: "email" },
+    { key: "phone", label: "phone" },
+    { key: "tax_id", label: "tax_id" },
+    { key: "net_days", label: "net_days" },
+    { key: "credit_limit", label: "credit_limit" },
+    { key: "fuel_surcharge", label: "fuel_surcharge" },
+    { key: "address_line1", label: "address_line1" },
+    { key: "address_city", label: "address_city" },
+    { key: "address_state", label: "address_state" },
+    { key: "address_zip", label: "address_zip" },
+    { key: "notes", label: "notes" },
+    { key: "archived", label: "archived" },
+  ] as const;
+
+  const csvRows = rows.map(row => {
+    const primary =
+      row.addresses.find(a => a.isDefault) ?? row.addresses[0] ?? null;
+    return {
+      name: row.name,
+      abbreviation: row.abbreviation ?? "",
+      email: row.email ?? "",
+      phone: row.phoneNumber ? formatPhone(row.phoneNumber) : "",
+      tax_id: row.taxId ?? "",
+      net_days: row.netDays == null ? "" : String(row.netDays),
+      credit_limit: row.creditLimit ?? "",
+      fuel_surcharge: row.fuelSurchargeAmount ?? "",
+      address_line1: primary?.street ?? "",
+      address_city: primary?.city ?? "",
+      address_state: primary?.state ?? "",
+      address_zip: primary?.zip ?? "",
+      notes: row.notes ?? "",
+      // Read-only column the importer ignores — purely informational
+      // for the export, so an accountant can grep archived customers.
+      archived: row.archivedAt ? "yes" : "",
+    };
+  });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `customers-${tenant.slug}-${stamp}.csv`;
+  return { filename, csv: serializeCsv(headers, csvRows) };
 }
 
 /**

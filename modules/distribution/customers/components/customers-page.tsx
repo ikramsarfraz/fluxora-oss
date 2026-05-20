@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Upload } from "lucide-react";
+import { Download, Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   CsvImportModal,
@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   archiveCustomerAction,
   bulkCreateCustomersAction,
+  exportCustomersCsvAction,
   findCustomerImportConflictsAction,
   permanentlyDeleteCustomerAction,
   restoreCustomerAction,
@@ -125,6 +126,26 @@ export default function Customers() {
   const queryClient = useQueryClient();
   const [lifecycleTarget, setLifecycleTarget] = useState<LifecycleTarget | null>(null);
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("customers");
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const { filename, csv } = await exportCustomersCsvAction(archivedFilter);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Customers exported.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function handleBulkImport(rows: Record<string, string>[]): Promise<CsvApplyResult> {
     const inputs = rows.map(csvRowToCustomerInput);
@@ -282,13 +303,29 @@ export default function Customers() {
           pagination.setFilter("archived", value as CustomerArchivedFilter)
         }
         secondaryActions={
-          <button onClick={openImport} style={{
-            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
-            borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
-            background: "var(--color-card)", color: "var(--color-subtle)", border: "1px solid var(--color-border-default)", fontFamily: "inherit",
-          }}>
-            <Upload size={13} /> Import CSV
-          </button>
+          <div style={{ display: "inline-flex", gap: 6 }}>
+            <button
+              onClick={handleExportCsv}
+              disabled={exporting}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+                borderRadius: 6, fontSize: 13, fontWeight: 500,
+                cursor: exporting ? "wait" : "pointer",
+                opacity: exporting ? 0.6 : 1,
+                background: "var(--color-card)", color: "var(--color-subtle)",
+                border: "1px solid var(--color-border-default)", fontFamily: "inherit",
+              }}
+            >
+              <Download size={13} /> {exporting ? "Exporting…" : "Export CSV"}
+            </button>
+            <button onClick={openImport} style={{
+              display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+              borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
+              background: "var(--color-card)", color: "var(--color-subtle)", border: "1px solid var(--color-border-default)", fontFamily: "inherit",
+            }}>
+              <Upload size={13} /> Import CSV
+            </button>
+          </div>
         }
         primaryAction={
           <ListingAction href="/customers/new">

@@ -768,6 +768,18 @@ export const customers = pgTable(
      * how `suppliers.net_days` works on the AP side.
      */
     netDays: integer("net_days"),
+    /**
+     * Free-text memo, workspace-internal. Shown on the detail page and
+     * editable from the form. Up to 4,000 chars (parity with suppliers).
+     */
+    notes: text("notes"),
+    /**
+     * Soft AR limit. The detail page + new-order form display current
+     * balance against this number so ops can see when a customer is
+     * about to go over. Not enforced at order submit — informational only
+     * for v1.
+     */
+    creditLimit: numeric("credit_limit", { precision: 12, scale: 2 }),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {

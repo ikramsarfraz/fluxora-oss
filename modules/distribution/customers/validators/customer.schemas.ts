@@ -81,6 +81,32 @@ export const customerAddressInputSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
+/**
+ * Free-text notes — empty string and null both coerce to `null`.
+ * Capped at 4,000 chars (parity with `suppliers.notes`).
+ */
+const optionalNotes = z
+  .union([z.literal(""), z.string().trim().max(4000, "Notes must be 4,000 characters or less")])
+  .nullable()
+  .optional()
+  .transform(v => (v === "" || v == null ? null : v));
+
+/**
+ * Soft AR credit limit. Accepts an empty string (no limit) or a
+ * non-negative numeric string with up to 2 decimal places.
+ */
+const optionalCreditLimit = z
+  .union([
+    z.literal(""),
+    z
+      .string()
+      .trim()
+      .regex(/^\d+(\.\d{1,2})?$/, "Credit limit must be a non-negative dollar amount."),
+  ])
+  .nullable()
+  .optional()
+  .transform(v => (v === "" || v == null ? null : v));
+
 export const createCustomerInputSchema = z.object({
   name: z.string().trim().min(1, "Customer name is required"),
   abbreviation: z
@@ -94,6 +120,8 @@ export const createCustomerInputSchema = z.object({
   taxId: optionalTaxId,
   netDays: optionalNetDays,
   fuelSurchargeAmount: nullableOptionalString,
+  creditLimit: optionalCreditLimit,
+  notes: optionalNotes,
   addresses: z.array(customerAddressInputSchema).optional(),
 });
 
