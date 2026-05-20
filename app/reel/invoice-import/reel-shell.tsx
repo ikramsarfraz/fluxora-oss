@@ -13,12 +13,11 @@ export function ReelShell({
     <div
       ref={frameRef}
       className={cn(
-        "relative isolate w-full overflow-hidden rounded-xl",
-        "border border-border-default bg-page shadow-[0_30px_80px_-30px_rgba(31,58,46,0.35)]",
+        "relative isolate h-screen w-screen overflow-hidden bg-page",
       )}
       data-reel-frame
     >
-      <div className="relative">{children}</div>
+      <div className="relative h-full w-full">{children}</div>
     </div>
   );
 }
