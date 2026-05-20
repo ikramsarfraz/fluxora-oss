@@ -245,6 +245,8 @@ export function useRecordPaymentForSalesOrderInvoice() {
   return useMutation({
     mutationFn: recordPaymentForSalesOrderInvoiceAction,
     onSuccess: (_, variables) => {
+      // Sales order surfaces (existing): order detail (totals + payment
+      // status), activity feed, listing.
       queryClient.invalidateQueries({
         queryKey: queryKeys.salesOrders.detail(variables.salesOrderId),
       });
@@ -252,6 +254,25 @@ export function useRecordPaymentForSalesOrderInvoice() {
         queryKey: queryKeys.salesOrders.activity(variables.salesOrderId),
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.salesOrders.all });
+
+      // Invoice surfaces: the targeted invoice's totals (Paid / Balance due /
+      // status pill) and its embedded payments relation, plus the listing
+      // page so the row's status updates without a reload.
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.invoices.detail(variables.salesInvoiceId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all });
+
+      // Payments surfaces: the new event flips both the listing and any
+      // future detail queries.
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
+
+      // Dashboard AR aging buckets and the customer's portfolio (which
+      // aggregates open balance / payment cadence).
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.arAging });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dashboard.summary,
+      });
     },
   });
 }
