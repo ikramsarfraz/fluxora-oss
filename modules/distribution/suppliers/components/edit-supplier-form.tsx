@@ -141,7 +141,7 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
   }
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full">
       <CardContent className="pt-6">
         <form id="form-edit-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (

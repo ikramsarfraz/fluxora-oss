@@ -161,7 +161,7 @@ export function AddSupplierForm(props?: {
   }
 
   return (
-    <Card className="w-full max-w-2xl">
+    <Card className="w-full">
       <CardContent className="pt-6">
         <form id="form-add-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
