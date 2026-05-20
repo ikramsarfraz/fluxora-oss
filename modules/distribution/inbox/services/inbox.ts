@@ -334,8 +334,8 @@ export async function getInboxData(): Promise<InboxData> {
       detailTone: hours < 24 ? "red" : "amber",
       pills: [{ label: `${hours}h left`, tone: hours < 24 ? "red" : "amber" }],
       actions: [
-        { label: "Markdown", kind: "secondary", route: `/lots/${lot.lotId}` },
-        { label: "View lot", kind: "ghost", route: `/lots/${lot.lotId}` },
+        { label: "Markdown", kind: "secondary", route: `/inventory/lots/${lot.lotId}` },
+        { label: "View lot", kind: "ghost", route: `/inventory/lots/${lot.lotId}` },
       ],
       relatedEntity: { type: "lot", id: lot.lotId },
       createdAt: new Date(),
@@ -430,11 +430,17 @@ export async function getInboxData(): Promise<InboxData> {
   const activeConns = connections.filter(c => c.status !== "disconnected");
   const reauthBanners: ReauthBanner[] = connections
     .filter(c => c.status === "requires_reauth")
-    .map(c => ({
-      connectionId: c.id,
-      institutionName: c.institutionName,
-      lastSyncAt: c.lastSyncAt ? new Date(c.lastSyncAt) : null,
-    }));
+    .map(c => {
+      const lastSyncAt = c.lastSyncAt ? new Date(c.lastSyncAt) : null;
+      return {
+        connectionId: c.id,
+        institutionName: c.institutionName,
+        lastSyncAt,
+        daysSinceLastSync: lastSyncAt
+          ? Math.floor((now.getTime() - lastSyncAt.getTime()) / 86_400_000)
+          : null,
+      };
+    });
 
   let cashFlow: CashFlowSummary | null = null;
 

@@ -131,6 +131,8 @@ export interface ReauthBanner {
   connectionId: string;
   institutionName: string | null;
   lastSyncAt: Date | null;
+  /** Whole days between lastSyncAt and the data fetch. Computed server-side. */
+  daysSinceLastSync: number | null;
 }
 
 // ── Mystery outflow ───────────────────────────────────────────────────────

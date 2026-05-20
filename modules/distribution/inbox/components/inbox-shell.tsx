@@ -1191,9 +1191,7 @@ function ConnectBankPromptCard() {
 // ── Re-auth banner ─────────────────────────────────────────────────────────
 
 function ReauthBannerComponent({ banner }: { banner: ReauthBanner }) {
-  const daysSince = banner.lastSyncAt
-    ? Math.floor((Date.now() - new Date(banner.lastSyncAt).getTime()) / 86_400_000)
-    : null;
+  const daysSince = banner.daysSinceLastSync;
 
   return (
     <div
