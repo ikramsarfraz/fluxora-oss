@@ -29,7 +29,14 @@ export function ReelEmbed({
         : "aspect-video";
 
   return (
-    <div className={cn("relative", className)}>
+    <div
+      className={cn("relative", className)}
+      // Disable browser scroll-anchoring on the wrapper. Without this, if
+      // the iframe content briefly reflows (scene swaps, layout changes),
+      // the browser may "anchor" scroll position to the iframe — yanking
+      // the visitor's view back to the demo.
+      style={{ overflowAnchor: "none" }}
+    >
       <div
         className={cn(
           "relative overflow-hidden rounded-2xl border border-border-default bg-surface shadow-[0_30px_80px_-30px_rgba(31,58,46,0.45)]",
@@ -56,12 +63,16 @@ export function ReelEmbed({
           ) : null}
         </div>
 
-        {/* Iframe */}
+        {/* Iframe. tabIndex=-1 so keyboard navigation doesn't focus the
+            iframe (which scrolls the parent to bring the iframe on-screen)
+            — the "fullscreen" link in the chrome above is the intended
+            interaction surface. */}
         <iframe
           src={`/reel/${slug}`}
           className="absolute inset-x-0 bottom-0 top-[34px] h-[calc(100%-34px)] w-full border-0"
           title={`Reel: ${slug}`}
           loading="lazy"
+          tabIndex={-1}
         />
       </div>
 

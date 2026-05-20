@@ -103,7 +103,9 @@ function CreateSupplierDialog({ prefillName }: { prefillName: string }) {
                     autoComplete="organization"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    autoFocus
+                    // autoFocus removed: scrolls the focused input into view,
+                    // which bubbles up from the iframe to the marketing page.
+                    // The reel doesn't need real typing focus anyway.
                   />
                 </Field>
 
@@ -211,7 +213,9 @@ function CreateProductDialog({
                     placeholder="e.g. Beef Ribeye"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    autoFocus
+                    // autoFocus removed: scrolls the focused input into view,
+                    // which bubbles up from the iframe to the marketing page.
+                    // The reel doesn't need real typing focus anyway.
                   />
                 </Field>
 
