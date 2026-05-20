@@ -1,31 +1,28 @@
+"use client";
+
 import Link from "next/link";
+import { motion, useReducedMotion, type Variants } from "motion/react";
 import { ArrowLeft, ArrowRight, PlayCircle } from "lucide-react";
 
 import { Logomark } from "@/components/brand/logomark";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import type { Feature, FeatureAccent } from "../_data/features";
-import { GROUP_LABEL } from "../_data/features";
+import { GROUP_LABEL, getFeatureBySlug } from "../_data/features";
+import type { FeatureAccent } from "../_data/features";
 
-// Engaging full-frame "trailer" card for a single feature. The same layout as
-// the OpeningSplash inside /reel/invoice-import — promoted to a real page so
-// every feature in docs/feature-flows.md has its own animated title card.
+// Funky, choreographed entrance for a single feature trailer card. The
+// component runs on the client because every visible chunk gets a motion
+// variant — headline curtain-reveal, pill spring-pop, drifting hero icon,
+// continuous radial breath, dotted-grid scroll.
 
 type ThemeTokens = {
-  /** Inline-style backdrop using the accent's tinted color via color-mix. */
   radial: string;
-  /** Tailwind class for the brand chip border + glow. */
   ring: string;
-  /** Tailwind text class used for the headline accent line + chip. */
   text: string;
-  /** Tailwind bg class for the eyebrow dot. */
   dot: string;
-  /** Tailwind bg class for the highlight stat icon. */
   pill: string;
-  /** Tailwind class for the highlight icon stroke. */
   pillIcon: string;
-  /** Tailwind soft border class for the highlight pill. */
   pillBorder: string;
 };
 
@@ -72,69 +69,207 @@ const ACCENT_THEMES: Record<FeatureAccent, ThemeTokens> = {
   },
 };
 
+const EASE_OUT_EXPO = [0.22, 1, 0.36, 1] as const;
+
+const heroContainer: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.2,
+    },
+  },
+};
+
+const slideUp: Variants = {
+  hidden: { opacity: 0, y: 28 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: EASE_OUT_EXPO },
+  },
+};
+
+const headlineLine: Variants = {
+  hidden: { opacity: 0, y: 40, filter: "blur(8px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.7, ease: EASE_OUT_EXPO },
+  },
+};
+
+const popIn: Variants = {
+  hidden: { opacity: 0, scale: 0.55 },
+  show: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: "spring", stiffness: 320, damping: 18 },
+  },
+};
+
+const pillRow: Variants = {
+  hidden: {},
+  show: {
+    transition: {
+      delayChildren: 0.05,
+      staggerChildren: 0.08,
+    },
+  },
+};
+
+const ctaRow: Variants = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: EASE_OUT_EXPO, delay: 0.05 },
+  },
+};
+
 export function FeatureTransition({
-  feature,
+  slug,
   total,
   prevSlug,
   nextSlug,
 }: {
-  feature: Feature;
+  slug: string;
   total: number;
   prevSlug?: string;
   nextSlug?: string;
 }) {
+  const feature = getFeatureBySlug(slug);
+  const reduceMotion = useReducedMotion();
+
+  if (!feature) return null;
+
   const theme = ACCENT_THEMES[feature.accent];
   const Icon = feature.icon;
   const liveDemo = feature.liveDemoHref;
 
+  // When the user has reduced-motion on, skip the entrance choreography and
+  // hand-rolled continuous loops. Variants still render; they just resolve
+  // instantly.
+  const transitionFor = (base: object) =>
+    reduceMotion ? { duration: 0 } : base;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-page">
-      {/* Decorative dotted grid — almost invisible, but adds depth */}
-      <DottedBackdrop />
+      {/* --- continuously-drifting dotted backdrop --- */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--color-border-default) 80%, transparent) 1px, transparent 0)",
+          backgroundSize: "24px 24px",
+          maskImage:
+            "radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 80%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 80%)",
+        }}
+        animate={
+          reduceMotion
+            ? undefined
+            : { backgroundPosition: ["0px 0px", "24px 24px"] }
+        }
+        transition={transitionFor({
+          duration: 24,
+          ease: "linear",
+          repeat: Infinity,
+        })}
+      />
 
-      {/* Accent radial — color-mixed against the feature's accent tint */}
-      <div
+      {/* --- breathing accent radial --- */}
+      <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{ background: theme.radial }}
+        initial={{ opacity: 0, scale: 1.25 }}
+        animate={{
+          opacity: 1,
+          scale: reduceMotion ? 1 : [1, 1.05, 1],
+        }}
+        transition={transitionFor({
+          opacity: { duration: 1.1, ease: "easeOut" },
+          scale: {
+            duration: 7,
+            ease: "easeInOut",
+            repeat: Infinity,
+            repeatType: "loop",
+          },
+        })}
       />
 
-      {/* Top bar — back to directory + chapter chip */}
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 pt-8">
+      {/* --- top bar: back link + chapter chip --- */}
+      <motion.header
+        className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 pt-8"
+        initial={{ y: -28, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={transitionFor({ duration: 0.55, ease: EASE_OUT_EXPO })}
+      >
         <Link
           href="/reel"
-          className="inline-flex items-center gap-2 rounded-full border border-border-default bg-card-warm/80 px-3 py-1.5 text-[11px] text-ink-warm backdrop-blur transition hover:text-ink"
+          className="group inline-flex items-center gap-2 rounded-full border border-border-default bg-card-warm/80 px-3 py-1.5 text-[11px] text-ink-warm backdrop-blur transition hover:text-ink"
         >
-          <ArrowLeft className="size-3.5" strokeWidth={2} />
+          <ArrowLeft
+            className="size-3.5 transition-transform group-hover:-translate-x-0.5"
+            strokeWidth={2}
+          />
           <span className="font-mono uppercase tracking-[0.12em]">
             All features
           </span>
         </Link>
 
-        <div
+        <motion.div
           className={cn(
             "inline-flex items-center gap-2.5 rounded-full border bg-card-warm/85 px-3 py-1.5 backdrop-blur",
             theme.pillBorder,
           )}
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={transitionFor({
+            type: "spring",
+            stiffness: 280,
+            damping: 18,
+            delay: 0.15,
+          })}
         >
-          <span
+          <motion.span
             className={cn(
               "flex size-5 items-center justify-center rounded-full text-[10px] font-bold text-card-warm",
               theme.dot,
             )}
+            animate={
+              reduceMotion ? undefined : { rotate: [0, -6, 6, 0] }
+            }
+            transition={transitionFor({
+              duration: 1.6,
+              delay: 0.5,
+              ease: "easeInOut",
+            })}
           >
             {feature.index}
-          </span>
+          </motion.span>
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
             {GROUP_LABEL[feature.group]} · {feature.index} of {total}
           </span>
-        </div>
-      </header>
+        </motion.div>
+      </motion.header>
 
-      {/* Hero */}
-      <section className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 pt-14 pb-10 text-center md:pt-20">
-        {/* Brand mark + icon chip */}
-        <div className="flex items-center gap-2 rounded-full border border-border-default bg-card-warm px-3 py-1.5 shadow-sm">
+      {/* --- hero (orchestrated stagger) --- */}
+      <motion.section
+        key={feature.slug}
+        className="relative z-10 mx-auto flex max-w-3xl flex-col items-center px-6 pt-14 pb-10 text-center md:pt-20"
+        variants={heroContainer}
+        initial="hidden"
+        animate="show"
+      >
+        <motion.div
+          variants={popIn}
+          className="flex items-center gap-2 rounded-full border border-border-default bg-card-warm px-3 py-1.5 shadow-sm"
+        >
           <Logomark size={20} />
           <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
             Fluxora
@@ -143,100 +278,176 @@ export function FeatureTransition({
           <span className={cn("text-[11px] font-medium", theme.text)}>
             Watch
           </span>
-        </div>
+        </motion.div>
 
-        {/* Eyebrow with accent dots */}
-        <div
+        <motion.div
+          variants={slideUp}
           className={cn(
             "mt-7 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em]",
             theme.text,
           )}
         >
-          <span className={cn("size-1 rounded-full", theme.dot)} />
+          <motion.span
+            className={cn("size-1 rounded-full", theme.dot)}
+            animate={reduceMotion ? undefined : { scale: [1, 1.6, 1] }}
+            transition={transitionFor({
+              duration: 1.8,
+              repeat: Infinity,
+              ease: "easeInOut",
+            })}
+          />
           <span>{feature.eyebrow}</span>
-          <span className={cn("size-1 rounded-full", theme.dot)} />
-        </div>
+          <motion.span
+            className={cn("size-1 rounded-full", theme.dot)}
+            animate={reduceMotion ? undefined : { scale: [1, 1.6, 1] }}
+            transition={transitionFor({
+              duration: 1.8,
+              delay: 0.3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            })}
+          />
+        </motion.div>
 
-        {/* Headline — the third line is the accent line */}
+        {/* Headline — curtain-reveal one line at a time */}
         <h1 className="mt-6 max-w-[680px] font-serif text-[42px] font-medium leading-[1.05] tracking-tight text-ink md:text-[60px]">
-          {feature.headline[0]}
-          <br />
-          {feature.headline[1]}
-          <br />
-          <span className={theme.text}>{feature.headline[2]}</span>
+          <motion.span variants={headlineLine} className="block">
+            {feature.headline[0]}
+          </motion.span>
+          <motion.span variants={headlineLine} className="block">
+            {feature.headline[1]}
+          </motion.span>
+          <motion.span
+            variants={headlineLine}
+            className={cn("block", theme.text)}
+          >
+            {feature.headline[2]}
+          </motion.span>
         </h1>
 
-        {/* Body */}
-        <p className="mt-6 max-w-[560px] text-[15px] leading-[1.6] text-subtle md:text-[16px]">
+        <motion.p
+          variants={slideUp}
+          className="mt-6 max-w-[560px] text-[15px] leading-[1.6] text-subtle md:text-[16px]"
+        >
           {feature.body}
-        </p>
+        </motion.p>
 
-        {/* Highlight pills */}
-        <ul className="mt-9 flex flex-wrap items-center justify-center gap-2.5">
+        {/* Pills */}
+        <motion.ul
+          variants={pillRow}
+          className="mt-9 flex flex-wrap items-center justify-center gap-2.5"
+        >
           {feature.highlights.map(({ icon: HighlightIcon, label }) => (
-            <li
+            <motion.li
               key={label}
+              variants={popIn}
+              whileHover={
+                reduceMotion ? undefined : { y: -3, scale: 1.04 }
+              }
+              transition={transitionFor({
+                type: "spring",
+                stiffness: 380,
+                damping: 22,
+              })}
               className={cn(
                 "inline-flex items-center gap-2 rounded-full border bg-card-warm px-3 py-1.5 shadow-sm",
                 theme.pillBorder,
               )}
             >
-              <span
+              <motion.span
                 className={cn(
                   "flex size-5 items-center justify-center rounded-full",
                   theme.pill,
                 )}
+                whileHover={
+                  reduceMotion ? undefined : { rotate: [0, -15, 15, 0] }
+                }
+                transition={transitionFor({ duration: 0.5 })}
               >
                 <HighlightIcon
                   className={cn("size-3", theme.pillIcon)}
                   strokeWidth={2}
                 />
-              </span>
+              </motion.span>
               <span className="text-[12.5px] font-medium text-ink">
                 {label}
               </span>
-            </li>
+            </motion.li>
           ))}
-        </ul>
+        </motion.ul>
 
-        {/* CTA row */}
-        <div className="mt-12 flex flex-col items-center gap-3 sm:flex-row">
-          <Button size="lg" asChild>
-            <Link href="/signup">
-              Try Fluxora free
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          {liveDemo ? (
-            <Button size="lg" variant="outline" asChild>
-              <Link href={liveDemo}>
-                <PlayCircle className="size-4" />
-                Watch the live demo
+        {/* CTAs */}
+        <motion.div
+          variants={ctaRow}
+          className="mt-12 flex flex-col items-center gap-3 sm:flex-row"
+        >
+          <motion.div
+            whileHover={reduceMotion ? undefined : { y: -2 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+          >
+            <Button size="lg" asChild>
+              <Link href="/signup">
+                Try Fluxora free
+                <ArrowRight className="size-4" />
               </Link>
             </Button>
+          </motion.div>
+
+          {liveDemo ? (
+            <motion.div
+              whileHover={reduceMotion ? undefined : { y: -2 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+            >
+              <Button size="lg" variant="outline" asChild>
+                <Link href={liveDemo}>
+                  <PlayCircle className="size-4" />
+                  Watch the live demo
+                </Link>
+              </Button>
+            </motion.div>
           ) : null}
-        </div>
+        </motion.div>
 
-        <span className="mt-3 text-[11px] text-subtle">
+        <motion.span
+          variants={slideUp}
+          className="mt-3 text-[11px] text-subtle"
+        >
           No credit card · 14-day trial
-        </span>
-      </section>
+        </motion.span>
+      </motion.section>
 
-      {/* Big translucent icon — the visual anchor in the lower half */}
-      <div
+      {/* --- oversized hero icon (anchor) --- */}
+      <motion.div
         aria-hidden
         className="pointer-events-none relative z-0 mx-auto -mt-2 flex max-w-3xl justify-center"
+        initial={{ opacity: 0, scale: 0.7, rotate: -8 }}
+        animate={{ opacity: 0.07, scale: 1, rotate: 0 }}
+        transition={transitionFor({
+          duration: 1.3,
+          delay: 0.5,
+          ease: EASE_OUT_EXPO,
+        })}
       >
-        <Icon
-          className={cn(
-            "size-40 opacity-[0.07] md:size-56",
-            theme.text,
-          )}
-          strokeWidth={1}
-        />
-      </div>
+        <motion.div
+          animate={
+            reduceMotion
+              ? undefined
+              : { y: [0, -14, 0], rotate: [0, 4, 0] }
+          }
+          transition={transitionFor({
+            duration: 9,
+            ease: "easeInOut",
+            repeat: Infinity,
+          })}
+        >
+          <Icon
+            className={cn("size-40 md:size-56", theme.text)}
+            strokeWidth={1}
+          />
+        </motion.div>
+      </motion.div>
 
-      {/* Bottom navigation — prev / next feature */}
+      {/* --- prev / next nav --- */}
       <footer className="relative z-10 mx-auto mt-2 mb-12 flex max-w-6xl items-center justify-between gap-3 px-6">
         <FeatureNav
           slug={prevSlug}
@@ -244,6 +455,8 @@ export function FeatureTransition({
           fallbackHref="/reel"
           fallbackLabel="All features"
           theme={theme}
+          delay={1.1}
+          reduceMotion={!!reduceMotion}
         />
         <FeatureNav
           slug={nextSlug}
@@ -251,6 +464,8 @@ export function FeatureTransition({
           fallbackHref="/reel"
           fallbackLabel="All features"
           theme={theme}
+          delay={1.2}
+          reduceMotion={!!reduceMotion}
         />
       </footer>
     </main>
@@ -263,62 +478,59 @@ function FeatureNav({
   fallbackHref,
   fallbackLabel,
   theme,
+  delay,
+  reduceMotion,
 }: {
   slug?: string;
   direction: "prev" | "next";
   fallbackHref: string;
   fallbackLabel: string;
   theme: ThemeTokens;
+  delay: number;
+  reduceMotion: boolean;
 }) {
   const href = slug ? `/reel/${slug}` : fallbackHref;
   const label = slug ? slug.replace(/-/g, " ") : fallbackLabel;
   const isNext = direction === "next";
 
   return (
-    <Link
-      href={href}
-      className={cn(
-        "group inline-flex items-center gap-2 rounded-full border border-border-default bg-card-warm/80 px-4 py-2 text-[12px] backdrop-blur transition",
-        "hover:border-ink-warm/40 hover:text-ink",
-        isNext ? "flex-row" : "flex-row-reverse",
-      )}
+    <motion.div
+      initial={{ x: isNext ? 32 : -32, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { duration: 0.55, delay, ease: EASE_OUT_EXPO }
+      }
+      whileHover={reduceMotion ? undefined : { x: isNext ? 4 : -4 }}
     >
-      <span
+      <Link
+        href={href}
         className={cn(
-          "font-mono text-[10px] uppercase tracking-[0.14em]",
-          theme.text,
+          "group inline-flex items-center gap-2 rounded-full border border-border-default bg-card-warm/80 px-4 py-2 text-[12px] backdrop-blur transition",
+          "hover:border-ink-warm/40 hover:text-ink",
+          isNext ? "flex-row" : "flex-row-reverse",
         )}
       >
-        {isNext ? "Next" : "Previous"}
-      </span>
-      <span className="font-medium capitalize text-ink-warm">{label}</span>
-      <ArrowRight
-        className={cn(
-          "size-3.5 text-subtle transition-transform",
-          isNext
-            ? "group-hover:translate-x-0.5"
-            : "rotate-180 group-hover:-translate-x-0.5",
-        )}
-        strokeWidth={2}
-      />
-    </Link>
-  );
-}
-
-function DottedBackdrop() {
-  return (
-    <div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 opacity-60"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--color-border-default) 80%, transparent) 1px, transparent 0)",
-        backgroundSize: "24px 24px",
-        maskImage:
-          "radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 80%)",
-        WebkitMaskImage:
-          "radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 80%)",
-      }}
-    />
+        <span
+          className={cn(
+            "font-mono text-[10px] uppercase tracking-[0.14em]",
+            theme.text,
+          )}
+        >
+          {isNext ? "Next" : "Previous"}
+        </span>
+        <span className="font-medium capitalize text-ink-warm">{label}</span>
+        <ArrowRight
+          className={cn(
+            "size-3.5 text-subtle transition-transform",
+            isNext
+              ? "group-hover:translate-x-0.5"
+              : "rotate-180 group-hover:-translate-x-0.5",
+          )}
+          strokeWidth={2}
+        />
+      </Link>
+    </motion.div>
   );
 }
