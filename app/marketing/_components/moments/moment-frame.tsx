@@ -1,20 +1,36 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useInView } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+// How often (ms) a moment replays its entrance animation while it remains
+// in view. Tuned to be longer than the longest moment's full animation so
+// nothing gets cut off — but short enough that visitors who pause on a
+// section see the moment loop a couple of times.
+const DEFAULT_LOOP_MS = 6500;
+
 // Frame wrapper for product moments. Subtle elevation, rounded corners,
 // optional tab label at the top-left to set context without screaming.
+//
+// Behaviour: while the frame is in view, the inner content remounts every
+// `loopMs` so the entrance animation re-plays. When the frame scrolls out
+// of view, the interval is paused — visitors don't pay for animations they
+// can't see, and offscreen moments don't pull the eye when the user is
+// reading something else. On re-entry, the moment replays immediately so
+// people who scroll back see motion straight away.
 export function MomentFrame({
   label,
   tone = "forest",
+  loopMs = DEFAULT_LOOP_MS,
   children,
   className,
   contentClassName,
 }: {
   label?: string;
   tone?: "forest" | "success" | "warning" | "info";
+  loopMs?: number;
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
@@ -28,8 +44,28 @@ export function MomentFrame({
           ? "bg-info-bg text-info-fg border-info-border/60"
           : "bg-forest-tint text-forest-mid border-forest-tint-deep/60";
 
+  const ref = useRef<HTMLDivElement>(null);
+  // `amount: 0.25` — a quarter of the moment must be on-screen before we
+  // consider it visible. Prevents the loop from kicking on slivers as
+  // someone scrolls past quickly.
+  const inView = useInView(ref, { amount: 0.25 });
+  const [loopKey, setLoopKey] = useState(0);
+  const hasBeenSeen = useRef(false);
+
+  useEffect(() => {
+    if (!inView) return;
+    // Replay immediately on re-entry, but not on the very first mount —
+    // motion's `initial → animate` already plays the entrance once.
+    if (hasBeenSeen.current) {
+      setLoopKey((k) => k + 1);
+    }
+    hasBeenSeen.current = true;
+    const id = setInterval(() => setLoopKey((k) => k + 1), loopMs);
+    return () => clearInterval(id);
+  }, [inView, loopMs]);
+
   return (
-    <div className={cn("relative", className)}>
+    <div ref={ref} className={cn("relative", className)}>
       {label ? (
         <div
           className={cn(
@@ -47,7 +83,10 @@ export function MomentFrame({
           contentClassName,
         )}
       >
-        {children}
+        {/* The `loopKey` remounts the entire inner tree on each cycle so
+            each moment's motion variants fire their entrance animation
+            again. Keep callers free of any per-moment loop wiring. */}
+        <div key={loopKey}>{children}</div>
       </div>
     </div>
   );
