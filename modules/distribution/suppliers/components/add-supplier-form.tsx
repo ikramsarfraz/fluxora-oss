@@ -166,8 +166,26 @@ export function AddSupplierForm(props?: {
     });
   }
 
+  const footer = (
+    <FormActionFooter
+      formId="form-add-supplier"
+      isPending={createSupplier.isPending}
+      onCancel={() => {
+        if (props?.onCancel) {
+          props.onCancel();
+        } else {
+          router.push("/suppliers");
+        }
+      }}
+      pendingLabel="Creating…"
+      submitLabel="Create supplier"
+      sticky={props?.stickyFooter}
+    />
+  );
+
   return (
-    <Card className={props?.stickyFooter ? "w-full overflow-visible" : "w-full"}>
+    <div className="flex flex-col gap-3">
+    <Card className="w-full">
       <CardContent className="pt-6">
         <form id="form-add-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
@@ -532,21 +550,10 @@ export function AddSupplierForm(props?: {
           </FieldGroup>
         </form>
       </CardContent>
-      <FormActionFooter
-        formId="form-add-supplier"
-        isPending={createSupplier.isPending}
-        onCancel={() => {
-          if (props?.onCancel) {
-            props.onCancel();
-          } else {
-            router.push("/suppliers");
-          }
-        }}
-        pendingLabel="Creating…"
-        submitLabel="Create supplier"
-        sticky={props?.stickyFooter}
-      />
+      {!props?.stickyFooter ? footer : null}
     </Card>
+    {props?.stickyFooter ? footer : null}
+    </div>
   );
 }
 

@@ -145,7 +145,8 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
   }
 
   return (
-    <Card className="w-full overflow-visible">
+    <div className="flex flex-col gap-3">
+    <Card className="w-full">
       <CardContent className="pt-6">
         <form id="form-edit-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
@@ -510,15 +511,16 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
           </FieldGroup>
         </form>
       </CardContent>
-      <FormActionFooter
-        formId="form-edit-supplier"
-        isPending={updateSupplier.isPending}
-        onCancel={() => router.push(`/suppliers/${supplier.id}`)}
-        pendingLabel="Saving…"
-        submitLabel="Save changes"
-        sticky
-      />
     </Card>
+    <FormActionFooter
+      formId="form-edit-supplier"
+      isPending={updateSupplier.isPending}
+      onCancel={() => router.push(`/suppliers/${supplier.id}`)}
+      pendingLabel="Saving…"
+      submitLabel="Save changes"
+      sticky
+    />
+    </div>
   );
 }
 

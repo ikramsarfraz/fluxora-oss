@@ -28,7 +28,10 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
+import {
+  DetailPageSkeleton,
+  TableSkeleton,
+} from "@/components/loading-skeletons";
 import { StatusPill } from "@/components/listing-page";
 import { TablePager } from "@/components/table-pager";
 import { Badge } from "@/components/ui/badge";
@@ -415,7 +418,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
   const deleteSupplier = useDeleteSupplier();
 
   if (!isUuid(supplierId)) return <PageError message="Invalid supplier ID." />;
-  if (isLoading) return <PageLoading message="Loading supplier..." />;
+  if (isLoading) return <DetailPageSkeleton sections={4} />;
   if (error) return <PageError message={(error as Error).message} />;
   if (!portfolio || !supplier) return <PageError message="Supplier not found." />;
 
@@ -618,7 +621,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       {tab === "invoices" && (
         <>
           {invoicesLoading ? (
-            <PageLoading message="Loading invoices..." />
+            <TableSkeleton rows={5} columns={6} />
           ) : !invoicesData?.data?.length ? (
             <p className="text-sm text-subtle">No invoices on record.</p>
           ) : (
@@ -728,7 +731,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       {tab === "lots" && (
         <>
           {lotsLoading ? (
-            <PageLoading message="Loading lots..." />
+            <TableSkeleton rows={5} columns={3} />
           ) : !lotsData?.data?.length ? (
             <p className="text-sm text-subtle">No lots received from this supplier.</p>
           ) : (
