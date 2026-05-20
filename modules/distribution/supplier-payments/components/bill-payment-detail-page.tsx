@@ -34,6 +34,7 @@ import { can } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { BillPaymentDetail } from "../services/supplier-payments";
+import { formatBillPaymentReference } from "../utils/payment-reference";
 import { BillPaymentEditDialog } from "./bill-payment-edit-dialog";
 
 function paymentMethodLabel(method: BillPaymentDetail["paymentMethod"]): string {
@@ -149,7 +150,9 @@ export function BillPaymentDetailPage({ paymentId }: { paymentId: string }) {
           <DetailField label="Method">
             {paymentMethodLabel(payment.paymentMethod)}
           </DetailField>
-          <DetailField label="Reference">{payment.reference ?? "—"}</DetailField>
+          <DetailField label="Reference">
+            {formatBillPaymentReference(payment) ?? "—"}
+          </DetailField>
         </DetailGrid>
       </DetailSection>
 
@@ -239,7 +242,9 @@ export function BillPaymentDetailPage({ paymentId }: { paymentId: string }) {
                         {paymentMethodLabel(p.paymentMethod)}
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-ink-warm">
-                        {p.reference ?? <span className="text-subtle">—</span>}
+                        {formatBillPaymentReference(p) ?? (
+                          <span className="text-subtle">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-ink-warm">
                         {p.createdBy?.fullName ?? (

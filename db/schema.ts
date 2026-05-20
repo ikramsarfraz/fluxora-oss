@@ -1233,7 +1233,14 @@ export const supplierInvoicePayments = pgTable(
     paymentDate: date("payment_date").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     paymentMethod: paymentMethodEnum("payment_method").notNull(),
-    reference: varchar("reference", { length: 128 }),
+    /**
+     * Check number — separate from reference_number so accounting exports
+     * can distinguish physical-artifact identifiers from generic references.
+     * Mirrors the AR `payments.check_number` column.
+     */
+    checkNumber: varchar("check_number", { length: 64 }),
+    /** Bank reference / transaction ID. Mirrors AR `payments.reference_number`. */
+    referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
     createdByUserId: uuid("created_by_user_id")
       .notNull()

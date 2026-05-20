@@ -1490,7 +1490,8 @@ export type RecordSupplierInvoicePaymentInput = {
   amount: string;
   paymentDate: string;
   paymentMethod: "cash" | "check" | "ach" | "zelle" | "credit_card";
-  reference?: string | null;
+  checkNumber?: string | null;
+  referenceNumber?: string | null;
   notes?: string | null;
 };
 
@@ -1550,14 +1551,16 @@ export async function recordSupplierInvoicePayment(
       );
     }
 
-    const trimmedReference = input.reference?.trim() || null;
+    const trimmedCheckNumber = input.checkNumber?.trim() || null;
+    const trimmedReferenceNumber = input.referenceNumber?.trim() || null;
     const [payment] = await tx.insert(supplierInvoicePayments).values({
       tenantId: tenant.id,
       supplierInvoiceId: input.supplierInvoiceId,
       paymentDate: input.paymentDate,
       amount: amount.toFixed(2),
       paymentMethod: input.paymentMethod,
-      reference: trimmedReference,
+      checkNumber: trimmedCheckNumber,
+      referenceNumber: trimmedReferenceNumber,
       notes: input.notes?.trim() || null,
       createdByUserId: currentUser.id,
     }).returning({ id: supplierInvoicePayments.id });
@@ -1574,7 +1577,8 @@ export async function recordSupplierInvoicePayment(
       contextJson: JSON.stringify({
         amount: amount.toFixed(2),
         paymentMethod: paymentSummaryMethod,
-        reference: trimmedReference,
+        checkNumber: trimmedCheckNumber,
+        referenceNumber: trimmedReferenceNumber,
       }),
     });
   });
@@ -1633,7 +1637,8 @@ export async function voidSupplierInvoicePayment(id: string) {
       contextJson: JSON.stringify({
         amount: existing.amount,
         paymentMethod: existing.paymentMethod,
-        reference: existing.reference,
+        checkNumber: existing.checkNumber,
+        referenceNumber: existing.referenceNumber,
         paymentDate: existing.paymentDate,
       }),
     });
@@ -1647,7 +1652,8 @@ export type UpdateSupplierInvoicePaymentInput = {
   paymentDate?: string;
   amount?: string;
   paymentMethod?: "cash" | "check" | "ach" | "zelle" | "credit_card";
-  reference?: string | null;
+  checkNumber?: string | null;
+  referenceNumber?: string | null;
   notes?: string | null;
 };
 
@@ -1712,8 +1718,11 @@ export async function updateSupplierInvoicePayment(
     patch.paymentMethod = input.paymentMethod;
   }
 
-  if (input.reference !== undefined) {
-    patch.reference = input.reference?.trim() || null;
+  if (input.checkNumber !== undefined) {
+    patch.checkNumber = input.checkNumber?.trim() || null;
+  }
+  if (input.referenceNumber !== undefined) {
+    patch.referenceNumber = input.referenceNumber?.trim() || null;
   }
   if (input.notes !== undefined) {
     patch.notes = input.notes?.trim() || null;
@@ -1749,7 +1758,8 @@ export async function updateSupplierInvoicePayment(
               "paymentDate",
               "amount",
               "paymentMethod",
-              "reference",
+              "checkNumber",
+              "referenceNumber",
               "notes",
             ] as const
           )

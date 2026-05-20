@@ -96,7 +96,8 @@ export async function getBillPaymentsPage(input?: BillPaymentListParams) {
     eq(supplierInvoicePayments.tenantId, tenant.id),
     ...buildBillPaymentFilterClauses(query.filters),
     buildTextSearchCondition(query.search, [
-      supplierInvoicePayments.reference,
+      supplierInvoicePayments.checkNumber,
+      supplierInvoicePayments.referenceNumber,
       supplierInvoices.invoiceNumber,
       suppliers.name,
     ]),
@@ -186,7 +187,8 @@ export async function getBillPaymentsSummary(
     eq(supplierInvoicePayments.tenantId, tenant.id),
     ...buildBillPaymentFilterClauses(filters),
     buildTextSearchCondition(search, [
-      supplierInvoicePayments.reference,
+      supplierInvoicePayments.checkNumber,
+      supplierInvoicePayments.referenceNumber,
       supplierInvoices.invoiceNumber,
       suppliers.name,
     ]),

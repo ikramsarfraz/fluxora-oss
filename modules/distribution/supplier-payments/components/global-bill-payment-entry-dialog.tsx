@@ -59,7 +59,8 @@ interface PaymentFormValues {
   paymentDate: string;
   amount: string;
   paymentMethod: BillPaymentMethod;
-  reference: string;
+  checkNumber: string;
+  referenceNumber: string;
   notes: string;
 }
 
@@ -260,7 +261,8 @@ function EnterPaymentStep({
       paymentDate: todayString(),
       amount: balanceDue.toFixed(2),
       paymentMethod: "ach",
-      reference: "",
+      checkNumber: "",
+      referenceNumber: "",
       notes: "",
     },
   });
@@ -275,7 +277,8 @@ function EnterPaymentStep({
         paymentDate: values.paymentDate,
         amount: values.amount,
         paymentMethod: values.paymentMethod,
-        reference: values.reference.trim() || undefined,
+        checkNumber: values.checkNumber.trim() || undefined,
+        referenceNumber: values.referenceNumber.trim() || undefined,
         notes: values.notes.trim() || undefined,
       });
       toast.success("Bill payment recorded.");
@@ -377,15 +380,28 @@ function EnterPaymentStep({
 
           <Field>
             <FieldLabel htmlFor="global-bill-payment-reference">
-              {paymentMethod === "check" ? "Check number" : "Reference"}
+              Reference number
             </FieldLabel>
             <Input
               id="global-bill-payment-reference"
-              placeholder={paymentMethod === "check" ? "Check #" : "Optional reference"}
-              {...register("reference")}
+              placeholder="Bank ref / transaction ID"
+              {...register("referenceNumber")}
             />
           </Field>
         </div>
+
+        {paymentMethod === "check" ? (
+          <Field>
+            <FieldLabel htmlFor="global-bill-payment-check-number">
+              Check number
+            </FieldLabel>
+            <Input
+              id="global-bill-payment-check-number"
+              placeholder="Check #"
+              {...register("checkNumber")}
+            />
+          </Field>
+        ) : null}
 
         <Field>
           <FieldLabel htmlFor="global-bill-payment-notes">Notes</FieldLabel>

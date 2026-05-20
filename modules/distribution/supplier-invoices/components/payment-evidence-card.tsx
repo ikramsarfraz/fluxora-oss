@@ -51,7 +51,8 @@ type ManualPayment = {
   paymentDate: string;
   amount: number | string;
   paymentMethod: string;
-  reference: string | null;
+  checkNumber: string | null;
+  referenceNumber: string | null;
   createdBy?: NamedUser | null;
   createdAt?: string | Date | null;
 };
@@ -165,7 +166,18 @@ function ManuallyMarkedEvidence({ payment }: { payment: ManualPayment }) {
       <div style={{ padding: "14px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "10px 20px" }}>
         <DataItem label="Payment date" value={formatDate(payment.paymentDate)} />
         <DataItem label="Method" value={methodLabel} />
-        {payment.reference && <DataItem label="Reference" value={<span style={{ fontFamily: C.mono, fontSize: 12 }}>{payment.reference}</span>} />}
+        {payment.checkNumber && (
+          <DataItem
+            label="Check #"
+            value={<span style={{ fontFamily: C.mono, fontSize: 12 }}>{payment.checkNumber}</span>}
+          />
+        )}
+        {payment.referenceNumber && (
+          <DataItem
+            label="Reference"
+            value={<span style={{ fontFamily: C.mono, fontSize: 12 }}>{payment.referenceNumber}</span>}
+          />
+        )}
         <DataItem label="Bank record" value={
           <span style={{ fontSize: 11, color: C.muted }}>
             None attached ·{" "}

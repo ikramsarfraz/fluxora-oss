@@ -32,6 +32,7 @@ import type {
   BillPaymentListSort,
   BillPaymentMethod,
 } from "../services/supplier-payments";
+import { formatBillPaymentReference } from "../utils/payment-reference";
 import { GlobalBillPaymentEntryDialog } from "./global-bill-payment-entry-dialog";
 
 type BillPaymentRow = BillPaymentListItem;
@@ -132,7 +133,7 @@ const COLUMNS: ListingColumn<BillPaymentRow>[] = [
     key: "reference",
     header: "Reference",
     render: row => {
-      const ref = row.reference;
+      const ref = formatBillPaymentReference(row);
       return ref
         ? { primary: <MonoText>{ref}</MonoText> }
         : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> };

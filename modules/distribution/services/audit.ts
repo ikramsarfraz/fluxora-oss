@@ -76,7 +76,13 @@ function summarizeAudit(row: {
   const contextReason = getContextString(context, "reason");
   const contextAmount = getContextString(context, "amount");
   const contextMethod = getContextString(context, "paymentMethod");
-  const contextReference = getContextString(context, "reference");
+  // The schema split (migration 0047) replaced `reference` with separate
+  // `checkNumber` + `referenceNumber` fields. Keep reading the legacy
+  // key as a fallback so old audit entries still render correctly.
+  const contextReference =
+    getContextString(context, "checkNumber") ||
+    getContextString(context, "referenceNumber") ||
+    getContextString(context, "reference");
 
   if (row.entityTable === "supplier_invoices") {
     if (contextAction === "complete_receipt") {
@@ -649,7 +655,8 @@ export async function getActivityForSupplierInvoice(
           amount: true,
           paymentMethod: true,
           paymentDate: true,
-          reference: true,
+          checkNumber: true,
+          referenceNumber: true,
           createdAt: true,
         },
         with: {
@@ -836,7 +843,13 @@ export async function getActivityForSupplierInvoice(
       source: "derived",
       scope: "payment",
       action: "insert",
-      summary: `Payment recorded: ${Number(payment.amount).toFixed(2)} via ${payment.paymentMethod.replace(/_/g, " ")}${payment.reference ? ` · Ref ${payment.reference}` : ""}`,
+      summary: `Payment recorded: ${Number(payment.amount).toFixed(2)} via ${payment.paymentMethod.replace(/_/g, " ")}${
+        payment.checkNumber
+          ? ` · Check #${payment.checkNumber}`
+          : payment.referenceNumber
+            ? ` · Ref ${payment.referenceNumber}`
+            : ""
+      }`,
       at: payment.createdAt.toISOString(),
       actor: {
         id: payment.createdBy?.id ?? null,

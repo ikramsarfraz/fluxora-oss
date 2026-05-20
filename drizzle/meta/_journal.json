@@ -330,6 +330,13 @@
 			"when": 1779100600000,
 			"tag": "0046_supplier_contact_address",
 			"breakpoints": true
+		},
+		{
+			"idx": 47,
+			"version": "7",
+			"when": 1779100700000,
+			"tag": "0047_supplier_payment_ref_split",
+			"breakpoints": true
 		}
 	]
 }

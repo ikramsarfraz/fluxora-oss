@@ -851,13 +851,22 @@ export function SupplierInvoiceDetailPage({
                             payment.paymentMethod}
                         </TableCell>
                         <TableCell>
-                          {payment.reference ? (
-                            <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
-                              {payment.reference}
-                            </span>
-                          ) : (
-                            <span style={{ color: C.muted }}>—</span>
-                          )}
+                          {(() => {
+                            const ref =
+                              payment.paymentMethod === "check" && payment.checkNumber
+                                ? `Check #${payment.checkNumber}`
+                                : payment.referenceNumber ||
+                                  (payment.checkNumber
+                                    ? `Check #${payment.checkNumber}`
+                                    : null);
+                            return ref ? (
+                              <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                                {ref}
+                              </span>
+                            ) : (
+                              <span style={{ color: C.muted }}>—</span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <span style={{ fontSize: "12px", color: C.muted }}>

@@ -41,7 +41,8 @@ interface FormValues {
   paymentDate: string;
   amount: string;
   paymentMethod: BillPaymentMethod;
-  reference: string;
+  checkNumber: string;
+  referenceNumber: string;
   notes: string;
 }
 
@@ -110,7 +111,8 @@ function Body({
       paymentDate: payment.paymentDate,
       amount: Number(payment.amount).toFixed(2),
       paymentMethod: payment.paymentMethod,
-      reference: payment.reference ?? "",
+      checkNumber: payment.checkNumber ?? "",
+      referenceNumber: payment.referenceNumber ?? "",
       notes: payment.notes ?? "",
     },
   });
@@ -125,7 +127,8 @@ function Body({
         paymentDate: values.paymentDate,
         amount: values.amount,
         paymentMethod: values.paymentMethod,
-        reference: values.reference.trim() || null,
+        checkNumber: values.checkNumber.trim() || null,
+        referenceNumber: values.referenceNumber.trim() || null,
         notes: values.notes.trim() || null,
       });
       toast.success("Bill payment updated.");
@@ -219,15 +222,28 @@ function Body({
 
           <Field>
             <FieldLabel htmlFor="bill-payment-edit-reference">
-              {paymentMethod === "check" ? "Check number" : "Reference"}
+              Reference number
             </FieldLabel>
             <Input
               id="bill-payment-edit-reference"
-              placeholder={paymentMethod === "check" ? "Check #" : "Optional reference"}
-              {...register("reference")}
+              placeholder="Bank ref / transaction ID"
+              {...register("referenceNumber")}
             />
           </Field>
         </div>
+
+        {paymentMethod === "check" ? (
+          <Field>
+            <FieldLabel htmlFor="bill-payment-edit-check-number">
+              Check number
+            </FieldLabel>
+            <Input
+              id="bill-payment-edit-check-number"
+              placeholder="Check #"
+              {...register("checkNumber")}
+            />
+          </Field>
+        ) : null}
 
         <Field>
           <FieldLabel htmlFor="bill-payment-edit-notes">Notes</FieldLabel>

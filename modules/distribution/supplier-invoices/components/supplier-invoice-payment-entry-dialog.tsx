@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,7 +48,8 @@ interface PaymentFormValues {
   paymentDate: string;
   amount: string;
   paymentMethod: PaymentMethod;
-  reference: string;
+  checkNumber: string;
+  referenceNumber: string;
   notes: string;
 }
 
@@ -74,7 +75,8 @@ function makeDefaults(
     amount:
       Number.isFinite(suggested) && suggested > 0 ? suggested.toFixed(2) : "",
     paymentMethod: defaultPaymentMethod ?? "ach",
-    reference: "",
+    checkNumber: "",
+    referenceNumber: "",
     notes: "",
   };
 }
@@ -139,6 +141,7 @@ function PaymentForm({
     defaultValues: makeDefaults(balanceDue, defaultPaymentMethod),
   });
 
+  const selectedMethod = useWatch({ control, name: "paymentMethod" });
   const numericBalanceDue = Number(balanceDue) || 0;
 
   async function onSubmit(values: PaymentFormValues) {
@@ -149,7 +152,8 @@ function PaymentForm({
         paymentDate: values.paymentDate,
         amount: values.amount,
         paymentMethod: values.paymentMethod,
-        reference: values.reference.trim() || null,
+        checkNumber: values.checkNumber.trim() || null,
+        referenceNumber: values.referenceNumber.trim() || null,
         notes: values.notes.trim() || null,
       });
       toast.success(`Payment recorded on ${invoiceNumber}.`);
@@ -242,14 +246,25 @@ function PaymentForm({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="si-payment-reference">Reference</FieldLabel>
+            <FieldLabel htmlFor="si-payment-reference">Reference number</FieldLabel>
             <Input
               id="si-payment-reference"
-              placeholder="Check #, ACH id, etc."
-              {...register("reference")}
+              placeholder="Bank ref / transaction ID"
+              {...register("referenceNumber")}
             />
           </Field>
         </div>
+
+        {selectedMethod === "check" ? (
+          <Field>
+            <FieldLabel htmlFor="si-payment-check-number">Check number</FieldLabel>
+            <Input
+              id="si-payment-check-number"
+              placeholder="Check #"
+              {...register("checkNumber")}
+            />
+          </Field>
+        ) : null}
 
         <Field>
           <FieldLabel htmlFor="si-payment-notes">Notes</FieldLabel>
