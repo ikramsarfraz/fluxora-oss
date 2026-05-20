@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 import {
+  getOpenInvoicesForPaymentAction,
   getSalesInvoiceByIdAction,
   getSalesInvoicesAction,
   getSalesInvoicesPageAction,
@@ -33,5 +34,20 @@ export function useSalesInvoice(id: string) {
     queryFn: () => getSalesInvoiceByIdAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Drives the global "Record payment" picker on /payments. Short stale
+ * time so the list reflects new invoices and partial-payment balance
+ * changes quickly without abusing the server.
+ */
+export function useOpenInvoicesForPayment(search: string, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.invoices.all, "open-for-payment", search] as const,
+    queryFn: () => getOpenInvoicesForPaymentAction({ search }),
+    enabled,
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 15,
   });
 }

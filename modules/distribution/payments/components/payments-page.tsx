@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Receipt } from "lucide-react";
 
 import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -15,7 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePaymentsPage, usePaymentsSummary } from "../hooks/use-payments";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { can } from "@/lib/auth/permissions";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
+import { GlobalPaymentEntryDialog } from "./global-payment-entry-dialog";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import type {
@@ -132,6 +138,9 @@ const COLUMNS: ListingColumn<PaymentRow>[] = [
 
 export function PaymentsPage() {
   const router = useRouter();
+  const { data: currentUser } = useCurrentPortalUser();
+  const canRecordPayment = can(currentUser?.role, "record_payment");
+  const [recordOpen, setRecordOpen] = useState(false);
 
   const pagination = useUrlPaginationState<PaymentListSort, PaymentFilters>({
     defaultSort: "paymentDate",
@@ -204,6 +213,14 @@ export function PaymentsPage() {
       <ListingPage
         title="Payments"
         subtitle="Customer payments recorded against sales invoices."
+        primaryAction={
+          canRecordPayment ? (
+            <Button onClick={() => setRecordOpen(true)} size="sm">
+              <Receipt className="h-4 w-4" />
+              Record payment
+            </Button>
+          ) : undefined
+        }
         columns={COLUMNS}
         getRowId={row => row.id}
         onRowClick={row => router.push(`/payments/${row.id}`)}
@@ -230,6 +247,8 @@ export function PaymentsPage() {
         onSearchChange={pagination.setSearch}
         onSortChange={(key, dir) => pagination.setSort(key as PaymentListSort, dir)}
       />
+
+      <GlobalPaymentEntryDialog open={recordOpen} onOpenChange={setRecordOpen} />
     </div>
   );
 }

@@ -409,6 +409,56 @@ export type SalesInvoiceListItem = Awaited<
   ReturnType<typeof getSalesInvoices>
 >[number];
 
+/**
+ * Tenant-scoped list of invoices with a non-zero balance due and a
+ * non-void status — drives the "Record payment" picker dialog on
+ * /payments. Supports an optional search across invoice number and
+ * customer name. Limited to keep the picker snappy; users can fall
+ * back to the invoice detail page for invoices beyond the list.
+ */
+export async function getOpenInvoicesForPayment(input: {
+  search?: string;
+  limit?: number;
+} = {}) {
+  const tenant = await getCurrentTenant();
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+
+  const where = and(
+    eq(salesInvoices.tenantId, tenant.id),
+    sql`${salesInvoices.balanceDue}::numeric > 0`,
+    sql`${salesInvoices.status} != 'void'`,
+    input.search && input.search.trim()
+      ? sql`(${salesInvoices.invoiceNumber} ILIKE ${`%${input.search.trim()}%`} OR ${customers.name} ILIKE ${`%${input.search.trim()}%`})`
+      : undefined,
+  );
+
+  const rows = await db
+    .select({
+      id: salesInvoices.id,
+      invoiceNumber: salesInvoices.invoiceNumber,
+      invoiceDate: salesInvoices.invoiceDate,
+      dueDate: salesInvoices.dueDate,
+      status: salesInvoices.status,
+      totalAmount: salesInvoices.totalAmount,
+      amountPaid: salesInvoices.amountPaid,
+      balanceDue: salesInvoices.balanceDue,
+      salesOrderId: salesInvoices.salesOrderId,
+      customerId: customers.id,
+      customerName: customers.name,
+    })
+    .from(salesInvoices)
+    .innerJoin(customers, eq(customers.id, salesInvoices.customerId))
+    .where(where)
+    .orderBy(desc(salesInvoices.dueDate), desc(salesInvoices.invoiceDate))
+    .limit(limit);
+
+  return rows;
+}
+
+export type OpenInvoiceForPayment = Awaited<
+  ReturnType<typeof getOpenInvoicesForPayment>
+>[number];
+
 export async function recordPayment(input: {
   salesInvoiceId: string;
   createdByUserId: string;

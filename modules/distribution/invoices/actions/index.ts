@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  getOpenInvoicesForPayment,
   getSalesInvoiceById,
   getSalesInvoices,
   getSalesInvoicesPage,
@@ -18,4 +19,10 @@ export async function getSalesInvoicesPageAction(
 
 export async function getSalesInvoiceByIdAction(id: string) {
   return await getSalesInvoiceById(id);
+}
+
+export async function getOpenInvoicesForPaymentAction(
+  input: { search?: string; limit?: number } = {},
+) {
+  return await getOpenInvoicesForPayment(input);
 }
