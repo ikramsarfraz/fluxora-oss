@@ -20,6 +20,53 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+
+const optionalText = (max: number) =>
+  z
+    .string()
+    .transform(s => s.trim())
+    .refine(s => s.length <= max, `Cannot exceed ${max} characters.`)
+    .transform(s => (s === "" ? null : s))
+    .nullable();
+
+const optionalEmail = z
+  .string()
+  .transform(s => s.trim().toLowerCase())
+  .refine(
+    s => s === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s),
+    "Enter a valid email address.",
+  )
+  .refine(s => s.length <= 320, "Email cannot exceed 320 characters.")
+  .transform(s => (s === "" ? null : s))
+  .nullable();
+
+// US EIN. Accepts "123456789" or "12-3456789".
+const optionalEin = z
+  .string()
+  .transform(s => s.trim())
+  .refine(
+    s => s === "" || /^\d{2}-?\d{7}$/.test(s),
+    "Tax ID must be a 9-digit US EIN (e.g. 12-3456789).",
+  )
+  .transform(s => (s === "" ? null : s))
+  .nullable();
+
+const optionalUrl = z
+  .string()
+  .transform(s => s.trim())
+  .refine(s => {
+    if (s === "") return true;
+    try {
+      const url = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "Enter a valid website URL.")
+  .refine(s => s.length <= 512, "Website cannot exceed 512 characters.")
+  .transform(s => (s === "" ? null : s))
+  .nullable();
 
 const createSupplierSchema = z.object({
   name: z
@@ -41,10 +88,37 @@ const createSupplierSchema = z.object({
         .max(365, "Payment terms cannot exceed 365 days.")
         .nullable(),
     ),
+  primaryContactName: optionalText(255),
+  primaryContactEmail: optionalEmail,
+  primaryContactPhone: optionalText(32),
+  taxId: optionalEin,
+  accountNumber: optionalText(64),
+  addressLine1: optionalText(255),
+  addressLine2: optionalText(255),
+  addressCity: optionalText(128),
+  addressRegion: optionalText(128),
+  addressPostalCode: optionalText(32),
+  websiteUrl: optionalUrl,
+  notes: optionalText(4000),
 });
 
 type CreateSupplierValues = z.input<typeof createSupplierSchema>;
 type CreateSupplierParsed = z.output<typeof createSupplierSchema>;
+
+const EMPTY_TEXT_DEFAULTS = {
+  primaryContactName: "",
+  primaryContactEmail: "",
+  primaryContactPhone: "",
+  taxId: "",
+  accountNumber: "",
+  addressLine1: "",
+  addressLine2: "",
+  addressCity: "",
+  addressRegion: "",
+  addressPostalCode: "",
+  websiteUrl: "",
+  notes: "",
+} as const;
 
 export function AddSupplierForm(props?: {
   /** Prefill the supplier name — used by the bill review create-supplier flow. */
@@ -62,31 +136,32 @@ export function AddSupplierForm(props?: {
 
   const form = useForm<CreateSupplierValues, unknown, CreateSupplierParsed>({
     resolver: zodResolver(createSupplierSchema),
-    defaultValues: { name: props?.initialName ?? "", netDays: "" },
+    defaultValues: {
+      name: props?.initialName ?? "",
+      netDays: "",
+      ...EMPTY_TEXT_DEFAULTS,
+    },
   });
 
   const createSupplier = useCreateSupplier();
 
   function onSubmit(data: CreateSupplierParsed) {
     setError(null);
-    createSupplier.mutate(
-      { name: data.name, netDays: data.netDays },
-      {
-        onSuccess: result => {
-          toast.success("Supplier created.");
-          if (props?.onCreated) {
-            props.onCreated({ id: result.id, name: result.name });
-          } else {
-            router.push(`/suppliers/${result.id}`);
-          }
-        },
-        onError: (e: Error) => setError(e.message),
+    createSupplier.mutate(data, {
+      onSuccess: result => {
+        toast.success("Supplier created.");
+        if (props?.onCreated) {
+          props.onCreated({ id: result.id, name: result.name });
+        } else {
+          router.push(`/suppliers/${result.id}`);
+        }
       },
-    );
+      onError: (e: Error) => setError(e.message),
+    });
   }
 
   return (
-    <Card className="w-full max-w-xl">
+    <Card className="w-full max-w-2xl">
       <CardContent className="pt-6">
         <form id="form-add-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
@@ -94,63 +169,360 @@ export function AddSupplierForm(props?: {
               {error}
             </FormErrorAlert>
           ) : null}
-          <FieldGroup>
-            <Controller
-              name="name"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-supplier-name">
-                    Supplier name *
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id="form-add-supplier-name"
-                    aria-invalid={fieldState.invalid}
-                    placeholder="e.g. ABC Meat Co."
-                    autoComplete="organization"
-                  />
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
 
-            <Controller
-              name="netDays"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-supplier-net-days">
-                    Payment terms (net days)
-                  </FieldLabel>
-                  <Input
-                    id="form-add-supplier-net-days"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={365}
-                    step={1}
-                    placeholder="e.g. 30"
-                    value={field.value ?? ""}
-                    onChange={e => field.onChange(e.target.value)}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                    ref={field.ref}
-                    aria-invalid={fieldState.invalid}
-                  />
-                  <FieldDescription>
-                    Days from invoice date until payment is due. Leave blank
-                    for Net-0 (due on invoice date).
-                  </FieldDescription>
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
+          <FieldGroup>
+            <FormSection title="Identity">
+              <Controller
+                name="name"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-name">
+                      Supplier name *
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-supplier-name"
+                      aria-invalid={fieldState.invalid}
+                      placeholder="e.g. ABC Meat Co."
+                      autoComplete="organization"
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+
+              <div className="grid gap-6 @md/field-group:grid-cols-2">
+                <Controller
+                  name="accountNumber"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-account-number">
+                        Account number
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-account-number"
+                        value={field.value ?? ""}
+                        placeholder="Your buyer-account ID with this supplier"
+                      />
+                      <FieldDescription>
+                        Often printed on the supplier&apos;s invoices.
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
                   )}
-                  <NetTermsLegend />
-                </Field>
-              )}
-            />
+                />
+
+                <Controller
+                  name="websiteUrl"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-website">
+                        Website
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-website"
+                        value={field.value ?? ""}
+                        inputMode="url"
+                        placeholder="abcmeat.com"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+              </div>
+            </FormSection>
+
+            <FormSection title="Primary contact">
+              <Controller
+                name="primaryContactName"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-contact-name">
+                      Contact name
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-supplier-contact-name"
+                      value={field.value ?? ""}
+                      placeholder="e.g. Jamie Rivera"
+                      autoComplete="name"
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+
+              <div className="grid gap-6 @md/field-group:grid-cols-2">
+                <Controller
+                  name="primaryContactEmail"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-contact-email">
+                        Email
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-contact-email"
+                        type="email"
+                        inputMode="email"
+                        value={field.value ?? ""}
+                        placeholder="ap@abcmeat.com"
+                        autoComplete="email"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <Controller
+                  name="primaryContactPhone"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-contact-phone">
+                        Phone
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-contact-phone"
+                        type="tel"
+                        inputMode="tel"
+                        value={field.value ?? ""}
+                        placeholder="(555) 123-4567"
+                        autoComplete="tel"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+              </div>
+            </FormSection>
+
+            <FormSection
+              title="Remit-to address"
+              description="Where you mail checks or returns. US only."
+            >
+              <Controller
+                name="addressLine1"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-address-line1">
+                      Street address
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-supplier-address-line1"
+                      value={field.value ?? ""}
+                      placeholder="123 Market St"
+                      autoComplete="address-line1"
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+
+              <Controller
+                name="addressLine2"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-address-line2">
+                      Suite / unit
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-supplier-address-line2"
+                      value={field.value ?? ""}
+                      placeholder="Suite 400"
+                      autoComplete="address-line2"
+                    />
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+
+              <div className="grid gap-6 @md/field-group:grid-cols-[2fr_1fr_1fr]">
+                <Controller
+                  name="addressCity"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-address-city">
+                        City
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-address-city"
+                        value={field.value ?? ""}
+                        autoComplete="address-level2"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <Controller
+                  name="addressRegion"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-address-region">
+                        State
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-address-region"
+                        value={field.value ?? ""}
+                        placeholder="CA"
+                        autoComplete="address-level1"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+
+                <Controller
+                  name="addressPostalCode"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-supplier-address-postal">
+                        ZIP
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        id="form-add-supplier-address-postal"
+                        value={field.value ?? ""}
+                        inputMode="numeric"
+                        placeholder="94103"
+                        autoComplete="postal-code"
+                      />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+              </div>
+            </FormSection>
+
+            <FormSection title="Payment & accounting">
+              <Controller
+                name="netDays"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-net-days">
+                      Payment terms (net days)
+                    </FieldLabel>
+                    <Input
+                      id="form-add-supplier-net-days"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={365}
+                      step={1}
+                      placeholder="e.g. 30"
+                      value={field.value ?? ""}
+                      onChange={e => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                      aria-invalid={fieldState.invalid}
+                    />
+                    <FieldDescription>
+                      Days from invoice date until payment is due. Leave blank
+                      for Net-0 (due on invoice date).
+                    </FieldDescription>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                    <NetTermsLegend />
+                  </Field>
+                )}
+              />
+
+              <Controller
+                name="taxId"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-tax-id">
+                      Tax ID (EIN)
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id="form-add-supplier-tax-id"
+                      value={field.value ?? ""}
+                      placeholder="12-3456789"
+                      inputMode="numeric"
+                    />
+                    <FieldDescription>
+                      US Employer Identification Number — required if you&apos;ll
+                      issue this supplier a 1099-NEC at year end.
+                    </FieldDescription>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+            </FormSection>
+
+            <FormSection title="Notes">
+              <Controller
+                name="notes"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-add-supplier-notes" className="sr-only">
+                      Internal notes
+                    </FieldLabel>
+                    <Textarea
+                      {...field}
+                      id="form-add-supplier-notes"
+                      value={field.value ?? ""}
+                      rows={4}
+                      placeholder="Anything else worth remembering about this supplier — delivery quirks, contact preferences, etc."
+                    />
+                    <FieldDescription>
+                      Visible only to your workspace. Up to 4,000 characters.
+                    </FieldDescription>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                )}
+              />
+            </FormSection>
           </FieldGroup>
         </form>
       </CardContent>
@@ -168,5 +540,29 @@ export function AddSupplierForm(props?: {
         submitLabel="Create supplier"
       />
     </Card>
+  );
+}
+
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-4">
+      <header>
+        <h3 className="text-xs font-medium uppercase tracking-wide text-subtle">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-0.5 text-xs text-subtle">{description}</p>
+        ) : null}
+      </header>
+      <div className="flex flex-col gap-6">{children}</div>
+    </section>
   );
 }

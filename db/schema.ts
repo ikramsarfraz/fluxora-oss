@@ -831,6 +831,22 @@ export const suppliers = pgTable(
      * AP aging falls back to Net-0 (invoice date) in that case.
      */
     netDays: integer("net_days"),
+    /* Primary contact — who AP staff actually email/call. */
+    primaryContactName: varchar("primary_contact_name", { length: 255 }),
+    primaryContactEmail: varchar("primary_contact_email", { length: 320 }),
+    primaryContactPhone: varchar("primary_contact_phone", { length: 32 }),
+    /* US EIN, normalized to "##-#######" by the service. */
+    taxId: varchar("tax_id", { length: 64 }),
+    /** Buyer-side account number with this supplier (appears on their invoices). */
+    accountNumber: varchar("account_number", { length: 64 }),
+    /* Remit-to address — US only for v1; country column intentionally omitted. */
+    addressLine1: varchar("address_line1", { length: 255 }),
+    addressLine2: varchar("address_line2", { length: 255 }),
+    addressCity: varchar("address_city", { length: 128 }),
+    addressRegion: varchar("address_region", { length: 128 }),
+    addressPostalCode: varchar("address_postal_code", { length: 32 }),
+    websiteUrl: varchar("website_url", { length: 512 }),
+    notes: text("notes"),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {

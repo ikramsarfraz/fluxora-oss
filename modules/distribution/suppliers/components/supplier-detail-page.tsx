@@ -113,6 +113,175 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
   );
 }
 
+// ── Contact / address card ───────────────────────────────────────────────────
+
+type SupplierContactSlice = {
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  taxId: string | null;
+  accountNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressRegion: string | null;
+  addressPostalCode: string | null;
+  websiteUrl: string | null;
+  notes: string | null;
+};
+
+function formatUsAddress(s: SupplierContactSlice): string | null {
+  const cityRegionZip = [
+    s.addressCity,
+    [s.addressRegion, s.addressPostalCode].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const lines = [s.addressLine1, s.addressLine2, cityRegionZip || null].filter(
+    (l): l is string => Boolean(l && l.trim()),
+  );
+  return lines.length ? lines.join("\n") : null;
+}
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode | null;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-subtle">
+        {label}
+      </dt>
+      <dd className="text-sm text-ink">{value ?? <span className="text-subtle">—</span>}</dd>
+    </div>
+  );
+}
+
+function SupplierContactCard({ supplier }: { supplier: SupplierContactSlice }) {
+  const hasContact =
+    supplier.primaryContactName ||
+    supplier.primaryContactEmail ||
+    supplier.primaryContactPhone;
+  const address = formatUsAddress(supplier);
+  const hasAccounting = supplier.accountNumber || supplier.taxId || supplier.websiteUrl;
+  const hasNotes = Boolean(supplier.notes);
+
+  // If nothing is populated, skip the card entirely — empty supplier records
+  // shouldn't show four em-dashes.
+  if (!hasContact && !address && !hasAccounting && !hasNotes) {
+    return null;
+  }
+
+  return (
+    <Card className="overflow-hidden rounded-xl p-6 shadow-none">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {hasContact ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Primary contact
+            </h4>
+            <DetailItem label="Name" value={supplier.primaryContactName} />
+            <DetailItem
+              label="Email"
+              value={
+                supplier.primaryContactEmail ? (
+                  <a
+                    href={`mailto:${supplier.primaryContactEmail}`}
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.primaryContactEmail}
+                  </a>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Phone"
+              value={
+                supplier.primaryContactPhone ? (
+                  <a
+                    href={`tel:${supplier.primaryContactPhone}`}
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.primaryContactPhone}
+                  </a>
+                ) : null
+              }
+            />
+          </dl>
+        ) : null}
+
+        {address ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Remit-to address
+            </h4>
+            <DetailItem
+              label="Mailing address"
+              value={<span className="whitespace-pre-line">{address}</span>}
+            />
+          </dl>
+        ) : null}
+
+        {hasAccounting ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Accounting
+            </h4>
+            <DetailItem
+              label="Account number"
+              value={
+                supplier.accountNumber ? (
+                  <span className="font-mono tabular-nums">
+                    {supplier.accountNumber}
+                  </span>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Tax ID (EIN)"
+              value={
+                supplier.taxId ? (
+                  <span className="font-mono tabular-nums">{supplier.taxId}</span>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Website"
+              value={
+                supplier.websiteUrl ? (
+                  <a
+                    href={supplier.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </a>
+                ) : null
+              }
+            />
+          </dl>
+        ) : null}
+      </div>
+
+      {hasNotes ? (
+        <div className="mt-6 border-t border-border-default pt-4">
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">
+            Notes
+          </h4>
+          <p className="whitespace-pre-line text-sm text-ink-warm">{supplier.notes}</p>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
@@ -300,6 +469,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         open={editTermsOpen}
         onOpenChange={setEditTermsOpen}
       />
+
+      <SupplierContactCard supplier={supplier} />
 
       {metrics.totalInvoicesCount < 5 && (
         <Card className="overflow-hidden rounded-xl p-6 shadow-none">
