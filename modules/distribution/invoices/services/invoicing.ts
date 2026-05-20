@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
   customers,
@@ -333,17 +333,64 @@ export type SalesInvoiceListSort =
   | "totalAmount"
   | "balanceDue";
 
-export type SalesInvoiceListParams = PaginatedQueryInput<SalesInvoiceListSort>;
+// "all" is the UI sentinel for no filter; "overdue" is computed (status=sent
+// AND balance>0 AND due_date < today). The other values map 1:1 to the
+// stored sales_invoices.status enum.
+export type SalesInvoiceStatusFilter =
+  | "all"
+  | "draft"
+  | "sent"
+  | "overdue"
+  | "partially_paid"
+  | "paid"
+  | "void";
+
+export type SalesInvoiceFilters = {
+  status?: SalesInvoiceStatusFilter;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+function buildSalesInvoiceFilterClauses(
+  filters: SalesInvoiceFilters,
+): SQL[] {
+  const clauses: SQL[] = [];
+  if (filters.status && filters.status !== "all") {
+    if (filters.status === "overdue") {
+      // Overdue = sent + has balance + due date passed.
+      clauses.push(eq(salesInvoices.status, "sent"));
+      clauses.push(sql`${salesInvoices.balanceDue}::numeric > 0`);
+      clauses.push(
+        sql`${salesInvoices.dueDate} IS NOT NULL AND ${salesInvoices.dueDate} < current_date`,
+      );
+    } else {
+      clauses.push(eq(salesInvoices.status, filters.status));
+    }
+  }
+  if (filters.dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateFrom)) {
+    clauses.push(gte(salesInvoices.invoiceDate, filters.dateFrom));
+  }
+  if (filters.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateTo)) {
+    clauses.push(lte(salesInvoices.invoiceDate, filters.dateTo));
+  }
+  return clauses;
+}
+
+export type SalesInvoiceListParams = PaginatedQueryInput<
+  SalesInvoiceListSort,
+  SalesInvoiceFilters
+>;
 
 export async function getSalesInvoicesPage(input?: SalesInvoiceListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "invoiceDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: {} as SalesInvoiceFilters,
   });
   const where = and(
     eq(salesInvoices.tenantId, tenant.id),
+    ...buildSalesInvoiceFilterClauses(query.filters),
     buildTextSearchCondition(query.search, [
       salesInvoices.invoiceNumber,
       salesInvoices.status,
@@ -408,6 +455,64 @@ export async function getSalesInvoicesPage(input?: SalesInvoiceListParams) {
 export type SalesInvoiceListItem = Awaited<
   ReturnType<typeof getSalesInvoices>
 >[number];
+
+export type SalesInvoicesSummary = {
+  /** Filter context: total grand_total across the filtered set. */
+  totalAmount: number;
+  /** Filter context: total open balance_due across the filtered set. */
+  totalOpenBalance: number;
+  /** Count of invoices in the filtered set. */
+  invoiceCount: number;
+  /** Count with balance_due > 0 AND status != 'void'. */
+  openCount: number;
+  /** Count of "sent" invoices with due_date < today AND balance > 0. */
+  overdueCount: number;
+  /** Sum of balance_due across overdue invoices only. */
+  overdueAmount: number;
+};
+
+/**
+ * Aggregate stats for the current filter set — drives the KPI strip on
+ * the invoices listing. Same filter clauses as getSalesInvoicesPage so
+ * the numbers always match what's visible.
+ */
+export async function getSalesInvoicesSummary(
+  filters: SalesInvoiceFilters = {},
+  search: string = "",
+): Promise<SalesInvoicesSummary> {
+  const tenant = await getCurrentTenant();
+  const where = and(
+    eq(salesInvoices.tenantId, tenant.id),
+    ...buildSalesInvoiceFilterClauses(filters),
+    buildTextSearchCondition(search, [
+      salesInvoices.invoiceNumber,
+      salesInvoices.status,
+      customers.name,
+    ]),
+  );
+
+  const [row] = await db
+    .select({
+      totalAmount: sql<string>`coalesce(sum(${salesInvoices.totalAmount}::numeric), 0)`,
+      totalOpenBalance: sql<string>`coalesce(sum(${salesInvoices.balanceDue}::numeric), 0)`,
+      invoiceCount: sql<number>`count(*)::int`,
+      openCount: sql<number>`count(*) filter (where ${salesInvoices.balanceDue}::numeric > 0 and ${salesInvoices.status} != 'void')::int`,
+      overdueCount: sql<number>`count(*) filter (where ${salesInvoices.status} = 'sent' and ${salesInvoices.balanceDue}::numeric > 0 and ${salesInvoices.dueDate} is not null and ${salesInvoices.dueDate} < current_date)::int`,
+      overdueAmount: sql<string>`coalesce(sum(${salesInvoices.balanceDue}::numeric) filter (where ${salesInvoices.status} = 'sent' and ${salesInvoices.balanceDue}::numeric > 0 and ${salesInvoices.dueDate} is not null and ${salesInvoices.dueDate} < current_date), 0)`,
+    })
+    .from(salesInvoices)
+    .leftJoin(customers, eq(customers.id, salesInvoices.customerId))
+    .where(where);
+
+  return {
+    totalAmount: Number(row?.totalAmount ?? 0),
+    totalOpenBalance: Number(row?.totalOpenBalance ?? 0),
+    invoiceCount: row?.invoiceCount ?? 0,
+    openCount: row?.openCount ?? 0,
+    overdueCount: row?.overdueCount ?? 0,
+    overdueAmount: Number(row?.overdueAmount ?? 0),
+  };
+}
 
 /**
  * Tenant-scoped list of invoices with a non-zero balance due and a

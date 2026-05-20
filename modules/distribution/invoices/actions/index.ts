@@ -5,6 +5,8 @@ import {
   getSalesInvoiceById,
   getSalesInvoices,
   getSalesInvoicesPage,
+  getSalesInvoicesSummary,
+  type SalesInvoiceFilters,
 } from "../services/invoicing";
 
 export async function getSalesInvoicesAction() {
@@ -25,4 +27,11 @@ export async function getOpenInvoicesForPaymentAction(
   input: { search?: string; limit?: number } = {},
 ) {
   return await getOpenInvoicesForPayment(input);
+}
+
+export async function getSalesInvoicesSummaryAction(
+  filters: SalesInvoiceFilters = {},
+  search: string = "",
+) {
+  return await getSalesInvoicesSummary(filters, search);
 }

@@ -7,9 +7,13 @@ import {
   getSalesInvoiceByIdAction,
   getSalesInvoicesAction,
   getSalesInvoicesPageAction,
+  getSalesInvoicesSummaryAction,
 } from "@/modules/distribution/invoices/actions";
 import { isUuid } from "@/lib/utils/uuid";
-import type { SalesInvoiceListParams } from "@/modules/distribution/invoices/services/invoicing";
+import type {
+  SalesInvoiceFilters,
+  SalesInvoiceListParams,
+} from "@/modules/distribution/invoices/services/invoicing";
 
 export function useSalesInvoices() {
   return useQuery({
@@ -34,6 +38,18 @@ export function useSalesInvoice(id: string) {
     queryFn: () => getSalesInvoiceByIdAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSalesInvoicesSummary(
+  filters: SalesInvoiceFilters,
+  search: string,
+) {
+  return useQuery({
+    queryKey: [...queryKeys.invoices.all, "summary", filters, search] as const,
+    queryFn: () => getSalesInvoicesSummaryAction(filters, search),
+    placeholderData: previousData => previousData,
+    staleTime: 1000 * 60,
   });
 }
 
