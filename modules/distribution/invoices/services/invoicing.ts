@@ -564,6 +564,42 @@ export type OpenInvoiceForPayment = Awaited<
   ReturnType<typeof getOpenInvoicesForPayment>
 >[number];
 
+/**
+ * Open (balance > 0, non-void) invoices for a single customer. Drives
+ * the bulk-allocate dialog launched from the customer detail page.
+ * Ordered oldest-first so the default FIFO auto-allocate picks the
+ * oldest balances to clear.
+ */
+export async function getOpenInvoicesForCustomer(customerId: string) {
+  const tenant = await getCurrentTenant();
+  return db
+    .select({
+      id: salesInvoices.id,
+      invoiceNumber: salesInvoices.invoiceNumber,
+      invoiceDate: salesInvoices.invoiceDate,
+      dueDate: salesInvoices.dueDate,
+      status: salesInvoices.status,
+      totalAmount: salesInvoices.totalAmount,
+      amountPaid: salesInvoices.amountPaid,
+      balanceDue: salesInvoices.balanceDue,
+      salesOrderId: salesInvoices.salesOrderId,
+    })
+    .from(salesInvoices)
+    .where(
+      and(
+        eq(salesInvoices.tenantId, tenant.id),
+        eq(salesInvoices.customerId, customerId),
+        sql`${salesInvoices.balanceDue}::numeric > 0`,
+        sql`${salesInvoices.status} != 'void'`,
+      ),
+    )
+    .orderBy(salesInvoices.invoiceDate);
+}
+
+export type OpenInvoiceForCustomer = Awaited<
+  ReturnType<typeof getOpenInvoicesForCustomer>
+>[number];
+
 export async function recordPayment(input: {
   salesInvoiceId: string;
   createdByUserId: string;
@@ -637,6 +673,136 @@ export async function recordPayment(input: {
       payments: true,
       lines: true,
     },
+  });
+}
+
+/**
+ * Apply a single payment event spread across N invoices for the same
+ * customer (one check / wire / ACH covering multiple bills).
+ *
+ * Behaviour:
+ *   - All allocations commit in one transaction. All-or-nothing — a
+ *     mid-batch failure rolls back the whole thing so the user never
+ *     ends up with a partially-applied check.
+ *   - Each allocation gets its own row in `payments` (the schema
+ *     models each application as a discrete event for audit clarity)
+ *     and updates its parent invoice's amount_paid / balance_due /
+ *     status the same way recordPayment does.
+ *   - Validates: target invoice belongs to this customer + tenant,
+ *     amount > 0, amount <= current balance (1¢ tolerance), method
+ *     is in the enum.
+ *   - record_payment permission is enforced. Tenant cross-check too.
+ */
+export async function recordBulkPaymentForCustomer(input: {
+  customerId: string;
+  paymentDate: string;
+  paymentMethod: "cash" | "zelle" | "check" | "credit_card" | "ach";
+  checkNumber?: string;
+  referenceNumber?: string;
+  notes?: string;
+  allocations: Array<{ salesInvoiceId: string; amount: string }>;
+}): Promise<{
+  createdPayments: Array<{ paymentId: string; invoiceId: string }>;
+}> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_payment");
+
+  if (input.allocations.length === 0) {
+    throw new Error("Provide at least one invoice allocation.");
+  }
+
+  // Validate the allocations array shape + amounts upfront. Doing this
+  // before opening the transaction means simple input errors don't even
+  // touch the DB.
+  for (const a of input.allocations) {
+    const amount = Number(a.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Each allocation amount must be greater than 0.");
+    }
+  }
+
+  return await db.transaction(async tx => {
+    const invoiceIds = input.allocations.map(a => a.salesInvoiceId);
+    const invoices = await tx.query.salesInvoices.findMany({
+      where: and(
+        inArray(salesInvoices.id, invoiceIds),
+        eq(salesInvoices.tenantId, tenant.id),
+        eq(salesInvoices.customerId, input.customerId),
+      ),
+    });
+
+    if (invoices.length !== invoiceIds.length) {
+      throw new Error(
+        "One or more invoices were not found for this customer.",
+      );
+    }
+
+    const invoiceById = new Map(invoices.map(inv => [inv.id, inv]));
+    const createdPayments: Array<{ paymentId: string; invoiceId: string }> = [];
+
+    for (const allocation of input.allocations) {
+      const invoice = invoiceById.get(allocation.salesInvoiceId);
+      if (!invoice) {
+        throw new Error("Invoice not found in the loaded batch.");
+      }
+
+      const paymentAmount = Number(allocation.amount);
+      const currentBalanceDue = Number(invoice.balanceDue);
+
+      if (currentBalanceDue <= 0) {
+        throw new Error(
+          `Invoice ${invoice.invoiceNumber} is already fully paid.`,
+        );
+      }
+      if (paymentAmount - currentBalanceDue > 0.01) {
+        throw new Error(
+          `Amount for invoice ${invoice.invoiceNumber} exceeds its balance due.`,
+        );
+      }
+
+      const currentPaid = Number(invoice.amountPaid);
+      const totalAmount = Number(invoice.totalAmount);
+      const newAmountPaid = currentPaid + paymentAmount;
+      const newBalanceDue = totalAmount - newAmountPaid;
+
+      const [inserted] = await tx
+        .insert(payments)
+        .values({
+          tenantId: tenant.id,
+          salesInvoiceId: invoice.id,
+          createdByUserId: currentUser.id,
+          paymentDate: input.paymentDate,
+          amount: allocation.amount,
+          paymentMethod: input.paymentMethod,
+          checkNumber: input.checkNumber,
+          referenceNumber: input.referenceNumber,
+          notes: input.notes,
+        })
+        .returning({ id: payments.id });
+
+      await tx
+        .update(salesInvoices)
+        .set({
+          amountPaid: newAmountPaid.toFixed(2),
+          balanceDue: Math.max(newBalanceDue, 0).toFixed(2),
+          status:
+            newAmountPaid >= totalAmount
+              ? "paid"
+              : newAmountPaid > 0
+                ? "partially_paid"
+                : invoice.status,
+        })
+        .where(eq(salesInvoices.id, invoice.id));
+
+      createdPayments.push({ paymentId: inserted.id, invoiceId: invoice.id });
+    }
+
+    return { createdPayments };
   });
 }
 

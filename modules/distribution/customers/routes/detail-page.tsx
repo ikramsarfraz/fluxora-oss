@@ -9,6 +9,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  Receipt,
   ShoppingCart,
   TrendingUp,
   Wallet,
@@ -43,6 +44,9 @@ import {
   useCustomerOrdersPage,
   useCustomerPortfolio,
 } from "../hooks/use-customers";
+import { BulkPaymentEntryDialog } from "@/modules/distribution/invoices/components/bulk-payment-entry-dialog";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { can } from "@/lib/auth/permissions";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -122,6 +126,9 @@ export default function CustomerPortfolioPage() {
   const invoicesPer = Number(searchParams.get("invoicesPer") ?? 10) || 10;
 
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
+  const { data: currentUser } = useCurrentPortalUser();
+  const canRecordPayment = can(currentUser?.role, "record_payment");
   useEffect(() => {
     if (sessionStorage.getItem(`cust-details-${customerId}`) === "open") {
       setDetailsOpen(true);
@@ -202,6 +209,16 @@ export default function CustomerPortfolioPage() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {canRecordPayment && parseFloat(metrics.balanceDue) > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkPaymentOpen(true)}
+            >
+              <Receipt className="size-4" />
+              Record payment
+            </Button>
+          ) : null}
           <Button size="sm" asChild>
             <Link href={`/orders/new?customerId=${customer.id}`}>
               <Plus className="size-4" />
@@ -216,6 +233,13 @@ export default function CustomerPortfolioPage() {
           </Button>
         </div>
       </div>
+
+      <BulkPaymentEntryDialog
+        open={bulkPaymentOpen}
+        onOpenChange={setBulkPaymentOpen}
+        customerId={customer.id}
+        customerName={customer.name}
+      />
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
