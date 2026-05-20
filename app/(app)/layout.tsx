@@ -15,6 +15,8 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 import { getAccessibleDestinationsForAuthUser } from "@/modules/shared/services/auth";
+import { hasFeature } from "@/modules/core/feature-flags";
+import { INBOX_FEATURE } from "@/modules/distribution/inbox";
 
 export default async function AppGroupLayout({
   children,
@@ -39,6 +41,8 @@ export default async function AppGroupLayout({
     redirect("/login");
   }
 
+  const inboxEnabled = await hasFeature(tenant.id, INBOX_FEATURE);
+
   return (
     <TooltipProvider>
       <PostHogIdentify />
@@ -49,6 +53,7 @@ export default async function AppGroupLayout({
             tenantSlug={tenant.slug}
             destinations={destinations}
             user={session.user}
+            inboxEnabled={inboxEnabled}
           />
           <SidebarInset className="min-w-0 overflow-x-hidden">
             <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
@@ -59,7 +64,7 @@ export default async function AppGroupLayout({
               />
               <AppBreadcrumb />
               <div className="ml-auto flex items-center">
-                <InboxBell />
+                {inboxEnabled && <InboxBell />}
               </div>
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>

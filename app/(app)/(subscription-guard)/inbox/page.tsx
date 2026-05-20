@@ -2,9 +2,14 @@ import { Suspense } from "react";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getInboxData } from "@/modules/distribution/inbox/services/inbox";
 import { InboxShell } from "@/modules/distribution/inbox/components/inbox-shell";
+import { INBOX_FEATURE } from "@/modules/distribution/inbox";
+import { requireFeature } from "@/modules/core/feature-flags";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 import { Skeleton } from "@/components/loading/Skeleton";
 
 async function InboxContent() {
+  const tenant = await getCurrentTenantCached();
+  await requireFeature(tenant.id, INBOX_FEATURE);
   const [portalUser, data] = await Promise.all([
     getCurrentPortalUser(),
     getInboxData(),

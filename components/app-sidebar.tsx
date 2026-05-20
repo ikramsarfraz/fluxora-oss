@@ -20,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
   ChevronsUpDown,
+  Inbox,
   LayoutDashboard,
   Users,
   Package,
@@ -68,6 +69,8 @@ type NavItem = {
   url: string;
   icon: LucideIcon;
   permission?: Permission;
+  /** When set, the item is hidden unless the named flag is enabled. */
+  requiresInbox?: boolean;
 };
 
 type NavGroup = {
@@ -81,6 +84,12 @@ const navMain: NavGroup[] = [
     title: "Overview",
     hideLabel: true,
     items: [
+      {
+        title: "Inbox",
+        url: "/inbox",
+        icon: Inbox,
+        requiresInbox: true,
+      },
       {
         title: "Dashboard",
         url: "/",
@@ -188,6 +197,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   tenantSlug?: string;
   destinations?: AccessibleDestination[];
   user?: User;
+  inboxEnabled?: boolean;
 };
 
 export function AppSidebar({
@@ -195,6 +205,7 @@ export function AppSidebar({
   tenantSlug,
   destinations = [],
   user,
+  inboxEnabled = false,
   ...props
 }: AppSidebarProps) {
   const pathname = usePathname() ?? "";
@@ -209,9 +220,11 @@ export function AppSidebar({
   const visibleGroups = navMain
     .map(group => ({
       ...group,
-      items: group.items.filter(
-        item => !item.permission || can(role, item.permission),
-      ),
+      items: group.items.filter(item => {
+        if (item.permission && !can(role, item.permission)) return false;
+        if (item.requiresInbox && !inboxEnabled) return false;
+        return true;
+      }),
     }))
     .filter(group => group.items.length > 0);
 
