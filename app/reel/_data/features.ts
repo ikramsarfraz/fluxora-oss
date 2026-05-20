@@ -631,6 +631,7 @@ export const FEATURES: Feature[] = [
     ],
     accent: "info",
     icon: LayoutDashboard,
+    liveDemoHref: "/reel/dashboard-kpis",
   },
   {
     slug: "support",
