@@ -43,10 +43,10 @@ export function TransitionBackdrop({
       aria-hidden
       className="pointer-events-none absolute inset-0 overflow-hidden"
     >
+      <DriftingGrid color={palette.gridDot} />
       <ConcentricRings count={ringCount} color={palette.ring} />
       <DriftingDots count={dotCount} colors={palette.dotColors} />
       <FloatingGlyphs count={glyphCount} color={palette.glyph} />
-      <SpiralTrail color={palette.glyph} />
     </div>
   );
 }
@@ -54,12 +54,14 @@ export function TransitionBackdrop({
 const TONE_PALETTE: Record<
   Tone,
   {
+    gridDot: string;
     ring: string;
     dotColors: string[];
     glyph: string;
   }
 > = {
   forest: {
+    gridDot: "color-mix(in oklch, var(--color-forest-mid) 14%, transparent)",
     ring: "color-mix(in oklch, var(--color-forest-mid) 20%, transparent)",
     dotColors: [
       "color-mix(in oklch, var(--color-forest-mid) 30%, transparent)",
@@ -69,6 +71,7 @@ const TONE_PALETTE: Record<
     glyph: "color-mix(in oklch, var(--color-forest-mid) 22%, transparent)",
   },
   success: {
+    gridDot: "color-mix(in oklch, var(--color-success-fg) 14%, transparent)",
     ring: "color-mix(in oklch, var(--color-success-fg) 22%, transparent)",
     dotColors: [
       "color-mix(in oklch, var(--color-success-fg) 30%, transparent)",
@@ -77,6 +80,7 @@ const TONE_PALETTE: Record<
     glyph: "color-mix(in oklch, var(--color-success-fg) 25%, transparent)",
   },
   warning: {
+    gridDot: "color-mix(in oklch, var(--color-warning-fg) 14%, transparent)",
     ring: "color-mix(in oklch, var(--color-warning-fg) 22%, transparent)",
     dotColors: [
       "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)",
@@ -238,43 +242,28 @@ function FloatingGlyphs({ count, color }: { count: number; color: string }) {
   );
 }
 
-// ---------- Spiral trail ----------
-// A long, slow-rotating spiral made from a single SVG path — sits behind
-// everything and gives the backdrop a sense of orbit / flow without dominating.
-function SpiralTrail({ color }: { color: string }) {
+// ---------- Drifting dotted grid ----------
+// Replacement for the (over-art-deco) spiral trail. A graph-paper dotted
+// grid that drifts diagonally on a slow loop. Sits behind everything as
+// structural texture — anchors the page like Linear/Notion app surfaces
+// without competing with the headline.
+//
+// Implementation: an oversized div with a `radial-gradient` repeating
+// pattern, translated by exactly one grid cell over 14s. The cell-aligned
+// translate is what makes the loop seamless — at the end of the cycle, the
+// pattern lands exactly where it started.
+function DriftingGrid({ color }: { color: string }) {
+  const cell = 38; // px, the grid cell spacing
   return (
-    <motion.svg
-      viewBox="-100 -100 200 200"
-      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-      style={{ width: 720, height: 720, color }}
-      animate={{ rotate: 360 }}
-      transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
+    <motion.div
       aria-hidden
-    >
-      <path
-        d={spiralPath()}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="0.4"
-        strokeLinecap="round"
-        opacity={0.7}
-      />
-    </motion.svg>
+      className="absolute -inset-12"
+      style={{
+        backgroundImage: `radial-gradient(circle, ${color} 1.4px, transparent 1.6px)`,
+        backgroundSize: `${cell}px ${cell}px`,
+      }}
+      animate={{ x: [0, cell], y: [0, cell] }}
+      transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+    />
   );
-}
-
-function spiralPath(): string {
-  // Logarithmic-ish spiral, 4 turns. Build as a polyline.
-  const pts: string[] = [];
-  const turns = 4;
-  const steps = 360 * turns;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const angle = t * Math.PI * 2 * turns;
-    const radius = 6 + 90 * t;
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
-    pts.push(`${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`);
-  }
-  return pts.join(" ");
 }
