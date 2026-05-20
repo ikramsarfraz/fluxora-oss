@@ -5,6 +5,7 @@ import {
   Building2,
   Check,
   FileText,
+  Layers,
   Sparkles,
   Tag,
   UploadCloud,
@@ -17,124 +18,318 @@ import { cn } from "@/lib/utils";
 import { MarketingAppShell } from "./app-shell";
 
 // =========================================================================
-// AiExtractMoment — full Bills page with PDF drop + extracted fields
+// AiExtractMoment — bulk invoice drop with progressive AI extraction reveal
 // =========================================================================
+//
+// The narrative reads in three beats:
+//
+//   1. DROP   — one invoice falls into the drop zone. Nothing else happens
+//               yet. The visitor's eye is locked on the file landing.
+//   2. BULK   — four more invoices fan in behind it; a "5 queued · bulk
+//               processing" badge punches in. This is the moment that says
+//               "this works for a folder, not just one PDF."
+//   3. EXTRACT — only now does the right panel wake up. Status flips from
+//               "Waiting" → "AI reading" → "AI extracted"; a scanning sweep
+//               passes over the front invoice; then the extracted fields
+//               cascade in one at a time, ~0.8s apart, so each confidence
+//               bar has time to read before the next field lands.
+//
+// Timeline (within the 11s scene window):
+//
+//   0.0 → 0.3   drop zone visible; right panel says "Waiting"
+//   0.3 → 1.5   first invoice spring-drops in from above
+//   1.5 → 1.9   filename appears
+//   1.9 → 3.0   4 more invoices fan in behind, queue badge punches in
+//   3.0 → 3.7   right panel transitions: "AI reading invoice…"
+//   3.7 → 4.4   scanning sweep across the front invoice
+//   4.4 → 5.2   Vendor field
+//   5.2 → 6.0   Total field
+//   6.0 → 6.8   Lines matched field
+//   6.8 → 7.6   Receive into field
+//   7.6 → 8.2   green Posted callout
+//   8.2 → 8.8   "+ 4 more processing" queue hint
+//
+// loopMs is bumped to 11500ms so the loop never restarts mid-walkthrough
+// (the walkthrough's SCENE_MS = 11000ms). On the editorial / compare /
+// tour pages this gives the moment a slightly longer breathing pause
+// between loops — which the new pacing wants anyway.
+
+const QUEUED_INVOICES = [
+  { vendor: "North Coast Cheese", id: "20133", total: "$298.50" },
+  { vendor: "Pacific Greens", id: "8842", total: "$412.20" },
+  { vendor: "Sonoma Wines", id: "1190", total: "$1,224.00" },
+  { vendor: "Bay Coffee Co.", id: "5571", total: "$186.40" },
+];
+
 export function AiExtractMoment() {
   return (
     <MarketingAppShell
       activeNav="bills"
-      crumbs={["Bills", "Import supplier invoice"]}
-      label="AI invoice import"
+      crumbs={["Bills", "Import supplier invoices"]}
+      label="AI invoice import · bulk"
       tone="info"
+      loopMs={11500}
       rightSlot={
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-info-bg/60 px-2.5 py-1 font-mono text-[11px] text-info-fg">
+        <motion.span
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{
+            delay: 7.6,
+            type: "spring",
+            stiffness: 320,
+            damping: 18,
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full bg-info-bg/60 px-2.5 py-1 font-mono text-[11px] text-info-fg"
+        >
           <Sparkles className="size-3" strokeWidth={2} />
           2.4 sec · 94%
-        </span>
+        </motion.span>
       }
     >
       <div className="grid h-full grid-cols-[0.95fr_1.1fr] gap-0">
-        {/* LEFT: receipt thumbnail */}
-        <div className="flex flex-col items-center justify-center border-r border-border-default bg-card-warm/30 p-5">
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
-            Just dropped
-          </div>
+        {/* LEFT: drop zone with stack of invoices */}
+        <div className="relative flex flex-col items-center justify-center overflow-hidden border-r border-border-default bg-card-warm/30 px-5 py-8">
+          {/* Drop-zone label — visible while the page is "empty," fades as
+              the first invoice settles. */}
           <motion.div
-            initial={{ y: -50, rotate: -10, opacity: 0 }}
-            animate={{ y: 0, rotate: 0, opacity: 1 }}
-            transition={{
-              type: "spring",
-              stiffness: 200,
-              damping: 18,
-            }}
-            className="mt-3 flex w-full max-w-[220px] flex-col gap-1.5 rounded-md border-2 border-border-default bg-card-warm p-3.5 shadow-md"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: [1, 1, 0] }}
+            transition={{ duration: 1.8, times: [0, 0.2, 1] }}
+            className="absolute top-5 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-subtle"
           >
-            <div className="flex items-center gap-1.5 border-b border-border-default pb-1.5">
-              <FileText className="size-3.5 text-[#217346]" strokeWidth={2.2} />
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-subtle">
-                Bay Area Seafood
-              </span>
-            </div>
-            <div className="font-serif text-[12px] font-medium text-ink">
-              Invoice 4421
-            </div>
-            <ul className="space-y-0.5 font-mono text-[9.5px] text-ink-warm">
-              <li className="flex justify-between">
-                <span>Atlantic salmon · 30 lb</span>
-                <span>$216.00</span>
-              </li>
-              <li className="flex justify-between">
-                <span>Heirloom tomatoes · 8 cs</span>
-                <span>$176.00</span>
-              </li>
-              <li className="flex justify-between">
-                <span>Wagyu ribeye · 14 ea</span>
-                <span>$322.00</span>
-              </li>
-            </ul>
-            <div className="mt-1 border-t border-border-default pt-1 text-right font-mono text-[10.5px] font-medium text-ink">
-              Total · $714.00
-            </div>
+            <UploadCloud className="size-3" strokeWidth={2} />
+            Drop invoices here
           </motion.div>
-          <div className="mt-3 flex items-center gap-1.5 font-mono text-[10px] text-subtle">
+
+          {/* Stack container — front invoice with queued invoices fanned
+              behind. Min height reserves room for the fan offsets. */}
+          <div className="relative mt-4 min-h-[210px] w-full max-w-[220px]">
+            {/* Queued invoices — fan in behind the front one. Reversed so
+                the "closest" queued card lands first (smallest offset) and
+                cards further back appear later, like the stack growing. */}
+            {QUEUED_INVOICES.map((inv, idx) => {
+              const depth = idx + 1;
+              return (
+                <motion.div
+                  key={inv.id}
+                  initial={{
+                    opacity: 0,
+                    x: 0,
+                    y: -40,
+                    rotate: -16,
+                    scale: 0.86,
+                  }}
+                  animate={{
+                    opacity: 1 - depth * 0.16,
+                    x: -depth * 8,
+                    y: -depth * 5,
+                    rotate: -depth * 2.5,
+                    scale: 1 - depth * 0.03,
+                  }}
+                  transition={{
+                    delay: 1.9 + idx * 0.22,
+                    type: "spring",
+                    stiffness: 200,
+                    damping: 22,
+                  }}
+                  style={{ zIndex: 5 - depth }}
+                  className="absolute inset-0 flex flex-col gap-1 rounded-md border-2 border-border-default bg-card-warm p-3 shadow-md"
+                >
+                  <div className="flex items-center gap-1.5 border-b border-border-default pb-1">
+                    <FileText
+                      className="size-3 text-info-fg"
+                      strokeWidth={2.2}
+                    />
+                    <span className="font-mono text-[8.5px] uppercase tracking-[0.14em] text-subtle">
+                      {inv.vendor}
+                    </span>
+                  </div>
+                  <div className="font-serif text-[11px] font-medium text-ink">
+                    Invoice {inv.id}
+                  </div>
+                </motion.div>
+              );
+            })}
+
+            {/* Front invoice — drops in 0.3 → 1.5s with a satisfying spring */}
+            <motion.div
+              initial={{ y: -120, rotate: -10, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, rotate: 0, opacity: 1, scale: 1 }}
+              transition={{
+                delay: 0.3,
+                type: "spring",
+                stiffness: 180,
+                damping: 16,
+                mass: 1.1,
+              }}
+              style={{ zIndex: 10 }}
+              className="relative flex w-full flex-col gap-1.5 rounded-md border-2 border-border-default bg-card-warm p-3.5 shadow-lg"
+            >
+              <div className="flex items-center gap-1.5 border-b border-border-default pb-1.5">
+                <FileText
+                  className="size-3.5 text-[#217346]"
+                  strokeWidth={2.2}
+                />
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-subtle">
+                  Bay Area Seafood
+                </span>
+              </div>
+              <div className="font-serif text-[12px] font-medium text-ink">
+                Invoice 4421
+              </div>
+              <ul className="space-y-0.5 font-mono text-[9.5px] text-ink-warm">
+                <li className="flex justify-between">
+                  <span>Atlantic salmon · 30 lb</span>
+                  <span>$216.00</span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Heirloom tomatoes · 8 cs</span>
+                  <span>$176.00</span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Wagyu ribeye · 14 ea</span>
+                  <span>$322.00</span>
+                </li>
+              </ul>
+              <div className="mt-1 border-t border-border-default pt-1 text-right font-mono text-[10.5px] font-medium text-ink">
+                Total · $714.00
+              </div>
+
+              {/* Scanning sweep — 3.7 → 4.4s, runs top to bottom across the
+                  front invoice as the AI reads it. */}
+              <motion.div
+                aria-hidden
+                initial={{ y: -4, opacity: 0 }}
+                animate={{ y: 180, opacity: [0, 1, 1, 0] }}
+                transition={{
+                  delay: 3.7,
+                  duration: 0.7,
+                  times: [0, 0.1, 0.85, 1],
+                  ease: "linear",
+                }}
+                className="pointer-events-none absolute inset-x-2 top-0 h-[2px] rounded-full bg-info-fg shadow-[0_0_14px_var(--color-info-fg)]"
+              />
+            </motion.div>
+          </div>
+
+          {/* Filename — appears just after the front invoice settles */}
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.5, duration: 0.5 }}
+            className="mt-5 flex items-center gap-1.5 font-mono text-[10px] text-subtle"
+          >
             <UploadCloud className="size-3" strokeWidth={2} />
             bay-area-seafood-4421.pdf · 84 KB
-          </div>
+          </motion.div>
+
+          {/* Bulk queue badge — punches in once the fan completes */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{
+              delay: 3.0,
+              type: "spring",
+              stiffness: 280,
+              damping: 22,
+            }}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-info-border/60 bg-info-bg/60 px-2.5 py-1 font-mono text-[10px] text-info-fg"
+          >
+            <Layers className="size-3" strokeWidth={2} />
+            5 invoices queued · bulk processing
+          </motion.div>
         </div>
 
-        {/* RIGHT: extracted fields */}
+        {/* RIGHT: status panel — empty until the AI starts reading */}
         <div className="p-5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="size-3.5 text-info-fg" strokeWidth={2} />
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-info-fg">
+          {/* Three-state status label. Each state owns the same row; they
+              cross-fade as the moment progresses. */}
+          <div className="relative h-5">
+            <motion.div
+              initial={{ opacity: 1 }}
+              animate={{ opacity: [1, 1, 0] }}
+              transition={{ duration: 3.0, times: [0, 0.85, 1] }}
+              className="absolute inset-0 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-subtle"
+            >
+              <UploadCloud className="size-3.5" strokeWidth={2} />
+              Waiting for invoices…
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 1, 0] }}
+              transition={{
+                delay: 3.0,
+                duration: 1.4,
+                times: [0, 0.15, 0.85, 1],
+              }}
+              className="absolute inset-0 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-info-fg"
+            >
+              <Sparkles className="size-3.5" strokeWidth={2} />
+              AI reading invoice…
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 4.4, duration: 0.5 }}
+              className="absolute inset-0 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-info-fg"
+            >
+              <Sparkles className="size-3.5" strokeWidth={2} />
               AI extracted · ready to post
-            </span>
+            </motion.div>
           </div>
 
+          {/* Extracted fields — cascade in 0.8s apart so each confidence
+              bar reads before the next row lands. */}
           <div className="mt-3 space-y-2">
             <Field
               icon={Building2}
               label="Vendor"
               value="Bay Area Seafood"
               conf={0.97}
-              delay={0.3}
+              delay={4.4}
             />
             <Field
               icon={Zap}
               label="Total"
               value="$714.00"
               conf={0.99}
-              delay={0.5}
+              delay={5.2}
             />
             <Field
               icon={Tag}
               label="Lines matched"
               value="3 of 3 · 0 aliases needed"
               conf={0.94}
-              delay={0.7}
+              delay={6.0}
             />
             <Field
               icon={Wrench}
               label="Receive into"
               value="Inventory · 3 lots auto-created"
               conf={0.92}
-              delay={0.9}
+              delay={6.8}
             />
           </div>
 
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.2 }}
+            transition={{ delay: 7.6, duration: 0.5 }}
             className="mt-4 flex items-center gap-2 rounded-md bg-success-fg px-3 py-2 text-[12px] font-medium text-card-warm"
           >
             <Check className="size-3.5" strokeWidth={2.6} />
             Posted to AP + received into inventory
           </motion.div>
 
-          <p className="mt-3 font-mono text-[10px] text-subtle">
-            Aliases learned will persist for the next Bay Area Seafood invoice.
-          </p>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 8.2, duration: 0.6 }}
+            className="mt-3 inline-flex items-center gap-1.5 font-mono text-[10px] text-subtle"
+          >
+            <Layers className="size-3" strokeWidth={2} />
+            + 4 more processing · aliases learned will persist
+          </motion.p>
         </div>
       </div>
     </MarketingAppShell>
