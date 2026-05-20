@@ -66,12 +66,21 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-// Compare cards run ~2.6s of entrance choreography (tool tiles / panel
-// stagger, then voiceover, then big stat, then callout). Each card lingers
-// for ~4-5s afterwards so visitors can read the voiceover and absorb the
-// stat. 7500ms hits that beat without overstaying.
-const BEFORE_MS = 7500;
-const AFTER_MS = 7500;
+// Compare cards now walk the visitor through reading every line. Each card's
+// choreography:
+//   0.0s   card fades in (0.7s)
+//   1.3s   first tool tile / Fluxora panel lands
+//   1.3 → 3.7s   tool tiles land one every 0.6s (or action items inside the
+//                Fluxora panel land at the same cadence)
+//   ~4.2s   italic voiceover fades in over 1s — visitor reads the sentence
+//   6.7s   big time stat punches in (the punchline)
+//   8.0s   green callout (After only, the closing beat)
+//   ~3s of reading rest before the next card
+//
+// 11000ms gives ~2-3s of rest after the last beat, which feels generous
+// without being slow. The visitor can pause if they want longer.
+const BEFORE_MS = 11000;
+const AFTER_MS = 11000;
 const INTRO_MS = 3500;
 const OUTRO_MS = 6000;
 

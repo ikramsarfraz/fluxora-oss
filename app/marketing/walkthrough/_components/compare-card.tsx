@@ -68,7 +68,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.6 }}
+      transition={{ duration: 0.7 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="danger" />
@@ -94,7 +94,12 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
                   icon={t.icon}
                   label={t.label}
                   badge={t.badge}
-                  delay={0.25 + idx * 0.22}
+                  // First tile lands 1.3s in (after card fade + header
+                  // settle), then each subsequent tile lands 0.6s later.
+                  // 0.6s is roughly the read time for "Inbox · 8:42" or
+                  // "PDF reader · 8:44" — gives the visitor a beat to
+                  // register each tool before the next one appears.
+                  delay={1.3 + idx * 0.6}
                   askew={idx % 2 === 0}
                 />
               ))}
@@ -104,12 +109,14 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                // Lands AFTER all tool tiles have settled. Each tile takes
-                // ~0.6s to animate; with stagger 0.22 between them, the last
-                // (5th) tile finishes ~1.7s in. Voiceover then fades in
-                // slowly so it reads as commentary on the chaos above it.
-                delay: 0.4 + compare.before.tools.length * 0.22,
-                duration: 0.7,
+                // Lands AFTER all tool tiles have settled, with an extra
+                // beat for the visitor to scan the row. For 5 tools at
+                // 0.6s stagger: last tile lands at 1.3 + 4*0.6 = 3.7s.
+                // Voiceover fades in at 4.5s, takes ~1s to fully appear,
+                // then the visitor has another ~3s to read it before the
+                // stat punches in.
+                delay: 1.3 + compare.before.tools.length * 0.6 + 0.5,
+                duration: 1.0,
                 ease: [0.22, 1, 0.36, 1],
               }}
               className="mt-5 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
@@ -151,7 +158,7 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.6 }}
+      transition={{ duration: 0.7 }}
       className="relative flex h-full flex-col bg-page"
     >
       <Backdrop tone="success" />
@@ -176,13 +183,12 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                // Lands after the Fluxora panel's action checklist has fully
-                // ticked in. Panel itself enters at 0.15, then the list
-                // staggers at delayChildren 0.45 + 4 actions × 0.22 stagger
-                // × 0.5s each ≈ finishes 1.6s in. Voiceover fades in just
-                // after, reads as the brand voiceover.
-                delay: 1.9,
-                duration: 0.7,
+                // After all 4 actions have ticked in: panel mounts at 1.3,
+                // delayChildren 0.4, stagger 0.6 → last action lands at
+                // 1.3 + 0.4 + 3*0.6 = 3.5s. Add a beat of reading time
+                // before the voiceover fades in slowly.
+                delay: 4.2,
+                duration: 1.0,
                 ease: [0.22, 1, 0.36, 1],
               }}
               className="mt-4 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
@@ -205,10 +211,12 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            // Callout is the closing punctuation — lands last, after
-            // voiceover has settled. Slow fade so it reads as final.
-            delay: 2.6,
-            duration: 0.55,
+            // Callout is the closing punctuation — lands last, after the
+            // voiceover (4.2s) has had time to be read AND the big stat
+            // (6.7s) has landed. Visitor's eye has somewhere fresh to go
+            // for the final beat.
+            delay: 8.0,
+            duration: 0.7,
             ease: [0.22, 1, 0.36, 1],
           }}
           className="mt-6 flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
@@ -275,25 +283,28 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
   const list: Variants = {
     hidden: {},
     show: {
-      // Slower than the previous 0.3 / 0.12. Each action item lands as a
-      // distinct beat; visitor has time to read the label before the next
-      // one slides in.
-      transition: { staggerChildren: 0.22, delayChildren: 0.45 },
+      // 0.6s between actions = roughly one item per "reading beat." Each
+      // action label is 3-5 words, easy to register in that window before
+      // the next one slides in. delayChildren 0.4s relative to the panel
+      // mount.
+      transition: { staggerChildren: 0.6, delayChildren: 0.4 },
     },
   };
   const item: Variants = {
-    hidden: { opacity: 0, x: -10 },
+    hidden: { opacity: 0, x: -12 },
     show: {
       opacity: 1,
       x: 0,
-      transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+      transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
     },
   };
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.65, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+      // Panel mounts 1.3s in — after card fade + header settle. Matches
+      // the timing of the first tool tile on the Before card.
+      transition={{ duration: 0.7, delay: 1.3, ease: [0.22, 1, 0.36, 1] }}
       className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
     >
       {/* Mini app shell header */}
@@ -366,11 +377,15 @@ function HeroStat({
       initial={{ opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{
-        // Lands LAST — after the tool tiles / Fluxora panel have settled.
-        // The big number is the punchline; it should arrive when the visual
-        // context is already in place. Spring for a small bounce so the
-        // landing feels confident.
-        delay: 1.6,
+        // Lands as the closing punctuation on each card — AFTER the
+        // voiceover has had ~2s of reading time. The visitor reads "5
+        // windows open. You're 9 lines into a 12-line invoice..." then
+        // the big "25 min" punches in as the confirmation.
+        //
+        // 6.7s = voiceover lands at ~4.5s (Before) or 4.2s (After), then
+        // ~2s of read time, then the stat. Tuned for both cards to feel
+        // like the same beat.
+        delay: 6.7,
         type: "spring",
         stiffness: 200,
         damping: 20,
