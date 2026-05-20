@@ -51,17 +51,58 @@ const CONFIGS: Record<ImportType, {
   },
   suppliers: {
     displayName: "Suppliers",
+    // Columns mirror the supplier record fields (db/schema.ts → suppliers table).
+    // `name` is the only required field — leave the rest blank for any supplier
+    // you don't have details for yet.
     columns: [
       { key: "name", label: "Name", required: true },
-      { key: "ap_email", label: "AP email" },
-      { key: "terms", label: "Terms" },
-      { key: "default_tax_rate", label: "Default tax rate" },
-      { key: "primary_contact", label: "Primary contact" },
-      { key: "expected_delivery_days", label: "Expected delivery (days)" },
+      { key: "net_days", label: "Payment terms (net days)" },
+      { key: "primary_contact_name", label: "Primary contact" },
+      { key: "primary_contact_email", label: "Email" },
+      { key: "primary_contact_phone", label: "Phone" },
+      { key: "tax_id", label: "Tax ID (EIN)" },
+      { key: "account_number", label: "Account number" },
+      { key: "address_line1", label: "Address line 1" },
+      { key: "address_line2", label: "Address line 2" },
+      { key: "address_city", label: "City" },
+      { key: "address_region", label: "State" },
+      { key: "address_postal_code", label: "ZIP" },
+      { key: "website_url", label: "Website" },
+      { key: "notes", label: "Notes" },
     ],
     templateRows: [
-      { name: "Carnivore North", ap_email: "ap@carnivore.com", terms: "net30", default_tax_rate: "0", primary_contact: "John Smith", expected_delivery_days: "2" },
-      { name: "Fresh Farms", ap_email: "billing@freshfarms.com", terms: "net15", default_tax_rate: "0", primary_contact: "Jane Doe", expected_delivery_days: "1" },
+      {
+        name: "Carnivore North",
+        net_days: "30",
+        primary_contact_name: "John Smith",
+        primary_contact_email: "ap@carnivore.com",
+        primary_contact_phone: "(555) 123-4567",
+        tax_id: "12-3456789",
+        account_number: "CN-00421",
+        address_line1: "123 Market St",
+        address_line2: "Suite 400",
+        address_city: "San Francisco",
+        address_region: "CA",
+        address_postal_code: "94103",
+        website_url: "carnivorenorth.com",
+        notes: "Cold-chain only. Delivery window 6–10am.",
+      },
+      {
+        name: "Fresh Farms",
+        net_days: "15",
+        primary_contact_name: "Jane Doe",
+        primary_contact_email: "billing@freshfarms.com",
+        primary_contact_phone: "",
+        tax_id: "",
+        account_number: "",
+        address_line1: "",
+        address_line2: "",
+        address_city: "",
+        address_region: "",
+        address_postal_code: "",
+        website_url: "",
+        notes: "",
+      },
     ],
   },
   customers: {
@@ -121,6 +162,19 @@ function validate(rows: ParsedRow[], importType: ImportType): ValidationError[] 
       if (!row.sku) rowErrors.push("sku is required");
     } else if (importType === "suppliers") {
       if (!row.name) rowErrors.push("name is required");
+      if (row.primary_contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.primary_contact_email)) {
+        rowErrors.push("primary_contact_email is not a valid email");
+      }
+      // US EIN — accept "123456789" or "12-3456789"; normalized server-side.
+      if (row.tax_id && !/^\d{2}-?\d{7}$/.test(row.tax_id)) {
+        rowErrors.push("tax_id must be a 9-digit US EIN (e.g. 12-3456789)");
+      }
+      if (row.net_days) {
+        const n = Number(row.net_days);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 365) {
+          rowErrors.push("net_days must be a whole number between 0 and 365");
+        }
+      }
     } else if (importType === "customers") {
       if (!row.name) rowErrors.push("name is required");
       if (!row.email && !row.phone) rowErrors.push("email or phone is required");
