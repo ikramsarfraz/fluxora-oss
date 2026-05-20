@@ -127,7 +127,10 @@ async function runScript(c: Controls) {
     // so RESTART above puts us back to that state. Hold it briefly for the
     // viewer, then fade out.
     c.setScene("splash");
-    await c.sleep(3200);
+    // Hold the splash longer (3.7s instead of 3.2s) — gives it more
+    // presence before the explainer takes over. The user explicitly
+    // asked for a wait before the swap.
+    await c.sleep(3700);
     if (c.isCancelled()) return;
 
     // ---- Explainer 1: frame the whole flow ----

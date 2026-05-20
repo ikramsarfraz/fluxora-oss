@@ -74,11 +74,16 @@ export function TransitionLayer() {
 }
 
 // ---------- Opening splash ----------
+// Container mounts at full opacity from frame one. When a full-frame
+// transition takes over from another, the incoming container needs to be
+// solid immediately — if it fades in, both old + new sit at partial opacity
+// during the cross-fade and the app surface bleeds through. Children still
+// stagger in for the polish; the container is just the lid that covers.
 const splashContainer: Variants = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 1 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.18, delayChildren: 0.1, duration: 0.4 },
+    transition: { staggerChildren: 0.18, delayChildren: 0.1 },
   },
   exit: { opacity: 0, transition: { duration: 0.45, ease: easeOut } },
 };
@@ -193,7 +198,7 @@ function ChapterCard({
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-40"
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
@@ -305,7 +310,7 @@ function Interstitial({
   return (
     <motion.div
       className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center"
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
@@ -313,7 +318,7 @@ function Interstitial({
       <motion.div
         aria-hidden
         className="absolute inset-0 bg-page/40 backdrop-blur-sm"
-        initial={{ opacity: 0 }}
+        initial={{ opacity: 1 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3 }}
@@ -396,7 +401,7 @@ const TONE_BY_KIND: Record<
 
 // ---------- Outro splash ----------
 const outroContainer: Variants = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 1 },
   show: {
     opacity: 1,
     transition: { staggerChildren: 0.18, delayChildren: 0.1 },
@@ -522,7 +527,7 @@ function StatDivider() {
 
 // ---------- Explainer ----------
 const explainerContainer: Variants = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 1 },
   show: {
     opacity: 1,
     transition: { staggerChildren: 0.18, delayChildren: 0.15 },
