@@ -11,7 +11,7 @@ export default function SuppliersNewPage() {
         description="Create a new supplier for purchasing and invoicing."
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        <AddSupplierForm />
+        <AddSupplierForm stickyFooter />
         <SupplierFormSidePanel />
       </div>
     </div>

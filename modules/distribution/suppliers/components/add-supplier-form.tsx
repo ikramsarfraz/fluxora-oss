@@ -130,6 +130,12 @@ export function AddSupplierForm(props?: {
   onCreated?: (supplier: { id: string; name: string }) => void;
   /** When provided, the Cancel button calls this instead of routing back. */
   onCancel?: () => void;
+  /**
+   * Stick the save/cancel bar to the viewport bottom. Pass `true` from
+   * route pages so the actions stay reachable on long forms; leave off
+   * inside modals where the dialog already manages footer placement.
+   */
+  stickyFooter?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +167,7 @@ export function AddSupplierForm(props?: {
   }
 
   return (
-    <Card className="w-full">
+    <Card className={props?.stickyFooter ? "w-full overflow-visible" : "w-full"}>
       <CardContent className="pt-6">
         <form id="form-add-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
@@ -538,6 +544,7 @@ export function AddSupplierForm(props?: {
         }}
         pendingLabel="Creating…"
         submitLabel="Create supplier"
+        sticky={props?.stickyFooter}
       />
     </Card>
   );

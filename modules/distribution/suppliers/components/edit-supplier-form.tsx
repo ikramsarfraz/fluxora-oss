@@ -7,7 +7,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 
-import { updateSupplierAction } from "@/modules/distribution/suppliers/actions";
+import { useUpdateSupplier } from "../hooks/use-suppliers";
 import { NetTermsLegend } from "./net-terms-legend";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
@@ -108,6 +108,7 @@ type EditSupplierParsed = z.output<typeof editSupplierSchema>;
 export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const updateSupplier = useUpdateSupplier();
 
   const form = useForm<EditSupplierValues, unknown, EditSupplierParsed>({
     resolver: zodResolver(editSupplierSchema),
@@ -129,19 +130,22 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
     },
   });
 
-  async function onSubmit(data: EditSupplierParsed) {
+  function onSubmit(data: EditSupplierParsed) {
     setError(null);
-    try {
-      await updateSupplierAction({ id: supplier.id, ...data });
-      toast.success("Supplier updated.");
-      router.push(`/suppliers/${supplier.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update supplier.");
-    }
+    updateSupplier.mutate(
+      { id: supplier.id, ...data },
+      {
+        onSuccess: () => {
+          toast.success("Supplier updated.");
+          router.push(`/suppliers/${supplier.id}`);
+        },
+        onError: (e: Error) => setError(e.message),
+      },
+    );
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full overflow-visible">
       <CardContent className="pt-6">
         <form id="form-edit-supplier" onSubmit={form.handleSubmit(onSubmit)}>
           {error ? (
@@ -508,10 +512,11 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierDetail }) {
       </CardContent>
       <FormActionFooter
         formId="form-edit-supplier"
-        isPending={form.formState.isSubmitting}
+        isPending={updateSupplier.isPending}
         onCancel={() => router.push(`/suppliers/${supplier.id}`)}
         pendingLabel="Saving…"
         submitLabel="Save changes"
+        sticky
       />
     </Card>
   );
