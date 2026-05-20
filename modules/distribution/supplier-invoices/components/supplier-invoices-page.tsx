@@ -24,6 +24,7 @@ import { can } from "@/lib/auth/permissions";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import type { SupplierInvoiceListItem, SupplierInvoiceListSort } from "../services/receiving";
+import { getSupplierInvoiceStatusInfo } from "../utils/status";
 
 type InvoiceRow = SupplierInvoiceListItem;
 
@@ -71,10 +72,24 @@ const COLUMNS: ListingColumn<InvoiceRow>[] = [
     key: "status",
     header: "Status",
     render: row => {
-      if (row.status === "completed") {
-        return { primary: <StatusPill label="Received" bg="var(--color-success-bg)" color="var(--color-success-fg)" /> };
-      }
-      return { primary: <StatusPill label="Draft" bg="var(--color-divider)" color="var(--color-subtle)" /> };
+      // Driven by the shared utils/status.ts mapping so this listing,
+      // the legacy columns.tsx surface, and the detail page header pill
+      // all read from one source. The old if/else here hard-coded
+      // completed → "Received" with everything else falling through to
+      // "Draft" — so "paid" / "posted" / "receiving" / "reconciled" /
+      // "void" all rendered as Draft.
+      const info = getSupplierInvoiceStatusInfo(row.status);
+      const colors =
+        info.tone === "success"
+          ? { bg: "var(--color-success-bg)", color: "var(--color-success-fg)" }
+          : info.tone === "info"
+            ? { bg: "var(--color-info-bg)", color: "var(--color-info-fg)" }
+            : info.tone === "default"
+              ? { bg: "var(--color-success-bg)", color: "var(--color-success-fg)" }
+              : { bg: "var(--color-divider)", color: "var(--color-subtle)" };
+      return {
+        primary: <StatusPill label={info.label} bg={colors.bg} color={colors.color} />,
+      };
     },
   },
   {
