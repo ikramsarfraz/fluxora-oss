@@ -82,6 +82,122 @@ export async function createCustomer(
   return customer;
 }
 
+/**
+ * Tenant-scoped insert without the per-call plan-limit check. Used by
+ * the bulk import path which runs a single upfront limit check against
+ * the total row count (the per-row check would either falsely trip
+ * partway through a valid batch or silently let some rows through).
+ */
+async function createCustomerForTenant(
+  tenantId: string,
+  input: Omit<NewCustomer, "tenantId"> & {
+    addresses?: Omit<NewCustomerAddress, "customerId">[];
+  },
+) {
+  const [customer] = await db
+    .insert(customers)
+    .values({
+      tenantId,
+      name: input.name,
+      abbreviation: input.abbreviation,
+      phoneNumber: input.phoneNumber,
+      fuelSurchargeAmount: input.fuelSurchargeAmount,
+    })
+    .returning();
+
+  if (input.addresses?.length) {
+    await db.insert(customerAddresses).values(
+      input.addresses.map((addr, i) => ({
+        customerId: customer.id,
+        addressType: addr.addressType ?? "shipping",
+        street: addr.street,
+        city: addr.city,
+        state: addr.state,
+        zip: addr.zip,
+        isDefault: addr.isDefault ?? i === 0,
+      })),
+    );
+  }
+
+  return customer;
+}
+
+export type BulkCreateCustomerInput = Omit<NewCustomer, "tenantId"> & {
+  addresses?: Omit<NewCustomerAddress, "customerId">[];
+};
+
+export type BulkCreateCustomersResult = {
+  total: number;
+  created: number;
+  failed: Array<{ row: number; name: string; message: string }>;
+};
+
+function formatBulkCustomerError(error: unknown): string {
+  if (error instanceof Error) {
+    // No tenant-unique constraint on customer name today, but if one's
+    // added later the same friendlier-message path applies.
+    if (/duplicate key.*customers/i.test(error.message)) {
+      return "A customer with this name already exists.";
+    }
+    return error.message;
+  }
+  return "Unknown error.";
+}
+
+/**
+ * Insert N customers in one call. Single upfront plan-limit check so a
+ * batch either fully fits or fully rejects — no partial commits when the
+ * tenant is at the edge of their plan. Per-row failures past the plan
+ * check (validation errors, etc.) are caught and returned in `failed`.
+ */
+export async function bulkCreateCustomers(
+  rows: BulkCreateCustomerInput[],
+): Promise<BulkCreateCustomersResult> {
+  const tenant = await getCurrentTenant();
+
+  const existing = await countActiveCustomersForTenant(tenant.id);
+  const maxCustomers = getPlanLimit(tenant, "maxCustomers");
+  if (existing + rows.length > maxCustomers) {
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxCustomers",
+      limit: maxCustomers,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxCustomers",
+      limit: maxCustomers,
+      resourceLabel: "customers",
+      actionLabel: `import ${rows.length} customer${rows.length === 1 ? "" : "s"}`,
+    });
+  }
+
+  let created = 0;
+  const failed: BulkCreateCustomersResult["failed"] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    try {
+      await createCustomerForTenant(tenant.id, row);
+      created++;
+    } catch (error) {
+      failed.push({
+        row: i,
+        name: typeof row.name === "string" ? row.name : "",
+        message: formatBulkCustomerError(error),
+      });
+    }
+  }
+
+  return { total: rows.length, created, failed };
+}
+
 export async function updateCustomer(
   input: Partial<Omit<NewCustomer, "tenantId">> & {
     id: string;

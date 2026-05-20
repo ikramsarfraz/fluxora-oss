@@ -4,7 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
+import {
+  CsvImportModal,
+  useCsvImportModal,
+  type CsvApplyResult,
+} from "@/modules/distribution/onboarding/components/csv-import-modal";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -18,13 +22,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
-import { deleteCustomerAction } from "@/modules/distribution/customers/actions";
+import {
+  bulkCreateCustomersAction,
+  deleteCustomerAction,
+} from "@/modules/distribution/customers/actions";
 import { useCustomersPage } from "../hooks/use-customers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
-import type { CustomerListItem, CustomerListSort } from "../services/customers";
+import type {
+  BulkCreateCustomerInput,
+  CustomerListItem,
+  CustomerListSort,
+} from "../services/customers";
 
 type CustomerRow = CustomerListItem;
 
@@ -73,11 +84,47 @@ const COLUMNS: ListingColumn<CustomerRow>[] = [
   },
 ];
 
+function csvRowToCustomerInput(row: Record<string, string>): BulkCreateCustomerInput {
+  // Only construct an address block when the user gave us a street —
+  // any of city/state/zip alone is meaningless without a line 1 and
+  // would fail the customer_addresses NOT NULL constraint.
+  const street = row.address_line1?.trim() || "";
+  const addresses = street
+    ? [
+        {
+          addressType: "shipping" as const,
+          street,
+          city: row.address_city?.trim() || null,
+          state: row.address_state?.trim() || null,
+          zip: row.address_zip?.trim() || null,
+          isDefault: true,
+        },
+      ]
+    : undefined;
+
+  return {
+    name: row.name?.trim() ?? "",
+    abbreviation: row.abbreviation?.trim() || null,
+    phoneNumber: row.phone?.trim() || null,
+    fuelSurchargeAmount: row.fuel_surcharge?.trim() || null,
+    addresses,
+  };
+}
+
 export default function Customers() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [deletingCustomer, setDeletingCustomer] = useState<CustomerRow | null>(null);
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("customers");
+
+  async function handleBulkImport(rows: Record<string, string>[]): Promise<CsvApplyResult> {
+    const inputs = rows.map(csvRowToCustomerInput);
+    const result = await bulkCreateCustomersAction(inputs);
+    if (result.created > 0) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+    }
+    return { created: result.created, failed: result.failed };
+  }
 
   const pagination = useUrlPaginationState<CustomerListSort>({
     defaultSort: "createdAt",
@@ -105,7 +152,12 @@ export default function Customers() {
 
   return (
     <>
-      <CsvImportModal importType="customers" open={importOpen} onClose={closeImport} />
+      <CsvImportModal
+        importType="customers"
+        open={importOpen}
+        onClose={closeImport}
+        onApply={handleBulkImport}
+      />
       <ListingPage
         title="Customers"
         subtitle="Manage your customer accounts and contact information."

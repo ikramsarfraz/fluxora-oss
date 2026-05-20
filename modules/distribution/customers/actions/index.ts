@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
+  bulkCreateCustomers,
   createCustomer,
   deleteCustomer,
   deleteCustomerPrice,
@@ -18,6 +19,8 @@ import {
   getCustomersPage,
   setCustomerPrice,
   updateCustomer,
+  type BulkCreateCustomerInput,
+  type BulkCreateCustomersResult,
   type CustomerInvoicesParams,
   type CustomerListParams,
   type CustomerOrdersParams,
@@ -51,6 +54,17 @@ export async function createCustomerAction(input: CreateCustomerInput) {
     phoneNumber: emptyToNull(parsed.phoneNumber),
     fuelSurchargeAmount: emptyToNull(parsed.fuelSurchargeAmount),
   });
+}
+
+export async function bulkCreateCustomersAction(
+  rows: BulkCreateCustomerInput[],
+): Promise<BulkCreateCustomersResult> {
+  const result = await bulkCreateCustomers(rows);
+  if (result.created > 0) {
+    revalidatePath("/customers");
+    revalidatePath("/dashboard");
+  }
+  return result;
 }
 
 export async function updateCustomerAction(

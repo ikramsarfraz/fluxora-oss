@@ -107,15 +107,41 @@ const CONFIGS: Record<ImportType, {
   },
   customers: {
     displayName: "Customers",
+    // Columns mirror the customer record fields (db/schema.ts → customers
+    // + customer_addresses). `name` is the only required field; address
+    // fields are co-required — if any address column is set, address_line1
+    // (the only NOT NULL field on customer_addresses) must be set.
     columns: [
       { key: "name", label: "Name", required: true },
+      { key: "abbreviation", label: "Invoice prefix" },
       { key: "phone", label: "Phone" },
-      { key: "email", label: "Email" },
-      { key: "tags", label: "Tags" },
+      { key: "fuel_surcharge", label: "Fuel surcharge ($)" },
+      { key: "address_line1", label: "Street" },
+      { key: "address_city", label: "City" },
+      { key: "address_state", label: "State" },
+      { key: "address_zip", label: "ZIP" },
     ],
     templateRows: [
-      { name: "City Diner", phone: "555-1234", email: "orders@citydiner.com", tags: "restaurant,clearance" },
-      { name: "Fast Eats Truck", phone: "555-5678", email: "noreply@example.com", tags: "food_truck,clearance" },
+      {
+        name: "City Diner",
+        abbreviation: "CD",
+        phone: "(555) 123-4567",
+        fuel_surcharge: "15.00",
+        address_line1: "123 Main St",
+        address_city: "San Francisco",
+        address_state: "CA",
+        address_zip: "94103",
+      },
+      {
+        name: "Fast Eats Truck",
+        abbreviation: "",
+        phone: "(555) 567-8910",
+        fuel_surcharge: "",
+        address_line1: "",
+        address_city: "",
+        address_state: "",
+        address_zip: "",
+      },
     ],
   },
 };
@@ -177,7 +203,23 @@ function validate(rows: ParsedRow[], importType: ImportType): ValidationError[] 
       }
     } else if (importType === "customers") {
       if (!row.name) rowErrors.push("name is required");
-      if (!row.email && !row.phone) rowErrors.push("email or phone is required");
+      if (row.fuel_surcharge) {
+        const n = Number(row.fuel_surcharge);
+        if (!Number.isFinite(n) || n < 0) {
+          rowErrors.push("fuel_surcharge must be a non-negative number");
+        }
+      }
+      // Address columns are co-required: if any sub-field is filled, the
+      // street (the only NOT NULL column on customer_addresses) must be
+      // set too — otherwise the address insert fails server-side.
+      const anyAddressField = Boolean(
+        row.address_city || row.address_state || row.address_zip,
+      );
+      if (anyAddressField && !row.address_line1) {
+        rowErrors.push(
+          "address_line1 (street) is required when other address fields are set",
+        );
+      }
     }
     if (rowErrors.length > 0) errors.push({ row: i + 2, errors: rowErrors });
   });
