@@ -18,6 +18,7 @@ import {
 import { countActiveCustomersForTenant } from "@/modules/core/billing/services/subscription-usage";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { normalizePhone } from "@/lib/utils/phone";
 import {
   buildTextSearchCondition,
   createPaginatedResult,
@@ -98,6 +99,14 @@ async function createCustomerForTenant(
     addresses?: Omit<NewCustomerAddress, "customerId">[];
   },
 ) {
+  // Bulk import (CSV) doesn't go through the Zod schema, so normalize
+  // phone here too — keeps storage canonical regardless of input path.
+  const { value: normalizedPhone, isValid: phoneIsValid } = normalizePhone(
+    input.phoneNumber,
+  );
+  if (!phoneIsValid) {
+    throw new Error(`Invalid phone number: "${input.phoneNumber}"`);
+  }
   const [customer] = await db
     .insert(customers)
     .values({
@@ -105,7 +114,7 @@ async function createCustomerForTenant(
       name: input.name,
       abbreviation: input.abbreviation,
       email: input.email,
-      phoneNumber: input.phoneNumber,
+      phoneNumber: normalizedPhone,
       taxId: input.taxId,
       netDays: input.netDays,
       fuelSurchargeAmount: input.fuelSurchargeAmount,

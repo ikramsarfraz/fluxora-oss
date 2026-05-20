@@ -1,8 +1,34 @@
 import { z } from "zod";
 import { addressTypeEnum } from "@/db/schema";
 import { US_STATE_CODES } from "@/lib/constants/us-states";
+import { normalizePhone } from "@/lib/utils/phone";
 
 const nullableOptionalString = z.string().trim().nullable().optional();
+
+/**
+ * Phone number — accepts any of the common spellings ((555) 123-4567,
+ * 555-123-4567, +1 555 123 4567, etc.), normalizes to a canonical digit
+ * string for storage so display formatting round-trips, and rejects
+ * obvious garbage (<7 digits, >15 digits per ITU-T E.164).
+ */
+const optionalPhone = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform((v, ctx) => {
+    if (v == null || v === "") return null;
+    const { value, isValid } = normalizePhone(v);
+    if (!isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "Phone number must be a valid US 10-digit number or include a country code (e.g. +44 …).",
+      });
+      return z.NEVER;
+    }
+    return value;
+  });
 
 /**
  * Email — empty string and null both coerce to `null`. We don't reject unset
@@ -64,7 +90,7 @@ export const createCustomerInputSchema = z.object({
     .max(32, "Abbreviation must be 32 characters or less")
     .toUpperCase(),
   email: optionalEmail,
-  phoneNumber: nullableOptionalString,
+  phoneNumber: optionalPhone,
   taxId: optionalTaxId,
   netDays: optionalNetDays,
   fuelSurchargeAmount: nullableOptionalString,

@@ -171,19 +171,19 @@ export function AddCustomerForm(props?: {
               )}
             />
 
-            {/* Abbreviation */}
+            {/* Invoice prefix (stored as `abbreviation` for historical reasons) */}
             <Controller
               name="abbreviation"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-add-customer-abbreviation">
-                    Abbreviation *
+                  <FieldLabel htmlFor="form-add-customer-invoice-prefix">
+                    Invoice prefix *
                   </FieldLabel>
                   <Input
                     {...field}
                     value={field.value ?? ""}
-                    id="form-add-customer-abbreviation"
+                    id="form-add-customer-invoice-prefix"
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. ACME"
                     maxLength={32}

@@ -146,7 +146,7 @@ export function createColumns(actions: ColumnActions): ColumnDef<CustomerListIte
     },
     {
       accessorKey: "abbreviation",
-      header: "Abbreviation",
+      header: "Invoice prefix",
       cell: ({ row }) => {
         const prefix = row.getValue("abbreviation") as string | null;
         return prefix ? (

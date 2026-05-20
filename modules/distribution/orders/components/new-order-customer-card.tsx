@@ -274,7 +274,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                           color: C.ink2,
                         }}
                       >
-                        <b style={{ fontWeight: 500 }}>Abbreviation</b> ·{" "}
+                        <b style={{ fontWeight: 500 }}>Invoice prefix</b> ·{" "}
                         <span style={{ fontFamily: C.mono }}>{selected.abbreviation}</span>
                       </span>
                     )}

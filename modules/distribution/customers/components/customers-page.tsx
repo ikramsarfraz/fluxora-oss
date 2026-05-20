@@ -84,7 +84,7 @@ const COLUMNS: ListingColumn<CustomerRow>[] = [
   },
   {
     key: "abbreviation",
-    header: "Abbreviation",
+    header: "Invoice prefix",
     render: row =>
       row.abbreviation
         ? { primary: <MonoText>{row.abbreviation}</MonoText> }
