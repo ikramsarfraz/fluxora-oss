@@ -19,12 +19,12 @@ const C = {
   green: "var(--color-success-fg)",
   greenBg: "var(--color-success-bg)",
   greenBorder: "var(--color-success-border)",
-  amber: "#d97706",
-  amberBg: "#fffbeb",
-  amberBorder: "#fde68a",
-  red: "#dc2626",
-  redBg: "#fef2f2",
-  redBorder: "#fecaca",
+  amber: "var(--color-warning-fg)",
+  amberBg: "var(--color-warning-bg)",
+  amberBorder: "var(--color-warning-border)",
+  red: "var(--color-danger-fg)",
+  redBg: "var(--color-danger-bg)",
+  redBorder: "var(--color-danger-border)",
   blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
@@ -1200,15 +1200,15 @@ function ReauthBannerComponent({ banner }: { banner: ReauthBanner }) {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "12px 16px",
-        background: "#fffbeb",
-        border: "1px solid #fde68a",
+        background: "var(--color-warning-bg)",
+        border: "1px solid var(--color-warning-border)",
         borderRadius: 10,
         marginBottom: 14,
         gap: 12,
         flexWrap: "wrap",
       }}
     >
-      <div style={{ fontSize: 13, color: "#92400e", flex: 1 }}>
+      <div style={{ fontSize: 13, color: "var(--color-warning-fg)", flex: 1 }}>
         <strong>{banner.institutionName ?? "Bank"} connection needs re-authentication</strong>
         {daysSince !== null && (
           <>
@@ -1222,7 +1222,7 @@ function ReauthBannerComponent({ banner }: { banner: ReauthBanner }) {
         style={{
           flexShrink: 0,
           padding: "6px 14px",
-          background: "#d97706",
+          background: "var(--color-warning-fg)",
           color: "var(--color-card)",
           borderRadius: 7,
           fontSize: 12,

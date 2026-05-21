@@ -33,17 +33,17 @@ export function SyncStatus({ state, label, onRefresh }: SyncStatusProps) {
         alignItems: "center",
         gap: 10,
         padding: "7px 12px",
-        background: isStale ? "#fffbeb" : isSyncing ? "#eff6ff" : "var(--color-card)",
-        border: `1px solid ${isStale ? "#fde68a" : isSyncing ? "#bfdbfe" : "var(--color-border-default)"}`,
+        background: isStale ? "var(--color-warning-bg)" : isSyncing ? "#eff6ff" : "var(--color-card)",
+        border: `1px solid ${isStale ? "var(--color-warning-border)" : isSyncing ? "#bfdbfe" : "var(--color-border-default)"}`,
         borderRadius: 999,
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
         fontSize: 12,
-        color: isStale ? "#d97706" : isSyncing ? "var(--color-forest-mid)" : "var(--color-subtle)",
+        color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-subtle)",
       }}
     >
       <span
         style={{
-          color: isStale ? "#d97706" : isSyncing ? "var(--color-forest-mid)" : "var(--color-muted)",
+          color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-muted)",
           display: "flex",
           alignItems: "center",
           animation: isSyncing ? "loading-spin 1.5s linear infinite" : undefined,

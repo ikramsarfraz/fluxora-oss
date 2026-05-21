@@ -20,12 +20,12 @@ const C = {
   green: "var(--color-success-fg)",
   greenBg: "var(--color-success-bg)",
   greenBorder: "var(--color-success-border)",
-  amber: "#d97706",
-  amberBg: "#fffbeb",
-  amberBorder: "#fde68a",
-  red: "#dc2626",
-  redBg: "#fef2f2",
-  redBorder: "#fecaca",
+  amber: "var(--color-warning-fg)",
+  amberBg: "var(--color-warning-bg)",
+  amberBorder: "var(--color-warning-border)",
+  red: "var(--color-danger-fg)",
+  redBg: "var(--color-danger-bg)",
+  redBorder: "var(--color-danger-border)",
   blue: "var(--color-forest-mid)",
   blueBg: "#eff6ff",
   blueBorder: "#bfdbfe",
@@ -210,9 +210,9 @@ export function IngestionPanel({
   const headerGradient = isDone
     ? "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)"
     : isError || isPartialFailure
-    ? "linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%)"
+    ? `linear-gradient(135deg, ${C.redBg} 0%, color-mix(in oklch, ${C.redBg} 70%, var(--color-card)) 100%)`
     : isSlow
-    ? "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)"
+    ? `linear-gradient(135deg, ${C.amberBg} 0%, color-mix(in oklch, ${C.amberBg} 70%, var(--color-card)) 100%)`
     : "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%)";
 
   const iconBorderColor = isDone

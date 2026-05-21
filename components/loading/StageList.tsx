@@ -60,7 +60,7 @@ export function StageList({ stages }: StageListProps) {
                   : stage.status === "active"
                   ? "var(--color-forest-mid)"
                   : stage.status === "error"
-                  ? "#dc2626"
+                  ? "var(--color-danger-fg)"
                   : "var(--color-border-default)",
               color:
                 stage.status === "queued" ? undefined : "var(--color-card)",

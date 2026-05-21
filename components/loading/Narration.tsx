@@ -9,8 +9,8 @@ interface NarrationProps {
 }
 
 export function Narration({ text, micro, tone = "blue" }: NarrationProps) {
-  const caretColor = tone === "amber" ? "#d97706" : "var(--color-forest-mid)";
-  const borderColor = tone === "amber" ? "#fde68a" : "rgba(37,99,235,0.15)";
+  const caretColor = tone === "amber" ? "var(--color-warning-fg)" : "var(--color-forest-mid)";
+  const borderColor = tone === "amber" ? "var(--color-warning-border)" : "rgba(37,99,235,0.15)";
 
   return (
     <div

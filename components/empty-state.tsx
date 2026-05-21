@@ -33,9 +33,10 @@ const VARIANT_STYLES: Record<
   { bg: string; border: string; iconBg: string }
 > = {
   warm: {
-    bg: "#fffbeb",
-    border: "#fde68a",
-    iconBg: "#fef3c7",
+    bg: "var(--color-warning-bg)",
+    border: "var(--color-warning-border)",
+    iconBg:
+      "color-mix(in oklch, var(--color-warning-bg) 80%, var(--color-warning-fg))",
   },
   cool: {
     bg: "#eff6ff",

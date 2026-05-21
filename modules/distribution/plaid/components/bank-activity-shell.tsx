@@ -329,7 +329,7 @@ function TransactionRow({
             <span>·</span>
             <span style={{ fontWeight: 600, textTransform: "uppercase" }}>{txn.paymentMethod}</span>
             {txn.isMysteryOutflow && (
-              <span style={{ fontSize: 10, fontWeight: 600, color: "#dc2626", background: "#fef2f2", padding: "1px 5px", borderRadius: 4 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--color-danger-fg)", background: "var(--color-danger-bg)", padding: "1px 5px", borderRadius: 4 }}>
                 Mystery
               </span>
             )}

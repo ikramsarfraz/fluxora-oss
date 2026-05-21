@@ -3,7 +3,7 @@
 // Design tokens from mockup: 0.8s spin, 3 sizes, 3 accent colors
 const T = {
   blue: "var(--color-forest-mid)",
-  amber: "#d97706",
+  amber: "var(--color-warning-fg)",
   green: "var(--color-success-fg)",
   white: "var(--color-card)",
   track: "var(--color-border-default)",

@@ -82,19 +82,19 @@ export function SyncStatusPill({
         alignItems: "center",
         gap: 10,
         padding: "7px 12px",
-        background: isStale ? "#fffbeb" : isSyncing ? "#eff6ff" : "var(--color-card)",
-        border: `1px solid ${isStale ? "#fde68a" : isSyncing ? "#bfdbfe" : "var(--color-border-default)"}`,
+        background: isStale ? "var(--color-warning-bg)" : isSyncing ? "#eff6ff" : "var(--color-card)",
+        border: `1px solid ${isStale ? "var(--color-warning-border)" : isSyncing ? "#bfdbfe" : "var(--color-border-default)"}`,
         borderRadius: 999,
         boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
         fontSize: 12,
-        color: isStale ? "#d97706" : isSyncing ? "var(--color-forest-mid)" : "var(--color-subtle)",
+        color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-subtle)",
         pointerEvents: "auto",
       }}
     >
       {/* Icon */}
       <span
         style={{
-          color: isStale ? "#d97706" : isSyncing ? "var(--color-forest-mid)" : "var(--color-muted)",
+          color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-muted)",
           display: "flex",
           alignItems: "center",
           animation: isSyncing ? "loading-spin 1.5s linear infinite" : undefined,
@@ -120,7 +120,7 @@ export function SyncStatusPill({
             style={{
               background: "none",
               border: "none",
-              color: "#d97706",
+              color: "var(--color-warning-fg)",
               fontWeight: 600,
               textDecoration: "underline",
               cursor: "pointer",

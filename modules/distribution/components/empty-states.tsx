@@ -128,13 +128,13 @@ export function MarkdownColdStartBanner({
   return (
     <div
       style={{
-        background: "#fffbeb",
-        border: "1px solid #fde68a",
+        background: "var(--color-warning-bg)",
+        border: "1px solid var(--color-warning-border)",
         borderRadius: 10,
         padding: "12px 16px",
         marginBottom: 16,
         fontSize: 13,
-        color: "#92400e",
+        color: "var(--color-warning-fg)",
         lineHeight: 1.5,
       }}
     >

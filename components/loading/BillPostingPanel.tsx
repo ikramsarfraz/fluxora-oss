@@ -88,7 +88,7 @@ export function BillPostingPanel({
                 background:
                   step.status === "done" ? "var(--color-success-fg)" :
                   step.status === "active" ? "var(--color-forest-mid)" :
-                  step.status === "error" ? "#dc2626" :
+                  step.status === "error" ? "var(--color-danger-fg)" :
                   "var(--color-border-default)",
                 color: step.status === "queued" ? undefined : "var(--color-card)",
               }}

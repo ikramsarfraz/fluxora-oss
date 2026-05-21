@@ -12,7 +12,8 @@ interface ProgressBarProps {
 
 const FILLS: Record<ProgressColor, string> = {
   blue: "linear-gradient(90deg, #2563eb 0%, #60a5fa 100%)",
-  amber: "linear-gradient(90deg, #d97706 0%, #fbbf24 100%)",
+  amber:
+    "linear-gradient(90deg, var(--color-warning-fg) 0%, color-mix(in oklch, var(--color-warning-fg) 55%, var(--color-warning-bg)) 100%)",
   green: "linear-gradient(90deg, #16a34a 0%, #4ade80 100%)",
 };
 
