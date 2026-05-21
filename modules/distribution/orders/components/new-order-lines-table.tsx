@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useMemo, useEffect, useState } from "react";
+import { Fragment, useCallback, useMemo, useEffect, useRef, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -113,6 +113,17 @@ export function NewOrderLinesTable({
     name: "lines",
     keyName: "_fieldId",
   });
+
+  // Tracks the key of a freshly-appended line so the corresponding
+  // LineRow can grab focus on its product combobox on first mount.
+  // Cleared once the row reports back via `onAutoFocused` so subsequent
+  // re-renders don't keep stealing focus from the user.
+  const [autoFocusLineKey, setAutoFocusLineKey] = useState<string | null>(null);
+  const handleAddProduct = useCallback(() => {
+    const defaults = newLineDefaults();
+    append(defaults);
+    setAutoFocusLineKey(defaults.key);
+  }, [append]);
 
   const customerId = useWatch({ control, name: "customerId" });
   const lines = useWatch({ control, name: "lines" });
@@ -300,6 +311,8 @@ export function NewOrderLinesTable({
                 resolvePricePerLb={resolvePricePerLb}
                 customerId={customerId}
                 customerName={customer?.name ?? ""}
+                autoFocusOnMount={field.key === autoFocusLineKey}
+                onAutoFocused={() => setAutoFocusLineKey(null)}
                 onProductSelected={(product) =>
                   handleProductSelected(index, product)
                 }
@@ -323,7 +336,7 @@ export function NewOrderLinesTable({
       >
         <Button
           type="button"
-          onClick={() => append(newLineDefaults())}
+          onClick={handleAddProduct}
           variant="outline"
           className="h-8 border-dashed border-border-default bg-transparent px-3.5 text-[13px] text-subtle shadow-none hover:bg-divider hover:text-ink"
         >
@@ -439,6 +452,8 @@ interface LineRowProps {
   resolvePricePerLb: (productId: string) => string;
   customerId: string;
   customerName: string;
+  autoFocusOnMount: boolean;
+  onAutoFocused: () => void;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
 }
@@ -454,6 +469,8 @@ function LineRow({
   resolvePricePerLb,
   customerId,
   customerName,
+  autoFocusOnMount,
+  onAutoFocused,
   onProductSelected,
   onRemove,
 }: LineRowProps) {
@@ -494,6 +511,21 @@ function LineRow({
   // user has picked a customer + product but the price field is still
   // empty (no per-customer price, no product default).
   const [setPriceOpen, setSetPriceOpen] = useState(false);
+
+  // ── Auto-focus the product picker on freshly-added lines ─────────────────
+  // Without this the user clicks "+ Add product", the new row mounts, and
+  // the natural tab order leaves focus on the (now-distant) button — the
+  // next Tab lands on the cases input rather than the product picker.
+  const productTriggerRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (autoFocusOnMount) {
+      productTriggerRef.current?.focus();
+      onAutoFocused();
+    }
+    // Only fire once per "this row was just added" signal — the parent
+    // clears the flag via onAutoFocused so the dependency stays stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFocusOnMount]);
 
   useEffect(() => {
     if (!shouldAllocateInventory && selectedInventoryItemIds.length > 0) {
@@ -723,6 +755,7 @@ function LineRow({
                   <ComboboxTrigger
                     render={
                       <Button
+                        ref={productTriggerRef}
                         type="button"
                         variant="outline"
                         aria-invalid={fieldState.invalid}
