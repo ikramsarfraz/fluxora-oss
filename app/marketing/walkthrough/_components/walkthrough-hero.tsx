@@ -47,8 +47,8 @@ import { IntroCard, OutroCard } from "./intro-outro";
 
 // One merged demo. Auto-sequences through five core workflows. Between each
 // workflow, the visitor sees TWO stitched compare cards back-to-back:
-// Before → After. Each card has a vertical timeline with timestamped events
-// — letting more info filter through than the previous single-divider
+// "Now" → "With Fluxora". Each card has a vertical timeline with timestamped
+// events — letting more info filter through than the previous single-divider
 // design.
 
 type SceneKey =
@@ -67,20 +67,20 @@ type Phase =
 
 const SCENE_MS = 11000;
 // Compare cards now open with a FULL-FRAME TAKEOVER slate that owns the
-// entire 640px frame: chapter pill, giant Before/After word, accent line,
-// and the moment's topic as italic-serif subtext. The slate sits for the
-// visitor to read, then slides up and dissolves to reveal the comparison
-// underneath.
+// entire 640px frame: chapter pill, giant "Now" / "With Fluxora" phrase,
+// accent line, and the moment's topic as italic-serif subtext. The slate
+// sits for the visitor to read, then slides up and dissolves to reveal
+// the comparison underneath.
 //
 //   0.0 → 0.4s   card fades in
-//   0.0 → 2.8s   FULL-FRAME SLATE: chapter pill, big word, accent, subtext;
+//   0.0 → 2.8s   FULL-FRAME SLATE: chapter pill, big phrase, accent, subtext;
 //                holds 1.9 → 2.4, then slides up + fades 2.4 → 2.8
 //   2.7 → 3.2s   header (side pill spring; chapter label + topic slide in)
 //   2.9s   first tool tile / Fluxora panel mounts (cross-fades with slate exit)
 //   2.9 → 5.3s   tools/actions land at 0.6s reading-beat cadence
 //   5.8 → 6.4s   voiceover fades in over 1s
 //   8.3s   HUGE time stat punches in (punchline)
-//   9.6s   green callout (After only)
+//   9.6s   green callout (With Fluxora only)
 //   ~3s of rest before the next card
 //
 // 12500ms hits ~3s of rest after the last beat. Visitors can pause longer.
@@ -444,12 +444,12 @@ export function WalkthroughHero() {
         ) : phase.kind === "before" ? (
           <span className="inline-flex items-center gap-1.5">
             <Landmark className="size-3" strokeWidth={2} />
-            {phase.compare.step} · Before
+            {phase.compare.step} · Now
           </span>
         ) : phase.kind === "after" ? (
           <span className="inline-flex items-center gap-1.5 text-success-fg">
             <Sparkles className="size-3" strokeWidth={2} />
-            {phase.compare.step} · After
+            {phase.compare.step} · With Fluxora
           </span>
         ) : (
           <span>

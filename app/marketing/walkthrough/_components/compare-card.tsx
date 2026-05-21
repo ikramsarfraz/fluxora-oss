@@ -14,19 +14,20 @@ import { cn } from "@/lib/utils";
 
 // Compare cards, marketing-redesign edition. Two stitched cards per beat:
 //
-//   Before → visual chaos: a row of 4-5 tool tiles, each with a timestamp
-//   badge. The eye reads "5 systems open, time piling up."
+//   Now           → visual chaos: a row of 4-5 tool tiles, each with a
+//                   timestamp badge. The eye reads "5 systems open, time
+//                   piling up."
 //
-//   After  → visual calm: ONE Fluxora panel with check-row actions. ONE
-//   moment, one tool.
+//   With Fluxora  → visual calm: ONE Fluxora panel with check-row actions.
+//                   ONE moment, one tool.
 //
 // Both cards have a HUGE time stat as the right-side focal point so the
 // real comparison (25 min vs 4 sec) reads in under half a second.
 //
 // Each card opens with a FULL-FRAME TAKEOVER slate — a cinematic title
-// card carrying the chapter label, the giant Before/After word, and the
-// moment's topic as subtext. The slate owns the entire 640px frame for
-// ~2.4s, then slides up and dissolves to reveal the comparison underneath.
+// card carrying the chapter label, the giant "Now" / "With Fluxora" phrase,
+// and the moment's topic as subtext. The slate owns the entire 640px frame
+// for ~2.4s, then slides up and dissolves to reveal the comparison.
 
 type IconType = React.ComponentType<{
   className?: string;
@@ -82,7 +83,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
           up and dissolves to reveal the comparison underneath. */}
       <TitleReveal
         tone="danger"
-        label="Before"
+        label="Now"
         step={compare.step}
         topic={compare.topic}
         icon={FileSpreadsheet}
@@ -91,7 +92,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
       <CardHeader
         tone="danger"
         chapterLabel={compare.step}
-        sideLabel="Before"
+        sideLabel="Now"
         topic={compare.topic}
         icon={FileSpreadsheet}
       />
@@ -152,7 +153,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
             {compare.before.tools.length} systems · alt-tab fatigue
           </span>
           <span className="font-mono">
-            up next · after →
+            up next · with Fluxora →
           </span>
         </div>
       </div>
@@ -179,7 +180,7 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
           up and dissolves to reveal the comparison underneath. */}
       <TitleReveal
         tone="success"
-        label="After"
+        label="With Fluxora"
         step={compare.step}
         topic={compare.topic}
         icon={Sparkles}
@@ -188,7 +189,7 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
       <CardHeader
         tone="success"
         chapterLabel={compare.step}
-        sideLabel="After"
+        sideLabel="With Fluxora"
         topic={compare.topic}
         icon={Sparkles}
       />
@@ -611,8 +612,10 @@ function TitleReveal({
         animate={{ opacity: 1, scale: 1, letterSpacing: "-0.02em" }}
         transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "mt-6 font-serif font-medium leading-[0.92]",
-          "text-[88px] md:text-[132px]",
+          "mt-6 text-center font-serif font-medium leading-[0.92]",
+          // Sized so the longest label ("With Fluxora") fits inside the
+          // 640px-tall, ~1000px-wide takeover slate without wrapping.
+          "text-[64px] md:text-[108px]",
           titleColor,
         )}
         style={{

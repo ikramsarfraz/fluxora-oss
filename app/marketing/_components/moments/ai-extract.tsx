@@ -89,21 +89,64 @@ export function AiExtractMoment() {
       <div className="grid h-full grid-cols-[0.95fr_1.1fr] gap-0">
         {/* LEFT: drop zone with stack of invoices */}
         <div className="relative flex flex-col items-center justify-center overflow-hidden border-r border-border-default bg-card-warm/30 px-5 py-8">
-          {/* Drop-zone label — visible while the page is "empty," fades as
-              the first invoice settles. */}
-          <motion.div
-            initial={{ opacity: 1 }}
-            animate={{ opacity: [1, 1, 0] }}
-            transition={{ duration: 1.8, times: [0, 0.2, 1] }}
-            className="absolute top-5 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-subtle"
-          >
+          {/* Section label — sits above the drop zone */}
+          <div className="absolute top-5 inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-subtle">
             <UploadCloud className="size-3" strokeWidth={2} />
-            Drop invoices here
-          </motion.div>
+            Inbox · new invoices
+          </div>
 
-          {/* Stack container — front invoice with queued invoices fanned
-              behind. Min height reserves room for the fan offsets. */}
-          <div className="relative mt-4 min-h-[210px] w-full max-w-[220px]">
+          {/* Drop zone — visible dashed box that "receives" the file. Border
+              pulses solid info-fg as the first invoice lands. */}
+          <motion.div
+            initial={{
+              borderColor: "var(--color-info-border)",
+              scale: 1,
+            }}
+            animate={{
+              borderColor: [
+                "var(--color-info-border)",
+                "var(--color-info-fg)",
+                "var(--color-info-border)",
+              ],
+              scale: [1, 1.025, 1],
+            }}
+            transition={{
+              delay: 0.85,
+              duration: 0.7,
+              times: [0, 0.35, 1],
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="relative mt-3 w-full max-w-[260px] rounded-xl border-2 border-dashed bg-info-bg/20 p-5"
+          >
+            {/* Empty drop-zone state — upload icon + prompt, centered.
+                Visible 0 → 0.7s, fades as the first invoice lands. */}
+            <motion.div
+              initial={{ opacity: 1 }}
+              animate={{ opacity: [1, 1, 0] }}
+              transition={{ duration: 1.0, times: [0, 0.55, 1] }}
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5"
+            >
+              <motion.div
+                animate={{ y: [0, -3, 0] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+              >
+                <UploadCloud
+                  className="size-9 text-info-fg/80"
+                  strokeWidth={1.5}
+                />
+              </motion.div>
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-info-fg">
+                Drop invoices here
+              </div>
+              <div className="font-mono text-[9.5px] text-subtle">
+                PDF · CSV · XLSX
+              </div>
+            </motion.div>
+
+            {/* Stack container — front invoice with queued invoices fanned
+                behind. Min height reserves room for the fan offsets and
+                gives the drop zone presence even while empty. */}
+            <div className="relative min-h-[210px] w-full">
             {/* Queued invoices — fan in behind the front one. Reversed so
                 the "closest" queued card lands first (smallest offset) and
                 cards further back appear later, like the stack growing. */}
@@ -210,7 +253,8 @@ export function AiExtractMoment() {
                 className="pointer-events-none absolute inset-x-2 top-0 h-[2px] rounded-full bg-info-fg shadow-[0_0_14px_var(--color-info-fg)]"
               />
             </motion.div>
-          </div>
+            </div>
+          </motion.div>
 
           {/* Filename — appears just after the front invoice settles */}
           <motion.div
