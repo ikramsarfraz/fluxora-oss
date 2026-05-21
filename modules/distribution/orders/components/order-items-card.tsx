@@ -87,14 +87,35 @@ function computeLineTotal(line: Line): number | null {
     if (!Number.isFinite(cases) || cases <= 0) return null;
     return price * cases;
   }
-  // per_lb / catch-weight: bill on the real fulfilled weight when it
-  // exists. Pre-fulfillment that weight is 0, which would otherwise
-  // print $0 for every catch-weight line on the detail page even
-  // though we have a perfectly good estimate (`expectedCases ×
-  // conversion-to-base × price/lb`) baked into the snapshot.
+  // per_lb / catch-weight. Priority order matches the new-order
+  // estimate (useLinesSubtotal) so the detail page agrees with the
+  // pre-confirm preview the user just looked at:
+  //   1. Real fulfilled weight, once a fulfillment record exists.
+  //   2. Sum of allocated inventory items' exactWeightLbs — the
+  //      weights captured at receiving time, available as soon as the
+  //      order is allocated even before fulfillment.
+  //   3. expectedCases × conversionToBaseSnapshot — the product's
+  //      stated avg-case-weight, used only as a last-resort estimate
+  //      when no real numbers are around.
   const weight = getLineFulfilledWeight(line);
   if (Number.isFinite(weight) && weight > 0) {
     return price * weight;
+  }
+  const allocations = line.allocations ?? [];
+  const allocatedCases = allocations.reduce(
+    (sum, a) => sum + Math.max(0, a.inventoryItem?.cases ?? 0),
+    0,
+  );
+  const allocationCovers =
+    line.expectedCases > 0 && allocatedCases >= line.expectedCases;
+  if (allocationCovers) {
+    const allocatedWeight = allocations.reduce(
+      (sum, a) => sum + (parseFloat(a.inventoryItem?.exactWeightLbs ?? "0") || 0),
+      0,
+    );
+    if (allocatedWeight > 0) {
+      return price * allocatedWeight;
+    }
   }
   const conversion = parseFloat(line.conversionToBaseSnapshot ?? "");
   if (Number.isFinite(conversion) && conversion > 0 && line.expectedCases > 0) {
@@ -812,7 +833,8 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
 
   // One row per distinct allocated lot. A single lot may back several
   // allocated inventory items on this line (e.g. multiple cases pulled
-  // from the same lot), so we dedupe by lotId and sum cases for display.
+  // from the same lot), so we dedupe by lotId and sum cases / weights
+  // for the dropdown's secondary detail line.
   const lotOptions = useMemo(() => {
     if (!selectedLine) return [];
     const map = new Map<
@@ -821,6 +843,8 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         id: string;
         lotNumber: string;
         cases: number;
+        weightLbs: number;
+        receiveDate: string | Date | null | undefined;
         expirationDate: string | Date | null | undefined;
       }
     >();
@@ -829,13 +853,18 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       if (!lot?.id) continue;
       const existing = map.get(lot.id);
       const cases = allocation.inventoryItem?.cases ?? 1;
+      const weight =
+        parseFloat(allocation.inventoryItem?.exactWeightLbs ?? "0") || 0;
       if (existing) {
         existing.cases += cases;
+        existing.weightLbs += weight;
       } else {
         map.set(lot.id, {
           id: lot.id,
           lotNumber: lot.lotNumber,
           cases,
+          weightLbs: weight,
+          receiveDate: lot.receiveDate ?? null,
           expirationDate: lot.expirationDate ?? null,
         });
       }
@@ -1101,14 +1130,44 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {lotOptions.map(l => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.lotNumber} · {l.cases.toLocaleString()} cs
-                    {l.expirationDate
-                      ? ` · exp ${formatDisplayDate(l.expirationDate)}`
-                      : ""}
-                  </SelectItem>
-                ))}
+                {lotOptions.map(l => {
+                  // Mirror the customer picker pattern: lot number on
+                  // top, the recorded receiving details on a muted
+                  // second line so the picker tells the warehouse user
+                  // exactly which lot they're committing to.
+                  const detailParts: string[] = [];
+                  detailParts.push(
+                    `${l.cases.toLocaleString()} ${l.cases === 1 ? "case" : "cases"}`,
+                  );
+                  if (l.weightLbs > 0) {
+                    detailParts.push(`${l.weightLbs.toFixed(2)} lb`);
+                  }
+                  if (l.receiveDate) {
+                    detailParts.push(`received ${formatDisplayDate(l.receiveDate)}`);
+                  }
+                  if (l.expirationDate) {
+                    detailParts.push(`exp ${formatDisplayDate(l.expirationDate)}`);
+                  }
+                  return (
+                    <SelectItem key={l.id} value={l.id}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "1px",
+                          minWidth: 0,
+                        }}
+                      >
+                        <span style={{ fontFamily: C.mono, fontWeight: 500 }}>
+                          {l.lotNumber}
+                        </span>
+                        <span style={{ fontSize: "11px", color: C.muted }}>
+                          {detailParts.join(" · ")}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           ) : (
