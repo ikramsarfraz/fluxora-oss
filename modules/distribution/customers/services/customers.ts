@@ -227,13 +227,22 @@ export type BulkCreateCustomerInput = Omit<NewCustomer, "tenantId"> & {
  * existing customer record. `rowIndex` is 0-based against the input
  * array; the modal converts to 1-based + header for display.
  *
+ * One input row can produce up to two conflicts — e.g. both a
+ * duplicate name AND a duplicate invoice prefix — so the rendering
+ * side has to handle multiple entries per row.
+ *
  * `reason`:
- *   - "duplicate-name-active"   — an active customer with this name
+ *   - "duplicate-name-active"     — an active customer with this name
  *     already exists; insert would be rejected by the unique index.
- *   - "duplicate-name-archived" — an archived customer with this name
+ *   - "duplicate-name-archived"   — an archived customer with this name
  *     exists; insert would still be rejected, but the user might prefer
  *     to restore rather than create a new one.
- *   - "duplicate-email-active"  — an active customer with this email
+ *   - "duplicate-prefix-active"   — an active customer already uses this
+ *     invoice prefix. Caught at insert by the partial unique index;
+ *     surfacing pre-commit so the user can pick a different prefix.
+ *   - "duplicate-prefix-archived" — an archived customer holds this
+ *     prefix. Restoring vs. choosing a new prefix is a real decision.
+ *   - "duplicate-email-active"    — an active customer with this email
  *     already exists. Email isn't unique, but importing the same
  *     contact twice is usually a mistake worth flagging.
  */
@@ -242,13 +251,19 @@ export type CustomerImportConflict = {
   reason:
     | "duplicate-name-active"
     | "duplicate-name-archived"
+    | "duplicate-prefix-active"
+    | "duplicate-prefix-archived"
     | "duplicate-email-active";
   existingCustomerId: string;
   existingCustomerName: string;
 };
 
 export async function findCustomerImportConflicts(
-  rows: ReadonlyArray<{ name?: string; email?: string }>,
+  rows: ReadonlyArray<{
+    name?: string;
+    email?: string;
+    abbreviation?: string;
+  }>,
 ): Promise<CustomerImportConflict[]> {
   const tenant = await getCurrentTenant();
   const names = Array.from(
@@ -265,7 +280,16 @@ export async function findCustomerImportConflicts(
         .filter((e): e is string => !!e && e.length > 0),
     ),
   );
-  if (names.length === 0 && emails.length === 0) return [];
+  const prefixes = Array.from(
+    new Set(
+      rows
+        .map(r => r.abbreviation?.trim().toUpperCase())
+        .filter((p): p is string => !!p && p.length > 0),
+    ),
+  );
+  if (names.length === 0 && emails.length === 0 && prefixes.length === 0) {
+    return [];
+  }
 
   const nameCondition =
     names.length > 0
@@ -276,15 +300,24 @@ export async function findCustomerImportConflicts(
       : null;
   const emailCondition =
     emails.length > 0 ? inArray(customers.email, emails) : null;
+  const prefixCondition =
+    prefixes.length > 0
+      ? sql`upper(${customers.abbreviation}) in (${sql.join(
+          prefixes.map(p => sql`${p}`),
+          sql`, `,
+        )})`
+      : null;
+  const conditions = [nameCondition, emailCondition, prefixCondition].filter(
+    (c): c is NonNullable<typeof c> => c !== null,
+  );
   const matchCondition =
-    nameCondition && emailCondition
-      ? or(nameCondition, emailCondition)
-      : (nameCondition ?? emailCondition);
+    conditions.length === 1 ? conditions[0] : or(...conditions);
   const existing = await db
     .select({
       id: customers.id,
       name: customers.name,
       email: customers.email,
+      abbreviation: customers.abbreviation,
       archivedAt: customers.archivedAt,
     })
     .from(customers)
@@ -295,6 +328,10 @@ export async function findCustomerImportConflicts(
     { id: string; name: string; archived: boolean }
   >();
   const byEmail = new Map<string, { id: string; name: string }>();
+  const byPrefix = new Map<
+    string,
+    { id: string; name: string; archived: boolean }
+  >();
   for (const row of existing) {
     const lowerName = row.name.toLowerCase();
     if (!byName.has(lowerName)) {
@@ -306,12 +343,24 @@ export async function findCustomerImportConflicts(
         byEmail.set(lowerEmail, { id: row.id, name: row.name });
       }
     }
+    if (row.abbreviation) {
+      const upperPrefix = row.abbreviation.toUpperCase();
+      if (!byPrefix.has(upperPrefix)) {
+        byPrefix.set(upperPrefix, {
+          id: row.id,
+          name: row.name,
+          archived: !!row.archivedAt,
+        });
+      }
+    }
   }
 
   const conflicts: CustomerImportConflict[] = [];
   rows.forEach((row, idx) => {
     const lname = row.name?.trim().toLowerCase();
     const lemail = row.email?.trim().toLowerCase();
+    const uprefix = row.abbreviation?.trim().toUpperCase();
+    // Name conflict — most disruptive (insert is blocked), report first.
     if (lname && byName.has(lname)) {
       const hit = byName.get(lname)!;
       conflicts.push({
@@ -322,9 +371,28 @@ export async function findCustomerImportConflicts(
         existingCustomerId: hit.id,
         existingCustomerName: hit.name,
       });
-      return;
     }
-    if (lemail && byEmail.has(lemail)) {
+    // Prefix conflict — also blocks insert. A single row can hit both
+    // name + prefix (the user might be trying to recreate an archived
+    // record verbatim), so we don't `return` early.
+    if (uprefix && byPrefix.has(uprefix)) {
+      const hit = byPrefix.get(uprefix)!;
+      conflicts.push({
+        rowIndex: idx,
+        reason: hit.archived
+          ? "duplicate-prefix-archived"
+          : "duplicate-prefix-active",
+        existingCustomerId: hit.id,
+        existingCustomerName: hit.name,
+      });
+    }
+    // Email conflict — informational (email isn't unique server-side).
+    // Skip if we already reported a harder conflict on this row.
+    if (
+      lemail &&
+      byEmail.has(lemail) &&
+      conflicts.every(c => c.rowIndex !== idx)
+    ) {
       const hit = byEmail.get(lemail)!;
       conflicts.push({
         rowIndex: idx,

@@ -163,31 +163,45 @@ export default function Customers() {
       rows.map(r => ({
         name: r.name?.trim(),
         email: r.email?.trim() || undefined,
+        abbreviation: r.abbreviation?.trim() || undefined,
       })),
     );
     return conflicts.map(c => {
       // Row numbers in the modal are 1-based with header counted, so the
       // first data row is index 0 here → row 2 in the UI.
       const uiRow = c.rowIndex + 2;
-      if (c.reason === "duplicate-name-active") {
-        return {
-          row: uiRow,
-          severity: "error" as const,
-          message: `An active customer named "${c.existingCustomerName}" already exists — this row will be skipped.`,
-        };
+      switch (c.reason) {
+        case "duplicate-name-active":
+          return {
+            row: uiRow,
+            severity: "error" as const,
+            message: `An active customer named "${c.existingCustomerName}" already exists — this row will be skipped.`,
+          };
+        case "duplicate-name-archived":
+          return {
+            row: uiRow,
+            severity: "error" as const,
+            message: `An archived customer named "${c.existingCustomerName}" already exists. Restore it from the Archived tab instead of re-importing.`,
+          };
+        case "duplicate-prefix-active":
+          return {
+            row: uiRow,
+            severity: "error" as const,
+            message: `Invoice prefix already used by "${c.existingCustomerName}". Pick a different prefix for this row.`,
+          };
+        case "duplicate-prefix-archived":
+          return {
+            row: uiRow,
+            severity: "error" as const,
+            message: `Invoice prefix held by archived customer "${c.existingCustomerName}". Restore them or pick a new prefix.`,
+          };
+        case "duplicate-email-active":
+          return {
+            row: uiRow,
+            severity: "warning" as const,
+            message: `Email matches an existing customer "${c.existingCustomerName}". Continuing will create a second record sharing this email.`,
+          };
       }
-      if (c.reason === "duplicate-name-archived") {
-        return {
-          row: uiRow,
-          severity: "error" as const,
-          message: `An archived customer named "${c.existingCustomerName}" already exists. Restore it from the Archived tab instead of re-importing.`,
-        };
-      }
-      return {
-        row: uiRow,
-        severity: "warning" as const,
-        message: `Email matches an existing customer "${c.existingCustomerName}". Continuing will create a second record sharing this email.`,
-      };
     });
   }
 
