@@ -112,12 +112,32 @@ export function calculateLineTotal(
     "quantity" | "pricePerLb" | "unitType" | "salesUnitId"
   >,
   product?: ProductListItem | null,
+  /**
+   * Real fulfilled/allocated weight in lbs for the line, when known.
+   * Catch-weight lines bill on the real lot weight, not the product's
+   * stated avg-case-weight estimate. Passing this lets the subtotal
+   * agree with the line-row total when the two differ (e.g. allocation
+   * covers fewer real cases than the product config assumes).
+   */
+  effectiveWeightLbs?: number | null,
 ): number | null {
-  const quantity = Number(line.quantity ?? "");
   const price = Number(line.pricePerLb ?? "");
-
-  if (!Number.isFinite(quantity) || quantity <= 0) return null;
   if (!Number.isFinite(price) || price < 0) return null;
+
+  // Catch-weight with a known real weight: bill on that weight, period.
+  // This is the source of truth for the line row; the summary should
+  // match.
+  if (
+    line.unitType === "catch_weight" &&
+    effectiveWeightLbs != null &&
+    Number.isFinite(effectiveWeightLbs) &&
+    effectiveWeightLbs > 0
+  ) {
+    return effectiveWeightLbs * price;
+  }
+
+  const quantity = Number(line.quantity ?? "");
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
 
   // Price is always per atomic unit ($/lb or $/ea).
   // Multiply by conversionToBase to get the total for any selling unit.

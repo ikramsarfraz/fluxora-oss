@@ -24,8 +24,8 @@ import type { ProductListItem } from "@/modules/distribution/products/services/p
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";
 import { NewOrderSummaryCard } from "./new-order-summary-card";
-import { calculateLineTotal } from "./new-order-line-utils";
 import { getDefaultSalesUnit, inferLineUnitType } from "./new-order-line-utils";
+import { useLinesSubtotal } from "./use-lines-subtotal";
 import {
   newOrderFormSchema,
   type NewOrderFormValues,
@@ -126,27 +126,25 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
     name: "discountAmount",
   });
   const { data: selectedCustomer } = useCustomer(customerId);
+  const productsById = useMemo(() => {
+    const map = new Map<string, ProductListItem>();
+    for (const p of products ?? []) map.set(p.id, p);
+    return map;
+  }, [products]);
+  // Same shared subtotal as the new-order form + the Estimate card so
+  // all three surfaces agree on real-weight-aware totals for
+  // catch-weight lines.
+  const { subtotal, filledLineCount } = useLinesSubtotal(lines, productsById);
   const { lineCount, estTotal } = useMemo(() => {
-    const productsById = new Map<string, ProductListItem>();
-    for (const p of products ?? []) productsById.set(p.id, p);
-
-    const filledLines = (lines ?? []).filter(l => l.productId);
-
-    let subtotal = 0;
-    for (const l of filledLines) {
-      subtotal += calculateLineTotal(l, productsById.get(l.productId)) ?? 0;
-    }
-
     const fuel = addFuelSurcharge
       ? Number(selectedCustomer?.fuelSurchargeAmount ?? 0) || 0
       : 0;
     const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
-
     return {
-      lineCount: filledLines.length,
+      lineCount: filledLineCount,
       estTotal: Math.max(0, subtotal + fuel - disc),
     };
-  }, [lines, products, selectedCustomer, addFuelSurcharge, discountAmount]);
+  }, [subtotal, filledLineCount, selectedCustomer, addFuelSurcharge, discountAmount]);
 
   useEffect(() => {
     if (!order || !products) return;

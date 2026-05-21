@@ -31,7 +31,7 @@ import {
   newOrderFormSchema,
   type NewOrderFormValues,
 } from "./new-order-form.schema";
-import { calculateLineTotal } from "./new-order-line-utils";
+import { useLinesSubtotal } from "./use-lines-subtotal";
 
 const C = {
   ink: "var(--color-ink)",
@@ -130,27 +130,25 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
     !!existingDraft &&
     existingDraft.id !== draftIdRef.current &&
     !dismissedDraftIds.has(existingDraft.id);
+  const productsById = useMemo(() => {
+    const map = new Map<string, ProductListItem>();
+    for (const p of products ?? []) map.set(p.id, p);
+    return map;
+  }, [products]);
+  // Shared with the right-rail Estimate card — both surfaces respect
+  // real allocated weight on catch-weight lines so they agree with each
+  // other and with the per-row line total inside NewOrderLinesTable.
+  const { subtotal, filledLineCount } = useLinesSubtotal(lines, productsById);
   const { lineCount, estTotal } = useMemo(() => {
-    const productsById = new Map<string, ProductListItem>();
-    for (const p of products ?? []) productsById.set(p.id, p);
-
-    const filledLines = (lines ?? []).filter(l => l.productId);
-
-    let subtotal = 0;
-    for (const l of filledLines) {
-      subtotal += calculateLineTotal(l, productsById.get(l.productId)) ?? 0;
-    }
-
     const fuel = addFuelSurcharge
       ? Number(selectedCustomer?.fuelSurchargeAmount ?? 0) || 0
       : 0;
     const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
-
     return {
-      lineCount: filledLines.length,
+      lineCount: filledLineCount,
       estTotal: Math.max(0, subtotal + fuel - disc),
     };
-  }, [lines, products, selectedCustomer, addFuelSurcharge, discountAmount]);
+  }, [subtotal, filledLineCount, selectedCustomer, addFuelSurcharge, discountAmount]);
 
   useEffect(() => {
     isPendingRef.current = pendingMode !== null;

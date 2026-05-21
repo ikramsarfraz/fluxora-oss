@@ -12,8 +12,8 @@ import { useProducts } from "@/modules/distribution/products/hooks/use-products"
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
-import { calculateLineTotal } from "./new-order-line-utils";
 import type { NewOrderFormValues } from "./new-order-form.schema";
+import { useLinesSubtotal } from "./use-lines-subtotal";
 
 const C = {
   ink: "var(--color-ink)",
@@ -50,13 +50,11 @@ export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
     return map;
   }, [products]);
 
-  const subtotal = useMemo(() => {
-    let total = 0;
-    for (const line of lines ?? []) {
-      total += calculateLineTotal(line, productsById.get(line.productId)) ?? 0;
-    }
-    return total;
-  }, [lines, productsById]);
+  // Shared with the form's sticky bottom bar — both surfaces respect
+  // real allocated weight on catch-weight lines instead of the product's
+  // stated avg-case-weight estimate, so the totals agree with the per-
+  // row line totals inside NewOrderLinesTable.
+  const { subtotal } = useLinesSubtotal(lines, productsById);
 
   const fuelSurchargeAmt = useMemo(() => {
     if (!addFuelSurcharge) return 0;
