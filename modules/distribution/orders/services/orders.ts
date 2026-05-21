@@ -1028,15 +1028,25 @@ async function autoAllocateOldestInventoryToSalesOrderLine(input: {
 
   if (selected.length === 0) return;
 
-  await db.insert(salesOrderLineAllocations).values(
-    selected.map(item => ({
-      salesOrderLineId: input.salesOrderLineId,
-      inventoryItemId: item.id,
-      allocatedWeightLbs: item.exactWeightLbs,
-    })),
-  );
-
-  await markInventoryItemsAllocated(selected.map(item => item.id));
+  // Atomic insert + status flip so a concurrent allocator can't see
+  // the row marked `allocated` before the link row exists (or worse,
+  // pick the same item between our insert and the mark). The reconcile
+  // pass runs after — it's idempotent and reads the now-consistent
+  // state.
+  const selectedIds = selected.map(item => item.id);
+  await db.transaction(async tx => {
+    await tx.insert(salesOrderLineAllocations).values(
+      selected.map(item => ({
+        salesOrderLineId: input.salesOrderLineId,
+        inventoryItemId: item.id,
+        allocatedWeightLbs: item.exactWeightLbs,
+      })),
+    );
+    await tx
+      .update(inventoryItems)
+      .set({ status: "allocated", updatedAt: new Date() })
+      .where(inArray(inventoryItems.id, selectedIds));
+  });
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
@@ -1085,15 +1095,23 @@ async function allocateSelectedInventoryToSalesOrderLine(input: {
     }
   }
 
-  await db.insert(salesOrderLineAllocations).values(
-    selected.map(item => ({
-      salesOrderLineId: input.salesOrderLineId,
-      inventoryItemId: item.id,
-      allocatedWeightLbs: item.exactWeightLbs,
-    })),
-  );
-
-  await markInventoryItemsAllocated(selected.map(item => item.id));
+  // Same atomic insert + status flip as the FIFO path above — without
+  // this a parallel allocation could see the inventory item still
+  // `in_stock` between our insert and the mark and double-allocate.
+  const manualSelectedIds = selected.map(item => item.id);
+  await db.transaction(async tx => {
+    await tx.insert(salesOrderLineAllocations).values(
+      selected.map(item => ({
+        salesOrderLineId: input.salesOrderLineId,
+        inventoryItemId: item.id,
+        allocatedWeightLbs: item.exactWeightLbs,
+      })),
+    );
+    await tx
+      .update(inventoryItems)
+      .set({ status: "allocated", updatedAt: new Date() })
+      .where(inArray(inventoryItems.id, manualSelectedIds));
+  });
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
@@ -1790,21 +1808,29 @@ export async function updateSalesOrder(input: {
 
   await db.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, input.id));
 
-  for (const line of input.lines) {
-    const supplierId = await resolveLineSupplierContext({
-      tenantId: tenant.id,
-      productId: line.productId,
-      manualInventoryItemIds: line.inventoryItemIds,
-    });
+  // Resolve each line's supplier + per-lb price in parallel — both
+  // are pure reads keyed on the line's own product/customer. Inserts +
+  // allocations remain sequential downstream because allocation
+  // contention against the same lot must be serialized.
+  const lineContexts = await Promise.all(
+    input.lines.map(async line => {
+      const supplierId = await resolveLineSupplierContext({
+        tenantId: tenant.id,
+        productId: line.productId,
+        manualInventoryItemIds: line.inventoryItemIds,
+      });
+      const resolvedPricePerLb = await resolveLinePricePerLb({
+        customerId: input.customerId,
+        productId: line.productId,
+        supplierId,
+        providedOverride: line.pricePerLbOverride,
+        validProducts,
+      });
+      return { line, supplierId, resolvedPricePerLb };
+    }),
+  );
 
-    const resolvedPricePerLb = await resolveLinePricePerLb({
-      customerId: input.customerId,
-      productId: line.productId,
-      supplierId,
-      providedOverride: line.pricePerLbOverride,
-      validProducts,
-    });
-
+  for (const { line, resolvedPricePerLb } of lineContexts) {
     const unitType = line.unitType ?? "catch_weight";
     const snapshot = buildSalesOrderLineSnapshot(
       { ...line, unitType, resolvedPricePerLb },
@@ -1929,21 +1955,30 @@ export async function createSalesOrder(input: {
     .set({ orderNumber })
     .where(eq(salesOrders.id, order.id));
 
-  for (const line of input.lines) {
-    const supplierId = await resolveLineSupplierContext({
-      tenantId: tenant.id,
-      productId: line.productId,
-      manualInventoryItemIds: line.inventoryItemIds,
-    });
+  // Resolve each line's supplier + per-lb price in parallel — both
+  // are pure reads keyed on the line's own product/customer, so there's
+  // no cross-line dependency. The inserts and allocations remain
+  // sequential because allocation contention against the same lot must
+  // be serialized.
+  const lineContexts = await Promise.all(
+    input.lines.map(async line => {
+      const supplierId = await resolveLineSupplierContext({
+        tenantId: tenant.id,
+        productId: line.productId,
+        manualInventoryItemIds: line.inventoryItemIds,
+      });
+      const resolvedPricePerLb = await resolveLinePricePerLb({
+        customerId: input.customerId,
+        productId: line.productId,
+        supplierId,
+        providedOverride: line.pricePerLbOverride,
+        validProducts,
+      });
+      return { line, supplierId, resolvedPricePerLb };
+    }),
+  );
 
-    const resolvedPricePerLb = await resolveLinePricePerLb({
-      customerId: input.customerId,
-      productId: line.productId,
-      supplierId,
-      providedOverride: line.pricePerLbOverride,
-      validProducts,
-    });
-
+  for (const { line, resolvedPricePerLb } of lineContexts) {
     const unitType = line.unitType ?? "catch_weight";
     const snapshot = buildSalesOrderLineSnapshot(
       { ...line, unitType, resolvedPricePerLb },

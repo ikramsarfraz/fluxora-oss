@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
+import { captureException } from "@/lib/sentry-scope";
 import { getActivityForSalesOrder } from "@/modules/distribution/services/audit";
 import { getSalesOrderById } from "../services/orders";
 
@@ -34,14 +35,21 @@ export default async function OrdersDetailPage({
   }
 
   // Activity feed is shown below the fold; prefetching it avoids a
-  // post-mount fetch. The previous full-list prefetch was dropped — the
-  // detail page doesn't read the orders list.
+  // post-mount fetch. A failure here shouldn't break the page render
+  // (client refetches on mount) but it shouldn't vanish silently
+  // either — tag it for Sentry so we see prefetch regressions.
   await queryClient
     .prefetchQuery({
       queryKey: queryKeys.salesOrders.activity(id),
       queryFn: () => getActivityForSalesOrder(id),
     })
-    .catch(() => {});
+    .catch((e: unknown) => {
+      captureException(e, {
+        stage: "orders-detail-prefetch",
+        query: "salesOrders.activity",
+        orderId: id,
+      });
+    });
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
