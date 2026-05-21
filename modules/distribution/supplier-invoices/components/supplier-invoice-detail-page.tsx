@@ -42,6 +42,7 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
+import { TablePager } from "@/components/table-pager";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   useCompleteSupplierInvoice,
@@ -257,8 +258,10 @@ export function SupplierInvoiceDetailPage({
     new Set(),
   );
   // Receiving-summary client-side pagination — see receivingRows below.
-  const [receivingPage, setReceivingPage] = useState(0);
-  const RECEIVING_PAGE_SIZE = 25;
+  // 1-indexed page to match the shared TablePager component used across
+  // the app's listing tables.
+  const [receivingPage, setReceivingPage] = useState(1);
+  const [receivingPerPage, setReceivingPerPage] = useState(25);
 
   useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.referenceNumber);
 
@@ -808,12 +811,12 @@ export function SupplierInvoiceDetailPage({
                       {(() => {
                         const pageCount = Math.max(
                           1,
-                          Math.ceil(receivingRows.length / RECEIVING_PAGE_SIZE),
+                          Math.ceil(receivingRows.length / receivingPerPage),
                         );
-                        const safePage = Math.min(receivingPage, pageCount - 1);
+                        const safePage = Math.min(receivingPage, pageCount);
                         const slice = receivingRows.slice(
-                          safePage * RECEIVING_PAGE_SIZE,
-                          (safePage + 1) * RECEIVING_PAGE_SIZE,
+                          (safePage - 1) * receivingPerPage,
+                          safePage * receivingPerPage,
                         );
                         return slice.map(({ lot, item }) => (
                           <TableRow key={item.id}>
@@ -855,67 +858,24 @@ export function SupplierInvoiceDetailPage({
                       })()}
                     </TableBody>
                   </Table>
+                  <TablePager
+                    total={receivingRows.length}
+                    perPage={receivingPerPage}
+                    page={Math.min(
+                      receivingPage,
+                      Math.max(
+                        1,
+                        Math.ceil(receivingRows.length / receivingPerPage),
+                      ),
+                    )}
+                    onPageChange={setReceivingPage}
+                    onPerPageChange={value => {
+                      setReceivingPerPage(value);
+                      setReceivingPage(1);
+                    }}
+                    perPageOptions={[25, 50, 100]}
+                  />
                 </div>
-
-                {receivingRows.length > RECEIVING_PAGE_SIZE && (() => {
-                  const pageCount = Math.max(
-                    1,
-                    Math.ceil(receivingRows.length / RECEIVING_PAGE_SIZE),
-                  );
-                  const safePage = Math.min(receivingPage, pageCount - 1);
-                  return (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "12px",
-                        marginTop: "4px",
-                        fontSize: "12px",
-                        color: C.muted,
-                      }}
-                    >
-                      <span>
-                        Showing{" "}
-                        <b style={{ color: C.ink, fontWeight: 500 }}>
-                          {safePage * RECEIVING_PAGE_SIZE + 1}–
-                          {Math.min(
-                            receivingRows.length,
-                            (safePage + 1) * RECEIVING_PAGE_SIZE,
-                          )}
-                        </b>{" "}
-                        of {receivingRows.length.toLocaleString()} inventory items
-                      </span>
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={safePage === 0}
-                          onClick={() =>
-                            setReceivingPage(p => Math.max(0, p - 1))
-                          }
-                        >
-                          Prev
-                        </Button>
-                        <span style={{ fontSize: "12px", color: C.muted }}>
-                          Page {safePage + 1} of {pageCount}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={safePage >= pageCount - 1}
-                          onClick={() =>
-                            setReceivingPage(p => Math.min(pageCount - 1, p + 1))
-                          }
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </Section>

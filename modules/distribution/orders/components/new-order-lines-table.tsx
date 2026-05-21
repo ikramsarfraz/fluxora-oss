@@ -48,6 +48,7 @@ import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerDetail } from "@/modules/distribution/customers/services/customers";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import type { FifoAllocationResult } from "@/modules/distribution/inventory/services/inventory";
+import { TablePager } from "@/components/table-pager";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 import {
@@ -1130,8 +1131,6 @@ interface FifoAllocationTrayProps {
   isLoading: boolean;
 }
 
-const TRAY_PAGE_SIZE = 25;
-
 function FifoAllocationTray({
   rows,
   candidates,
@@ -1149,20 +1148,22 @@ function FifoAllocationTray({
     selectedInventoryItemIds.length > 0,
   );
   // Pagination — products with hundreds of allocated cases would
-  // otherwise render every row in one giant list.
-  const [page, setPage] = useState(0);
+  // otherwise render every row in one giant list. Page is 1-indexed
+  // to match the shared TablePager component used elsewhere in the app.
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const selectedSet = new Set(selectedInventoryItemIds);
   const selectedRows = candidates.filter(row =>
     selectedSet.has(row.inventoryItemId),
   );
   const allDisplayRows = manualMode ? candidates : rows;
-  const pageCount = Math.max(1, Math.ceil(allDisplayRows.length / TRAY_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(allDisplayRows.length / perPage));
   // Clamp the current page when the row set shrinks (e.g. user unchecks
   // an item, switches mode, or product changes).
-  const safePage = Math.min(page, pageCount - 1);
+  const safePage = Math.min(page, pageCount);
   const displayRows = allDisplayRows.slice(
-    safePage * TRAY_PAGE_SIZE,
-    (safePage + 1) * TRAY_PAGE_SIZE,
+    (safePage - 1) * perPage,
+    safePage * perPage,
   );
   const allocatedRows = manualMode ? selectedRows : rows;
   const allocatedCount = allocatedRows.length;
@@ -1173,7 +1174,7 @@ function FifoAllocationTray({
 
   function startManualSelection() {
     setManualMode(true);
-    setPage(0);
+    setPage(1);
     onSelectedInventoryItemIdsChange(
       rows.slice(0, requestedCases).map(row => row.inventoryItemId),
     );
@@ -1181,7 +1182,7 @@ function FifoAllocationTray({
 
   function useFifo() {
     setManualMode(false);
-    setPage(0);
+    setPage(1);
     onSelectedInventoryItemIdsChange([]);
   }
 
@@ -1291,6 +1292,47 @@ function FifoAllocationTray({
           )}
         </div>
       </div>
+
+      {/* Short-stock warning — hoisted above the table so it's the
+          first thing the user sees when the selection or available
+          stock doesn't cover the requested quantity. */}
+      {shortBy > 0 && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "8px",
+            padding: "10px 12px",
+            marginBottom: "12px",
+            background: "oklch(96% 0.04 70)",
+            color: "oklch(40% 0.10 70)",
+            border: "1px solid oklch(85% 0.10 70)",
+            borderRadius: C.radiusSm,
+            fontSize: "12px",
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            style={{ flexShrink: 0, marginTop: "1px" }}
+          >
+            <path d="M8 2l6.5 11h-13L8 2z" strokeLinejoin="round" />
+            <path d="M8 6.5v3.5M8 11.7v.1" strokeLinecap="round" />
+          </svg>
+          <div>
+            <b>Short {shortBy} {shortBy === 1 ? "case" : "cases"}.</b>{" "}
+            Only {allocatedCount} of {requestedCases} requested{" "}
+            {requestedCases === 1 ? "case is" : "cases are"}{" "}
+            {manualMode ? "selected" : "in stock"}.{" "}
+            {manualMode ? "Select more inventory or reduce quantity." : "Reduce quantity or back-order."}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       {isLoading ? (
@@ -1458,89 +1500,29 @@ function FifoAllocationTray({
         </div>
       )}
 
-      {/* Pager */}
-      {!isLoading && allDisplayRows.length > TRAY_PAGE_SIZE && (
+      {/* Pager — use the shared TablePager so the styling matches the
+          rest of the app's tables (listing pages, etc.). */}
+      {!isLoading && allDisplayRows.length > 0 && (
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
             marginTop: "10px",
-            fontSize: "11px",
-            color: C.muted,
-          }}
-        >
-          <span>
-            Showing{" "}
-            <b style={{ color: C.ink2, fontWeight: 500 }}>
-              {safePage * TRAY_PAGE_SIZE + 1}–
-              {Math.min(allDisplayRows.length, (safePage + 1) * TRAY_PAGE_SIZE)}
-            </b>{" "}
-            of {allDisplayRows.length}
-          </span>
-          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              disabled={safePage === 0}
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-            >
-              Prev
-            </Button>
-            <span style={{ fontSize: "11px", color: C.muted }}>
-              {safePage + 1} / {pageCount}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              disabled={safePage >= pageCount - 1}
-              onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Short-stock warning */}
-      {shortBy > 0 && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "8px",
-            padding: "10px 12px",
-            marginTop: "10px",
-            background: "oklch(96% 0.04 70)",
-            color: "oklch(40% 0.10 70)",
-            border: "1px solid oklch(85% 0.10 70)",
+            background: C.surface,
+            border: `1px solid ${C.line}`,
             borderRadius: C.radiusSm,
-            fontSize: "12px",
+            overflow: "hidden",
           }}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            style={{ flexShrink: 0, marginTop: "1px" }}
-          >
-            <path d="M8 2l6.5 11h-13L8 2z" strokeLinejoin="round" />
-            <path d="M8 6.5v3.5M8 11.7v.1" strokeLinecap="round" />
-          </svg>
-          <div>
-            <b>Short {shortBy} {shortBy === 1 ? "case" : "cases"}.</b>{" "}
-            Only {allocatedCount} of {requestedCases} requested{" "}
-            {requestedCases === 1 ? "case is" : "cases are"}{" "}
-            {manualMode ? "selected" : "in stock"}.{" "}
-            {manualMode ? "Select more inventory or reduce quantity." : "Reduce quantity or back-order."}
-          </div>
+          <TablePager
+            total={allDisplayRows.length}
+            perPage={perPage}
+            page={safePage}
+            onPageChange={setPage}
+            onPerPageChange={value => {
+              setPerPage(value);
+              setPage(1);
+            }}
+            perPageOptions={[25, 50, 100]}
+          />
         </div>
       )}
 
