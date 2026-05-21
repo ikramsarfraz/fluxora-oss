@@ -63,7 +63,7 @@ import { getSupplierInvoiceStatusInfo } from "@/modules/distribution/supplier-in
 
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
 import { SupplierInvoicePdfPreviewCard } from "./supplier-invoice-pdf-preview-card";
-import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
+import { SupplierInvoiceActivityCard } from "./supplier-invoice-activity-card";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
 import { ForwardBillModal } from "./forward-bill-modal";
 import { PaymentEvidenceCard } from "./payment-evidence-card";
@@ -964,10 +964,9 @@ export function SupplierInvoiceDetailPage({
             <ForwardHistoryCard forwards={invoice.billForwards} />
           )}
 
-          {/* Activity */}
-          <Section title="Activity" description="Who touched this bill and when.">
-            <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
-          </Section>
+          {/* Activity — same compact card as the order detail page so
+              the two surfaces feel consistent. */}
+          <SupplierInvoiceActivityCard supplierInvoiceId={invoiceId} />
         </div>
 
         {/* ── RIGHT SIDEBAR ── */}
