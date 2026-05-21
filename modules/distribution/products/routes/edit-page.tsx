@@ -8,6 +8,7 @@ import { isUuid } from "@/lib/utils/uuid";
 import { getProductById } from "../services/products";
 
 import { AddProductForm } from "../components/add-product-form";
+import { ProductFormSidePanel } from "../components/product-form-side-panel";
 
 export default async function ProductsEditPage({
   params,
@@ -33,7 +34,13 @@ export default async function ProductsEditPage({
           </Link>
         </Button>
       </PageHeader>
-      <AddProductForm mode="edit" product={product} />
+      {/* Mirrors the customer + supplier edit-page layout: form left,
+          sticky "Why we ask" explainer right. Same grid template as the
+          new page so the form widths stay visually consistent. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <AddProductForm mode="edit" product={product} />
+        <ProductFormSidePanel />
+      </div>
     </section>
   );
 }

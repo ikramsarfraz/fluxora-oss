@@ -550,7 +550,7 @@ export function AddProductForm(props?: {
   const isPending = form.formState.isSubmitting;
 
   return (
-    <Card className="w-full max-w-xl">
+    <Card className="w-full">
       <CardContent className="pt-6">
         <form id="form-add-product" onSubmit={form.handleSubmit(onSubmit)}>
           {mutationError ? (
