@@ -235,7 +235,11 @@ export default function Customers() {
             </>
           ),
           confirm: "Archive",
-          variant: "default" as const,
+          // Archive is reversible (Restore lives one tab over), but it's
+          // still a removal-flavored action — surface the destructive
+          // theme color so it's visually distinct from Restore's
+          // affirmative one and from a neutral OK button.
+          variant: "destructive" as const,
         };
       case "restore":
         return {

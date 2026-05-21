@@ -385,6 +385,7 @@ export default function CustomerPortfolioPage() {
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
+                  variant="destructive"
                   onClick={handleLifecycleConfirm}
                   disabled={lifecyclePending}
                 >
