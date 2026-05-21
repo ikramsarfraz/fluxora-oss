@@ -37,6 +37,7 @@ import {
 } from "@/modules/distribution/services/inventory-state";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { assertCustomerWithinCreditLimit } from "@/modules/distribution/customers/services/customers";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildTextSearchCondition,
@@ -1768,6 +1769,10 @@ export async function createSalesOrder(input: {
   if (input.lines.length === 0) {
     throw new Error("Add at least one line item before saving.");
   }
+
+  // Soft AR cap: block new orders when the customer is already over
+  // their credit limit. No-op when the column is null (no limit set).
+  await assertCustomerWithinCreditLimit(input.customerId, tenant.id);
 
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,

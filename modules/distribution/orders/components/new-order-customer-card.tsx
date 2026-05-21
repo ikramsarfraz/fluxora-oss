@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/utils/currency";
 import {
   useCustomer,
+  useCustomerCreditSnapshot,
   useCustomerSearch,
 } from "@/modules/distribution/customers/hooks/use-customers";
 import type { CustomerSearchResult } from "@/modules/distribution/customers/services/customers";
@@ -54,6 +55,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
   // editing an existing order), resolve the full record by id so we can
   // render the chip without waiting for the user to type.
   const { data: selected, isLoading: selectedLoading } = useCustomer(customerId);
+  const { data: credit } = useCustomerCreditSnapshot(customerId);
   const isStep1Done = !!selected;
 
   const defaultAddress = selected
@@ -234,7 +236,8 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
 
                 {/* Info chips */}
                 {(selected.fuelSurchargeAmount ||
-                  selected.abbreviation) && (
+                  selected.abbreviation ||
+                  credit) && (
                   <div
                     style={{
                       display: "flex",
@@ -243,6 +246,12 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                       marginTop: "10px",
                     }}
                   >
+                    {credit ? (
+                      <CreditExposureChip
+                        balanceDue={credit.balanceDue}
+                        creditLimit={credit.creditLimit}
+                      />
+                    ) : null}
                     {selected.fuelSurchargeAmount &&
                       Number(selected.fuelSurchargeAmount) > 0 && (
                         <span
@@ -342,5 +351,69 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
         />
       </div>
     </Card>
+  );
+}
+
+/**
+ * Chip showing open AR balance against the customer's credit limit.
+ * Three tones:
+ *   - No limit configured     → neutral, just shows the balance.
+ *   - Within 80% of limit     → neutral with "of $X limit" helper.
+ *   - 80–100% of limit         → warning (amber).
+ *   - Over limit               → danger (red). Server also blocks new
+ *     orders in this state via assertCustomerWithinCreditLimit.
+ */
+function CreditExposureChip({
+  balanceDue,
+  creditLimit,
+}: {
+  balanceDue: string;
+  creditLimit: string | null;
+}) {
+  const balance = parseFloat(balanceDue);
+  const limit = creditLimit ? parseFloat(creditLimit) : null;
+  if (!Number.isFinite(balance) && (limit == null || !Number.isFinite(limit))) {
+    return null;
+  }
+
+  let tone: "neutral" | "warning" | "danger" = "neutral";
+  let trailing: string | null = null;
+  if (limit != null && Number.isFinite(limit) && limit > 0) {
+    if (balance > limit) tone = "danger";
+    else if (balance >= limit * 0.8) tone = "warning";
+    trailing =
+      tone === "danger"
+        ? `over $${limit.toFixed(2)} limit`
+        : `of $${limit.toFixed(2)} limit`;
+  }
+
+  const palette =
+    tone === "danger"
+      ? { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" }
+      : tone === "warning"
+        ? { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" }
+        : { bg: C.line2, fg: C.ink2 };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "4px 10px",
+        borderRadius: "100px",
+        fontSize: "12px",
+        background: palette.bg,
+        color: palette.fg,
+      }}
+    >
+      <b style={{ fontWeight: 500 }}>
+        {tone === "danger" ? "Over limit" : "Balance"}
+      </b>{" "}
+      · {formatMoney(balanceDue)}
+      {trailing ? (
+        <span style={{ opacity: 0.85 }}> {trailing}</span>
+      ) : null}
+    </span>
   );
 }

@@ -561,6 +561,95 @@ export type CustomerDetail = NonNullable<
   Awaited<ReturnType<typeof getCustomerById>>
 >;
 
+/**
+ * Lightweight credit-exposure snapshot for a single customer. Cheaper
+ * than `getCustomerPortfolio` (one aggregate, no order/invoice page),
+ * suited for the order-entry card that just needs "are they near or
+ * past their limit?" at a glance.
+ *
+ * `balanceDue` is the sum of `balance_due` across non-void invoices —
+ * same shape the detail page uses. `creditLimit` mirrors the column
+ * directly (null = no limit configured).
+ */
+export type CustomerCreditSnapshot = {
+  id: string;
+  name: string;
+  balanceDue: string;
+  creditLimit: string | null;
+};
+
+export async function getCustomerCreditSnapshot(
+  customerId: string,
+): Promise<CustomerCreditSnapshot | null> {
+  const tenant = await getCurrentTenant();
+  const customer = await db.query.customers.findFirst({
+    where: and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)),
+    columns: { id: true, name: true, creditLimit: true },
+  });
+  if (!customer) return null;
+  const [agg] = await db
+    .select({
+      balanceDue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.balanceDue}::numeric else 0 end), 0)`,
+    })
+    .from(salesInvoices)
+    .where(
+      and(
+        eq(salesInvoices.customerId, customerId),
+        eq(salesInvoices.tenantId, tenant.id),
+      ),
+    );
+  return {
+    id: customer.id,
+    name: customer.name,
+    balanceDue: agg?.balanceDue ?? "0",
+    creditLimit: customer.creditLimit ?? null,
+  };
+}
+
+/**
+ * Throw a friendly error if the customer is currently over their
+ * credit limit. Used by createSalesOrder to block new exposure from
+ * piling up on a customer who's already in arrears. No-op when
+ * creditLimit is null (no limit configured).
+ *
+ * Conservative model for v1: we don't try to estimate the new order's
+ * eventual invoiced amount — we just check whether existing open AR
+ * already exceeds the limit. A customer right at the limit can still
+ * place new orders; one already past the limit cannot.
+ */
+export async function assertCustomerWithinCreditLimit(
+  customerId: string,
+  tenantId: string,
+): Promise<void> {
+  const customer = await db.query.customers.findFirst({
+    where: and(
+      eq(customers.id, customerId),
+      eq(customers.tenantId, tenantId),
+    ),
+    columns: { name: true, creditLimit: true },
+  });
+  if (!customer || customer.creditLimit == null) return;
+  const limit = parseFloat(customer.creditLimit);
+  if (!Number.isFinite(limit) || limit <= 0) return;
+  const [agg] = await db
+    .select({
+      balanceDue: sql<string>`coalesce(sum(case when ${salesInvoices.status} <> 'void' then ${salesInvoices.balanceDue}::numeric else 0 end), 0)`,
+    })
+    .from(salesInvoices)
+    .where(
+      and(
+        eq(salesInvoices.customerId, customerId),
+        eq(salesInvoices.tenantId, tenantId),
+      ),
+    );
+  const balance = parseFloat(agg?.balanceDue ?? "0");
+  if (balance > limit) {
+    throw new Error(
+      `${customer.name} is over their credit limit (open balance $${balance.toFixed(2)} of $${limit.toFixed(2)}). Bring the balance under the limit before adding new orders.`,
+    );
+  }
+}
+
 export type CustomerListSort = "name" | "createdAt";
 
 /**

@@ -6,6 +6,7 @@ import {
   archiveCustomerAction,
   createCustomerAction,
   getCustomerAction,
+  getCustomerCreditSnapshotAction,
   getCustomerInvoicesPageAction,
   getCustomerOrdersPageAction,
   getCustomerPortfolioAction,
@@ -87,6 +88,20 @@ export function useCustomerPortfolio(id: string) {
     queryFn: () => getCustomerPortfolioAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+/**
+ * Just-enough credit data for the new-order customer chip: open AR
+ * balance + configured credit limit. Cheaper than fetching the full
+ * portfolio for forms that only need exposure-at-a-glance.
+ */
+export function useCustomerCreditSnapshot(id: string) {
+  return useQuery({
+    queryKey: [...queryKeys.customers.detail(id), "credit-snapshot"] as const,
+    queryFn: () => getCustomerCreditSnapshotAction(id),
+    enabled: !!id && isUuid(id),
+    staleTime: 1000 * 30,
   });
 }
 

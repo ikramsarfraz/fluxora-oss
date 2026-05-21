@@ -13,6 +13,7 @@ import {
   exportCustomersCsv,
   findCustomerImportConflicts,
   getCustomerById,
+  getCustomerCreditSnapshot,
   getCustomerInvoicesPage,
   getCustomerOrdersPage,
   getCustomerPortfolio,
@@ -28,6 +29,7 @@ import {
   type BulkCreateCustomerInput,
   type BulkCreateCustomersResult,
   type CustomerArchivedFilter,
+  type CustomerCreditSnapshot,
   type CustomerImportConflict,
   type CustomerInvoicesParams,
   type CustomerListParams,
@@ -66,6 +68,12 @@ export async function exportCustomersCsvAction(
   archived: CustomerArchivedFilter = "all",
 ): Promise<{ filename: string; csv: string }> {
   return await exportCustomersCsv(archived);
+}
+
+export async function getCustomerCreditSnapshotAction(
+  customerId: string,
+): Promise<CustomerCreditSnapshot | null> {
+  return await getCustomerCreditSnapshot(customerId);
 }
 
 export async function getCustomerAction(customerId: string) {
