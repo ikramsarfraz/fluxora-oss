@@ -855,35 +855,47 @@ function LineRow({
                     />
                     <ComboboxEmpty>No products found.</ComboboxEmpty>
                     <ComboboxList>
-                      {(p: ProductListItem) => (
-                        <ComboboxItem key={p.id} value={p}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              width: "100%",
-                              gap: "8px",
-                            }}
-                          >
-                            <div>
-                              <div>{p.name}</div>
-                              <div
-                                style={{
-                                  fontFamily: C.mono,
-                                  fontSize: "11px",
-                                  color: C.muted,
-                                }}
-                              >
-                                {p.sku}
+                      {(p: ProductListItem) => {
+                        // Show the price the customer would actually
+                        // pay (contract → product default → none),
+                        // not the raw product default — that read as
+                        // "$0.00" for products without a base default
+                        // even when a customer contract existed.
+                        const resolved = resolvePricePerLb(p.id);
+                        const priceLabel =
+                          resolved && Number(resolved) > 0
+                            ? `${formatMoney(resolved)}/lb`
+                            : "—";
+                        return (
+                          <ComboboxItem key={p.id} value={p}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                width: "100%",
+                                gap: "8px",
+                              }}
+                            >
+                              <div>
+                                <div>{p.name}</div>
+                                <div
+                                  style={{
+                                    fontFamily: C.mono,
+                                    fontSize: "11px",
+                                    color: C.muted,
+                                  }}
+                                >
+                                  {p.sku}
+                                </div>
                               </div>
+                              <span style={{ fontSize: "12px", color: C.muted }}>
+                                {priceLabel}
+                              </span>
                             </div>
-                            <span style={{ fontSize: "12px", color: C.muted }}>
-                              {formatMoney(p.defaultPricePerLb)}
-                            </span>
-                          </div>
-                        </ComboboxItem>
-                      )}
+                          </ComboboxItem>
+                        );
+                      }}
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>

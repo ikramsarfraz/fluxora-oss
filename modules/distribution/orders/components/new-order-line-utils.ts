@@ -144,7 +144,16 @@ export function calculateLineTotal(
   // For lb or ea units, conversionToBase = 1 so the formula is the same.
   // For case units, conversionToBase = lbs/case or units/case.
   const salesUnit = getSelectedSalesUnit(product, line.salesUnitId);
-  const conversion = Number(salesUnit?.conversionToBase ?? "1");
+  // If the sales unit IS a weight unit (lb/lbs/pound), the qty is
+  // already in lbs and the base unit is also lb — so conversion must
+  // be 1 regardless of what's stored on the unit row. Some test
+  // products carry a misconfigured `conversionToBase` (e.g. 0.04) on
+  // the `lb` unit, which would otherwise yield nonsense totals like
+  // 20 lbs × $10/lb = $8. The line-row weight calc has the same
+  // clamp via `Math.max(1, avgLbsPerCase || 1)`; this mirrors it.
+  const conversion = isWeightSalesUnit(salesUnit)
+    ? 1
+    : Number(salesUnit?.conversionToBase ?? "1");
   if (!Number.isFinite(conversion) || conversion <= 0) return null;
   return quantity * conversion * price;
 }
