@@ -10,6 +10,7 @@ import {
   products,
   supplierInvoiceLines,
   suppliers,
+  unitsOfMeasure,
 } from "@/db/schema";
 import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 
@@ -469,6 +470,13 @@ export async function getInventoryItemById(inventoryItemId: string) {
           sku: true,
           name: true,
         },
+        // Eager-load the product's base UOM so the detail page can
+        // render "X.XX lb" vs "N ea" without an extra roundtrip.
+        with: {
+          baseUnit: {
+            columns: { id: true, abbreviation: true, family: true },
+          },
+        },
       },
       lot: {
         columns: {
@@ -495,6 +503,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
                   quantityCases: true,
                   weightLbs: true,
                   unitType: true,
+                  purchaseUnitAbbreviationSnapshot: true,
                 },
                 with: {
                   product: {
@@ -502,6 +511,11 @@ export async function getInventoryItemById(inventoryItemId: string) {
                       id: true,
                       sku: true,
                       name: true,
+                    },
+                    with: {
+                      baseUnit: {
+                        columns: { id: true, abbreviation: true, family: true },
+                      },
                     },
                   },
                 },
@@ -1128,6 +1142,25 @@ export type InventoryProductSummaryRow = {
   totalCases: number;
   totalWeightLbs: string;
   itemCount: number;
+  /**
+   * Abbreviation of the product's base UOM ("lb", "ea", "gal", …). Used
+   * by the rollup display to render the right suffix per row — weight
+   * products show "X.XX lb", non-weight products show "N ea/case/etc".
+   * Null only for legacy products that never had a base unit set.
+   */
+  baseUnitAbbreviation: string | null;
+  /**
+   * UoM family ("weight" | "count" | "volume" | "length" | "other" | null).
+   * Drives which column ("Weight" vs "Units") the display reads from for
+   * this row; a single non-weight catalog still aggregates correctly.
+   */
+  baseUnitFamily:
+    | "weight"
+    | "count"
+    | "volume"
+    | "length"
+    | "other"
+    | null;
 };
 
 export async function getInventoryProductSummary(): Promise<InventoryProductSummaryRow[]> {
@@ -1140,16 +1173,27 @@ export async function getInventoryProductSummary(): Promise<InventoryProductSumm
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
       totalWeightLbs: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
       itemCount: sql<number>`count(distinct ${inventoryItems.id})::int`,
+      baseUnitAbbreviation: unitsOfMeasure.abbreviation,
+      baseUnitFamily: unitsOfMeasure.family,
     })
     .from(inventoryItems)
     .innerJoin(products, eq(products.id, inventoryItems.productId))
+    // Left join: legacy products without a base UOM still appear in the
+    // rollup (their row just has null/null for the new fields).
+    .leftJoin(unitsOfMeasure, eq(unitsOfMeasure.id, products.baseUnitId))
     .where(
       and(
         eq(products.tenantId, tenant.id),
         inArray(inventoryItems.status, ["in_stock", "allocated", "picked", "packed"]),
       ),
     )
-    .groupBy(products.id, products.sku, products.name)
+    .groupBy(
+      products.id,
+      products.sku,
+      products.name,
+      unitsOfMeasure.abbreviation,
+      unitsOfMeasure.family,
+    )
     .orderBy(products.name);
   return rows;
 }

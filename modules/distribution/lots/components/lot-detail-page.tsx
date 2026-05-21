@@ -346,7 +346,11 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
                 <TableRow>
                   <TableHead>Barcode</TableHead>
                   <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Weight lbs</TableHead>
+                  <TableHead className="text-right">
+                    {isLotNonWeight(lot)
+                      ? `Qty (${product?.baseUnit?.abbreviation ?? "ea"})`
+                      : `Weight (${product?.baseUnit?.abbreviation ?? "lb"})`}
+                  </TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Allocations</TableHead>
                   <TableHead className="text-right">Fulfillments</TableHead>
@@ -362,7 +366,13 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
                     </TableCell>
                     <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatWeightLbs(item.exactWeightLbs)}
+                      {/* Per-item quantity — weight for catch/fixed,
+                          case-count for per_each / per_unit (one item
+                          row = one unit/case in the base UOM). */}
+                      {item.costUnitTypeSnapshot === "per_each" ||
+                      item.costUnitTypeSnapshot === "per_unit"
+                        ? item.cases
+                        : formatWeightLbs(item.exactWeightLbs)}
                     </TableCell>
                     <TableCell>
                       <InventoryStatusBadge status={item.status} />

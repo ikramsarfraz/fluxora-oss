@@ -14,7 +14,11 @@ type SortDirection = "asc" | "desc";
 const HEADERS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "name", label: "Product" },
   { key: "totalCases", label: "Cases", align: "right" },
-  { key: "totalWeightLbs", label: "Weight (lb)", align: "right" },
+  // Generic "Quantity" label — the cell renders weight for weight-family
+  // products and count for non-weight products, each with the right
+  // abbreviation. Sort still operates on the weight column (zero for
+  // non-weight rows, which clusters them).
+  { key: "totalWeightLbs", label: "Quantity", align: "right" },
   { key: "itemCount", label: "Items", align: "right" },
 ];
 
@@ -139,7 +143,15 @@ export function InventoryProductSummary() {
                         <MonoText>{row.totalCases.toLocaleString()}</MonoText>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <MonoText>{formatWeightLbs(row.totalWeightLbs)}</MonoText>
+                        {/* Family-aware: weight products show "X.XX lb"
+                            (or kg, oz); non-weight products show their
+                            case count in the product's base UOM. */}
+                        <MonoText>
+                          {row.baseUnitFamily === "weight" ||
+                          row.baseUnitFamily == null
+                            ? `${formatWeightLbs(row.totalWeightLbs)} ${row.baseUnitAbbreviation ?? "lb"}`
+                            : `${row.totalCases.toLocaleString()} ${row.baseUnitAbbreviation ?? "ea"}`}
+                        </MonoText>
                       </td>
                       <td className="px-4 py-2 text-right">
                         <MonoText>{row.itemCount.toLocaleString()}</MonoText>

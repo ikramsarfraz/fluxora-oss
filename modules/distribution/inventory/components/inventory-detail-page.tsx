@@ -37,6 +37,7 @@ import { InventoryAdjustmentHistory } from "@/modules/distribution/components/wa
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import {
+  formatInventoryQuantity,
   formatWeightLbs,
   getExpirationState,
 } from "../utils/insights";
@@ -103,11 +104,36 @@ export function InventoryDetailPage({
       ? getWarehouseCorrectionDeniedReason()
       : workflowAdjustmentBlockedReason;
 
-  const costUnitLabel = item.costUnitTypeSnapshot === "fixed_case" ? "case" : "lb";
-  const totalCostValue =
+  // Unit label for "Unit cost" — historically "lb" or "case"; now also
+  // covers per_each / per_unit by reading the line's snapshot
+  // abbreviation when present, else falling back to the product's base
+  // UOM, else the legacy lb/case mapping.
+  const baseUnitAbbr = item.product?.baseUnit?.abbreviation ?? null;
+  const costUnitLabel =
     item.costUnitTypeSnapshot === "fixed_case"
-      ? Number(item.costPerUnitSnapshot) * item.cases
-      : Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs);
+      ? "case"
+      : item.costUnitTypeSnapshot === "per_each"
+        ? baseUnitAbbr ?? "ea"
+        : item.costUnitTypeSnapshot === "per_unit"
+          ? baseUnitAbbr ?? "unit"
+          : baseUnitAbbr ?? "lb";
+  // Total inventory value: weight × per-lb for catch_weight; case-count ×
+  // per-case for everything else (fixed_case / per_each / per_unit).
+  const totalCostValue =
+    item.costUnitTypeSnapshot === "catch_weight"
+      ? Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs)
+      : Number(item.costPerUnitSnapshot) * item.cases;
+  // Renders "X.XX lb" / "5 ea" / "1 case" depending on the snapshot.
+  const quantityLabel = formatInventoryQuantity({
+    costUnitTypeSnapshot: item.costUnitTypeSnapshot,
+    exactWeightLbs: item.exactWeightLbs,
+    cases: item.cases,
+    baseUnitAbbreviation: baseUnitAbbr,
+  });
+  const isWeightItem =
+    item.costUnitTypeSnapshot === "catch_weight" ||
+    item.costUnitTypeSnapshot === "fixed_case" ||
+    item.costUnitTypeSnapshot == null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,11 +179,11 @@ export function InventoryDetailPage({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Exact weight
+              {isWeightItem ? "Exact weight" : "Quantity"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {formatWeightLbs(item.exactWeightLbs)} lb
+            {quantityLabel}
           </CardContent>
         </Card>
         <Card>
@@ -198,8 +224,8 @@ export function InventoryDetailPage({
           <DetailField label="Barcode / inventory ID">
             <span className="font-mono text-sm">{item.barcodeId}</span>
           </DetailField>
-          <DetailField label="Exact weight">
-            {formatWeightLbs(item.exactWeightLbs)} lb
+          <DetailField label={isWeightItem ? "Exact weight" : "Quantity"}>
+            {quantityLabel}
           </DetailField>
           <DetailField label="Unit cost">
             {formatMoney(item.costPerUnitSnapshot)} / {costUnitLabel}
@@ -262,8 +288,19 @@ export function InventoryDetailPage({
           <DetailField label="Receipt line">
             {sourceReceiptLine ? (
               <span>
-                {sourceReceiptLine.quantityCases.toLocaleString()} cases /{" "}
-                {formatWeightLbs(sourceReceiptLine.weightLbs)} lb
+                {sourceReceiptLine.quantityCases.toLocaleString()} cases
+                {/* Only render weight for weight-priced receipt lines.
+                    Non-weight lines (cans, gal jugs) keep just the
+                    case/unit count which is the meaningful metric there. */}
+                {sourceReceiptLine.unitType === "catch_weight" ||
+                sourceReceiptLine.unitType === "fixed_case" ? (
+                  <>
+                    {" "}
+                    /{" "}
+                    {formatWeightLbs(sourceReceiptLine.weightLbs)}{" "}
+                    {sourceReceiptLine.product?.baseUnit?.abbreviation ?? "lb"}
+                  </>
+                ) : null}
               </span>
             ) : (
               <span className="text-muted-foreground">-</span>
@@ -364,7 +401,11 @@ export function InventoryDetailPage({
                   <TableHead>Order</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Weight lbs</TableHead>
+                  {isWeightItem ? (
+                    <TableHead className="text-right">
+                      Weight {baseUnitAbbr ?? "lb"}
+                    </TableHead>
+                  ) : null}
                   <TableHead>Recorded by</TableHead>
                   <TableHead>Fulfilled at</TableHead>
                   <TableHead>Status</TableHead>
@@ -389,9 +430,11 @@ export function InventoryDetailPage({
                     <TableCell className="text-right tabular-nums">
                       {fulfillment.quantityFulfilled.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatWeightLbs(fulfillment.weightLbs)}
-                    </TableCell>
+                    {isWeightItem ? (
+                      <TableCell className="text-right tabular-nums">
+                        {formatWeightLbs(fulfillment.weightLbs)}
+                      </TableCell>
+                    ) : null}
                     <TableCell>{actorLabel(fulfillment.fulfilledBy)}</TableCell>
                     <TableCell>
                       {new Date(fulfillment.fulfilledAt).toLocaleString()}
