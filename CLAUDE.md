@@ -12,6 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Multi-tenant SaaS: tenants on subdomains, a reserved `admin.` host for platform admins, plus a root host for marketing/shared auth.
 - **Auth: Better Auth** — config in [lib/auth.ts](lib/auth.ts), client in [lib/auth-client.ts](lib/auth-client.ts), DB schema in [db/auth-schema.ts](db/auth-schema.ts). Sessions resolve per-host (root vs tenant vs `admin.`); do not call `cookies()` directly for auth — go through the Better Auth helpers.
 - **DB: Neon serverless Postgres + Drizzle ORM.** Schema entry at [db/schema.ts](db/schema.ts) with relations in [db/relations.ts](db/relations.ts) and the driver wired in [db/index.ts](db/index.ts). Both `@neondatabase/serverless` and `pg` are installed; production/edge paths use Neon, scripts under `db/*.ts` use `pg`.
+- **UI: Tailwind CSS 4 + shadcn/ui** (Radix UI + Base UI primitives). Components live in [components/ui/](components/ui); the registry is configured via [components.json](components.json). Use `shadcn` CLI to add primitives rather than handcrafting Radix wrappers.
+- **Forms: React Hook Form + Zod.** Validation schemas live with the owning module (e.g. `modules/distribution/<domain>/validators/`); `@hookform/resolvers` bridges the two. The same Zod schema usually backs both client-form validation and the server action's input parsing — keep them shared, not duplicated.
+- **Deployment: Vercel** (see [vercel.json](vercel.json) for cron + region pins). Stripe + Plaid webhooks and AI-vision routes are exempted from rate limits in `proxy.ts`; check that list when adding new webhook endpoints.
 
 ## Common commands
 
@@ -31,6 +34,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Enforce import boundaries | `pnpm check:boundaries` |
 
 Tests use the **Node built-in test runner** with `tsx` — there is no Vitest/Jest. The list of test files is hard-coded in `package.json` under `test:unit`; **adding a new `*.test.ts` file requires appending it to that script** or it will not run in CI. The `--conditions=react-server` flag is required for any test that pulls in `server-only` or React Server Component code paths — leave it on by default to avoid resolution surprises.
+
+The bulk of existing test coverage sits under `modules/distribution/supplier-invoices/` (vision dispatch, OpenAI provider, parsing pipeline, line/PDF matching, etc.) — that's the codebase's most failure-prone surface, so when changing AI / PDF parsing code, run the supplier-invoices tests specifically before the full suite.
 
 Local dev requires `ROOT_DOMAIN` set (e.g. `localtest.me`) so the proxy can resolve tenant subdomains — see [docs/local-development.md](docs/local-development.md).
 
@@ -114,4 +119,4 @@ The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting thi
 
 ## Further reading
 
-The `docs/` directory has detailed guides; [docs/README.md](docs/README.md) is the index. Start with [docs/module-architecture.md](docs/module-architecture.md) for the module layout rationale, [docs/local-development.md](docs/local-development.md) for env/host setup, [docs/feature-flows.md](docs/feature-flows.md) for end-to-end domain flows, and [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) + [docs/subscription-system-overview.md](docs/subscription-system-overview.md) for billing.
+The `docs/` directory has detailed guides; [docs/README.md](docs/README.md) is the index. Start with [docs/module-architecture.md](docs/module-architecture.md) for the module layout rationale, [docs/local-development.md](docs/local-development.md) for env/host setup, [docs/feature-flows.md](docs/feature-flows.md) for end-to-end domain flows, [docs/rules/README.md](docs/rules/README.md) for business rules & permissions (e.g. credit limits, multi-page imports), [docs/ai-setup.md](docs/ai-setup.md) for the OpenAI / vision pipeline used in supplier-invoices, and [docs/stripe-subscriptions.md](docs/stripe-subscriptions.md) + [docs/subscription-system-overview.md](docs/subscription-system-overview.md) for billing.
