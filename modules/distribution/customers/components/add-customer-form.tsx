@@ -194,7 +194,14 @@ export function AddCustomerForm(props?: {
     <div className="flex flex-col gap-3">
       <Card className="w-full">
         <CardContent className="pt-6">
-          <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
+          <form
+            id="form-add-customer"
+            onSubmit={form.handleSubmit(onSubmit)}
+            // Suppress native browser validation popups (type="email", etc.)
+            // — react-hook-form + Zod own the validation surface, and the
+            // native messages bypass our inline FieldError display.
+            noValidate
+          >
             {error ? (
               <FormErrorAlert
                 title={
