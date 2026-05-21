@@ -73,22 +73,22 @@ const SCENE_MS = 11000;
 // arc the marketing flow asks for.
 //
 //   0.0 → 0.4s   card fades in
-//   0.0 → 2.8s   ACT 1 · SLATE: chapter pill, big phrase, accent, subtext;
-//                holds 1.9 → 2.4, then slides up + fades 2.4 → 2.8
-//   2.7 → 3.2s   header (side pill spring; chapter label + topic slide in)
-//   2.9 → 3.5s   ACT 2 · HOOK: label fades in (2.9s), huge value springs
-//                in (3.0s), hint fades in (3.5s). The headline number is
-//                onscreen by 3.5s.
-//   4.5s   ACT 3 · PROCESS: first tool tile / Fluxora panel mounts. The
-//                visitor has had ~1 second to absorb the hook before the
+//   0.0 → 3.8s   ACT 1 · SLATE: chapter pill, big phrase, accent, subtext;
+//                subtext lands at 1.05s and gets ~1.75s of clean read
+//                time before the slate slides up + fades (3.3 → 3.8s)
+//   3.7 → 4.5s   header (side pill spring; chapter label + topic slide in)
+//   3.9 → 4.5s   ACT 2 · HOOK: label fades in (3.9s), huge value springs
+//                in (4.0s), hint fades in (4.5s). Headline onscreen by 5.0s.
+//   5.5s   ACT 3 · PROCESS: first tool tile / Fluxora panel mounts. The
+//                visitor has had ~1.5s to absorb the hook before the
 //                explanation begins.
-//   4.5 → 6.9s   tools/actions land at 0.6s reading-beat cadence (Now has
+//   5.5 → 7.9s   tools/actions land at 0.6s reading-beat cadence (Now has
 //                up to 5 tiles, With Fluxora has 4 actions)
-//   7.1 → 8.0s   voiceover fades in
-//   8.6s   green callout (With Fluxora only)
-//   ~2.5s of rest before the next card
+//   8.1 → 9.0s   voiceover fades in
+//   9.6s   green callout (With Fluxora only)
+//   ~2.9s of rest before the next card
 //
-// 12500ms hits ~2.5s of rest after the last beat. Visitors can pause.
+// 12500ms hits ~2.9s of rest after the last beat. Visitors can pause.
 const BEFORE_MS = 12500;
 const AFTER_MS = 12500;
 const INTRO_MS = 3500;

@@ -121,7 +121,7 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
           <motion.p
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 4.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 5.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="font-mono text-[10px] uppercase tracking-[0.16em] text-subtle"
           >
             What&apos;s open on your desk
@@ -133,10 +133,10 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
                 icon={t.icon}
                 label={t.label}
                 badge={t.badge}
-                // First tile lands 4.5s in — AFTER the hook stat has
-                // punched in (3.0s) and breathed for ~1 second. Then each
+                // First tile lands 5.5s in — AFTER the hook stat has
+                // punched in (4.0s) and breathed for ~1.5s. Then each
                 // subsequent tile lands 0.6s later.
-                delay={4.5 + idx * 0.6}
+                delay={5.5 + idx * 0.6}
                 askew={idx % 2 === 0}
               />
             ))}
@@ -147,9 +147,9 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{
               // Lands AFTER all tool tiles. For 5 tools at 0.6s stagger
-              // starting at 4.5s: last tile = 4.5 + 4*0.6 = 6.9s. Add a
+              // starting at 5.5s: last tile = 5.5 + 4*0.6 = 7.9s. Add a
               // 0.4s reading buffer before the voiceover fades in.
-              delay: 4.5 + compare.before.tools.length * 0.6 + 0.4,
+              delay: 5.5 + compare.before.tools.length * 0.6 + 0.4,
               duration: 0.9,
               ease: [0.22, 1, 0.36, 1],
             }}
@@ -219,7 +219,7 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
           <motion.p
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 4.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 5.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             className="font-mono text-[10px] uppercase tracking-[0.16em] text-success-fg"
           >
             One tool · one moment
@@ -230,10 +230,10 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{
-              // Panel mounts at 4.5s. delayChildren 0.4 + stagger 0.6 →
-              // last (4th) action lands at 4.5 + 0.4 + 3*0.6 = 6.7s.
+              // Panel mounts at 5.5s. delayChildren 0.4 + stagger 0.6 →
+              // last (4th) action lands at 5.5 + 0.4 + 3*0.6 = 7.7s.
               // Voiceover fades in shortly after.
-              delay: 7.1,
+              delay: 8.1,
               duration: 0.9,
               ease: [0.22, 1, 0.36, 1],
             }}
@@ -247,9 +247,9 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            // Final punctuation — closes the beat at 8.6s after the
-            // voiceover (7.1s) has had time to read.
-            delay: 8.6,
+            // Final punctuation — closes the beat at 9.6s after the
+            // voiceover (8.1s) has had time to read.
+            delay: 9.6,
             duration: 0.6,
             ease: [0.22, 1, 0.36, 1],
           }}
@@ -334,10 +334,10 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      // Panel mounts 4.5s in — AFTER the hook stat has punched in (3.0s)
-      // and had ~1 second to breathe. Matches the Now card's first tool
-      // tile so both cards' processes start at the same beat.
-      transition={{ duration: 0.7, delay: 4.5, ease: [0.22, 1, 0.36, 1] }}
+      // Panel mounts 5.5s in — AFTER the hook stat has punched in (4.0s)
+      // and had ~1.5s to breathe. Matches the Now card's first tool tile
+      // so both cards' processes start at the same beat.
+      transition={{ duration: 0.7, delay: 5.5, ease: [0.22, 1, 0.36, 1] }}
       className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
     >
       {/* Mini app shell header */}
@@ -395,12 +395,12 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
 // Centered banner that takes the spotlight at the top of the card. Three
 // staggered beats:
 //
-//   2.9s   small label fades in ("Now takes" / "With Fluxora · only")
-//   3.0s   HUGE value springs in (the punchline number)
-//   3.5s   small hint fades in (e.g. "+ 14 alt-tabs", "1 click")
+//   3.9s   small label fades in ("Now takes" / "With Fluxora · only")
+//   4.0s   HUGE value springs in (the punchline number)
+//   4.5s   small hint fades in (e.g. "+ 14 alt-tabs", "1 click")
 //
-// By 4.0s the hook is fully landed. The process tiles / Fluxora panel
-// then start cascading in at 4.5s — visitor first sees the WHAT (the
+// By 5.0s the hook is fully landed. The process tiles / Fluxora panel
+// then start cascading in at 5.5s — visitor first sees the WHAT (the
 // number), then the WHY (the chaos or the one panel that produces it).
 function HookStat({
   tone,
@@ -421,7 +421,7 @@ function HookStat({
       <motion.div
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 2.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ delay: 3.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em]",
           tone === "danger" ? "text-danger-fg" : "text-success-fg",
@@ -436,7 +436,7 @@ function HookStat({
         initial={{ opacity: 0, scale: 0.72 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{
-          delay: 3.0,
+          delay: 4.0,
           type: "spring",
           stiffness: 220,
           damping: 18,
@@ -455,7 +455,7 @@ function HookStat({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 3.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ delay: 4.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
             "mt-2 font-mono text-[10.5px] uppercase tracking-[0.16em]",
             tone === "danger" ? "text-danger-fg/75" : "text-success-fg/85",
@@ -508,7 +508,7 @@ function CardHeader({
 
   // Header lands as the takeover slate is finishing its slide-up. The
   // chapter label + topic glide in from the left; the side pill scales in
-  // from a small starting point. By the time the slate is fully gone (~2.8s)
+  // from a small starting point. By the time the slate is fully gone (~3.8s)
   // the header is in place and grounds the visitor as a recap of what the
   // slate just announced.
   return (
@@ -517,7 +517,7 @@ function CardHeader({
         initial={{ opacity: 0, x: -8 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{
-          delay: 2.9,
+          delay: 3.9,
           duration: 0.55,
           ease: [0.22, 1, 0.36, 1],
         }}
@@ -533,7 +533,7 @@ function CardHeader({
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{
-          delay: 2.7,
+          delay: 3.7,
           type: "spring",
           stiffness: 280,
           damping: 22,
@@ -555,27 +555,30 @@ function CardHeader({
 // =========================================================================
 // TitleReveal — full-frame takeover slate
 // =========================================================================
-// Cinematic title card that owns the entire 640px frame for ~2.8s before
+// Cinematic title card that owns the entire 640px frame for ~3.8s before
 // sliding up and dissolving away. Stack (top → bottom):
 //
 //   chapter pill    e.g. "STEP 1 OF 5"
-//   BIG TITLE       e.g. "Before"     ← the takeover word
+//   BIG TITLE       e.g. "With Fluxora"  ← the takeover word
 //   accent line     drawn left-to-right
 //   subtext         the moment's topic ("A supplier PDF lands at 8:42")
 //
-// The slate's background is an opaque tinted radial — pure red for Before,
-// pure green for After — so the comparison underneath is hidden until the
-// slate slides off-screen. Timing:
+// The slate's background is an opaque tinted radial — pure red for Now,
+// pure green for With Fluxora — so the comparison underneath is hidden
+// until the slate slides off-screen. Timing (tuned so the SUBTEXT gets a
+// clean ~1.5s of read time after fading in; earlier 2.8s slate only gave
+// the subtext ~0.5s before slide-out):
 //
-//   0.0 → 0.1   pre-roll
-//   0.1 → 0.6   chapter pill drops in
-//   0.3 → 1.0   title scales up
-//   0.9 → 1.4   accent line sweeps
-//   1.3 → 1.9   subtext fades in
-//   1.9 → 2.4   HOLD (visitor reads the topic)
-//   2.4 → 2.8   slate slides up + fades out, revealing the comparison
+//   0.0 → 0.05  pre-roll
+//   0.05 → 0.45 chapter pill drops in
+//   0.2 → 0.85  title scales up
+//   0.75 → 1.15 accent line sweeps
+//   1.05 → 1.55 subtext fades in (smaller-distance slide, faster fade)
+//   1.55 → 3.30 HOLD (visitor reads the topic — ~1.75s)
+//   3.30 → 3.80 slate slides up + fades out, revealing the comparison
 //
-// By 2.8s the slate is gone and the card's header/tiles take over.
+// By 3.8s the slate is gone and the card's header / hook / process take
+// over (header begins cross-fading in ~0.1s before slate exit).
 function TitleReveal({
   tone,
   label,
@@ -605,7 +608,7 @@ function TitleReveal({
     <motion.div
       aria-hidden
       // The slate sits above the Backdrop and the card header (which
-      // begins fading in around 2.7s — slightly before the slate leaves,
+      // begins fading in around 3.7s — slightly before the slate leaves,
       // for a clean cross-fade).
       className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center px-12"
       style={{ background: slateBackground }}
@@ -615,16 +618,18 @@ function TitleReveal({
         y: [0, 0, -36],
       }}
       transition={{
-        duration: 2.8,
-        times: [0, 0.86, 1],
+        // 3.8s total: 3.3s of held visibility (subtext gets ~1.5-1.75s of
+        // clean read time inside the hold) + 0.5s slide-up/fade exit.
+        duration: 3.8,
+        times: [0, 0.868, 1],
         ease: [0.22, 1, 0.36, 1],
       }}
     >
-      {/* Chapter pill — drops in from above */}
+      {/* Chapter pill — drops in from above (0.05 → 0.45s) */}
       <motion.div
         initial={{ opacity: 0, y: -14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.4, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.22em] shadow-sm",
           pillBorder,
@@ -634,11 +639,11 @@ function TitleReveal({
         {step}
       </motion.div>
 
-      {/* The big word — scales up and settles */}
+      {/* The big word — scales up and settles (0.2 → 0.85s) */}
       <motion.h2
         initial={{ opacity: 0, scale: 0.82, letterSpacing: "0.04em" }}
         animate={{ opacity: 1, scale: 1, letterSpacing: "-0.02em" }}
-        transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.65, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "mt-6 text-center font-serif font-medium leading-[0.92]",
           // Sized so the longest label ("With Fluxora") fits inside the
@@ -655,22 +660,24 @@ function TitleReveal({
         {label}
       </motion.h2>
 
-      {/* Accent line — sweeps from center outward */}
+      {/* Accent line — sweeps from center outward (0.75 → 1.15s) */}
       <motion.div
         initial={{ scaleX: 0, opacity: 0 }}
         animate={{ scaleX: 1, opacity: 1 }}
-        transition={{ duration: 0.55, delay: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.4, delay: 0.75, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
           "mt-6 h-[3px] w-28 origin-center rounded-full",
           accentColor,
         )}
       />
 
-      {/* Subtext — the moment's topic, in italic serif */}
+      {/* Subtext — the moment's topic, in italic serif. Lands earlier
+          (1.05s) and the slate holds longer so this gets ~1.75s of clean
+          read time before the slide-out begins (3.3s). */}
       <motion.p
-        initial={{ opacity: 0, y: 12 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 1.3, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.5, delay: 1.05, ease: [0.22, 1, 0.36, 1] }}
         className="mt-6 max-w-[600px] text-center font-serif italic leading-snug text-ink-warm text-[22px] md:text-[26px]"
       >
         {topic}
