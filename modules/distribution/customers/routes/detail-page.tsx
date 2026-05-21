@@ -147,7 +147,11 @@ export default function CustomerPortfolioPage() {
   const invoicesPage = Math.max(1, Number(searchParams.get("invoicesPage") ?? 1));
   const invoicesPer = Number(searchParams.get("invoicesPer") ?? 10) || 10;
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  // Default open — the panel is the first place users land for any
+  // single-customer question (phone, EIN, payment terms…). Keep the
+  // sessionStorage memory so explicitly collapsing one customer
+  // doesn't bounce open again on navigate-back.
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState<
     "archive" | "restore" | "permanent-delete" | null
@@ -157,8 +161,8 @@ export default function CustomerPortfolioPage() {
   const { data: currentUser } = useCurrentPortalUser();
   const canRecordPayment = can(currentUser?.role, "record_payment");
   useEffect(() => {
-    if (sessionStorage.getItem(`cust-details-${customerId}`) === "open") {
-      setDetailsOpen(true);
+    if (sessionStorage.getItem(`cust-details-${customerId}`) === "closed") {
+      setDetailsOpen(false);
     }
   }, [customerId]);
 
