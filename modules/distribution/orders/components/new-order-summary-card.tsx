@@ -30,13 +30,9 @@ const C = {
 
 interface NewOrderSummaryCardProps {
   control: Control<NewOrderFormValues>;
-  showDiscountInput?: boolean;
 }
 
-export function NewOrderSummaryCard({
-  control,
-  showDiscountInput = true,
-}: NewOrderSummaryCardProps) {
+export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
   const [discountOpen, setDiscountOpen] = useState(false);
 
   const { data: products } = useProducts();
@@ -170,7 +166,7 @@ export function NewOrderSummaryCard({
       />
 
       {/* Discount toggle/input */}
-      {showDiscountInput && <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: "10px" }}>
+      <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: "10px" }}>
         {!discountOpen ? (
           <Button
             type="button"
@@ -206,7 +202,7 @@ export function NewOrderSummaryCard({
             )}
           />
         )}
-      </div>}
+      </div>
     </Card>
   );
 }

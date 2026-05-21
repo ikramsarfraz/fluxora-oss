@@ -262,6 +262,11 @@ export async function generateInvoiceForSalesOrder(input: {
     createdByUserId: currentUser.id,
     invoiceDate,
     dueDate: input.dueDate ?? order.dueDate ?? undefined,
+    // Discount captured on the order at create/edit time flows through
+    // to the invoice. `createInvoiceFromSalesOrder` already accepts an
+    // explicit `discountAmount`, so we just hand it the order's stored
+    // value (defaults to "0" for orders saved before the column existed).
+    discountAmount: order.discountAmount ?? undefined,
   });
 }
 

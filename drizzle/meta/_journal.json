@@ -379,6 +379,13 @@
 			"when": 1779101300000,
 			"tag": "0053_customer_notes_credit_limit",
 			"breakpoints": true
+		},
+		{
+			"idx": 54,
+			"version": "7",
+			"when": 1779101400000,
+			"tag": "0054_sales_order_discount_amount",
+			"breakpoints": true
 		}
 	]
 }

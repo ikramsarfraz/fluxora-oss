@@ -1,4 +1,4 @@
-import { and, count, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lt } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -97,6 +97,14 @@ export async function countActiveCustomersForTenant(
   return row?.c ?? 0;
 }
 
+// Statuses that consume a monthly-orders quota slot. Draft (`sales_order`)
+// and `cancelled` orders are explicitly excluded — drafts because the
+// autosave path creates them on every keystroke session, and cancelled
+// because they don't represent fulfilled work. Quota is consumed at the
+// confirm transition (`updateSalesOrderStatus`) and on direct-confirm
+// creates (`createSalesOrder` with status: "confirmed").
+const QUOTA_COUNTING_ORDER_STATUSES = ["confirmed", "fulfilled"] as const;
+
 export async function countCurrentMonthSalesOrdersForTenant(
   tenantId: string,
 ): Promise<number> {
@@ -110,6 +118,7 @@ export async function countCurrentMonthSalesOrdersForTenant(
         eq(salesOrders.tenantId, tenantId),
         gte(salesOrders.createdAt, monthStart),
         lt(salesOrders.createdAt, nextMonthStart),
+        inArray(salesOrders.status, [...QUOTA_COUNTING_ORDER_STATUSES]),
       ),
     );
 

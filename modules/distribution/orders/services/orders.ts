@@ -53,6 +53,51 @@ function makeOrderNumber(id: string, prefix: string | null | undefined) {
   return prefix ? `${prefix}-${base}` : base;
 }
 
+/**
+ * Normalize a user-provided discount string to the `numeric(12,2)` shape
+ * the column expects. Empty / null / negative / non-finite → "0.00".
+ */
+function normalizeDiscountAmount(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "0.00";
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return "0.00";
+  return n.toFixed(2);
+}
+
+/**
+ * Confirming an order is what consumes a monthly-orders quota slot. Drafts
+ * don't count (otherwise the autosave path would burn quota on every
+ * abandoned form), and cancelled orders don't count (they don't represent
+ * fulfilled work). The check fires from both `createSalesOrder` (when the
+ * UI submits directly as "confirmed") and `updateSalesOrderStatus` (when a
+ * draft is promoted to confirmed).
+ */
+async function assertMonthlyOrdersWithinLimit(
+  tenant: Awaited<ReturnType<typeof getCurrentTenant>>,
+): Promise<void> {
+  const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
+  if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+      resourceLabel: "orders per month",
+      actionLabel: "confirm another sales order",
+    });
+  }
+}
+
 function isLineClosed(line: {
   expectedCases: number;
   fulfilledCases: number;
@@ -1384,6 +1429,9 @@ export async function updateSalesOrderStatus(input: {
   }
 
   if (input.status === "confirmed" && order.status !== "confirmed") {
+    // Promoting a draft into the confirmed/billable pool — same quota
+    // gate that `createSalesOrder` runs on direct-confirm submits.
+    await assertMonthlyOrdersWithinLimit(tenant);
     await db
       .update(salesOrders)
       .set({
@@ -1516,6 +1564,7 @@ export async function updateSalesOrder(input: {
   orderDate: string;
   dueDate?: string | null;
   addFuelSurcharge?: boolean;
+  discountAmount?: string | null;
   customerNotes?: string | null;
   internalNotes?: string | null;
   lines: Array<{
@@ -1619,6 +1668,11 @@ export async function updateSalesOrder(input: {
     throw new Error("Customer not found.");
   }
 
+  // Same soft AR cap we run on create — once an order is editable
+  // (no fulfillment, no invoice, not cancelled), bumping quantities up
+  // should be subject to the same credit-limit gate.
+  await assertCustomerWithinCreditLimit(input.customerId, tenant.id);
+
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
     customerId: input.customerId,
@@ -1638,6 +1692,7 @@ export async function updateSalesOrder(input: {
       orderDate: input.orderDate,
       dueDate: input.dueDate ?? null,
       addFuelSurcharge: input.addFuelSurcharge ?? true,
+      discountAmount: normalizeDiscountAmount(input.discountAmount),
       customerNotes: input.customerNotes ?? null,
       internalNotes: input.internalNotes ?? null,
       updatedByUserId: currentUser.id,
@@ -1723,6 +1778,7 @@ export async function createSalesOrder(input: {
   orderDate: string;
   dueDate?: string;
   addFuelSurcharge?: boolean;
+  discountAmount?: string | null;
   status?: "sales_order" | "confirmed";
   customerNotes?: string;
   internalNotes?: string;
@@ -1744,26 +1800,12 @@ export async function createSalesOrder(input: {
 
   requirePermission(currentUser.role, "edit_order");
 
-  const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
-  if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
-    logSubscriptionEnforcementBlock({
-      tenant: {
-        id: tenant.id,
-        slug: tenant.slug,
-        subscriptionPlan: tenant.subscriptionPlan,
-        subscriptionStatus: tenant.subscriptionStatus,
-      },
-      reason: "limit_reached",
-      key: "maxMonthlyOrders",
-      limit: maxMonthlyOrders,
-    });
-    throw createPlanLimitReachedError({
-      tenant,
-      limitKey: "maxMonthlyOrders",
-      limit: maxMonthlyOrders,
-      resourceLabel: "orders per month",
-      actionLabel: "create another sales order",
-    });
+  // Quota only fires when the order is being created directly as
+  // "confirmed". Draft saves (status: "sales_order") are free — they
+  // become billable when the user later confirms via
+  // `updateSalesOrderStatus`, which runs the same check.
+  if ((input.status ?? "sales_order") === "confirmed") {
+    await assertMonthlyOrdersWithinLimit(tenant);
   }
 
   if (input.lines.length === 0) {
@@ -1793,6 +1835,7 @@ export async function createSalesOrder(input: {
       orderDate: input.orderDate,
       dueDate: input.dueDate,
       addFuelSurcharge: input.addFuelSurcharge ?? true,
+      discountAmount: normalizeDiscountAmount(input.discountAmount),
       customerNotes: input.customerNotes,
       internalNotes: input.internalNotes,
       createdByUserId: currentUser.id,

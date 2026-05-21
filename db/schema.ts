@@ -1476,6 +1476,9 @@ export const salesOrders = pgTable(
     dueDate: date("due_date"),
     status: orderStatusEnum("status").notNull().default("sales_order"),
     addFuelSurcharge: boolean("add_fuel_surcharge").notNull().default(true),
+    discountAmount: numeric("discount_amount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
     customerNotes: text("customer_notes"),
     internalNotes: text("internal_notes"),
     createdByUserId: uuid("created_by_user_id")

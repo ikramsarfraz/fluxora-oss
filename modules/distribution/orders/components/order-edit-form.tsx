@@ -105,6 +105,15 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
     const productsById = new Map(
       products.map(product => [product.id, product]),
     );
+    // Mirror the form's optional-discount UI: only seed the input when
+    // the order actually has a non-zero discount, otherwise leave the
+    // field blank so the "+ Add discount" affordance still shows.
+    const storedDiscount = parseFloat(order.discountAmount ?? "0");
+    const seededDiscount =
+      Number.isFinite(storedDiscount) && storedDiscount > 0
+        ? storedDiscount.toFixed(2)
+        : "";
+
     form.reset({
       customerId: order.customerId,
       orderDate: order.orderDate,
@@ -112,7 +121,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
       customerNotes: order.customerNotes ?? "",
       internalNotes: order.internalNotes ?? "",
       addFuelSurcharge: order.addFuelSurcharge,
-      discountAmount: "",
+      discountAmount: seededDiscount,
       lines:
         order.lines?.map(line => {
           const product = productsById.get(line.productId);
@@ -150,6 +159,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
         orderDate: values.orderDate,
         dueDate: values.deliveryDate || null,
         addFuelSurcharge: values.addFuelSurcharge,
+        discountAmount: values.discountAmount || null,
         customerNotes: values.customerNotes || null,
         internalNotes: values.internalNotes || null,
         lines: values.lines.map(line => ({
@@ -312,10 +322,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
         </div>
 
         <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <NewOrderSummaryCard
-            control={form.control}
-            showDiscountInput={false}
-          />
+          <NewOrderSummaryCard control={form.control} />
         </div>
       </div>
     </form>
