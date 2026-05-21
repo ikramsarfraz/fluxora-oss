@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useFieldArray, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -14,14 +14,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
 import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -116,7 +114,6 @@ export function AddCustomerForm(props?: {
   const form = useForm<CreateCustomerInput>({
     resolver: zodResolver(createCustomerInputSchema),
     defaultValues,
-    mode: "onBlur",
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -197,65 +194,67 @@ export function AddCustomerForm(props?: {
     <div className="flex flex-col gap-3">
       <Card className="w-full">
         <CardContent className="pt-6">
-          <Form {...form}>
-            <form
-              id="form-add-customer"
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="flex flex-col gap-7"
-            >
-              {error ? (
-                <FormErrorAlert
-                  title={
-                    mode === "edit"
-                      ? "We couldn't save your changes."
-                      : "We couldn't create the customer."
-                  }
-                >
-                  {isLimitReachedMessage(error, "maxCustomers") ? (
-                    <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
-                  ) : (
-                    stripSubscriptionEnforcementPrefix(error)
-                  )}
-                </FormErrorAlert>
-              ) : null}
+          <form id="form-add-customer" onSubmit={form.handleSubmit(onSubmit)}>
+            {error ? (
+              <FormErrorAlert
+                title={
+                  mode === "edit"
+                    ? "We couldn't save your changes."
+                    : "We couldn't create the customer."
+                }
+              >
+                {isLimitReachedMessage(error, "maxCustomers") ? (
+                  <SubscriptionUpgradeMessage message="Your current plan has reached the customer limit." />
+                ) : (
+                  stripSubscriptionEnforcementPrefix(error)
+                )}
+              </FormErrorAlert>
+            ) : null}
 
+            <FieldGroup>
               <FormSection title="Identity">
-                <div className="grid gap-6 md:grid-cols-[2fr_1fr]">
-                  <FormField
-                    control={form.control}
+                <div className="grid gap-6 @md/field-group:grid-cols-[2fr_1fr]">
+                  <Controller
                     name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Customer name *</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            placeholder="e.g. Acme Meats Inc."
-                            autoComplete="organization"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-name">
+                          Customer name *
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-name"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="e.g. Acme Meats Inc."
+                          autoComplete="organization"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
+                  <Controller
                     name="abbreviation"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Invoice prefix *</FormLabel>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-invoice-prefix">
+                          Invoice prefix *
+                        </FieldLabel>
                         <div className="flex items-stretch gap-2">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              placeholder="e.g. ACME"
-                              maxLength={32}
-                              className="flex-1"
-                            />
-                          </FormControl>
+                          <Input
+                            {...field}
+                            value={field.value ?? ""}
+                            id="form-add-customer-invoice-prefix"
+                            aria-invalid={fieldState.invalid}
+                            placeholder="e.g. ACME"
+                            maxLength={32}
+                            className="flex-1"
+                          />
                           <Button
                             type="button"
                             variant="outline"
@@ -272,172 +271,199 @@ export function AddCustomerForm(props?: {
                             Generate
                           </Button>
                         </div>
-                        <FormDescription>
+                        <FieldDescription>
                           Short code that prefixes invoice numbers (ACME-001).
                           Must be unique per workspace.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
                 </div>
               </FormSection>
 
               <FormSection title="Contact">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
+                <div className="grid gap-6 @md/field-group:grid-cols-2">
+                  <Controller
                     name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            type="email"
-                            inputMode="email"
-                            placeholder="ap@acme.com"
-                            autoComplete="email"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-email">
+                          Email
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-email"
+                          type="email"
+                          inputMode="email"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="ap@acme.com"
+                          autoComplete="email"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
+                  <Controller
                     name="phoneNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            type="tel"
-                            inputMode="tel"
-                            placeholder="(555) 123-4567"
-                            autoComplete="tel"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-phone">
+                          Phone
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-phone"
+                          type="tel"
+                          inputMode="tel"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="(555) 123-4567"
+                          autoComplete="tel"
+                        />
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
                 </div>
               </FormSection>
 
               <FormSection title="Payment & accounting">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
+                <div className="grid gap-6 @md/field-group:grid-cols-2">
+                  <Controller
                     name="netDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment terms (net days)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min={0}
-                            max={365}
-                            step={1}
-                            placeholder="e.g. 30"
-                            value={
-                              field.value == null ? "" : String(field.value)
-                            }
-                            onChange={e => field.onChange(e.target.value)}
-                            onBlur={field.onBlur}
-                            name={field.name}
-                            ref={field.ref}
-                          />
-                        </FormControl>
-                        <FormDescription>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-net-days">
+                          Payment terms (net days)
+                        </FieldLabel>
+                        <Input
+                          id="form-add-customer-net-days"
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={365}
+                          step={1}
+                          placeholder="e.g. 30"
+                          value={field.value == null ? "" : String(field.value)}
+                          onChange={e => field.onChange(e.target.value)}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          aria-invalid={fieldState.invalid}
+                        />
+                        <FieldDescription>
                           Days until invoice is due. Blank = due on receipt.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
+                  <Controller
                     name="fuelSurchargeAmount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fuel surcharge ($)</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            value={field.value ?? ""}
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            placeholder="0.00"
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Flat add-on per order, when the order has
-                          &ldquo;Add fuel surcharge&rdquo; ticked.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-fuel">
+                          Fuel surcharge ($)
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-fuel"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="0.00"
+                        />
+                        <FieldDescription>
+                          Flat add-on per order, when the order has &ldquo;Add
+                          fuel surcharge&rdquo; ticked.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
                     )}
                   />
                 </div>
 
                 <NetTermsLegend />
 
-                <FormField
-                  control={form.control}
+                <Controller
                   name="creditLimit"
-                  render={({ field }) => (
-                    <FormItem className="md:max-w-xs">
-                      <FormLabel>Credit limit ($)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                        />
-                      </FormControl>
-                      <FormDescription>
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field
+                      data-invalid={fieldState.invalid}
+                      className="@md/field-group:max-w-xs"
+                    >
+                      <FieldLabel htmlFor="form-add-customer-credit-limit">
+                        Credit limit ($)
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-credit-limit"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="0.00"
+                      />
+                      <FieldDescription>
                         Soft cap on open AR. Detail page flags when the
                         customer is over. Leave blank for no limit.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
+                <Controller
                   name="taxId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tax ID (EIN)</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          value={field.value ?? ""}
-                          placeholder="12-3456789"
-                          inputMode="numeric"
-                          maxLength={10}
-                        />
-                      </FormControl>
-                      <FormDescription>
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="form-add-customer-tax-id">
+                        Tax ID (EIN)
+                      </FieldLabel>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-tax-id"
+                        aria-invalid={fieldState.invalid}
+                        placeholder="12-3456789"
+                        inputMode="numeric"
+                        maxLength={10}
+                      />
+                      <FieldDescription>
                         9-digit US EIN. Optional — required if you need to
                         include it on B2B invoices.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
                   )}
                 />
               </FormSection>
@@ -481,30 +507,36 @@ export function AddCustomerForm(props?: {
               </FormSection>
 
               <FormSection title="Internal notes">
-                <FormField
-                  control={form.control}
+                <Controller
                   name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="sr-only">Internal notes</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          value={field.value ?? ""}
-                          rows={4}
-                          placeholder="Anything worth remembering — delivery quirks, contact preferences, payment habits, etc."
-                        />
-                      </FormControl>
-                      <FormDescription>
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel
+                        htmlFor="form-add-customer-notes"
+                        className="sr-only"
+                      >
+                        Internal notes
+                      </FieldLabel>
+                      <Textarea
+                        {...field}
+                        value={field.value ?? ""}
+                        id="form-add-customer-notes"
+                        rows={4}
+                        placeholder="Anything worth remembering — delivery quirks, contact preferences, payment habits, etc."
+                      />
+                      <FieldDescription>
                         Visible only to your workspace. Up to 4,000 characters.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                      </FieldDescription>
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
                   )}
                 />
               </FormSection>
-            </form>
-          </Form>
+            </FieldGroup>
+          </form>
         </CardContent>
         {!stickyFooter ? footer : null}
       </Card>
@@ -526,15 +558,18 @@ function AddressFields({
     <div className="rounded-md border border-border-default p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <FormField
-            control={control}
+          <Controller
             name={`addresses.${index}.addressType`}
+            control={control}
             render={({ field }) => (
               <Select
                 value={field.value ?? "shipping"}
                 onValueChange={field.onChange}
               >
-                <SelectTrigger className="h-8 w-36 text-xs">
+                <SelectTrigger
+                  id={`addresses-${index}-type`}
+                  className="h-8 w-36 text-xs"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -546,9 +581,9 @@ function AddressFields({
               </Select>
             )}
           />
-          <FormField
-            control={control}
+          <Controller
             name={`addresses.${index}.isDefault`}
+            control={control}
             render={({ field }) => (
               <label className="flex cursor-pointer items-center gap-1.5 text-xs text-subtle">
                 <input
@@ -574,59 +609,70 @@ function AddressFields({
       </div>
 
       <div className="flex flex-col gap-4">
-        <FormField
-          control={control}
+        <Controller
           name={`addresses.${index}.street`}
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Street *</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value ?? ""}
-                  placeholder="123 Main St"
-                  autoComplete="street-address"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={`addresses-${index}-street`}>
+                Street *
+              </FieldLabel>
+              <Input
+                {...field}
+                value={field.value ?? ""}
+                id={`addresses-${index}-street`}
+                aria-invalid={fieldState.invalid}
+                placeholder="123 Main St"
+                autoComplete="street-address"
+              />
+              {fieldState.invalid && (
+                <FieldError errors={[fieldState.error]} />
+              )}
+            </Field>
           )}
         />
 
-        <div className="grid gap-4 md:grid-cols-[2fr_1fr_1fr]">
-          <FormField
-            control={control}
+        <div className="grid gap-4 @md/field-group:grid-cols-[2fr_1fr_1fr]">
+          <Controller
             name={`addresses.${index}.city`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>City *</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    placeholder="San Francisco"
-                    autoComplete="address-level2"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-city`}>
+                  City *
+                </FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id={`addresses-${index}-city`}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="San Francisco"
+                  autoComplete="address-level2"
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
             )}
           />
-          <FormField
-            control={control}
+          <Controller
             name={`addresses.${index}.state`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>State *</FormLabel>
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-state`}>
+                  State *
+                </FieldLabel>
                 <Select
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
                 >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="State" />
-                    </SelectTrigger>
-                  </FormControl>
+                  <SelectTrigger
+                    id={`addresses-${index}-state`}
+                    aria-invalid={fieldState.invalid}
+                  >
+                    <SelectValue placeholder="State" />
+                  </SelectTrigger>
                   <SelectContent>
                     {US_STATES.map(s => (
                       <SelectItem key={s.code} value={s.code}>
@@ -635,28 +681,34 @@ function AddressFields({
                     ))}
                   </SelectContent>
                 </Select>
-                <FormMessage />
-              </FormItem>
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
             )}
           />
-          <FormField
-            control={control}
+          <Controller
             name={`addresses.${index}.zip`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ZIP *</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    value={field.value ?? ""}
-                    placeholder="94103"
-                    inputMode="numeric"
-                    autoComplete="postal-code"
-                    maxLength={5}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            control={control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={`addresses-${index}-zip`}>
+                  ZIP *
+                </FieldLabel>
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id={`addresses-${index}-zip`}
+                  aria-invalid={fieldState.invalid}
+                  placeholder="94103"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={5}
+                />
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
+              </Field>
             )}
           />
         </div>
