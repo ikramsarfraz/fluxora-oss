@@ -87,9 +87,20 @@ function computeLineTotal(line: Line): number | null {
     if (!Number.isFinite(cases) || cases <= 0) return null;
     return price * cases;
   }
+  // per_lb / catch-weight: bill on the real fulfilled weight when it
+  // exists. Pre-fulfillment that weight is 0, which would otherwise
+  // print $0 for every catch-weight line on the detail page even
+  // though we have a perfectly good estimate (`expectedCases ×
+  // conversion-to-base × price/lb`) baked into the snapshot.
   const weight = getLineFulfilledWeight(line);
-  if (!Number.isFinite(weight)) return null;
-  return price * weight;
+  if (Number.isFinite(weight) && weight > 0) {
+    return price * weight;
+  }
+  const conversion = parseFloat(line.conversionToBaseSnapshot ?? "");
+  if (Number.isFinite(conversion) && conversion > 0 && line.expectedCases > 0) {
+    return price * conversion * line.expectedCases;
+  }
+  return null;
 }
 
 function formatUnit(line: Line): string {
