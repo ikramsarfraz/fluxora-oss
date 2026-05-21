@@ -285,6 +285,21 @@ const c = {
   redBorder: "var(--color-danger-border)",
 } as const;
 
+/**
+ * Pick a short human label for a parsed row — used in error messages so
+ * the user can match "Line 3 (City Diner)" to their CSV without
+ * counting lines by hand. Falls back to a few common identifier keys,
+ * then empty if the row has none.
+ */
+function rowLabel(row: ParsedRow | undefined): string {
+  if (!row) return "";
+  for (const key of ["name", "sku", "primary_contact_name"]) {
+    const v = row[key]?.trim();
+    if (v) return v.length > 40 ? `${v.slice(0, 39)}…` : v;
+  }
+  return "";
+}
+
 // ── Stepper ───────────────────────────────────────────────────────────────────
 
 const STEPS = ["Upload", "Map columns", "Validate", "Apply"] as const;
@@ -744,7 +759,13 @@ export function CsvImportModal({
                   </div>
                   {errors.map(e => (
                     <div key={e.row} style={{ padding: "7px 12px", borderBottom: `1px solid ${c.border}`, fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 600, color: c.text }}>Row {e.row}:</span>{" "}
+                      <span style={{ fontWeight: 600, color: c.text }}>
+                        Line {e.row}
+                        {rowLabel(mappedRows[e.row - 2]) && (
+                          <span style={{ color: c.text2, fontWeight: 400 }}> ({rowLabel(mappedRows[e.row - 2])})</span>
+                        )}
+                        :
+                      </span>{" "}
                       <span style={{ color: c.red }}>{e.errors.join(", ")}</span>
                     </div>
                   ))}
@@ -758,7 +779,13 @@ export function CsvImportModal({
                   </div>
                   {warnings.map(w => (
                     <div key={w.row} style={{ padding: "7px 12px", borderBottom: `1px solid ${c.border}`, fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 600, color: c.text }}>Row {w.row}:</span>{" "}
+                      <span style={{ fontWeight: 600, color: c.text }}>
+                        Line {w.row}
+                        {rowLabel(mappedRows[w.row - 2]) && (
+                          <span style={{ color: c.text2, fontWeight: 400 }}> ({rowLabel(mappedRows[w.row - 2])})</span>
+                        )}
+                        :
+                      </span>{" "}
                       <span style={{ color: c.amber }}>{w.errors.join(", ")}</span>
                     </div>
                   ))}
