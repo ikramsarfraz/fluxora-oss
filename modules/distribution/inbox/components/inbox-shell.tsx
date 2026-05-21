@@ -757,33 +757,16 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
       ))}
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.015em", margin: "0 0 2px" }}>
-            {greeting()}, {firstName}
-          </h1>
-          <div style={{ fontSize: 13, color: C.text2, display: "flex", alignItems: "center", gap: 10 }}>
-            <span>{formatDate()}</span>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.text3, display: "inline-block" }} />
-            <span>
-              {stats.billsToReview > 0 ? `${stats.billsToReview} bill${stats.billsToReview > 1 ? "s" : ""} awaiting review` : "No bills awaiting review"}
-            </span>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 34, height: 34,
-              borderRadius: "50%",
-              background: "var(--color-forest-mid)",
-              color: "var(--color-card)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontWeight: 600,
-              fontSize: 13,
-            }}
-          >
-            {firstName.substring(0, 2).toUpperCase()}
-          </div>
+      <div>
+        <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.015em", margin: "0 0 2px" }}>
+          {greeting()}, {firstName}
+        </h1>
+        <div style={{ fontSize: 13, color: C.text2, display: "flex", alignItems: "center", gap: 10 }}>
+          <span>{formatDate()}</span>
+          <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.text3, display: "inline-block" }} />
+          <span>
+            {stats.billsToReview > 0 ? `${stats.billsToReview} bill${stats.billsToReview > 1 ? "s" : ""} awaiting review` : "No bills awaiting review"}
+          </span>
         </div>
       </div>
 
