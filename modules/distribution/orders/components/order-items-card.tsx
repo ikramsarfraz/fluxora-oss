@@ -1000,6 +1000,27 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       return;
     }
 
+    // For weight-priced lines, the billed lbs (`weightValue`) is the
+    // bound on what gets shipped, not the integer `qty`. Block any
+    // submission that would push the cumulative billed weight past
+    // the ordered weight — partial fulfillments can't aggregate to an
+    // over-ship either. Tiny tolerance for scale rounding.
+    if (isWeightSalesUnit && weightValue && selectedLine) {
+      const weight = parseFloat(weightValue);
+      if (Number.isFinite(weight) && weight > 0) {
+        const orderedLbs = selectedLine.expectedCases;
+        const alreadyBilledLbs =
+          parseFloat(selectedLine.totalBilledWeightLbs ?? "0") || 0;
+        const remainingLbs = Math.max(0, orderedLbs - alreadyBilledLbs);
+        if (weight - remainingLbs > 0.0025) {
+          setSubmitError(
+            `Weight ${weight.toFixed(2)} lb exceeds the ${remainingLbs.toFixed(2)} lb remaining on this order.`,
+          );
+          return;
+        }
+      }
+    }
+
     try {
       await createFulfillment.mutateAsync({
         salesOrderId: order.id,

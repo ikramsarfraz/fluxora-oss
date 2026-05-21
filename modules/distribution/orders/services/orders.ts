@@ -2347,6 +2347,9 @@ export async function recordSalesOrderFulfillment(input: {
           expectedCases: true,
           fulfilledCases: true,
           shortShippedAt: true,
+          salesUnitAbbreviationSnapshot: true,
+          salesUnitNameSnapshot: true,
+          totalBilledWeightLbs: true,
         },
       },
     },
@@ -2403,6 +2406,32 @@ export async function recordSalesOrderFulfillment(input: {
 
   if (weight != null && (!Number.isFinite(weight) || weight < 0)) {
     throw new Error("Weight must be a non-negative number.");
+  }
+
+  // For weight-priced lines (sales unit = lb/pound), expectedCases is
+  // the ordered lbs and `weight` is the billed lbs for this fulfillment
+  // — neither can exceed the order. Cap both per-fulfillment and
+  // cumulatively across earlier fulfillments so a sequence of partials
+  // can't over-ship in aggregate.
+  const lineSalesUnitTokens = [
+    matchingLine.salesUnitAbbreviationSnapshot,
+    matchingLine.salesUnitNameSnapshot,
+  ];
+  const lineIsWeightUnit = lineSalesUnitTokens.some(token => {
+    const v = (token ?? "").trim().toLowerCase();
+    return v === "lb" || v === "lbs" || v === "pound" || v === "pounds";
+  });
+
+  if (lineIsWeightUnit && weight != null) {
+    const orderedLbs = matchingLine.expectedCases;
+    const alreadyBilledLbs = parseFloat(matchingLine.totalBilledWeightLbs ?? "0") || 0;
+    const remainingLbs = Math.max(0, orderedLbs - alreadyBilledLbs);
+    // Tiny tolerance for scale rounding (1 g ≈ 0.0022 lb).
+    if (weight - remainingLbs > 0.0025) {
+      throw new Error(
+        `Fulfilled weight ${weight.toFixed(2)} lb exceeds the ${remainingLbs.toFixed(2)} lb remaining on this order.`,
+      );
+    }
   }
 
   const firstFulfillmentId = await recordAutoAllocatedFulfillments({
