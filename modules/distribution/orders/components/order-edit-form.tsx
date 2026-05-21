@@ -4,32 +4,44 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, Lock } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { Lock } from "lucide-react";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
-import { Checkbox } from "@/components/ui/checkbox";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { useSidebar } from "@/components/ui/sidebar";
+import { formatMoney } from "@/lib/utils/currency";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSalesOrder, useUpdateSalesOrder } from "../hooks/use-orders";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
 import { NewOrderCustomerCard } from "./new-order-customer-card";
 import { NewOrderLinesTable } from "./new-order-lines-table";
 import { NewOrderSummaryCard } from "./new-order-summary-card";
+import { calculateLineTotal } from "./new-order-line-utils";
 import { getDefaultSalesUnit, inferLineUnitType } from "./new-order-line-utils";
 import {
   newOrderFormSchema,
   type NewOrderFormValues,
 } from "./new-order-form.schema";
 import { getOrderActionAvailability } from "./order-action-rules";
+
+// Design tokens mirror new-order-form so the two surfaces look identical.
+const C = {
+  ink: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  radius: "10px",
+  radiusSm: "6px",
+  mono: "'Geist Mono', ui-monospace, monospace" as const,
+} as const;
 
 function emptyDefaults(): NewOrderFormValues {
   return {
@@ -82,7 +94,9 @@ function resolvePricePerLbForEditor(
 
 export function OrderEditForm({ orderId }: { orderId: string }) {
   const router = useRouter();
+  const { state: sidebarState, isMobile } = useSidebar();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { data: order, isLoading, isError, error } = useSalesOrder(orderId);
   const { data: products } = useProducts();
   const { data: currentUser } = useCurrentPortalUser();
@@ -98,6 +112,41 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
     () => (order ? getOrderActionAvailability(order, currentUser?.role) : null),
     [order, currentUser?.role],
   );
+
+  // Mirror new-order-form's live estimate so the sticky action bar shows
+  // the same "N items · est $X" line count + total.
+  const lines = useWatch({ control: form.control, name: "lines" });
+  const customerId = useWatch({ control: form.control, name: "customerId" });
+  const addFuelSurcharge = useWatch({
+    control: form.control,
+    name: "addFuelSurcharge",
+  });
+  const discountAmount = useWatch({
+    control: form.control,
+    name: "discountAmount",
+  });
+  const { data: selectedCustomer } = useCustomer(customerId);
+  const { lineCount, estTotal } = useMemo(() => {
+    const productsById = new Map<string, ProductListItem>();
+    for (const p of products ?? []) productsById.set(p.id, p);
+
+    const filledLines = (lines ?? []).filter(l => l.productId);
+
+    let subtotal = 0;
+    for (const l of filledLines) {
+      subtotal += calculateLineTotal(l, productsById.get(l.productId)) ?? 0;
+    }
+
+    const fuel = addFuelSurcharge
+      ? Number(selectedCustomer?.fuelSurchargeAmount ?? 0) || 0
+      : 0;
+    const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
+
+    return {
+      lineCount: filledLines.length,
+      estTotal: Math.max(0, subtotal + fuel - disc),
+    };
+  }, [lines, products, selectedCustomer, addFuelSurcharge, discountAmount]);
 
   useEffect(() => {
     if (!order || !products) return;
@@ -152,6 +201,7 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
     }
 
     const values = form.getValues();
+    setIsSaving(true);
     try {
       await updateOrder.mutateAsync({
         id: order.id,
@@ -174,13 +224,13 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
       });
       toast.success("Sales order updated.");
       router.push(`/orders/${order.id}`);
-    } catch (submitError) {
+    } catch (err) {
       const message =
-        submitError instanceof Error
-          ? submitError.message
-          : "Could not update the order.";
+        err instanceof Error ? err.message : "Could not update the order.";
       setSubmitError(message);
       toast.error(message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -220,94 +270,156 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
     );
   }
 
+  const orderLabel = order.orderNumber ?? order.id.slice(0, 8);
+
   return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-        void handleSubmit();
-      }}
-      className="flex flex-col gap-6 pb-28"
-    >
-      <PageHeader
-        title={`Edit ${order.orderNumber ?? "Sales Order"}`}
-        description="Update order details and line items before fulfillment or invoicing activity begins."
+    <>
+      <form
+        id="order-edit-form"
+        onSubmit={e => {
+          // Match new-order: swallow form submit so Enter in any input
+          // doesn't accidentally save. Explicit save happens via the
+          // buttons in the sticky bar below.
+          e.preventDefault();
+        }}
+        style={{ paddingBottom: "72px" }}
       >
+        {/* Page header — same shape as new-order-form */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: "24px",
+            paddingBottom: "22px",
+            borderBottom: `1px solid ${C.line}`,
+            marginBottom: "28px",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "22px",
+                fontWeight: 600,
+                letterSpacing: "-0.02em",
+                color: C.ink,
+              }}
+            >
+              Edit sales order
+            </div>
+            <div style={{ fontSize: "13px", color: C.muted, marginTop: "4px" }}>
+              <span style={{ fontFamily: C.mono }}>{orderLabel}</span> ·
+              update details and line items before fulfillment starts.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <Button
+              type="button"
+              onClick={() => router.push(`/orders/${order.id}`)}
+              disabled={isSaving}
+              variant="outline"
+              className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+
+        {/* Error banner */}
+        {submitError && (
+          <div
+            style={{
+              padding: "12px 16px",
+              marginBottom: "20px",
+              background: "var(--color-danger-bg)",
+              border: "1px solid oklch(80% 0.1 25)",
+              borderRadius: C.radiusSm,
+              fontSize: "13px",
+              color: "oklch(45% 0.22 25)",
+            }}
+          >
+            {submitError}
+          </div>
+        )}
+
+        {/* Two-column layout — identical to new-order */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 300px",
+            gap: "28px",
+            alignItems: "start",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "18px",
+              minWidth: 0,
+            }}
+          >
+            <NewOrderCustomerCard control={form.control} />
+            <NewOrderLinesTable
+              control={form.control}
+              setValue={form.setValue}
+            />
+            {form.formState.errors.lines?.root && (
+              <p style={{ fontSize: "13px", color: "var(--color-danger-fg)" }}>
+                {form.formState.errors.lines.root.message}
+              </p>
+            )}
+          </div>
+
+          <div style={{ position: "sticky", top: "76px" }}>
+            <NewOrderSummaryCard control={form.control} />
+          </div>
+        </div>
+      </form>
+
+      {/* Sticky action bar — same shell as new-order; single Save action */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: sidebarState === "expanded" && !isMobile ? "16rem" : 0,
+          right: 0,
+          background: C.surface,
+          borderTop: `1px solid ${C.line}`,
+          padding: "12px 32px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          zIndex: 10,
+          transition: "left 0.2s ease-linear",
+        }}
+      >
+        <div style={{ fontSize: "13px", color: C.muted }}>
+          <b style={{ color: C.ink, fontWeight: 500 }}>{lineCount}</b>{" "}
+          {lineCount === 1 ? "item" : "items"} · est.{" "}
+          <b style={{ fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
+            {formatMoney(estTotal)}
+          </b>
+        </div>
+        <div style={{ flex: 1 }} />
         <Button
           type="button"
-          variant="outline"
           onClick={() => router.push(`/orders/${order.id}`)}
-          disabled={updateOrder.isPending}
+          disabled={isSaving}
+          variant="outline"
+          className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={updateOrder.isPending}>
-          {updateOrder.isPending ? "Saving…" : "Save changes"}
+        <Button
+          type="button"
+          onClick={() => void handleSubmit()}
+          disabled={isSaving}
+          className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-60"
+        >
+          {isSaving ? "Saving…" : "Save changes"}
         </Button>
-      </PageHeader>
-
-      {submitError ? (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertTitle>Could not update order</AlertTitle>
-          <AlertDescription>{submitError}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-        <div className="flex flex-col gap-6">
-          <NewOrderCustomerCard control={form.control} />
-          <div className="rounded-xl border bg-card p-6">
-            <div className="mb-4">
-              <h2 className="text-lg font-medium">Notes &amp; options</h2>
-              <p className="text-sm text-muted-foreground">
-                Surcharge toggle and order notes. Dates are above on the
-                customer card.
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field className="md:col-span-2">
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={form.watch("addFuelSurcharge")}
-                    onCheckedChange={checked =>
-                      form.setValue("addFuelSurcharge", checked === true)
-                    }
-                  />
-                  <span>Apply customer fuel surcharge</span>
-                </label>
-              </Field>
-              <Field className="md:col-span-2">
-                <FieldLabel htmlFor="edit-customer-notes">
-                  Notes (visible on invoice)
-                </FieldLabel>
-                <Textarea
-                  id="edit-customer-notes"
-                  rows={3}
-                  placeholder="Delivery instructions, packing requests…"
-                  {...form.register("customerNotes")}
-                />
-              </Field>
-              <Field className="md:col-span-2">
-                <FieldLabel htmlFor="edit-internal-notes">
-                  Internal notes
-                </FieldLabel>
-                <Textarea
-                  id="edit-internal-notes"
-                  rows={3}
-                  placeholder="Notes for warehouse and office staff…"
-                  {...form.register("internalNotes")}
-                />
-              </Field>
-            </div>
-          </div>
-
-          <NewOrderLinesTable control={form.control} setValue={form.setValue} />
-        </div>
-
-        <div className="flex flex-col gap-6 lg:sticky lg:top-6 lg:self-start">
-          <NewOrderSummaryCard control={form.control} />
-        </div>
       </div>
-    </form>
+    </>
   );
 }
