@@ -258,30 +258,13 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
           <NewOrderCustomerCard control={form.control} />
           <div className="rounded-xl border bg-card p-6">
             <div className="mb-4">
-              <h2 className="text-lg font-medium">Order details</h2>
+              <h2 className="text-lg font-medium">Notes &amp; options</h2>
               <p className="text-sm text-muted-foreground">
-                Scheduling and notes for this order.
+                Surcharge toggle and order notes. Dates are above on the
+                customer card.
               </p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="edit-order-date">Order date</FieldLabel>
-                <Input
-                  id="edit-order-date"
-                  type="date"
-                  {...form.register("orderDate")}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="edit-delivery-date">
-                  Delivery date
-                </FieldLabel>
-                <Input
-                  id="edit-delivery-date"
-                  type="date"
-                  {...form.register("deliveryDate")}
-                />
-              </Field>
               <Field className="md:col-span-2">
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
                   <Checkbox
