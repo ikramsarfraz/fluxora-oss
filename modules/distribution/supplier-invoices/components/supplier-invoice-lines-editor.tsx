@@ -30,6 +30,7 @@ import {
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import { supplierInvoiceLineCostPerLb } from "@/modules/distribution/supplier-invoices/utils/cost";
+import { getDefaultPurchaseUnit } from "@/modules/distribution/supplier-invoices/utils/product-purchase-defaults";
 import type { SupplierCostDiffEntry } from "@/modules/distribution/supplier-invoices/services/receiving";
 
 import {
@@ -346,6 +347,11 @@ export function SupplierInvoiceLinesEditor({
     sku: p.sku,
   }));
   const productNameById = new Map(products.map(p => [p.id, p.name] as const));
+  // Pass the full record down so LineRow can resolve a product's default
+  // purchase UOM the moment the user picks it. We keep the lighter
+  // `productOptions` for the picker itself to avoid passing every product
+  // through the Select children prop.
+  const productById = new Map(products.map(p => [p.id, p] as const));
 
   return (
     <div>
@@ -403,6 +409,7 @@ export function SupplierInvoiceLinesEditor({
             supplierId={supplierId}
             costDiffByProductId={costDiffByProductId}
             productNameById={productNameById}
+            productById={productById}
             acknowledgedKeys={acknowledgedKeys}
             onToggleAck={onToggleAck}
           />
@@ -633,6 +640,7 @@ function LineRow({
   supplierId,
   costDiffByProductId,
   productNameById,
+  productById,
   acknowledgedKeys,
   onToggleAck,
 }: {
@@ -649,6 +657,7 @@ function LineRow({
   supplierId: string;
   costDiffByProductId: Map<string, SupplierCostDiffEntry>;
   productNameById: Map<string, string>;
+  productById: Map<string, ProductListItem>;
   acknowledgedKeys: Set<LineCostAckKey>;
   onToggleAck: (key: LineCostAckKey) => void;
 }) {
@@ -680,6 +689,34 @@ function LineRow({
     }
     prevUnitTypeRef.current = unitType;
   }, [unitType]);
+
+  // Auto-fill the line's UOM + unit type from the product's defaults when
+  // the user picks (or changes) the product. Reads in priority order from
+  // product_units rows (purpose='purchase') → product.baseUnit. This is
+  // the moment that connects the product-create form's UOM data to the
+  // bill line, so the user sees "/ea" or "/case" without typing anything.
+  const prevProductIdRef = useRef(productId);
+  useEffect(() => {
+    const prev = prevProductIdRef.current;
+    prevProductIdRef.current = productId;
+    // Skip the initial mount (when prev === productId because both started
+    // as the same value), only react to actual productId transitions.
+    if (prev === productId) return;
+    if (!productId) return;
+
+    const product = productById.get(productId);
+    const purchaseDefault = getDefaultPurchaseUnit(product);
+    if (!purchaseDefault) return;
+
+    setValue(`lines.${index}.unitType`, purchaseDefault.unitType, {
+      shouldDirty: true,
+    });
+    setValue(
+      `lines.${index}.purchaseUnitAbbreviation`,
+      purchaseDefault.abbreviation,
+      { shouldDirty: true },
+    );
+  }, [productId, productById, index, setValue]);
 
   // Sync caseWeightEntries length with quantityCases
   useEffect(() => {
