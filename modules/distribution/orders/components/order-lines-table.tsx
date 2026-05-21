@@ -365,9 +365,11 @@ function LineRowGroup({
         </TableCell>
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
-            pricingUnitType === "per_lb"
-              ? `${formatMoney(price)}/lb`
-              : `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
+            // The snapshot abbreviation is the truth — per_lb lines store
+            // "lb" (or whatever the base UOM is) and per_case lines store
+            // "cs". Either way, render from the snapshot so the suffix
+            // always matches the unit the price was recorded in.
+            `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
           ) : (
             <span className="text-muted-foreground">—</span>
           )}

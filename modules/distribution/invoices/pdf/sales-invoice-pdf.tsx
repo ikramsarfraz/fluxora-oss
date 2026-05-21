@@ -30,6 +30,13 @@ export type InvoicePdfLineItem = {
   totalWeight: number | null;
   unitPrice: number;
   pricingType: InvoicePricingType;
+  /**
+   * Optional explicit abbreviation for the unit-price suffix. When set,
+   * overrides the per_lb/per_case/per_unit default mapping — e.g. a
+   * milk product priced per gallon snapshots "gal" here so the PDF
+   * prints "$ 4.50 / gal" instead of "$ 4.50 / lb".
+   */
+  pricingUnitAbbreviation?: string | null;
   lineTotal: number;
 };
 
@@ -157,9 +164,20 @@ function formatPercent(value: number) {
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(2)}%`;
 }
 
-function formatUnitPrice(value: number, pricingType: InvoicePricingType) {
-  const suffix =
-    pricingType === "per_lb"
+function formatUnitPrice(
+  value: number,
+  pricingType: InvoicePricingType,
+  pricingUnitAbbreviation?: string | null,
+) {
+  // Explicit snapshot abbreviation wins so beverage / non-lb products
+  // render with their actual UOM ("/ gal", "/ ea", "/ case of 12"). When
+  // no snapshot is available, fall back to the pricing-type defaults
+  // (per_lb / per_case / per_unit) so historical invoices keep printing
+  // the same suffixes.
+  const explicit = pricingUnitAbbreviation?.trim();
+  const suffix = explicit
+    ? ` / ${explicit}`
+    : pricingType === "per_lb"
       ? " / lb"
       : pricingType === "per_case"
         ? " / case"
@@ -416,6 +434,13 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
         { invoiceLineId: line.id, productId: line.productId },
       );
     }
+
+    // Carry the snapshot abbreviation forward so the PDF renders the
+    // suffix the order was actually priced in (e.g. "/ gal" for milk,
+    // "/ case" for soda) rather than the pricing-type default.
+    const pricingUnitAbbreviation =
+      orderLine?.salesUnitAbbreviationSnapshot ?? null;
+
     return {
       id: line.id,
       description: productName ?? line.productId ?? "Unnamed product",
@@ -426,6 +451,7 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
       totalWeight,
       unitPrice: toNumber(line.unitPrice),
       pricingType,
+      pricingUnitAbbreviation,
       lineTotal: toNumber(line.lineTotal),
     } satisfies InvoicePdfLineItem;
   });
@@ -1124,7 +1150,7 @@ function InvoiceLineRow({ line }: { line: InvoicePdfLineItem }) {
           {line.totalWeight == null ? "-" : formatWeight(line.totalWeight)}
         </Text>
         <Text style={[styles.cell, styles.unitPriceCol, styles.numericText]}>
-          {formatUnitPrice(line.unitPrice, line.pricingType)}
+          {formatUnitPrice(line.unitPrice, line.pricingType, line.pricingUnitAbbreviation)}
         </Text>
         <Text style={[styles.cell, styles.totalCol, styles.cellLast, styles.totalText]}>
           {formatMoney(line.lineTotal)}

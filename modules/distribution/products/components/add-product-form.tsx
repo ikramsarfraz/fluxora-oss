@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Controller,
+  useFieldArray,
+  useForm,
+  useWatch,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateSku } from "./product-sku-utils";
@@ -43,6 +48,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FormActionFooter } from "@/components/forms/form-action-footer";
 import { FormErrorAlert } from "@/components/forms/form-error-alert";
 
@@ -65,51 +79,101 @@ import { useUnitsOfMeasure } from "@/modules/distribution/units-of-measure/hooks
 import type { UnitOfMeasureListItem } from "@/modules/distribution/units-of-measure/services/units-of-measure";
 
 // ---------------------------------------------------------------------------
+// UOM family rendering — drives grouping in the picker and downstream
+// reports. Kept in this file (not in the schema module) because it's UI
+// metadata, not validation truth.
+// ---------------------------------------------------------------------------
+
+const UOM_FAMILY_ORDER = ["weight", "count", "volume", "length", "other"] as const;
+
+const UOM_FAMILY_LABEL: Record<(typeof UOM_FAMILY_ORDER)[number], string> = {
+  weight: "Weight",
+  count: "Count / Packaging",
+  volume: "Volume",
+  length: "Length",
+  other: "Other",
+};
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Find a UOM by abbreviation (case-insensitive). Used by `buildDefaultForm`
+ * to pick a sensible base UOM for brand-new products (defaults to `lb`,
+ * the historical baseline; user can change to `ea`, `gal`, etc.).
+ */
+function findUomByAbbreviation(
+  uoms: UnitOfMeasureListItem[],
+  abbreviation: string,
+): UnitOfMeasureListItem | undefined {
+  return uoms.find(
+    u => u.abbreviation?.toLowerCase() === abbreviation.toLowerCase(),
+  );
+}
+
 function buildDefaultForm(
-  product?: ProductDetail,
+  product: ProductDetail | undefined,
+  uoms: UnitOfMeasureListItem[],
   initialName?: string,
 ): AddProductFormValues {
   if (!product) {
+    // Brand-new product: default to lb-base + one lb sales row marked default.
+    // The user can swap base UOM and add more sales rows before submitting.
+    const lbUom = findUomByAbbreviation(uoms, "lb");
     return {
       sku: "",
       name: initialName ?? "",
       categoryIds: [],
-      sellingType: "by_weight",
-      sellByPound: true,
-      sellByEach: true,
-      sellInCases: false,
-      caseQuantity: "",
+      baseUnitId: lbUom?.id ?? "",
+      defaultPrice: "",
+      salesUnits: lbUom
+        ? [
+            {
+              unitId: lbUom.id,
+              conversionToBase: "1",
+              isDefault: true,
+              allowsFractional: true,
+            },
+          ]
+        : [],
     };
   }
 
-  const salesUnits = (product.productUnits ?? []).filter(
-    u => u.purpose === "sales",
-  );
-  const baseAbbrev = product.baseUnit?.abbreviation?.toLowerCase() ?? "";
-  const isWeightBased = baseAbbrev === "lb" || baseAbbrev === "kg";
+  const salesRows = (product.productUnits ?? [])
+    .filter(u => u.purpose === "sales")
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(u => ({
+      unitId: u.unitId,
+      conversionToBase: u.conversionToBase,
+      isDefault: u.isDefault,
+      allowsFractional: u.allowsFractional,
+    }));
 
-  const hasPoundUnit = salesUnits.some(
-    u => u.unit?.abbreviation?.toLowerCase() === "lb",
-  );
-  const caseUnit = salesUnits.find(
-    u => u.unit?.abbreviation?.toLowerCase() === "cs",
-  );
-  const hasEachUnit = salesUnits.some(
-    u => u.unit?.abbreviation?.toLowerCase() === "ea",
-  );
+  // If a product has no explicit sales rows (legacy data), seed one
+  // entry matching its baseUnit at conversion 1 so the form has
+  // something to render.
+  if (salesRows.length === 0 && product.baseUnitId) {
+    salesRows.push({
+      unitId: product.baseUnitId,
+      conversionToBase: "1",
+      isDefault: true,
+      allowsFractional: true,
+    });
+  }
+
+  // Guarantee exactly one default — pick the first row if none was flagged.
+  if (!salesRows.some(r => r.isDefault) && salesRows.length > 0) {
+    salesRows[0].isDefault = true;
+  }
 
   return {
     sku: product.sku,
     name: product.name,
     categoryIds: (product.productCategories ?? []).map(pc => pc.categoryId),
-    sellingType: isWeightBased ? "by_weight" : "by_unit",
-    sellByPound: hasPoundUnit || (isWeightBased && !caseUnit),
-    sellByEach: !isWeightBased ? hasEachUnit || !caseUnit : false,
-    sellInCases: !!caseUnit,
-    caseQuantity: caseUnit?.conversionToBase ?? "",
+    baseUnitId: product.baseUnitId ?? "",
+    defaultPrice: product.defaultPricePerLb ?? "",
+    salesUnits: salesRows,
   };
 }
 
@@ -117,73 +181,21 @@ type UnitPayload = NonNullable<
   Parameters<typeof createProductAction>[0]["units"]
 >[number];
 
-function buildUnitsPayload(
-  data: AddProductFormValues,
-  uoms: UnitOfMeasureListItem[],
-): UnitPayload[] {
-  const byAbbr = (abbr: string) => uoms.find(u => u.abbreviation === abbr);
-  const lbUom = byAbbr("lb");
-  const eaUom = byAbbr("ea");
-  const csUom = byAbbr("cs");
-
-  const units: UnitPayload[] = [];
-
-  if (data.sellingType === "by_weight") {
-    if (data.sellByPound && lbUom) {
-      units.push({
-        unitId: lbUom.id,
-        purpose: "sales",
-        conversionToBase: "1",
-        isDefault: !data.sellInCases,
-        allowsFractional: true,
-        sortOrder: 1,
-      });
-    }
-    if (data.sellInCases && csUom && data.caseQuantity) {
-      units.push({
-        unitId: csUom.id,
-        purpose: "sales",
-        conversionToBase: data.caseQuantity,
-        isDefault: true,
-        allowsFractional: false,
-        sortOrder: 0,
-      });
-    }
-  } else {
-    if (data.sellByEach && eaUom) {
-      units.push({
-        unitId: eaUom.id,
-        purpose: "sales",
-        conversionToBase: "1",
-        isDefault: !data.sellInCases,
-        allowsFractional: false,
-        sortOrder: 1,
-      });
-    }
-    if (data.sellInCases && csUom && data.caseQuantity) {
-      units.push({
-        unitId: csUom.id,
-        purpose: "sales",
-        conversionToBase: data.caseQuantity,
-        isDefault: true,
-        allowsFractional: false,
-        sortOrder: 0,
-      });
-    }
-  }
-
-  return units;
-}
-
-function getBaseUnitId(
-  data: AddProductFormValues,
-  uoms: UnitOfMeasureListItem[],
-): string | null {
-  const byAbbr = (abbr: string) => uoms.find(u => u.abbreviation === abbr)?.id ?? null;
-  // Base unit is always the atomic pricing unit: lb for weight, ea for unit-based.
-  // Case prices are derived as conversionToBase × defaultPrice, so base is never "cs".
-  if (data.sellingType === "by_weight") return byAbbr("lb");
-  return byAbbr("ea");
+/**
+ * Flatten the form's salesUnits array into the action-payload shape.
+ * Every row becomes one `product_units` entry with purpose='sales' and
+ * the conversion factor the user entered. The form enforces uniqueness
+ * and exactly-one-default; we just snapshot what the user picked.
+ */
+function buildUnitsPayload(data: AddProductFormValues): UnitPayload[] {
+  return data.salesUnits.map((row, i) => ({
+    unitId: row.unitId,
+    purpose: "sales" as const,
+    conversionToBase: row.conversionToBase,
+    isDefault: row.isDefault,
+    allowsFractional: row.allowsFractional,
+    sortOrder: i,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -290,17 +302,46 @@ export function AddProductForm(props?: {
   const queryClient = useQueryClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const form = useForm<AddProductFormValues>({
-    resolver: zodResolver(addProductFormSchema),
-    defaultValues: buildDefaultForm(product, initialName),
-  });
-
   const { data: productCategories } = useCategories();
   const { data: products } = useProducts();
   const { data: unitsOfMeasure } = useUnitsOfMeasure();
 
-  const sellingType = useWatch({ control: form.control, name: "sellingType" });
-  const sellInCases = useWatch({ control: form.control, name: "sellInCases" });
+  // Memoize so the form only resets when the underlying data actually
+  // changes — not on every parent re-render — otherwise the user's edits
+  // get clobbered while UoM data is still loading.
+  const initialFormValues = useMemo(
+    () => buildDefaultForm(product, unitsOfMeasure ?? [], initialName),
+    [product, unitsOfMeasure, initialName],
+  );
+
+  const form = useForm<AddProductFormValues>({
+    resolver: zodResolver(addProductFormSchema),
+    defaultValues: initialFormValues,
+  });
+
+  // The form's default values depend on the UoM list (so we can resolve
+  // "lb" as the new-product baseline). When UoMs load AFTER mount, reset
+  // the form once — but only if the user hasn't started editing yet,
+  // so we don't clobber in-flight changes.
+  const hasResetRef = useRef(false);
+  useEffect(() => {
+    if (hasResetRef.current) return;
+    if (!(unitsOfMeasure && unitsOfMeasure.length > 0)) return;
+    if (form.formState.isDirty) return;
+    hasResetRef.current = true;
+    form.reset(initialFormValues);
+  }, [form, initialFormValues, unitsOfMeasure]);
+
+  const { fields: salesUnitFields, append: appendSalesUnit, remove: removeSalesUnit } =
+    useFieldArray({
+      control: form.control,
+      name: "salesUnits",
+    });
+
+  const baseUnitId = useWatch({ control: form.control, name: "baseUnitId" });
+  const salesUnits = useWatch({ control: form.control, name: "salesUnits" });
+  const baseUnit = (unitsOfMeasure ?? []).find(u => u.id === baseUnitId);
+  const baseUnitAbbreviation = baseUnit?.abbreviation ?? "";
 
   async function onSubmit(data: AddProductFormValues) {
     setMutationError(null);
@@ -315,13 +356,17 @@ export function AddProductForm(props?: {
         );
         sku = generateSku(data.name, firstCat?.name ?? "", products);
       }
-      const uoms = unitsOfMeasure ?? [];
       const payload = {
         sku,
         name: data.name,
         categoryIds: data.categoryIds,
-        baseUnitId: getBaseUnitId(data, uoms),
-        units: buildUnitsPayload(data, uoms),
+        baseUnitId: data.baseUnitId || null,
+        // The DB column is still called default_price_per_lb (legacy
+        // name); semantically it stores "price per base unit". The form
+        // field is `defaultPrice` and the value flows verbatim — empty
+        // string degrades to 0 in the service.
+        defaultPricePerLb: data.defaultPrice || "0",
+        units: buildUnitsPayload(data),
       };
       const result =
         mode === "edit" && product
@@ -452,223 +497,292 @@ export function AddProductForm(props?: {
               }}
             />
 
-            {/* Selling method */}
+            {/* Base unit — the atomic unit pricing + inventory math is recorded in.
+                Once a product has dependent records (orders, prices, bills), the
+                base unit is locked to avoid silently changing the meaning of
+                stored prices and costs. */}
             <Controller
-              name="sellingType"
+              name="baseUnitId"
               control={form.control}
-              render={({ field }) => (
-                <Field>
-                  <FieldLabel>Selling method *</FieldLabel>
-                  <div className="flex flex-col gap-2">
-                    {(
-                      [
-                        {
-                          value: "by_weight",
-                          label: "By weight — price per pound",
-                          description: "Meat, fish, deli — invoice uses actual weight",
-                        },
-                        {
-                          value: "by_unit",
-                          label: "By unit — flat price per item",
-                          description: "Beverages, dry goods, packaged items",
-                        },
-                      ] as const
-                    ).map(opt => (
-                      <label
-                        key={opt.value}
-                        className={`flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
-                          field.value === opt.value
-                            ? "border-primary bg-accent/30"
-                            : "hover:bg-muted/40"
-                        }`}
+              render={({ field, fieldState }) => {
+                const baseUnitLocked = Boolean(
+                  product && (product._purchaseCount ?? 0) > 0,
+                );
+                return (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="form-product-base-unit">Base unit *</FieldLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={baseUnitLocked}
+                    >
+                      <SelectTrigger
+                        id="form-product-base-unit"
+                        aria-invalid={fieldState.invalid}
                       >
-                        <input
-                          type="radio"
-                          value={opt.value}
-                          checked={field.value === opt.value}
-                          onChange={() => {
-                            field.onChange(opt.value);
-                            if (opt.value === "by_weight") {
-                              form.setValue("sellByPound", true);
-                              form.setValue("sellByEach", false);
-                            } else {
-                              form.setValue("sellByPound", false);
-                              form.setValue("sellByEach", true);
-                            }
-                          }}
-                          className="mt-0.5 accent-current"
-                        />
-                        <div>
-                          <div className="text-sm font-medium">{opt.label}</div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {opt.description}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
+                        <SelectValue placeholder="Select a base unit…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {UOM_FAMILY_ORDER.map(family => {
+                          const inFamily = (unitsOfMeasure ?? []).filter(
+                            u => u.family === family && u.isActive,
+                          );
+                          if (inFamily.length === 0) return null;
+                          return (
+                            <SelectGroup key={family}>
+                              <SelectLabel>{UOM_FAMILY_LABEL[family]}</SelectLabel>
+                              {inFamily.map(u => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name}
+                                  {u.abbreviation ? ` (${u.abbreviation})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      {baseUnitLocked
+                        ? "Locked — this product has existing bills. Changing the base unit would reinterpret stored prices and costs."
+                        : "Prices, costs, and inventory totals are tracked in this unit. Sales units below convert to this base."}
+                    </FieldDescription>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
+                  </Field>
+                );
+              }}
+            />
+
+            {/* Default price (per base unit). The suffix mirrors whatever the
+                user picked as the base UOM. */}
+            <Controller
+              name="defaultPrice"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="form-product-default-price">
+                    Default price{baseUnitAbbreviation ? ` per ${baseUnitAbbreviation}` : ""}
+                  </FieldLabel>
+                  <div className="relative max-w-48">
+                    <span
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none"
+                      aria-hidden
+                    >
+                      $
+                    </span>
+                    <Input
+                      {...field}
+                      id="form-product-default-price"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      className="pl-7 pr-12"
+                      aria-invalid={fieldState.invalid}
+                    />
+                    {baseUnitAbbreviation ? (
+                      <span
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none"
+                        aria-hidden
+                      >
+                        /{baseUnitAbbreviation}
+                      </span>
+                    ) : null}
                   </div>
+                  <FieldDescription>
+                    The starting price the order form suggests. Customers may have
+                    their own overrides on the price chart.
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
+                  )}
                 </Field>
               )}
             />
 
-            {/* Selling units */}
+            {/* Sales units — repeating list. Each row is a UOM the product
+                can be SOLD in, with a conversion to the base unit. The user
+                marks exactly one as default (preselected on new orders). */}
             <Field>
-              <FieldLabel>Selling units *</FieldLabel>
-              <div className="rounded-md border p-4 flex flex-col gap-4">
-                {sellingType === "by_weight" ? (
-                  <>
-                    {/* Sell by pound */}
-                    <Controller
-                      name="sellByPound"
-                      control={form.control}
-                      render={({ field, fieldState }) => (
-                        <div className="flex flex-col gap-1">
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                            Sell by the pound (lb)
-                          </label>
-                          {fieldState.invalid && (
-                            <p className="text-xs text-destructive">
-                              {fieldState.error?.message}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    />
-
-                    {/* Sell by case */}
-                    <div className="flex flex-col gap-3">
+              <FieldLabel>Sales units *</FieldLabel>
+              <div className="flex flex-col gap-3">
+                {salesUnitFields.map((field, index) => {
+                  const row = salesUnits?.[index];
+                  const rowUnit = (unitsOfMeasure ?? []).find(
+                    u => u.id === row?.unitId,
+                  );
+                  const rowUnitAbbrev = rowUnit?.abbreviation ?? "unit";
+                  const isBase = row?.unitId === baseUnitId;
+                  return (
+                    <div
+                      key={field.id}
+                      className="rounded-md border p-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3"
+                    >
                       <Controller
-                        name="sellInCases"
+                        name={`salesUnits.${index}.unitId`}
                         control={form.control}
-                        render={({ field }) => (
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={v => {
-                                field.onChange(v);
-                                if (!v) form.setValue("caseQuantity", "");
-                              }}
-                            />
-                            Sell by the case (cs)
-                          </label>
+                        render={({ field: f, fieldState }) => (
+                          <Field
+                            data-invalid={fieldState.invalid}
+                            className="flex-1 min-w-0"
+                          >
+                            <FieldLabel>Unit</FieldLabel>
+                            <Select value={f.value} onValueChange={f.onChange}>
+                              <SelectTrigger aria-invalid={fieldState.invalid}>
+                                <SelectValue placeholder="Select a unit…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {UOM_FAMILY_ORDER.map(family => {
+                                  const inFamily = (unitsOfMeasure ?? []).filter(
+                                    u => u.family === family && u.isActive,
+                                  );
+                                  if (inFamily.length === 0) return null;
+                                  return (
+                                    <SelectGroup key={family}>
+                                      <SelectLabel>
+                                        {UOM_FAMILY_LABEL[family]}
+                                      </SelectLabel>
+                                      {inFamily.map(u => (
+                                        <SelectItem key={u.id} value={u.id}>
+                                          {u.name}
+                                          {u.abbreviation ? ` (${u.abbreviation})` : ""}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectGroup>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
                         )}
                       />
-                      {sellInCases && (
-                        <Controller
-                          name="caseQuantity"
-                          control={form.control}
-                          render={({ field, fieldState }) => (
-                            <Field
-                              data-invalid={fieldState.invalid}
-                              className="ml-6"
-                            >
-                              <FieldLabel htmlFor="case-quantity">
-                                Estimated lbs per case *
-                              </FieldLabel>
-                              <Input
-                                {...field}
-                                id="case-quantity"
-                                type="number"
-                                min="0.001"
-                                step="any"
-                                placeholder="e.g. 40"
-                                className="max-w-40"
-                                aria-invalid={fieldState.invalid}
-                              />
-                              <FieldDescription>
-                                Used for order total estimates only. Actual case
-                                weights are recorded at fulfillment.
-                              </FieldDescription>
-                              {fieldState.invalid && (
-                                <FieldError errors={[fieldState.error]} />
-                              )}
-                            </Field>
-                          )}
-                        />
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Sell by each */}
-                    <Controller
-                      name="sellByEach"
-                      control={form.control}
-                      render={({ field, fieldState }) => (
-                        <div className="flex flex-col gap-1">
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                            Sell by the unit — each (ea)
-                          </label>
-                          {fieldState.invalid && (
-                            <p className="text-xs text-destructive">
-                              {fieldState.error?.message}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    />
-
-                    {/* Sell by case */}
-                    <div className="flex flex-col gap-3">
                       <Controller
-                        name="sellInCases"
+                        name={`salesUnits.${index}.conversionToBase`}
                         control={form.control}
-                        render={({ field }) => (
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={v => {
-                                field.onChange(v);
-                                if (!v) form.setValue("caseQuantity", "");
-                              }}
+                        render={({ field: f, fieldState }) => (
+                          <Field
+                            data-invalid={fieldState.invalid}
+                            className="w-full sm:max-w-44"
+                          >
+                            <FieldLabel>
+                              {isBase
+                                ? `Per ${baseUnitAbbreviation || "base"}`
+                                : `${baseUnitAbbreviation || "base"} per ${rowUnitAbbrev}`}
+                            </FieldLabel>
+                            <Input
+                              {...f}
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={isBase ? "1" : "e.g. 12"}
+                              disabled={isBase}
+                              aria-invalid={fieldState.invalid}
                             />
-                            Sell by the case (cs)
-                          </label>
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
                         )}
                       />
-                      {sellInCases && (
+                      <div className="flex items-center gap-3 sm:pb-2">
                         <Controller
-                          name="caseQuantity"
+                          name={`salesUnits.${index}.isDefault`}
                           control={form.control}
-                          render={({ field, fieldState }) => (
-                            <Field
-                              data-invalid={fieldState.invalid}
-                              className="ml-6"
-                            >
-                              <FieldLabel htmlFor="case-quantity">
-                                Units per case *
-                              </FieldLabel>
-                              <Input
-                                {...field}
-                                id="case-quantity"
-                                type="number"
-                                min="1"
-                                step="1"
-                                placeholder="e.g. 24"
-                                className="max-w-40"
-                                aria-invalid={fieldState.invalid}
+                          render={({ field: f }) => (
+                            <label className="flex items-center gap-2 text-xs cursor-pointer whitespace-nowrap">
+                              <Checkbox
+                                checked={f.value}
+                                onCheckedChange={v => {
+                                  // Mark this row as default + unmark every
+                                  // other row so the form always has exactly
+                                  // one default.
+                                  if (v) {
+                                    salesUnits?.forEach((_, j) => {
+                                      form.setValue(
+                                        `salesUnits.${j}.isDefault`,
+                                        j === index,
+                                      );
+                                    });
+                                  } else {
+                                    f.onChange(false);
+                                  }
+                                }}
                               />
-                              {fieldState.invalid && (
-                                <FieldError errors={[fieldState.error]} />
-                              )}
-                            </Field>
+                              Default
+                            </label>
                           )}
                         />
-                      )}
+                        <Controller
+                          name={`salesUnits.${index}.allowsFractional`}
+                          control={form.control}
+                          render={({ field: f }) => (
+                            <label className="flex items-center gap-2 text-xs cursor-pointer whitespace-nowrap">
+                              <Checkbox
+                                checked={f.value}
+                                onCheckedChange={f.onChange}
+                              />
+                              Fractional
+                            </label>
+                          )}
+                        />
+                        {salesUnitFields.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeSalesUnit(index)}
+                            aria-label="Remove sales unit"
+                            className="text-muted-foreground"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
-                  </>
-                )}
+                  );
+                })}
+                {form.formState.errors.salesUnits?.root?.message ? (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.salesUnits.root.message}
+                  </p>
+                ) : form.formState.errors.salesUnits?.message ? (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.salesUnits.message}
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Pre-fill with the next unused active UOM so the user
+                    // isn't immediately required to pick one.
+                    const usedIds = new Set(
+                      (salesUnits ?? []).map(u => u.unitId),
+                    );
+                    const nextUom = (unitsOfMeasure ?? []).find(
+                      u => u.isActive && !usedIds.has(u.id),
+                    );
+                    appendSalesUnit({
+                      unitId: nextUom?.id ?? "",
+                      conversionToBase: "1",
+                      isDefault: false,
+                      allowsFractional: true,
+                    });
+                  }}
+                  className="self-start"
+                >
+                  <Plus className="size-3.5 mr-1" />
+                  Add sales unit
+                </Button>
               </div>
               <FieldDescription>
-                Need a different unit?{" "}
+                The default row is preselected on new orders. Other rows let staff
+                price by case, by bag, etc. with the conversion applied to the
+                base unit.{" "}
                 <Link
                   href="/units-of-measure"
                   className="text-primary underline underline-offset-4 hover:text-primary/80"

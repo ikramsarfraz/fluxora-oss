@@ -31,6 +31,18 @@ export type ProductInComparison = {
   sku: string;
   categoryId: string | null;
   categoryName: string | null;
+  /**
+   * Base UOM abbreviation ("lb", "ea", "gal", …). Drives the suffix
+   * rendered in each PriceCell so a mixed-UOM catalog (meat + beverages)
+   * still reads correctly. Null for legacy products without a base unit.
+   *
+   * Note: aggregate "Avg $/lb" totals across the column are only
+   * meaningful when every row shares a family. The view layer flags
+   * mixed families with a disclaimer; this field is what the flag
+   * checks against.
+   */
+  baseUnitAbbreviation: string | null;
+  baseUnitFamily: "weight" | "count" | "volume" | "length" | "other" | null;
   annualSpend: number;
   annualWeightLbs: number;
   supplierCount: number;
@@ -142,6 +154,9 @@ export async function getSupplierComparisonData(
           product: {
             with: {
               productCategories: { with: { category: true } },
+              // Eager-load baseUnit so the comparison cells can render the
+              // correct UOM suffix per row instead of hardcoding "/lb".
+              baseUnit: true,
             },
           },
         },
@@ -154,6 +169,8 @@ export async function getSupplierComparisonData(
   const productMap = new Map<string, {
     id: string; name: string; sku: string;
     categories: { id: string; name: string }[];
+    baseUnitAbbreviation: string | null;
+    baseUnitFamily: "weight" | "count" | "volume" | "length" | "other" | null;
     totalSpend: number; totalWeightLbs: number;
   }>();
 
@@ -173,6 +190,8 @@ export async function getSupplierComparisonData(
         categories: prod.productCategories.map(pc => ({
           id: pc.categoryId, name: pc.category?.name ?? "",
         })),
+        baseUnitAbbreviation: prod.baseUnit?.abbreviation ?? null,
+        baseUnitFamily: prod.baseUnit?.family ?? null,
         totalSpend: 0, totalWeightLbs: 0,
       };
       existing.totalSpend += Number(line.lineTotal);
@@ -278,6 +297,8 @@ export async function getSupplierComparisonData(
         categoryName: categoryId
           ? (categorySet.get(categoryId)?.name ?? null)
           : (prod.categories[0]?.name ?? null),
+        baseUnitAbbreviation: prod.baseUnitAbbreviation,
+        baseUnitFamily: prod.baseUnitFamily,
         annualSpend: prod.totalSpend, annualWeightLbs: prod.totalWeightLbs,
         supplierCount, isSingleSourced: supplierCount === 1,
       };

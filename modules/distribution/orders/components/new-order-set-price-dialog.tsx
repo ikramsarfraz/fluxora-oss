@@ -33,6 +33,7 @@ export function NewOrderSetPriceDialog({
   productId,
   productLabel,
   initialPrice,
+  baseUnitAbbreviation,
   onSaved,
 }: {
   open: boolean;
@@ -42,9 +43,16 @@ export function NewOrderSetPriceDialog({
   productId: string;
   productLabel: string;
   initialPrice?: string;
+  /**
+   * Abbreviation of the product's base UOM (e.g. "lb", "ea", "gal"). Used
+   * to label the input "Price per {unit}" and the description. Falls
+   * back to "lb" when omitted so older callers keep working unchanged.
+   */
+  baseUnitAbbreviation?: string;
   /** Called after a successful save with the price the user entered. */
   onSaved: (pricePerLb: string) => void;
 }) {
+  const unit = baseUnitAbbreviation ?? "lb";
   const [value, setValue] = useState(initialPrice ?? "");
   const [error, setError] = useState<string | null>(null);
   const setPrice = useSetCustomerPrice();
@@ -86,7 +94,7 @@ export function NewOrderSetPriceDialog({
         <DialogHeader>
           <DialogTitle>Set price for {customerName}</DialogTitle>
           <DialogDescription>
-            Saves the per-pound price for{" "}
+            Saves the per-{unit} price for{" "}
             <span style={{ fontWeight: 500 }}>{productLabel}</span>. Future
             orders for this customer pre-fill from this value automatically.
           </DialogDescription>
@@ -94,7 +102,7 @@ export function NewOrderSetPriceDialog({
 
         <Field>
           <FieldLabel htmlFor="new-order-set-price-input">
-            Price per lb
+            Price per {unit}
           </FieldLabel>
           <Input
             id="new-order-set-price-input"

@@ -107,6 +107,22 @@ export const pricingUnitTypeEnum = pgEnum("pricing_unit_type", [
   "per_case",
 ]);
 
+/**
+ * Classifier for `units_of_measure` rows. Drives:
+ *   - The product form's UOM picker (filter, group, family-match guard)
+ *   - Reports / dashboards — group weight-based aggregates separately
+ *     from count-based, prevent summing lb + ea into a nonsense total.
+ *   - Display surfaces (price chart, supplier comparison) that need to
+ *     flag mixed-family aggregations to the user.
+ */
+export const uomFamilyEnum = pgEnum("uom_family", [
+  "weight",
+  "count",
+  "volume",
+  "length",
+  "other",
+]);
+
 export const inventoryItemStatusEnum = pgEnum("inventory_item_status", [
   "in_stock",
   "allocated",
@@ -648,13 +664,23 @@ export const unitsOfMeasure = pgTable(
     name: varchar("name", { length: 128 }).notNull().unique(),
     abbreviation: varchar("abbreviation", { length: 16 }),
     notes: text("notes"),
+    /**
+     * Classifier for the unit. Drives family-match validation when picking
+     * a base UOM + alternate sales/purchase UOMs on a product, and lets
+     * reports group weight-vs-count aggregates correctly. Defaults to
+     * 'other' so unseeded admin-added rows stay valid until classified.
+     */
+    family: uomFamilyEnum("family").notNull().default("other"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  table => [index("units_of_measure_is_active_idx").on(table.isActive)],
+  table => [
+    index("units_of_measure_is_active_idx").on(table.isActive),
+    index("units_of_measure_family_idx").on(table.family),
+  ],
 );
 
 export const tenantBranding = pgTable(

@@ -8,6 +8,7 @@ import {
   products,
   productSupplierCosts,
   suppliers,
+  unitsOfMeasure,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
@@ -280,6 +281,13 @@ export type CustomerProductRow = {
   name: string;
   cost: string | null;
   category: string | null;
+  /**
+   * Abbreviation of the product's base UOM ("lb", "ea", "gal"). Drives
+   * the "/lb" vs "/ea" vs "/gal" suffix in the customer-price chart so
+   * mixed catalogs render correctly. Null for legacy products without
+   * a base unit set.
+   */
+  baseUnitAbbreviation: string | null;
   /** Customer's default price for this product (applies when no per-supplier price is set). */
   customerPrice: string | null;
   vendors: {
@@ -370,8 +378,13 @@ export async function getCustomerProductPricesPage(
       id: products.id,
       sku: products.sku,
       name: products.name,
+      // Base UOM abbreviation surfaces the product's pricing unit on the
+      // chart row (e.g. "lb" for meat, "ea" for beverages) so the suffix
+      // renders correctly across mixed catalogs.
+      baseUnitAbbreviation: unitsOfMeasure.abbreviation,
     })
     .from(products)
+    .leftJoin(unitsOfMeasure, eq(unitsOfMeasure.id, products.baseUnitId))
     .where(where)
     .orderBy(
       ...resolveOrderBy({
@@ -469,6 +482,7 @@ export async function getCustomerProductPricesPage(
       name: p.name,
       cost: cheapestVendor?.cost_per_lb ?? null,
       category: categoryByProduct.get(p.id) ?? null,
+      baseUnitAbbreviation: p.baseUnitAbbreviation,
       customerPrice: defaultPriceByProduct.get(p.id) ?? null,
       vendors,
     };

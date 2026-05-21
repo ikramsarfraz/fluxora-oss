@@ -117,7 +117,22 @@ function EngagementDot({ score, label = true }: { score: number; label?: boolean
 }
 
 // ── Price cell renderer ──────────────────────────────────────────────────────
-function PriceCellView({ cell, isAggregate }: { cell: PriceCell | null; isAggregate?: boolean }) {
+function PriceCellView({
+  cell,
+  isAggregate,
+  unitAbbreviation,
+}: {
+  cell: PriceCell | null;
+  isAggregate?: boolean;
+  /**
+   * Suffix shown next to the cell price (e.g. "lb", "ea", "gal"). When
+   * omitted the cell falls back to "lb" — the historical baseline for
+   * weight-priced products. The product row passes its base UOM; the
+   * aggregate row passes a column-wide consensus or leaves it blank.
+   */
+  unitAbbreviation?: string;
+}) {
+  const unit = unitAbbreviation ?? "lb";
   if (!cell) {
     return (
       <td style={{
@@ -155,7 +170,7 @@ function PriceCellView({ cell, isAggregate }: { cell: PriceCell | null; isAggreg
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
         <div>
           <span style={{ fontFamily: c.mono, fontWeight: 700, fontSize: 15, color: textColor }}>{fmtPrice(price)}</span>
-          <span style={{ fontSize: 10, color: c.text3, fontWeight: 500, marginLeft: 2 }}>/lb</span>
+          <span style={{ fontSize: 10, color: c.text3, fontWeight: 500, marginLeft: 2 }}>/{unit}</span>
         </div>
         {status === "best" && (
           <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.green, color: "var(--color-card)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9 }}>✓</span>
@@ -337,11 +352,20 @@ function SupplierScorecard({
             <div style={{ fontSize: 10, color: c.text3, marginTop: 1 }}>SKUs in category</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text3, marginBottom: 2 }}>Avg $/lb</div>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text3, marginBottom: 2 }}>
+              Avg unit price
+            </div>
             <div style={{ fontSize: 15, fontWeight: 700, fontFamily: c.mono, color: aggregate.avgPrice > 0 ? c.text : c.text3 }}>
               {aggregate.avgPrice > 0 ? fmtPrice(aggregate.avgPrice) : "—"}
             </div>
-            <div style={{ fontSize: 10, color: c.text3, marginTop: 1 }}>carried SKUs</div>
+            <div style={{ fontSize: 10, color: c.text3, marginTop: 1 }}>
+              carried SKUs
+              {/*
+                The legacy label said "$/lb"; we dropped the suffix because a
+                mixed-UOM catalog renders that as misleading. Each SKU's
+                actual unit is shown in its row cell.
+              */}
+            </div>
           </div>
         </div>
 
@@ -705,7 +729,13 @@ export function SupplierComparisonPage({
                           </div>
                         </td>
                         {suppliers.map(supplier => (
-                          <PriceCellView key={supplier.id} cell={priceMatrix[product.id]?.[supplier.id] ?? null} />
+                          <PriceCellView
+                            key={supplier.id}
+                            cell={priceMatrix[product.id]?.[supplier.id] ?? null}
+                            unitAbbreviation={
+                              product.baseUnitAbbreviation ?? undefined
+                            }
+                          />
                         ))}
                         <td style={{ background: "var(--color-page)", borderLeft: `1px dashed ${c.borderStrong}`, borderBottom: `1px solid ${c.border}` }}>
                           {product.isSingleSourced ? (
@@ -723,7 +753,7 @@ export function SupplierComparisonPage({
                     <tr>
                       <td style={{ background: "var(--color-page)", padding: "12px 14px", borderTop: `2px solid ${c.borderStrong}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: c.text2 }}>Category aggregate</div>
-                        <div style={{ fontSize: 11, color: c.text3, marginTop: 4, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>avg $/lb · best-of-row wins</div>
+                        <div style={{ fontSize: 11, color: c.text3, marginTop: 4, fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>avg unit price · best-of-row wins</div>
                       </td>
                       {suppliers.map(supplier => {
                         const agg = aggregateBySupplier[supplier.id];

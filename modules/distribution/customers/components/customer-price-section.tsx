@@ -332,7 +332,9 @@ function ProductRow({
             ) : (
               <span className="font-mono tabular-nums text-[13px] font-medium text-ink-warm">
                 ${fmt(prod.cost)}
-                <span className="text-[11px] text-subtle ml-0.5">/lb</span>
+                <span className="text-[11px] text-subtle ml-0.5">
+                  /{prod.baseUnitAbbreviation ?? "lb"}
+                </span>
               </span>
             )
           ) : (

@@ -862,9 +862,14 @@ function LineRow({
                         // "$0.00" for products without a base default
                         // even when a customer contract existed.
                         const resolved = resolvePricePerLb(p.id);
+                        // Per-base-unit suffix: read from the product's
+                        // base UOM so beverages show "/ea" or "/case"
+                        // instead of a hardcoded "/lb".
+                        const productUnit =
+                          p.baseUnit?.abbreviation ?? "lb";
                         const priceLabel =
                           resolved && Number(resolved) > 0
-                            ? `${formatMoney(resolved)}/lb`
+                            ? `${formatMoney(resolved)}/${productUnit}`
                             : "—";
                         return (
                           <ComboboxItem key={p.id} value={p}>

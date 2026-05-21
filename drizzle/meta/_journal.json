@@ -393,6 +393,13 @@
 			"when": 1779101600000,
 			"tag": "0055_supplier_invoice_line_uom",
 			"breakpoints": true
+		},
+		{
+			"idx": 56,
+			"version": "7",
+			"when": 1779101700000,
+			"tag": "0056_uom_family",
+			"breakpoints": true
 		}
 	]
 }

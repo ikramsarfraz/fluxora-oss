@@ -524,9 +524,7 @@ function LineRow({
           }}
         >
           {Number.isFinite(price)
-            ? pricingUnit === "per_lb"
-              ? `${formatMoney(price)}/lb`
-              : `${formatMoney(price)}/${unit}`
+            ? `${formatMoney(price)}/${unit}`
             : "—"}
         </div>
 

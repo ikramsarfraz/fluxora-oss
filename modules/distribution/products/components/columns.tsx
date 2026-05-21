@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ProductListItem } from "../services/products";
 import { formatMoney } from "@/lib/utils/currency";
+import { getProductBaseUnitAbbreviation } from "../utils/product-uom";
 
 type ColumnActions = {
   onDelete: (product: ProductListItem) => void;
@@ -158,15 +159,21 @@ export function createColumns(
     },
     {
       accessorKey: "defaultPricePerLb",
-      header: () => <div className="text-right">Price/lb</div>,
+      // Column header used to read "Price/lb"; now it reflects whatever
+      // unit makes sense for the current row. We can't read the row from
+      // the header, so this header is generic and the cell carries the
+      // unit-specific text.
+      header: () => <div className="text-right">Default price</div>,
       cell: ({ row }) => {
         const price = row.getValue("defaultPricePerLb") as string | null;
         if (!price) {
           return <div className="text-right text-muted-foreground">-</div>;
         }
+        const abbr = getProductBaseUnitAbbreviation(row.original);
         return (
           <div className="text-right tabular-nums font-medium">
             {formatMoney(price)}
+            <span className="ml-1 text-xs text-muted-foreground">/{abbr}</span>
           </div>
         );
       },

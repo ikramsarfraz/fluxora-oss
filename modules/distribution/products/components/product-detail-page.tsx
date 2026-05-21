@@ -6,6 +6,7 @@ import { Pencil } from "lucide-react";
 
 import { useProduct, useDeleteProduct } from "../hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
+import { getProductBaseUnitAbbreviation } from "../utils/product-uom";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
@@ -72,11 +73,13 @@ export function ProductDetailPage({ productId }: { productId: string }) {
   const categories = product.productCategories ?? [];
   const units = product.productUnits ?? [];
 
+  const baseUnitAbbr = getProductBaseUnitAbbreviation(product);
+
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
         title={product.name}
-        description="Default price/lb is a reference; set customer-specific prices in each customer profile."
+        description={`Default price/${baseUnitAbbr} is a reference; set customer-specific prices in each customer profile.`}
         badge={
           <Badge variant="secondary" className="font-mono">
             {product.sku}
@@ -100,8 +103,8 @@ export function ProductDetailPage({ productId }: { productId: string }) {
           <DetailField label="SKU">
             <span className="font-mono text-sm">{product.sku}</span>
           </DetailField>
-          <DetailField label="Default price / lb">
-            {formatMoney(product.defaultPricePerLb)}/lb
+          <DetailField label={`Default price / ${baseUnitAbbr}`}>
+            {formatMoney(product.defaultPricePerLb)}/{baseUnitAbbr}
           </DetailField>
           <DetailField label="Base unit">
             {product.baseUnit
