@@ -16,6 +16,11 @@ import type { CustomerProductsParams } from "@/modules/distribution/price-chart/
 
 function invalidatePriceChart(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
+  // Customer-side caches embed productPrices (used by the new-order form
+  // to back-fill line prices), so any price-chart write needs to bust
+  // the customer caches too. Broad invalidate by prefix covers detail,
+  // portfolio, and credit-snapshot keys.
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
 }
 
 export function usePriceChart() {

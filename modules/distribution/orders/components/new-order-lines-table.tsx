@@ -59,6 +59,7 @@ import {
   inferLineUnitType,
   isWeightSalesUnit,
 } from "./new-order-line-utils";
+import { NewOrderSetPriceDialog } from "./new-order-set-price-dialog";
 
 const C = {
   ink: "var(--color-ink)",
@@ -296,6 +297,8 @@ export function NewOrderLinesTable({
                 takenProductIds={takenProductIds}
                 setValue={setValue}
                 resolvePricePerLb={resolvePricePerLb}
+                customerId={customerId}
+                customerName={customer?.name ?? ""}
                 onProductSelected={(product) =>
                   handleProductSelected(index, product)
                 }
@@ -433,6 +436,8 @@ interface LineRowProps {
   takenProductIds: Set<string>;
   setValue: UseFormSetValue<NewOrderFormValues>;
   resolvePricePerLb: (productId: string) => string;
+  customerId: string;
+  customerName: string;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
 }
@@ -446,6 +451,8 @@ function LineRow({
   takenProductIds,
   setValue,
   resolvePricePerLb,
+  customerId,
+  customerName,
   onProductSelected,
   onRemove,
 }: LineRowProps) {
@@ -480,6 +487,12 @@ function LineRow({
 
   // ── Tray expand state ────────────────────────────────────────────────────
   const [expanded, setExpanded] = useState(false);
+
+  // ── Inline price-setter (#4) ─────────────────────────────────────────────
+  // Surfaces "+ Set price for <customer>" under the price input when the
+  // user has picked a customer + product but the price field is still
+  // empty (no per-customer price, no product default).
+  const [setPriceOpen, setSetPriceOpen] = useState(false);
 
   useEffect(() => {
     if (!shouldAllocateInventory && selectedInventoryItemIds.length > 0) {
@@ -921,7 +934,18 @@ function LineRow({
           <Controller
             control={control}
             name={`lines.${index}.pricePerLb`}
-            render={({ field, fieldState }) => (
+            render={({ field, fieldState }) => {
+              // Show the inline "Set price" affordance only when the
+              // customer + product are picked and the price field is
+              // still empty — once a price exists (typed manually, or
+              // back-filled from the retry effect once customer data
+              // loaded) the link becomes noise.
+              const trimmedPrice = (field.value ?? "").toString().trim();
+              const showSetPriceLink =
+                !!customerId &&
+                !!product &&
+                (trimmedPrice === "" || Number(trimmedPrice) === 0);
+              return (
               <div
                 style={{
                   display: "flex",
@@ -955,8 +979,20 @@ function LineRow({
                     {fieldState.error?.message}
                   </span>
                 )}
+                {showSetPriceLink && (
+                  <Button
+                    type="button"
+                    onClick={() => setSetPriceOpen(true)}
+                    variant="link"
+                    size="xs"
+                    className="h-auto p-0 text-[11px] font-medium text-primary"
+                  >
+                    + Set price for {customerName || "customer"}
+                  </Button>
+                )}
               </div>
-            )}
+              );
+            }}
           />
         </TableCell>
 
@@ -1035,6 +1071,23 @@ function LineRow({
           </TableCell>
         </TableRow>
       )}
+
+      {customerId && product ? (
+        <NewOrderSetPriceDialog
+          open={setPriceOpen}
+          onOpenChange={setSetPriceOpen}
+          customerId={customerId}
+          customerName={customerName}
+          productId={product.id}
+          productLabel={`${product.sku} · ${product.name}`}
+          onSaved={pricePerLb => {
+            setValue(`lines.${index}.pricePerLb`, pricePerLb, {
+              shouldDirty: true,
+              shouldValidate: true,
+            });
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1077,6 +1130,8 @@ interface FifoAllocationTrayProps {
   isLoading: boolean;
 }
 
+const TRAY_PAGE_SIZE = 25;
+
 function FifoAllocationTray({
   rows,
   candidates,
@@ -1093,11 +1148,22 @@ function FifoAllocationTray({
   const [manualMode, setManualMode] = useState(
     selectedInventoryItemIds.length > 0,
   );
+  // Pagination — products with hundreds of allocated cases would
+  // otherwise render every row in one giant list.
+  const [page, setPage] = useState(0);
   const selectedSet = new Set(selectedInventoryItemIds);
   const selectedRows = candidates.filter(row =>
     selectedSet.has(row.inventoryItemId),
   );
-  const displayRows = manualMode ? candidates : rows;
+  const allDisplayRows = manualMode ? candidates : rows;
+  const pageCount = Math.max(1, Math.ceil(allDisplayRows.length / TRAY_PAGE_SIZE));
+  // Clamp the current page when the row set shrinks (e.g. user unchecks
+  // an item, switches mode, or product changes).
+  const safePage = Math.min(page, pageCount - 1);
+  const displayRows = allDisplayRows.slice(
+    safePage * TRAY_PAGE_SIZE,
+    (safePage + 1) * TRAY_PAGE_SIZE,
+  );
   const allocatedRows = manualMode ? selectedRows : rows;
   const allocatedCount = allocatedRows.length;
   const totalWeight = allocatedRows.reduce((sum, row) => sum + row.weight, 0);
@@ -1107,6 +1173,7 @@ function FifoAllocationTray({
 
   function startManualSelection() {
     setManualMode(true);
+    setPage(0);
     onSelectedInventoryItemIdsChange(
       rows.slice(0, requestedCases).map(row => row.inventoryItemId),
     );
@@ -1114,6 +1181,7 @@ function FifoAllocationTray({
 
   function useFifo() {
     setManualMode(false);
+    setPage(0);
     onSelectedInventoryItemIdsChange([]);
   }
 
@@ -1387,6 +1455,53 @@ function FifoAllocationTray({
               </Fragment>
             );
           })}
+        </div>
+      )}
+
+      {/* Pager */}
+      {!isLoading && allDisplayRows.length > TRAY_PAGE_SIZE && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            marginTop: "10px",
+            fontSize: "11px",
+            color: C.muted,
+          }}
+        >
+          <span>
+            Showing{" "}
+            <b style={{ color: C.ink2, fontWeight: 500 }}>
+              {safePage * TRAY_PAGE_SIZE + 1}–
+              {Math.min(allDisplayRows.length, (safePage + 1) * TRAY_PAGE_SIZE)}
+            </b>{" "}
+            of {allDisplayRows.length}
+          </span>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={safePage === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+            >
+              Prev
+            </Button>
+            <span style={{ fontSize: "11px", color: C.muted }}>
+              {safePage + 1} / {pageCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
 

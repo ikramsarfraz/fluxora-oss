@@ -256,6 +256,9 @@ export function SupplierInvoiceDetailPage({
   const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<Set<string>>(
     new Set(),
   );
+  // Receiving-summary client-side pagination — see receivingRows below.
+  const [receivingPage, setReceivingPage] = useState(0);
+  const RECEIVING_PAGE_SIZE = 25;
 
   useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.referenceNumber);
 
@@ -282,6 +285,17 @@ export function SupplierInvoiceDetailPage({
     0,
   );
   const blockedItems = allItems.filter(i => i.status !== "in_stock");
+
+  // Receiving-summary rows pre-flattened so we can paginate. Bills with
+  // hundreds of cases would otherwise render every inventory item in
+  // one giant DOM block — painful to load and to scroll past on a phone.
+  const receivingRows = invoice.lines.flatMap(line =>
+    line.lotReceipts.flatMap(receipt => {
+      const lot = receipt.lot;
+      if (!lot) return [];
+      return lot.inventoryItems.map(item => ({ lot, item }));
+    }),
+  );
 
   const workflowAllowsReverse =
     invoice.status === "completed" && blockedItems.length === 0;
@@ -791,52 +805,117 @@ export function SupplierInvoiceDetailPage({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invoice.lines.flatMap(line =>
-                        line.lotReceipts.flatMap(receipt => {
-                          const lot = receipt.lot;
-                          if (!lot) return [];
-                          return lot.inventoryItems.map(item => (
-                            <TableRow key={item.id}>
-                              <TableCell>
-                                <Link
-                                  href={`/inventory/lots/${lot.id}`}
-                                  style={{
-                                    fontFamily: C.mono,
-                                    fontSize: "13px",
-                                    color: C.accent,
-                                    textDecoration: "none",
-                                  }}
-                                  className="hover:underline"
-                                >
-                                  {lot.lotNumber}
-                                </Link>
-                              </TableCell>
-                              <TableCell>
-                                {formatDisplayDate(lot.expirationDate)}
-                              </TableCell>
-                              <TableCell>
-                                <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
-                                  {item.barcodeId}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {item.cases.toLocaleString()}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatWeightLbs(item.exactWeightLbs)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="capitalize">
-                                  {item.status.replace("_", " ")}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          ));
-                        }),
-                      )}
+                      {(() => {
+                        const pageCount = Math.max(
+                          1,
+                          Math.ceil(receivingRows.length / RECEIVING_PAGE_SIZE),
+                        );
+                        const safePage = Math.min(receivingPage, pageCount - 1);
+                        const slice = receivingRows.slice(
+                          safePage * RECEIVING_PAGE_SIZE,
+                          (safePage + 1) * RECEIVING_PAGE_SIZE,
+                        );
+                        return slice.map(({ lot, item }) => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              <Link
+                                href={`/inventory/lots/${lot.id}`}
+                                style={{
+                                  fontFamily: C.mono,
+                                  fontSize: "13px",
+                                  color: C.accent,
+                                  textDecoration: "none",
+                                }}
+                                className="hover:underline"
+                              >
+                                {lot.lotNumber}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              {formatDisplayDate(lot.expirationDate)}
+                            </TableCell>
+                            <TableCell>
+                              <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                                {item.barcodeId}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {item.cases.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatWeightLbs(item.exactWeightLbs)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">
+                                {item.status.replace("_", " ")}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      })()}
                     </TableBody>
                   </Table>
                 </div>
+
+                {receivingRows.length > RECEIVING_PAGE_SIZE && (() => {
+                  const pageCount = Math.max(
+                    1,
+                    Math.ceil(receivingRows.length / RECEIVING_PAGE_SIZE),
+                  );
+                  const safePage = Math.min(receivingPage, pageCount - 1);
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "12px",
+                        marginTop: "4px",
+                        fontSize: "12px",
+                        color: C.muted,
+                      }}
+                    >
+                      <span>
+                        Showing{" "}
+                        <b style={{ color: C.ink, fontWeight: 500 }}>
+                          {safePage * RECEIVING_PAGE_SIZE + 1}–
+                          {Math.min(
+                            receivingRows.length,
+                            (safePage + 1) * RECEIVING_PAGE_SIZE,
+                          )}
+                        </b>{" "}
+                        of {receivingRows.length.toLocaleString()} inventory items
+                      </span>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={safePage === 0}
+                          onClick={() =>
+                            setReceivingPage(p => Math.max(0, p - 1))
+                          }
+                        >
+                          Prev
+                        </Button>
+                        <span style={{ fontSize: "12px", color: C.muted }}>
+                          Page {safePage + 1} of {pageCount}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={safePage >= pageCount - 1}
+                          onClick={() =>
+                            setReceivingPage(p => Math.min(pageCount - 1, p + 1))
+                          }
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </Section>

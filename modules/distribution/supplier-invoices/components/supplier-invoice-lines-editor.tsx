@@ -17,9 +17,11 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CreateProductDialog } from "./create-product-dialog";
 import {
   computeDraftLineWeight,
   formatEditableWeight,
@@ -608,6 +610,11 @@ function LineRow({
   const [expanded, setExpanded] = useState(false);
   const [lotOpen, setLotOpen] = useState(false);
 
+  // Inline create-product flow — mirrors the bulk-import review path so the
+  // user can add a missing catalog product without leaving the bill form.
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  const CREATE_PRODUCT_SENTINEL = "__create_new_product__";
+
   const productId = line?.productId ?? "";
   const unitType = line?.unitType ?? "catch_weight";
   const weightEntryMode = (line?.weightEntryMode ??
@@ -779,7 +786,17 @@ function LineRow({
             render={({ field, fieldState }) => (
               <Select
                 value={field.value || ""}
-                onValueChange={field.onChange}
+                onValueChange={value => {
+                  // Intercept the sentinel — open the create dialog
+                  // without setting the form value, so the row stays
+                  // empty until the new product exists. The dialog's
+                  // onCreated handler writes the real id below.
+                  if (value === CREATE_PRODUCT_SENTINEL) {
+                    setCreateProductOpen(true);
+                    return;
+                  }
+                  field.onChange(value);
+                }}
                 disabled={disabled || productsLoading}
               >
                 <SelectTrigger
@@ -808,6 +825,13 @@ function LineRow({
                       {p.label}
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <SelectItem value={CREATE_PRODUCT_SENTINEL}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Plus className="h-3.5 w-3.5" />
+                      Create new product…
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -1187,6 +1211,22 @@ function LineRow({
           />
         </div>
       )}
+
+      <CreateProductDialog
+        open={createProductOpen}
+        onOpenChange={setCreateProductOpen}
+        initialName={vendorProductName ?? ""}
+        onCreated={productId => {
+          // Apply the newly-created product to this row. The products
+          // prop is sourced from `useProducts()` higher up — that hook
+          // is invalidated by AddProductForm so the new product appears
+          // in the dropdown on the next render too.
+          setValue(`lines.${index}.productId`, productId, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
+        }}
+      />
     </div>
   );
 }
