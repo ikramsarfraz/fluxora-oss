@@ -11,6 +11,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import {
   useCreateSalesOrder,
+  useOpenDraftForCustomer,
   useUpdateSalesOrder,
   useUpdateSalesOrderStatus,
 } from "../hooks/use-orders";
@@ -82,6 +83,12 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const [autoSaveStatus, setAutoSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  // Drafts the user has explicitly chosen to ignore on this page load.
+  // Without this the banner would re-render every time their typing
+  // triggers a refetch.
+  const [dismissedDraftIds, setDismissedDraftIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const draftIdRef = useRef<string | null>(null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
@@ -114,6 +121,15 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
   const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
   const { data: selectedCustomer } = useCustomer(customerId);
+  const { data: existingDraft } = useOpenDraftForCustomer(customerId);
+  // Hide the banner if this draft is the session's own autosaved row,
+  // or the user already dismissed it. The dismiss set is keyed by
+  // draft id so picking a different customer with its own draft
+  // resurfaces the banner.
+  const showExistingDraftBanner =
+    !!existingDraft &&
+    existingDraft.id !== draftIdRef.current &&
+    !dismissedDraftIds.has(existingDraft.id);
   const { lineCount, estTotal } = useMemo(() => {
     const productsById = new Map<string, ProductListItem>();
     for (const p of products ?? []) productsById.set(p.id, p);
@@ -379,6 +395,62 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             ) : (
               stripSubscriptionEnforcementPrefix(submitError)
             )}
+          </div>
+        )}
+
+        {/* Existing-draft banner — surfaces when the picked customer
+            already has an unconfirmed draft from a previous session, so
+            the user can resume that one instead of accidentally
+            creating a duplicate via the autosave path. */}
+        {showExistingDraftBanner && existingDraft && (
+          <div
+            style={{
+              padding: "12px 16px",
+              marginBottom: "20px",
+              background: "var(--color-info-bg)",
+              border: "1px solid var(--color-info-border)",
+              borderRadius: C.radiusSm,
+              fontSize: "13px",
+              color: "var(--color-info-fg)",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              <b style={{ fontWeight: 500 }}>Existing draft</b> for{" "}
+              {selectedCustomer?.name ?? "this customer"}
+              {" — "}
+              <span style={{ fontFamily: C.mono }}>
+                {existingDraft.orderNumber ?? existingDraft.id.slice(0, 8)}
+              </span>
+              {", last edited "}
+              {new Date(existingDraft.updatedAt).toLocaleDateString()}.
+            </span>
+            <Button
+              type="button"
+              onClick={() => router.push(`/orders/${existingDraft.id}/edit`)}
+              variant="outline"
+              size="xs"
+              className="h-7 border-border-default bg-card px-3 text-[12px] text-ink shadow-none hover:bg-divider"
+            >
+              Resume draft
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                setDismissedDraftIds(prev => {
+                  const next = new Set(prev);
+                  next.add(existingDraft.id);
+                  return next;
+                })
+              }
+              variant="ghost"
+              size="xs"
+              className="h-7 px-2 text-[12px] text-subtle hover:bg-divider hover:text-ink"
+            >
+              Start fresh
+            </Button>
           </div>
         )}
 

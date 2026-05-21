@@ -418,7 +418,10 @@ export function formatFulfillmentTimestamp(
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
 
-  return new Intl.DateTimeFormat("en-US", {
+  // Use the user's runtime locale rather than hardcoding en-US — the
+  // rest of the date helpers (`formatDisplayDate`) follow the same
+  // pattern, and tenants outside the US see the right date order.
+  return new Intl.DateTimeFormat(undefined, {
     month: "2-digit",
     day: "2-digit",
     year: "numeric",

@@ -4,6 +4,7 @@ import {
   cancelSalesOrder,
   createSalesOrder,
   deleteSalesOrder,
+  findOpenDraftForCustomer,
   getSalesOrderById,
   getSalesOrdersPage,
   getSalesOrderAttachmentDownload,
@@ -29,6 +30,10 @@ export async function getSalesOrdersPageAction(
 
 export async function getSalesOrderByIdAction(id: string) {
   return await getSalesOrderById(id);
+}
+
+export async function findOpenDraftForCustomerAction(customerId: string) {
+  return await findOpenDraftForCustomer(customerId);
 }
 
 export async function deleteSalesOrderAction(id: string) {

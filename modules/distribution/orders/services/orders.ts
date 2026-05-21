@@ -1265,6 +1265,33 @@ export type SalesOrderDetail = NonNullable<
   Awaited<ReturnType<typeof getSalesOrderById>>
 >;
 
+/**
+ * Cheapest possible "does this customer already have an unconfirmed
+ * draft" lookup. The new-order form's autosave creates a draft on the
+ * first ready line; when a user returns to /orders/new for a customer
+ * that already has one, we surface it so they can resume instead of
+ * accidentally creating a second.
+ */
+export async function findOpenDraftForCustomer(customerId: string) {
+  const tenant = await getCurrentTenant();
+  return (
+    (await db.query.salesOrders.findFirst({
+      where: and(
+        eq(salesOrders.tenantId, tenant.id),
+        eq(salesOrders.customerId, customerId),
+        eq(salesOrders.status, "sales_order"),
+      ),
+      columns: {
+        id: true,
+        orderNumber: true,
+        orderDate: true,
+        updatedAt: true,
+      },
+      orderBy: [desc(salesOrders.updatedAt)],
+    })) ?? null
+  );
+}
+
 export async function deleteSalesOrder(id: string) {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();

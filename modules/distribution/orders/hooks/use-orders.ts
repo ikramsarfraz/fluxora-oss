@@ -5,6 +5,7 @@ import {
   cancelSalesOrderAction,
   createSalesOrderAction,
   deleteSalesOrderAction,
+  findOpenDraftForCustomerAction,
   generateInvoiceForSalesOrderAction,
   getSalesOrderByIdAction,
   getSalesOrdersPageAction,
@@ -38,6 +39,23 @@ export function useSalesOrder(id: string) {
     queryFn: () => getSalesOrderByIdAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 2,
+  });
+}
+
+/**
+ * Most-recent open (status: "sales_order") draft for a customer, or
+ * `null` if none. Used by the new-order form to surface a "resume
+ * existing draft" affordance when the user picks a customer that
+ * already has one — keeps the autosave from creating accidental
+ * duplicate drafts when a tab is closed and reopened.
+ */
+export function useOpenDraftForCustomer(customerId: string | undefined) {
+  return useQuery({
+    queryKey: ["sales-orders", "open-draft-for-customer", customerId] as const,
+    queryFn: () =>
+      customerId ? findOpenDraftForCustomerAction(customerId) : null,
+    enabled: !!customerId && isUuid(customerId),
+    staleTime: 1000 * 30,
   });
 }
 
