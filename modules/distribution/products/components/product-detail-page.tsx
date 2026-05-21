@@ -17,6 +17,14 @@ import { PageError } from "@/components/page-error";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -134,44 +142,46 @@ export function ProductDetailPage({ productId }: { productId: string }) {
       >
         {units.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="py-2 pr-4 text-left font-medium">Unit</th>
-                  <th className="py-2 pr-4 text-left font-medium">Purpose</th>
-                  <th className="py-2 pr-4 text-left font-medium">Conversion to base</th>
-                  <th className="py-2 pr-4 text-left font-medium">Fractional</th>
-                  <th className="py-2 text-left font-medium">Default</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Purpose</TableHead>
+                  <TableHead>Conversion to base</TableHead>
+                  <TableHead>Fractional</TableHead>
+                  <TableHead>Default</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {units.map(pu => (
-                  <tr key={pu.id}>
-                    <td className="py-2 pr-4">
+                  <TableRow key={pu.id}>
+                    <TableCell>
                       {pu.unit.abbreviation
                         ? `${pu.unit.name} (${pu.unit.abbreviation})`
                         : pu.unit.name}
-                    </td>
-                    <td className="py-2 pr-4">
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline" className="text-xs">
                         {PURPOSE_LABELS[pu.purpose] ?? pu.purpose}
                       </Badge>
-                    </td>
-                    <td className="py-2 pr-4 font-mono">
+                    </TableCell>
+                    <TableCell className="font-mono tabular-nums">
                       {Number(pu.conversionToBase).toString()}
-                    </td>
-                    <td className="py-2 pr-4 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {pu.allowsFractional ? "Yes" : "No"}
-                    </td>
-                    <td className="py-2">
+                    </TableCell>
+                    <TableCell>
                       {pu.isDefault ? (
-                        <Badge variant="secondary" className="text-xs">Default</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Default
+                        </Badge>
                       ) : null}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No units configured.</p>
