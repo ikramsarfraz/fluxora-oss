@@ -1277,6 +1277,11 @@ export async function deleteSalesOrder(id: string) {
 
   const order = await db.query.salesOrders.findFirst({
     where: and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)),
+    columns: {
+      id: true,
+      orderNumber: true,
+      status: true,
+    },
     with: {
       invoices: {
         columns: {
@@ -1345,6 +1350,22 @@ export async function deleteSalesOrder(id: string) {
       .where(inArray(salesOrderLineAllocations.id, allocationIdsToRelease));
     await restoreInventoryItemsToStock(inventoryItemIdsToRelease);
   }
+
+  // Record the delete BEFORE the row goes away — once it's gone, the
+  // audit row carrying its order number is the only trace left.
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "delete",
+    entityTable: "sales_orders",
+    entityId: id,
+    entityLabel: order.orderNumber ?? null,
+    changedFieldsJson: null,
+    beforeJson: JSON.stringify({ status: order.status }),
+    afterJson: null,
+    contextJson: JSON.stringify({ action: "delete_order" }),
+  });
 
   await db
     .delete(salesOrders)
@@ -1430,6 +1451,7 @@ export async function updateSalesOrderStatus(input: {
     // Promoting a draft into the confirmed/billable pool — same quota
     // gate that `createSalesOrder` runs on direct-confirm submits.
     await assertMonthlyOrdersWithinLimit(tenant);
+    const previousStatus = order.status;
     await db
       .update(salesOrders)
       .set({
@@ -1440,6 +1462,23 @@ export async function updateSalesOrderStatus(input: {
       .where(
         and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
       );
+
+    // Mirror the cancel-order audit pattern so support / compliance can
+    // tell who confirmed the order — the activity timeline rebuilds
+    // status transitions from these rows.
+    await db.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "update",
+      entityTable: "sales_orders",
+      entityId: input.id,
+      entityLabel: null,
+      changedFieldsJson: JSON.stringify(["status"]),
+      beforeJson: JSON.stringify({ status: previousStatus }),
+      afterJson: JSON.stringify({ status: "confirmed" }),
+      contextJson: JSON.stringify({ action: "confirm_order" }),
+    });
   }
 
   return getSalesOrderById(input.id);
@@ -2426,15 +2465,35 @@ export async function markSalesOrderLineShortShipped(input: {
     throw new Error("A fully fulfilled line cannot be marked short shipped.");
   }
 
+  const shortShippedAt = new Date();
+  const shortShipNotes = input.notes?.trim() || null;
   await db
     .update(salesOrderLines)
     .set({
-      shortShippedAt: new Date(),
+      shortShippedAt,
       shortShippedByUserId: currentUser.id,
-      shortShipNotes: input.notes?.trim() || null,
-      updatedAt: new Date(),
+      shortShipNotes,
+      updatedAt: shortShippedAt,
     })
     .where(eq(salesOrderLines.id, input.salesOrderLineId));
+
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "update",
+    entityTable: "sales_order_lines",
+    entityId: input.salesOrderLineId,
+    entityLabel: null,
+    changedFieldsJson: JSON.stringify(["shortShippedAt"]),
+    beforeJson: JSON.stringify({ shortShippedAt: null }),
+    afterJson: JSON.stringify({ shortShippedAt: shortShippedAt.toISOString() }),
+    contextJson: JSON.stringify({
+      action: "short_ship_line",
+      salesOrderId: input.salesOrderId,
+      notes: shortShipNotes,
+    }),
+  });
 
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
   await syncSalesOrderLineFulfillment(input.salesOrderLineId);
@@ -2541,15 +2600,36 @@ export async function reverseSalesOrderFulfillment(input: {
     throw new Error("This fulfillment entry has already been reversed.");
   }
 
+  const reversedAt = new Date();
+  const reversalReason = input.reversalReason?.trim() || null;
   await db
     .update(salesOrderFulfillments)
     .set({
-      reversedAt: new Date(),
+      reversedAt,
       reversedByUserId: currentUser.id,
-      reversalReason: input.reversalReason?.trim() || null,
-      updatedAt: new Date(),
+      reversalReason,
+      updatedAt: reversedAt,
     })
     .where(eq(salesOrderFulfillments.id, input.fulfillmentId));
+
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "update",
+    entityTable: "sales_order_fulfillments",
+    entityId: input.fulfillmentId,
+    entityLabel: null,
+    changedFieldsJson: JSON.stringify(["reversedAt"]),
+    beforeJson: JSON.stringify({ reversedAt: null }),
+    afterJson: JSON.stringify({ reversedAt: reversedAt.toISOString() }),
+    contextJson: JSON.stringify({
+      action: "reverse_fulfillment",
+      salesOrderId: input.salesOrderId,
+      salesOrderLineId: fulfillment.salesOrderLineId,
+      reversalReason,
+    }),
+  });
 
   await syncSalesOrderLineFulfillment(fulfillment.salesOrderLineId);
 

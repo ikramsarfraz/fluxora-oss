@@ -21,10 +21,13 @@ import {
   useRecordSalesOrderFulfillment,
   useMarkSalesOrderLineShortShipped,
 } from "../hooks/use-orders";
+import { OrderFulfillmentReversalDialog } from "./order-fulfillment-reversal-dialog";
 
 import type { SalesOrderDetail } from "../services/orders";
 import type { OrderActionAvailability } from "./order-action-rules";
 import {
+  formatFulfillmentTimestamp,
+  getLineAllFulfillmentRecords,
   getLineFulfillmentState,
   getLineFulfilledQuantity,
   getLineFulfilledWeight,
@@ -211,7 +214,10 @@ export function OrderItemsCard({
           <LineRow
             key={line.id}
             line={line}
+            orderId={order.id}
             awaitingFulfillment={awaitingFulfillment && !hasInvoice}
+            canReverseFulfillment={actionState.canReverseFulfillment}
+            reverseFulfillmentReason={actionState.reverseFulfillmentReason}
           />
         ))}
       </div>
@@ -350,25 +356,27 @@ function TotalsRow({
 
 function LineRow({
   line,
+  orderId,
   awaitingFulfillment,
+  canReverseFulfillment,
+  reverseFulfillmentReason,
 }: {
   line: Line;
+  orderId: string;
   awaitingFulfillment: boolean;
+  canReverseFulfillment: boolean;
+  reverseFulfillmentReason: string | null;
 }) {
   const price = getLinePricePerUnit(line);
   const pricingUnit = getLinePricingUnitType(line);
   const total = computeLineTotal(line);
   const unit = formatUnit(line);
   const fulfillState = getLineFulfillmentState(line);
-  const fulfillments = getLineFulfillmentRecords(line);
-  const firstFulfillment = fulfillments?.[0];
+  const allFulfillments = getLineAllFulfillmentRecords(line);
   const suggestedLot = line.allocations?.[0]?.inventoryItem?.lot?.lotNumber;
-  const lotExpiry =
-    firstFulfillment?.lot?.expirationDate ??
-    line.allocations?.[0]?.inventoryItem?.lot?.expirationDate;
 
   const showToFulfillTag = awaitingFulfillment && fulfillState === "not_started";
-  const hasDetail = firstFulfillment != null || suggestedLot != null;
+  const hasDetail = allFulfillments.length > 0 || suggestedLot != null;
 
   return (
     <div>
@@ -509,94 +517,191 @@ function LineRow({
       </div>
 
       {/* Lot & fulfillment detail <details> */}
-      {hasDetail && <LotDisclosure line={line} firstFulfillment={firstFulfillment} lotExpiry={lotExpiry} />}
+      {hasDetail && (
+        <LotDisclosure
+          line={line}
+          orderId={orderId}
+          canReverseFulfillment={canReverseFulfillment}
+          reverseFulfillmentReason={reverseFulfillmentReason}
+        />
+      )}
     </div>
   );
 }
 
 // ── LotDisclosure ──────────────────────────────────────────────────────────
 
-type FulfillmentRecord = NonNullable<ReturnType<typeof getLineFulfillmentRecords>>[number];
+type FulfillmentRecord = NonNullable<ReturnType<typeof getLineAllFulfillmentRecords>>[number];
 
 function LotDisclosure({
   line,
-  firstFulfillment,
-  lotExpiry,
+  orderId,
+  canReverseFulfillment,
+  reverseFulfillmentReason,
 }: {
   line: Line;
-  firstFulfillment: FulfillmentRecord | undefined;
-  lotExpiry: string | Date | null | undefined;
+  orderId: string;
+  canReverseFulfillment: boolean;
+  reverseFulfillmentReason: string | null;
 }) {
+  const allFulfillments = getLineAllFulfillmentRecords(line);
+  const [reversalTarget, setReversalTarget] = useState<FulfillmentRecord | null>(
+    null,
+  );
+
+  // Allocated-but-not-yet-fulfilled lots — shown as a hint above the
+  // fulfillment list so the warehouse user can see what's reserved.
+  const allocatedLot =
+    line.allocations?.[0]?.inventoryItem?.lot ?? null;
+  const allocatedLotExpiry = allocatedLot?.expirationDate ?? null;
+  const productLabel = line.product
+    ? `${line.product.sku} · ${line.product.name}`
+    : "Line item";
+
   return (
-    <details style={{ borderBottom: `1px solid ${C.line2}` }}>
-      <summary
-        style={{
-          listStyle: "none",
-          WebkitAppearance: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          fontSize: "12px",
-          color: C.muted,
-          padding: "10px 20px",
-          userSelect: "none",
-        }}
-      >
-        <ChevronIcon />
-        Lot &amp; fulfillment detail
-      </summary>
-      <div style={{ padding: "0 20px 16px", fontSize: "13px", color: C.ink2 }}>
-        {(firstFulfillment?.lot?.lotNumber ??
-          line.allocations?.[0]?.inventoryItem?.lot?.lotNumber) && (
-          <DisclosureRow borderBottom>
-            <span>Lot</span>
-            <span>
-              <span
+    <>
+      <details style={{ borderBottom: `1px solid ${C.line2}` }}>
+        <summary
+          style={{
+            listStyle: "none",
+            WebkitAppearance: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+            color: C.muted,
+            padding: "10px 20px",
+            userSelect: "none",
+          }}
+        >
+          <ChevronIcon />
+          Lot &amp; fulfillment detail
+          {allFulfillments.length > 1 ? ` · ${allFulfillments.length} entries` : null}
+        </summary>
+        <div style={{ padding: "0 20px 16px", fontSize: "13px", color: C.ink2 }}>
+          {allFulfillments.length === 0 && allocatedLot && (
+            <DisclosureRow>
+              <span>Allocated lot</span>
+              <span>
+                <LotPill lotNumber={allocatedLot.lotNumber} />
+                {allocatedLotExpiry && (
+                  <span style={{ color: C.warn, marginLeft: "8px" }}>
+                    expires {formatDisplayDate(allocatedLotExpiry)}
+                  </span>
+                )}
+              </span>
+            </DisclosureRow>
+          )}
+          {allFulfillments.map((fulfillment, index) => {
+            const lot = fulfillment.lot ?? fulfillment.inventoryItem?.lot ?? null;
+            const isReversed = !!fulfillment.reversedAt;
+            const isLast = index === allFulfillments.length - 1;
+
+            return (
+              <div
+                key={fulfillment.id}
                 style={{
-                  display: "inline-flex",
-                  padding: "2px 7px",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  background: C.line2,
-                  color: C.ink2,
-                  fontFamily: C.mono,
+                  borderBottom: isLast ? undefined : `1px dashed ${C.line2}`,
+                  paddingBottom: isLast ? 0 : "8px",
+                  marginBottom: isLast ? 0 : "8px",
+                  opacity: isReversed ? 0.6 : 1,
                 }}
               >
-                {firstFulfillment?.lot?.lotNumber ??
-                  line.allocations?.[0]?.inventoryItem?.lot?.lotNumber}
-              </span>
-              {lotExpiry && (
-                <span style={{ color: C.warn, marginLeft: "8px" }}>
-                  expires {formatDisplayDate(lotExpiry)}
-                </span>
-              )}
-            </span>
-          </DisclosureRow>
-        )}
-        {firstFulfillment && (
-          <DisclosureRow borderBottom={!!firstFulfillment.fulfilledBy?.fullName}>
-            <span>Fulfilled</span>
-            <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
-              {firstFulfillment.quantityFulfilled.toLocaleString()} cases
-              {firstFulfillment.weightLbs
-                ? ` · ${Number(firstFulfillment.weightLbs).toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`
-                : ""}
-              {firstFulfillment.fulfilledAt
-                ? ` · ${formatDisplayDate(firstFulfillment.fulfilledAt)}`
-                : ""}
-            </span>
-          </DisclosureRow>
-        )}
-        {firstFulfillment?.fulfilledBy?.fullName && (
-          <DisclosureRow>
-            <span>Recorded by</span>
-            <span>{firstFulfillment.fulfilledBy.fullName}</span>
-          </DisclosureRow>
-        )}
-      </div>
-    </details>
+                <DisclosureRow>
+                  <span>
+                    {isReversed ? "Reversed" : "Fulfilled"}
+                    {lot ? (
+                      <>
+                        {" · "}
+                        <LotPill lotNumber={lot.lotNumber} />
+                      </>
+                    ) : null}
+                  </span>
+                  <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
+                    {fulfillment.quantityFulfilled.toLocaleString()} cases
+                    {fulfillment.weightLbs
+                      ? ` · ${Number(fulfillment.weightLbs).toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`
+                      : ""}
+                    {" · "}
+                    {formatFulfillmentTimestamp(fulfillment.fulfilledAt)}
+                  </span>
+                </DisclosureRow>
+                {(fulfillment.fulfilledBy?.fullName || !isReversed) && (
+                  <DisclosureRow>
+                    <span style={{ fontSize: "12px", color: C.muted }}>
+                      {isReversed && fulfillment.reversedBy?.fullName
+                        ? `Reversed by ${fulfillment.reversedBy.fullName}`
+                        : fulfillment.fulfilledBy?.fullName
+                          ? `Recorded by ${fulfillment.fulfilledBy.fullName}`
+                          : ""}
+                    </span>
+                    {!isReversed ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setReversalTarget(fulfillment)}
+                        disabled={!canReverseFulfillment}
+                        title={
+                          !canReverseFulfillment
+                            ? (reverseFulfillmentReason ?? undefined)
+                            : "Reverse this fulfillment"
+                        }
+                        className="h-auto px-2 py-0.5 text-xs text-subtle hover:bg-divider hover:text-ink disabled:opacity-50"
+                      >
+                        Reverse
+                      </Button>
+                    ) : null}
+                  </DisclosureRow>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </details>
+
+      <OrderFulfillmentReversalDialog
+        open={!!reversalTarget}
+        onOpenChange={open => {
+          if (!open) setReversalTarget(null);
+        }}
+        orderId={orderId}
+        fulfillment={
+          reversalTarget
+            ? {
+                id: reversalTarget.id,
+                quantityFulfilled: reversalTarget.quantityFulfilled,
+                weightLbs: reversalTarget.weightLbs,
+                fulfilledAt: reversalTarget.fulfilledAt,
+                notes: reversalTarget.notes,
+                reversedAt: reversalTarget.reversedAt,
+                productLabel,
+                fulfilledBy: reversalTarget.fulfilledBy,
+              }
+            : null
+        }
+      />
+    </>
+  );
+}
+
+function LotPill({ lotNumber }: { lotNumber: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "2px 7px",
+        borderRadius: "4px",
+        fontSize: "11px",
+        fontWeight: 500,
+        background: C.line2,
+        color: C.ink2,
+        fontFamily: C.mono,
+      }}
+    >
+      {lotNumber}
+    </span>
   );
 }
 
