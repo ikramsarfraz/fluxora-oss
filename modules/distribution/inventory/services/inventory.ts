@@ -727,7 +727,14 @@ async function loadInventoryItemForAdjustment(inventoryItemId: string) {
 
 function calculateWriteOffLoss(args: {
   costPerUnitSnapshot: string | null;
-  costUnitTypeSnapshot: "catch_weight" | "fixed_case" | null;
+  // Accepts the full lineUnitType enum — per_each / per_unit lines
+  // contribute a flat per-unit loss (treated the same as fixed_case).
+  costUnitTypeSnapshot:
+    | "catch_weight"
+    | "fixed_case"
+    | "per_each"
+    | "per_unit"
+    | null;
   statusBefore: InventoryLifecycleState;
   statusAfter: InventoryLifecycleState;
   weightBefore: number;

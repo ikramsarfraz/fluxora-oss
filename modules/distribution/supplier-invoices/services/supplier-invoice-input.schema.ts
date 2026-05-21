@@ -79,6 +79,8 @@ export const supplierInvoiceChargeTypeEnum = z.enum([
 export const supplierInvoiceUnitTypeEnum = z.enum([
   "catch_weight",
   "fixed_case",
+  "per_each",
+  "per_unit",
 ]);
 
 export const supplierInvoiceHeaderInputSchema = z.object({
@@ -143,6 +145,21 @@ export const supplierInvoiceLineInputSchema = z
       .nullable()
       .optional(),
     expirationDateOverride: isoDateSchema.nullable().optional(),
+    /**
+     * UOM FK for per_each / per_unit lines. Null for weight modes, where
+     * the unit is implicit (lb / cs). Validated as a UUID when present.
+     */
+    purchaseUnitId: uuidSchema.nullable().optional(),
+    /**
+     * Snapshot abbreviation rendered in the UI (e.g. "ea", "cs", "gal").
+     * Server may also derive this from the UOM table when only the FK is
+     * sent — both paths converge in `receiving.ts`.
+     */
+    purchaseUnitAbbreviation: z
+      .string()
+      .max(16, "Unit abbreviation is too long (max 16 characters).")
+      .nullable()
+      .optional(),
   })
   .superRefine((line, ctx) => {
     // catch_weight requires a positive total weight; fixed_case may have
@@ -157,6 +174,8 @@ export const supplierInvoiceLineInputSchema = z
         });
       }
     }
+    // per_each / per_unit rely on quantityCases as the count field and
+    // ignore weight entirely — already validated above by quantityCases.
   });
 
 export const supplierInvoiceChargeInputSchema = z

@@ -114,7 +114,7 @@ function ReceiveCard({
     quantityCases: number;
     weightLbs: string;
     unitPrice: string;
-    unitType: "catch_weight" | "fixed_case";
+    unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   };
   state: ReceiveState;
   onChange: (state: ReceiveState) => void;

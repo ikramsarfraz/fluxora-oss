@@ -42,6 +42,8 @@ export function SupplierInvoiceEditShell({
         quantityCases: String(line.quantityCases ?? 0),
         weightLbs: String(line.weightLbs ?? "0"),
         unitPrice: String(line.unitPrice ?? "0"),
+        purchaseUnitAbbreviation:
+          line.purchaseUnitAbbreviationSnapshot ?? "",
         lotNumberOverride: "",
         expirationDateOverride: "",
       })),

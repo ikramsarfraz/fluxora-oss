@@ -85,13 +85,19 @@ export function formatSupplierInvoiceReferenceNumber(counter: number): string {
 
 export type SupplierInvoiceStatus = "draft" | "completed";
 
+export type SupplierInvoiceLineUnitType =
+  | "catch_weight"
+  | "fixed_case"
+  | "per_each"
+  | "per_unit";
+
 export type SupplierInvoiceLineInput = {
   /** Existing line id when editing; omit to insert a new line. */
   id?: string;
   productId: string;
   quantityCases: number;
   weightLbs: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: SupplierInvoiceLineUnitType;
   unitPrice: string;
   /** Persisted JSON array of per-case weights when detailed mode is used. */
   caseWeightsLbs?: string | null;
@@ -99,6 +105,10 @@ export type SupplierInvoiceLineInput = {
   lotNumberOverride?: string | null;
   /** Override for the default expiration (receiveDate + 7 days). */
   expirationDateOverride?: string | null;
+  /** UOM FK for per_each / per_unit lines; null/undefined for weight modes. */
+  purchaseUnitId?: string | null;
+  /** Snapshot abbreviation persisted for display (e.g. "ea", "gal", "cs"). */
+  purchaseUnitAbbreviation?: string | null;
 };
 
 export type SupplierInvoiceHeaderInput = {
@@ -141,7 +151,7 @@ function roundTo(value: number, digits: number): string {
 function computeLineTotal(line: {
   quantityCases: number;
   weightLbs: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: SupplierInvoiceLineUnitType;
   unitPrice: string;
 }): string {
   const unitPrice = Number(line.unitPrice) || 0;
@@ -149,8 +159,31 @@ function computeLineTotal(line: {
     const weight = Number(line.weightLbs) || 0;
     return roundTo(weight * unitPrice, 4);
   }
+  // fixed_case, per_each, per_unit all use the count * price math.
   const cases = Number(line.quantityCases) || 0;
   return roundTo(cases * unitPrice, 4);
+}
+
+/** Pricing direction snapshot mirrors the sales-side `pricing_unit_type` enum. */
+function pricingUnitTypeSnapshotFor(
+  unitType: SupplierInvoiceLineUnitType,
+): "per_lb" | "per_case" | null {
+  if (unitType === "catch_weight") return "per_lb";
+  if (unitType === "fixed_case") return "per_case";
+  return null;
+}
+
+/** Default abbreviation displayed when the user hasn't picked an explicit UOM. */
+function defaultPurchaseUnitAbbreviation(
+  unitType: SupplierInvoiceLineUnitType,
+  explicit: string | null | undefined,
+): string | null {
+  const trimmed = explicit?.trim();
+  if (trimmed) return trimmed;
+  if (unitType === "catch_weight") return "lb";
+  if (unitType === "fixed_case") return "cs";
+  if (unitType === "per_each") return "ea";
+  return null;
 }
 
 function normalizeSupplierInvoiceLine(
@@ -159,7 +192,15 @@ function normalizeSupplierInvoiceLine(
   if (line.unitType !== "catch_weight") {
     return {
       ...line,
+      // Non-catch-weight modes carry no per-case weight array.
       caseWeightsLbs: null,
+      // Non-weight modes ignore the weight column — clear it to zero so
+      // downstream readers (e.g. cost_per_lb math) don't accidentally
+      // pick up stale values.
+      weightLbs:
+        line.unitType === "per_each" || line.unitType === "per_unit"
+          ? "0"
+          : line.weightLbs,
     };
   }
 
@@ -243,10 +284,13 @@ async function syncSupplierInvoiceLineCost(args: {
     productId: string;
     quantityCases: number;
     weightLbs: string;
-    unitType: "catch_weight" | "fixed_case";
+    unitType: SupplierInvoiceLineUnitType;
     unitPrice: string;
   };
 }) {
+  // Weight-priced modes contribute a per-lb cost snapshot; per_each /
+  // per_unit return null and skip the snapshot entirely (V1 — separate
+  // per-unit cost table is a follow-up).
   const costPerLb = supplierInvoiceLineCostPerLb(args.line);
   if (costPerLb == null) return;
 
@@ -951,6 +995,16 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
           unitPrice: line.unitPrice,
           lineTotal: line.lineTotal,
           caseWeightsLbs: line.caseWeightsLbs ?? null,
+          // Unit-aware columns: `quantity` carries the count in the line's
+          // purchase UOM (mirrors quantityCases for legacy weight modes);
+          // snapshot fields preserve the rendered UOM at moment of record.
+          quantity: String(line.quantityCases),
+          purchaseUnitId: line.purchaseUnitId ?? null,
+          purchaseUnitAbbreviationSnapshot: defaultPurchaseUnitAbbreviation(
+            line.unitType,
+            line.purchaseUnitAbbreviation,
+          ),
+          pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
         })),
       )
       .returning();
@@ -1057,6 +1111,13 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
         unitPrice: line.unitPrice,
         lineTotal: line.lineTotal,
         caseWeightsLbs: line.caseWeightsLbs ?? null,
+        quantity: String(line.quantityCases),
+        purchaseUnitId: line.purchaseUnitId ?? null,
+        purchaseUnitAbbreviationSnapshot: defaultPurchaseUnitAbbreviation(
+          line.unitType,
+          line.purchaseUnitAbbreviation,
+        ),
+        pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
       })),
     );
 
@@ -1266,11 +1327,19 @@ async function postSupplierInvoiceInternal(args: {
     const perCaseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
     const totalWeight = Number(line.weightLbs ?? 0);
     const fallbackWeight = caseCount > 0 ? totalWeight / caseCount : totalWeight;
+    // For non-weight modes (per_each / per_unit) the line has no
+    // meaningful weight per case — store 0 so the NOT NULL column is
+    // happy and downstream readers can detect the sentinel via the
+    // line's unit_type.
+    const isWeightMode =
+      line.unitType === "catch_weight" || line.unitType === "fixed_case";
 
     const itemRows = Array.from({ length: caseCount }, (_, i) => {
-      const caseWeightLbs = perCaseWeights[i] != null
-        ? String(perCaseWeights[i])
-        : String(fallbackWeight);
+      const caseWeightLbs = !isWeightMode
+        ? "0"
+        : perCaseWeights[i] != null
+          ? String(perCaseWeights[i])
+          : String(fallbackWeight);
       return {
         productId: line.productId,
         lotId: lot.id,

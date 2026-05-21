@@ -7,13 +7,15 @@ export type SupplierInvoicePdfPaymentMethod =
 
 export type SupplierInvoicePdfPrefillLine = {
   productId: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   weightEntryMode: "total_weight" | "default_case_weight" | "manual_case_weights";
   quantityCases: string;
   weightLbs: string;
   defaultCaseWeightLbs: string;
   caseWeightEntries: string[];
   unitPrice: string;
+  /** Snapshot abbreviation (e.g. "ea", "gal") — empty for weight modes. */
+  purchaseUnitAbbreviation: string;
   lotNumberOverride: string;
   expirationDateOverride: string;
 };
@@ -81,6 +83,7 @@ function emptyPrefillLine(): SupplierInvoicePdfPrefillLine {
     defaultCaseWeightLbs: "",
     caseWeightEntries: [""],
     unitPrice: "0",
+    purchaseUnitAbbreviation: "",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

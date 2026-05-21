@@ -159,3 +159,69 @@ test("convertAiLineToPrefill: invalid quantityCases (decimal or negative) defaul
   );
   assert.equal(result.line.quantityCases, "1");
 });
+
+// ---------------------------------------------------------------------------
+// Per-each / per-unit modes — non-weight pricing for beverages etc.
+// ---------------------------------------------------------------------------
+
+test("convertAiLineToPrefill: per_each skips weight back-calc and carries quantity verbatim", () => {
+  const { line, backCalculatedWeight, manualCaseWeights } = convertAiLineToPrefill({
+    vendorProductName: "COCA-COLA 12OZ CAN",
+    quantityCases: 24,
+    quantityWeight: null,
+    caseWeights: null,
+    unitPrice: 1.25,
+    lineTotal: 30,
+    unitType: "per_each",
+    unitOfMeasure: "ea",
+  });
+  assert.equal(line.unitType, "per_each");
+  assert.equal(line.quantityCases, "24");
+  assert.equal(line.weightLbs, "0");
+  assert.equal(line.unitPrice, "1.25");
+  assert.equal(line.purchaseUnitAbbreviation, "ea");
+  assert.equal(line.weightEntryMode, "total_weight");
+  assert.equal(backCalculatedWeight, false);
+  assert.equal(manualCaseWeights, false);
+});
+
+test("convertAiLineToPrefill: per_unit passes through the abbreviation and skips weight", () => {
+  const { line, backCalculatedWeight } = convertAiLineToPrefill({
+    vendorProductName: "COCA-COLA 12PK CASE",
+    quantityCases: 5,
+    quantityWeight: 50, // model returned weight; we should ignore it
+    caseWeights: null,
+    unitPrice: 9.99,
+    lineTotal: 49.95,
+    unitType: "per_unit",
+    unitOfMeasure: "case",
+  });
+  assert.equal(line.unitType, "per_unit");
+  assert.equal(line.quantityCases, "5");
+  // per_unit ignores weight entirely — no back-calc, no carry-through
+  assert.equal(line.weightLbs, "0");
+  assert.equal(line.unitPrice, "9.99");
+  assert.equal(line.purchaseUnitAbbreviation, "case");
+  assert.equal(backCalculatedWeight, false);
+});
+
+test("convertAiLineToPrefill: per_each without abbreviation falls back to empty string", () => {
+  const { line } = convertAiLineToPrefill({
+    vendorProductName: "WATER BOTTLE",
+    quantityCases: 12,
+    quantityWeight: null,
+    caseWeights: null,
+    unitPrice: 0.5,
+    lineTotal: 6,
+    unitType: "per_each",
+    unitOfMeasure: null,
+  });
+  assert.equal(line.purchaseUnitAbbreviation, "");
+});
+
+test("convertAiLineToPrefill: catch_weight still carries unitOfMeasure as empty string", () => {
+  // Weight modes don't use the abbreviation, but the form field is still
+  // populated to keep the prefill shape stable.
+  const { line } = convertAiLineToPrefill(makeAiLine({ unitOfMeasure: null }));
+  assert.equal(line.purchaseUnitAbbreviation, "");
+});

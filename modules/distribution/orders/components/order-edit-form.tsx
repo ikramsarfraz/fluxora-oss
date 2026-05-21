@@ -173,12 +173,20 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
         order.lines?.map(line => {
           const product = productsById.get(line.productId);
           const defaultSalesUnit = getDefaultSalesUnit(product);
+          // Sales orders only support catch_weight / fixed_case today. The
+          // underlying enum now also includes per_each / per_unit (used by
+          // supplier invoices for beverages), so we narrow here before
+          // handing the value to the order form schema.
+          const inferredUnitType =
+            line.unitType === "catch_weight" || line.unitType === "fixed_case"
+              ? line.unitType
+              : inferLineUnitType(product);
           return {
             key: line.id,
             existingLineId: line.id,
             productId: line.productId,
             salesUnitId: line.salesUnitId ?? defaultSalesUnit?.unitId ?? "",
-            unitType: line.unitType ?? inferLineUnitType(product),
+            unitType: inferredUnitType,
             inventoryItemIds: (line.allocations ?? [])
               .map(allocation => allocation.inventoryItemId)
               .filter((id): id is string => Boolean(id)),

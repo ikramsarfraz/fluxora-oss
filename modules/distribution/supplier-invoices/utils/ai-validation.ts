@@ -9,6 +9,32 @@ import { parseInvoiceDate } from "./invoice-date-parsing";
 // Zod schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Closed allow-list of unit-of-measure abbreviations the AI is permitted
+ * to emit. A server-side resolver maps these (case-insensitively) onto
+ * `units_of_measure` rows; anything outside this list collapses to null.
+ * Kept small on purpose — adding entries here without a matching seed
+ * row will produce orphan abbreviations the form can't render cleanly.
+ */
+export const AI_UNIT_OF_MEASURE_ALLOWLIST = [
+  "lb",
+  "kg",
+  "oz",
+  "ea",
+  "cs",
+  "case",
+  "bx",
+  "box",
+  "bag",
+  "gal",
+  "L",
+  "fl oz",
+  "pk",
+  "pack",
+  "ct",
+] as const;
+export type AiUnitOfMeasure = (typeof AI_UNIT_OF_MEASURE_ALLOWLIST)[number];
+
 // Schema doubles as the OpenAI strict structured-output schema (via
 // `zodResponseFormat`). Strict mode forbids `.optional()` and requires every
 // property to appear in `required`, so `caseWeights` is `.nullable()` —
@@ -21,7 +47,16 @@ const AiInvoiceLineSchema = z.object({
   caseWeights: z.array(z.number()).nullable(),
   unitPrice: z.number().nullable(),
   lineTotal: z.number().nullable(),
-  unitType: z.enum(["catch_weight", "fixed_case"]).nullable(),
+  unitType: z
+    .enum(["catch_weight", "fixed_case", "per_each", "per_unit"])
+    .nullable(),
+  /**
+   * Free-string UOM (e.g. "case", "gal", "ea"). Validated against the
+   * allow-list in `validateExtractionResult` rather than via z.enum so
+   * pre-prompt fixtures and stricter prompts can coexist without
+   * breaking the strict-output schema requirements.
+   */
+  unitOfMeasure: z.string().nullable(),
   notes: z.string().nullable(),
 });
 
@@ -121,6 +156,10 @@ function backfillOptionalLineFields(raw: unknown): unknown {
       if (!("caseWeights" in next)) next.caseWeights = null;
       if (!("vendorProductDescription" in next))
         next.vendorProductDescription = null;
+      // unitOfMeasure was added with the per_each / per_unit modes — older
+      // prompts and fixtures don't emit it, so default to null so strict
+      // schema validation still passes.
+      if (!("unitOfMeasure" in next)) next.unitOfMeasure = null;
       return next;
     });
   }
@@ -164,6 +203,20 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
   // as "Line N" placeholders in the Review UI — block them at the source.
   data.lines = data.lines.filter(line => line.vendorProductName.trim().length > 0);
 
+  // Allow-list lowered for case-insensitive matching. Anything outside
+  // the list (or a non-string value) collapses to null so the form
+  // doesn't render unparseable abbreviations.
+  const uomAllowlist = new Set(
+    AI_UNIT_OF_MEASURE_ALLOWLIST.map(u => u.toLowerCase()),
+  );
+  function sanitizeUnitOfMeasure(raw: unknown): string | null {
+    if (raw == null) return null;
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    return uomAllowlist.has(trimmed.toLowerCase()) ? trimmed : null;
+  }
+
   // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
   // whose length disagrees with quantityCases (likely a model misread).
   // Also collapse whitespace-only descriptions to null so the UI never has
@@ -180,26 +233,44 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         ? null
         : description;
 
+    const unitOfMeasure = sanitizeUnitOfMeasure(line.unitOfMeasure);
+
     const raw = line.caseWeights ?? null;
     if (raw === null) {
-      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
+      return {
+        ...line,
+        vendorProductDescription: dedupedDescription,
+        caseWeights: null,
+        unitOfMeasure,
+      };
     }
 
     const filtered = raw.filter(w => Number.isFinite(w) && w > 0);
     if (filtered.length === 0) {
-      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
+      return {
+        ...line,
+        vendorProductDescription: dedupedDescription,
+        caseWeights: null,
+        unitOfMeasure,
+      };
     }
 
     // Tolerate caseWeights even when quantityCases is null — the merge step
     // can adopt the array length as the case count.
     if (line.quantityCases !== null && filtered.length !== line.quantityCases) {
-      return { ...line, vendorProductDescription: dedupedDescription, caseWeights: null };
+      return {
+        ...line,
+        vendorProductDescription: dedupedDescription,
+        caseWeights: null,
+        unitOfMeasure,
+      };
     }
 
     return {
       ...line,
       vendorProductDescription: dedupedDescription,
       caseWeights: filtered,
+      unitOfMeasure,
     };
   });
 

@@ -222,7 +222,11 @@ function buildLine({
       weight,
       unitPrice,
       total,
-      fixed: line.unitType === "fixed_case",
+      // "fixed" on the review row means "non-catch-weight" — true for
+    // fixed_case, per_each, and per_unit alike. The downstream review
+    // editor only distinguishes weight vs no-weight; precise type
+    // selection happens in the main form.
+    fixed: line.unitType !== "catch_weight",
       match: { status: "fee", candidates: [] },
     };
   }
@@ -241,7 +245,11 @@ function buildLine({
       weight,
       unitPrice,
       total,
-      fixed: line.unitType === "fixed_case",
+      // "fixed" on the review row means "non-catch-weight" — true for
+    // fixed_case, per_each, and per_unit alike. The downstream review
+    // editor only distinguishes weight vs no-weight; precise type
+    // selection happens in the main form.
+    fixed: line.unitType !== "catch_weight",
       match: {
         status: "matched",
         product: product.name,
@@ -264,7 +272,11 @@ function buildLine({
     weight,
     unitPrice,
     total,
-    fixed: line.unitType === "fixed_case",
+    // "fixed" on the review row means "non-catch-weight" — true for
+    // fixed_case, per_each, and per_unit alike. The downstream review
+    // editor only distinguishes weight vs no-weight; precise type
+    // selection happens in the main form.
+    fixed: line.unitType !== "catch_weight",
     match: {
       status: "unmatched",
       candidates: (unresolved?.topCandidates ?? []).map(c =>

@@ -10,7 +10,9 @@ export type AiLineLike = {
   caseWeights?: number[] | null;
   unitPrice: number | null;
   lineTotal: number | null;
-  unitType: "catch_weight" | "fixed_case" | null;
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit" | null;
+  /** Optional UOM abbreviation from the AI; passed through to the form. */
+  unitOfMeasure?: string | null;
 };
 
 export type AiLineConversion = {
@@ -43,6 +45,7 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
   const caseWeights = (line.caseWeights ?? []).filter(
     w => Number.isFinite(w) && w > 0,
   );
+  const purchaseUnitAbbreviation = (line.unitOfMeasure ?? "").trim();
 
   // Prefer the AI's quantityCases. If absent but per-case weights are present
   // and consistent, derive count from the caseWeights array length.
@@ -54,6 +57,31 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
     quantityCases = caseWeights.length;
   }
   if (!Number.isInteger(quantityCases) || quantityCases <= 0) quantityCases = 1;
+
+  // Non-weight modes short-circuit: no weight, no per-case array, no
+  // back-calculation. quantityCases acts as the each / unit count.
+  if (unitType === "per_each" || unitType === "per_unit") {
+    return {
+      line: {
+        productId: "",
+        unitType,
+        weightEntryMode: "total_weight",
+        quantityCases: String(quantityCases),
+        weightLbs: "0",
+        defaultCaseWeightLbs: "",
+        caseWeightEntries: Array.from(
+          { length: Math.max(1, quantityCases) },
+          () => "",
+        ),
+        unitPrice: String(line.unitPrice ?? 0),
+        purchaseUnitAbbreviation,
+        lotNumberOverride: "",
+        expirationDateOverride: "",
+      },
+      backCalculatedWeight: false,
+      manualCaseWeights: false,
+    };
+  }
 
   let weight = line.quantityWeight ?? 0;
   let backCalculatedWeight = false;
@@ -102,6 +130,7 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
       defaultCaseWeightLbs: "",
       caseWeightEntries,
       unitPrice: String(line.unitPrice ?? 0),
+      purchaseUnitAbbreviation,
       lotNumberOverride: "",
       expirationDateOverride: "",
     },

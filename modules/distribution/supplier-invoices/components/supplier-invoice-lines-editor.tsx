@@ -35,8 +35,36 @@ import type { SupplierCostDiffEntry } from "@/modules/distribution/supplier-invo
 import {
   computeLineTotal,
   emptyLine,
+  isWeightLineUnitType,
   type SupplierInvoiceFormValues,
+  type SupplierInvoiceLineUnitType,
 } from "./supplier-invoice-form.schema";
+
+/**
+ * Resolves the unit-price suffix shown after the dollar input.
+ *   catch_weight → "/lb"
+ *   fixed_case   → "/cs"
+ *   per_each     → "/ea" (or the explicit abbreviation, if entered)
+ *   per_unit     → "/{abbr}" with a sensible default of "/unit"
+ */
+function priceSuffixFor(
+  unitType: SupplierInvoiceLineUnitType,
+  abbreviation: string | undefined | null,
+): string {
+  const trimmed = abbreviation?.trim();
+  if (unitType === "catch_weight") return "/lb";
+  if (unitType === "fixed_case") return "/cs";
+  if (unitType === "per_each") return trimmed ? `/${trimmed}` : "/ea";
+  return trimmed ? `/${trimmed}` : "/unit";
+}
+
+function quantityHeaderFor(
+  unitType: SupplierInvoiceLineUnitType,
+): string {
+  if (unitType === "per_each") return "Units";
+  if (unitType === "per_unit") return "Qty";
+  return "Cases";
+}
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 const T = {
@@ -209,20 +237,38 @@ function FooterStats({
 }) {
   const lines = useWatch({ control, name: "lines" });
   const arr = lines ?? [];
+
+  // Split totals by mode so mixed bills (e.g. meat + beverages) don't
+  // misleadingly sum a fake "weight" across the unit-priced lines.
   const totalCases = arr.reduce(
     (s, l) => s + (getPositiveInteger(l?.quantityCases) || 0),
     0,
   );
-  const totalWeight = arr.reduce(
+  const weightLines = arr.filter(l =>
+    isWeightLineUnitType(
+      (l?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType,
+    ),
+  );
+  const totalWeight = weightLines.reduce(
     (s, l) => s + computeDraftLineWeight(l ?? {}),
     0,
   );
+  const unitCount = arr.reduce((s, l) => {
+    const type = (l?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType;
+    if (type === "per_each" || type === "per_unit") {
+      return s + (getPositiveInteger(l?.quantityCases) || 0);
+    }
+    return s;
+  }, 0);
   const invoiceTotal = arr.reduce((s, l) => s + computeLineTotal(l ?? {}), 0);
   return (
     <div style={{ display: "flex", gap: 24, alignItems: "baseline" }}>
       <Stat label="Lines" value={lineCount} />
       <Stat label="Cases" value={totalCases} />
-      <Stat label="Total weight" value={`${fmt2(totalWeight)} lb`} />
+      {weightLines.length > 0 ? (
+        <Stat label="Total weight" value={`${fmt2(totalWeight)} lb`} />
+      ) : null}
+      {unitCount > 0 ? <Stat label="Units" value={unitCount} /> : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <div
           style={{
@@ -321,8 +367,8 @@ export function SupplierInvoiceLinesEditor({
       >
         <div>Product</div>
         <div>Pricing</div>
-        <div style={{ textAlign: "center" }}>Cases</div>
-        <div style={{ textAlign: "right" }}>Weight (lbs)</div>
+        <div style={{ textAlign: "center" }}>Cases / Units</div>
+        <div style={{ textAlign: "right" }}>Weight or UOM</div>
         <div style={{ textAlign: "right" }}>Unit price</div>
         <div style={{ textAlign: "right" }}>Line total</div>
         <div />
@@ -616,12 +662,15 @@ function LineRow({
   const CREATE_PRODUCT_SENTINEL = "__create_new_product__";
 
   const productId = line?.productId ?? "";
-  const unitType = line?.unitType ?? "catch_weight";
+  const unitType = (line?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType;
   const weightEntryMode = (line?.weightEntryMode ??
     "total_weight") as SupplierInvoiceWeightEntryMode;
   const quantityCases = getPositiveInteger(line?.quantityCases);
   const sku = products.find((p) => p.id === productId)?.sku ?? "";
   const isCatchWeight = unitType === "catch_weight";
+  const isWeightMode = isWeightLineUnitType(unitType);
+  const isUnitMode = unitType === "per_each" || unitType === "per_unit";
+  const purchaseUnitAbbreviation = line?.purchaseUnitAbbreviation ?? "";
 
   // Auto-open tray when switching to catch_weight
   const prevUnitTypeRef = useRef(unitType);
@@ -671,10 +720,13 @@ function LineRow({
 
   const totalWeightLbs = isCatchWeight
     ? computeDraftLineWeight(line ?? {})
-    : Number(line?.weightLbs ?? "0") || 0;
+    : isWeightMode
+      ? Number(line?.weightLbs ?? "0") || 0
+      : 0;
 
   // Live per-lb cost recomputed as the user types. Matches what the server
-  // would write into productSupplierCosts at completion.
+  // would write into productSupplierCosts at completion. Unit-priced lines
+  // (per_each, per_unit) return null and the callout is suppressed.
   const liveCostPerLb = (() => {
     if (!supplierId || !productId) return null;
     return supplierInvoiceLineCostPerLb({
@@ -883,7 +935,13 @@ function LineRow({
                   flexShrink: 0,
                 }}
               />
-              {isCatchWeight ? "Variable weight" : "Fixed case"}
+              {unitType === "catch_weight"
+                ? "Variable weight"
+                : unitType === "fixed_case"
+                  ? "Fixed case"
+                  : unitType === "per_each"
+                    ? "Per each"
+                    : "Per unit"}
             </div>
           </div>
           <div
@@ -894,9 +952,13 @@ function LineRow({
               paddingLeft: 2,
             }}
           >
-            {isCatchWeight
+            {unitType === "catch_weight"
               ? "Priced per lb · weight per case"
-              : "Priced per case · fixed weight"}
+              : unitType === "fixed_case"
+                ? "Priced per case · fixed weight"
+                : unitType === "per_each"
+                  ? "Priced per piece · no weight"
+                  : "Priced per UOM · no weight"}
           </div>
         </div>
 
@@ -910,8 +972,54 @@ function LineRow({
           {...register(`lines.${index}.quantityCases`)}
         />
 
-        {/* 4. Weight — toggle button for catch_weight, plain input for fixed */}
-        {isCatchWeight ? (
+        {/* 4. Weight (catch/fixed) or UOM input (per_each/per_unit) */}
+        {isUnitMode ? (
+          <div>
+            <div style={{ position: "relative" }}>
+              <Input
+                type="text"
+                placeholder={unitType === "per_each" ? "ea" : "case / gal / bag"}
+                disabled={disabled}
+                maxLength={16}
+                style={{
+                  height: 38,
+                  textAlign: "right",
+                  paddingRight: 12,
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+                {...register(`lines.${index}.purchaseUnitAbbreviation`)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded((o) => !o)}
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: expanded ? T.accent : T.mutedSoft,
+                background: "none",
+                border: "none",
+                padding: "0 2px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              <ChevronDown
+                style={{
+                  width: 10,
+                  height: 10,
+                  transform: expanded ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s",
+                }}
+              />
+              Pricing
+            </button>
+          </div>
+        ) : isCatchWeight ? (
           <button
             type="button"
             onClick={() => setExpanded((o) => !o)}
@@ -1065,7 +1173,7 @@ function LineRow({
               pointerEvents: "none",
             }}
           >
-            {isCatchWeight ? "/lb" : "/cs"}
+            {priceSuffixFor(unitType, purchaseUnitAbbreviation)}
           </span>
         </div>
 
@@ -1522,6 +1630,8 @@ function CatchWeightTray({
                     Variable weight
                   </SelectItem>
                   <SelectItem value="fixed_case">Fixed case</SelectItem>
+                  <SelectItem value="per_each">Per each</SelectItem>
+                  <SelectItem value="per_unit">Per unit</SelectItem>
                 </SelectContent>
               </Select>
             )}

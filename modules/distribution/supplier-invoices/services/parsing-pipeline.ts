@@ -1083,6 +1083,7 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     defaultCaseWeightLbs: "",
     caseWeightEntries: [""],
     unitPrice: "0",
+    purchaseUnitAbbreviation: "",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

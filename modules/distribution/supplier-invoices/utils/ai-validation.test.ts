@@ -208,7 +208,8 @@ test("validateExtractionResult: returns null for non-object input", () => {
 test("validateExtractionResult: rejects invalid unitType", () => {
   const payload = {
     ...validExtractionPayload(),
-    lines: [{ ...validExtractionPayload().lines[0], unitType: "per_unit" }],
+    // `per_kilo` is not a member of the enum — should fail.
+    lines: [{ ...validExtractionPayload().lines[0], unitType: "per_kilo" }],
   };
   assert.equal(validateExtractionResult(payload), null);
 });
@@ -672,4 +673,75 @@ test("AI extraction output with real lines passes validation even when supplier 
   assert.equal(result!.supplierName, null);
   assert.equal(result!.lines.length, 1);
   assert.equal(result!.confidence, 75);
+});
+
+// ---------------------------------------------------------------------------
+// Unit-of-measure normalization on per_each / per_unit lines
+// ---------------------------------------------------------------------------
+
+function beverageExtractionPayload() {
+  return {
+    supplierName: "COKE DISTRIBUTOR",
+    supplierInvoiceNumber: "BEV-001",
+    invoiceDate: "2026-05-01",
+    totalAmount: 49.95,
+    subtotal: 49.95,
+    fees: [],
+    lines: [
+      {
+        vendorProductName: "COCA-COLA 12PK",
+        quantityCases: 5,
+        quantityWeight: null,
+        unitPrice: 9.99,
+        lineTotal: 49.95,
+        unitType: "per_unit",
+        unitOfMeasure: "case",
+        notes: null,
+      },
+    ],
+    confidence: 90,
+    warnings: [],
+    reasoning: "Beverage invoice with per-case pricing.",
+  };
+}
+
+test("validateExtractionResult: accepts per_unit line with case UOM", () => {
+  const result = validateExtractionResult(beverageExtractionPayload());
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_unit");
+  assert.equal(result!.lines[0].unitOfMeasure, "case");
+});
+
+test("validateExtractionResult: drops unitOfMeasure outside the allow-list", () => {
+  const payload = beverageExtractionPayload();
+  payload.lines[0].unitOfMeasure = "barrel"; // not in allowlist
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitOfMeasure, null);
+});
+
+test("validateExtractionResult: accepts per_each lines", () => {
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "CANDY BAR",
+    quantityCases: 24,
+    quantityWeight: null,
+    unitPrice: 1.25,
+    lineTotal: 30,
+    unitType: "per_each",
+    unitOfMeasure: "ea",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_each");
+  assert.equal(result!.lines[0].unitOfMeasure, "ea");
+});
+
+test("validateExtractionResult: backfills missing unitOfMeasure as null on legacy fixtures", () => {
+  // Older catch_weight fixtures don't carry unitOfMeasure — the
+  // backfill should set it to null rather than fail validation.
+  const result = validateExtractionResult(validExtractionPayload());
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitOfMeasure, null);
 });

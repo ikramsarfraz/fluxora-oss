@@ -168,7 +168,13 @@ function toFixedCostAmount(value: number) {
 
 function calculateFulfillmentCostSnapshot(input: {
   costPerUnitSnapshot: string;
-  costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+  // Underlying enum widened — per_each / per_unit treated like fixed_case
+  // for cost math (count * unit cost), with no weight requirement.
+  costUnitTypeSnapshot:
+    | "catch_weight"
+    | "fixed_case"
+    | "per_each"
+    | "per_unit";
   quantityFulfilled: number;
   weightLbs: number | null;
 }) {
@@ -184,9 +190,9 @@ function calculateFulfillmentCostSnapshot(input: {
   }
 
   const costAmount =
-    input.costUnitTypeSnapshot === "fixed_case"
-      ? input.quantityFulfilled * costPerUnit
-      : (input.weightLbs ?? 0) * costPerUnit;
+    input.costUnitTypeSnapshot === "catch_weight"
+      ? (input.weightLbs ?? 0) * costPerUnit
+      : input.quantityFulfilled * costPerUnit;
 
   return {
     costPerUnitSnapshot: input.costPerUnitSnapshot,
@@ -512,7 +518,11 @@ type SalesOrderLineSnapshot = {
 type ExistingSnapshotLine = {
   productId: string;
   salesUnitId: string | null;
-  unitType: "catch_weight" | "fixed_case";
+  // The underlying enum has widened to include per_each / per_unit (used by
+  // supplier invoices). Sales orders treat those identically to fixed_case
+  // for snapshot purposes — accept the wider union so reads from the DB
+  // line out of the box.
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   pricePerLbOverride: string | null;
   conversionToBaseSnapshot: string | null;
   baseUnitIdSnapshot: string | null;
@@ -2081,7 +2091,15 @@ async function selectAutoFulfillmentInventory(input: {
     originalExactWeightLbs: string;
     allocatedWeightLbs: number;
     costPerUnitSnapshot: string;
-    costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+    // Underlying enum was widened to include per_each / per_unit (supplier-
+    // invoice beverages). Fulfillment carries the snapshot verbatim — only
+    // catch_weight needs special-case weight math, the others all behave
+    // like fixed_case for cost-loss calculation.
+    costUnitTypeSnapshot:
+      | "catch_weight"
+      | "fixed_case"
+      | "per_each"
+      | "per_unit";
   }> = [];
   let selectedQuantity = 0;
 

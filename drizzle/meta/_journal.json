@@ -386,6 +386,13 @@
 			"when": 1779101400000,
 			"tag": "0054_sales_order_discount_amount",
 			"breakpoints": true
+		},
+		{
+			"idx": 55,
+			"version": "7",
+			"when": 1779101500000,
+			"tag": "0055_supplier_invoice_line_uom",
+			"breakpoints": true
 		}
 	]
 }

@@ -48,10 +48,32 @@ fees vs lines:
   a new category.
 
 Line-item unit type:
-- "catch_weight" — line has BOTH weight and per-lb rate.
-- "fixed_case" — line has a per-case rate, no weight.
+- "catch_weight" — line has BOTH weight and per-lb rate. (Meat sold by lb.)
+- "fixed_case" — line has a per-case rate, no weight. (Meat in fixed cases.)
+- "per_each" — non-weight item priced per piece (cans of soda, candy bars,
+  bottles of water, individual fruits). quantityCases is the count of items;
+  unitPrice is $/each. NO weight column expected.
+- "per_unit" — non-weight item priced per case or per other UOM
+  (case of 12 cans at $9.99/case, gallon jugs of milk at $4.50/gal,
+  bag of chips at $1.20/bag). quantityCases is the count of UOMs;
+  unitOfMeasure carries the abbreviation; unitPrice is $/UOM.
 - null when you cannot determine.
-- quantityCases is the number of cases/boxes; quantityWeight is TOTAL weight in lbs.
+- quantityCases is the count field for ALL types; quantityWeight is TOTAL
+  weight in lbs (catch_weight only — leave null for fixed/each/unit).
+
+unitOfMeasure (required for per_unit, optional for per_each, ignored for weight):
+- Must be one of: "lb", "kg", "oz", "ea", "cs", "case", "bx", "box",
+  "bag", "gal", "L", "fl oz", "pk", "pack", "ct". Extract VERBATIM from
+  the invoice when shown (e.g. a label "$9.99/CASE" → "case"; "$4.50/GAL"
+  → "gal"). If no UOM is printed and the line is clearly per-each (e.g.
+  "12 EA" or "EACH"), set to "ea". When unclear, return null.
+
+BEVERAGES & NON-WEIGHT GOODS — CRITICAL:
+- Soda, water, juice, energy drinks, candy, chips, packaged snacks:
+  these are NEVER catch_weight. Default to per_unit when a pack size /
+  case is implied (e.g. "12 PK COKE"); per_each only when truly sold
+  one-at-a-time. NEVER fabricate a weight for these — return
+  quantityWeight = null and let unitType + unitOfMeasure carry the truth.
 
 PRODUCT NAME vs DESCRIPTION — CRITICAL:
 - Many invoices have TWO product columns. The first is a short Item code/name

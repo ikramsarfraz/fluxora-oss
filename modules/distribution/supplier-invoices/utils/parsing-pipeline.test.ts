@@ -28,6 +28,7 @@ function makeLine(productId = ""): SupplierInvoicePdfPrefillLine {
     defaultCaseWeightLbs: "",
     caseWeightEntries: [""],
     unitPrice: "2.50",
+    purchaseUnitAbbreviation: "",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

@@ -216,8 +216,13 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   credit_card: "Credit card",
 };
 
-function unitTypeLabel(type: "catch_weight" | "fixed_case") {
-  return type === "catch_weight" ? "Catch weight" : "Fixed case";
+function unitTypeLabel(
+  type: "catch_weight" | "fixed_case" | "per_each" | "per_unit",
+) {
+  if (type === "catch_weight") return "Catch weight";
+  if (type === "fixed_case") return "Fixed case";
+  if (type === "per_each") return "Per each";
+  return "Per unit";
 }
 
 function renderCaseWeightSummary(caseWeightsLbs: string | null): string | null {

@@ -500,6 +500,10 @@ export const supplierInvoiceLinesRelations = relations(
       fields: [supplierInvoiceLines.productId],
       references: [products.id],
     }),
+    purchaseUnit: one(unitsOfMeasure, {
+      fields: [supplierInvoiceLines.purchaseUnitId],
+      references: [unitsOfMeasure.id],
+    }),
     lotReceipts: many(lotReceipts),
   }),
 );

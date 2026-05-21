@@ -93,6 +93,13 @@ export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
+  // Non-weight modes — added for beverages and other unit-priced SKUs:
+  //   per_each → price is $/each unit (e.g. one can of soda)
+  //   per_unit → price is $/purchase-uom (e.g. $9.99/case of 12)
+  // Math is `quantity * unitPrice`; `weight_lbs` is unused for these and
+  // typically zero. UI hides the weight tray when these are selected.
+  "per_each",
+  "per_unit",
 ]);
 
 export const pricingUnitTypeEnum = pgEnum("pricing_unit_type", [
@@ -1232,6 +1239,42 @@ export const supplierInvoiceLines = pgTable(
       .default("0"),
     unitType: lineUnitTypeEnum("unit_type").notNull().default("catch_weight"),
     caseWeightsLbs: text("case_weights_lbs"),
+    /**
+     * Unit-of-measure for the purchase, when the line is priced per_each
+     * or per_unit. Nullable for catch_weight / fixed_case lines (their
+     * unit is implicit). FK → `units_of_measure`. Snapshot columns below
+     * preserve the abbreviation and conversion factor at the moment of
+     * record so later edits to a UOM definition don't rewrite history.
+     */
+    purchaseUnitId: uuid("purchase_unit_id").references(
+      () => unitsOfMeasure.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Quantity expressed in the line's purchase unit (cases of soda,
+     * gallons of milk, each, etc.). For legacy catch_weight/fixed_case
+     * rows this mirrors `quantity_cases`; for new modes it carries the
+     * truth that the math reads.
+     */
+    quantity: numeric("quantity", { precision: 12, scale: 4 })
+      .notNull()
+      .default("0"),
+    /** Conversion to base UOM at moment of record. e.g. 12 for a case-of-12. */
+    conversionToBaseSnapshot: numeric("conversion_to_base_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
+    /** Abbreviation snapshot used for UI rendering: lb, cs, ea, gal, … */
+    purchaseUnitAbbreviationSnapshot: varchar(
+      "purchase_unit_abbreviation_snapshot",
+      { length: 16 },
+    ),
+    /**
+     * Pricing direction snapshot mirrors the sales-side concept: per_lb
+     * for catch_weight rows, per_case for fixed_case. per_each / per_unit
+     * rows leave this null — the line_unit_type itself encodes them.
+     */
+    pricingUnitTypeSnapshot: pricingUnitTypeEnum("pricing_unit_type_snapshot"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1241,6 +1284,9 @@ export const supplierInvoiceLines = pgTable(
       table.supplierInvoiceId,
     ),
     index("supplier_invoice_lines_product_id_idx").on(table.productId),
+    index("supplier_invoice_lines_purchase_unit_id_idx").on(
+      table.purchaseUnitId,
+    ),
   ],
 );
 

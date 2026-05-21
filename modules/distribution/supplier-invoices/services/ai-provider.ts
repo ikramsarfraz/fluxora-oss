@@ -55,7 +55,13 @@ export type AiInvoiceLine = {
   caseWeights?: number[] | null;
   unitPrice: number | null;
   lineTotal: number | null;
-  unitType: "catch_weight" | "fixed_case" | null;
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit" | null;
+  /**
+   * Unit-of-measure abbreviation (e.g. "ea", "cs", "gal"). Used by per_each
+   * and per_unit lines; null/undefined for weight-priced modes. The
+   * validator restricts this to a fixed allow-list (`AI_UNIT_OF_MEASURE_ALLOWLIST`).
+   */
+  unitOfMeasure?: string | null;
   notes: string | null;
 };
 
