@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
 
@@ -300,7 +301,7 @@ export function OrderSidebar({
             >
               {firstFulfillDate && <>Fulfilled {formatDisplayDate(firstFulfillDate)}</>}
               {totalWeight > 0 && (
-                <>{firstFulfillDate ? " · " : ""}{totalWeight.toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs captured</>
+                <>{firstFulfillDate ? " · " : ""}{formatWeightLbs(totalWeight)} lbs captured</>
               )}
               {shortShippedCount > 0 && <> · {shortShippedCount} short-shipped</>}
               {!firstFulfillDate && totalWeight === 0 && shortShippedCount === 0 && "No fulfillment recorded"}

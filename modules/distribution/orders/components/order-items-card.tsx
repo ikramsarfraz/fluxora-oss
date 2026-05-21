@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatMoney } from "@/lib/utils/currency";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
   useGenerateInvoiceForSalesOrder,
@@ -190,9 +190,7 @@ export function OrderItemsCard({
     `${totalCases} case${totalCases === 1 ? "" : "s"}`,
   ];
   if (totalWeight > 0)
-    headerParts.push(
-      `${totalWeight.toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`,
-    );
+    headerParts.push(`${formatWeightLbs(totalWeight)} lbs`);
 
   // Sorted payments for totals display
   const allPayments = useMemo(
@@ -580,6 +578,11 @@ function LotDisclosure({
   const [reversalTarget, setReversalTarget] = useState<FulfillmentRecord | null>(
     null,
   );
+  // Default-open the disclosure when the line has at least one active
+  // (non-reversed) fulfillment. Without this the Reverse action was
+  // tucked behind a collapsed `Lot & fulfillment detail · N entries`
+  // toggle — the audit log was easy to overlook entirely.
+  const hasActiveFulfillment = allFulfillments.some(f => !f.reversedAt);
 
   // Allocated-but-not-yet-fulfilled lots — shown as a hint above the
   // fulfillment list so the warehouse user can see what's reserved.
@@ -592,7 +595,10 @@ function LotDisclosure({
 
   return (
     <>
-      <details style={{ borderBottom: `1px solid ${C.line2}` }}>
+      <details
+        open={hasActiveFulfillment || undefined}
+        style={{ borderBottom: `1px solid ${C.line2}` }}
+      >
         <summary
           style={{
             listStyle: "none",
@@ -653,7 +659,7 @@ function LotDisclosure({
                   <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
                     {fulfillment.quantityFulfilled.toLocaleString()} cases
                     {fulfillment.weightLbs
-                      ? ` · ${Number(fulfillment.weightLbs).toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`
+                      ? ` · ${formatWeightLbs(fulfillment.weightLbs)} lbs`
                       : ""}
                     {" · "}
                     {formatFulfillmentTimestamp(fulfillment.fulfilledAt)}
@@ -671,7 +677,7 @@ function LotDisclosure({
                     {!isReversed ? (
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="outline"
                         size="xs"
                         onClick={() => setReversalTarget(fulfillment)}
                         disabled={!canReverseFulfillment}
@@ -680,9 +686,9 @@ function LotDisclosure({
                             ? (reverseFulfillmentReason ?? undefined)
                             : "Reverse this fulfillment"
                         }
-                        className="h-auto px-2 py-0.5 text-xs text-subtle hover:bg-divider hover:text-ink disabled:opacity-50"
+                        className="h-7 border-border-default bg-card px-2.5 text-xs text-ink-warm shadow-none hover:bg-divider hover:text-ink disabled:opacity-50"
                       >
-                        Reverse
+                        Reverse fulfillment
                       </Button>
                     ) : null}
                   </DisclosureRow>
