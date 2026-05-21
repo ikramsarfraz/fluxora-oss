@@ -25,13 +25,9 @@ const C = {
   red: "var(--color-danger-fg)",
   redBg: "var(--color-danger-bg)",
   redBorder: "var(--color-danger-border)",
-  blue: "var(--color-forest-mid)",
-  blueBg: "#eff6ff",
-  blueBorder: "#bfdbfe",
-  purple: "#7c3aed",
-  purpleBg: "#f5f3ff",
-  teal: "#0d9488",
-  tealBg: "#f0fdfa",
+  blue: "var(--color-info-fg)",
+  blueBg: "var(--color-info-bg)",
+  blueBorder: "var(--color-info-border)",
   mono: "var(--font-geist-mono, 'JetBrains Mono', ui-monospace, monospace)",
 } as const;
 
@@ -52,13 +48,9 @@ function formatDate(): string {
   });
 }
 
-function formatTime(): string {
-  return new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
 // ── Pill component ────────────────────────────────────────────────────────
 
-type PillTone = "red" | "amber" | "blue" | "green" | "gray" | "purple" | "teal";
+type PillTone = "red" | "amber" | "blue" | "green" | "gray";
 
 function Pill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
   const styles: Record<PillTone, { bg: string; color: string }> = {
@@ -67,8 +59,6 @@ function Pill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
     blue: { bg: C.blueBg, color: C.blue },
     green: { bg: C.greenBg, color: C.green },
     gray: { bg: "var(--color-divider)", color: C.text2 },
-    purple: { bg: C.purpleBg, color: C.purple },
-    teal: { bg: C.tealBg, color: C.teal },
   };
   const s = styles[tone];
   return (
@@ -251,7 +241,7 @@ function FilterTabs({
           {tab.count !== undefined && (
             <span
               style={{
-                background: active === tab.value ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.08)",
+                background: active === tab.value ? "rgba(255,255,255,0.2)" : "var(--color-divider)",
                 color: active === tab.value ? "var(--color-card)" : C.text2,
                 fontSize: 10,
                 padding: "0 5px",
@@ -276,7 +266,7 @@ function ActionItem({ item }: { item: InboxItem }) {
     blocking_others: { bg: C.redBg, color: C.red },
     today: { bg: C.amberBg, color: C.amber },
     this_week: { bg: C.blueBg, color: C.blue },
-    informational: { bg: C.tealBg, color: C.teal },
+    informational: { bg: "var(--color-surface-deep)", color: C.text2 },
   };
   const ic = iconColor[item.urgency] ?? iconColor.today;
 
@@ -395,10 +385,10 @@ function ActionItem({ item }: { item: InboxItem }) {
 
 function ExpiringItem({ lot }: { lot: ExpiringLotEntry }) {
   const thumbStyles: Record<string, string> = {
-    beef: "linear-gradient(135deg, #fecaca 0%, #fca5a5 100%)",
-    chicken: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-    lamb: "linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%)",
-    other: "linear-gradient(135deg, #f4f4f5 0%, #e7e7ea 100%)",
+    beef: "var(--color-danger-bg)",
+    chicken: "var(--color-warning-bg)",
+    lamb: "var(--color-info-bg)",
+    other: "var(--color-surface-deep)",
   };
   const emojis: Record<string, string> = { beef: "🥩", chicken: "🍗", lamb: "🍖", other: "📦" };
   const deadlineColor = lot.hoursRemaining < 24 ? C.red : lot.hoursRemaining < 72 ? C.amber : C.text3;
@@ -629,7 +619,7 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
   return (
     <div
       style={{
-        background: `linear-gradient(135deg, ${C.redBg} 0%, #fff5f5 100%)`,
+        background: `linear-gradient(135deg, ${C.redBg} 0%, var(--color-card-warm) 100%)`,
         border: `1px solid ${C.redBorder}`,
         borderRadius: 12,
         padding: "16px 18px",
@@ -678,7 +668,7 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
       <div
         style={{
           fontSize: 11, fontFamily: C.mono, color: C.text3,
-          background: "rgba(0,0,0,0.04)", borderRadius: 4, padding: "3px 7px",
+          background: "var(--color-divider)", borderRadius: 4, padding: "3px 7px",
           display: "inline-block", marginBottom: 12,
         }}
       >
@@ -773,7 +763,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             {greeting()}, {firstName}
           </h1>
           <div style={{ fontSize: 13, color: C.text2, display: "flex", alignItems: "center", gap: 10 }}>
-            <span>{formatDate()} · {formatTime()}</span>
+            <span>{formatDate()}</span>
             <span style={{ width: 4, height: 4, borderRadius: "50%", background: C.text3, display: "inline-block" }} />
             <span>
               {stats.billsToReview > 0 ? `${stats.billsToReview} bill${stats.billsToReview > 1 ? "s" : ""} awaiting review` : "No bills awaiting review"}
@@ -785,7 +775,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             style={{
               width: 34, height: 34,
               borderRadius: "50%",
-              background: "linear-gradient(135deg, #18181b, #52525b)",
+              background: "var(--color-forest-mid)",
               color: "var(--color-card)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontWeight: 600,
@@ -801,7 +791,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
       {hasPriorityBanner ? (
         <div
           style={{
-            background: "linear-gradient(135deg, #18181b 0%, #27272a 100%)",
+            background: "linear-gradient(135deg, var(--color-ink) 0%, var(--color-ink-warm) 100%)",
             color: "var(--color-card)",
             borderRadius: 14,
             padding: "20px 24px",
@@ -1134,7 +1124,7 @@ function CashFlowCard({ cashFlow }: { cashFlow: CashFlowSummary }) {
   return (
     <div
       style={{
-        background: "linear-gradient(135deg, #1c1917 0%, #292524 100%)",
+        background: "linear-gradient(135deg, var(--color-ink) 0%, var(--color-ink-warm) 100%)",
         borderRadius: 12,
         padding: "18px 20px",
         marginBottom: 14,
@@ -1149,9 +1139,9 @@ function CashFlowCard({ cashFlow }: { cashFlow: CashFlowSummary }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {[
-          { label: "Last 7d out", value: `-${fmt(cashFlow.last7dOut)}`, color: "#f87171" },
-          { label: "Last 7d in", value: `+${fmt(cashFlow.last7dIn)}`, color: "#4ade80" },
-          { label: "Next 7d due", value: fmt(cashFlow.next7dScheduled), color: "#fbbf24" },
+          { label: "Last 7d out", value: `-${fmt(cashFlow.last7dOut)}`, color: "var(--color-danger-border)" },
+          { label: "Last 7d in", value: `+${fmt(cashFlow.last7dIn)}`, color: "var(--color-success-border)" },
+          { label: "Next 7d due", value: fmt(cashFlow.next7dScheduled), color: "var(--color-warning-border)" },
         ].map(({ label, value, color }) => (
           <div key={label}>
             <div style={{ fontSize: 10, color: "var(--color-subtle)", marginBottom: 2 }}>{label}</div>
@@ -1167,7 +1157,7 @@ function ConnectBankPromptCard() {
   return (
     <div
       style={{
-        border: "1px dashed #e7e7ea",
+        border: "1px dashed var(--color-border-default)",
         borderRadius: 12,
         padding: "16px",
         marginBottom: 14,
