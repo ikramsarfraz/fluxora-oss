@@ -285,80 +285,107 @@ export function NewOrderLinesTable({
         <span style={{ fontSize: "12px", color: C.muted }}>{sectionAside}</span>
       </div>
 
-      {/* Line items table */}
-      <div style={{ overflowX: "auto" }}>
-        <Table className="text-[13px]">
-          <TableHeader>
-            <TableRow className="border-0 hover:bg-transparent">
-              <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Product
-              </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Unit
-              </TableHead>
-              <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Qty
-              </TableHead>
-              <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Weight (lbs)
-              </TableHead>
-              <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Price
-              </TableHead>
-              <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
-                Total
-              </TableHead>
-              <TableHead className="h-auto w-7.5 px-2.5 pt-0 pb-2" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fields.map((field, index) => (
-              <LineRow
-                key={field._fieldId}
-                index={index}
-                control={control}
-                products={products ?? []}
-                productsById={productsById}
-                casesOnHandMap={casesOnHandMap}
-                takenProductIds={takenProductIds}
-                setValue={setValue}
-                resolvePricePerLb={resolvePricePerLb}
-                customerId={customerId}
-                customerName={customer?.name ?? ""}
-                autoFocusOnMount={field.key === autoFocusLineKey}
-                onAutoFocused={() => setAutoFocusLineKey(null)}
-                onProductSelected={(product) =>
-                  handleProductSelected(index, product)
-                }
-                onRemove={() => remove(index)}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Table footer */}
-      <div
-        style={{
-          paddingTop: "12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "8px",
-          marginTop: fields.length > 0 ? "4px" : "0",
-        }}
-      >
-        <Button
-          type="button"
-          onClick={handleAddProduct}
-          variant="outline"
-          className="h-8 border-dashed border-border-default bg-transparent px-3.5 text-[13px] text-subtle shadow-none hover:bg-divider hover:text-ink"
+      {/* Customer-first gate: prices, fuel surcharge, and credit limit
+          all depend on the picked customer, so block product entry
+          until step 1 is done. Avoids the auto-fill/contract-price
+          race entirely. The gate naturally never appears in /edit
+          mode because customerId is seeded from the saved order. */}
+      {!customerId ? (
+        <div
+          style={{
+            padding: "32px 16px",
+            textAlign: "center",
+            border: `1px dashed ${C.line}`,
+            borderRadius: C.radiusSm,
+            background: C.line2,
+            color: C.muted,
+            fontSize: "13px",
+          }}
         >
-          + Add product
-        </Button>
-        <span style={{ fontSize: "12px", color: C.muted }}>
-          ⚖ Catch-weight cases capture final lbs at fulfillment — estimates shown here
-        </span>
+          <div style={{ color: C.ink2, fontWeight: 500, marginBottom: "4px" }}>
+            Pick a customer first
+          </div>
+          <div>
+            Contract pricing, fuel surcharge, and credit-limit checks all
+            depend on the selected customer.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Line items table */}
+          <div style={{ overflowX: "auto" }}>
+            <Table className="text-[13px]">
+              <TableHeader>
+                <TableRow className="border-0 hover:bg-transparent">
+                  <TableHead className="h-auto w-[34%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Product
+                  </TableHead>
+                  <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-left text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Unit
+                  </TableHead>
+                  <TableHead className="h-auto w-[9%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Qty
+                  </TableHead>
+                  <TableHead className="h-auto w-[16%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Weight (lbs)
+                  </TableHead>
+                  <TableHead className="h-auto w-[13%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Price
+                  </TableHead>
+                  <TableHead className="h-auto w-[12%] px-2.5 pt-0 pb-2 text-right text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">
+                    Total
+                  </TableHead>
+                  <TableHead className="h-auto w-7.5 px-2.5 pt-0 pb-2" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {fields.map((field, index) => (
+                  <LineRow
+                    key={field._fieldId}
+                    index={index}
+                    control={control}
+                    products={products ?? []}
+                    productsById={productsById}
+                    casesOnHandMap={casesOnHandMap}
+                    takenProductIds={takenProductIds}
+                    setValue={setValue}
+                    resolvePricePerLb={resolvePricePerLb}
+                    customerId={customerId}
+                    customerName={customer?.name ?? ""}
+                    autoFocusOnMount={field.key === autoFocusLineKey}
+                    onAutoFocused={() => setAutoFocusLineKey(null)}
+                    onProductSelected={(product) =>
+                      handleProductSelected(index, product)
+                    }
+                    onRemove={() => remove(index)}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Table footer */}
+          <div
+            style={{
+              paddingTop: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              marginTop: fields.length > 0 ? "4px" : "0",
+            }}
+          >
+            <Button
+              type="button"
+              onClick={handleAddProduct}
+              variant="outline"
+              className="h-8 border-dashed border-border-default bg-transparent px-3.5 text-[13px] text-subtle shadow-none hover:bg-divider hover:text-ink"
+            >
+              + Add product
+            </Button>
+            <span style={{ fontSize: "12px", color: C.muted }}>
+              ⚖ Catch-weight cases capture final lbs at fulfillment — estimates shown here
+            </span>
       </div>
 
       {/* Notes */}
@@ -449,6 +476,8 @@ export function NewOrderLinesTable({
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
