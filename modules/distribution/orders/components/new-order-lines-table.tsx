@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useEffect, useState } from "react";
+import { Fragment, useCallback, useMemo, useEffect, useState } from "react";
 import {
   Controller,
   useFieldArray,
@@ -164,14 +164,33 @@ export function NewOrderLinesTable({
 
   const isStep2Done = (lines ?? []).some((l) => l.productId);
 
-  function resolvePricePerLb(productId: string): string {
-    if (!productId) return "";
-    const contract = customer?.productPrices?.find(
-      (p) => p.productId === productId,
-    );
-    if (contract?.pricePerLb) return contract.pricePerLb;
-    return productsById.get(productId)?.defaultPricePerLb ?? "";
-  }
+  // Price preview the user sees in the line editor. The server re-resolves
+  // at submit time with the actual lot supplier (see resolveLinePricePerLb
+  // in services/orders.ts), so this is just a sensible default for the UI.
+  //
+  // Preference order:
+  //   1. customerProductPrices(customer, product, supplierId IS NULL) —
+  //      the customer's default for the product, independent of supplier.
+  //   2. any other customerProductPrices row for the product — if the
+  //      customer has only per-supplier prices set, show one of them so
+  //      the field isn't empty.
+  //   3. products.defaultPricePerLb — global fallback.
+  //
+  // Wrapped in useCallback so LineRow's "retry once customer loads"
+  // effect re-runs when customer data finally arrives.
+  const resolvePricePerLb = useCallback(
+    (productId: string): string => {
+      if (!productId) return "";
+      const contracts =
+        customer?.productPrices?.filter(p => p.productId === productId) ?? [];
+      const nullSupplier = contracts.find(c => c.supplierId == null);
+      if (nullSupplier?.pricePerLb) return nullSupplier.pricePerLb;
+      const anyContract = contracts.find(c => c.pricePerLb);
+      if (anyContract?.pricePerLb) return anyContract.pricePerLb;
+      return productsById.get(productId)?.defaultPricePerLb ?? "";
+    },
+    [customer, productsById],
+  );
 
   function handleProductSelected(index: number, product: ProductListItem) {
     const defaultSalesUnit = getDefaultSalesUnit(product);
@@ -276,6 +295,7 @@ export function NewOrderLinesTable({
                 casesOnHandMap={casesOnHandMap}
                 takenProductIds={takenProductIds}
                 setValue={setValue}
+                resolvePricePerLb={resolvePricePerLb}
                 onProductSelected={(product) =>
                   handleProductSelected(index, product)
                 }
@@ -412,6 +432,7 @@ interface LineRowProps {
   casesOnHandMap: Map<string, number>;
   takenProductIds: Set<string>;
   setValue: UseFormSetValue<NewOrderFormValues>;
+  resolvePricePerLb: (productId: string) => string;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
 }
@@ -424,6 +445,7 @@ function LineRow({
   casesOnHandMap,
   takenProductIds,
   setValue,
+  resolvePricePerLb,
   onProductSelected,
   onRemove,
 }: LineRowProps) {
@@ -486,6 +508,23 @@ function LineRow({
     setValue,
     shouldAllocateInventory,
   ]);
+
+  // Retry price resolution once customer data lands. Picking a product
+  // before `useCustomer` finishes leaves the price field empty; this
+  // back-fills it when the customer's productPrices array arrives. The
+  // existing value is preserved if the user (or this effect's prior
+  // run) already set a price, so a manual override is never clobbered.
+  const currentPricePerLb = row?.pricePerLb ?? "";
+  useEffect(() => {
+    if (!row?.productId) return;
+    if (currentPricePerLb && currentPricePerLb !== "") return;
+    const resolved = resolvePricePerLb(row.productId);
+    if (resolved) {
+      setValue(`lines.${index}.pricePerLb`, resolved, {
+        shouldValidate: true,
+      });
+    }
+  }, [index, row?.productId, currentPricePerLb, resolvePricePerLb, setValue]);
 
   // ── Effective weight for line total ──────────────────────────────────────
   const manualAllocationRows =
@@ -1046,7 +1085,14 @@ function FifoAllocationTray({
   requestedCases,
   isLoading,
 }: FifoAllocationTrayProps) {
-  const manualMode = selectedInventoryItemIds.length > 0;
+  // Manual mode is sticky inside the tray rather than derived from the
+  // selection length. Otherwise unchecking the last picked case kicked
+  // the user back to FIFO mid-edit, hiding the checkboxes they needed
+  // to add a different one. Initialized true when there's already a
+  // selection (edit-existing-draft case), false otherwise.
+  const [manualMode, setManualMode] = useState(
+    selectedInventoryItemIds.length > 0,
+  );
   const selectedSet = new Set(selectedInventoryItemIds);
   const selectedRows = candidates.filter(row =>
     selectedSet.has(row.inventoryItemId),
@@ -1060,9 +1106,15 @@ function FifoAllocationTray({
   const avg = allocatedCount > 0 ? totalWeight / allocatedCount : 0;
 
   function startManualSelection() {
+    setManualMode(true);
     onSelectedInventoryItemIdsChange(
       rows.slice(0, requestedCases).map(row => row.inventoryItemId),
     );
+  }
+
+  function useFifo() {
+    setManualMode(false);
+    onSelectedInventoryItemIdsChange([]);
   }
 
   function toggleInventoryItem(inventoryItemId: string, checked: boolean) {
@@ -1154,7 +1206,7 @@ function FifoAllocationTray({
               type="button"
               variant="outline"
               size="xs"
-              onClick={() => onSelectedInventoryItemIdsChange([])}
+              onClick={useFifo}
             >
               Use FIFO
             </Button>
