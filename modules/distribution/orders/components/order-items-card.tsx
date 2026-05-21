@@ -851,6 +851,52 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
   const isCatchWeight = selectedLine?.unitType === "catch_weight";
   const isSubmitting = createFulfillment.isPending || markShortShipped.isPending;
 
+  // Auto-populate the weight field from the picked lot's recorded
+  // inventory items. The exact case weights were captured when the
+  // supplier bill was received, so 95% of fulfillment runs match those
+  // numbers exactly — no need to make the warehouse user re-type them.
+  // We only set the value when the field is empty or still equal to
+  // whatever we last auto-filled; once the user types their own number
+  // we stop clobbering it.
+  const lastAutoFilledWeightRef = useRef<string>("");
+  useEffect(() => {
+    if (!isCatchWeight) return;
+    if (!selectedLine) return;
+    const qty = parseInt(casesValue, 10);
+    if (!Number.isInteger(qty) || qty <= 0) return;
+
+    const items = (selectedLine.allocations ?? [])
+      .filter(allocation =>
+        effectiveSelectedLotId
+          ? allocation.inventoryItem?.lotId === effectiveSelectedLotId
+          : true,
+      )
+      .map(allocation => allocation.inventoryItem)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    let remainingCases = qty;
+    let totalWeight = 0;
+    for (const item of items) {
+      if (remainingCases <= 0) break;
+      const itemCases = item.cases ?? 1;
+      const itemWeight = parseFloat(item.exactWeightLbs ?? "0") || 0;
+      if (itemCases <= 0 || itemWeight <= 0) continue;
+      const taken = Math.min(itemCases, remainingCases);
+      totalWeight += (taken / itemCases) * itemWeight;
+      remainingCases -= taken;
+    }
+
+    if (totalWeight <= 0) return;
+    const formatted = totalWeight.toFixed(4);
+    setWeightValue(prev => {
+      // Empty (initial mount or post line-switch) or still matching the
+      // last value we wrote → safe to refill. User-typed values stay.
+      if (prev !== "" && prev !== lastAutoFilledWeightRef.current) return prev;
+      lastAutoFilledWeightRef.current = formatted;
+      return formatted;
+    });
+  }, [isCatchWeight, selectedLine, effectiveSelectedLotId, casesValue]);
+
   async function handleSubmit(isPartial: boolean) {
     setSubmitError(null);
     const qty = isPartial ? parseInt(casesValue, 10) : remaining;
