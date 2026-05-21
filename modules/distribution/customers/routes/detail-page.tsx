@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -148,9 +148,10 @@ export default function CustomerPortfolioPage() {
   const invoicesPer = Number(searchParams.get("invoicesPer") ?? 10) || 10;
 
   // Default open — the panel is the first place users land for any
-  // single-customer question (phone, EIN, payment terms…). Keep the
-  // sessionStorage memory so explicitly collapsing one customer
-  // doesn't bounce open again on navigate-back.
+  // single-customer question (phone, EIN, payment terms…). Collapse
+  // is a session-only convenience; we don't persist the closed state
+  // because old "closed" entries would override the new default and
+  // make the panel snap shut a frame after mount.
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
   const [lifecycleAction, setLifecycleAction] = useState<
@@ -160,11 +161,6 @@ export default function CustomerPortfolioPage() {
   const queryClient = useQueryClient();
   const { data: currentUser } = useCurrentPortalUser();
   const canRecordPayment = can(currentUser?.role, "record_payment");
-  useEffect(() => {
-    if (sessionStorage.getItem(`cust-details-${customerId}`) === "closed") {
-      setDetailsOpen(false);
-    }
-  }, [customerId]);
 
   const { data: portfolio, isLoading, error } = useCustomerPortfolio(customerId);
   const { data: ordersData, isLoading: ordersLoading } = useCustomerOrdersPage(customerId, {
@@ -193,11 +189,7 @@ export default function CustomerPortfolioPage() {
   }
 
   function toggleDetails() {
-    setDetailsOpen(prev => {
-      const next = !prev;
-      sessionStorage.setItem(`cust-details-${customerId}`, next ? "open" : "closed");
-      return next;
-    });
+    setDetailsOpen(prev => !prev);
   }
 
   const isArchived = !!customer.archivedAt;
