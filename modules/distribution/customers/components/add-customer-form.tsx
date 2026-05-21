@@ -413,66 +413,65 @@ export function AddCustomerForm(props?: {
 
                 <NetTermsLegend />
 
-                <Controller
-                  name="creditLimit"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field
-                      data-invalid={fieldState.invalid}
-                      className="@md/field-group:max-w-xs"
-                    >
-                      <FieldLabel htmlFor="form-add-customer-credit-limit">
-                        Credit limit ($)
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        id="form-add-customer-credit-limit"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="0.00"
-                      />
-                      <FieldDescription>
-                        Soft cap on open AR. Detail page flags when the
-                        customer is over. Leave blank for no limit.
-                      </FieldDescription>
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
+                <div className="grid gap-6 @md/field-group:grid-cols-2">
+                  <Controller
+                    name="creditLimit"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-credit-limit">
+                          Credit limit ($)
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-credit-limit"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.01"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="0.00"
+                        />
+                        <FieldDescription>
+                          Soft cap on open AR. Detail page flags when over.
+                          Blank = no limit.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
 
-                <Controller
-                  name="taxId"
-                  control={form.control}
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="form-add-customer-tax-id">
-                        Tax ID (EIN)
-                      </FieldLabel>
-                      <Input
-                        {...field}
-                        value={field.value ?? ""}
-                        id="form-add-customer-tax-id"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="12-3456789"
-                        inputMode="numeric"
-                        maxLength={10}
-                      />
-                      <FieldDescription>
-                        9-digit US EIN. Optional — required if you need to
-                        include it on B2B invoices.
-                      </FieldDescription>
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
+                  <Controller
+                    name="taxId"
+                    control={form.control}
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="form-add-customer-tax-id">
+                          Tax ID (EIN)
+                        </FieldLabel>
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          id="form-add-customer-tax-id"
+                          aria-invalid={fieldState.invalid}
+                          placeholder="12-3456789"
+                          inputMode="numeric"
+                          maxLength={10}
+                        />
+                        <FieldDescription>
+                          9-digit US EIN. Optional — required if you need
+                          to include it on B2B invoices.
+                        </FieldDescription>
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
+                      </Field>
+                    )}
+                  />
+                </div>
               </FormSection>
 
               <FormSection
