@@ -189,11 +189,21 @@ export function NewOrderLinesTable({
   //      the field isn't empty.
   //   3. products.defaultPricePerLb — global fallback.
   //
-  // Wrapped in useCallback so LineRow's "retry once customer loads"
-  // effect re-runs when customer data finally arrives.
+  // Returns `null` (vs "") when the customer detail is still in flight —
+  // LineRow's retry effect uses that to defer setting a value instead of
+  // writing a product-default that would later block the contract price
+  // from being picked up when the customer query lands.
+  //
+  // Wrapped in useCallback so LineRow's retry effect re-runs when the
+  // customer arrives.
   const resolvePricePerLb = useCallback(
-    (productId: string): string => {
+    (productId: string): string | null => {
       if (!productId) return "";
+      // A customer was picked but their detail hasn't arrived yet. Wait
+      // before falling back to the product default — otherwise the
+      // retry effect's "don't overwrite a non-empty price" guard would
+      // freeze us on the default once the contract data finally lands.
+      if (customerId && !customer) return null;
       const contracts =
         customer?.productPrices?.filter(p => p.productId === productId) ?? [];
       const nullSupplier = contracts.find(c => c.supplierId == null);
@@ -202,7 +212,7 @@ export function NewOrderLinesTable({
       if (anyContract?.pricePerLb) return anyContract.pricePerLb;
       return productsById.get(productId)?.defaultPricePerLb ?? "";
     },
-    [customer, productsById],
+    [customer, customerId, productsById],
   );
 
   function handleProductSelected(index: number, product: ProductListItem) {
@@ -217,7 +227,11 @@ export function NewOrderLinesTable({
     setValue(`lines.${index}.inventoryItemIds`, [], {
       shouldValidate: true,
     });
-    setValue(`lines.${index}.pricePerLb`, resolvePricePerLb(product.id), {
+    // resolver may return `null` while the customer detail is still
+    // loading — in that case leave the price field empty so the retry
+    // effect can back-fill it once data arrives.
+    const resolvedPrice = resolvePricePerLb(product.id) ?? "";
+    setValue(`lines.${index}.pricePerLb`, resolvedPrice, {
       shouldValidate: true,
     });
   }
@@ -449,7 +463,7 @@ interface LineRowProps {
   casesOnHandMap: Map<string, number>;
   takenProductIds: Set<string>;
   setValue: UseFormSetValue<NewOrderFormValues>;
-  resolvePricePerLb: (productId: string) => string;
+  resolvePricePerLb: (productId: string) => string | null;
   customerId: string;
   customerName: string;
   autoFocusOnMount: boolean;
@@ -556,15 +570,20 @@ function LineRow({
   ]);
 
   // Retry price resolution once customer data lands. Picking a product
-  // before `useCustomer` finishes leaves the price field empty; this
+  // before `useCustomer` finishes (or arriving on /edit before the
+  // customer detail has refetched) leaves the price field empty; this
   // back-fills it when the customer's productPrices array arrives. The
-  // existing value is preserved if the user (or this effect's prior
-  // run) already set a price, so a manual override is never clobbered.
+  // existing value is preserved if the user already typed a price, so
+  // a manual override is never clobbered.
   const currentPricePerLb = row?.pricePerLb ?? "";
   useEffect(() => {
     if (!row?.productId) return;
     if (currentPricePerLb && currentPricePerLb !== "") return;
     const resolved = resolvePricePerLb(row.productId);
+    // `null` means "customer still loading — wait". Skipping leaves the
+    // guard above ready to fire again when resolvePricePerLb's identity
+    // changes after the customer query lands.
+    if (resolved == null) return;
     if (resolved) {
       setValue(`lines.${index}.pricePerLb`, resolved, {
         shouldValidate: true,
@@ -583,10 +602,19 @@ function LineRow({
     manualAllocationRows.length > 0
       ? manualAllocationRows
       : (fifoAlloc?.rows ?? []);
+  // Trust the real allocation sum only when it actually covers the
+  // currently-requested cases. Otherwise (case count changed and the
+  // FIFO refetch hasn't landed yet, or stock is short, or the user is
+  // in manual mode with a partial selection) fall back to the
+  // synthetic estimate so the displayed weight stays in lock-step with
+  // the cases input and doesn't flicker through the previous request's
+  // total on every keystroke.
+  const allocationCoversRequest =
+    caseCount > 0 && allocationRows.length === caseCount;
   const effectiveTotalWeight =
     isWeightUnit
       ? quantity * Math.max(1, avgLbsPerCase || 1)
-      : allocationRows.length > 0
+      : allocationCoversRequest
         ? allocationRows.reduce((sum, item) => sum + item.weight, 0)
         : caseCount * avgLbsPerCase;
 
@@ -657,7 +685,10 @@ function LineRow({
 
     const hasCases = caseCount > 0;
     const allocatedCount = allocationRows.length;
-    const totalWt = allocationRows.length > 0
+    // Use the same lock-step rule as `effectiveTotalWeight` above so
+    // the headline number doesn't flicker through the previous request's
+    // allocation sum after the user bumps the cases count.
+    const totalWt = allocationCoversRequest
       ? allocationRows.reduce((sum, item) => sum + item.weight, 0)
       : effectiveTotalWeight;
     const lotsUsed = new Set(allocationRows.map(item => item.lotId)).size;
