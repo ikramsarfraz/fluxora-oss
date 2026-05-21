@@ -20,7 +20,10 @@ import { ListingAction, ListingPage, StatusPill, MonoText, type ListingColumn } 
 import { useDeleteSalesOrder, useSalesOrdersPage } from "../hooks/use-orders";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { SalesOrderListSort } from "../services/orders";
+import type {
+  SalesOrderListSort,
+  SalesOrderListStatusFilter,
+} from "../services/orders";
 
 type OrderRow = NonNullable<ReturnType<typeof useSalesOrdersPage>["data"]>["data"][number];
 
@@ -98,7 +101,8 @@ const SEGMENTS = [
 export default function Orders() {
   const router = useRouter();
   const [deletingOrder, setDeletingOrder] = useState<OrderRow | null>(null);
-  const [activeSegment, setActiveSegment] = useState("all");
+  const [activeSegment, setActiveSegment] =
+    useState<SalesOrderListStatusFilter>("all");
 
   const pagination = useUrlPaginationState<SalesOrderListSort>({
     defaultSort: "orderDate",
@@ -111,13 +115,15 @@ export default function Orders() {
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
+    filters: { status: activeSegment },
   });
 
   const deleteOrder = useDeleteSalesOrder();
 
-  const rows = (data?.data ?? []).filter(
-    row => activeSegment === "all" || row.status === activeSegment,
-  );
+  // Filtering moved server-side via `filters.status` above so segment +
+  // pagination compose correctly (the previous client-only filter
+  // hid rows that lived on other pages).
+  const rows = data?.data ?? [];
   const hasInvoice = (order: OrderRow) => (order.invoices?.length ?? 0) > 0;
 
   if (error) {
@@ -144,7 +150,9 @@ export default function Orders() {
         }
         statusSegments={SEGMENTS}
         activeSegment={activeSegment}
-        onSegmentChange={setActiveSegment}
+        onSegmentChange={value =>
+          setActiveSegment(value as SalesOrderListStatusFilter)
+        }
         columns={COLUMNS}
         getRowId={row => row.id}
         onRowClick={row => router.push(`/orders/${row.id}`)}

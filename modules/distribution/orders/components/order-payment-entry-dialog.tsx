@@ -324,29 +324,28 @@ function PaymentBody({
               <FieldError errors={[errors.paymentMethod]} />
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="payment-reference">
-                {paymentMethod === "check" ? "Reference number" : "Reference number"}
-              </FieldLabel>
-              <Input
-                id="payment-reference"
-                placeholder="Optional reference"
-                {...register("referenceNumber")}
-              />
-            </Field>
+            {paymentMethod === "check" ? (
+              <Field>
+                <FieldLabel htmlFor="payment-check-number">Check number</FieldLabel>
+                <Input
+                  id="payment-check-number"
+                  placeholder="e.g. 1042"
+                  {...register("checkNumber")}
+                />
+              </Field>
+            ) : (
+              <Field>
+                <FieldLabel htmlFor="payment-reference">
+                  Reference number
+                </FieldLabel>
+                <Input
+                  id="payment-reference"
+                  placeholder="Optional confirmation / memo"
+                  {...register("referenceNumber")}
+                />
+              </Field>
+            )}
           </div>
-
-          <Field>
-            <FieldLabel htmlFor="payment-check-number">Check number</FieldLabel>
-            <Input
-              id="payment-check-number"
-              placeholder="Optional check number"
-              {...register("checkNumber")}
-            />
-            <FieldDescription>
-              Useful for check or bank-referenced payments.
-            </FieldDescription>
-          </Field>
 
           <Field>
             <FieldLabel htmlFor="payment-notes">Notes</FieldLabel>

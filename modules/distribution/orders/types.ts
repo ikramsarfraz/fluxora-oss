@@ -1,7 +1,8 @@
 export type {
   SalesOrderListSort,
   SalesOrderListParams,
-  SalesOrderListItem,
+  SalesOrderListStatusFilter,
+  SalesOrderListFilters,
   SalesOrderDetail,
   UploadSalesOrderAttachmentInput,
 } from "./services/orders";

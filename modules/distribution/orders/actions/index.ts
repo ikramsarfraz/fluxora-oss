@@ -5,7 +5,6 @@ import {
   createSalesOrder,
   deleteSalesOrder,
   getSalesOrderById,
-  getSalesOrders,
   getSalesOrdersPage,
   getSalesOrderAttachmentDownload,
   markSalesOrderLineShortShipped,
@@ -21,10 +20,6 @@ import {
   generateInvoiceForSalesOrder,
   recordPaymentForSalesOrderInvoice,
 } from "@/modules/distribution/invoices/services/invoicing";
-
-export async function getSalesOrdersAction() {
-  return await getSalesOrders();
-}
 
 export async function getSalesOrdersPageAction(
   input?: Parameters<typeof getSalesOrdersPage>[0],

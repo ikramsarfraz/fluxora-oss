@@ -7,7 +7,6 @@ import {
   deleteSalesOrderAction,
   generateInvoiceForSalesOrderAction,
   getSalesOrderByIdAction,
-  getSalesOrdersAction,
   getSalesOrdersPageAction,
   markSalesOrderLineShortShippedAction,
   removeSalesOrderAttachmentAction,
@@ -23,14 +22,6 @@ import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-chec
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
 import type { SalesOrderListParams } from "@/modules/distribution/orders/services/orders";
-
-export function useSalesOrders() {
-  return useQuery({
-    queryKey: queryKeys.salesOrders.all,
-    queryFn: getSalesOrdersAction,
-    staleTime: 1000 * 60 * 2,
-  });
-}
 
 export function useSalesOrdersPage(params: SalesOrderListParams) {
   return useQuery({
@@ -267,12 +258,16 @@ export function useRecordPaymentForSalesOrderInvoice() {
       // future detail queries.
       queryClient.invalidateQueries({ queryKey: queryKeys.payments.all });
 
-      // Dashboard AR aging buckets and the customer's portfolio (which
-      // aggregates open balance / payment cadence).
+      // Dashboard AR aging buckets and the dashboard summary refresh.
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.arAging });
       queryClient.invalidateQueries({
         queryKey: queryKeys.dashboard.summary,
       });
+
+      // Customer-side caches (portfolio, detail, credit snapshot used
+      // on the new-order customer chip) all carry the post-payment
+      // balance; broad-invalidate by prefix.
+      queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
     },
   });
 }

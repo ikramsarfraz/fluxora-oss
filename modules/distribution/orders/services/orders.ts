@@ -1087,39 +1087,42 @@ async function allocateSelectedInventoryToSalesOrderLine(input: {
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
-export async function getSalesOrders() {
-  const tenant = await getCurrentTenant();
-  return await db.query.salesOrders.findMany({
-    where: eq(salesOrders.tenantId, tenant.id),
-    with: {
-      customer: true,
-      lines: {
-        with: {
-          salesUnit: true,
-        },
-      },
-    },
-    orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
-  });
-}
-
 export type SalesOrderListSort =
   | "orderNumber"
   | "orderDate"
   | "status"
   | "createdAt";
 
-export type SalesOrderListParams = PaginatedQueryInput<SalesOrderListSort>;
+export type SalesOrderListStatusFilter =
+  | "all"
+  | "sales_order"
+  | "confirmed"
+  | "fulfilled"
+  | "cancelled";
+
+export type SalesOrderListFilters = {
+  status?: SalesOrderListStatusFilter;
+};
+
+export type SalesOrderListParams = PaginatedQueryInput<
+  SalesOrderListSort,
+  SalesOrderListFilters
+>;
 
 export async function getSalesOrdersPage(input?: SalesOrderListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "orderDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: { status: "all" as SalesOrderListStatusFilter },
   });
+  const statusFilter =
+    query.filters.status && query.filters.status !== "all"
+      ? eq(salesOrders.status, query.filters.status)
+      : undefined;
   const where = and(
     eq(salesOrders.tenantId, tenant.id),
+    statusFilter,
     buildTextSearchCondition(query.search, [
       salesOrders.orderNumber,
       customers.name,
@@ -1189,11 +1192,6 @@ export async function getSalesOrdersPage(input?: SalesOrderListParams) {
     total: count ?? 0,
   });
 }
-
-/** Row shape returned by `getSalesOrders()` (for client `import type` only). */
-export type SalesOrderListItem = Awaited<
-  ReturnType<typeof getSalesOrders>
->[number];
 
 export async function getSalesOrderById(id: string) {
   const tenant = await getCurrentTenant();
