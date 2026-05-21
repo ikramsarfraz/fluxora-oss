@@ -88,6 +88,10 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // Tracks the in-flight autosave promise so submit can await it before
+  // reading draftIdRef — without this, a user clicking Confirm while an
+  // autosave is mid-flight would race and create a duplicate order.
+  const autoSavePromiseRef = useRef<Promise<unknown> | null>(null);
 
   const { data: products } = useProducts();
 
@@ -173,25 +177,33 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           lines: orderLines,
         };
 
-        try {
-          if (!draftIdRef.current) {
-            const order = await createOrder.mutateAsync({
-              ...payload,
-              status: "sales_order",
-            });
-            if (order?.id) draftIdRef.current = order.id;
-          } else {
-            await updateOrder.mutateAsync({
-              id: draftIdRef.current,
-              ...payload,
-            });
+        const work = (async () => {
+          try {
+            if (!draftIdRef.current) {
+              const order = await createOrder.mutateAsync({
+                ...payload,
+                status: "sales_order",
+              });
+              if (order?.id) draftIdRef.current = order.id;
+            } else {
+              await updateOrder.mutateAsync({
+                id: draftIdRef.current,
+                ...payload,
+              });
+            }
+            setAutoSaveStatus("saved");
+          } catch {
+            setAutoSaveStatus("error");
+          } finally {
+            autoSaveInProgressRef.current = false;
           }
-          setAutoSaveStatus("saved");
-        } catch {
-          setAutoSaveStatus("error");
-        } finally {
-          autoSaveInProgressRef.current = false;
-        }
+        })();
+        autoSavePromiseRef.current = work;
+        work.finally(() => {
+          if (autoSavePromiseRef.current === work) {
+            autoSavePromiseRef.current = null;
+          }
+        });
       }, 1500);
     });
 
@@ -210,6 +222,21 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
     }
     const values = form.getValues();
     setPendingMode(mode);
+
+    // Cancel any pending autosave timer that hasn't fired yet, and wait
+    // for an in-flight autosave to finish so draftIdRef is up to date
+    // before we read it. Without this, clicking Confirm mid-autosave
+    // could create a duplicate order (draftIdRef still null while the
+    // autosave's createOrder is in flight).
+    clearTimeout(autoSaveTimerRef.current);
+    if (autoSavePromiseRef.current) {
+      try {
+        await autoSavePromiseRef.current;
+      } catch {
+        // Autosave errors don't block explicit submit — we surface
+        // any real failure from the calls below.
+      }
+    }
 
     const orderLines = values.lines
       .filter((l) => l.productId && l.salesUnitId)
@@ -278,8 +305,10 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
       <form
         id="new-order-form"
         onSubmit={e => {
+          // Form submit fires from Enter in any focused input. We swallow
+          // it to avoid an inadvertent confirm — explicit confirm/save
+          // happens via the buttons in the sticky action bar.
           e.preventDefault();
-          void handleSubmit("confirm");
         }}
         style={{ paddingBottom: "72px" }}
       >

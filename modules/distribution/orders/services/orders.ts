@@ -1979,6 +1979,17 @@ async function selectAutoFulfillmentInventory(input: {
   salesOrderLineId: string;
   productId: string;
   quantityFulfilled: number;
+  /**
+   * When provided, only allocated inventory items belonging to this lot
+   * are eligible — the warehouse user picked this specific lot in the
+   * fulfillment UI and we honor it instead of FIFO-ing across lots.
+   */
+  preferredLotId?: string | null;
+  /**
+   * When provided, only this exact allocated inventory item is eligible.
+   * Most restrictive; supersedes `preferredLotId` when both are set.
+   */
+  preferredInventoryItemId?: string | null;
 }) {
   const allocations = await db.query.salesOrderLineAllocations.findMany({
     where: eq(salesOrderLineAllocations.salesOrderLineId, input.salesOrderLineId),
@@ -2013,12 +2024,24 @@ async function selectAutoFulfillmentInventory(input: {
   const candidates = allocations
     .filter(allocation => {
       const item = allocation.inventoryItem;
-      return (
-        item != null &&
-        item.productId === input.productId &&
-        item.lot?.tenantId === input.tenantId &&
-        item.status === "allocated"
-      );
+      if (
+        item == null ||
+        item.productId !== input.productId ||
+        item.lot?.tenantId !== input.tenantId ||
+        item.status !== "allocated"
+      ) {
+        return false;
+      }
+      if (
+        input.preferredInventoryItemId &&
+        item.id !== input.preferredInventoryItemId
+      ) {
+        return false;
+      }
+      if (input.preferredLotId && item.lotId !== input.preferredLotId) {
+        return false;
+      }
+      return true;
     })
     .sort((a, b) => {
       if (!a.inventoryItem || !b.inventoryItem) return 0;
@@ -2093,8 +2116,14 @@ async function selectAutoFulfillmentInventory(input: {
       0,
     );
 
+    const scope = input.preferredInventoryItemId
+      ? "selected inventory item"
+      : input.preferredLotId
+        ? "selected lot"
+        : "product";
+
     throw new Error(
-      `Could not automatically match ${input.quantityFulfilled} fulfilled case${input.quantityFulfilled === 1 ? "" : "s"} to allocated inventory. Only ${allocatedQuantity} allocated case${allocatedQuantity === 1 ? "" : "s"} are available for this product.`,
+      `Could not match ${input.quantityFulfilled} fulfilled case${input.quantityFulfilled === 1 ? "" : "s"} to allocated inventory. Only ${allocatedQuantity} allocated case${allocatedQuantity === 1 ? "" : "s"} ${allocatedQuantity === 1 ? "is" : "are"} available for this ${scope}.`,
     );
   }
 
@@ -2152,6 +2181,8 @@ async function recordAutoAllocatedFulfillments(input: {
   weightLbs: number | null;
   fulfilledAt: Date;
   notes?: string | null;
+  preferredLotId?: string | null;
+  preferredInventoryItemId?: string | null;
 }) {
   await autoAllocateOldestInventoryToSalesOrderLine({
     tenantId: input.tenantId,
@@ -2165,6 +2196,8 @@ async function recordAutoAllocatedFulfillments(input: {
     salesOrderLineId: input.salesOrderLineId,
     productId: input.productId,
     quantityFulfilled: input.quantityFulfilled,
+    preferredLotId: input.preferredLotId,
+    preferredInventoryItemId: input.preferredInventoryItemId,
   });
   const weights = distributeFulfillmentWeight(input.weightLbs, selections);
   const insertedIds: string[] = [];
@@ -2319,6 +2352,8 @@ export async function recordSalesOrderFulfillment(input: {
     weightLbs: weight,
     fulfilledAt,
     notes: input.notes ?? null,
+    preferredLotId: input.lotId ?? null,
+    preferredInventoryItemId: input.inventoryItemId ?? null,
   });
 
   await syncSalesOrderLineFulfillment(input.salesOrderLineId);

@@ -665,8 +665,25 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
 
   const [casesValue, setCasesValue] = useState(String(remaining || ""));
   const [weightValue, setWeightValue] = useState("");
-  const [generateInvoiceOnSave, setGenerateInvoiceOnSave] = useState(true);
+  const [generateInvoiceOnSave, setGenerateInvoiceOnSave] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // The invoice-on-save toggle only makes sense when this fulfillment
+  // will close every remaining line on the order — otherwise
+  // `generateInvoiceForSalesOrder` rejects and the user is left wondering
+  // why no invoice appeared. We surface the option only on the last
+  // open line, when the user is filling its full remaining quantity.
+  const otherOpenLineCount = openLines.filter(l => l.id !== selectedLineId).length;
+  const fillingFullRemaining =
+    !!casesValue &&
+    Number.isInteger(parseInt(casesValue, 10)) &&
+    parseInt(casesValue, 10) === remaining;
+  const canGenerateInvoiceOnSave = otherOpenLineCount === 0 && fillingFullRemaining;
+  useEffect(() => {
+    if (!canGenerateInvoiceOnSave && generateInvoiceOnSave) {
+      setGenerateInvoiceOnSave(false);
+    }
+  }, [canGenerateInvoiceOnSave, generateInvoiceOnSave]);
 
   const prevLineRef = useRef(selectedLineId);
   useEffect(() => {
@@ -677,16 +694,37 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     }
   }, [selectedLineId, remaining]);
 
+  // One row per distinct allocated lot. A single lot may back several
+  // allocated inventory items on this line (e.g. multiple cases pulled
+  // from the same lot), so we dedupe by lotId and sum cases for display.
   const lotOptions = useMemo(() => {
     if (!selectedLine) return [];
-    return (selectedLine.allocations ?? [])
-      .filter(a => a.inventoryItem?.lot?.lotNumber)
-      .map(a => ({
-        id: a.inventoryItem!.lot!.lotNumber!,
-        lotNumber: a.inventoryItem!.lot!.lotNumber!,
-        cases: a.inventoryItem?.cases ?? 1,
-        expirationDate: a.inventoryItem?.lot?.expirationDate,
-      }));
+    const map = new Map<
+      string,
+      {
+        id: string;
+        lotNumber: string;
+        cases: number;
+        expirationDate: string | Date | null | undefined;
+      }
+    >();
+    for (const allocation of selectedLine.allocations ?? []) {
+      const lot = allocation.inventoryItem?.lot;
+      if (!lot?.id) continue;
+      const existing = map.get(lot.id);
+      const cases = allocation.inventoryItem?.cases ?? 1;
+      if (existing) {
+        existing.cases += cases;
+      } else {
+        map.set(lot.id, {
+          id: lot.id,
+          lotNumber: lot.lotNumber,
+          cases,
+          expirationDate: lot.expirationDate ?? null,
+        });
+      }
+    }
+    return [...map.values()];
   }, [selectedLine]);
 
   const [selectedLotId, setSelectedLotId] = useState("");
@@ -719,15 +757,29 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
         salesOrderLineId: selectedLineId,
         quantityFulfilled: qty,
         weightLbs: weightValue || undefined,
+        // Honor the warehouse user's lot pick. When no lot is selected
+        // (single allocation, or auto-allocated), the service falls
+        // through to FIFO across the line's allocated inventory.
+        lotId: effectiveSelectedLotId || undefined,
       });
       toast.success("Fulfillment recorded.");
 
-      if (generateInvoiceOnSave) {
+      // Only attempted when the UI confirmed this is the closing
+      // fulfillment for the order — see canGenerateInvoiceOnSave above.
+      // Errors here are surfaced (not swallowed) so the user knows the
+      // invoice didn't generate.
+      if (generateInvoiceOnSave && canGenerateInvoiceOnSave) {
         try {
-          const invoice = await generateInvoice.mutateAsync({ salesOrderId: order.id });
+          const invoice = await generateInvoice.mutateAsync({
+            salesOrderId: order.id,
+          });
           toast.success(`Invoice ${invoice?.invoiceNumber ?? ""} generated.`);
-        } catch {
-          // Order may not be ready to invoice yet; ignore silently
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "Could not generate invoice.";
+          toast.error(`Fulfillment saved, but invoice did not generate: ${msg}`);
         }
       }
 
@@ -945,28 +997,38 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             flexWrap: "wrap",
           }}
         >
-          <label
-            style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
-          >
-            <Checkbox
-              checked={generateInvoiceOnSave}
-              onCheckedChange={checked => setGenerateInvoiceOnSave(checked === true)}
-            />
-            Generate invoice on save
-          </label>
+          {canGenerateInvoiceOnSave ? (
+            <label
+              style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+            >
+              <Checkbox
+                checked={generateInvoiceOnSave}
+                onCheckedChange={checked =>
+                  setGenerateInvoiceOnSave(checked === true)
+                }
+              />
+              Generate invoice on save
+            </label>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", gap: "8px" }}>
-          <Button
-            type="button"
-            disabled={isSubmitting || !actionState.canFulfill}
-            onClick={() => void handleSubmit(true)}
-            variant="outline"
-            size="sm"
-            className="border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
-          >
-            Save as partial
-          </Button>
+          {/* "Save partial" only renders when the user has actually reduced
+              the cases count below the line's remaining — otherwise both
+              buttons submitted the same payload and the partial label
+              was misleading. */}
+          {fillingFullRemaining ? null : (
+            <Button
+              type="button"
+              disabled={isSubmitting || !actionState.canFulfill}
+              onClick={() => void handleSubmit(true)}
+              variant="outline"
+              size="sm"
+              className="border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
+            >
+              Save {casesValue || 0} of {remaining}
+            </Button>
+          )}
           <Button
             type="button"
             disabled={isSubmitting || !actionState.canFulfill}
@@ -974,7 +1036,11 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             size="sm"
             className="border-forest-mid bg-forest-mid text-xs text-card-warm hover:bg-forest disabled:opacity-50"
           >
-            {isSubmitting ? "Saving…" : "Confirm & fulfill"}
+            {isSubmitting
+              ? "Saving…"
+              : fillingFullRemaining
+                ? `Fulfill all ${remaining}`
+                : `Fulfill all ${remaining} (skip partial)`}
           </Button>
         </div>
       </div>
