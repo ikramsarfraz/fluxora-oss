@@ -18,7 +18,10 @@ export type CategoryDetail = NonNullable<
 export async function getCategories() {
   const tenant = await getCurrentTenant();
   const result = await db.query.categories.findMany({
-    where: eq(categories.tenantId, tenant.id),
+    where: and(
+      eq(categories.tenantId, tenant.id),
+      eq(categories.isActive, true),
+    ),
   });
 
   return result ?? [];

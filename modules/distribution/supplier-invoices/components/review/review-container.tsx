@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { captureClientEvent } from "@/lib/posthog-client";
+import { queryKeys } from "@/lib/query/keys";
 
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
@@ -314,6 +315,7 @@ export function ReviewContainer({
   );
   const [submitting, setSubmitting] = useState(false);
   const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
+  const queryClient = useQueryClient();
   /** Which line is opening the Create Product dialog, or null when closed. */
   const [createProductForLine, setCreateProductForLine] = useState<number | null>(null);
   const [rememberAliases, setRememberAliases] = useState(true);
@@ -908,6 +910,13 @@ export function ReviewContainer({
         complete: true, // Complete & receive — creates lots + inventory atomically.
       });
 
+      // A draft just became a posted bill — the bell summary's "drafts
+      // needing review" count is now stale. Otherwise the badge lingers
+      // until the 2-minute staleTime expires.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.inbox.bellSummary,
+      });
+
       // Attach the original PDF to the new bill so it shows up in the
       // supplier-invoice detail page's attachments tab. The legacy form did
       // this via uploadParsedPdfMutation; the bulk-import flow had been
@@ -1051,6 +1060,7 @@ export function ReviewContainer({
     onSubmitStart,
     onSubmitEnd,
     onSubmitSuccess,
+    queryClient,
   ]);
 
   // Queue-mode: listen for the page header's Complete event so the form's

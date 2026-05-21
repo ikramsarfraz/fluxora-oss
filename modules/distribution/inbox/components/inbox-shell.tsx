@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOutflow, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
 import { dismissMysteryOutflowAction } from "@/modules/distribution/plaid";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
+import { captureException } from "@/lib/sentry-scope";
 
 // ── Design tokens (mapped to the warm system in globals.css) ──────────────
 const C = {
@@ -709,7 +710,11 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
                 await dismissMysteryOutflowAction(txn.id);
                 toast.info("Hidden. It won't appear here again.");
                 router.refresh();
-              } catch {
+              } catch (err) {
+                captureException(err, {
+                  stage: "dismiss_mystery_outflow",
+                  transactionId: txn.id,
+                });
                 toast.error("Failed to dismiss.");
               }
             });

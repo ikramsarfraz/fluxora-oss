@@ -97,7 +97,8 @@ export async function POST(req: NextRequest) {
       if (
         webhook_code === "ERROR" ||
         webhook_code === "PENDING_EXPIRATION" ||
-        webhook_code === "USER_PERMISSION_REVOKED"
+        webhook_code === "USER_PERMISSION_REVOKED" ||
+        webhook_code === "LOGIN_REQUIRED"
       ) {
         await db
           .update(plaidConnections)

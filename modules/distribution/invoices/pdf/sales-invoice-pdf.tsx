@@ -409,9 +409,16 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
         ? roundMoney(weightFromCases > 0 ? weightFromCases : invoiceWeight)
         : null;
 
+    const productName = line.product?.name?.trim();
+    if (!productName) {
+      console.warn(
+        "[sales-invoice-pdf] missing product name; falling back to product id",
+        { invoiceLineId: line.id, productId: line.productId },
+      );
+    }
     return {
       id: line.id,
-      description: line.product?.name ?? "Product",
+      description: productName ?? line.productId ?? "Unnamed product",
       quantity: toNumber(line.quantityCases),
       unitType: getUnitType(orderLine, pricingType),
       caseWeights,

@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { stripePrices } from "@/db/schema";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
+import { captureException } from "@/lib/sentry-scope";
 import { STRIPE_SAAS_PAID_PLAN_KEYS } from "@/lib/stripe/plan-metadata";
 import {
   getPlatformAdminStripeCatalogPagePayload,
@@ -35,7 +36,11 @@ function formatMoneyAdmin(currency: string, cents: number | null): string {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(cents / 100);
-  } catch {
+  } catch (err) {
+    captureException(err, {
+      stage: "stripe_catalog_format_money",
+      currency,
+    });
     return `${(cents / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
 }
