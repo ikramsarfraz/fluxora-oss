@@ -11,15 +11,30 @@ import {
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  HelpCircle,
+  Info,
+  Loader2,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { generateSku } from "./product-sku-utils";
 import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
+import { cn } from "@/lib/utils";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Field,
   FieldDescription,
@@ -77,6 +92,146 @@ import {
 } from "@/lib/subscription-enforcement";
 import { useUnitsOfMeasure } from "@/modules/distribution/units-of-measure/hooks/use-units-of-measure";
 import type { UnitOfMeasureListItem } from "@/modules/distribution/units-of-measure/services/units-of-measure";
+
+// ---------------------------------------------------------------------------
+// Helpful examples shown on the form. Tight, concrete recipes so a user
+// looking at the new base-UOM + sales-unit setup can pattern-match to
+// their product type instead of guessing. Edit this list when adding
+// support for a new vertical (e.g. produce by weight + box).
+// ---------------------------------------------------------------------------
+
+const PRICING_EXAMPLES: Array<{
+  title: string;
+  baseUnit: string;
+  defaultPriceFormat: string;
+  salesUnits: string[];
+  notes: string;
+}> = [
+  {
+    title: "Meat by the pound",
+    baseUnit: "lb",
+    defaultPriceFormat: "$ 8.99 / lb",
+    salesUnits: ["lb (default)", "cs — 40 lb per case"],
+    notes:
+      "Catch-weight items priced per pound. Add a case sales unit so staff can also quote whole-case orders.",
+  },
+  {
+    title: "Beverages by case",
+    baseUnit: "ea",
+    defaultPriceFormat: "$ 1.25 / ea",
+    salesUnits: ["ea (default)", "cs — 12 ea per case"],
+    notes:
+      "Canned drinks, water bottles, snacks. The base is the individual unit so pricing math always works.",
+  },
+  {
+    title: "Liquids by the gallon",
+    baseUnit: "gal",
+    defaultPriceFormat: "$ 4.50 / gal",
+    salesUnits: ["gal (default)", "cs — 4 gal per case"],
+    notes:
+      "Milk, syrups, sauces. Picking gal as the base lets the form derive case prices from per-gallon math.",
+  },
+];
+
+function PricingExamplesPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Alert className="border-dashed">
+      <Info className="size-4 text-info-fg" />
+      <AlertTitle>Picking the right units</AlertTitle>
+      <AlertDescription>
+        <p className="text-xs text-subtle">
+          The <strong>base unit</strong> is what pricing, costs, and inventory
+          math are tracked in. <strong>Sales units</strong> are the unit options
+          staff can pick when quoting an order — each has a conversion back to
+          the base.
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-info-fg hover:text-info-fg/80"
+        >
+          <ChevronDown
+            className={cn(
+              "size-3 transition-transform",
+              open ? "rotate-180" : "",
+            )}
+          />
+          {open ? "Hide examples" : "Show common setups"}
+        </button>
+        {open ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {PRICING_EXAMPLES.map(ex => (
+              <div
+                key={ex.title}
+                className="rounded-md border border-border-default bg-card p-3 text-xs flex flex-col gap-1.5"
+              >
+                <div className="font-medium text-ink text-[12px]">
+                  {ex.title}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-subtle/80 text-[10.5px] uppercase tracking-wide font-semibold">
+                    Base
+                  </span>
+                  <span className="font-mono tabular-nums text-ink">
+                    {ex.baseUnit}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-subtle/80 text-[10.5px] uppercase tracking-wide font-semibold">
+                    Price
+                  </span>
+                  <span className="font-mono tabular-nums text-ink">
+                    {ex.defaultPriceFormat}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-subtle/80 text-[10.5px] uppercase tracking-wide font-semibold block mb-1">
+                    Sales units
+                  </span>
+                  <ul className="ml-3 list-disc text-ink space-y-0.5">
+                    {ex.salesUnits.map(u => (
+                      <li key={u}>{u}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="text-[11px] text-subtle leading-snug pt-1 border-t border-border-default/60">
+                  {ex.notes}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+/**
+ * Small "?" affordance next to a label. Renders an accessible tooltip
+ * trigger with a tight 1-2 sentence explanation; kept compact so the
+ * form labels stay scannable for repeat users.
+ */
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex size-4 items-center justify-center text-subtle/70 hover:text-subtle"
+            aria-label="More info"
+          >
+            <HelpCircle className="size-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px] text-xs leading-snug">
+          {children}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // UOM family rendering — drives grouping in the picker and downstream
@@ -497,6 +652,11 @@ export function AddProductForm(props?: {
               }}
             />
 
+            {/* Quick-orientation guide for users new to the unit model.
+                Collapsed by default so it doesn't clutter the form for
+                repeat users. */}
+            <PricingExamplesPanel />
+
             {/* Base unit — the atomic unit pricing + inventory math is recorded in.
                 Once a product has dependent records (orders, prices, bills), the
                 base unit is locked to avoid silently changing the meaning of
@@ -510,7 +670,20 @@ export function AddProductForm(props?: {
                 );
                 return (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="form-product-base-unit">Base unit *</FieldLabel>
+                    <FieldLabel
+                      htmlFor="form-product-base-unit"
+                      className="inline-flex items-center gap-1"
+                    >
+                      Base unit *
+                      <FieldHint>
+                        The smallest unit you price and count in. Pick{" "}
+                        <strong>lb</strong> for catch-weight meat,{" "}
+                        <strong>ea</strong> for cans and packaged items,{" "}
+                        <strong>gal</strong> or <strong>L</strong> for liquids.
+                        Every cost and customer-specific price stores in this
+                        unit.
+                      </FieldHint>
+                    </FieldLabel>
                     <Select
                       value={field.value}
                       onValueChange={field.onChange}
@@ -562,8 +735,21 @@ export function AddProductForm(props?: {
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="form-product-default-price">
-                    Default price{baseUnitAbbreviation ? ` per ${baseUnitAbbreviation}` : ""}
+                  <FieldLabel
+                    htmlFor="form-product-default-price"
+                    className="inline-flex items-center gap-1"
+                  >
+                    Default price
+                    {baseUnitAbbreviation ? ` per ${baseUnitAbbreviation}` : ""}
+                    <FieldHint>
+                      The starting price the order form suggests when a customer
+                      doesn&rsquo;t have a contracted price for this product.
+                      Always stored in the base unit{baseUnitAbbreviation
+                        ? ` (${baseUnitAbbreviation})`
+                        : ""}{" "}
+                      — case prices are derived from the conversion factor
+                      below.
+                    </FieldHint>
                   </FieldLabel>
                   <div className="relative max-w-48">
                     <span
@@ -605,7 +791,15 @@ export function AddProductForm(props?: {
                 can be SOLD in, with a conversion to the base unit. The user
                 marks exactly one as default (preselected on new orders). */}
             <Field>
-              <FieldLabel>Sales units *</FieldLabel>
+              <FieldLabel className="inline-flex items-center gap-1">
+                Sales units *
+                <FieldHint>
+                  The unit options staff can pick when adding this product to an
+                  order. Most products only need one row matching the base unit.
+                  Add a second row (e.g. case) so staff can quote a whole-case
+                  price without doing the math.
+                </FieldHint>
+              </FieldLabel>
               <div className="flex flex-col gap-3">
                 {salesUnitFields.map((field, index) => {
                   const row = salesUnits?.[index];
@@ -692,7 +886,7 @@ export function AddProductForm(props?: {
                           name={`salesUnits.${index}.isDefault`}
                           control={form.control}
                           render={({ field: f }) => (
-                            <label className="flex items-center gap-2 text-xs cursor-pointer whitespace-nowrap">
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
                               <Checkbox
                                 checked={f.value}
                                 onCheckedChange={v => {
@@ -712,6 +906,10 @@ export function AddProductForm(props?: {
                                 }}
                               />
                               Default
+                              <FieldHint>
+                                Preselected when staff add this product to a new
+                                order. Pick the unit you most often quote in.
+                              </FieldHint>
                             </label>
                           )}
                         />
@@ -719,12 +917,17 @@ export function AddProductForm(props?: {
                           name={`salesUnits.${index}.allowsFractional`}
                           control={form.control}
                           render={({ field: f }) => (
-                            <label className="flex items-center gap-2 text-xs cursor-pointer whitespace-nowrap">
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap">
                               <Checkbox
                                 checked={f.value}
                                 onCheckedChange={f.onChange}
                               />
                               Fractional
+                              <FieldHint>
+                                Allow decimal quantities (e.g. 2.5 lb). Turn this
+                                OFF for fixed packs like cases or boxes where a
+                                "half case" doesn&rsquo;t make sense.
+                              </FieldHint>
                             </label>
                           )}
                         />
@@ -780,9 +983,25 @@ export function AddProductForm(props?: {
                 </Button>
               </div>
               <FieldDescription>
-                The default row is preselected on new orders. Other rows let staff
-                price by case, by bag, etc. with the conversion applied to the
-                base unit.{" "}
+                {baseUnitAbbreviation ? (
+                  <>
+                    <strong>Conversion</strong> is how many{" "}
+                    <code className="px-1 rounded bg-divider text-[11px]">
+                      {baseUnitAbbreviation}
+                    </code>{" "}
+                    are in one of that sales unit. Example: a case of 12 cans
+                    converts at <code className="px-1 rounded bg-divider text-[11px]">12</code>;
+                    a 40-lb case converts at{" "}
+                    <code className="px-1 rounded bg-divider text-[11px]">40</code>.
+                    The default row is preselected on new orders.{" "}
+                  </>
+                ) : (
+                  <>
+                    The default row is preselected on new orders. Other rows let
+                    staff price by case, by bag, etc. with the conversion applied
+                    to the base unit.{" "}
+                  </>
+                )}
                 <Link
                   href="/units-of-measure"
                   className="text-primary underline underline-offset-4 hover:text-primary/80"
