@@ -277,10 +277,12 @@ const c = {
   green: "var(--color-success-fg)",
   greenBg: "var(--color-success-bg)",
   greenBorder: "var(--color-success-border)",
-  amber: "#d97706",
-  red: "#dc2626",
-  redBg: "#fef2f2",
-  redBorder: "#fecaca",
+  amber: "var(--color-warning-fg)",
+  amberBg: "var(--color-warning-bg)",
+  amberBorder: "var(--color-warning-border)",
+  red: "var(--color-danger-fg)",
+  redBg: "var(--color-danger-bg)",
+  redBorder: "var(--color-danger-border)",
 } as const;
 
 // ── Stepper ───────────────────────────────────────────────────────────────────
@@ -736,8 +738,8 @@ export function CsvImportModal({
               )}
 
               {warnings.length > 0 && (
-                <div style={{ border: `1px solid color-mix(in oklch, ${c.amber} 35%, transparent)`, borderRadius: 8, overflow: "hidden", marginBottom: 16, maxHeight: 220, overflowY: "auto" }}>
-                  <div style={{ padding: "8px 12px", background: `color-mix(in oklch, ${c.amber} 12%, transparent)`, fontSize: 11, fontWeight: 600, color: c.amber, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid color-mix(in oklch, ${c.amber} 35%, transparent)` }}>
+                <div style={{ border: `1px solid ${c.amberBorder}`, borderRadius: 8, overflow: "hidden", marginBottom: 16, maxHeight: 220, overflowY: "auto" }}>
+                  <div style={{ padding: "8px 12px", background: c.amberBg, fontSize: 11, fontWeight: 600, color: c.amber, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${c.amberBorder}` }}>
                     Heads up — these rows match existing records
                   </div>
                   {warnings.map(w => (
