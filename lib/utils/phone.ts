@@ -25,6 +25,50 @@ export function formatPhone(phone: string | null | undefined): string {
 }
 
 /**
+ * Live input mask for US phone numbers. Use as a controlled-input
+ * onChange handler so the value the user sees lines up with what we
+ * store. Strips non-digits, then re-applies the format based on how
+ * many digits are present:
+ *
+ *   ""             → ""
+ *   "5"            → "(5"
+ *   "555"          → "(555) "
+ *   "5551"         → "(555) 1"
+ *   "5551234"      → "(555) 123-4"
+ *   "5551234567"   → "(555) 123-4567"
+ *   "+44..."       → "+44…"  (anything with a leading + is passed through
+ *                              digits-only, so international numbers
+ *                              aren't forced into a US shape)
+ *
+ * Pairs with `normalizePhone`, which strips the mask back to digits
+ * for storage.
+ */
+export function formatPhoneInput(raw: string): string {
+  if (!raw) return "";
+
+  // International — preserve as the user typed it (digits + leading
+  // plus), no mask. The schema's normalizePhone() handles validation
+  // on submit.
+  if (raw.trim().startsWith("+")) {
+    return "+" + raw.replace(/\D/g, "");
+  }
+
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+
+  // 11-digit input — display as +1 (xxx) xxx-xxxx if it starts with 1.
+  if (digits.length === 11 && digits.startsWith("1")) {
+    const rest = digits.slice(1);
+    return `+1 (${rest.slice(0, 3)}) ${rest.slice(3, 6)}-${rest.slice(6, 10)}`;
+  }
+
+  // US 10-digit progressive mask.
+  if (digits.length === 0) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+}
+
+/**
  * Normalize a phone number for storage. Goal: canonicalize US numbers
  * (10-digit local or 11-digit with country code 1) into a single digit
  * string so `(555) 123-4567`, `555-123-4567`, and `+1 555 123 4567` all

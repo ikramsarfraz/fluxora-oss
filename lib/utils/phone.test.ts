@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { formatPhone, normalizePhone } from "./phone";
+import { formatPhone, formatPhoneInput, normalizePhone } from "./phone";
 
 // ── normalizePhone ────────────────────────────────────────────────────────────
 
@@ -66,4 +66,39 @@ test("formatPhone still handles legacy 11-digit values", () => {
 test("formatPhone shows em dash for empty input", () => {
   assert.equal(formatPhone(null), "—");
   assert.equal(formatPhone(""), "—");
+});
+
+// ── formatPhoneInput (live mask) ──────────────────────────────────────────────
+
+test("formatPhoneInput progressively formats US digits as the user types", () => {
+  assert.equal(formatPhoneInput(""), "");
+  assert.equal(formatPhoneInput("5"), "(5");
+  assert.equal(formatPhoneInput("55"), "(55");
+  assert.equal(formatPhoneInput("555"), "(555");
+  assert.equal(formatPhoneInput("5551"), "(555) 1");
+  assert.equal(formatPhoneInput("555123"), "(555) 123");
+  assert.equal(formatPhoneInput("5551234"), "(555) 123-4");
+  assert.equal(formatPhoneInput("5551234567"), "(555) 123-4567");
+});
+
+test("formatPhoneInput strips existing formatting before re-applying", () => {
+  // User pastes a formatted number — we restrip and reformat so the
+  // canonical mask wins.
+  assert.equal(formatPhoneInput("(555) 123-4567"), "(555) 123-4567");
+  assert.equal(formatPhoneInput("555-123-4567"), "(555) 123-4567");
+  assert.equal(formatPhoneInput("555 123 4567"), "(555) 123-4567");
+});
+
+test("formatPhoneInput adds country code shape when leading 1 + 10 digits", () => {
+  assert.equal(formatPhoneInput("15551234567"), "+1 (555) 123-4567");
+});
+
+test("formatPhoneInput leaves international + numbers alone (digits only)", () => {
+  assert.equal(formatPhoneInput("+44 20 7946 0958"), "+442079460958");
+});
+
+test("formatPhoneInput caps US input at 11 digits", () => {
+  // Past 11 digits, extra typing is ignored (clamped). Maintains the
+  // canonical US/+1 shape rather than producing a half-formatted blob.
+  assert.equal(formatPhoneInput("155512345678901234"), "+1 (555) 123-4567");
 });

@@ -40,6 +40,8 @@ import {
 } from "@/modules/distribution/customers/actions";
 import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { US_STATES } from "@/lib/constants/us-states";
+import { formatPhoneInput } from "@/lib/utils/phone";
+import { formatEinInput } from "@/lib/utils/tax-id";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import {
   isLimitReachedMessage,
@@ -76,8 +78,11 @@ function buildDefaultCustomerForm(customer?: CustomerDetail): CreateCustomerInpu
     name: customer.name,
     abbreviation: customer.abbreviation ?? "",
     email: customer.email ?? "",
-    phoneNumber: customer.phoneNumber ?? "",
-    taxId: customer.taxId ?? "",
+    // Pre-format on edit so the user sees "(555) 123-4567" instead of
+    // the canonical "5551234567" we store; the schema normalizes the
+    // value back to digits on submit.
+    phoneNumber: customer.phoneNumber ? formatPhoneInput(customer.phoneNumber) : "",
+    taxId: customer.taxId ? formatEinInput(customer.taxId) : "",
     netDays: customer.netDays == null ? "" : String(customer.netDays),
     fuelSurchargeAmount: customer.fuelSurchargeAmount ?? "",
     creditLimit: customer.creditLimit ?? "",
@@ -327,8 +332,13 @@ export function AddCustomerForm(props?: {
                           Phone
                         </FieldLabel>
                         <Input
-                          {...field}
+                          name={field.name}
+                          ref={field.ref}
+                          onBlur={field.onBlur}
                           value={field.value ?? ""}
+                          onChange={e =>
+                            field.onChange(formatPhoneInput(e.target.value))
+                          }
                           id="form-add-customer-phone"
                           type="tel"
                           inputMode="tel"
@@ -453,8 +463,13 @@ export function AddCustomerForm(props?: {
                           Tax ID (EIN)
                         </FieldLabel>
                         <Input
-                          {...field}
+                          name={field.name}
+                          ref={field.ref}
+                          onBlur={field.onBlur}
                           value={field.value ?? ""}
+                          onChange={e =>
+                            field.onChange(formatEinInput(e.target.value))
+                          }
                           id="form-add-customer-tax-id"
                           aria-invalid={fieldState.invalid}
                           placeholder="12-3456789"
