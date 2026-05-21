@@ -736,8 +736,8 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
 
   if (!data.hasBills) {
     return (
-      <div className="flex flex-col">
-        <div style={{ marginBottom: 24 }}>
+      <div className="flex flex-col gap-6 pb-10">
+        <div>
           <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.015em", margin: "0 0 2px" }}>
             {greeting()}, {firstName}
           </h1>
@@ -749,7 +749,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
   }
 
   return (
-    <div style={{ padding: "28px 32px 80px", maxWidth: 1440, margin: "0 auto" }}>
+    <div className="flex flex-col gap-6 pb-10">
 
       {/* ── Re-auth banners ─────────────────────────────────────────────── */}
       {data.reauthBanners.map(banner => (
@@ -757,7 +757,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
       ))}
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.015em", margin: "0 0 2px" }}>
             {greeting()}, {firstName}
@@ -795,7 +795,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             color: "var(--color-card)",
             borderRadius: 14,
             padding: "20px 24px",
-            marginBottom: 22,
             display: "flex", alignItems: "center", justifyContent: "space-between",
             position: "relative",
             overflow: "hidden",
@@ -842,7 +841,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             border: `1px solid ${C.greenBorder}`,
             borderRadius: 14,
             padding: "16px 24px",
-            marginBottom: 22,
             display: "flex",
             alignItems: "center",
             gap: 12,
@@ -864,7 +862,6 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
           display: "grid",
           gridTemplateColumns: "repeat(5, 1fr)",
           gap: 10,
-          marginBottom: 22,
         }}
       >
         {[
