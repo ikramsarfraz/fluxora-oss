@@ -734,7 +734,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
   const hasPriorityBanner = data.blockingItems.length > 0;
   const stats = data.stats;
 
-  if (data.billCount === 0) {
+  if (!data.hasBills) {
     return (
       <div style={{ padding: "28px 32px 80px", maxWidth: 1440, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
@@ -1056,7 +1056,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
                 <PriceMoverRow key={mover.productId} mover={mover} />
               ))}
             </Card>
-          ) : data.billCount > 0 && data.dayCount < 30 ? (
+          ) : data.hasBills && data.dayCount < 30 ? (
             <Card>
               <CardHead left={<CardTitle title="Price alerts" />} />
               <div style={{ padding: "12px 16px" }}>

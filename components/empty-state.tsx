@@ -39,9 +39,10 @@ const VARIANT_STYLES: Record<
       "color-mix(in oklch, var(--color-warning-bg) 80%, var(--color-warning-fg))",
   },
   cool: {
-    bg: "#eff6ff",
-    border: "#bfdbfe",
-    iconBg: "#dbeafe",
+    bg: "var(--color-info-bg)",
+    border: "var(--color-info-border)",
+    iconBg:
+      "color-mix(in oklch, var(--color-info-bg) 80%, var(--color-info-fg))",
   },
   neutral: {
     bg: "var(--color-page)",
@@ -193,7 +194,7 @@ export function EmptyState({
                 fontSize: 13,
                 fontWeight: 500,
                 cursor: "pointer",
-                border: cta.kind === "primary" ? "1px solid #18181b" : "1px solid var(--color-border-default)",
+                border: cta.kind === "primary" ? "1px solid var(--color-ink)" : "1px solid var(--color-border-default)",
                 background: cta.kind === "primary" ? "var(--color-ink)" : "var(--color-card)",
                 color: cta.kind === "primary" ? "var(--color-card)" : "var(--color-subtle)",
                 fontFamily: "inherit",

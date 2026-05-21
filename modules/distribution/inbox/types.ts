@@ -159,8 +159,8 @@ export interface InboxData {
   activeSessions: ActiveSession[];
   expiringLots: ExpiringLotEntry[];
   priceMovers: PriceMover[];
-  /** Running total of posted supplier invoices — drives empty-state gating */
-  billCount: number;
+  /** Whether the tenant has any supplier invoice yet (drives empty-state gating). */
+  hasBills: boolean;
   /** Days since oldest posted invoice — drives price-alert readiness gate (unlocks at 30) */
   dayCount: number;
   /** null = no bank connected */

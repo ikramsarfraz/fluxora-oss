@@ -15,7 +15,6 @@ import {
   supplierInvoices,
   supplierInvoiceLines,
   suppliers,
-  tenants,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import type {
@@ -398,11 +397,14 @@ export async function getInboxData(): Promise<InboxData> {
 
   const activeSessions: ActiveSession[] = [];
 
-  // ── billCount + dayCount ───────────────────────────────────────────────────
-  const [tenantRow, oldestInvoiceRow] = await Promise.all([
-    db.query.tenants.findFirst({
-      where: eq(tenants.id, tenantId),
-      columns: { billCount: true },
+  // ── hasBills + dayCount ────────────────────────────────────────────────────
+  // tenants.billCount is a counter cache that's only bumped by one writer, so
+  // it drifts every time a bill is inserted via CSV import / AI bulk import /
+  // seed / etc. Derive existence directly from supplier_invoices instead.
+  const [anyBillRow, oldestInvoiceRow] = await Promise.all([
+    db.query.supplierInvoices.findFirst({
+      where: eq(supplierInvoices.tenantId, tenantId),
+      columns: { id: true },
     }),
     db.query.supplierInvoices.findFirst({
       where: and(
@@ -414,6 +416,7 @@ export async function getInboxData(): Promise<InboxData> {
     }),
   ]);
 
+  const hasBills = Boolean(anyBillRow);
   const dayCount = oldestInvoiceRow?.invoiceDate
     ? Math.floor(
         (now.getTime() - new Date(oldestInvoiceRow.invoiceDate).getTime()) /
@@ -554,7 +557,7 @@ export async function getInboxData(): Promise<InboxData> {
     activeSessions,
     expiringLots,
     priceMovers: topMovers,
-    billCount: tenantRow?.billCount ?? 0,
+    hasBills,
     dayCount,
     cashFlow,
     reauthBanners,
