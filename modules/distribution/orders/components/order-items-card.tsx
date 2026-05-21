@@ -901,6 +901,29 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     : (lotOptions[0]?.id ?? "");
 
   const isCatchWeight = selectedLine?.unitType === "catch_weight";
+  // True when the sales unit is itself a weight (lb/pound) — i.e. the
+  // customer is buying pounds directly, not cases that get weighed.
+  // For weight-priced lines the fulfilled lbs is the user's source of
+  // truth (actual scale weight at packing time). For case-priced
+  // catch-weight lines, the cases' exactWeightLbs recorded at receiving
+  // ARE the source of truth — letting the warehouse user retype them
+  // here would just create drift between inventory and shipment.
+  const isWeightSalesUnit = (() => {
+    if (!selectedLine) return false;
+    const tokens = [
+      selectedLine.salesUnitAbbreviationSnapshot,
+      selectedLine.salesUnitNameSnapshot,
+      selectedLine.salesUnit?.abbreviation,
+      selectedLine.salesUnit?.name,
+    ];
+    return tokens.some(t => {
+      const v = (t ?? "").trim().toLowerCase();
+      return v === "lb" || v === "lbs" || v === "pound" || v === "pounds";
+    });
+  })();
+  // Catch-weight + case unit → weight is locked to the picked items'
+  // recorded weights. Catch-weight + lb unit → weight is editable.
+  const weightInputLocked = isCatchWeight && !isWeightSalesUnit;
   const isSubmitting = createFulfillment.isPending || markShortShipped.isPending;
 
   // Auto-populate the weight field from the picked lot's recorded
@@ -941,13 +964,25 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     if (totalWeight <= 0) return;
     const formatted = totalWeight.toFixed(4);
     setWeightValue(prev => {
-      // Empty (initial mount or post line-switch) or still matching the
-      // last value we wrote → safe to refill. User-typed values stay.
+      // When the input is locked (catch-weight + case unit), the
+      // recorded case weights are the source of truth — always sync.
+      // Otherwise only auto-fill when the field is empty or still
+      // matching the last auto-fill, so a user-typed value stays.
+      if (weightInputLocked) {
+        lastAutoFilledWeightRef.current = formatted;
+        return formatted;
+      }
       if (prev !== "" && prev !== lastAutoFilledWeightRef.current) return prev;
       lastAutoFilledWeightRef.current = formatted;
       return formatted;
     });
-  }, [isCatchWeight, selectedLine, effectiveSelectedLotId, casesValue]);
+  }, [
+    isCatchWeight,
+    weightInputLocked,
+    selectedLine,
+    effectiveSelectedLotId,
+    casesValue,
+  ]);
 
   async function handleSubmit(isPartial: boolean) {
     setSubmitError(null);
@@ -1134,11 +1169,40 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             type="number"
             min="0"
             step="0.0001"
-            placeholder={isCatchWeight ? "required" : "optional"}
+            placeholder={
+              weightInputLocked
+                ? "from picked lot"
+                : isCatchWeight
+                  ? "required"
+                  : "optional"
+            }
             value={weightValue}
             onChange={e => setWeightValue(e.target.value)}
-            className="border-border-default bg-card font-mono text-sm text-ink shadow-none"
+            readOnly={weightInputLocked}
+            aria-readonly={weightInputLocked}
+            title={
+              weightInputLocked
+                ? "Weight is the sum of the picked lot's recorded case weights. Edit the case count or pick a different lot to change it."
+                : undefined
+            }
+            className={
+              weightInputLocked
+                ? "cursor-not-allowed border-border-default bg-divider font-mono text-sm text-ink shadow-none"
+                : "border-border-default bg-card font-mono text-sm text-ink shadow-none"
+            }
           />
+          {weightInputLocked ? (
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                fontSize: "11px",
+                color: C.muted,
+              }}
+            >
+              From recorded case weights. Change the case count to adjust.
+            </span>
+          ) : null}
         </label>
 
         {/* Lot */}
