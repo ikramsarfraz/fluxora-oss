@@ -191,11 +191,24 @@ export function InventoryPage() {
           Record bill
         </ListingAction>
       }
-      kpis={summary ? [
-        { label: "Items", value: summary.totalItems },
-        { label: "Weight (lb)", value: Number(summary.totalWeight ?? 0).toFixed(0) },
-        { label: "Expiring soon", value: summary.expiringCount },
-      ] : undefined}
+      kpis={summary ? (() => {
+        const weight = Number(summary.totalWeight ?? 0);
+        const units = Number(summary.totalUnits ?? 0);
+        const kpis: { label: string; value: string | number }[] = [
+          { label: "Items", value: summary.totalItems },
+        ];
+        // Show Weight only when the workspace actually carries weight-priced
+        // stock; show Units only when it carries non-weight stock. Pure-meat
+        // tenants see the legacy single-KPI layout; mixed catalogs get both.
+        if (weight > 0 || units === 0) {
+          kpis.push({ label: "Weight (lb)", value: weight.toFixed(0) });
+        }
+        if (units > 0) {
+          kpis.push({ label: "Units", value: units.toLocaleString() });
+        }
+        kpis.push({ label: "Expiring soon", value: summary.expiringCount });
+        return kpis;
+      })() : undefined}
       headerExtra={<InventoryProductSummary />}
       statusSegments={EXPIRATION_SEGMENTS}
       activeSegment={pagination.filters.expiration ?? "all"}

@@ -293,7 +293,13 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     .select({
       totalItems: sql<number>`count(distinct ${inventoryItems.id})::int`,
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
-      totalWeight: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      // Sum weight only across weight-priced inventory rows. Mixed
+      // catalogs would otherwise hide weight items inside an aggregate
+      // that includes "0.00 lb" beverage rows — the count is correct
+      // but the label would mislead. Per_each / per_unit rows feed the
+      // separate totalUnits aggregate below.
+      totalWeight: sql<string>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('catch_weight','fixed_case') or ${inventoryItems.costUnitTypeSnapshot} is null then ${inventoryItems.exactWeightLbs}::numeric else 0 end), 0)::text`,
+      totalUnits: sql<number>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('per_each','per_unit') then ${inventoryItems.cases} else 0 end), 0)::int`,
       expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '1 day' then 1 else 0 end), 0)::int`,
     })
     .from(inventoryItems)
@@ -428,6 +434,7 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
       totalItems: summaryRow?.totalItems ?? 0,
       totalCases: summaryRow?.totalCases ?? 0,
       totalWeight: summaryRow?.totalWeight ?? "0",
+      totalUnits: summaryRow?.totalUnits ?? 0,
       expiringCount: summaryRow?.expiringCount ?? 0,
     },
     filterOptions: {

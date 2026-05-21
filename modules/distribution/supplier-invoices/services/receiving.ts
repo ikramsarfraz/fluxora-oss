@@ -565,7 +565,16 @@ export async function getSupplierInvoiceById(id: string) {
       },
       lines: {
         with: {
-          product: true,
+          product: {
+            // `product: true` brings the columns; we also need baseUnit so
+            // the bill detail page can render mixed-UOM weight/quantity
+            // columns correctly.
+            with: {
+              baseUnit: {
+                columns: { id: true, abbreviation: true, family: true },
+              },
+            },
+          },
           lotReceipts: {
             with: {
               lot: {

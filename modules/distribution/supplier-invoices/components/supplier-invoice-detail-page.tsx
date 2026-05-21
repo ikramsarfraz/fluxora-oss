@@ -288,10 +288,31 @@ export function SupplierInvoiceDetailPage({
   );
   const allItems = allLots.flatMap(lot => lot?.inventoryItems ?? []);
   const totalCases = allItems.reduce((acc, i) => acc + (i.cases ?? 0), 0);
-  const totalWeight = allItems.reduce(
-    (acc, i) => acc + Number(i.exactWeightLbs ?? 0),
-    0,
-  );
+  // Split totals by line-unit family. A mixed bill (meat + beverages
+  // can't happen today but supported by schema) would otherwise sum
+  // weight-mode + non-weight-mode quantities into nonsense numbers.
+  let totalWeight = 0;
+  let totalUnits = 0;
+  for (const item of allItems) {
+    const isWeightMode =
+      item.costUnitTypeSnapshot === "catch_weight" ||
+      item.costUnitTypeSnapshot === "fixed_case" ||
+      item.costUnitTypeSnapshot == null; // legacy default → weight
+    if (isWeightMode) {
+      totalWeight += Number(item.exactWeightLbs ?? 0);
+    } else {
+      totalUnits += Number(item.cases ?? 0);
+    }
+  }
+  // Bill-level family — true when every line is non-weight. Used by the
+  // line-items table to hide the "Weight (lb)" column entirely when no
+  // line carries a meaningful weight, instead of showing "0.00" for every
+  // row (the misleading state visible on per_each-only bills today).
+  const billIsAllNonWeight =
+    invoice.lines.length > 0 &&
+    invoice.lines.every(
+      l => l.unitType === "per_each" || l.unitType === "per_unit",
+    );
   const blockedItems = allItems.filter(i => i.status !== "in_stock");
 
   // Receiving-summary rows pre-flattened so we can paginate. Bills with
@@ -606,8 +627,14 @@ export function SupplierInvoiceDetailPage({
                     <TableHead>Product</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead>Unit type</TableHead>
-                    <TableHead className="text-right">Cases</TableHead>
-                    <TableHead className="text-right">Weight lbs</TableHead>
+                    <TableHead className="text-right">Cases / Units</TableHead>
+                    {/* The weight column is meaningful only on a bill
+                        that has at least one weight-priced line. For
+                        per-each / per-unit bills, hide it entirely
+                        instead of showing "0.00" for every row. */}
+                    {billIsAllNonWeight ? null : (
+                      <TableHead className="text-right">Weight</TableHead>
+                    )}
                     <TableHead className="text-right">Unit price</TableHead>
                     <TableHead className="text-right">Line total</TableHead>
                   </TableRow>
@@ -616,7 +643,7 @@ export function SupplierInvoiceDetailPage({
                   {invoice.lines.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={billIsAllNonWeight ? 6 : 7}
                         className="text-muted-foreground h-20 text-center"
                       >
                         No lines on this invoice.
@@ -685,18 +712,38 @@ export function SupplierInvoiceDetailPage({
                               </div>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
+                              {/* Cases / Units cell — shows count + UOM abbreviation
+                                  so per-each / per-unit lines read "48 ea" or
+                                  "5 case" instead of a bare number. */}
                               {line.quantityCases.toLocaleString()}
+                              {line.unitType === "per_each" ||
+                              line.unitType === "per_unit"
+                                ? ` ${line.purchaseUnitAbbreviationSnapshot ?? line.product?.baseUnit?.abbreviation ?? "ea"}`
+                                : ""}
                             </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              <div className="flex flex-col items-end">
-                                <span>{formatWeightLbs(line.weightLbs)}</span>
-                                {summary ? (
-                                  <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
-                                    {summary}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </TableCell>
+                            {billIsAllNonWeight ? null : (
+                              <TableCell className="text-right tabular-nums">
+                                {/* Weight cell — only meaningful for catch_weight
+                                    and fixed_case. Non-weight lines on a mixed
+                                    bill show "—" instead of "0.00 lb". */}
+                                {line.unitType === "catch_weight" ||
+                                line.unitType === "fixed_case" ? (
+                                  <div className="flex flex-col items-end">
+                                    <span>
+                                      {formatWeightLbs(line.weightLbs)}{" "}
+                                      {line.product?.baseUnit?.abbreviation ?? "lb"}
+                                    </span>
+                                    {summary ? (
+                                      <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
+                                        {summary}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            )}
                             <TableCell className="text-right tabular-nums">
                               {formatMoney(line.unitPrice)}
                             </TableCell>
@@ -778,10 +825,18 @@ export function SupplierInvoiceDetailPage({
                     { label: "Lots created", value: allLots.length },
                     { label: "Inventory items", value: allItems.length },
                     { label: "Total cases", value: totalCases.toLocaleString() },
-                    {
-                      label: "Total weight",
-                      value: `${formatWeightLbs(totalWeight)} lbs`,
-                    },
+                    billIsAllNonWeight
+                      ? {
+                          // Bills with only per_each / per_unit lines don't have
+                          // a meaningful aggregate weight — surface the unit
+                          // count instead so the KPI carries real information.
+                          label: "Total units",
+                          value: totalUnits.toLocaleString(),
+                        }
+                      : {
+                          label: "Total weight",
+                          value: `${formatWeightLbs(totalWeight)} lbs`,
+                        },
                   ].map(({ label, value }) => (
                     <div
                       key={label}
@@ -808,7 +863,12 @@ export function SupplierInvoiceDetailPage({
                         <TableHead>Expires</TableHead>
                         <TableHead>Barcode</TableHead>
                         <TableHead className="text-right">Cases</TableHead>
-                        <TableHead className="text-right">Weight lbs</TableHead>
+                        {/* Same hide-when-no-weight rule as the line items
+                            table above: a beverages-only bill shows no
+                            weight column instead of "0.00" rows. */}
+                        {billIsAllNonWeight ? null : (
+                          <TableHead className="text-right">Weight</TableHead>
+                        )}
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -850,9 +910,20 @@ export function SupplierInvoiceDetailPage({
                             <TableCell className="text-right tabular-nums">
                               {item.cases.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {formatWeightLbs(item.exactWeightLbs)}
-                            </TableCell>
+                            {billIsAllNonWeight ? null : (
+                              <TableCell className="text-right tabular-nums">
+                                {/* Per-item weight: only render for
+                                    weight-mode rows on a mixed bill;
+                                    non-weight rows show "—". Pure
+                                    beverages bills don't reach here
+                                    because the column is hidden above. */}
+                                {item.costUnitTypeSnapshot === "catch_weight" ||
+                                item.costUnitTypeSnapshot === "fixed_case" ||
+                                item.costUnitTypeSnapshot == null
+                                  ? formatWeightLbs(item.exactWeightLbs)
+                                  : "—"}
+                              </TableCell>
+                            )}
                             <TableCell>
                               <Badge variant="outline" className="capitalize">
                                 {item.status.replace("_", " ")}
