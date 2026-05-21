@@ -62,7 +62,27 @@ export function useLinesSubtotal(
       filledLineCount += 1;
       const caseCount = parseCases(line.quantity);
       const data = fifoQueries[index]?.data;
-      const allocationRows = data?.rows ?? [];
+
+      // Mirror the line-row logic in `new-order-lines-table.tsx`:
+      // when the user has manually picked specific inventory items,
+      // bill on the real weight of those items; otherwise use the FIFO
+      // auto-picked rows. Without this, switching to manual pick made
+      // the per-row total move while the Estimate card stayed on the
+      // FIFO total.
+      const manualIds = line.inventoryItemIds ?? [];
+      const manualRows =
+        manualIds.length > 0
+          ? (data?.candidates ?? []).filter(c =>
+              manualIds.includes(c.inventoryItemId),
+            )
+          : [];
+      const allocationRows =
+        manualRows.length > 0 ? manualRows : (data?.rows ?? []);
+
+      // Trust the real-weight total only when the allocation actually
+      // covers the requested cases — otherwise fall back to the
+      // synthetic estimate so the displayed total stays in lock-step
+      // with whatever case count the user just typed.
       const allocationCovers =
         caseCount > 0 && allocationRows.length === caseCount;
       const realWeight = allocationCovers
