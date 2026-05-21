@@ -736,7 +736,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
 
   if (!data.hasBills) {
     return (
-      <div style={{ padding: "28px 32px 80px", maxWidth: 1440, margin: "0 auto" }}>
+      <div className="flex flex-col">
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.015em", margin: "0 0 2px" }}>
             {greeting()}, {firstName}

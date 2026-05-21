@@ -23,7 +23,7 @@ async function InboxContent() {
 
 function InboxSkeleton() {
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1440, margin: "0 auto" }}>
+    <div className="flex flex-col">
       <div style={{ marginBottom: 22 }}>
         <Skeleton width={260} height={32} borderRadius={6} style={{ marginBottom: 8 }} />
         <Skeleton width={320} height={16} borderRadius={4} />
