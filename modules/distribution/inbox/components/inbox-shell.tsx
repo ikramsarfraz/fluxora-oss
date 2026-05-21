@@ -7,7 +7,7 @@ import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOu
 import { dismissMysteryOutflowAction } from "@/modules/distribution/plaid";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
 
-// ── Design tokens (mockup exact values) ───────────────────────────────────
+// ── Design tokens (mapped to the warm system in globals.css) ──────────────
 const C = {
   bg: "var(--color-surface)",
   card: "var(--color-card)",
@@ -125,7 +125,7 @@ function CardHead({
 }
 
 function CardTitle({ title, count, countTone = "default" }: { title: string; count?: number | string; countTone?: "default" | "red" | "amber" | "green" }) {
-  const countBg = countTone === "red" ? C.red : countTone === "amber" ? C.amber : countTone === "green" ? C.green : C.text;
+  const countBg = countTone === "red" ? C.red : countTone === "amber" ? C.amber : countTone === "green" ? C.green : "var(--color-forest-mid)";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <span style={{ fontSize: 13, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: C.text2 }}>
@@ -175,7 +175,7 @@ function Btn({
         fontSize: size === "sm" ? 11.5 : 12.5,
         fontWeight: 500,
         border: variant === "primary" ? "none" : variant === "ghost" ? "none" : `1px solid ${C.borderStrong}`,
-        background: variant === "primary" ? C.text : variant === "ghost" ? "transparent" : "var(--color-card)",
+        background: variant === "primary" ? "var(--color-forest-mid)" : variant === "ghost" ? "transparent" : "var(--color-card)",
         color: variant === "primary" ? "var(--color-card)" : C.text,
         cursor: "pointer",
         fontFamily: "inherit",
@@ -230,7 +230,7 @@ function FilterTabs({
             color: active === tab.value ? "var(--color-card)" : C.text2,
             cursor: "pointer",
             border: "none",
-            background: active === tab.value ? C.text : "transparent",
+            background: active === tab.value ? "var(--color-forest-mid)" : "transparent",
             fontFamily: "inherit",
             display: "inline-flex",
             alignItems: "center",

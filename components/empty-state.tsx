@@ -194,8 +194,8 @@ export function EmptyState({
                 fontSize: 13,
                 fontWeight: 500,
                 cursor: "pointer",
-                border: cta.kind === "primary" ? "1px solid var(--color-ink)" : "1px solid var(--color-border-default)",
-                background: cta.kind === "primary" ? "var(--color-ink)" : "var(--color-card)",
+                border: cta.kind === "primary" ? "1px solid var(--color-forest-mid)" : "1px solid var(--color-border-default)",
+                background: cta.kind === "primary" ? "var(--color-forest-mid)" : "var(--color-card)",
                 color: cta.kind === "primary" ? "var(--color-card)" : "var(--color-subtle)",
                 fontFamily: "inherit",
               }}
