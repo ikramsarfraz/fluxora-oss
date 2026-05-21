@@ -66,24 +66,29 @@ type Phase =
   | { kind: "outro"; ms: number };
 
 const SCENE_MS = 11000;
-// Compare cards now open with a FULL-FRAME TAKEOVER slate that owns the
-// entire 640px frame: chapter pill, giant "Now" / "With Fluxora" phrase,
-// accent line, and the moment's topic as italic-serif subtext. The slate
-// sits for the visitor to read, then slides up and dissolves to reveal
-// the comparison underneath.
+// Compare cards unfold in THREE acts: full-frame slate → headline hook
+// (the number) → process (the chaos or the calm that produces the number).
+// The visitor sees WHAT first ("now takes 25 min"), then WHY ("here's the
+// 5 systems open on your desk"). That's the "current problems → what if?"
+// arc the marketing flow asks for.
 //
 //   0.0 → 0.4s   card fades in
-//   0.0 → 2.8s   FULL-FRAME SLATE: chapter pill, big phrase, accent, subtext;
+//   0.0 → 2.8s   ACT 1 · SLATE: chapter pill, big phrase, accent, subtext;
 //                holds 1.9 → 2.4, then slides up + fades 2.4 → 2.8
 //   2.7 → 3.2s   header (side pill spring; chapter label + topic slide in)
-//   2.9s   first tool tile / Fluxora panel mounts (cross-fades with slate exit)
-//   2.9 → 5.3s   tools/actions land at 0.6s reading-beat cadence
-//   5.8 → 6.4s   voiceover fades in over 1s
-//   8.3s   HUGE time stat punches in (punchline)
-//   9.6s   green callout (With Fluxora only)
-//   ~3s of rest before the next card
+//   2.9 → 3.5s   ACT 2 · HOOK: label fades in (2.9s), huge value springs
+//                in (3.0s), hint fades in (3.5s). The headline number is
+//                onscreen by 3.5s.
+//   4.5s   ACT 3 · PROCESS: first tool tile / Fluxora panel mounts. The
+//                visitor has had ~1 second to absorb the hook before the
+//                explanation begins.
+//   4.5 → 6.9s   tools/actions land at 0.6s reading-beat cadence (Now has
+//                up to 5 tiles, With Fluxora has 4 actions)
+//   7.1 → 8.0s   voiceover fades in
+//   8.6s   green callout (With Fluxora only)
+//   ~2.5s of rest before the next card
 //
-// 12500ms hits ~3s of rest after the last beat. Visitors can pause longer.
+// 12500ms hits ~2.5s of rest after the last beat. Visitors can pause.
 const BEFORE_MS = 12500;
 const AFTER_MS = 12500;
 const INTRO_MS = 3500;

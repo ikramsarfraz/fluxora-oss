@@ -12,22 +12,27 @@ import {
 import { Logomark } from "@/components/brand/logomark";
 import { cn } from "@/lib/utils";
 
-// Compare cards, marketing-redesign edition. Two stitched cards per beat:
+// Compare cards, marketing-redesign edition. Two stitched cards per beat,
+// each unfolds in three deliberate acts (after the takeover slate):
 //
-//   Now           → visual chaos: a row of 4-5 tool tiles, each with a
-//                   timestamp badge. The eye reads "5 systems open, time
-//                   piling up."
+//   ACT 1: SLATE   — full-frame takeover. "Now" or "With Fluxora" as the
+//                   giant title, the moment's topic as italic subtext.
+//                   Sets the scene. Slides up and dissolves at 2.8s.
 //
-//   With Fluxora  → visual calm: ONE Fluxora panel with check-row actions.
-//                   ONE moment, one tool.
+//   ACT 2: HOOK    — the headline NUMBER lands first, centered and huge:
+//                   "Now takes 25 min" or "With Fluxora · only 4 sec".
+//                   The visitor sees the time hit BEFORE the explanation.
+//                   This is the "current problems" / "what if?" beat.
 //
-// Both cards have a HUGE time stat as the right-side focal point so the
-// real comparison (25 min vs 4 sec) reads in under half a second.
+//   ACT 3: PROCESS — only now do we show the WHY. The Now card cascades
+//                   4-5 tool tiles (the chaos that produces the 25 min).
+//                   The With Fluxora card mounts one panel with check-row
+//                   actions (the single screen that produces the 4 sec).
+//                   Voiceover closes each card; With Fluxora gets a green
+//                   callout as the final punctuation.
 //
-// Each card opens with a FULL-FRAME TAKEOVER slate — a cinematic title
-// card carrying the chapter label, the giant "Now" / "With Fluxora" phrase,
-// and the moment's topic as subtext. The slate owns the entire 640px frame
-// for ~2.4s, then slides up and dissolves to reveal the comparison.
+// The vertical top-to-bottom layout (header → hook → process → footer)
+// mirrors how the visitor should read the story: scene → hit → reason.
 
 type IconType = React.ComponentType<{
   className?: string;
@@ -97,64 +102,68 @@ export function BeforeCard({ compare }: { compare: CompareStep }) {
         icon={FileSpreadsheet}
       />
 
-      <div className="relative flex flex-1 flex-col px-10 pb-8">
-        <div className="grid flex-1 grid-cols-[1.6fr_1fr] items-center gap-8">
-          {/* Tool chaos */}
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-subtle">
-              What&apos;s open on your desk
-            </p>
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              {compare.before.tools.map((t, idx) => (
-                <ToolTile
-                  key={t.label}
-                  icon={t.icon}
-                  label={t.label}
-                  badge={t.badge}
-                  // First tile lands 2.9s in — AFTER the big TitleReveal
-                  // has finished (~2.0s) and the header has settled
-                  // (~2.3s). Then each subsequent tile lands 0.6s later.
-                  // 0.6s ≈ reading time for "Inbox · 8:42".
-                  delay={2.9 + idx * 0.6}
-                  askew={idx % 2 === 0}
-                />
-              ))}
-            </div>
+      <div className="relative flex flex-1 flex-col px-10 pb-6">
+        {/* HOOK — the problem as a single number. Lands right after the
+            slate clears, BEFORE the process tiles. The visitor sees the
+            time hit first; the chaos below is the explanation. */}
+        <HookStat
+          tone="danger"
+          label="Now takes"
+          value={compare.before.stat.value}
+          hint={compare.before.statHint}
+          icon={Clock}
+        />
 
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                // Lands AFTER all tool tiles. For 5 tools at 0.6s stagger
-                // starting at 2.9s: last tile = 2.9 + 4*0.6 = 5.3s. Add
-                // ~0.5s reading buffer before voiceover starts fading in.
-                delay: 2.9 + compare.before.tools.length * 0.6 + 0.5,
-                duration: 1.0,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              className="mt-5 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
-            >
-              &ldquo;{compare.before.voiceover}&rdquo;
-            </motion.p>
+        {/* PROCESS — the chaos that produces the number above. Tools
+            cascade in 0.6s apart starting at 4.5s, AFTER the visitor has
+            had ~1 second to absorb the stat. */}
+        <div className="mt-5 flex-1">
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 4.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="font-mono text-[10px] uppercase tracking-[0.16em] text-subtle"
+          >
+            What&apos;s open on your desk
+          </motion.p>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            {compare.before.tools.map((t, idx) => (
+              <ToolTile
+                key={t.label}
+                icon={t.icon}
+                label={t.label}
+                badge={t.badge}
+                // First tile lands 4.5s in — AFTER the hook stat has
+                // punched in (3.0s) and breathed for ~1 second. Then each
+                // subsequent tile lands 0.6s later.
+                delay={4.5 + idx * 0.6}
+                askew={idx % 2 === 0}
+              />
+            ))}
           </div>
 
-          {/* Hero stat — the focal point */}
-          <HeroStat
-            tone="danger"
-            label={compare.before.stat.label}
-            value={compare.before.stat.value}
-            hint={compare.before.statHint}
-            icon={Clock}
-          />
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              // Lands AFTER all tool tiles. For 5 tools at 0.6s stagger
+              // starting at 4.5s: last tile = 4.5 + 4*0.6 = 6.9s. Add a
+              // 0.4s reading buffer before the voiceover fades in.
+              delay: 4.5 + compare.before.tools.length * 0.6 + 0.4,
+              duration: 0.9,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="mt-5 max-w-[640px] font-serif text-[16px] italic leading-snug text-ink-warm md:text-[18px]"
+          >
+            &ldquo;{compare.before.voiceover}&rdquo;
+          </motion.p>
         </div>
 
-        <div className="mt-6 flex items-center justify-between border-t-2 border-dashed border-danger-border/40 pt-3 text-[10.5px] uppercase tracking-[0.18em] text-subtle">
+        <div className="flex items-center justify-between border-t-2 border-dashed border-danger-border/40 pt-3 text-[10.5px] uppercase tracking-[0.18em] text-subtle">
           <span className="font-mono">
             {compare.before.tools.length} systems · alt-tab fatigue
           </span>
-          <span className="font-mono">
-            up next · with Fluxora →
-          </span>
+          <span className="font-mono">what if? · with Fluxora →</span>
         </div>
       </div>
     </motion.div>
@@ -194,54 +203,57 @@ export function AfterCard({ compare }: { compare: CompareStep }) {
         icon={Sparkles}
       />
 
-      <div className="relative flex flex-1 flex-col px-10 pb-8">
-        <div className="grid flex-1 grid-cols-[1.6fr_1fr] items-center gap-8">
-          {/* Fluxora panel */}
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-success-fg">
-              One tool · one moment
-            </p>
-            <FluxoraPanel actions={compare.after.actions} />
+      <div className="relative flex flex-1 flex-col px-10 pb-6">
+        {/* HOOK — the answer. "With Fluxora · 4 sec" lands first. The
+            visitor sees the relief before the explanation. */}
+        <HookStat
+          tone="success"
+          label="With Fluxora · only"
+          value={compare.after.stat.value}
+          hint={compare.after.statHint}
+          icon={Timer}
+        />
 
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                // Panel mounts at 2.9s (matches Before's first tool tile,
-                // after TitleReveal). delayChildren 0.4 + stagger 0.6 →
-                // last (4th) action lands at 2.9 + 0.4 + 3*0.6 = 5.1s.
-                // Voiceover fades in shortly after.
-                delay: 5.8,
-                duration: 1.0,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              className="mt-4 max-w-[420px] font-serif text-[18px] italic leading-snug text-ink-warm md:text-[20px]"
-            >
-              &ldquo;{compare.after.voiceover}&rdquo;
-            </motion.p>
-          </div>
+        {/* PROCESS — the single panel that produces the number above. */}
+        <div className="mt-5 flex-1">
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 4.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="font-mono text-[10px] uppercase tracking-[0.16em] text-success-fg"
+          >
+            One tool · one moment
+          </motion.p>
+          <FluxoraPanel actions={compare.after.actions} />
 
-          {/* Hero stat — the focal point */}
-          <HeroStat
-            tone="success"
-            label={compare.after.stat.label}
-            value={compare.after.stat.value}
-            hint={compare.after.statHint}
-            icon={Timer}
-          />
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              // Panel mounts at 4.5s. delayChildren 0.4 + stagger 0.6 →
+              // last (4th) action lands at 4.5 + 0.4 + 3*0.6 = 6.7s.
+              // Voiceover fades in shortly after.
+              delay: 7.1,
+              duration: 0.9,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="mt-4 max-w-[640px] font-serif text-[16px] italic leading-snug text-ink-warm md:text-[18px]"
+          >
+            &ldquo;{compare.after.voiceover}&rdquo;
+          </motion.p>
         </div>
 
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            // Callout = final punctuation. Voiceover lands at 5.8s,
-            // stat lands at 8.3s, callout closes the beat at 9.6s.
-            delay: 9.6,
-            duration: 0.7,
+            // Final punctuation — closes the beat at 8.6s after the
+            // voiceover (7.1s) has had time to read.
+            delay: 8.6,
+            duration: 0.6,
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="mt-6 flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
+          className="flex items-center gap-2.5 rounded-lg border border-success-border/60 bg-success-bg/40 px-3 py-2"
         >
           <Check
             className="size-3.5 shrink-0 text-success-fg"
@@ -322,9 +334,10 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      // Panel mounts 2.9s in — after the TitleReveal sequence + header
-      // settle. Matches the Before card's first tool tile.
-      transition={{ duration: 0.7, delay: 2.9, ease: [0.22, 1, 0.36, 1] }}
+      // Panel mounts 4.5s in — AFTER the hook stat has punched in (3.0s)
+      // and had ~1 second to breathe. Matches the Now card's first tool
+      // tile so both cards' processes start at the same beat.
+      transition={{ duration: 0.7, delay: 4.5, ease: [0.22, 1, 0.36, 1] }}
       className="mt-3 overflow-hidden rounded-2xl border-2 border-success-border/70 bg-card-warm shadow-[0_22px_50px_-25px_rgba(74,107,47,0.4)]"
     >
       {/* Mini app shell header */}
@@ -377,9 +390,19 @@ function FluxoraPanel({ actions }: { actions: AfterPayload["actions"] }) {
 }
 
 // =========================================================================
-// Hero stat — the focal point of each card
+// HookStat — the headline number, displayed FIRST after the slate clears
 // =========================================================================
-function HeroStat({
+// Centered banner that takes the spotlight at the top of the card. Three
+// staggered beats:
+//
+//   2.9s   small label fades in ("Now takes" / "With Fluxora · only")
+//   3.0s   HUGE value springs in (the punchline number)
+//   3.5s   small hint fades in (e.g. "+ 14 alt-tabs", "1 click")
+//
+// By 4.0s the hook is fully landed. The process tiles / Fluxora panel
+// then start cascading in at 4.5s — visitor first sees the WHAT (the
+// number), then the WHY (the chaos or the one panel that produces it).
+function HookStat({
   tone,
   label,
   value,
@@ -393,50 +416,55 @@ function HeroStat({
   icon: IconType;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{
-        // The big number is the punchline. Lands AFTER the voiceover has
-        // had ~2s of reading time. Voiceover Before = 6.4s, voiceover
-        // After = 5.8s; stat lands at 8.3s on both for a consistent beat.
-        delay: 8.3,
-        type: "spring",
-        stiffness: 200,
-        damping: 20,
-      }}
-      className="flex flex-col items-end text-right"
-    >
-      <div
+    <div className="flex flex-col items-center text-center">
+      {/* Small uppercase label — sets context for the number */}
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 2.9, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-          "flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em]",
+          "inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em]",
           tone === "danger" ? "text-danger-fg" : "text-success-fg",
         )}
       >
-        <Icon className="size-3" strokeWidth={2} />
+        <Icon className="size-3" strokeWidth={2.2} />
         {label}
-      </div>
-      <div
+      </motion.div>
+
+      {/* HUGE value — the punchline */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.72 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{
+          delay: 3.0,
+          type: "spring",
+          stiffness: 220,
+          damping: 18,
+        }}
         className={cn(
-          "font-serif text-[88px] font-medium leading-[0.95] tracking-tight tabular-nums md:text-[112px]",
-          tone === "danger"
-            ? "text-danger-fg line-through decoration-[3px]"
-            : "text-success-fg",
+          "mt-1 font-serif font-medium leading-[0.95] tracking-tight tabular-nums",
+          "text-[72px] md:text-[108px]",
+          tone === "danger" ? "text-danger-fg" : "text-success-fg",
         )}
       >
         {value}
-      </div>
+      </motion.div>
+
+      {/* Hint — small detail under the value */}
       {hint ? (
-        <div
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 3.5, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
-            "mt-1 font-mono text-[10.5px] uppercase tracking-[0.16em]",
-            tone === "danger" ? "text-danger-fg/70" : "text-success-fg/80",
+            "mt-2 font-mono text-[10.5px] uppercase tracking-[0.16em]",
+            tone === "danger" ? "text-danger-fg/75" : "text-success-fg/85",
           )}
         >
           {hint}
-        </div>
+        </motion.div>
       ) : null}
-    </motion.div>
+    </div>
   );
 }
 
