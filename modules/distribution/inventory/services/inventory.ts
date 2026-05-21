@@ -137,6 +137,16 @@ export async function getInventoryItems() {
           sku: true,
           name: true,
         },
+        // Eager-load the product's base UOM so the inventory grid can
+        // render "/lb" vs "/ea" vs "/gal" per row without an extra
+        // roundtrip. The `cost_unit_type_snapshot` column already tells
+        // us catch-weight vs not — but the literal abbreviation is what
+        // we need to display.
+        with: {
+          baseUnit: {
+            columns: { id: true, abbreviation: true, family: true },
+          },
+        },
       },
       lot: {
         columns: {
@@ -331,6 +341,13 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
                 id: true,
                 sku: true,
                 name: true,
+              },
+              // Same eager-load as the unpaginated path — needed by
+              // formatInventoryQuantity to render mixed-UOM rows.
+              with: {
+                baseUnit: {
+                  columns: { id: true, abbreviation: true, family: true },
+                },
               },
             },
             lot: {

@@ -32,6 +32,15 @@ export async function getLotById(lotId: string) {
                   sku: true,
                   name: true,
                 },
+                with: {
+                  baseUnit: {
+                    columns: {
+                      id: true,
+                      abbreviation: true,
+                      family: true,
+                    },
+                  },
+                },
               },
               supplierInvoice: {
                 columns: {
@@ -73,6 +82,15 @@ export async function getLotById(lotId: string) {
               id: true,
               sku: true,
               name: true,
+            },
+            with: {
+              baseUnit: {
+                columns: {
+                  id: true,
+                  abbreviation: true,
+                  family: true,
+                },
+              },
             },
           },
           allocations: {
@@ -185,6 +203,18 @@ export async function getLots() {
                   sku: true,
                   name: true,
                 },
+                // Eager-load base UOM so the lots list can render
+                // "/lb" vs "/ea" vs "/gal" per row without an extra
+                // join on the client.
+                with: {
+                  baseUnit: {
+                    columns: {
+                      id: true,
+                      abbreviation: true,
+                      family: true,
+                    },
+                  },
+                },
               },
               supplierInvoice: {
                 columns: {
@@ -206,6 +236,7 @@ export async function getLots() {
           cases: true,
           exactWeightLbs: true,
           status: true,
+          costUnitTypeSnapshot: true,
         },
         with: {
           product: {
@@ -213,6 +244,15 @@ export async function getLots() {
               id: true,
               sku: true,
               name: true,
+            },
+            with: {
+              baseUnit: {
+                columns: {
+                  id: true,
+                  abbreviation: true,
+                  family: true,
+                },
+              },
             },
           },
         },

@@ -11,7 +11,12 @@ import { useLots } from "../hooks/use-lots";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatWeightLbs, getExpirationState, getLotOperationalStatus } from "@/lib/warehouse/insights";
 
-import { getLotPrimaryProduct, getLotSourceInvoices, getLotTotals } from "./lot-view-helpers";
+import {
+  getLotPrimaryProduct,
+  getLotSourceInvoices,
+  getLotTotals,
+  isLotNonWeight,
+} from "./lot-view-helpers";
 
 type LotRow = NonNullable<ReturnType<typeof useLots>["data"]>[number];
 
@@ -75,12 +80,20 @@ const COLUMNS: ListingColumn<LotRow>[] = [
   },
   {
     key: "weight",
-    header: "Weight",
+    // Renamed from "Weight" — non-weight lots (beverages, cans) show
+    // their unit count in the product's base UOM. Each lot maps to a
+    // single product so the family is well-defined per row.
+    header: "Quantity",
     sortKey: "weight",
     align: "right",
     render: row => {
       const totals = getLotTotals(row);
-      return { primary: <MonoText>{formatWeightLbs(totals.totalWeight)}</MonoText> };
+      const product = getLotPrimaryProduct(row);
+      const baseAbbr = product?.baseUnit?.abbreviation ?? "lb";
+      const primary = isLotNonWeight(row)
+        ? `${totals.totalUnits} ${baseAbbr}`
+        : `${formatWeightLbs(totals.totalWeight)} ${baseAbbr}`;
+      return { primary: <MonoText>{primary}</MonoText> };
     },
   },
   {

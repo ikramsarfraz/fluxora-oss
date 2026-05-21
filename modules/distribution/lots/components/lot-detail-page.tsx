@@ -51,6 +51,7 @@ import {
   getLotPrimaryProduct,
   getLotSourceInvoices,
   getLotTotals,
+  isLotNonWeight,
 } from "./lot-view-helpers";
 import { LotExtendExpirationDialog } from "./lot-extend-expiration-dialog";
 import { LotWriteOffDialog } from "./lot-write-off-dialog";
@@ -181,11 +182,15 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total weight
+              {isLotNonWeight(lot) ? "Total units" : "Total weight"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {formatWeightLbs(totals.totalWeight)} lb
+            {/* Mixed-UOM safe: weight lots show "X.XX lb", non-weight
+                lots show their count in the product's base UOM. */}
+            {isLotNonWeight(lot)
+              ? `${totals.totalUnits} ${product?.baseUnit?.abbreviation ?? "ea"}`
+              : `${formatWeightLbs(totals.totalWeight)} ${product?.baseUnit?.abbreviation ?? "lb"}`}
           </CardContent>
         </Card>
         <Card>

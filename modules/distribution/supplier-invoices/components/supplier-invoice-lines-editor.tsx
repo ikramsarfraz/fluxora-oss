@@ -1297,7 +1297,13 @@ function LineRow({
         />
       ) : null}
 
-      {/* Weight entry tray (catch-weight only) */}
+      {/* Pricing tray:
+            - catch_weight → CatchWeightTray (weight modes + pricing type)
+            - fixed_case / per_each / per_unit → PricingTypeTray (just unit
+              picker + pricing-type override).
+          The previous code rendered LotExpiresTray here too, which then
+          got rendered AGAIN by the Lot chevron below — the trays are now
+          single-responsibility so each toggle opens exactly one. */}
       {expanded && isCatchWeight && (
         <div
           style={{
@@ -1321,7 +1327,6 @@ function LineRow({
         </div>
       )}
 
-      {/* Fixed-case weight tray (lot+expires) */}
       {expanded && !isCatchWeight && (
         <div
           style={{
@@ -1330,16 +1335,17 @@ function LineRow({
             borderTop: `1px dashed ${T.borderStrong}`,
           }}
         >
-          <LotExpiresTray
+          <PricingTypeTray
             control={control}
-            register={register}
+            setValue={setValue}
             index={index}
+            product={productById.get(productId) ?? null}
             disabled={disabled}
           />
         </div>
       )}
 
-      {/* Lot drawer (separate toggle, all line types) */}
+      {/* Lot drawer — pure lot + expiry. Available on every line type. */}
       {lotOpen && (
         <div
           style={{
@@ -1680,6 +1686,12 @@ function CatchWeightTray({
 }
 
 // ── Lot & expiry drawer ────────────────────────────────────────────────────
+/**
+ * Lot + expiry only. Previously this tray also carried the "Pricing
+ * type" select, which caused the tray to render TWICE on non-catch-weight
+ * lines (once via the Weight/Pricing chevron, once via the Lot chevron)
+ * — split so each tray has a single responsibility.
+ */
 function LotExpiresTray({
   control,
   register,
@@ -1747,7 +1759,157 @@ function LotExpiresTray({
             </div>
           )}
         </div>
-        <div style={{ flex: 1, minWidth: 160, maxWidth: 200 }}>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Pricing-mode picker for fixed_case / per_each / per_unit lines. Surfaces
+ * the line's unit-type Select AND a "Pricing unit" quick-pick populated
+ * from the product's known product_units rows — so when the supplier
+ * sells "Salam Cola" by the case, the user picks "cs (12 ea)" from a
+ * dropdown instead of typing the abbreviation freehand.
+ *
+ * Falls back gracefully: when the product has no extra units defined,
+ * the tray shows just the unit-type select; the abbreviation stays as
+ * the freetext input in the main row.
+ */
+function PricingTypeTray({
+  control,
+  setValue,
+  index,
+  product,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  setValue: UseFormSetValue<SupplierInvoiceFormValues>;
+  index: number;
+  product: ProductListItem | null | undefined;
+  disabled: boolean;
+}) {
+  const currentAbbrev =
+    useWatch({ control, name: `lines.${index}.purchaseUnitAbbreviation` }) ?? "";
+  const baseUnitAbbrev = product?.baseUnit?.abbreviation ?? null;
+
+  // De-duplicate the product's UoM rows by unit id so the picker doesn't
+  // show "Each" twice when the product has both a sales row and a base
+  // unit pointing at it.
+  const rawRows = (product?.productUnits ?? []).map(u => ({
+    unitId: u.unitId,
+    abbreviation: u.unit?.abbreviation ?? "",
+    name: u.unit?.name ?? "",
+    conversionToBase: Number(u.conversionToBase) || 1,
+    purpose: u.purpose,
+    isDefault: u.isDefault,
+    sortOrder: u.sortOrder,
+  }));
+  // Make sure the base UoM is always pickable, even when no product_units
+  // row references it (very small / new products).
+  if (
+    product?.baseUnitId &&
+    baseUnitAbbrev &&
+    !rawRows.some(r => r.unitId === product.baseUnitId)
+  ) {
+    rawRows.unshift({
+      unitId: product.baseUnitId,
+      abbreviation: baseUnitAbbrev,
+      name: product.baseUnit?.name ?? baseUnitAbbrev,
+      conversionToBase: 1,
+      purpose: "stock",
+      isDefault: false,
+      sortOrder: -1,
+    });
+  }
+  const uniqueByUnitId = new Map<string, (typeof rawRows)[number]>();
+  for (const row of rawRows) {
+    if (!uniqueByUnitId.has(row.unitId)) uniqueByUnitId.set(row.unitId, row);
+  }
+  const pricingUnitOptions = [...uniqueByUnitId.values()].sort((a, b) => {
+    // Base unit (conversion 1) first, then by sortOrder.
+    if (a.conversionToBase !== b.conversionToBase) {
+      if (a.conversionToBase === 1) return -1;
+      if (b.conversionToBase === 1) return 1;
+    }
+    return a.sortOrder - b.sortOrder;
+  });
+
+  function applyPricingUnit(option: (typeof pricingUnitOptions)[number]) {
+    // Set the abbreviation snapshot and infer a sensible unit type from
+    // it (lb/kg → catch_weight, ea → per_each, anything else → per_unit).
+    setValue(`lines.${index}.purchaseUnitAbbreviation`, option.abbreviation, {
+      shouldDirty: true,
+    });
+    const lower = option.abbreviation.toLowerCase();
+    let nextUnitType: SupplierInvoiceLineUnitType;
+    if (lower === "lb" || lower === "lbs" || lower === "kg" || lower === "oz") {
+      nextUnitType = "catch_weight";
+    } else if (lower === "ea" || lower === "each" || lower === "pc") {
+      nextUnitType = "per_each";
+    } else if (option.conversionToBase === 1) {
+      // Base unit but not a weight/each variant — treat as per_unit
+      // (matches gal, L, etc. as base).
+      nextUnitType = "per_unit";
+    } else {
+      nextUnitType = "per_unit";
+    }
+    setValue(`lines.${index}.unitType`, nextUnitType, { shouldDirty: true });
+  }
+
+  // Match the current abbreviation back to one of the options so the
+  // Select reflects the user's prior pick (or AI prefill).
+  const selectedOption =
+    pricingUnitOptions.find(
+      o => o.abbreviation.toLowerCase() === currentAbbrev.trim().toLowerCase(),
+    ) ?? null;
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: T.muted,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          marginBottom: 12,
+        }}
+      >
+        Pricing
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {pricingUnitOptions.length > 0 ? (
+          <div style={{ flex: 1, minWidth: 220, maxWidth: 320 }}>
+            <label style={lbl}>How is the bill priced?</label>
+            <Select
+              value={selectedOption?.unitId ?? ""}
+              onValueChange={unitId => {
+                const option = pricingUnitOptions.find(o => o.unitId === unitId);
+                if (option) applyPricingUnit(option);
+              }}
+              disabled={disabled}
+            >
+              <SelectTrigger style={{ height: 36, borderRadius: 7, fontSize: 12 }}>
+                <SelectValue placeholder="Pick a unit…" />
+              </SelectTrigger>
+              <SelectContent>
+                {pricingUnitOptions.map(o => (
+                  <SelectItem key={o.unitId} value={o.unitId}>
+                    {o.name || o.abbreviation}
+                    {o.abbreviation ? ` (${o.abbreviation})` : ""}
+                    {o.conversionToBase !== 1 && baseUnitAbbrev
+                      ? ` — ${o.conversionToBase} ${baseUnitAbbrev} per ${o.abbreviation || "unit"}`
+                      : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+              Picks the unit + price-per direction in one step.
+            </div>
+          </div>
+        ) : null}
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 260 }}>
           <label style={lbl}>Pricing type</label>
           <Controller
             control={control}
@@ -1758,12 +1920,17 @@ function LotExpiresTray({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="catch_weight">Variable weight</SelectItem>
-                  <SelectItem value="fixed_case">Fixed case</SelectItem>
+                  <SelectItem value="catch_weight">Variable weight (/lb)</SelectItem>
+                  <SelectItem value="fixed_case">Fixed case (/cs)</SelectItem>
+                  <SelectItem value="per_each">Per each (/ea)</SelectItem>
+                  <SelectItem value="per_unit">Per unit (/UOM)</SelectItem>
                 </SelectContent>
               </Select>
             )}
           />
+          <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+            Override if the supplier&apos;s pricing differs from the unit pick.
+          </div>
         </div>
       </div>
     </div>

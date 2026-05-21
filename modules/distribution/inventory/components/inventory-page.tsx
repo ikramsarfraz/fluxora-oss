@@ -14,7 +14,11 @@ import { useInventoryItemsPage } from "../hooks/use-inventory";
 import { InventoryProductSummary } from "./inventory-product-summary";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
-import { formatWeightLbs, getExpirationState, getInventoryStatusLabel } from "../utils/insights";
+import {
+  formatInventoryQuantity,
+  getExpirationState,
+  getInventoryStatusLabel,
+} from "../utils/insights";
 import type {
   InventoryListFilters,
   InventoryListItem,
@@ -83,10 +87,26 @@ const COLUMNS: ListingColumn<InventoryRow>[] = [
   },
   {
     key: "weight",
-    header: "Weight (lb)",
+    // Renamed from "Weight (lb)" — non-weight items (beverages, cans)
+    // render their count in the product's base UOM instead. Sort key
+    // stays "weight" since the underlying SQL still orders by
+    // exact_weight_lbs (zero for non-weight items, which lumps them
+    // together at the bottom — acceptable for now).
+    header: "Quantity",
     sortKey: "weight",
     align: "right",
-    render: row => ({ primary: <MonoText>{formatWeightLbs(row.exactWeightLbs)}</MonoText> }),
+    render: row => ({
+      primary: (
+        <MonoText>
+          {formatInventoryQuantity({
+            costUnitTypeSnapshot: row.costUnitTypeSnapshot,
+            exactWeightLbs: row.exactWeightLbs,
+            cases: row.cases,
+            baseUnitAbbreviation: row.product?.baseUnit?.abbreviation,
+          })}
+        </MonoText>
+      ),
+    }),
   },
   {
     key: "status",
