@@ -216,44 +216,58 @@ function FilterTabs({
   active: string;
   onSelect: (v: string) => void;
 }) {
+  // Matches the ListingPage's status-segment pattern: tan group container with
+  // a cream-lifted pill (border + tiny shadow) for the active state.
   return (
-    <div style={{ display: "flex", gap: 2, padding: "0 4px" }}>
-      {tabs.map(tab => (
-        <button
-          key={tab.value}
-          onClick={() => onSelect(tab.value)}
-          style={{
-            padding: "4px 10px",
-            borderRadius: 5,
-            fontSize: 11.5,
-            fontWeight: 500,
-            color: active === tab.value ? "var(--color-card)" : C.text2,
-            cursor: "pointer",
-            border: "none",
-            background: active === tab.value ? "var(--color-forest-mid)" : "transparent",
-            fontFamily: "inherit",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-          }}
-        >
-          {tab.label}
-          {tab.count !== undefined && (
-            <span
-              style={{
-                background: active === tab.value ? "rgba(255,255,255,0.2)" : "var(--color-divider)",
-                color: active === tab.value ? "var(--color-card)" : C.text2,
-                fontSize: 10,
-                padding: "0 5px",
-                borderRadius: 3,
-                fontWeight: 600,
-              }}
-            >
-              {tab.count}
-            </span>
-          )}
-        </button>
-      ))}
+    <div
+      style={{
+        display: "inline-flex",
+        gap: 2,
+        padding: 2,
+        background: "var(--color-divider)",
+        borderRadius: 6,
+      }}
+    >
+      {tabs.map(tab => {
+        const isActive = active === tab.value;
+        return (
+          <button
+            key={tab.value}
+            onClick={() => onSelect(tab.value)}
+            style={{
+              padding: "3px 10px",
+              borderRadius: 4,
+              fontSize: 11.5,
+              fontWeight: isActive ? 500 : 400,
+              color: isActive ? C.text : C.text2,
+              cursor: "pointer",
+              border: isActive ? `1px solid ${C.border}` : "1px solid transparent",
+              background: isActive ? "var(--color-card)" : "transparent",
+              boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.04)" : "none",
+              fontFamily: "inherit",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+            }}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span
+                style={{
+                  background: isActive ? "var(--color-divider)" : "var(--color-surface-deep)",
+                  color: C.text2,
+                  fontSize: 10,
+                  padding: "0 5px",
+                  borderRadius: 3,
+                  fontWeight: 600,
+                }}
+              >
+                {tab.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
