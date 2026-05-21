@@ -516,12 +516,17 @@ export function CsvImportModal({
         }
         if (result.failed.length > 0) {
           // Surface per-row failures as validation errors so the user can
-          // fix their CSV and re-upload. Row numbers are +2 to match the
-          // existing validate-step display (header row + 1-based index).
-          const newErrors: ValidationError[] = result.failed.map(f => ({
-            row: f.row + 2,
-            errors: [f.message],
-          }));
+          // fix their CSV and re-upload. The server's `f.row` is an index
+          // into `validRows` (what we sent), so map it back through
+          // `validRowIndices` to the original CSV row before adding the
+          // header offset.
+          const newErrors: ValidationError[] = result.failed.map(f => {
+            const originalIdx = validRowIndices[f.row] ?? f.row;
+            return {
+              row: originalIdx + 2,
+              errors: [f.message],
+            };
+          });
           setErrors(newErrors);
           setStep(2);
           setApplying(false);
@@ -576,7 +581,16 @@ export function CsvImportModal({
     downloadCsv(csv, "import_errors.csv");
   }
 
-  const validRows = mappedRows.filter((_, i) => !errors.some(e => e.row === i + 2));
+  // Indices of rows that passed both local validation and preflight,
+  // expressed against the original `mappedRows` array. We keep the
+  // original index so that an apply-step failure can be mapped back to
+  // the actual CSV row number (the filter would otherwise compress
+  // indices — e.g. validRows[0] could be CSV row 4 if rows 2/3 had
+  // errors, and reporting "row 2" would point at the wrong record).
+  const validRowIndices = mappedRows
+    .map((_, i) => i)
+    .filter(i => !errors.some(e => e.row === i + 2));
+  const validRows = validRowIndices.map(i => mappedRows[i]!);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
