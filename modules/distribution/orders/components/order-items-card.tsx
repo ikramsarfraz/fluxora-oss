@@ -831,10 +831,10 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     }
   }, [selectedLineId, remaining]);
 
-  // One row per distinct allocated lot. A single lot may back several
-  // allocated inventory items on this line (e.g. multiple cases pulled
-  // from the same lot), so we dedupe by lotId and sum cases / weights
-  // for the dropdown's secondary detail line.
+  // One row per distinct allocated lot. We keep each underlying
+  // inventory item separately so the dropdown can show case + weight
+  // totals scaled to whatever the user just typed in the cases input
+  // (proportional take from each item if a partial case is pulled).
   const lotOptions = useMemo(() => {
     if (!selectedLine) return [];
     const map = new Map<
@@ -842,8 +842,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       {
         id: string;
         lotNumber: string;
-        cases: number;
-        weightLbs: number;
+        items: Array<{ cases: number; weightLbs: number }>;
         receiveDate: string | Date | null | undefined;
         expirationDate: string | Date | null | undefined;
       }
@@ -851,19 +850,17 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     for (const allocation of selectedLine.allocations ?? []) {
       const lot = allocation.inventoryItem?.lot;
       if (!lot?.id) continue;
-      const existing = map.get(lot.id);
       const cases = allocation.inventoryItem?.cases ?? 1;
       const weight =
         parseFloat(allocation.inventoryItem?.exactWeightLbs ?? "0") || 0;
+      const existing = map.get(lot.id);
       if (existing) {
-        existing.cases += cases;
-        existing.weightLbs += weight;
+        existing.items.push({ cases, weightLbs: weight });
       } else {
         map.set(lot.id, {
           id: lot.id,
           lotNumber: lot.lotNumber,
-          cases,
-          weightLbs: weight,
+          items: [{ cases, weightLbs: weight }],
           receiveDate: lot.receiveDate ?? null,
           expirationDate: lot.expirationDate ?? null,
         });
@@ -871,6 +868,26 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     }
     return [...map.values()];
   }, [selectedLine]);
+
+  function lotTotalCases(items: Array<{ cases: number }>) {
+    return items.reduce((sum, item) => sum + Math.max(0, item.cases), 0);
+  }
+
+  function lotWeightForCases(
+    items: Array<{ cases: number; weightLbs: number }>,
+    requestedCases: number,
+  ) {
+    let remaining = requestedCases;
+    let total = 0;
+    for (const item of items) {
+      if (remaining <= 0) break;
+      if (item.cases <= 0 || item.weightLbs <= 0) continue;
+      const taken = Math.min(item.cases, remaining);
+      total += (taken / item.cases) * item.weightLbs;
+      remaining -= taken;
+    }
+    return total;
+  }
 
   const [selectedLotId, setSelectedLotId] = useState("");
   const effectiveSelectedLotId = lotOptions.some(lot => lot.id === selectedLotId)
@@ -1127,23 +1144,60 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               onValueChange={setSelectedLotId}
             >
               <SelectTrigger className="border-border-default bg-card font-mono text-sm text-ink shadow-none">
-                <SelectValue />
+                {(() => {
+                  // Render the trigger ourselves so the collapsed view
+                  // is a clean, left-aligned lot number instead of the
+                  // option's multi-line content.
+                  const selected = lotOptions.find(
+                    l => l.id === effectiveSelectedLotId,
+                  );
+                  return (
+                    <span
+                      style={{
+                        flex: 1,
+                        textAlign: "left",
+                        color: selected ? C.ink : C.muted,
+                      }}
+                    >
+                      {selected ? selected.lotNumber : "Select lot…"}
+                    </span>
+                  );
+                })()}
               </SelectTrigger>
               <SelectContent>
                 {lotOptions.map(l => {
                   // Mirror the customer picker pattern: lot number on
-                  // top, the recorded receiving details on a muted
-                  // second line so the picker tells the warehouse user
-                  // exactly which lot they're committing to.
+                  // top, receiving details on a muted second line. The
+                  // displayed cases + weight reflect what the user
+                  // would actually pull from this lot for the current
+                  // `casesValue` (capped by what the lot has), so the
+                  // picker stays honest as the cases input changes.
+                  const totalCases = lotTotalCases(l.items);
+                  const requestedCases = (() => {
+                    const n = parseInt(casesValue, 10);
+                    return Number.isInteger(n) && n > 0 ? n : 0;
+                  })();
+                  const displayCases =
+                    requestedCases > 0
+                      ? Math.min(requestedCases, totalCases)
+                      : totalCases;
+                  const displayWeight = lotWeightForCases(l.items, displayCases);
+
                   const detailParts: string[] = [];
                   detailParts.push(
-                    `${l.cases.toLocaleString()} ${l.cases === 1 ? "case" : "cases"}`,
+                    `${displayCases.toLocaleString()}${
+                      requestedCases > 0 && displayCases < totalCases
+                        ? ` of ${totalCases.toLocaleString()}`
+                        : ""
+                    } ${displayCases === 1 ? "case" : "cases"}`,
                   );
-                  if (l.weightLbs > 0) {
-                    detailParts.push(`${l.weightLbs.toFixed(2)} lb`);
+                  if (displayWeight > 0) {
+                    detailParts.push(`${displayWeight.toFixed(2)} lb`);
                   }
                   if (l.receiveDate) {
-                    detailParts.push(`received ${formatDisplayDate(l.receiveDate)}`);
+                    detailParts.push(
+                      `received ${formatDisplayDate(l.receiveDate)}`,
+                    );
                   }
                   if (l.expirationDate) {
                     detailParts.push(`exp ${formatDisplayDate(l.expirationDate)}`);
@@ -1156,9 +1210,16 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
                           flexDirection: "column",
                           gap: "1px",
                           minWidth: 0,
+                          textAlign: "left",
                         }}
                       >
-                        <span style={{ fontFamily: C.mono, fontWeight: 500 }}>
+                        <span
+                          style={{
+                            fontFamily: C.mono,
+                            fontWeight: 500,
+                            textAlign: "left",
+                          }}
+                        >
                           {l.lotNumber}
                         </span>
                         <span style={{ fontSize: "11px", color: C.muted }}>
