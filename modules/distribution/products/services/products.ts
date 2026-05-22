@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, like, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -150,12 +150,36 @@ export type ProductListSort =
   | "defaultPricePerLb"
   | "createdAt";
 
-export type ProductListParams = PaginatedQueryInput<ProductListSort>;
+/**
+ * Filter for the paginated list page.
+ *   - "active"   (default): only non-archived products
+ *   - "archived": only archived products
+ *   - "all":      everything
+ */
+export type ProductArchivedFilter = "active" | "archived" | "all";
 
-export async function getProducts() {
+export type ProductListParams = PaginatedQueryInput<ProductListSort> & {
+  archived?: ProductArchivedFilter;
+};
+
+/**
+ * Active (non-archived) products in the tenant. Archived products are
+ * hidden from order / invoice / receiving pickers — selling or
+ * receiving an archived product would re-introduce data nobody wants
+ * to see in new business activity.
+ *
+ * Pass `{ includeArchived: true }` only for catalogs (e.g. CSV export)
+ * where the archived rows are meaningful.
+ */
+export async function getProducts(
+  options: { includeArchived?: boolean } = {},
+) {
   const tenant = await getCurrentTenant();
   const result = await db.query.products.findMany({
-    where: eq(products.tenantId, tenant.id),
+    where: and(
+      eq(products.tenantId, tenant.id),
+      options.includeArchived ? undefined : isNull(products.archivedAt),
+    ),
     with: {
       productCategories: {
         with: { category: true },
@@ -172,13 +196,21 @@ export async function getProducts() {
 
 export async function getProductsPage(input?: ProductListParams) {
   const tenant = await getCurrentTenant();
+  const archived = input?.archived ?? "active";
   const query = normalizePaginatedQuery(input, {
     defaultSort: "createdAt",
     defaultDirection: "desc",
     defaultFilters: {},
   });
+  const archivedCondition =
+    archived === "active"
+      ? isNull(products.archivedAt)
+      : archived === "archived"
+        ? isNotNull(products.archivedAt)
+        : undefined;
   const where = and(
     eq(products.tenantId, tenant.id),
+    archivedCondition,
     buildTextSearchCondition(query.search, [products.sku, products.name]),
   );
   const [{ count }] = await db
@@ -479,8 +511,137 @@ export async function updateProduct(input: {
   });
 }
 
-export async function deleteProduct(productId: string) {
+/**
+ * Soft-delete a product. Sets `archivedAt` + `archivedByUserId`; the
+ * row stays in the table so historical orders / invoices / prices /
+ * bills keep working. Archived products are hidden from list pages
+ * and order / receiving lookups by default, but are restorable.
+ *
+ * Use this — not `permanentlyDeleteProduct` — for any product that's
+ * been used in business activity. Permanent delete is reserved for
+ * orphan rows mistakenly created and never referenced.
+ */
+export async function archiveProduct(productId: string) {
+  const [tenant, user] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
+  const [row] = await db
+    .update(products)
+    .set({
+      archivedAt: new Date(),
+      archivedByUserId: user.id,
+    })
+    .where(
+      and(
+        eq(products.id, productId),
+        eq(products.tenantId, tenant.id),
+        isNull(products.archivedAt),
+      ),
+    )
+    .returning({ id: products.id });
+  if (!row) {
+    throw new Error("Product not found or already archived.");
+  }
+  return row;
+}
+
+/**
+ * Reverse an archive. Clears `archivedAt` / `archivedByUserId`.
+ * The `(tenant_id, sku)` unique constraint still applies — restoring
+ * a product whose SKU has since been reassigned to a different row
+ * will fail at the DB. The form's "Edit product" surface is the
+ * fix-up path in that case.
+ */
+export async function restoreProduct(productId: string) {
   const tenant = await getCurrentTenant();
+  const [row] = await db
+    .update(products)
+    .set({
+      archivedAt: null,
+      archivedByUserId: null,
+    })
+    .where(
+      and(
+        eq(products.id, productId),
+        eq(products.tenantId, tenant.id),
+        isNotNull(products.archivedAt),
+      ),
+    )
+    .returning({ id: products.id });
+  if (!row) {
+    throw new Error("Product not found or not archived.");
+  }
+  return row;
+}
+
+/**
+ * Permanently remove a product. Only allowed when no dependent record
+ * references it — order lines, invoice lines, bill lines, customer
+ * prices, and supplier-cost snapshots all have FKs to `products.id`.
+ * The FK behaviour varies (some cascade, some restrict, some set null),
+ * but a permanent delete is a footgun on a product with any history,
+ * so we count first and surface a human-readable error.
+ *
+ * For products with history, use {@link archiveProduct}.
+ */
+export async function permanentlyDeleteProduct(productId: string) {
+  const tenant = await getCurrentTenant();
+  // Confirm the product belongs to this tenant before any of the
+  // dependent-count probes run.
+  const existing = await db.query.products.findFirst({
+    where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
+    columns: { id: true, name: true },
+  });
+  if (!existing) {
+    throw new Error("Product not found.");
+  }
+  const [
+    [supplierInvoiceCountRow],
+    [salesOrderCountRow],
+    [salesInvoiceCountRow],
+    [customerPriceCountRow],
+    [supplierCostCountRow],
+  ] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(supplierInvoiceLines)
+      .where(eq(supplierInvoiceLines.productId, productId)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(salesOrderLines)
+      .where(eq(salesOrderLines.productId, productId)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(salesInvoiceLines)
+      .where(eq(salesInvoiceLines.productId, productId)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(customerProductPrices)
+      .where(eq(customerProductPrices.productId, productId)),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(productSupplierCosts)
+      .where(eq(productSupplierCosts.productId, productId)),
+  ]);
+
+  const parts: string[] = [];
+  const orderLines = salesOrderCountRow?.n ?? 0;
+  const invoiceLines = salesInvoiceCountRow?.n ?? 0;
+  const billLines = supplierInvoiceCountRow?.n ?? 0;
+  const prices = customerPriceCountRow?.n ?? 0;
+  const costs = supplierCostCountRow?.n ?? 0;
+  if (orderLines > 0) parts.push(`${orderLines} order line${orderLines === 1 ? "" : "s"}`);
+  if (invoiceLines > 0) parts.push(`${invoiceLines} invoice line${invoiceLines === 1 ? "" : "s"}`);
+  if (billLines > 0) parts.push(`${billLines} bill line${billLines === 1 ? "" : "s"}`);
+  if (prices > 0) parts.push(`${prices} customer price${prices === 1 ? "" : "s"}`);
+  if (costs > 0) parts.push(`${costs} supplier cost${costs === 1 ? "" : "s"}`);
+  if (parts.length > 0) {
+    throw new Error(
+      `This product has ${parts.join(", ")} on record and can't be permanently deleted. Archive instead — historical records will be preserved.`,
+    );
+  }
+
   await db
     .delete(products)
     .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));

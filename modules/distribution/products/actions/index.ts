@@ -6,12 +6,14 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
+  archiveProduct,
   createProduct,
-  deleteProduct,
   getProductById,
   getProducts,
   getProductsPage,
+  permanentlyDeleteProduct,
   previewProductSku,
+  restoreProduct,
   updateProduct,
   type ProductListParams,
 } from "../services/products";
@@ -78,20 +80,61 @@ export async function updateProductAction(input: {
   return product;
 }
 
-export async function deleteProductAction(id: string) {
+export async function archiveProductAction(productId: string) {
   const [user, product] = await Promise.all([
     getCurrentPortalUser(),
-    getProductById(id),
+    getProductById(productId),
   ]);
-  const result = await deleteProduct(id);
+  const result = await archiveProduct(productId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "product.archive",
+    resourceType: "product",
+    resourceId: productId,
+    metadata: product ? { name: product.name, sku: product.sku } : {},
+  });
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  return result;
+}
+
+export async function restoreProductAction(productId: string) {
+  const [user, product] = await Promise.all([
+    getCurrentPortalUser(),
+    getProductById(productId),
+  ]);
+  const result = await restoreProduct(productId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "product.restore",
+    resourceType: "product",
+    resourceId: productId,
+    metadata: product ? { name: product.name, sku: product.sku } : {},
+  });
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  return result;
+}
+
+export async function permanentlyDeleteProductAction(productId: string) {
+  const [user, product] = await Promise.all([
+    getCurrentPortalUser(),
+    getProductById(productId),
+  ]);
+  const result = await permanentlyDeleteProduct(productId);
   await logAuditEvent({
     tenantId: user.tenantId,
     actorUserId: user.id,
     actorEmail: user.email,
     action: "product.delete",
     resourceType: "product",
-    resourceId: id,
+    resourceId: productId,
     metadata: product ? { name: product.name, sku: product.sku } : {},
   });
+  revalidatePath("/products");
   return result;
 }

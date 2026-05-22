@@ -46,7 +46,12 @@ export default async function OrdersNewPage({
     }),
     prefetchSafe(queryClient, "products.all", {
       queryKey: queryKeys.products.all,
-      queryFn: getProducts,
+      // Active products only — archived rows must not show up in
+      // order pickers. `getProducts` now takes an options bag so we
+      // wrap it instead of passing the function reference directly
+      // (React Query would otherwise pass its QueryFunctionContext as
+      // `options` and trip the includeArchived check).
+      queryFn: () => getProducts(),
     }),
     prefetchSafe(queryClient, "inventory.casesOnHand", {
       queryKey: queryKeys.inventory.casesOnHand,

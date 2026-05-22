@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  deleteProductAction,
+  archiveProductAction,
   getProductByIdAction,
   getProductsAction,
   getProductsPageAction,
+  permanentlyDeleteProductAction,
   previewProductSkuAction,
+  restoreProductAction,
 } from "@/modules/distribution/products/actions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -41,13 +43,52 @@ export function useProduct(id: string) {
   });
 }
 
-export function useDeleteProduct() {
+/**
+ * Move a product into the archived state. Hides it from order /
+ * receiving pickers but keeps the row for historical references.
+ * Use this for any product that's been used in business activity.
+ */
+export function useArchiveProduct() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: deleteProductAction,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    mutationFn: archiveProductAction,
+    onSuccess: (_data, productId) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(productId),
+      });
+    },
+  });
+}
+
+/** Reverse {@link useArchiveProduct}. */
+export function useRestoreProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreProductAction,
+    onSuccess: (_data, productId) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(productId),
+      });
+    },
+  });
+}
+
+/**
+ * Hard delete. The service throws a human-readable error if the
+ * product has any dependent rows; the form catches that and shows it
+ * to the user. For products with history, archive instead.
+ */
+export function usePermanentlyDeleteProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: permanentlyDeleteProductAction,
+    onSuccess: (_data, productId) => {
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      queryClient.removeQueries({
+        queryKey: queryKeys.products.detail(productId),
+      });
     },
   });
 }
