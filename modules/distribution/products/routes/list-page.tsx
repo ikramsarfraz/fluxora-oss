@@ -7,6 +7,7 @@ import {
 
 import { getProductsPage, type ProductListParams } from "../services/products";
 import { queryKeys } from "@/lib/query/keys";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
 
 import Products from "../components/products-page";
 
@@ -61,7 +62,7 @@ export default async function ProductsListPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
+      <Suspense fallback={<ListPageSkeleton tableColumns={4} />}>
         <Products />
       </Suspense>
     </HydrationBoundary>

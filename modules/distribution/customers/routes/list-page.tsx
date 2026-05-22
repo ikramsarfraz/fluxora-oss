@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 
 import { getCustomers } from "../services/customers";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
 
 import Customers from "../components/customers-page";
 
@@ -19,7 +20,7 @@ export default async function CustomersListPage() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
+      <Suspense fallback={<ListPageSkeleton tableColumns={5} />}>
         <Customers />
       </Suspense>
     </HydrationBoundary>
