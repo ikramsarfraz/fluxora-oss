@@ -32,6 +32,7 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import { serializeCsv } from "@/lib/csv/serialize";
 
 function canAdjustInventory(role: PortalUserRole | null | undefined) {
   return role === "owner" || role === "admin" || role === "warehouse";
@@ -208,7 +209,11 @@ export type InventoryListSort =
 export type InventoryListFilters = {
   productId?: string;
   status?: InventoryLifecycleState | "all";
+  supplierId?: string;
+  // `lotId` is for programmatic deep-linking (uuid). `lotNumber` is the
+  // human-typed filter that the UI exposes — partial, case-insensitive.
   lotId?: string;
+  lotNumber?: string;
   expiration?: "all" | "fresh" | "expiring_soon" | "expired";
 };
 
@@ -259,6 +264,14 @@ function buildInventoryWhere(args: {
     args.filters.lotId && args.filters.lotId !== "all"
       ? eq(inventoryItems.lotId, args.filters.lotId)
       : undefined,
+    // Partial, case-insensitive lot-number search (warehouse staff don't
+    // remember UUIDs). Trims to avoid surprises from trailing whitespace.
+    args.filters.lotNumber && args.filters.lotNumber.trim().length > 0
+      ? sql`${lots.lotNumber} ilike ${"%" + args.filters.lotNumber.trim() + "%"}`
+      : undefined,
+    args.filters.supplierId && args.filters.supplierId !== "all"
+      ? eq(lots.supplierId, args.filters.supplierId)
+      : undefined,
     getInventoryExpirationFilterSql(args.filters.expiration),
   );
 }
@@ -271,7 +284,9 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     defaultFilters: {
       productId: "all",
       status: "all",
+      supplierId: "all",
       lotId: "all",
+      lotNumber: undefined,
       expiration: "all",
     },
   });
@@ -424,6 +439,18 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
     .where(eq(lots.tenantId, tenant.id))
     .orderBy(lots.lotNumber);
+  // Only suppliers that currently have inventory — keeps the dropdown short
+  // and prevents stale options for suppliers we no longer buy from.
+  const supplierOptions = await db
+    .selectDistinct({
+      id: suppliers.id,
+      name: suppliers.name,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(eq(lots.tenantId, tenant.id))
+    .orderBy(suppliers.name);
 
   return {
     ...createPaginatedResult({
@@ -444,8 +471,127 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     filterOptions: {
       products: productOptions,
       lots: lotOptions,
+      suppliers: supplierOptions,
     },
   };
+}
+
+/**
+ * Export inventory rows matching the same search + filter shape as the list
+ * page. Returns the file body and a stamped filename. The result is in-memory
+ * (matches the pattern in customers / orders) — fine up to ~50k rows. If a
+ * tenant outgrows that, switch to streaming or chunked pagination later.
+ */
+export async function exportInventoryCsv(input?: {
+  search?: string;
+  filters?: InventoryListFilters;
+}): Promise<{ filename: string; csv: string }> {
+  const tenant = await getCurrentTenant();
+  const search = input?.search ?? "";
+  const filters: InventoryListFilters = {
+    productId: input?.filters?.productId ?? "all",
+    status: input?.filters?.status ?? "all",
+    supplierId: input?.filters?.supplierId ?? "all",
+    lotId: input?.filters?.lotId ?? "all",
+    lotNumber: input?.filters?.lotNumber,
+    expiration: input?.filters?.expiration ?? "all",
+  };
+  const where = buildInventoryWhere({
+    tenantId: tenant.id,
+    search,
+    filters,
+  });
+
+  const rows = await db
+    .select({
+      id: inventoryItems.id,
+      barcodeId: inventoryItems.barcodeId,
+      productName: products.name,
+      productSku: products.sku,
+      lotNumber: lots.lotNumber,
+      cases: inventoryItems.cases,
+      exactWeightLbs: inventoryItems.exactWeightLbs,
+      unitsPerPackageSnapshot: inventoryItems.unitsPerPackageSnapshot,
+      costPerUnitSnapshot: inventoryItems.costPerUnitSnapshot,
+      costUnitTypeSnapshot: inventoryItems.costUnitTypeSnapshot,
+      status: inventoryItems.status,
+      expirationDate: lots.expirationDate,
+      receiveDate: lots.receiveDate,
+      supplierName: suppliers.name,
+      // Pull the first linked supplier-invoice number per item. Most items
+      // map 1:1 to a single receipt line; if a lot was split-received across
+      // multiple invoices the first one is fine for an export snapshot.
+      supplierInvoiceNumber: sql<string | null>`(
+        select si.invoice_number
+        from lot_receipts lr
+        inner join supplier_invoice_lines sil on sil.id = lr.supplier_invoice_line_id
+        inner join supplier_invoices si on si.id = sil.supplier_invoice_id
+        where lr.lot_id = ${lots.id}
+        order by si.invoice_date desc nulls last
+        limit 1
+      )`,
+      createdAt: inventoryItems.createdAt,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(where)
+    .orderBy(desc(inventoryItems.createdAt));
+
+  const headers = [
+    { key: "barcode_id", label: "barcode_id" },
+    { key: "product_name", label: "product_name" },
+    { key: "product_sku", label: "product_sku" },
+    { key: "lot_number", label: "lot_number" },
+    { key: "status", label: "status" },
+    { key: "cases", label: "cases" },
+    { key: "weight_lbs", label: "weight_lbs" },
+    { key: "units_per_package", label: "units_per_package" },
+    { key: "cost_unit_type", label: "cost_unit_type" },
+    { key: "cost_per_unit", label: "cost_per_unit" },
+    { key: "total_cost", label: "total_cost" },
+    { key: "expiration_date", label: "expiration_date" },
+    { key: "receive_date", label: "receive_date" },
+    { key: "supplier", label: "supplier" },
+    { key: "supplier_invoice_number", label: "supplier_invoice_number" },
+    { key: "created_at", label: "created_at" },
+  ] as const;
+
+  const csvRows = rows.map(row => {
+    const cost = Number(row.costPerUnitSnapshot ?? 0);
+    const weight = Number(row.exactWeightLbs ?? 0);
+    // Same total-cost math as the detail page: catch-weight uses
+    // cost × weight; everything else (fixed_case, per_each, per_unit)
+    // uses cost × cases. Snapshotted values mean later product edits
+    // don't retroactively change historical exports.
+    const totalCost =
+      row.costUnitTypeSnapshot === "catch_weight"
+        ? cost * weight
+        : cost * row.cases;
+    return {
+      barcode_id: row.barcodeId,
+      product_name: row.productName,
+      product_sku: row.productSku ?? "",
+      lot_number: row.lotNumber,
+      status: row.status,
+      cases: String(row.cases),
+      weight_lbs: weight.toFixed(4),
+      units_per_package: row.unitsPerPackageSnapshot ?? "",
+      cost_unit_type: row.costUnitTypeSnapshot ?? "",
+      cost_per_unit: cost.toFixed(6),
+      total_cost: totalCost.toFixed(2),
+      expiration_date: row.expirationDate ?? "",
+      receive_date: row.receiveDate ?? "",
+      supplier: row.supplierName ?? "",
+      supplier_invoice_number: row.supplierInvoiceNumber ?? "",
+      created_at: row.createdAt.toISOString(),
+    };
+  });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `inventory-${tenant.slug}-${stamp}.csv`;
+  return { filename, csv: serializeCsv(headers, csvRows) };
 }
 
 export async function getInventoryItemById(inventoryItemId: string) {
