@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, FileText, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ export function ReviewQueueHeader({
   isLastRemaining,
   onBackToBulk,
   onReparse,
+  reparsePending = false,
   onSkip,
   onComplete,
   submitting,
@@ -41,6 +42,12 @@ export function ReviewQueueHeader({
   isLastRemaining: boolean;
   onBackToBulk?: () => void;
   onReparse?: () => void;
+  /**
+   * True while a rescan mutation is in flight. Drives the spinner +
+   * "Re-scanning…" label on the Re-scan button so the user has visible
+   * feedback during the (multi-second) AI round-trip.
+   */
+  reparsePending?: boolean;
   onSkip?: () => void;
   onComplete?: () => void;
   submitting?: boolean;
@@ -110,10 +117,15 @@ export function ReviewQueueHeader({
           variant="outline"
           size="sm"
           onClick={onReparse}
+          disabled={reparsePending || !onReparse}
           className="h-8 gap-1.5 text-[12px]"
         >
-          <RefreshCw className="size-[12px]" strokeWidth={1.6} />
-          Re-scan
+          {reparsePending ? (
+            <Loader2 className="size-[12px] animate-spin" strokeWidth={1.8} />
+          ) : (
+            <RefreshCw className="size-[12px]" strokeWidth={1.6} />
+          )}
+          {reparsePending ? "Re-scanning…" : "Re-scan"}
         </Button>
 
         {/* Segmented Skip / Complete & next group. */}

@@ -6,6 +6,16 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { captureClientEvent } from "@/lib/posthog-client";
@@ -303,36 +313,35 @@ export function ReviewQueueShell({
     );
   }
 
+  // Two-step rescan: clicking the header button just opens the AlertDialog;
+  // confirming inside the dialog fires the mutation. Native `window.confirm`
+  // was disruptive (focus jumps to the browser chrome) and looked out of
+  // place against the rest of the in-app modals.
+  const [rescanDialogOpen, setRescanDialogOpen] = useState(false);
   const onReparse: (() => void) | undefined = currentKey
     ? () => {
         if (rescanMutation.isPending) return;
-        if (
-          !window.confirm(
-            "Re-scan this invoice? Any edits you've made to product matches, weights, charges, or other fields on this row will be cleared.",
-          )
-        ) {
-          return;
-        }
-        clearReviewOverrides(currentKey);
-        captureClientEvent("review.rescan_triggered", {
-          scope: "single",
-        });
-        rescanMutation.mutate(currentKey, {
-          onSuccess: row => {
-            toast.success(
-              row.status === "parse_error"
-                ? "Re-scan finished, but the AI couldn't read this invoice. Try re-uploading the PDF."
-                : "Re-scan complete — review the updated fields.",
-            );
-          },
-          onError: err => {
-            toast.error(
-              err instanceof Error ? err.message : "Re-scan failed.",
-            );
-          },
-        });
+        setRescanDialogOpen(true);
       }
     : undefined;
+  const confirmRescan = () => {
+    if (!currentKey || rescanMutation.isPending) return;
+    clearReviewOverrides(currentKey);
+    captureClientEvent("review.rescan_triggered", { scope: "single" });
+    rescanMutation.mutate(currentKey, {
+      onSuccess: row => {
+        toast.success(
+          row.status === "parse_error"
+            ? "Re-scan finished, but the AI couldn't read this invoice. Try re-uploading the PDF."
+            : "Re-scan complete — review the updated fields.",
+        );
+      },
+      onError: err => {
+        toast.error(err instanceof Error ? err.message : "Re-scan failed.");
+      },
+    });
+    setRescanDialogOpen(false);
+  };
 
   // Render as a function so the ReviewScreen can hand back its
   // form-state-aware `counts` (which include in-form product/supplier
@@ -362,6 +371,7 @@ export function ReviewQueueShell({
       onBackToBulk={goBackToBulk}
       onSkip={goNext}
       onReparse={onReparse}
+      reparsePending={rescanMutation.isPending}
     />
   );
 
@@ -444,6 +454,25 @@ export function ReviewQueueShell({
         }
       />
       </div>
+
+      <AlertDialog open={rescanDialogOpen} onOpenChange={setRescanDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-scan this invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The AI will read the PDF again and rebuild the line items.
+              Any edits you've made to product matches, weights, charges, or
+              other fields on this row will be cleared.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRescan}>
+              Re-scan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

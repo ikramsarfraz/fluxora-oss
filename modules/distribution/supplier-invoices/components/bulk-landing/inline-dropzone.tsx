@@ -9,7 +9,7 @@ import {
   type DragEvent,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -211,20 +211,27 @@ export const InlineDropzone = forwardRef<
           isDragging
             ? "border-forest-mid bg-divider"
             : "border-border-default bg-card hover:border-divider",
-          isImporting && "cursor-not-allowed opacity-60",
+          isImporting && "cursor-not-allowed border-forest-mid bg-divider/40",
         )}
       >
-        <Upload className="mb-3 size-7 text-subtle" strokeWidth={1.6} />
+        {isImporting ? (
+          <Loader2
+            className="mb-3 size-7 animate-spin text-forest"
+            strokeWidth={1.8}
+          />
+        ) : (
+          <Upload className="mb-3 size-7 text-subtle" strokeWidth={1.6} />
+        )}
         <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-ink">
           {isImporting
-            ? "Scanning…"
+            ? "Scanning your PDFs…"
             : isDragging
               ? "Drop to start scanning"
               : "Drop PDFs to scan"}
         </h2>
         <p className="max-w-[420px] text-[13px] text-subtle">
           {isImporting
-            ? "Files are being read in order — they'll appear here as each one finishes."
+            ? "Reading each file with AI. New rows will appear here as scans finish — this can take 10–30 seconds per page."
             : `Drag supplier-invoice PDFs here, or click to pick. Up to ${MAX_FILES_PER_BATCH} per batch, ${fmtBytes(MAX_FILE_BYTES)} each.`}
         </p>
         {hiddenInput}
@@ -257,11 +264,16 @@ export const InlineDropzone = forwardRef<
         "mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
         isDragging
           ? "border-forest-mid bg-divider text-ink"
-          : "border-border-default bg-card text-subtle hover:border-divider hover:text-ink",
-        isImporting && "cursor-not-allowed opacity-60",
+          : isImporting
+            ? "cursor-not-allowed border-forest-mid bg-divider/50 text-ink"
+            : "border-border-default bg-card text-subtle hover:border-divider hover:text-ink",
       )}
     >
-      <Upload className="size-3.5" strokeWidth={1.6} />
+      {isImporting ? (
+        <Loader2 className="size-3.5 animate-spin text-forest" strokeWidth={1.8} />
+      ) : (
+        <Upload className="size-3.5" strokeWidth={1.6} />
+      )}
       <span>
         {isImporting
           ? "Scanning more PDFs…"
