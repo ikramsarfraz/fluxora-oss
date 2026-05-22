@@ -12,6 +12,7 @@ import {
   useProduct,
   useRestoreProduct,
 } from "../hooks/use-products";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
@@ -74,6 +75,13 @@ export function ProductDetailPage({ productId }: { productId: string }) {
   const [confirmingPermanentDelete, setConfirmingPermanentDelete] =
     useState(false);
 
+  // Mirror the listing's UI gate. Non-admins still get to view product
+  // detail, but the Lifecycle section is hidden so they can't click
+  // into a Forbidden toast. Server enforces via requireAdminPortalUser.
+  const { data: currentUser } = useCurrentPortalUser();
+  const canManageLifecycle =
+    currentUser?.role === "admin" || currentUser?.role === "owner";
+
   if (isLoading) return <PageLoading message="Loading product..." />;
   if (isError || !product)
     return (
@@ -112,12 +120,18 @@ export function ProductDetailPage({ productId }: { productId: string }) {
           </span>
         }
       >
-        <Button variant="outline" asChild>
-          <Link href={`/products/${product.id}/edit`}>
-            <Pencil className="size-4" />
-            Edit
-          </Link>
-        </Button>
+        {/* Edit is hidden for archived products — they're read-only.
+            Restore via the Lifecycle section first, then edit. The
+            edit route also enforces this server-side, so a stale
+            tab can't bypass it. */}
+        {!isArchived ? (
+          <Button variant="outline" asChild>
+            <Link href={`/products/${product.id}/edit`}>
+              <Pencil className="size-4" />
+              Edit
+            </Link>
+          </Button>
+        ) : null}
       </DetailPageHeader>
 
       {/* Core details */}
@@ -274,7 +288,11 @@ export function ProductDetailPage({ productId }: { productId: string }) {
       {/* Lifecycle — archive (active products), restore (archived
           products), and permanent-delete (only when the product has
           zero dependent rows; the service double-checks and throws a
-          human-readable error otherwise). */}
+          human-readable error otherwise).
+          Hidden entirely for non-admin / non-owner roles — the server
+          actions also reject with Forbidden as defense-in-depth, but
+          there's no point dangling buttons that always fail. */}
+      {canManageLifecycle ? (
       <DetailSection
         title="Lifecycle"
         description={
@@ -413,6 +431,7 @@ export function ProductDetailPage({ productId }: { productId: string }) {
           </AlertDialog>
         </div>
       </DetailSection>
+      ) : null}
     </div>
   );
 }

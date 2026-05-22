@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
@@ -21,6 +21,15 @@ export default async function ProductsEditPage({
 
   const product = await getProductById(id);
   if (!product) notFound();
+
+  // Archived products are read-only. The detail page hides the Edit
+  // button, but a stale browser tab or a hand-typed URL can still
+  // land here — bounce back to the detail page. Once there, the
+  // "Archived" badge and Lifecycle section's Restore button give the
+  // user the next step.
+  if (product.archivedAt) {
+    redirect(`/products/${product.id}`);
+  }
 
   return (
     <section className="flex flex-col gap-6">
