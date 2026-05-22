@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-import { ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingErrorState, ListingPage, StatusPill, MonoText, type ListingColumn } from "@/components/listing-page";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -144,12 +144,10 @@ export default function Invoices() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
