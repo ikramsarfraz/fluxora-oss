@@ -2,9 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { toast } from "sonner";
 
-import { useProduct, useDeleteProduct } from "../hooks/use-products";
+import {
+  useArchiveProduct,
+  usePermanentlyDeleteProduct,
+  useProduct,
+  useRestoreProduct,
+} from "../hooks/use-products";
 import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
@@ -61,7 +68,11 @@ export function ProductDetailPage({ productId }: { productId: string }) {
 
   useSetBreadcrumbLabel(`/products/${productId}`, product?.name);
 
-  const deleteProduct = useDeleteProduct();
+  const archiveProduct = useArchiveProduct();
+  const restoreProduct = useRestoreProduct();
+  const permanentlyDeleteProduct = usePermanentlyDeleteProduct();
+  const [confirmingPermanentDelete, setConfirmingPermanentDelete] =
+    useState(false);
 
   if (isLoading) return <PageLoading message="Loading product..." />;
   if (isError || !product)
@@ -75,6 +86,8 @@ export function ProductDetailPage({ productId }: { productId: string }) {
 
   const categories = product.productCategories ?? [];
   const units = product.productUnits ?? [];
+  const isArchived = !!product.archivedAt;
+  const canPermanentlyDelete = product._dependentRecordCount === 0;
 
   const baseUnitAbbr = getProductBaseUnitAbbreviation(product);
 
@@ -84,9 +97,19 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         title={product.name}
         description={`Default price/${baseUnitAbbr} is a reference; set customer-specific prices in each customer profile.`}
         badge={
-          <Badge variant="secondary" className="font-mono">
-            {product.sku}
-          </Badge>
+          <span className="inline-flex items-center gap-1.5">
+            <Badge variant="secondary" className="font-mono">
+              {product.sku}
+            </Badge>
+            {isArchived ? (
+              <Badge
+                variant="secondary"
+                className="rounded-full px-2 text-[11px] font-medium uppercase tracking-wide"
+              >
+                Archived
+              </Badge>
+            ) : null}
+          </span>
         }
       >
         <Button variant="outline" asChild>
@@ -248,43 +271,147 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         </DetailGrid>
       </DetailSection>
 
-      {/* Danger zone */}
+      {/* Lifecycle — archive (active products), restore (archived
+          products), and permanent-delete (only when the product has
+          zero dependent rows; the service double-checks and throws a
+          human-readable error otherwise). */}
       <DetailSection
-        title="Danger Zone"
-        description="Irreversible actions for this product."
+        title="Lifecycle"
+        description={
+          isArchived
+            ? "Restore the product to make it selectable again, or remove it permanently."
+            : "Archive hides the product from new orders while preserving history. Permanent delete is only available before the product has any business activity."
+        }
         className="border-destructive/50"
       >
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline">
-              Delete product
+        <div className="flex flex-wrap gap-2">
+          {/* Archive (active only) — primary lifecycle verb. Uses the
+              destructive theme because it's a removal-flavoured action;
+              Restore (below) is the affirmative counterpart. */}
+          {!isArchived ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="outline">
+                  Archive product
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Archive product?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Hide <strong>{product.name}</strong> from new orders and
+                    receiving pickers. Historical lines, prices, and bills
+                    stay intact. You can restore it later.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    disabled={archiveProduct.isPending}
+                    onClick={() => {
+                      archiveProduct.mutate(productId, {
+                        onSuccess: () => {
+                          toast.success("Product archived.");
+                          router.push("/products");
+                        },
+                        onError: e =>
+                          toast.error(
+                            e instanceof Error ? e.message : "Archive failed.",
+                          ),
+                      });
+                    }}
+                  >
+                    {archiveProduct.isPending ? "Archiving…" : "Archive"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : null}
+
+          {/* Restore (archived only) */}
+          {isArchived ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={restoreProduct.isPending}
+              onClick={() =>
+                restoreProduct.mutate(productId, {
+                  onSuccess: () => toast.success("Product restored."),
+                  onError: e =>
+                    toast.error(
+                      e instanceof Error ? e.message : "Restore failed.",
+                    ),
+                })
+              }
+            >
+              {restoreProduct.isPending ? "Restoring…" : "Restore product"}
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete product?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete{" "}
-                <strong>{product.name}</strong> and all associated data.
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={deleteProduct.isPending}
-                onClick={() => {
-                  deleteProduct.mutate(productId, {
-                    onSuccess: () => router.push("/products"),
-                  });
-                }}
-              >
-                {deleteProduct.isPending ? "Deleting…" : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          ) : null}
+
+          {/* Permanent delete — guarded by _dependentRecordCount.
+              Showing the button always (even when disabled) so the
+              affordance is discoverable, with the tooltip-via-title
+              explaining why it's locked. The service runs the same
+              check server-side as a defense-in-depth. */}
+          <AlertDialog
+            open={confirmingPermanentDelete}
+            onOpenChange={open => {
+              if (!open) setConfirmingPermanentDelete(false);
+            }}
+          >
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!canPermanentlyDelete || permanentlyDeleteProduct.isPending}
+              title={
+                canPermanentlyDelete
+                  ? undefined
+                  : "Has dependent records — archive instead."
+              }
+              onClick={() => setConfirmingPermanentDelete(true)}
+            >
+              {permanentlyDeleteProduct.isPending
+                ? "Deleting…"
+                : "Delete permanently"}
+            </Button>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently removes <strong>{product.name}</strong>{" "}
+                  and can’t be undone. Available only because this product
+                  has no orders, invoices, prices, or bills referencing
+                  it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={permanentlyDeleteProduct.isPending}
+                  onClick={() => {
+                    permanentlyDeleteProduct.mutate(productId, {
+                      onSuccess: () => {
+                        toast.success("Product deleted.");
+                        router.push("/products");
+                      },
+                      onError: e =>
+                        toast.error(
+                          e instanceof Error ? e.message : "Delete failed.",
+                        ),
+                    });
+                    setConfirmingPermanentDelete(false);
+                  }}
+                >
+                  {permanentlyDeleteProduct.isPending
+                    ? "Deleting…"
+                    : "Delete permanently"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </DetailSection>
     </div>
   );

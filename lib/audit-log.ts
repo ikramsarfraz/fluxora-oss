@@ -34,6 +34,8 @@ export type AuditAction =
   | "supplier.switch_primary"
   | "supplier.delete"
   | "product.delete"
+  | "product.archive"
+  | "product.restore"
   | "product.bulk_import"
   | "customer.delete"
   | "customer.archive"
