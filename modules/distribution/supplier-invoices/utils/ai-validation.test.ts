@@ -840,3 +840,46 @@ test("validateExtractionResult: leaves per_unit alone for non-each UOM", () => {
   assert.ok(result !== null);
   assert.equal(result!.lines[0].unitType, "per_unit");
 });
+
+test('validateExtractionResult: "loose singles" in description forces per_each + UOM=ea', () => {
+  // Real bug: WATER BOTTLE 16.9 OZ / loose singles / 48 EA / $0.45/EA
+  // came back from the model as per_unit with unitOfMeasure="cs" because
+  // surrounding lines on the same bill were case-priced. The UOM-only
+  // reconciler can't catch this (UOM is "cs", not "ea"), but the
+  // "loose singles" description is the disambiguator.
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "WATER BOTTLE 16.9 OZ",
+    vendorProductDescription: "loose singles",
+    quantityCases: 48,
+    quantityWeight: null,
+    unitPrice: 0.45,
+    lineTotal: 21.6,
+    unitType: "per_unit",
+    unitOfMeasure: "cs",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_each");
+  assert.equal(result!.lines[0].unitOfMeasure, "ea");
+});
+
+test('validateExtractionResult: "loose single" (singular) also triggers per_each override', () => {
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "SNICKERS BAR",
+    vendorProductDescription: "loose single, no carton",
+    quantityCases: 24,
+    quantityWeight: null,
+    unitPrice: 1.25,
+    lineTotal: 30,
+    unitType: "per_unit",
+    unitOfMeasure: "cs",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_each");
+  assert.equal(result!.lines[0].unitOfMeasure, "ea");
+});

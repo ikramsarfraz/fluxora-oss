@@ -288,8 +288,20 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         ? null
         : description;
 
-    const unitOfMeasure = sanitizeUnitOfMeasure(line.unitOfMeasure);
-    const unitType = reconcileUnitType(line.unitType, unitOfMeasure);
+    let unitOfMeasure = sanitizeUnitOfMeasure(line.unitOfMeasure);
+    let unitType = reconcileUnitType(line.unitType, unitOfMeasure);
+
+    // Description-based override for "loose single(s)" lines. The model
+    // sometimes labels these as per_unit / "cs" when the surrounding lines
+    // on the same bill are case-priced (real bug: WATER BOTTLE / loose
+    // singles / 48 EA / $0.45/EA came back as per_unit with UOM="cs", so
+    // the UOM-only reconciler above couldn't catch it). The "loose
+    // singles" phrasing in vendorProductDescription is the clearest
+    // disambiguator, so override both unitType AND unitOfMeasure here.
+    if (dedupedDescription && /\bloose\s+singles?\b/i.test(dedupedDescription)) {
+      unitType = "per_each";
+      unitOfMeasure = "ea";
+    }
 
     const raw = line.caseWeights ?? null;
     if (raw === null) {
