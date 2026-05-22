@@ -1468,6 +1468,10 @@ export function SupplierInvoiceForm({
         </div>
 
         {/* ── Non-inventory charges ─────────────────────────────────────── */}
+        {/* Wrapped in marginBottom: 16 to match the Bill details + Line
+            items spacing — without this the Supporting documents card
+            sits flush against this section. */}
+        <div style={{ marginBottom: 16 }}>
         <SectionCard
           header={
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
@@ -1566,6 +1570,7 @@ export function SupplierInvoiceForm({
             )}
           </div>
         </SectionCard>
+        </div>
 
         {/* ── Supporting documents ───────────────────────────────────────── */}
         <SupplierInvoiceAttachmentsPlaceholder />
