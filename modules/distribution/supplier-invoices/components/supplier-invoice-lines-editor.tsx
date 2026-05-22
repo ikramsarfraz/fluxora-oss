@@ -1355,13 +1355,17 @@ function LineRow({
         </div>
       )}
 
-      {/* Lot drawer — pure lot + expiry. Available on every line type. */}
+      {/* Lot drawer — pure lot + expiry. Available on every line type.
+          Uses the same surface token (var(--color-divider) via T.surfaceAlt)
+          as the Catch-weight and Pricing trays so all three expanded
+          drawers read as the same design-system surface. The previous
+          one-off blue OKLCH literal didn't match the form's palette. */}
       {lotOpen && (
         <div
           style={{
-            background: "oklch(98% 0.01 240)",
+            background: T.surfaceAlt,
             padding: "16px 28px 18px",
-            borderTop: `1px solid ${T.border}`,
+            borderTop: `1px dashed ${T.borderStrong}`,
           }}
         >
           <LotExpiresTray
