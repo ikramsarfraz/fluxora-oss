@@ -93,6 +93,14 @@ export type ParsedLine = {
   total: number;
   /** Case-priced rather than weight-priced. */
   fixed?: boolean;
+  /**
+   * Unit abbreviation for the line's pricing column — drives the "× Ncs @
+   * $X /cs" rendering on the review row. "lb" for catch-weight, "ea" for
+   * per_each, "cs"/"case"/"gal" etc. for per_unit, defaults to "cs" for
+   * fixed_case. Optional because legacy callers / fee rows omit it and the
+   * renderer falls back to "lb" / "cs" based on `weight`.
+   */
+  unitAbbr?: string;
   match: LineMatch;
   /**
    * AI-detected fee category. Populated only for fee rows (synthesized in

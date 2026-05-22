@@ -208,6 +208,23 @@ function buildLine({
   const total =
     line.unitType === "catch_weight" ? weight * unitPrice : cases * unitPrice;
 
+  // Derive the abbreviation the review row should render in "× Ncs @ $X/cs":
+  //   - catch_weight → "lb" (weight pricing)
+  //   - per_each     → AI-extracted abbreviation or "ea"
+  //   - per_unit     → AI-extracted abbreviation or "cs"
+  //   - fixed_case   → "cs"
+  // Picked up from `line.purchaseUnitAbbreviation` which `convertAiLineToPrefill`
+  // sets from the AI's `unitOfMeasure`. Without this, WATER BOTTLE / 48 EA /
+  // $0.45/EA rendered as "48cs @ $0.45/cs" even though the AI extracted ea.
+  const unitAbbr =
+    line.unitType === "catch_weight"
+      ? "lb"
+      : line.unitType === "per_each"
+        ? line.purchaseUnitAbbreviation || "ea"
+        : line.unitType === "per_unit"
+          ? line.purchaseUnitAbbreviation || "cs"
+          : "cs";
+
   const product = line.productId ? findProduct(products, line.productId) : null;
   const rawText = unresolved?.vendorProductName ?? product?.name ?? `Line ${index + 1}`;
   const description = unresolved?.vendorProductDescription ?? null;
@@ -227,6 +244,7 @@ function buildLine({
     // editor only distinguishes weight vs no-weight; precise type
     // selection happens in the main form.
     fixed: line.unitType !== "catch_weight",
+      unitAbbr,
       match: { status: "fee", candidates: [] },
     };
   }
@@ -250,6 +268,7 @@ function buildLine({
     // editor only distinguishes weight vs no-weight; precise type
     // selection happens in the main form.
     fixed: line.unitType !== "catch_weight",
+      unitAbbr,
       match: {
         status: "matched",
         product: product.name,
@@ -277,6 +296,7 @@ function buildLine({
     // editor only distinguishes weight vs no-weight; precise type
     // selection happens in the main form.
     fixed: line.unitType !== "catch_weight",
+    unitAbbr,
     match: {
       status: "unmatched",
       candidates: (unresolved?.topCandidates ?? []).map(c =>

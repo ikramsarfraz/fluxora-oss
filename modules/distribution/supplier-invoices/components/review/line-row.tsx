@@ -539,10 +539,10 @@ function NumericSnapshot({
             ? `${line.weight.toFixed(2)}lb`
             : isFee
               ? "flat"
-              : `${line.cases}cs`}
+              : `${line.cases}${line.unitAbbr ?? "cs"}`}
         </span>
         <span>@ ${line.unitPrice.toFixed(2)}</span>
-        <span>{line.weight > 0 ? "/lb" : "/cs"}</span>
+        <span>{line.weight > 0 ? "/lb" : `/${line.unitAbbr ?? "cs"}`}</span>
       </div>
     </div>
   );
