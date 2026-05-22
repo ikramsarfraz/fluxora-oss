@@ -13,6 +13,7 @@ import { formatWeightLbs, getInventoryStatusLabel } from "../utils/insights";
 import { formatMoney } from "@/lib/utils/currency";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,10 @@ export function InventoryAdjustmentDialog({
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Explicit confirmation gate for destructive operations — marking damaged/
+  // expired (or taking weight off a catch-weight item) creates a permanent
+  // write-off expense entry. Default off; user must opt in before submit.
+  const [confirmWriteOff, setConfirmWriteOff] = useState(false);
 
   const cost = Number(item.costPerUnitSnapshot ?? 0);
   const isCatchWeight = item.costUnitTypeSnapshot === "catch_weight";
@@ -76,6 +81,14 @@ export function InventoryAdjustmentDialog({
     return isCatchWeight && weightDelta > 0 ? cost * weightDelta : 0;
   })();
 
+  // A destructive adjustment is one that will create a write-off expense:
+  // moving the item to damaged/expired, or shaving weight off a catch-weight
+  // item. Returning stock to in_stock or doing a zero-cost correction is not.
+  const isDestructiveAdjustment =
+    nextStatusResolved === "damaged" ||
+    nextStatusResolved === "expired" ||
+    writeOffLoss > 0;
+
   useEffect(() => {
     if (open) {
       setTargetStatus("unchanged");
@@ -83,8 +96,15 @@ export function InventoryAdjustmentDialog({
       setReason("");
       setNotes("");
       setSubmitError(null);
+      setConfirmWriteOff(false);
     }
   }, [open, item.id]);
+
+  // Re-arm the confirmation any time the user changes status or weight — the
+  // checkbox should only "stick" for the exact configuration the user reviewed.
+  useEffect(() => {
+    setConfirmWriteOff(false);
+  }, [targetStatus, correctedWeightLbs]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,6 +112,9 @@ export function InventoryAdjustmentDialog({
       setSubmitError(null);
       if (!reason) {
         throw new Error("Choose an adjustment reason.");
+      }
+      if (isDestructiveAdjustment && !confirmWriteOff) {
+        throw new Error("Confirm the write-off to record this adjustment.");
       }
 
       await adjustInventory.mutateAsync({
@@ -153,14 +176,38 @@ export function InventoryAdjustmentDialog({
             </div>
           </div>
 
-          {writeOffLoss > 0 && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
-              <p className="font-medium text-destructive">
-                Write-off: {formatMoney(writeOffLoss.toFixed(2))}
-              </p>
-              <p className="mt-0.5 text-muted-foreground">
-                This adjustment will create an &quot;Inventory write-off&quot; expense entry for the lost value.
-              </p>
+          {isDestructiveAdjustment && (
+            <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+              <div>
+                {writeOffLoss > 0 ? (
+                  <p className="font-medium text-destructive">
+                    Write-off: {formatMoney(writeOffLoss.toFixed(2))}
+                  </p>
+                ) : (
+                  <p className="font-medium text-destructive">
+                    {nextStatusResolved === "expired" ? "Marking expired" : "Marking damaged"}
+                  </p>
+                )}
+                <p className="mt-0.5 text-muted-foreground">
+                  {writeOffLoss > 0
+                    ? "This adjustment will create an “Inventory write-off” expense entry for the lost value. This cannot be undone automatically."
+                    : "This adjustment changes the item’s status and is recorded in the audit trail. Reverse it manually if needed."}
+                </p>
+              </div>
+              <label
+                className="flex cursor-pointer items-start gap-2 text-sm"
+                htmlFor="inventory-adjustment-confirm"
+              >
+                <Checkbox
+                  id="inventory-adjustment-confirm"
+                  checked={confirmWriteOff}
+                  onCheckedChange={value => setConfirmWriteOff(value === true)}
+                  disabled={Boolean(disabledReason) || adjustInventory.isPending}
+                />
+                <span>
+                  I confirm this adjustment{writeOffLoss > 0 ? " and accept the write-off" : ""}.
+                </span>
+              </label>
             </div>
           )}
 
@@ -250,7 +297,11 @@ export function InventoryAdjustmentDialog({
           <DialogFooter>
             <Button
               type="submit"
-              disabled={Boolean(disabledReason) || adjustInventory.isPending}
+              disabled={
+                Boolean(disabledReason) ||
+                adjustInventory.isPending ||
+                (isDestructiveAdjustment && !confirmWriteOff)
+              }
             >
               {adjustInventory.isPending ? "Saving..." : "Record adjustment"}
             </Button>

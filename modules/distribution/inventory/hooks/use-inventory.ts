@@ -52,6 +52,10 @@ export function useAdjustInventoryItem() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.inventory.detail(variables.inventoryItemId),
       });
+      // Rollups (on-hand by product widget, dashboard cases-on-hand) read from
+      // their own keys — invalidate them so they refresh after an adjustment.
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.productSummary });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.casesOnHand });
       queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
       if (result?.lot?.id) {
         queryClient.invalidateQueries({
@@ -94,6 +98,9 @@ export function useBulkAdjustLotInventory() {
     mutationFn: bulkAdjustLotInventoryAction,
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      // Same rollup story as the single-item path above.
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.productSummary });
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.casesOnHand });
       queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
       queryClient.invalidateQueries({
         queryKey: queryKeys.lots.detail(variables.lotId),
