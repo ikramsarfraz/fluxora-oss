@@ -33,7 +33,7 @@ import {
   ExpirationStateBadge,
   InventoryStatusBadge,
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
-import { InventoryAdjustmentHistory } from "@/modules/distribution/components/warehouse/inventory-adjustment-history";
+import { InventoryMovementTimeline } from "./inventory-movement-timeline";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import {
@@ -465,10 +465,10 @@ export function InventoryDetailPage({
       </DetailSection>
 
       <DetailSection
-        title="Adjustment history"
-        description="Warehouse correction records for this inventory item."
+        title="Movement history"
+        description="Chronological log of receipt, allocations, fulfillments, reversals, and adjustments for this inventory item."
       >
-        <InventoryAdjustmentHistory adjustments={item.adjustments} />
+        <InventoryMovementTimeline item={item} />
       </DetailSection>
 
       <InventoryAdjustmentDialog
