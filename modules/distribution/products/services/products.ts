@@ -18,6 +18,7 @@ import {
 } from "@/lib/subscription-enforcement";
 import { countActiveProductsForTenant } from "@/modules/core/billing/services/subscription-usage";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import {
   buildTextSearchCondition,
   createPaginatedResult,
@@ -212,7 +213,10 @@ export async function createProduct(input: {
   baseUnitId?: string | null;
   units?: ProductUnitInput[];
 }) {
-  const tenant = await getCurrentTenant();
+  const [tenant, portalUser] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
   const maxProducts = getPlanLimit(tenant, "maxProducts");
   if ((await countActiveProductsForTenant(tenant.id)) + 1 > maxProducts) {
     logSubscriptionEnforcementBlock({
@@ -253,25 +257,57 @@ export async function createProduct(input: {
       validCategories.find(c => c.id === firstId)?.name ?? null;
   }
 
-  // Insert the product row, retrying with a freshly-picked SKU if another
-  // request inserted the same SKU between the form's preview call and this
-  // write. The `(tenant_id, sku)` unique index is the source of truth —
-  // the client preview can be stale, so we resolve the collision here
-  // rather than failing the user-facing request.
+  // Insert the product row + dependent rows in one transaction, retrying
+  // the whole transaction with a freshly-picked SKU if another request
+  // inserted the same SKU between the form's preview call and this write.
+  // The `(tenant_id, sku)` unique index is the source of truth — the
+  // client preview can be stale, so we resolve the collision here rather
+  // than failing the user-facing request. The transaction keeps us from
+  // ending up with an orphan product row if the categories/units inserts
+  // fail.
   let attemptSku = input.sku.trim();
   let product: typeof products.$inferSelect | undefined;
   for (let attempt = 0; attempt < MAX_SKU_RETRY_ATTEMPTS; attempt += 1) {
     try {
-      [product] = await db
-        .insert(products)
-        .values({
-          tenantId: tenant.id,
-          sku: attemptSku,
-          name: input.name.trim(),
-          defaultPricePerLb: input.defaultPricePerLb ?? "0",
-          baseUnitId: input.baseUnitId ?? null,
-        })
-        .returning();
+      product = await db.transaction(async tx => {
+        const [row] = await tx
+          .insert(products)
+          .values({
+            tenantId: tenant.id,
+            sku: attemptSku,
+            name: input.name.trim(),
+            defaultPricePerLb: input.defaultPricePerLb ?? "0",
+            baseUnitId: input.baseUnitId ?? null,
+            createdByUserId: portalUser.id,
+            updatedByUserId: portalUser.id,
+          })
+          .returning();
+
+        if (input.categoryIds.length > 0) {
+          await tx.insert(productCategories).values(
+            input.categoryIds.map(categoryId => ({
+              productId: row.id,
+              categoryId,
+            })),
+          );
+        }
+
+        if (input.units && input.units.length > 0) {
+          await tx.insert(productUnits).values(
+            input.units.map((u, i) => ({
+              productId: row.id,
+              unitId: u.unitId,
+              purpose: u.purpose,
+              conversionToBase: u.conversionToBase,
+              isDefault: u.isDefault ?? i === 0,
+              allowsFractional: u.allowsFractional ?? true,
+              sortOrder: u.sortOrder ?? i,
+            })),
+          );
+        }
+
+        return row;
+      });
       break;
     } catch (error) {
       if (!isProductSkuCollision(error)) throw error;
@@ -293,29 +329,6 @@ export async function createProduct(input: {
     );
   }
 
-  if (input.categoryIds.length > 0) {
-    await db.insert(productCategories).values(
-      input.categoryIds.map(categoryId => ({
-        productId: product.id,
-        categoryId,
-      })),
-    );
-  }
-
-  if (input.units && input.units.length > 0) {
-    await db.insert(productUnits).values(
-      input.units.map((u, i) => ({
-        productId: product.id,
-        unitId: u.unitId,
-        purpose: u.purpose,
-        conversionToBase: u.conversionToBase,
-        isDefault: u.isDefault ?? i === 0,
-        allowsFractional: u.allowsFractional ?? true,
-        sortOrder: u.sortOrder ?? i,
-      })),
-    );
-  }
-
   return product;
 }
 
@@ -328,7 +341,10 @@ export async function updateProduct(input: {
   baseUnitId?: string | null;
   units?: ProductUnitInput[];
 }) {
-  const tenant = await getCurrentTenant();
+  const [tenant, portalUser] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
 
   const existing = await db.query.products.findFirst({
     where: and(eq(products.id, input.id), eq(products.tenantId, tenant.id)),
@@ -352,55 +368,61 @@ export async function updateProduct(input: {
     }
   }
 
-  const [updated] = await db
-    .update(products)
-    .set({
-      sku: input.sku.trim(),
-      name: input.name.trim(),
-      ...(input.defaultPricePerLb !== undefined && {
-        defaultPricePerLb: input.defaultPricePerLb,
-      }),
-      baseUnitId: input.baseUnitId ?? null,
-    })
-    .where(and(eq(products.id, input.id), eq(products.tenantId, tenant.id)))
-    .returning();
+  // Wrap update + categories rewrite + units rewrite in a transaction so a
+  // failure between steps can't leave the product with its categories
+  // wiped and no replacement.
+  return await db.transaction(async tx => {
+    const [updated] = await tx
+      .update(products)
+      .set({
+        sku: input.sku.trim(),
+        name: input.name.trim(),
+        ...(input.defaultPricePerLb !== undefined && {
+          defaultPricePerLb: input.defaultPricePerLb,
+        }),
+        baseUnitId: input.baseUnitId ?? null,
+        updatedByUserId: portalUser.id,
+      })
+      .where(and(eq(products.id, input.id), eq(products.tenantId, tenant.id)))
+      .returning();
 
-  if (!updated) {
-    throw new Error("Failed to update product.");
-  }
+    if (!updated) {
+      throw new Error("Failed to update product.");
+    }
 
-  await db
-    .delete(productCategories)
-    .where(eq(productCategories.productId, input.id));
+    await tx
+      .delete(productCategories)
+      .where(eq(productCategories.productId, input.id));
 
-  if (input.categoryIds.length > 0) {
-    await db.insert(productCategories).values(
-      input.categoryIds.map(categoryId => ({
-        productId: input.id,
-        categoryId,
-      })),
-    );
-  }
+    if (input.categoryIds.length > 0) {
+      await tx.insert(productCategories).values(
+        input.categoryIds.map(categoryId => ({
+          productId: input.id,
+          categoryId,
+        })),
+      );
+    }
 
-  await db
-    .delete(productUnits)
-    .where(eq(productUnits.productId, input.id));
+    await tx
+      .delete(productUnits)
+      .where(eq(productUnits.productId, input.id));
 
-  if (input.units && input.units.length > 0) {
-    await db.insert(productUnits).values(
-      input.units.map((u, i) => ({
-        productId: input.id,
-        unitId: u.unitId,
-        purpose: u.purpose,
-        conversionToBase: u.conversionToBase,
-        isDefault: u.isDefault ?? i === 0,
-        allowsFractional: u.allowsFractional ?? true,
-        sortOrder: u.sortOrder ?? i,
-      })),
-    );
-  }
+    if (input.units && input.units.length > 0) {
+      await tx.insert(productUnits).values(
+        input.units.map((u, i) => ({
+          productId: input.id,
+          unitId: u.unitId,
+          purpose: u.purpose,
+          conversionToBase: u.conversionToBase,
+          isDefault: u.isDefault ?? i === 0,
+          allowsFractional: u.allowsFractional ?? true,
+          sortOrder: u.sortOrder ?? i,
+        })),
+      );
+    }
 
-  return updated;
+    return updated;
+  });
 }
 
 export async function deleteProduct(productId: string) {
