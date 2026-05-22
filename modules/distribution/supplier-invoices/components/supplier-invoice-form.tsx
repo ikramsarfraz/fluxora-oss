@@ -1044,7 +1044,7 @@ export function SupplierInvoiceForm({
                   }}
                 >
                   <FileText style={{ width: 14, height: 14 }} />
-                  Read PDF
+                  Scan PDF
                 </button>
               </>
             )}
