@@ -17,6 +17,33 @@ import type { ProductListParams } from "@/modules/distribution/products/services
 
 const SKU_PREVIEW_DEBOUNCE_MS = 300;
 
+/**
+ * Invalidate every `["products", …]` query EXCEPT sku-preview. Used by
+ * the lifecycle mutations so:
+ *
+ *  - `useProducts()` (orders pickers, supplier-invoice review) refreshes
+ *    and stops offering an archived product.
+ *  - `useProductsPage()` (the products listing) refreshes both the
+ *    Active and Archived tabs.
+ *  - `useProduct(id)` (detail pages) re-fetches.
+ *
+ * Skipping `sku-preview` keeps the form's still-mounted preview hook
+ * from re-firing a server action against the wrong URL — same race
+ * the create-bounce fix addresses.
+ */
+function invalidateAllProductQueriesExceptSkuPreview(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  void queryClient.invalidateQueries({
+    predicate: q => {
+      const k = q.queryKey;
+      if (!Array.isArray(k) || k[0] !== "products") return false;
+      if (k[1] === "sku-preview") return false;
+      return true;
+    },
+  });
+}
+
 export function useProducts() {
   return useQuery({
     queryKey: queryKeys.products.all,
@@ -52,11 +79,8 @@ export function useArchiveProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: archiveProductAction,
-    onSuccess: (_data, productId) => {
-      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(productId),
-      });
+    onSuccess: () => {
+      invalidateAllProductQueriesExceptSkuPreview(queryClient);
     },
   });
 }
@@ -66,11 +90,8 @@ export function useRestoreProduct() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: restoreProductAction,
-    onSuccess: (_data, productId) => {
-      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.detail(productId),
-      });
+    onSuccess: () => {
+      invalidateAllProductQueriesExceptSkuPreview(queryClient);
     },
   });
 }
@@ -85,7 +106,9 @@ export function usePermanentlyDeleteProduct() {
   return useMutation({
     mutationFn: permanentlyDeleteProductAction,
     onSuccess: (_data, productId) => {
-      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
+      invalidateAllProductQueriesExceptSkuPreview(queryClient);
+      // The detail cache for a deleted product can't be re-fetched, so
+      // remove it outright instead of marking it stale.
       queryClient.removeQueries({
         queryKey: queryKeys.products.detail(productId),
       });
