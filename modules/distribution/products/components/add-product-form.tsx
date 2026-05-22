@@ -757,6 +757,18 @@ export function AddProductForm(props?: {
                         </ComboboxList>
                       </ComboboxContent>
                     </Combobox>
+                    {productCategories && productCategories.length === 0 ? (
+                      // First-time tenants land here with no categories at
+                      // all — the combobox renders blank and looks broken.
+                      // Point them at the inline "New category" button so
+                      // the empty state has a next step rather than dead
+                      // air.
+                      <FieldDescription>
+                        No categories yet — use{" "}
+                        <strong>New category</strong> above to add your
+                        first one.
+                      </FieldDescription>
+                    ) : null}
                     {fieldState.invalid && (
                       <FieldError errors={[fieldState.error]} />
                     )}
