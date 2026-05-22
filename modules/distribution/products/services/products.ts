@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNotNull, isNull, like, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
@@ -645,6 +645,279 @@ export async function permanentlyDeleteProduct(productId: string) {
   await db
     .delete(products)
     .where(and(eq(products.id, productId), eq(products.tenantId, tenant.id)));
+}
+
+/**
+ * One row's worth of conflict signal returned by the bulk-import preflight.
+ *
+ * Reasons:
+ *   - `duplicate-sku-active`   — SKU collides with an active product in
+ *     the tenant. Insert would fail at the unique index.
+ *   - `duplicate-sku-archived` — SKU collides with an *archived* product.
+ *     Insert would also fail (the index covers archived rows), but the
+ *     friendlier path is to restore the archived product rather than
+ *     re-importing a new one.
+ *   - `duplicate-name-active`  — name matches an active product. Names
+ *     aren't unique server-side, so this is informational ("you already
+ *     have a product called X — sure you want a second?"). Skip-able.
+ */
+export type ProductImportConflict = {
+  rowIndex: number;
+  reason:
+    | "duplicate-sku-active"
+    | "duplicate-sku-archived"
+    | "duplicate-name-active";
+  existingProductId: string;
+  existingProductName: string;
+  existingProductSku: string;
+};
+
+/**
+ * Preflight check for a CSV bulk import. Inspects the tenant's catalog
+ * (active + archived) for collisions with the incoming `sku` / `name`
+ * values. Caller renders each conflict as a row-level issue in the
+ * import modal so the user can fix the CSV before applying.
+ *
+ * Mirrors `findCustomerImportConflicts`.
+ */
+export async function findProductImportConflicts(
+  rows: ReadonlyArray<{ sku?: string; name?: string }>,
+): Promise<ProductImportConflict[]> {
+  const tenant = await getCurrentTenant();
+  const skus = Array.from(
+    new Set(
+      rows
+        .map(r => r.sku?.trim().toUpperCase())
+        .filter((s): s is string => !!s && s.length > 0),
+    ),
+  );
+  const names = Array.from(
+    new Set(
+      rows
+        .map(r => r.name?.trim().toLowerCase())
+        .filter((n): n is string => !!n && n.length > 0),
+    ),
+  );
+  if (skus.length === 0 && names.length === 0) return [];
+
+  const skuCondition =
+    skus.length > 0
+      ? sql`upper(${products.sku}) in (${sql.join(
+          skus.map(s => sql`${s}`),
+          sql`, `,
+        )})`
+      : null;
+  const nameCondition =
+    names.length > 0
+      ? sql`lower(${products.name}) in (${sql.join(
+          names.map(n => sql`${n}`),
+          sql`, `,
+        )})`
+      : null;
+  const conditions = [skuCondition, nameCondition].filter(
+    (c): c is NonNullable<typeof c> => c !== null,
+  );
+  const matchCondition =
+    conditions.length === 1 ? conditions[0] : or(...conditions);
+
+  const existing = await db
+    .select({
+      id: products.id,
+      sku: products.sku,
+      name: products.name,
+      archivedAt: products.archivedAt,
+    })
+    .from(products)
+    .where(and(eq(products.tenantId, tenant.id), matchCondition!));
+
+  // Lookups: by uppercased SKU and lowercased name, so the CSV row's
+  // trimmed value can index in directly.
+  const bySku = new Map<
+    string,
+    { id: string; sku: string; name: string; archived: boolean }
+  >();
+  const byName = new Map<string, { id: string; sku: string; name: string }>();
+  for (const row of existing) {
+    bySku.set(row.sku.toUpperCase(), {
+      id: row.id,
+      sku: row.sku,
+      name: row.name,
+      archived: !!row.archivedAt,
+    });
+    // Name conflicts only flagged against active rows — an archived
+    // product's name doesn't block a new insert (the unique index is on
+    // SKU, not name).
+    if (!row.archivedAt) {
+      byName.set(row.name.toLowerCase(), {
+        id: row.id,
+        sku: row.sku,
+        name: row.name,
+      });
+    }
+  }
+
+  const conflicts: ProductImportConflict[] = [];
+  rows.forEach((row, idx) => {
+    const sku = row.sku?.trim().toUpperCase();
+    const name = row.name?.trim().toLowerCase();
+    // SKU conflict — blocks insert at the unique index. Report it
+    // first; if SKU collides we don't bother flagging the name match
+    // (it's the same row anyway).
+    if (sku && bySku.has(sku)) {
+      const hit = bySku.get(sku)!;
+      conflicts.push({
+        rowIndex: idx,
+        reason: hit.archived
+          ? "duplicate-sku-archived"
+          : "duplicate-sku-active",
+        existingProductId: hit.id,
+        existingProductSku: hit.sku,
+        existingProductName: hit.name,
+      });
+      return;
+    }
+    if (name && byName.has(name)) {
+      const hit = byName.get(name)!;
+      conflicts.push({
+        rowIndex: idx,
+        reason: "duplicate-name-active",
+        existingProductId: hit.id,
+        existingProductSku: hit.sku,
+        existingProductName: hit.name,
+      });
+    }
+  });
+  return conflicts;
+}
+
+/**
+ * Row shape accepted by {@link bulkCreateProducts}. CSV-level columns
+ * resolved to FK ids (`categoryId`, `baseUnitId`) BEFORE calling. The
+ * mapper in `utils/csv-row-mapping.ts` owns that translation.
+ */
+export type BulkCreateProductInput = {
+  sku: string;
+  name: string;
+  categoryId?: string | null;
+  baseUnitId?: string | null;
+  defaultPricePerLb?: string;
+};
+
+export type BulkCreateProductsResult = {
+  total: number;
+  created: number;
+  failed: Array<{ row: number; sku: string; name: string; message: string }>;
+};
+
+function formatBulkProductError(error: unknown): string {
+  if (error instanceof Error) {
+    if (
+      isProductSkuCollision(error) ||
+      new RegExp(PRODUCTS_SKU_UNIQUE_INDEX, "i").test(error.message)
+    ) {
+      return "A product with this SKU already exists.";
+    }
+    return error.message;
+  }
+  return "Unknown error.";
+}
+
+/**
+ * Insert N products in one call. Single upfront plan-limit check so a
+ * batch either fully fits or fully rejects — no partial commits when
+ * the tenant is at the edge of their plan. Per-row failures past the
+ * plan check (SKU collision with an archived row, validation, etc.)
+ * are caught and returned in `failed` so the modal can render them
+ * as per-row errors.
+ *
+ * Mirrors `bulkCreateCustomers`.
+ */
+export async function bulkCreateProducts(
+  rows: BulkCreateProductInput[],
+): Promise<BulkCreateProductsResult> {
+  const [tenant, portalUser] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
+
+  const maxProducts = getPlanLimit(tenant, "maxProducts");
+  const existing = await countActiveProductsForTenant(tenant.id);
+  if (existing + rows.length > maxProducts) {
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxProducts",
+      limit: maxProducts,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxProducts",
+      limit: maxProducts,
+      resourceLabel: "products",
+      actionLabel: `import ${rows.length} product${rows.length === 1 ? "" : "s"}`,
+    });
+  }
+
+  let created = 0;
+  const failed: BulkCreateProductsResult["failed"] = [];
+
+  // Insert rows one-by-one inside a single shared connection. Each row
+  // gets its own transaction via createProduct so a failure mid-batch
+  // doesn't leave orphan product_categories/product_units rows.
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    try {
+      await db.transaction(async tx => {
+        const [productRow] = await tx
+          .insert(products)
+          .values({
+            tenantId: tenant.id,
+            sku: row.sku.trim(),
+            name: row.name.trim(),
+            defaultPricePerLb: row.defaultPricePerLb ?? "0",
+            baseUnitId: row.baseUnitId ?? null,
+            createdByUserId: portalUser.id,
+            updatedByUserId: portalUser.id,
+          })
+          .returning();
+        if (row.categoryId) {
+          await tx.insert(productCategories).values({
+            productId: productRow.id,
+            categoryId: row.categoryId,
+          });
+        }
+        // Mirror the form's single-sales-unit-at-conversion-1 default
+        // so the row passes the form's later edit validation without
+        // a hand-fix. Only applies when a base unit was resolved.
+        if (row.baseUnitId) {
+          await tx.insert(productUnits).values({
+            productId: productRow.id,
+            unitId: row.baseUnitId,
+            purpose: "sales",
+            conversionToBase: "1",
+            isDefault: true,
+            allowsFractional: true,
+            sortOrder: 0,
+          });
+        }
+      });
+      created++;
+    } catch (error) {
+      failed.push({
+        row: i,
+        sku: row.sku ?? "",
+        name: row.name ?? "",
+        message: formatBulkProductError(error),
+      });
+    }
+  }
+
+  return { total: rows.length, created, failed };
 }
 
 /** Row shape returned by `getProducts()` / `GET /api/products` (for client `import type` only). */

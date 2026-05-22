@@ -3,11 +3,16 @@
 import { revalidatePath } from "next/cache";
 
 import { logAuditEvent } from "@/lib/audit-log";
-import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
+import {
+  getCurrentPortalUser,
+  requireAdminPortalUser,
+} from "@/modules/shared/services/portal-users";
 
 import {
   archiveProduct,
+  bulkCreateProducts,
   createProduct,
+  findProductImportConflicts,
   getProductById,
   getProducts,
   getProductsPage,
@@ -15,6 +20,7 @@ import {
   previewProductSku,
   restoreProduct,
   updateProduct,
+  type BulkCreateProductInput,
   type ProductListParams,
 } from "../services/products";
 
@@ -139,5 +145,45 @@ export async function permanentlyDeleteProductAction(productId: string) {
     metadata: product ? { name: product.name, sku: product.sku } : {},
   });
   revalidatePath("/products");
+  return result;
+}
+
+/**
+ * CSV-import preflight. Returns conflict signals so the modal can
+ * render row-level issues *before* the user clicks Apply — saving them
+ * a round-trip through a failed import. No audit log on this one; it's
+ * a read-only probe and runs on every keystroke-equivalent in the
+ * preview step.
+ */
+export async function findProductImportConflictsAction(
+  rows: ReadonlyArray<{ sku?: string; name?: string }>,
+) {
+  return await findProductImportConflicts(rows);
+}
+
+/**
+ * CSV-import apply. Wraps the bulk service with audit logging — one
+ * `product.bulk_import` row per call, with the created/failed counts
+ * in metadata so an operator can correlate the import to the catalog
+ * state at the time.
+ */
+export async function bulkCreateProductsAction(rows: BulkCreateProductInput[]) {
+  const user = await getCurrentPortalUser();
+  const result = await bulkCreateProducts(rows);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "product.bulk_import",
+    resourceType: "product",
+    metadata: {
+      total: result.total,
+      created: result.created,
+      failedCount: result.failed.length,
+    },
+  });
+  if (result.created > 0) {
+    revalidatePath("/products");
+  }
   return result;
 }
