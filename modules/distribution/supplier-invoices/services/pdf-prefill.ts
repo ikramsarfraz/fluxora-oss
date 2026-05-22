@@ -29,13 +29,14 @@ const MAX_PDF_PREFILL_BYTES = 25 * 1024 * 1024;
 type ParseMode = PipelineTelemetry["mode"];
 type TextExtractor = PipelineTelemetry["textExtractor"];
 
-// PARSE_MODE=text-first activates the pdfjs-dist layout-preserving extractor
-// before pdf-parse. Any other value (including unset) keeps the original
-// pdf-parse → vision-fallback behaviour. The flag is read each call so it
-// can be flipped at runtime without restarting the server.
+// `text-first` is the default: pdfjs-dist runs first (layout-preserving,
+// more tolerant of synthetic / unusual XRef streams that trip pdf-parse),
+// with pdf-parse as the fallback and vision after that. `PARSE_MODE=vision-only`
+// reverts to the legacy pdf-parse → vision path for parity testing. The flag
+// is read each call so it can be flipped at runtime without restarting.
 function readParseMode(): ParseMode {
   const raw = (process.env.PARSE_MODE ?? "").toLowerCase().trim();
-  return raw === "text-first" ? "text-first" : "vision-only";
+  return raw === "vision-only" ? "vision-only" : "text-first";
 }
 
 /**

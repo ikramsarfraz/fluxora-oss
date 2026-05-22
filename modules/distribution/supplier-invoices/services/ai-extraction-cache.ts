@@ -36,6 +36,18 @@ export { hashPdfBytes };
 
 export type CacheStage = "invoice_extraction" | "vision_extraction";
 
+// Bump when extraction logic changes in a way that should invalidate prior
+// cache entries (prompt rewrites, validation rule changes that override AI
+// output like `reconcileUnitType` / `loose singles` overrides). Suffixed to
+// `pdf_content_hash` on both read and write so old rows become unreachable;
+// they remain in the table but are never read, and fresh writes use the new
+// key. A future migration can clean up orphans.
+const CACHE_KEY_VERSION = "v2";
+
+function versionedHash(pdfContentHash: string): string {
+  return `${pdfContentHash}:${CACHE_KEY_VERSION}`;
+}
+
 /**
  * Lookup. Returns the cached AiExtractionResult when one exists for
  * (tenant, hash, stage), or null on miss. Best-effort: a DB error returns
@@ -53,7 +65,7 @@ export async function lookupAiExtractionCache(args: {
       .where(
         and(
           eq(aiExtractionCache.tenantId, args.tenantId),
-          eq(aiExtractionCache.pdfContentHash, args.pdfContentHash),
+          eq(aiExtractionCache.pdfContentHash, versionedHash(args.pdfContentHash)),
           eq(aiExtractionCache.stage, args.stage),
         ),
       )
@@ -91,7 +103,7 @@ export async function saveAiExtractionCache(args: {
       .insert(aiExtractionCache)
       .values({
         tenantId: args.tenantId,
-        pdfContentHash: args.pdfContentHash,
+        pdfContentHash: versionedHash(args.pdfContentHash),
         stage: args.stage,
         model: args.model,
         sourceFilename: args.sourceFilename,
