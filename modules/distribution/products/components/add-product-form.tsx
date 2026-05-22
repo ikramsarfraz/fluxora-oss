@@ -605,7 +605,25 @@ export function AddProductForm(props?: {
         mode === "edit" && product
           ? await updateProductAction({ id: product.id, ...payload })
           : await createProductAction(payload);
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      // IMPORTANT — order matters. Navigate (or hand off via onCreated)
+      // BEFORE invalidating any queries. Invalidating `["products"]` here
+      // matches `useProductSkuPreview`'s key by prefix; the still-mounted
+      // hook would re-fire `previewProductSkuAction` against the form's
+      // current path (`/products/new`). Next.js 16 piggybacks each server
+      // action's response with the page tree for the URL it was POSTed to;
+      // when that response lands AFTER router.push has started, the client
+      // router rolls the URL back to `/products/new`. Net effect users saw:
+      // submit → flash of /products/<id> → bounce back to /products/new.
+      toast.success(mode === "edit" ? "Product updated." : "Product created.");
+      if (props?.onCreated) {
+        props.onCreated({ id: result.id });
+      } else {
+        router.push(`/products/${result.id}`);
+      }
+      // Now that the form is unmounting, invalidate. Use the more specific
+      // `["products", "list"]` prefix so the sku-preview branch is never
+      // matched even if a future component re-mounts it before this fires.
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] });
       if (mode === "edit" && product) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.products.detail(product.id),
@@ -613,12 +631,6 @@ export function AddProductForm(props?: {
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
       invalidateSetupChecklistQuery(queryClient);
-      toast.success(mode === "edit" ? "Product updated." : "Product created.");
-      if (props?.onCreated) {
-        props.onCreated({ id: result.id });
-      } else {
-        router.push(`/products/${result.id}`);
-      }
     } catch (e) {
       setMutationError(
         e instanceof Error
