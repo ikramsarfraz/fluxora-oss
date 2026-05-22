@@ -351,42 +351,129 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
             </div>
           </div>
 
-          {/* Line items table */}
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 24 }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Item</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Qty (cs)</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Weight (lb)</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Unit price</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(invoice.lines ?? []).map((line, i) => (
-                <tr key={line.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
-                  <td style={{ padding: "10px 0", fontSize: 13 }}>
-                    <div style={{ fontWeight: 500, color: C.ink }}>{line.product?.name ?? "—"}</div>
-                    {line.product?.sku ? (
-                      <div style={{ fontSize: 11, fontFamily: C.mono, color: C.muted }}>{line.product.sku}</div>
+          {/* Line items table — family-aware: when no line on the invoice
+              carries a weight (i.e. a pure beverages / dry-goods order),
+              the Weight column is hidden so the row doesn't show "0.00"
+              for every line. Mixed invoices keep the column and show
+              "—" on non-weight rows. */}
+          {(() => {
+            const lines = invoice.lines ?? [];
+            const anyHasWeight = lines.some(
+              line => Number(line.billedWeightLbs ?? 0) > 0,
+            );
+            return (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  marginBottom: 24,
+                }}
+              >
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Item</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
+                    {anyHasWeight ? (
+                      <th style={{ ...thStyle, textAlign: "right" }}>
+                        Weight
+                      </th>
                     ) : null}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {line.quantityCases.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {formatWeightLbs(line.billedWeightLbs)}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {formatMoney(line.unitPrice)}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
-                    {formatMoney(line.lineTotal)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <th style={{ ...thStyle, textAlign: "right" }}>
+                      Unit price
+                    </th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line, i) => {
+                    const baseAbbr =
+                      line.product?.baseUnit?.abbreviation ?? "lb";
+                    const lineHasWeight =
+                      Number(line.billedWeightLbs ?? 0) > 0;
+                    return (
+                      <tr
+                        key={line.id}
+                        style={{
+                          background: i % 2 === 1 ? C.line2 : "transparent",
+                        }}
+                      >
+                        <td style={{ padding: "10px 0", fontSize: 13 }}>
+                          <div style={{ fontWeight: 500, color: C.ink }}>
+                            {line.product?.name ?? "—"}
+                          </div>
+                          {line.product?.sku ? (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontFamily: C.mono,
+                                color: C.muted,
+                              }}
+                            >
+                              {line.product.sku}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            color: C.ink2,
+                            fontFamily: C.mono,
+                          }}
+                        >
+                          {line.quantityCases.toLocaleString()}
+                        </td>
+                        {anyHasWeight ? (
+                          <td
+                            style={{
+                              padding: "10px 0",
+                              fontSize: 13,
+                              textAlign: "right",
+                              color: C.ink2,
+                              fontFamily: C.mono,
+                            }}
+                          >
+                            {lineHasWeight ? (
+                              <>
+                                {formatWeightLbs(line.billedWeightLbs)}{" "}
+                                {baseAbbr}
+                              </>
+                            ) : (
+                              <span style={{ color: C.muted }}>—</span>
+                            )}
+                          </td>
+                        ) : null}
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            color: C.ink2,
+                            fontFamily: C.mono,
+                          }}
+                        >
+                          {formatMoney(line.unitPrice)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            fontFamily: C.mono,
+                            fontWeight: 500,
+                            color: C.ink,
+                          }}
+                        >
+                          {formatMoney(line.lineTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
 
           {/* Totals block */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 32 : 0 }}>

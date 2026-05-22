@@ -1,6 +1,17 @@
 import { z } from "zod";
 
-export const lineUnitTypeValues = ["catch_weight", "fixed_case"] as const;
+// Widened to mirror the supplier-bill side so a per_each / per_unit
+// inventory item carries its original intent through to sales orders
+// and invoices. The form's pricing/total math collapses everything
+// non-weight onto the per_case branch, so the practical effect is
+// "fixed_case-like behavior" — but the snapshot preserves the
+// distinction for reporting + cost-flow purposes.
+export const lineUnitTypeValues = [
+  "catch_weight",
+  "fixed_case",
+  "per_each",
+  "per_unit",
+] as const;
 export type LineUnitType = (typeof lineUnitTypeValues)[number];
 
 const decimalString = (opts?: { allowEmpty?: boolean }) =>

@@ -374,7 +374,17 @@ function getIndividualWeights({
 
 function getPricingType(orderLine: SalesOrderLine | null): InvoicePricingType {
   if (orderLine?.pricingUnitTypeSnapshot === "per_case") return "per_case";
-  if (orderLine?.unitType === "fixed_case") return "per_case";
+  // Map all non-weight intrinsic types onto per_case so the PDF math
+  // (cases × price) kicks in for beverages and dry goods. The snapshot
+  // abbreviation propagated alongside still renders "/ ea" / "/ case"
+  // correctly in the suffix.
+  if (
+    orderLine?.unitType === "fixed_case" ||
+    orderLine?.unitType === "per_each" ||
+    orderLine?.unitType === "per_unit"
+  ) {
+    return "per_case";
+  }
   return "per_lb";
 }
 

@@ -37,7 +37,10 @@ import {
 } from "@/lib/uploads/r2";
 import { parsePersistedCaseWeights } from "../utils/case-weights";
 import { computePaymentSummary } from "../utils/payment-summary";
-import { supplierInvoiceLineCostPerLb } from "../utils/cost";
+import {
+  supplierInvoiceLineCostPerLb,
+  supplierInvoiceLineCostPerUnit,
+} from "../utils/cost";
 
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
@@ -306,6 +309,40 @@ async function reserveLotNumber(args: {
   return `${base}-${safeLotSuffix()}`;
 }
 
+/**
+ * Resolve the "$/base-unit" cost for a line in any unit mode. Used by
+ * both the forward-sync (`syncSupplierInvoiceLineCost`) and the rollback
+ * (`rollbackSupplierInvoiceLineCosts` / `getReversalCostChanges`) paths
+ * so beverages and per-each goods get a recorded supplier cost — not
+ * just meat. Returns null when the line lacks enough info (e.g. zero
+ * weight on a fixed_case line, zero price).
+ */
+function resolveLineCostPerBaseUnit(line: {
+  quantityCases: number;
+  weightLbs: string;
+  unitType: SupplierInvoiceLineUnitType;
+  unitPrice: string;
+  conversionToBaseSnapshot?: string | null;
+}): string | null {
+  if (line.unitType === "catch_weight" || line.unitType === "fixed_case") {
+    return supplierInvoiceLineCostPerLb(line);
+  }
+  // per_each: unitPrice IS already per-base-unit ($/each).
+  // per_unit: unitPrice is per purchase unit ($/case); divide by pack
+  //   size so the stored cost stays comparable across suppliers and
+  //   downstream sales-side margin math works without conditions.
+  const conv =
+    line.unitType === "per_unit"
+      ? Number(line.conversionToBaseSnapshot ?? "1")
+      : 1;
+  const perUnit = supplierInvoiceLineCostPerUnit({
+    unitType: line.unitType,
+    unitPrice: line.unitPrice,
+    conversionToBase: conv > 0 ? conv : 1,
+  });
+  return perUnit?.perBase ?? perUnit?.perUnit ?? null;
+}
+
 async function syncSupplierInvoiceLineCost(args: {
   tx: Tx;
   supplierId: string;
@@ -316,13 +353,15 @@ async function syncSupplierInvoiceLineCost(args: {
     weightLbs: string;
     unitType: SupplierInvoiceLineUnitType;
     unitPrice: string;
+    /** Pack size (e.g. 12 ea per case). Used to normalize per_unit prices
+     *  back to per-base-unit before snapshotting. */
+    conversionToBaseSnapshot?: string | null;
   };
 }) {
-  // Weight-priced modes contribute a per-lb cost snapshot; per_each /
-  // per_unit return null and skip the snapshot entirely (V1 — separate
-  // per-unit cost table is a follow-up).
-  const costPerLb = supplierInvoiceLineCostPerLb(args.line);
-  if (costPerLb == null) return;
+  // `product_supplier_costs.cost_per_lb` is semantically "$/base-unit" —
+  // the column name is legacy. The helper handles all four unit types.
+  const costPerBaseUnit = resolveLineCostPerBaseUnit(args.line);
+  if (costPerBaseUnit == null) return;
 
   const existing = await args.tx.query.productSupplierCosts.findFirst({
     where: and(
@@ -338,7 +377,7 @@ async function syncSupplierInvoiceLineCost(args: {
     await args.tx
       .update(productSupplierCosts)
       .set({
-        costPerLb,
+        costPerLb: costPerBaseUnit,
         lastReceivedAt: receivedAt,
         updatedAt: new Date(),
       })
@@ -347,7 +386,7 @@ async function syncSupplierInvoiceLineCost(args: {
     await args.tx.insert(productSupplierCosts).values({
       productId: args.line.productId,
       supplierId: args.supplierId,
-      costPerLb,
+      costPerLb: costPerBaseUnit,
       lastReceivedAt: receivedAt,
     });
   }
@@ -377,6 +416,10 @@ async function findPriorSupplierInvoiceLine(args: {
       weightLbs: supplierInvoiceLines.weightLbs,
       unitType: supplierInvoiceLines.unitType,
       unitPrice: supplierInvoiceLines.unitPrice,
+      // Pack size — needed so `syncSupplierInvoiceLineCost` can
+      // normalize per_unit prices back to per-base-unit when rolling
+      // the cost forward from a prior invoice.
+      conversionToBaseSnapshot: supplierInvoiceLines.conversionToBaseSnapshot,
     })
     .from(supplierInvoiceLines)
     .innerJoin(
@@ -422,7 +465,12 @@ async function rollbackSupplierInvoiceLineCosts(args: {
       excludeInvoiceId: args.invoiceId,
     });
 
-    const restoredCost = priorLine ? supplierInvoiceLineCostPerLb(priorLine) : null;
+    // Restore the cost from the most-recent OTHER completed invoice for
+    // this (supplier, product). Family-aware so a reversed beverage bill
+    // restores the prior per-each cost instead of going to null.
+    const restoredCost = priorLine
+      ? resolveLineCostPerBaseUnit(priorLine)
+      : null;
 
     if (priorLine && restoredCost != null) {
       await args.tx
@@ -909,7 +957,9 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
       productId,
       excludeInvoiceId: invoice.id,
     });
-    const restoredCost = prior ? supplierInvoiceLineCostPerLb(prior) : null;
+    // Same family-aware resolver as the rollback path so the reversal
+    // preview matches what would actually be written.
+    const restoredCost = prior ? resolveLineCostPerBaseUnit(prior) : null;
 
     let after: ReversalCostChange["afterReversal"];
     if (prior && restoredCost != null) {
@@ -1384,6 +1434,14 @@ async function postSupplierInvoiceInternal(args: {
     const isWeightMode =
       line.unitType === "catch_weight" || line.unitType === "fixed_case";
 
+    // Normalize the snapshot cost so downstream COGS math is consistent
+    // across unit types. The `cost_per_unit_snapshot` column stores
+    // either $/lb (catch_weight) or $/case (fixed_case / per_unit) or
+    // $/each (per_each) — i.e. cost per ONE unit of the line's pricing
+    // basis. For per_unit lines that means we leave unitPrice as-is
+    // because each inventory_items row represents one purchase unit
+    // (one case). For weight modes, unitPrice is $/lb so it stays too.
+    // The intent is captured in `cost_unit_type_snapshot`.
     const itemRows = Array.from({ length: caseCount }, (_, i) => {
       const caseWeightLbs = !isWeightMode
         ? "0"

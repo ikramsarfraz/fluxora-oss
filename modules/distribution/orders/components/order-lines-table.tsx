@@ -42,6 +42,8 @@ type Line = SalesOrderDetail["lines"][number];
 const UNIT_TYPE_LABELS: Record<string, string> = {
   catch_weight: "Catch weight",
   fixed_case: "Fixed case",
+  per_each: "Per each",
+  per_unit: "Per unit",
 };
 
 function formatPersistedSalesUnit(

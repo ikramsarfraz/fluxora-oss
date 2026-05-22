@@ -89,12 +89,57 @@ export async function createInvoiceFromSalesOrder(input: {
 
   for (const line of order.lines) {
     const billedWeight = Number(line.totalBilledWeightLbs ?? "0");
+    const fulfilledCases = line.fulfilledCases || line.expectedCases;
 
-    const unitPrice = Number(
-      line.pricePerLbOverride ?? line.product.defaultPricePerLb,
-    );
+    // The order line's `pricePerLbOverride` is semantically
+    // "$/pricing-unit" — for `per_lb` snapshots it's per-lb, for
+    // `per_case` it's per-case. Falling back to `defaultPricePerLb`
+    // (which is "$/base-unit") is correct for per_lb / per_each, but
+    // wrong for per_case where the customer expects a per-case price.
+    // We branch on the pricing snapshot so each line resolves the
+    // right number; PDF math reads the same shape.
+    const pricingType =
+      line.pricingUnitTypeSnapshot ??
+      (line.unitType === "fixed_case" ? "per_case" : "per_lb");
+    const snapshotPrice =
+      line.pricePerUnitSnapshot != null
+        ? Number(line.pricePerUnitSnapshot)
+        : null;
+    const overridePrice =
+      line.pricePerLbOverride != null
+        ? Number(line.pricePerLbOverride)
+        : null;
+    const defaultPrice = Number(line.product.defaultPricePerLb);
+    // Snapshot wins; then override; then product default. For per_case
+    // pricing the product-default fallback is rough (it's $/base-unit,
+    // not $/case) — multiplied by conversion below to recover a sane
+    // per-case figure when nothing else is set.
+    let unitPrice =
+      snapshotPrice ??
+      overridePrice ??
+      (pricingType === "per_case"
+        ? defaultPrice *
+          Number(
+            line.pricingConversionSnapshot ??
+              line.conversionToBaseSnapshot ??
+              "1",
+          )
+        : defaultPrice);
+    if (!Number.isFinite(unitPrice)) unitPrice = 0;
 
-    const lineTotal = billedWeight * unitPrice;
+    // Line total math now mirrors the bill side:
+    //   per_lb       → billedWeight × $/lb     (catch-weight meat)
+    //   per_case     → cases × $/case          (fixed-case meat, beverages by case)
+    //   per_each / per_unit (no pricing snap) → cases × $/unit
+    // Falling back to the case path when billedWeight is zero keeps
+    // non-weight bills (cans of soda) from rendering "$0.00".
+    let lineTotal: number;
+    if (pricingType === "per_lb" && billedWeight > 0) {
+      lineTotal = billedWeight * unitPrice;
+    } else {
+      lineTotal = fulfilledCases * unitPrice;
+    }
+
     const cogsAmount = (line.fulfillments ?? [])
       .filter(fulfillment => !fulfillment.reversedAt)
       .reduce(
@@ -106,7 +151,7 @@ export async function createInvoiceFromSalesOrder(input: {
 
     invoiceLinesPayload.push({
       productId: line.productId,
-      quantityCases: line.fulfilledCases || line.expectedCases,
+      quantityCases: fulfilledCases,
       billedWeightLbs: billedWeight.toFixed(4),
       unitPrice: roundMoney4(unitPrice),
       lineTotal: roundMoney2(lineTotal),
@@ -301,7 +346,18 @@ export async function getSalesInvoiceById(id: string) {
       },
       lines: {
         with: {
-          product: true,
+          product: {
+            // Eager-load baseUnit so the invoice detail page can render
+            // per-line UOM suffixes ("/lb", "/ea", "/gal") without an
+            // extra join. The invoice-line schema doesn't snapshot the
+            // unit itself — we read the product's current base UOM,
+            // which is locked once any bill lands.
+            with: {
+              baseUnit: {
+                columns: { id: true, abbreviation: true, family: true },
+              },
+            },
+          },
         },
       },
       payments: {

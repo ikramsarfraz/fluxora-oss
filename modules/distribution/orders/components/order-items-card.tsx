@@ -57,7 +57,11 @@ type Line = SalesOrderDetail["lines"][number];
 // ── Pricing helpers (mirror order-lines-table.tsx logic) ───────────────────
 function getLinePricingUnitType(line: Line): "per_lb" | "per_case" {
   if (line.pricingUnitTypeSnapshot) return line.pricingUnitTypeSnapshot;
-  return line.unitType === "fixed_case" ? "per_case" : "per_lb";
+  // All non-catch_weight intrinsic types price per-purchase-unit; the
+  // snapshot abbreviation propagated alongside renders the actual UOM
+  // suffix ("/ea", "/case") so this binary collapse is just for the
+  // pricing-direction enum, not the displayed label.
+  return line.unitType === "catch_weight" ? "per_lb" : "per_case";
 }
 
 function getLinePricePerUnit(line: Line): number {
@@ -484,7 +488,13 @@ function LineRow({
               }}
             >
               {line.product?.sku ?? ""}
-              {line.unitType === "fixed_case" ? " · Fixed case" : " · Catch weight"}
+              {line.unitType === "catch_weight"
+                ? " · Catch weight"
+                : line.unitType === "fixed_case"
+                  ? " · Fixed case"
+                  : line.unitType === "per_each"
+                    ? " · Per each"
+                    : " · Per unit"}
               {awaitingFulfillment && suggestedLot ? ` · suggest lot ${suggestedLot}` : ""}
             </div>
           </div>
@@ -914,10 +924,27 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       selectedLine.salesUnit?.abbreviation,
       selectedLine.salesUnit?.name,
     ];
-    return tokens.some(t => {
-      const v = (t ?? "").trim().toLowerCase();
-      return v === "lb" || v === "lbs" || v === "pound" || v === "pounds";
-    });
+    // Match the expanded weight-token set used by the server-side
+    // over-ship cap (orders.ts) so the fulfillment dialog's "weight
+    // editable" branch fires for kg/oz catalogs too, not just lb.
+    const WEIGHT_TOKENS = new Set([
+      "lb",
+      "lbs",
+      "pound",
+      "pounds",
+      "kg",
+      "kilogram",
+      "kilograms",
+      "oz",
+      "ounce",
+      "ounces",
+      "g",
+      "gram",
+      "grams",
+    ]);
+    return tokens.some(t =>
+      WEIGHT_TOKENS.has((t ?? "").trim().toLowerCase()),
+    );
   })();
   // Catch-weight + case unit → weight is locked to the picked items'
   // recorded weights. Catch-weight + lb unit → weight is editable.

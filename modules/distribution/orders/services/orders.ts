@@ -632,7 +632,7 @@ async function resolveLineSupplierContext(input: {
 }
 
 function computePricingSnapshot(
-  unitType: "catch_weight" | "fixed_case",
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit",
   resolvedPricePerLb: string | null,
   conversionToBase: string,
 ): {
@@ -640,8 +640,13 @@ function computePricingSnapshot(
   pricePerUnitSnapshot: string | null;
   pricingConversionSnapshot: string | null;
 } {
+  // Map the line's intrinsic unit type onto the binary
+  // pricing_unit_type enum (per_lb / per_case). Non-weight modes
+  // (per_each, per_unit) follow the per_case path — pricing is per
+  // packaged unit, with the conversion-to-base snapshot carrying the
+  // pack size for downstream math.
   const pricingUnitType: PricingUnitType =
-    unitType === "fixed_case" ? "per_case" : "per_lb";
+    unitType === "catch_weight" ? "per_lb" : "per_case";
 
   if (resolvedPricePerLb == null || resolvedPricePerLb === "") {
     return {
@@ -684,7 +689,7 @@ function buildSalesOrderLineSnapshot(
   line: {
     productId: string;
     salesUnitId: string;
-    unitType: "catch_weight" | "fixed_case";
+    unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     resolvedPricePerLb: string | null;
   },
   validProducts: ValidSalesOrderProduct[],
@@ -1664,7 +1669,7 @@ export async function updateSalesOrder(input: {
     productId: string;
     salesUnitId: string;
     expectedCases: number;
-    unitType?: "catch_weight" | "fixed_case";
+    unitType?: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     inventoryItemIds?: string[];
     pricePerLbOverride?: string | null;
   }>;
@@ -1886,7 +1891,7 @@ export async function createSalesOrder(input: {
     productId: string;
     salesUnitId: string;
     expectedCases: number;
-    unitType?: "catch_weight" | "fixed_case";
+    unitType?: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     inventoryItemIds?: string[];
     pricePerLbOverride?: string;
   }>;
@@ -2466,14 +2471,32 @@ export async function recordSalesOrderFulfillment(input: {
   // — neither can exceed the order. Cap both per-fulfillment and
   // cumulatively across earlier fulfillments so a sequence of partials
   // can't over-ship in aggregate.
+  // Expanded weight-token detection so non-US weight catalogs (kg/oz)
+  // also engage the over-ship cap. The set mirrors WEIGHT_UNIT_NAMES
+  // in new-order-line-utils.ts; eventually both should consult the
+  // UoM table's `family` column directly.
   const lineSalesUnitTokens = [
     matchingLine.salesUnitAbbreviationSnapshot,
     matchingLine.salesUnitNameSnapshot,
   ];
-  const lineIsWeightUnit = lineSalesUnitTokens.some(token => {
-    const v = (token ?? "").trim().toLowerCase();
-    return v === "lb" || v === "lbs" || v === "pound" || v === "pounds";
-  });
+  const WEIGHT_TOKENS = new Set([
+    "lb",
+    "lbs",
+    "pound",
+    "pounds",
+    "kg",
+    "kilogram",
+    "kilograms",
+    "oz",
+    "ounce",
+    "ounces",
+    "g",
+    "gram",
+    "grams",
+  ]);
+  const lineIsWeightUnit = lineSalesUnitTokens.some(token =>
+    WEIGHT_TOKENS.has((token ?? "").trim().toLowerCase()),
+  );
 
   if (lineIsWeightUnit && weight != null) {
     const orderedLbs = matchingLine.expectedCases;
