@@ -1,10 +1,12 @@
 import { and, count, desc, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  auditLog,
   categories,
   customers,
   customerProductPrices,
   inventoryItems,
+  portalUsers,
   productCategories,
   products,
   productSupplierCosts,
@@ -15,6 +17,7 @@ import {
   supplierInvoices,
   suppliers,
 } from "@/db/schema";
+import type { ActivityTimelineItem } from "@/modules/distribution/services/audit";
 import {
   buildSkuBase,
   nextSkuForBase,
@@ -71,15 +74,23 @@ function isProductSkuCollision(error: unknown): boolean {
 
 export async function getProductById(productId: string) {
   const tenant = await getCurrentTenant();
-  // Count each table the product is referenced from. `_purchaseCount` is
-  // specifically supplier_invoice_lines because the price-intelligence
-  // empty state is about purchase history. `_dependentRecordCount`
-  // aggregates every reference that would be invalidated by changing
-  // the base unit (orders/invoices/customer prices/supplier costs/bills)
-  // — used by the form to lock the base-unit picker.
+  // Count each table the product is referenced from.
+  //
+  // - `_purchaseCount` reads the "received purchases" sense — only
+  //   non-draft supplier_invoices count. Drafts are work-in-progress
+  //   and shouldn't show as purchases (the price-intelligence gate
+  //   would otherwise stay "2 of 3" forever for a tenant that has a
+  //   draft sitting in their queue). The detail page's price-intel
+  //   threshold reads this.
+  // - `_dependentRecordCount` is the broader "would changing the base
+  //   unit reinterpret any data" check; it sums every line table that
+  //   stores a per-unit snapshot, INCLUDING drafts (their cost/qty
+  //   columns would also re-interpret). Two slightly different
+  //   semantics so two slightly different counts.
   const [
     result,
-    [supplierInvoiceCountRow],
+    [supplierInvoiceLineCountRow],
+    [nonDraftPurchaseCountRow],
     [salesOrderCountRow],
     [salesInvoiceCountRow],
     [customerPriceCountRow],
@@ -107,10 +118,27 @@ export async function getProductById(productId: string) {
         },
       },
     }),
+    // ALL supplier_invoice_lines for this product — feeds dependent-record
+    // count below (includes drafts).
     db
       .select({ count: count() })
       .from(supplierInvoiceLines)
       .where(eq(supplierInvoiceLines.productId, productId)),
+    // Non-draft purchase count — feeds the price-intelligence threshold.
+    db
+      .select({ count: count() })
+      .from(supplierInvoiceLines)
+      .innerJoin(
+        supplierInvoices,
+        eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
+      )
+      .where(
+        and(
+          eq(supplierInvoiceLines.productId, productId),
+          eq(supplierInvoices.tenantId, tenant.id),
+          sql`${supplierInvoices.status} <> 'draft'`,
+        ),
+      ),
     db
       .select({ count: count() })
       .from(salesOrderLines)
@@ -130,16 +158,17 @@ export async function getProductById(productId: string) {
   ]);
 
   if (!result) return null;
-  const supplierInvoiceCount = supplierInvoiceCountRow?.count ?? 0;
+  const supplierInvoiceLineCount = supplierInvoiceLineCountRow?.count ?? 0;
+  const nonDraftPurchaseCount = nonDraftPurchaseCountRow?.count ?? 0;
   const dependentRecordCount =
-    supplierInvoiceCount +
+    supplierInvoiceLineCount +
     (salesOrderCountRow?.count ?? 0) +
     (salesInvoiceCountRow?.count ?? 0) +
     (customerPriceCountRow?.count ?? 0) +
     (supplierCostCountRow?.count ?? 0);
   return {
     ...result,
-    _purchaseCount: supplierInvoiceCount,
+    _purchaseCount: nonDraftPurchaseCount,
     _dependentRecordCount: dependentRecordCount,
   };
 }
@@ -1045,6 +1074,10 @@ export async function getProductRecentPurchases(
       and(
         eq(supplierInvoiceLines.productId, productId),
         eq(supplierInvoices.tenantId, tenant.id),
+        // Drafts are work-in-progress; they shouldn't surface as
+        // "purchases" on the detail page. A draft bill might be edited
+        // or discarded before its numbers are real.
+        sql`${supplierInvoices.status} <> 'draft'`,
       ),
     )
     .orderBy(desc(supplierInvoices.invoiceDate))
@@ -1132,6 +1165,11 @@ export async function getProductPurchaseIntelligence(productId: string) {
       and(
         eq(supplierInvoiceLines.productId, productId),
         eq(supplierInvoices.tenantId, tenant.id),
+        // Drafts are work-in-progress, not purchases — a draft sitting
+        // in the queue shouldn't keep the price-intel threshold stuck
+        // below 3, and a draft's unit-price shouldn't pollute the
+        // running average.
+        sql`${supplierInvoices.status} <> 'draft'`,
       ),
     );
 
@@ -1153,6 +1191,7 @@ export async function getProductPurchaseIntelligence(productId: string) {
       and(
         eq(supplierInvoiceLines.productId, productId),
         eq(supplierInvoices.tenantId, tenant.id),
+        sql`${supplierInvoices.status} <> 'draft'`,
       ),
     )
     .orderBy(desc(supplierInvoices.invoiceDate))
@@ -1176,6 +1215,203 @@ export async function getProductPurchaseIntelligence(productId: string) {
 export type ProductPurchaseIntelligence = NonNullable<
   Awaited<ReturnType<typeof getProductPurchaseIntelligence>>
 >;
+
+/**
+ * Activity timeline for a single product. Returns the shared
+ * `ActivityTimelineItem[]` shape (defined in services/audit.ts) so the
+ * detail page can drop it into the same `<ActivityCard>` component
+ * the order and supplier-invoice detail pages use.
+ *
+ * Two data sources merged + sorted by date desc:
+ *
+ *   1. `audit_log` rows for this product. createProduct / updateProduct
+ *      don't write audit rows today — only the lifecycle verbs
+ *      (archive / restore / delete) and bulk_import do — so this stream
+ *      is sparse but high-signal.
+ *
+ *   2. Derived baseline events from the product's audit columns:
+ *      "Product created" (always emitted), "Product updated" (emitted
+ *      when updatedAt is meaningfully later than createdAt), "Product
+ *      archived" (when archivedAt is set AND the audit_log doesn't
+ *      already cover it; defense against rows archived before the
+ *      audit-log write was wired up).
+ */
+export async function getProductActivity(
+  productId: string,
+): Promise<ActivityTimelineItem[]> {
+  const tenant = await getCurrentTenant();
+
+  const product = await db.query.products.findFirst({
+    where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
+    with: {
+      createdBy: { columns: { id: true, fullName: true, email: true } },
+      updatedBy: { columns: { id: true, fullName: true, email: true } },
+      archivedBy: { columns: { id: true, fullName: true, email: true } },
+    },
+  });
+  if (!product) return [];
+
+  // audit_log rows for the product. resourceType/resourceId is the
+  // logAuditEvent shape (separate table from audit_logs that the
+  // order/bill flow uses).
+  const auditRows = await db
+    .select({
+      id: auditLog.id,
+      action: auditLog.action,
+      occurredAt: auditLog.occurredAt,
+      actorUserId: auditLog.actorUserId,
+      actorEmail: auditLog.actorEmail,
+      actorFullName: portalUsers.fullName,
+      metadata: auditLog.metadata,
+    })
+    .from(auditLog)
+    .leftJoin(portalUsers, eq(auditLog.actorUserId, portalUsers.id))
+    .where(
+      and(
+        eq(auditLog.tenantId, tenant.id),
+        eq(auditLog.resourceType, "product"),
+        eq(auditLog.resourceId, productId),
+      ),
+    )
+    .orderBy(desc(auditLog.occurredAt))
+    .limit(200);
+
+  const auditItems: ActivityTimelineItem[] = auditRows.map(row => ({
+    id: row.id,
+    source: "audit",
+    // No "product" scope in the shared ActivityScope union today —
+    // using "other" keeps the type happy. Adding a dedicated scope
+    // would require touching the order timeline's SCOPE_STYLES too,
+    // which is out of scope for this fix.
+    scope: "other",
+    action: row.action,
+    summary: summarizeProductAudit(row.action, row.metadata),
+    at: row.occurredAt.toISOString(),
+    actor: {
+      id: row.actorUserId,
+      name: row.actorFullName,
+      email: row.actorEmail,
+      type: "portal_user",
+    },
+    entityTable: "products",
+    entityId: productId,
+    entityLabel: product.sku,
+    changedFields: null,
+  }));
+
+  // Derived baseline — "Product created". Always emitted because we
+  // don't yet write an audit_log row for product.create.
+  const derived: ActivityTimelineItem[] = [];
+  derived.push({
+    id: `derived:product-created:${product.id}`,
+    source: "derived",
+    scope: "other",
+    action: "insert",
+    summary: "Product created",
+    at: product.createdAt.toISOString(),
+    actor: {
+      id: product.createdBy?.id ?? null,
+      name: product.createdBy?.fullName ?? null,
+      email: product.createdBy?.email ?? null,
+      type: product.createdBy ? "portal_user" : "system",
+    },
+    entityTable: "products",
+    entityId: product.id,
+    entityLabel: product.sku,
+    changedFields: null,
+  });
+
+  // "Product updated" — emit only when the updatedAt clearly post-dates
+  // the createdAt. The .$onUpdate() trigger bumps updatedAt on every
+  // INSERT too (Drizzle behaviour), so a 0–1s delta is noise.
+  if (
+    product.updatedAt &&
+    product.updatedAt.getTime() - product.createdAt.getTime() > 2000
+  ) {
+    derived.push({
+      id: `derived:product-updated:${product.id}`,
+      source: "derived",
+      scope: "other",
+      action: "update",
+      summary: "Product details updated",
+      at: product.updatedAt.toISOString(),
+      actor: {
+        id: product.updatedBy?.id ?? null,
+        name: product.updatedBy?.fullName ?? null,
+        email: product.updatedBy?.email ?? null,
+        type: product.updatedBy ? "portal_user" : "system",
+      },
+      entityTable: "products",
+      entityId: product.id,
+      entityLabel: product.sku,
+      changedFields: null,
+    });
+  }
+
+  // "Product archived" — only emit when the audit_log row is missing
+  // (e.g. rows archived before audit-log writes existed). Today every
+  // archive call writes a row, so this is mostly defensive.
+  if (
+    product.archivedAt &&
+    !auditItems.some(item => item.action === "product.archive")
+  ) {
+    derived.push({
+      id: `derived:product-archived:${product.id}`,
+      source: "derived",
+      scope: "other",
+      action: "product.archive",
+      summary: "Product archived",
+      at: product.archivedAt.toISOString(),
+      actor: {
+        id: product.archivedBy?.id ?? null,
+        name: product.archivedBy?.fullName ?? null,
+        email: product.archivedBy?.email ?? null,
+        type: product.archivedBy ? "portal_user" : "system",
+      },
+      entityTable: "products",
+      entityId: product.id,
+      entityLabel: product.sku,
+      changedFields: null,
+    });
+  }
+
+  return [...auditItems, ...derived].sort(
+    (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+  );
+}
+
+/**
+ * Per-action summary line for the product audit feed. Keep these
+ * short — the activity card already shows the actor + timestamp
+ * underneath, so the summary just needs the verb + any
+ * subject-of-action that's not implied by the surrounding context.
+ */
+function summarizeProductAudit(
+  action: string,
+  metadata: unknown,
+): string {
+  // metadata is `jsonb` so it lands as `unknown`; narrow defensively.
+  const meta =
+    metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {};
+  switch (action) {
+    case "product.archive":
+      return "Product archived";
+    case "product.restore":
+      return "Product restored";
+    case "product.delete":
+      return "Product deleted permanently";
+    case "product.bulk_import": {
+      const created = typeof meta.created === "number" ? meta.created : null;
+      return created != null
+        ? `Bulk-imported ${created} product${created === 1 ? "" : "s"} (this product included)`
+        : "Bulk import";
+    }
+    default:
+      return action;
+  }
+}
 
 /** Row shape returned by `getProducts()` / `GET /api/products` (for client `import type` only). */
 export type ProductListItem = Awaited<ReturnType<typeof getProducts>>[number];

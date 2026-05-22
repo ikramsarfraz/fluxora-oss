@@ -56,6 +56,7 @@ export const queryKeys = {
       ["products", id, "customer-prices"] as const,
     purchaseIntelligence: (id: string) =>
       ["products", id, "purchase-intelligence"] as const,
+    activity: (id: string) => ["products", id, "activity"] as const,
   },
   unitsOfMeasure: {
     all: ["unitsOfMeasure"] as const,

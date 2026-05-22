@@ -13,6 +13,7 @@ import {
   bulkCreateProducts,
   createProduct,
   findProductImportConflicts,
+  getProductActivity,
   getProductById,
   getProductCustomerPrices,
   getProductInventorySummary,
@@ -60,6 +61,10 @@ export async function getProductCustomerPricesAction(productId: string) {
 
 export async function getProductPurchaseIntelligenceAction(productId: string) {
   return await getProductPurchaseIntelligence(productId);
+}
+
+export async function getProductActivityAction(productId: string) {
+  return await getProductActivity(productId);
 }
 
 export async function previewProductSkuAction(input: {

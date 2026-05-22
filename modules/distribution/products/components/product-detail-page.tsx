@@ -10,18 +10,20 @@ import {
   useArchiveProduct,
   usePermanentlyDeleteProduct,
   useProduct,
+  useProductActivity,
   useProductCustomerPrices,
   useProductInventorySummary,
   useProductPurchaseIntelligence,
   useProductRecentPurchases,
   useRestoreProduct,
 } from "../hooks/use-products";
+import { ActivityCard } from "@/modules/distribution/components/activity-card";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
 } from "../utils/product-uom";
-import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/date";
+import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils";
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -452,6 +454,19 @@ function ProductPriceIntelligenceSection({
   );
 }
 
+/**
+ * Activity card — same shape used by the order and supplier-invoice
+ * detail pages. Wrapped in a thin component so the parent doesn't
+ * pull in `useProductActivity` directly and we can change the data
+ * shape without touching the page-level layout.
+ */
+function ProductActivitySection({ productId }: { productId: string }) {
+  const { data, isLoading, isError } = useProductActivity(productId);
+  return (
+    <ActivityCard items={data} isLoading={isLoading} isError={isError} />
+  );
+}
+
 export function ProductDetailPage({ productId }: { productId: string }) {
   const router = useRouter();
   const {
@@ -661,33 +676,11 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         baseUnitAbbreviation={baseUnitAbbr}
       />
 
-      {/* Activity — audit trail from products.created_by_user_id /
-          products.updated_by_user_id. Rows created before those columns
-          were wired up will show "—" for the actor; the timestamp is
-          always present because the columns are NOT NULL with defaultNow. */}
-      <DetailSection
-        title="Activity"
-        description="Who created this product and when it was last edited."
-      >
-        <DetailGrid>
-          <DetailField label="Created by">
-            {product.createdBy?.fullName ?? product.createdBy?.email ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </DetailField>
-          <DetailField label="Created at">
-            {formatDisplayDateTime(product.createdAt)}
-          </DetailField>
-          <DetailField label="Last edited by">
-            {product.updatedBy?.fullName ?? product.updatedBy?.email ?? (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </DetailField>
-          <DetailField label="Last edited at">
-            {formatDisplayDateTime(product.updatedAt)}
-          </DetailField>
-        </DetailGrid>
-      </DetailSection>
+      {/* Activity — shared timeline card (also used by orders + bills).
+          Combines audit_log rows for this product with derived
+          baseline events from the audit columns. Replaces a previous
+          4-field DetailGrid that didn't match the rest of the app. */}
+      <ProductActivitySection productId={productId} />
 
       {/* Lifecycle — archive (active products), restore (archived
           products), and permanent-delete (only when the product has

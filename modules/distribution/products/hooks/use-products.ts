@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   archiveProductAction,
+  getProductActivityAction,
   getProductByIdAction,
   getProductCustomerPricesAction,
   getProductInventorySummaryAction,
@@ -224,5 +225,18 @@ export function useProductPurchaseIntelligence(productId: string) {
     queryFn: () => getProductPurchaseIntelligenceAction(productId),
     enabled: !!productId && isUuid(productId),
     staleTime: 1000 * 60,
+  });
+}
+
+/**
+ * Audit-log + derived event feed for the product detail page's
+ * Activity card. Mirrors useSalesOrderActivity / useSupplierInvoiceActivity.
+ */
+export function useProductActivity(productId: string) {
+  return useQuery({
+    queryKey: queryKeys.products.activity(productId),
+    queryFn: () => getProductActivityAction(productId),
+    enabled: !!productId && isUuid(productId),
+    staleTime: 1000 * 30,
   });
 }
