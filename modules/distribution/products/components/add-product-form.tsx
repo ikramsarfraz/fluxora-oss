@@ -1068,7 +1068,7 @@ export function AddProductForm(props?: {
                               <FieldHint>
                                 Allow decimal quantities (e.g. 2.5 lb). Turn this
                                 OFF for fixed packs like cases or boxes where a
-                                "half case" doesn&rsquo;t make sense.
+                                &ldquo;half case&rdquo; doesn&rsquo;t make sense.
                               </FieldHint>
                             </label>
                           )}

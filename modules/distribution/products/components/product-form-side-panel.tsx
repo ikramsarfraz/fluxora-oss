@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Box,
   CircleDollarSign,
@@ -91,12 +92,12 @@ export function ProductFormSidePanel() {
         </h3>
         <p className="mt-1 text-xs leading-relaxed text-subtle">
           Add it from the{" "}
-          <a
+          <Link
             href="/units-of-measure"
             className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             units of measure
-          </a>{" "}
+          </Link>{" "}
           admin and it’ll appear in the base-unit and sales-unit pickers,
           grouped by family.
         </p>
