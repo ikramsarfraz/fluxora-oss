@@ -48,6 +48,14 @@ export const queryKeys = {
     detail: (id: string) => ["products", id] as const,
     skuPreview: (name: string, categoryName: string | null) =>
       ["products", "sku-preview", name, categoryName ?? null] as const,
+    inventorySummary: (id: string) =>
+      ["products", id, "inventory-summary"] as const,
+    recentPurchases: (id: string) =>
+      ["products", id, "recent-purchases"] as const,
+    customerPrices: (id: string) =>
+      ["products", id, "customer-prices"] as const,
+    purchaseIntelligence: (id: string) =>
+      ["products", id, "purchase-intelligence"] as const,
   },
   unitsOfMeasure: {
     all: ["unitsOfMeasure"] as const,

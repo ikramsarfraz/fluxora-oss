@@ -14,6 +14,10 @@ import {
   createProduct,
   findProductImportConflicts,
   getProductById,
+  getProductCustomerPrices,
+  getProductInventorySummary,
+  getProductPurchaseIntelligence,
+  getProductRecentPurchases,
   getProducts,
   getProductsPage,
   permanentlyDeleteProduct,
@@ -34,6 +38,28 @@ export async function getProductsPageAction(input?: ProductListParams) {
 
 export async function getProductByIdAction(id: string) {
   return await getProductById(id);
+}
+
+// ── Detail-page section data ────────────────────────────────────────────────
+// Pure read-only actions. Each maps 1:1 to a service function and feeds a
+// dedicated React Query hook on the detail page (see hooks/use-products.ts).
+// Kept separate from getProductByIdAction so the detail page can lazy-load
+// each section's data without blocking the headline render.
+
+export async function getProductInventorySummaryAction(productId: string) {
+  return await getProductInventorySummary(productId);
+}
+
+export async function getProductRecentPurchasesAction(productId: string) {
+  return await getProductRecentPurchases(productId);
+}
+
+export async function getProductCustomerPricesAction(productId: string) {
+  return await getProductCustomerPrices(productId);
+}
+
+export async function getProductPurchaseIntelligenceAction(productId: string) {
+  return await getProductPurchaseIntelligence(productId);
 }
 
 export async function previewProductSkuAction(input: {

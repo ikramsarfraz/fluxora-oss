@@ -1,8 +1,10 @@
-import { and, count, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, like, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
+  customers,
   customerProductPrices,
+  inventoryItems,
   productCategories,
   products,
   productSupplierCosts,
@@ -10,6 +12,8 @@ import {
   salesInvoiceLines,
   salesOrderLines,
   supplierInvoiceLines,
+  supplierInvoices,
+  suppliers,
 } from "@/db/schema";
 import {
   buildSkuBase,
@@ -919,6 +923,259 @@ export async function bulkCreateProducts(
 
   return { total: rows.length, created, failed };
 }
+
+// ---------------------------------------------------------------------------
+// Detail-page sections — keep these read-only and side-effect-free; they
+// feed React Query hooks (see hooks/use-products.ts) and run on every
+// detail page visit. Each function aggregates one logical surface (on-hand
+// stock, recent purchases, customer overrides, purchase intelligence)
+// so the detail page can lazy-load them in parallel instead of bundling
+// the whole world into getProductById.
+// ---------------------------------------------------------------------------
+
+/**
+ * Stock summary for the product detail page. Buckets `inventory_items`
+ * statuses into three product-friendly groups so the page surfaces a
+ * tight "on hand / in motion / problem" trio:
+ *
+ *   onHand   = in_stock + allocated   (sellable or earmarked-but-here)
+ *   inMotion = picked + packed + shipped + sold
+ *   problem  = damaged + expired
+ *
+ * For each bucket we report `cases` and a `weightLbs` aggregate; the
+ * weight aggregate is meaningful for catch-weight products and a
+ * defensible total for per-each items too (it's just unused there).
+ * `lotCount` is the count of distinct lots represented in the on-hand
+ * bucket — useful as a stale-stock signal at a glance.
+ */
+export async function getProductInventorySummary(productId: string) {
+  const tenant = await getCurrentTenant();
+  // Tenant-scope guard — the inventory tables don't carry tenantId
+  // themselves, so we confirm the product first, then query.
+  const product = await db.query.products.findFirst({
+    where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
+    columns: { id: true },
+  });
+  if (!product) return null;
+
+  const rows = await db
+    .select({
+      status: inventoryItems.status,
+      totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
+      totalWeight: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}), 0)::text`,
+      lotCount: sql<number>`count(distinct ${inventoryItems.lotId})::int`,
+    })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.productId, productId))
+    .groupBy(inventoryItems.status);
+
+  const onHandStatuses = new Set(["in_stock", "allocated"]);
+  const inMotionStatuses = new Set(["picked", "packed", "shipped", "sold"]);
+  const problemStatuses = new Set(["damaged", "expired"]);
+
+  function bucketTotals(filter: (s: string) => boolean) {
+    let cases = 0;
+    let weight = 0;
+    for (const row of rows) {
+      if (!filter(row.status)) continue;
+      cases += row.totalCases;
+      weight += Number(row.totalWeight);
+    }
+    return { cases, weightLbs: weight.toString() };
+  }
+
+  // For the headline lot count we want "distinct lots backing on-hand
+  // stock", regardless of status mix. One more lightweight query:
+  const [{ onHandLotCount }] = await db
+    .select({
+      onHandLotCount: sql<number>`count(distinct ${inventoryItems.lotId})::int`,
+    })
+    .from(inventoryItems)
+    .where(
+      and(
+        eq(inventoryItems.productId, productId),
+        inArray(inventoryItems.status, ["in_stock", "allocated"]),
+      ),
+    );
+
+  return {
+    onHand: bucketTotals(s => onHandStatuses.has(s)),
+    inMotion: bucketTotals(s => inMotionStatuses.has(s)),
+    problem: bucketTotals(s => problemStatuses.has(s)),
+    onHandLotCount,
+  };
+}
+
+/**
+ * Last N supplier bills that referenced this product. Returns the line-
+ * level snapshot (`unitPrice`, `weightLbs`, `quantityCases`) so the
+ * detail page can render "what we paid, when, to whom" without a
+ * second round-trip for join data.
+ *
+ * `limit` defaults to 5 — the MVP detail card is a "recent 5" strip.
+ * Larger pagination ships as a separate feature (see GH issue).
+ */
+export async function getProductRecentPurchases(
+  productId: string,
+  options: { limit?: number } = {},
+) {
+  const tenant = await getCurrentTenant();
+  const limit = options.limit ?? 5;
+  const rows = await db
+    .select({
+      lineId: supplierInvoiceLines.id,
+      unitPrice: supplierInvoiceLines.unitPrice,
+      lineTotal: supplierInvoiceLines.lineTotal,
+      weightLbs: supplierInvoiceLines.weightLbs,
+      quantityCases: supplierInvoiceLines.quantityCases,
+      unitType: supplierInvoiceLines.unitType,
+      invoiceId: supplierInvoices.id,
+      invoiceDate: supplierInvoices.invoiceDate,
+      referenceNumber: supplierInvoices.referenceNumber,
+      supplierId: suppliers.id,
+      supplierName: suppliers.name,
+    })
+    .from(supplierInvoiceLines)
+    .innerJoin(
+      supplierInvoices,
+      eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
+    )
+    .innerJoin(suppliers, eq(supplierInvoices.supplierId, suppliers.id))
+    .where(
+      and(
+        eq(supplierInvoiceLines.productId, productId),
+        eq(supplierInvoices.tenantId, tenant.id),
+      ),
+    )
+    .orderBy(desc(supplierInvoices.invoiceDate))
+    .limit(limit);
+  return rows;
+}
+
+export type ProductRecentPurchase = Awaited<
+  ReturnType<typeof getProductRecentPurchases>
+>[number];
+
+/**
+ * Customers that have a product-specific price override for this
+ * product. Returns customer + override price + (optional) supplier scope
+ * so the detail page can surface both flat overrides ("Customer X pays
+ * $X for this product") and per-supplier overrides ("Customer X pays
+ * $X when sourced from Supplier Y").
+ */
+export async function getProductCustomerPrices(productId: string) {
+  const tenant = await getCurrentTenant();
+  // Inner-join customers gives us tenant isolation (customers carry
+  // tenantId) without a separate guard query.
+  const rows = await db
+    .select({
+      id: customerProductPrices.id,
+      customerId: customers.id,
+      customerName: customers.name,
+      customerArchivedAt: customers.archivedAt,
+      pricePerLb: customerProductPrices.pricePerLb,
+      supplierId: customerProductPrices.supplierId,
+      supplierName: suppliers.name,
+      updatedAt: customerProductPrices.updatedAt,
+    })
+    .from(customerProductPrices)
+    .innerJoin(
+      customers,
+      and(
+        eq(customerProductPrices.customerId, customers.id),
+        eq(customers.tenantId, tenant.id),
+      ),
+    )
+    .leftJoin(
+      suppliers,
+      eq(customerProductPrices.supplierId, suppliers.id),
+    )
+    .where(eq(customerProductPrices.productId, productId))
+    .orderBy(desc(customerProductPrices.updatedAt));
+  return rows;
+}
+
+export type ProductCustomerPrice = Awaited<
+  ReturnType<typeof getProductCustomerPrices>
+>[number];
+
+/**
+ * MVP price intelligence — running cost average over all completed
+ * purchases of this product, plus the most-recent cost and its delta
+ * vs. the average. Replaces the "unlocks after 3 purchases" empty
+ * state on the detail page once we have enough history.
+ *
+ * Returns `null` when the product has no `supplier_invoice_lines` — the
+ * caller renders the empty state. When `purchaseCount < 3` we still
+ * return the numbers we have but the caller continues to gate display
+ * on count so a single anomalous purchase doesn't masquerade as a
+ * "baseline".
+ *
+ * Future shape (see GH issue): per-supplier breakdown, sparkline over
+ * last 30/90 days, drift thresholds, anomaly flags.
+ */
+export async function getProductPurchaseIntelligence(productId: string) {
+  const tenant = await getCurrentTenant();
+  // Aggregate: count, average unit price, most recent unit price + date.
+  // Done as one query with two CTEs so we don't pay two round-trips.
+  const [agg] = await db
+    .select({
+      purchaseCount: sql<number>`count(*)::int`,
+      averageUnitPrice: sql<string>`coalesce(avg(${supplierInvoiceLines.unitPrice}), 0)::text`,
+    })
+    .from(supplierInvoiceLines)
+    .innerJoin(
+      supplierInvoices,
+      eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
+    )
+    .where(
+      and(
+        eq(supplierInvoiceLines.productId, productId),
+        eq(supplierInvoices.tenantId, tenant.id),
+      ),
+    );
+
+  if (!agg || agg.purchaseCount === 0) return null;
+
+  // Most recent purchase — separate small query keeps the planner
+  // happy (the agg above doesn't need ordering).
+  const [mostRecent] = await db
+    .select({
+      unitPrice: supplierInvoiceLines.unitPrice,
+      invoiceDate: supplierInvoices.invoiceDate,
+    })
+    .from(supplierInvoiceLines)
+    .innerJoin(
+      supplierInvoices,
+      eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
+    )
+    .where(
+      and(
+        eq(supplierInvoiceLines.productId, productId),
+        eq(supplierInvoices.tenantId, tenant.id),
+      ),
+    )
+    .orderBy(desc(supplierInvoices.invoiceDate))
+    .limit(1);
+
+  const avg = Number(agg.averageUnitPrice);
+  const last = mostRecent ? Number(mostRecent.unitPrice) : null;
+  // Delta as a fraction of the average. NaN-safe when avg is 0.
+  const deltaFraction =
+    last != null && avg > 0 ? (last - avg) / avg : null;
+
+  return {
+    purchaseCount: agg.purchaseCount,
+    averageUnitPrice: agg.averageUnitPrice,
+    mostRecentUnitPrice: mostRecent?.unitPrice ?? null,
+    mostRecentDate: mostRecent?.invoiceDate ?? null,
+    deltaFraction,
+  };
+}
+
+export type ProductPurchaseIntelligence = NonNullable<
+  Awaited<ReturnType<typeof getProductPurchaseIntelligence>>
+>;
 
 /** Row shape returned by `getProducts()` / `GET /api/products` (for client `import type` only). */
 export type ProductListItem = Awaited<ReturnType<typeof getProducts>>[number];

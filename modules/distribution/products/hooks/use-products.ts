@@ -5,6 +5,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   archiveProductAction,
   getProductByIdAction,
+  getProductCustomerPricesAction,
+  getProductInventorySummaryAction,
+  getProductPurchaseIntelligenceAction,
+  getProductRecentPurchasesAction,
   getProductsAction,
   getProductsPageAction,
   permanentlyDeleteProductAction,
@@ -171,5 +175,54 @@ export function useProductSkuPreview(
     // preview can be a little stale without hurting anything, since the
     // service retries on actual SKU collisions at insert time.
     staleTime: 1000 * 30,
+  });
+}
+
+// ── Detail-page section hooks ──────────────────────────────────────────────
+// Each section gets its own short-staleTime query so the detail page can
+// render the product headline immediately and stream in the four heavier
+// surfaces (inventory / purchases / customer prices / intel) in parallel.
+
+/** On-hand / in-motion / problem stock buckets for the detail page. */
+export function useProductInventorySummary(productId: string) {
+  return useQuery({
+    queryKey: queryKeys.products.inventorySummary(productId),
+    queryFn: () => getProductInventorySummaryAction(productId),
+    enabled: !!productId && isUuid(productId),
+    staleTime: 1000 * 60,
+  });
+}
+
+/** Last 5 supplier bills referencing this product. */
+export function useProductRecentPurchases(productId: string) {
+  return useQuery({
+    queryKey: queryKeys.products.recentPurchases(productId),
+    queryFn: () => getProductRecentPurchasesAction(productId),
+    enabled: !!productId && isUuid(productId),
+    staleTime: 1000 * 60,
+  });
+}
+
+/** Customer-specific price overrides for this product. */
+export function useProductCustomerPrices(productId: string) {
+  return useQuery({
+    queryKey: queryKeys.products.customerPrices(productId),
+    queryFn: () => getProductCustomerPricesAction(productId),
+    enabled: !!productId && isUuid(productId),
+    staleTime: 1000 * 60,
+  });
+}
+
+/**
+ * MVP price intelligence — running average + most recent cost + delta.
+ * Returns null when there's no purchase history; the detail page
+ * renders the empty-state placeholder in that case.
+ */
+export function useProductPurchaseIntelligence(productId: string) {
+  return useQuery({
+    queryKey: queryKeys.products.purchaseIntelligence(productId),
+    queryFn: () => getProductPurchaseIntelligenceAction(productId),
+    enabled: !!productId && isUuid(productId),
+    staleTime: 1000 * 60,
   });
 }
