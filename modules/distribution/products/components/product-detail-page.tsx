@@ -9,6 +9,7 @@ import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
 } from "../utils/product-uom";
+import { formatDisplayDateTime } from "@/lib/utils/date";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
@@ -218,6 +219,34 @@ export function ProductDetailPage({ productId }: { productId: string }) {
           />
         </DetailSection>
       )}
+
+      {/* Activity — audit trail from products.created_by_user_id /
+          products.updated_by_user_id. Rows created before those columns
+          were wired up will show "—" for the actor; the timestamp is
+          always present because the columns are NOT NULL with defaultNow. */}
+      <DetailSection
+        title="Activity"
+        description="Who created this product and when it was last edited."
+      >
+        <DetailGrid>
+          <DetailField label="Created by">
+            {product.createdBy?.fullName ?? product.createdBy?.email ?? (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </DetailField>
+          <DetailField label="Created at">
+            {formatDisplayDateTime(product.createdAt)}
+          </DetailField>
+          <DetailField label="Last edited by">
+            {product.updatedBy?.fullName ?? product.updatedBy?.email ?? (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </DetailField>
+          <DetailField label="Last edited at">
+            {formatDisplayDateTime(product.updatedAt)}
+          </DetailField>
+        </DetailGrid>
+      </DetailSection>
 
       {/* Danger zone */}
       <DetailSection

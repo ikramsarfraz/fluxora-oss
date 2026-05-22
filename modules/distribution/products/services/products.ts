@@ -91,6 +91,16 @@ export async function getProductById(productId: string) {
           with: { unit: true },
         },
         baseUnit: true,
+        // Audit columns — surfaced as "Created by … on …" + "Last edited by … on …"
+        // on the detail page. Columns are populated by createProduct /
+        // updateProduct via getCurrentPortalUser(); legacy rows from before
+        // those writes were wired up will have nullable relations.
+        createdBy: {
+          columns: { id: true, fullName: true, email: true },
+        },
+        updatedBy: {
+          columns: { id: true, fullName: true, email: true },
+        },
       },
     }),
     db
