@@ -227,14 +227,18 @@ test("convertAiLineToPrefill: catch_weight still carries unitOfMeasure as empty 
 });
 
 // ---------------------------------------------------------------------------
-// Pack size (unitsPerPackage) extraction — the AI flow's contribution to
-// the inventory rollup math. Per_unit lines need the pack size so 5
-// cases of a 24-pack reads as 120 base units, not 5.
+// Pack size — pulled deterministically from the AI's
+// `vendorProductDescription` via the regex extractor. The AI used to
+// emit a structured `unitsPerPackage` field, but that broke OpenAI's
+// strict structured-output reliability on real bills; the regex
+// extractor reads the same phrase the model already copies into the
+// description.
 // ---------------------------------------------------------------------------
 
-test("convertAiLineToPrefill: per_unit carries the AI-extracted pack size", () => {
+test("convertAiLineToPrefill: per_unit pulls pack size from description regex", () => {
   const { line } = convertAiLineToPrefill({
-    vendorProductName: "COCA-COLA 12PK CASE",
+    vendorProductName: "COCA-COLA",
+    vendorProductDescription: "12 (12 oz) cans per case",
     quantityCases: 5,
     quantityWeight: null,
     caseWeights: null,
@@ -242,17 +246,32 @@ test("convertAiLineToPrefill: per_unit carries the AI-extracted pack size", () =
     lineTotal: 49.95,
     unitType: "per_unit",
     unitOfMeasure: "case",
-    unitsPerPackage: 12,
   });
   assert.equal(line.unitsPerPackage, "12");
 });
 
-test("convertAiLineToPrefill: per_unit without AI pack size falls back to 1", () => {
+test("convertAiLineToPrefill: per_unit handles 'case of N' phrasing", () => {
+  const { line } = convertAiLineToPrefill({
+    vendorProductName: "BEEF FRANKS",
+    vendorProductDescription: "case of 12",
+    quantityCases: 4,
+    quantityWeight: null,
+    caseWeights: null,
+    unitPrice: 38.5,
+    lineTotal: 154,
+    unitType: "per_unit",
+    unitOfMeasure: "case",
+  });
+  assert.equal(line.unitsPerPackage, "12");
+});
+
+test("convertAiLineToPrefill: per_unit without pack phrase falls back to 1", () => {
   // AI can't always read the pack size off the invoice (label only says
   // "5 cases" with no per-case quantity). Fall back to "1" so the form
   // has a valid value; the user overrides in the PricingTypeTray.
   const { line } = convertAiLineToPrefill({
     vendorProductName: "WATER CASE",
+    vendorProductDescription: null,
     quantityCases: 10,
     quantityWeight: null,
     caseWeights: null,
@@ -260,16 +279,17 @@ test("convertAiLineToPrefill: per_unit without AI pack size falls back to 1", ()
     lineTotal: 45,
     unitType: "per_unit",
     unitOfMeasure: "case",
-    unitsPerPackage: null,
   });
   assert.equal(line.unitsPerPackage, "1");
 });
 
-test("convertAiLineToPrefill: per_each forces pack size to 1 regardless of AI value", () => {
-  // Even if the model misclassifies, per_each lines mean "one inventory
-  // row IS one base unit" — never multiply by a pack factor.
+test("convertAiLineToPrefill: per_each forces pack size to 1 regardless of description", () => {
+  // Per_each lines mean "one inventory row IS one base unit" — never
+  // multiply by a pack factor, even if a pack phrase is in the
+  // description (would just be informational).
   const { line } = convertAiLineToPrefill({
     vendorProductName: "CANDY BAR",
+    vendorProductDescription: "12 per box",
     quantityCases: 24,
     quantityWeight: null,
     caseWeights: null,
@@ -277,24 +297,6 @@ test("convertAiLineToPrefill: per_each forces pack size to 1 regardless of AI va
     lineTotal: 30,
     unitType: "per_each",
     unitOfMeasure: "ea",
-    unitsPerPackage: 12, // ignored
-  });
-  assert.equal(line.unitsPerPackage, "1");
-});
-
-test("convertAiLineToPrefill: per_unit with garbage pack size falls back to 1", () => {
-  // Defensive — the validator should already clamp these, but the
-  // conversion stays safe even if a stale fixture sneaks through.
-  const { line } = convertAiLineToPrefill({
-    vendorProductName: "BAD CASE",
-    quantityCases: 3,
-    quantityWeight: null,
-    caseWeights: null,
-    unitPrice: 5,
-    lineTotal: 15,
-    unitType: "per_unit",
-    unitOfMeasure: "case",
-    unitsPerPackage: -7,
   });
   assert.equal(line.unitsPerPackage, "1");
 });

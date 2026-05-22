@@ -57,20 +57,22 @@ const AiInvoiceLineSchema = z.object({
    * breaking the strict-output schema requirements.
    */
   unitOfMeasure: z.string().nullable(),
-  /**
-   * Pack size — how many base units are inside one purchase unit.
-   *   12-pack of soda  → 12
-   *   24-pack of water → 24
-   *   loose single-can → 1
-   * Required for per_unit lines so inventory math knows that 5 cases
-   * of a 24-pack = 120 base units, not 5. Null for weight modes (the
-   * "pack" is implicit in the weight). The validator clamps negative
-   * / non-integer values to null so a bad model output can't poison
-   * inventory totals.
-   */
-  unitsPerPackage: z.number().nullable(),
   notes: z.string().nullable(),
 });
+
+// NOTE on pack size:
+// We previously asked the AI to emit `unitsPerPackage` as a top-level
+// schema field. The strict structured-output binding intermittently
+// returned a null/empty response on real bills with that field present
+// (suspect: model output exceeded the response-format constraints when
+// the prompt also grew the unitOfMeasure + per_each/per_unit guidance).
+// Moved to a deterministic regex pass on `vendorProductDescription` in
+// `extractPackSizeFromDescription` (utils/pack-size.ts) so the AI's
+// contract stays minimal AND we still recover the pack size from
+// patterns the prompt already encourages it to keep in the description
+// ("24 (11 oz) cans per case", "12 PK", "case of 24"). The product's
+// default purchase-unit conversion still pre-fills the form when the
+// description doesn't carry the pack info.
 
 /**
  * Fee taxonomy. Meat invoices typically carry a small finite set of
@@ -172,9 +174,6 @@ function backfillOptionalLineFields(raw: unknown): unknown {
       // prompts and fixtures don't emit it, so default to null so strict
       // schema validation still passes.
       if (!("unitOfMeasure" in next)) next.unitOfMeasure = null;
-      // unitsPerPackage was added later for per_unit pack-size capture;
-      // backfill the same way so older fixtures continue to validate.
-      if (!("unitsPerPackage" in next)) next.unitsPerPackage = null;
       return next;
     });
   }
@@ -232,24 +231,11 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
     return uomAllowlist.has(trimmed.toLowerCase()) ? trimmed : null;
   }
 
-  /**
-   * Pack-size sanitizer. Reject anything that isn't a positive
-   * integer ≥ 1 — a model that guesses "0.5" or "-2" must not be
-   * allowed to poison the inventory rollup downstream. We also cap
-   * absurdly large values (> 10,000) because a case bigger than that
-   * is almost certainly a misread of weight or price.
-   */
-  function sanitizeUnitsPerPackage(
-    raw: unknown,
-    unitType: ValidatedExtractionResult["lines"][number]["unitType"],
-  ): number | null {
-    // Weight modes never carry pack size — null regardless of input.
-    if (unitType === "catch_weight" || unitType === "fixed_case") return null;
-    if (raw == null) return null;
-    const n = typeof raw === "number" ? raw : Number(raw);
-    if (!Number.isFinite(n) || n < 1 || n > 10_000) return null;
-    return Math.round(n);
-  }
+  // Pack-size sanitizer was inlined here when we briefly asked the AI
+  // for `unitsPerPackage` as a top-level schema field. That broke
+  // OpenAI's strict structured-output reliability on real bills, so
+  // pack-size now lives in a deterministic regex pass over
+  // `vendorProductDescription` — see `extractPackSizeFromDescription`.
 
   // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
   // whose length disagrees with quantityCases (likely a model misread).
@@ -268,10 +254,6 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         : description;
 
     const unitOfMeasure = sanitizeUnitOfMeasure(line.unitOfMeasure);
-    const unitsPerPackage = sanitizeUnitsPerPackage(
-      line.unitsPerPackage,
-      line.unitType,
-    );
 
     const raw = line.caseWeights ?? null;
     if (raw === null) {
@@ -280,7 +262,6 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
-        unitsPerPackage,
       };
     }
 
@@ -291,7 +272,6 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
-        unitsPerPackage,
       };
     }
 
@@ -303,7 +283,6 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
-        unitsPerPackage,
       };
     }
 
@@ -312,7 +291,6 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
       vendorProductDescription: dedupedDescription,
       caseWeights: filtered,
       unitOfMeasure,
-      unitsPerPackage,
     };
   });
 

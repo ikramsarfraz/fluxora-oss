@@ -1,10 +1,19 @@
 // Pure conversion from AI-extracted invoice lines into the form's prefill
 // shape. No server-only imports — safe for tests.
 
+import { extractPackSizeFromDescription } from "./pack-size";
 import type { SupplierInvoicePdfPrefillLine } from "./pdf-prefill";
 
 export type AiLineLike = {
   vendorProductName: string;
+  /**
+   * Free-text description the AI carries from the bill (e.g.
+   * "24 (11 oz) cans per case"). Used to recover pack size via
+   * `extractPackSizeFromDescription` since we no longer ask the AI
+   * for a structured `unitsPerPackage` field (that broke OpenAI's
+   * strict structured-output reliability on real bills).
+   */
+  vendorProductDescription?: string | null;
   quantityCases: number | null;
   quantityWeight: number | null;
   caseWeights?: number[] | null;
@@ -13,14 +22,6 @@ export type AiLineLike = {
   unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit" | null;
   /** Optional UOM abbreviation from the AI; passed through to the form. */
   unitOfMeasure?: string | null;
-  /**
-   * Pack size extracted by the AI (e.g. 12 for a 12-pack case). Drives
-   * `unitsPerPackage` on the prefill line so the inventory rollup math
-   * (cases × pack) works without manual re-entry on the bill form.
-   * Null when the AI couldn't determine it — the line still prefills,
-   * the user just overrides the pack size in the form.
-   */
-  unitsPerPackage?: number | null;
 };
 
 export type AiLineConversion = {
@@ -71,14 +72,17 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
   if (unitType === "per_each" || unitType === "per_unit") {
     // Pack size:
     //  - per_each → always 1 (one inventory row IS one base unit)
-    //  - per_unit → use the AI's extracted pack size when present;
-    //    fall back to 1 so the form has a sane default the user can
-    //    override in the PricingTypeTray.
-    const aiPack = Number(line.unitsPerPackage ?? 0);
+    //  - per_unit → run a regex over `vendorProductDescription` to
+    //    pick up "24 (11 oz) cans per case" / "12 PK" patterns. The
+    //    AI used to emit this as a structured field but the extra
+    //    schema slot intermittently caused empty responses; deriving
+    //    it deterministically here is safer.
+    const regexPack =
+      unitType === "per_unit"
+        ? extractPackSizeFromDescription(line.vendorProductDescription)
+        : null;
     const unitsPerPackage =
-      unitType === "per_unit" && Number.isFinite(aiPack) && aiPack > 0
-        ? String(aiPack)
-        : "1";
+      regexPack != null && regexPack > 0 ? String(regexPack) : "1";
     return {
       line: {
         productId: "",
