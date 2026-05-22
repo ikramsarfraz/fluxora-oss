@@ -175,6 +175,15 @@ export type ProductMatchCandidate = {
   sku: string | null;
   categoryNames?: string[];
   knownAliases?: string[];
+  /**
+   * Family of the product's base UOM ("weight" / "count" / "volume" / …).
+   * Used by the family-aware scorer to penalize cross-family suggestions
+   * — e.g. matching a "SALAM COLA" beverage line against the "JUMBO
+   * CHICKEN TENDER" meat product (which scored ~40% on partial-word
+   * overlap before this gate). Null falls through to the legacy
+   * meat-signal scoring path.
+   */
+  baseUnitFamily?: "weight" | "count" | "volume" | "length" | "other" | null;
 };
 
 export type ProductMatchResult = {
@@ -320,6 +329,76 @@ export async function matchProductsMultiStage(args: {
   return results;
 }
 
+/**
+ * Lower-case keyword sets the deterministic scorer uses to guess the
+ * UoM family of a vendor product name. Keeps the family-mismatch
+ * penalty conservative — when none of these fire, the legacy scoring
+ * runs unchanged, preserving the meat-distributor behavior.
+ */
+const NON_WEIGHT_NAME_KEYWORDS = new Set([
+  "cola",
+  "soda",
+  "pepsi",
+  "coke",
+  "water",
+  "juice",
+  "tea",
+  "coffee",
+  "milk",
+  "energy drink",
+  "redbull",
+  "monster",
+  "lemonade",
+  "yemonade",
+  "sprite",
+  "bottle",
+  "can",
+  "carton",
+  "jug",
+  "gallon",
+  "liter",
+  "litre",
+  "yogurt",
+  "labneh",
+  "cheese block",
+  "honey",
+  "oil",
+  "syrup",
+  "sauce",
+  "vinegar",
+  "spice",
+  "salt",
+  "pepper",
+  "snack",
+  "chips",
+  "cookie",
+  "candy",
+  "chocolate",
+  "cracker",
+  "bread",
+  "pita",
+]);
+
+/**
+ * Cheap family inference from the vendor name. We can't run the full
+ * meat-signal scorer here because vendor names like "WATER BOTTLE" or
+ * "SALAM COLA 12 PK" don't have species/cut/bone signals — but their
+ * keywords clearly identify the family. Returns null when the name
+ * doesn't trip any keyword, falling through to the legacy scorer.
+ */
+function inferVendorNameFamily(
+  vendorName: string,
+): "weight" | "count" | "volume" | null {
+  const lower = vendorName.toLowerCase();
+  // Volume keywords win when present — "milk gallon" is volume even if
+  // the catalog tags it as count.
+  if (/\b(gal|gallon|liter|litre|fl\s*oz|ml)\b/.test(lower)) return "volume";
+  for (const kw of NON_WEIGHT_NAME_KEYWORDS) {
+    if (lower.includes(kw)) return "count";
+  }
+  return null;
+}
+
 function matchProductDeterministic(
   vendorName: string,
   aliasMap: Map<string, ProductAlias>,
@@ -357,15 +436,35 @@ function matchProductDeterministic(
     }
   }
 
-  // Stage 3: fuzzy match — score every candidate, keep top 5
+  // Stage 3: fuzzy match — score every candidate, keep top 5.
+  // Family mismatch is a hard disqualifier: when the vendor name
+  // clearly belongs to a non-weight family (beverages, oils, snacks)
+  // and the candidate product's base UOM is weight, drop the score
+  // to 0 so we don't suggest a meat product for a soda line. Falls
+  // through to legacy behavior when:
+  //   - the vendor name doesn't trip any family keyword (returns null), or
+  //   - the candidate doesn't carry a baseUnitFamily (null), or
+  //   - both sides agree on family
+  const vendorFamily = inferVendorNameFamily(vendorName);
   const scored = candidates
-    .map(p => ({
-      product: p,
-      score: Math.max(
+    .map(p => {
+      const rawScore = Math.max(
         fuzzyScore(vendorName, p.name),
         p.sku ? fuzzyScore(vendorName, p.sku) : 0,
-      ),
-    }))
+      );
+      // Cross-family veto: vendor name says non-weight, candidate is
+      // weight (or vice versa via "other"). Drop to 0 so the candidate
+      // never appears in topCandidates and never auto-matches.
+      const familyConflict =
+        vendorFamily != null &&
+        p.baseUnitFamily != null &&
+        ((vendorFamily === "count" || vendorFamily === "volume") &&
+          p.baseUnitFamily === "weight");
+      return {
+        product: p,
+        score: familyConflict ? 0 : rawScore,
+      };
+    })
     .filter(x => x.score > 0)
     .sort((a, b) => b.score - a.score);
 

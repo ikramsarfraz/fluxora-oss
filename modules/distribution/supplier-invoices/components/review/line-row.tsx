@@ -253,7 +253,11 @@ export function LineRow({
                 ))
               : null}
             <CreateNewButton onClick={onCreateNew} />
-            {onToggleWeightEditor ? (
+            {/* Weight chip only renders for catch-weight lines — fixed-case,
+                per_each, and per_unit lines (line.fixed === true) carry no
+                meaningful per-case weight, so showing "Set weights" on a
+                beverage / case-priced line just confuses the user. */}
+            {onToggleWeightEditor && !line.fixed ? (
               <WeightChipButton
                 isOpen={isWeightEditorOpen === true}
                 hasOverride={weightEditorState != null}
@@ -278,7 +282,10 @@ export function LineRow({
         {!isFee &&
         isWeightEditorOpen === true &&
         weightEditorState != null &&
-        onWeightEditorChange ? (
+        onWeightEditorChange &&
+        !line.fixed ? (
+          // Same fixed-vs-catch gate as the chip above — never render
+          // the weight tray inline for a non-catch-weight line.
           <LineWeightEditor
             quantityCases={line.cases}
             state={weightEditorState}

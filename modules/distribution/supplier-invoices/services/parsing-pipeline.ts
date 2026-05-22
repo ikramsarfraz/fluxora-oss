@@ -6,7 +6,15 @@ import { findRowForLine } from "../utils/match-line-to-pdf-row";
 import { eq, and, isNull, inArray, desc, ne } from "drizzle-orm";
 
 import { db } from "@/db";
-import { products, suppliers, productCategories, categories, supplierInvoices, supplierInvoiceLines } from "@/db/schema";
+import {
+  products,
+  suppliers,
+  productCategories,
+  categories,
+  supplierInvoices,
+  supplierInvoiceLines,
+  unitsOfMeasure,
+} from "@/db/schema";
 import {
   parseSupplierInvoicePdfText,
   type SupplierInvoicePdfPrefillResult,
@@ -279,15 +287,24 @@ export async function runParsingPipeline(args: {
     return buildScannedPdfResult(sourceFilename);
   }
 
-  // Load tenant data — products with their category names in one round-trip
+  // Load tenant data — products with their category names in one round-trip.
+  // Left-join units_of_measure so each product candidate carries the base
+  // UOM family — drives the family-aware veto in the deterministic match
+  // scorer (no weight-family meat suggestions for beverage lines).
   const [supplierRows, productRows, categoryRows] = await Promise.all([
     db
       .select({ id: suppliers.id, name: suppliers.name })
       .from(suppliers)
       .where(eq(suppliers.tenantId, tenantId)),
     db
-      .select({ id: products.id, name: products.name, sku: products.sku })
+      .select({
+        id: products.id,
+        name: products.name,
+        sku: products.sku,
+        baseUnitFamily: unitsOfMeasure.family,
+      })
       .from(products)
+      .leftJoin(unitsOfMeasure, eq(unitsOfMeasure.id, products.baseUnitId))
       .where(and(eq(products.tenantId, tenantId), isNull(products.archivedAt))),
     db
       .select({ productId: productCategories.productId, categoryName: categories.name })
@@ -305,9 +322,14 @@ export async function runParsingPipeline(args: {
     categoryMap.set(row.productId, names);
   }
 
-  // Enrich products with category names
+  // Enrich products with category names + carry baseUnitFamily forward
+  // so the matcher's family-aware veto can suppress meat suggestions
+  // for beverage lines (and vice versa).
   const richProductRows: ProductMatchCandidate[] = productRows.map(p => ({
-    ...p,
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+    baseUnitFamily: p.baseUnitFamily,
     categoryNames: categoryMap.get(p.id),
   }));
 
