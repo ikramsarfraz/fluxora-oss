@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateSku } from "./product-sku-utils";
+import { buildSkuBase } from "../utils/sku";
 import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -85,7 +85,7 @@ import { createProductAction, updateProductAction } from "@/modules/distribution
 import { createCategoryAction } from "@/modules/distribution/categories/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
-import { useProducts } from "../hooks/use-products";
+import { useProductSkuPreview } from "../hooks/use-products";
 import {
   isLimitReachedMessage,
   stripSubscriptionEnforcementPrefix,
@@ -435,6 +435,55 @@ function NewCategoryDialog({ onCreated }: { onCreated: (id: string) => void }) {
   );
 }
 
+/**
+ * Static line below the Name field. In create mode shows what SKU the
+ * product will get (resolved against the live catalog so two simultaneous
+ * creates can't pick the same `-NN`). In edit mode shows the locked SKU.
+ * Stays silent until the user has typed a name AND picked a category, so
+ * the form doesn't show a half-formed "OTH-XYZ-…" preview that would only
+ * confuse non-meat tenants.
+ */
+function SkuPreviewLine(props: {
+  mode: "create" | "edit";
+  editingProduct: ProductDetail | undefined;
+  name: string;
+  firstCategorySelected: boolean;
+  previewValue: string | null;
+  isLoading: boolean;
+}) {
+  if (props.mode === "edit" && props.editingProduct) {
+    return (
+      <FieldDescription>
+        <span className="text-subtle">SKU:</span>{" "}
+        <code className="font-mono text-[11px] text-ink">
+          {props.editingProduct.sku}
+        </code>{" "}
+        <span className="text-subtle">(locked)</span>
+      </FieldDescription>
+    );
+  }
+  if (props.mode !== "create") return null;
+  if (!props.name.trim() || !props.firstCategorySelected) {
+    return (
+      <FieldDescription>
+        SKU is generated from the name + first category once both are set.
+      </FieldDescription>
+    );
+  }
+  return (
+    <FieldDescription>
+      <span className="text-subtle">SKU preview:</span>{" "}
+      {props.isLoading || !props.previewValue ? (
+        <span className="text-subtle">resolving…</span>
+      ) : (
+        <code className="font-mono text-[11px] text-ink">
+          {props.previewValue}
+        </code>
+      )}
+    </FieldDescription>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main form
 // ---------------------------------------------------------------------------
@@ -468,7 +517,6 @@ export function AddProductForm(props?: {
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const { data: productCategories } = useCategories();
-  const { data: products } = useProducts();
   const { data: unitsOfMeasure } = useUnitsOfMeasure();
 
   // Memoize so the form only resets when the underlying data actually
@@ -505,13 +553,31 @@ export function AddProductForm(props?: {
 
   const baseUnitId = useWatch({ control: form.control, name: "baseUnitId" });
   const salesUnits = useWatch({ control: form.control, name: "salesUnits" });
+  const watchedName = useWatch({ control: form.control, name: "name" });
+  const watchedCategoryIds = useWatch({
+    control: form.control,
+    name: "categoryIds",
+  });
+  const firstCategoryName =
+    (productCategories ?? []).find(c => c.id === watchedCategoryIds?.[0])
+      ?.name ?? null;
   const baseUnit = (unitsOfMeasure ?? []).find(u => u.id === baseUnitId);
   const baseUnitAbbreviation = baseUnit?.abbreviation ?? "";
+
+  // Server-driven SKU preview — only in create mode, since edit keeps the
+  // existing SKU. The hook gates on a non-empty name internally.
+  const skuPreviewQuery = useProductSkuPreview(
+    mode === "create" ? (watchedName ?? "") : "",
+    firstCategoryName,
+  );
 
   async function onSubmit(data: AddProductFormValues) {
     setMutationError(null);
     try {
-      // Edit keeps the existing SKU; create always auto-generates.
+      // Edit keeps the existing SKU; create uses the most recent server
+      // preview — and on the off-chance the preview hasn't resolved yet,
+      // submits a starter SKU that the service will retry against the
+      // unique index if it collides.
       let sku: string;
       if (mode === "edit" && product) {
         sku = product.sku;
@@ -519,7 +585,9 @@ export function AddProductForm(props?: {
         const firstCat = productCategories?.find(
           c => c.id === data.categoryIds[0],
         );
-        sku = generateSku(data.name, firstCat?.name ?? "", products);
+        sku =
+          skuPreviewQuery.data ??
+          `${buildSkuBase(data.name, firstCat?.name ?? null)}-01`;
       }
       const payload = {
         sku,
@@ -619,6 +687,14 @@ export function AddProductForm(props?: {
                     id="form-add-product-name"
                     aria-invalid={fieldState.invalid}
                     placeholder="e.g. Beef Ribeye"
+                  />
+                  <SkuPreviewLine
+                    mode={mode}
+                    editingProduct={product}
+                    name={watchedName ?? ""}
+                    firstCategorySelected={Boolean(watchedCategoryIds?.length)}
+                    previewValue={skuPreviewQuery.data ?? null}
+                    isLoading={skuPreviewQuery.isFetching}
                   />
                   {fieldState.invalid && (
                     <FieldError errors={[fieldState.error]} />

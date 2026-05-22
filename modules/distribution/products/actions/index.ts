@@ -11,6 +11,7 @@ import {
   getProductById,
   getProducts,
   getProductsPage,
+  previewProductSku,
   updateProduct,
   type ProductListParams,
 } from "../services/products";
@@ -25,6 +26,13 @@ export async function getProductsPageAction(input?: ProductListParams) {
 
 export async function getProductByIdAction(id: string) {
   return await getProductById(id);
+}
+
+export async function previewProductSkuAction(input: {
+  name: string;
+  categoryName?: string | null;
+}) {
+  return await previewProductSku(input);
 }
 
 export async function createProductAction(input: {

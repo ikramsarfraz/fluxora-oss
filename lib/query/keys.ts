@@ -46,6 +46,8 @@ export const queryKeys = {
     all: ["products"] as const,
     list: (params: unknown) => ["products", "list", params] as const,
     detail: (id: string) => ["products", id] as const,
+    skuPreview: (name: string, categoryName: string | null) =>
+      ["products", "sku-preview", name, categoryName ?? null] as const,
   },
   unitsOfMeasure: {
     all: ["unitsOfMeasure"] as const,
