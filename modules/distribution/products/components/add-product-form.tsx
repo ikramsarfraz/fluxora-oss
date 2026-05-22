@@ -778,8 +778,13 @@ export function AddProductForm(props?: {
               name="baseUnitId"
               control={form.control}
               render={({ field, fieldState }) => {
+                // Lock the base unit once ANY dependent record exists — not
+                // just bills. Sales-order lines, sales-invoice lines,
+                // customer-specific prices, and supplier-cost snapshots all
+                // store amounts/quantities in the product's base unit; if we
+                // swap it out from under them, history reinterprets silently.
                 const baseUnitLocked = Boolean(
-                  product && (product._purchaseCount ?? 0) > 0,
+                  product && (product._dependentRecordCount ?? 0) > 0,
                 );
                 return (
                   <Field data-invalid={fieldState.invalid}>
@@ -830,7 +835,7 @@ export function AddProductForm(props?: {
                     </Select>
                     <FieldDescription>
                       {baseUnitLocked
-                        ? "Locked — this product has existing bills. Changing the base unit would reinterpret stored prices and costs."
+                        ? "Locked — this product has orders, invoices, prices, or bills referencing it. Changing the base unit would reinterpret stored amounts."
                         : "Prices, costs, and inventory totals are tracked in this unit. Sales units below convert to this base."}
                     </FieldDescription>
                     {fieldState.invalid && (

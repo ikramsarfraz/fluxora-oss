@@ -2,9 +2,13 @@ import { and, count, eq, inArray, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   categories,
+  customerProductPrices,
   productCategories,
   products,
+  productSupplierCosts,
   productUnits,
+  salesInvoiceLines,
+  salesOrderLines,
   supplierInvoiceLines,
 } from "@/db/schema";
 import {
@@ -63,7 +67,20 @@ function isProductSkuCollision(error: unknown): boolean {
 
 export async function getProductById(productId: string) {
   const tenant = await getCurrentTenant();
-  const [result, [purchaseCountRow]] = await Promise.all([
+  // Count each table the product is referenced from. `_purchaseCount` is
+  // specifically supplier_invoice_lines because the price-intelligence
+  // empty state is about purchase history. `_dependentRecordCount`
+  // aggregates every reference that would be invalidated by changing
+  // the base unit (orders/invoices/customer prices/supplier costs/bills)
+  // — used by the form to lock the base-unit picker.
+  const [
+    result,
+    [supplierInvoiceCountRow],
+    [salesOrderCountRow],
+    [salesInvoiceCountRow],
+    [customerPriceCountRow],
+    [supplierCostCountRow],
+  ] = await Promise.all([
     db.query.products.findFirst({
       where: and(eq(products.id, productId), eq(products.tenantId, tenant.id)),
       with: {
@@ -80,10 +97,37 @@ export async function getProductById(productId: string) {
       .select({ count: count() })
       .from(supplierInvoiceLines)
       .where(eq(supplierInvoiceLines.productId, productId)),
+    db
+      .select({ count: count() })
+      .from(salesOrderLines)
+      .where(eq(salesOrderLines.productId, productId)),
+    db
+      .select({ count: count() })
+      .from(salesInvoiceLines)
+      .where(eq(salesInvoiceLines.productId, productId)),
+    db
+      .select({ count: count() })
+      .from(customerProductPrices)
+      .where(eq(customerProductPrices.productId, productId)),
+    db
+      .select({ count: count() })
+      .from(productSupplierCosts)
+      .where(eq(productSupplierCosts.productId, productId)),
   ]);
 
   if (!result) return null;
-  return { ...result, _purchaseCount: purchaseCountRow?.count ?? 0 };
+  const supplierInvoiceCount = supplierInvoiceCountRow?.count ?? 0;
+  const dependentRecordCount =
+    supplierInvoiceCount +
+    (salesOrderCountRow?.count ?? 0) +
+    (salesInvoiceCountRow?.count ?? 0) +
+    (customerPriceCountRow?.count ?? 0) +
+    (supplierCostCountRow?.count ?? 0);
+  return {
+    ...result,
+    _purchaseCount: supplierInvoiceCount,
+    _dependentRecordCount: dependentRecordCount,
+  };
 }
 
 export type ProductDetail = NonNullable<
