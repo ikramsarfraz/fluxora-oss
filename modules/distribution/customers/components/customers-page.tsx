@@ -24,7 +24,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   ListingAction,
+  ListingErrorState,
   ListingPage,
+  ListingSecondaryAction,
   MonoText,
   type ListingColumn,
 } from "@/components/listing-page";
@@ -227,12 +229,10 @@ export default function Customers() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
@@ -321,29 +321,19 @@ export default function Customers() {
           pagination.setFilter("archived", value as CustomerArchivedFilter)
         }
         secondaryActions={
-          <div style={{ display: "inline-flex", gap: 6 }}>
-            <button
+          <>
+            <ListingSecondaryAction
               onClick={handleExportCsv}
               disabled={exporting}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
-                borderRadius: 6, fontSize: 13, fontWeight: 500,
-                cursor: exporting ? "wait" : "pointer",
-                opacity: exporting ? 0.6 : 1,
-                background: "var(--color-card)", color: "var(--color-subtle)",
-                border: "1px solid var(--color-border-default)", fontFamily: "inherit",
-              }}
             >
-              <Download size={13} /> {exporting ? "Exporting…" : "Export CSV"}
-            </button>
-            <button onClick={openImport} style={{
-              display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
-              borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
-              background: "var(--color-card)", color: "var(--color-subtle)", border: "1px solid var(--color-border-default)", fontFamily: "inherit",
-            }}>
-              <Upload size={13} /> Import CSV
-            </button>
-          </div>
+              <Download className="size-3.5" />
+              {exporting ? "Exporting…" : "Export CSV"}
+            </ListingSecondaryAction>
+            <ListingSecondaryAction onClick={openImport}>
+              <Upload className="size-3.5" />
+              Import CSV
+            </ListingSecondaryAction>
+          </>
         }
         primaryAction={
           <ListingAction href="/customers/new">

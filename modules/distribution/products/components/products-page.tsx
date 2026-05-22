@@ -16,7 +16,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import {
+  ListingAction,
+  ListingErrorState,
+  ListingPage,
+  ListingSecondaryAction,
+  MonoText,
+  type ListingColumn,
+} from "@/components/listing-page";
 import { useDeleteProduct, useProductsPage } from "../hooks/use-products";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import {
@@ -88,12 +95,10 @@ export default function Products() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
@@ -104,13 +109,10 @@ export default function Products() {
         title="Products"
         subtitle="Manage your product catalog."
         secondaryActions={
-          <button onClick={openImport} style={{
-            display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
-            borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: "pointer",
-            background: "var(--color-card)", color: "var(--color-subtle)", border: "1px solid var(--color-border-default)", fontFamily: "inherit",
-          }}>
-            <Upload size={13} /> Import CSV
-          </button>
+          <ListingSecondaryAction onClick={openImport}>
+            <Upload className="size-3.5" />
+            Import CSV
+          </ListingSecondaryAction>
         }
         primaryAction={
           <ListingAction href="/products/new">
