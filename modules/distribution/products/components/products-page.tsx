@@ -32,6 +32,7 @@ import {
   restoreProductAction,
 } from "@/modules/distribution/products/actions";
 import { useProductsPage } from "../hooks/use-products";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { queryKeys } from "@/lib/query/keys";
 import {
@@ -116,6 +117,14 @@ export default function Products() {
     null,
   );
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("products");
+
+  // UI side of the lifecycle permission gate. Hides Archive / Restore /
+  // Delete-permanently row actions for non-admins so they don't click
+  // an affordance only to get a "Forbidden" toast back. The server
+  // actions still enforce via requireAdminPortalUser as defense-in-depth.
+  const { data: currentUser } = useCurrentPortalUser();
+  const canManageLifecycle =
+    currentUser?.role === "admin" || currentUser?.role === "owner";
 
   const pagination = useUrlPaginationState<
     ProductListSort,
@@ -246,18 +255,18 @@ export default function Products() {
           { label: "View", href: row => `/products/${row.id}` },
           {
             label: "Archive",
-            isVisible: row => !row.archivedAt,
+            isVisible: row => canManageLifecycle && !row.archivedAt,
             onClick: row => setLifecycleTarget({ action: "archive", product: row }),
           },
           {
             label: "Restore",
-            isVisible: row => !!row.archivedAt,
+            isVisible: row => canManageLifecycle && !!row.archivedAt,
             onClick: row => setLifecycleTarget({ action: "restore", product: row }),
           },
           {
             label: "Delete permanently",
             variant: "destructive",
-            isVisible: row => !!row.archivedAt,
+            isVisible: row => canManageLifecycle && !!row.archivedAt,
             onClick: row =>
               setLifecycleTarget({ action: "permanent-delete", product: row }),
           },

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { logAuditEvent } from "@/lib/audit-log";
-import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import { requireAdminPortalUser } from "@/modules/shared/services/portal-users";
 
 import {
   archiveProduct,
@@ -81,8 +81,11 @@ export async function updateProductAction(input: {
 }
 
 export async function archiveProductAction(productId: string) {
+  // Defensible default until the role matrix is wired up: only
+  // owners and admins can move products through the lifecycle.
+  // requireAdminPortalUser throws "Forbidden" before any side effect.
   const [user, product] = await Promise.all([
-    getCurrentPortalUser(),
+    requireAdminPortalUser(),
     getProductById(productId),
   ]);
   const result = await archiveProduct(productId);
@@ -102,7 +105,7 @@ export async function archiveProductAction(productId: string) {
 
 export async function restoreProductAction(productId: string) {
   const [user, product] = await Promise.all([
-    getCurrentPortalUser(),
+    requireAdminPortalUser(),
     getProductById(productId),
   ]);
   const result = await restoreProduct(productId);
@@ -122,7 +125,7 @@ export async function restoreProductAction(productId: string) {
 
 export async function permanentlyDeleteProductAction(productId: string) {
   const [user, product] = await Promise.all([
-    getCurrentPortalUser(),
+    requireAdminPortalUser(),
     getProductById(productId),
   ]);
   const result = await permanentlyDeleteProduct(productId);
