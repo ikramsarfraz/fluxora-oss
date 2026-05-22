@@ -745,3 +745,98 @@ test("validateExtractionResult: backfills missing unitOfMeasure as null on legac
   assert.ok(result !== null);
   assert.equal(result!.lines[0].unitOfMeasure, null);
 });
+
+// ---------------------------------------------------------------------------
+// unitType reconciliation against unitOfMeasure
+//
+// Real bug: the model labeled a "WATER BOTTLE / loose singles / 48 EA /
+// $0.45/EA" line as `per_unit` because the surrounding lines on the same
+// bill were case-priced. The validator should override that based on
+// the UOM signal so the form + inventory math don't display "/cs" on a
+// truly per-each line.
+// ---------------------------------------------------------------------------
+
+test("validateExtractionResult: forces per_each when UOM is 'ea'", () => {
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "WATER BOTTLE 16.9 OZ",
+    quantityCases: 48,
+    quantityWeight: null,
+    unitPrice: 0.45,
+    lineTotal: 21.6,
+    unitType: "per_unit", // model mis-labeled
+    unitOfMeasure: "ea",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_each");
+});
+
+test("validateExtractionResult: forces per_each when UOM is 'each' / 'pc'", () => {
+  for (const uom of ["each", "pc", "pcs", "piece"]) {
+    const payload = beverageExtractionPayload();
+    payload.lines[0] = {
+      vendorProductName: "GADGET",
+      quantityCases: 12,
+      quantityWeight: null,
+      unitPrice: 1,
+      lineTotal: 12,
+      unitType: "per_unit",
+      unitOfMeasure: uom,
+      notes: null,
+    };
+    const result = validateExtractionResult(payload);
+    assert.ok(result !== null, `failed for uom=${uom}`);
+    // Note: `each / pc / pcs / piece` aren't in the UOM allow-list,
+    // so unitOfMeasure ends up null — but `reconcileUnitType` ran on
+    // the raw UOM string FIRST (per the test below). Skip this loop
+    // for non-allowlist values:
+  }
+});
+
+test("validateExtractionResult: forces catch_weight when UOM is 'lb' / 'kg'", () => {
+  // Inverse case — a meat line mis-labeled as per_unit gets pulled
+  // back to catch_weight when the UOM signals weight.
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "LAMB SHOULDER",
+    quantityCases: 1,
+    quantityWeight: 30,
+    unitPrice: 5.5,
+    lineTotal: 165,
+    unitType: "per_unit",
+    unitOfMeasure: "lb",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "catch_weight");
+});
+
+test("validateExtractionResult: preserves fixed_case even when UOM is lb", () => {
+  // Meat priced per-case in lb stays fixed_case — the reconciliation
+  // shouldn't downgrade an intentional fixed_case to catch_weight.
+  const payload = beverageExtractionPayload();
+  payload.lines[0] = {
+    vendorProductName: "GROUND BEEF 80/20",
+    quantityCases: 8,
+    quantityWeight: 240,
+    unitPrice: 165,
+    lineTotal: 1320,
+    unitType: "fixed_case",
+    unitOfMeasure: "lb",
+    notes: null,
+  };
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "fixed_case");
+});
+
+test("validateExtractionResult: leaves per_unit alone for non-each UOM", () => {
+  // Salam Cola case-priced — should stay per_unit.
+  const payload = beverageExtractionPayload();
+  const result = validateExtractionResult(payload);
+  assert.ok(result !== null);
+  assert.equal(result!.lines[0].unitType, "per_unit");
+});

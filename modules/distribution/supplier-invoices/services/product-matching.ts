@@ -257,14 +257,38 @@ export async function matchProductsMultiStage(args: {
     const prescored = selectTopCandidatesForMatching(unresolvedNames, enrichedCandidates);
     const aiCandidates = prescored.map(ps => ps.candidate);
 
-    // Build top candidates debug info per vendor name
+    // Build top candidates debug info per vendor name.
+    // Apply the same family veto as the deterministic fuzzy path so a
+    // beverage line doesn't surface meat candidates with "-30%" scores
+    // just because the meat-signal scorer happened to penalise them
+    // less than the model would have. Also drop negative-score
+    // candidates entirely — they're noise to the user (we already
+    // know the line isn't that product).
     const topCandidatesMap = new Map<string, Array<{ id: string; name: string; score: number }>>();
     for (const vendorName of unresolvedNames) {
+      const vendorFamily = inferVendorNameFamily(vendorName);
       const vs = extractMeatProductSignals(vendorName);
-      const scored = aiCandidates.map(c => {
-        const { score } = scoreCandidateAgainstSignals(vs, extractMeatProductSignals(c.name), c.id);
-        return { id: c.id, name: c.name, score };
-      });
+      const scored = aiCandidates
+        .map(c => {
+          const { score } = scoreCandidateAgainstSignals(
+            vs,
+            extractMeatProductSignals(c.name),
+            c.id,
+          );
+          // Same family-conflict rule as Stage 3 below — drop
+          // weight-family candidates for non-weight vendor names.
+          const familyConflict =
+            vendorFamily != null &&
+            c.baseUnitFamily != null &&
+            ((vendorFamily === "count" || vendorFamily === "volume") &&
+              c.baseUnitFamily === "weight");
+          return {
+            id: c.id,
+            name: c.name,
+            score: familyConflict ? -999 : score,
+          };
+        })
+        .filter(x => x.score > 0);
       scored.sort((a, b) => b.score - a.score);
       topCandidatesMap.set(vendorName, scored.slice(0, 5));
     }

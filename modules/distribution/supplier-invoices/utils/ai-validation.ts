@@ -237,6 +237,41 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
   // pack-size now lives in a deterministic regex pass over
   // `vendorProductDescription` — see `extractPackSizeFromDescription`.
 
+  /**
+   * Reconcile `unitType` against the line's other signals. The model
+   * sometimes labels a loose-single line as `per_unit` even though
+   * the UOM is "ea" or the rate clearly says "/ea" — most often
+   * happens when the surrounding lines on the same bill are case-
+   * priced and the prompt's "default to per_unit when a pack is
+   * implied" guidance leaks across. Resolving here keeps the bill
+   * form's display + the inventory rollup math correct without
+   * relying on the user to fix every per_each line by hand.
+   *
+   *   - unitOfMeasure ∈ {ea, each, pc, pcs, piece} → force per_each
+   *   - unitOfMeasure ∈ {lb, lbs, kg, oz} → force catch_weight
+   *   - otherwise: leave the model's label alone
+   */
+  function reconcileUnitType(
+    unitType: ValidatedExtractionResult["lines"][number]["unitType"],
+    unitOfMeasure: string | null,
+  ): ValidatedExtractionResult["lines"][number]["unitType"] {
+    const uom = (unitOfMeasure ?? "").trim().toLowerCase();
+    if (
+      uom === "ea" ||
+      uom === "each" ||
+      uom === "pc" ||
+      uom === "pcs" ||
+      uom === "piece"
+    ) {
+      return "per_each";
+    }
+    if (uom === "lb" || uom === "lbs" || uom === "kg" || uom === "oz") {
+      // Don't override fixed_case — meat can be priced per-case in lb.
+      return unitType === "fixed_case" ? "fixed_case" : "catch_weight";
+    }
+    return unitType;
+  }
+
   // Normalize each line's caseWeights: `undefined` → `null`, and drop arrays
   // whose length disagrees with quantityCases (likely a model misread).
   // Also collapse whitespace-only descriptions to null so the UI never has
@@ -254,6 +289,7 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         : description;
 
     const unitOfMeasure = sanitizeUnitOfMeasure(line.unitOfMeasure);
+    const unitType = reconcileUnitType(line.unitType, unitOfMeasure);
 
     const raw = line.caseWeights ?? null;
     if (raw === null) {
@@ -262,6 +298,7 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
+        unitType,
       };
     }
 
@@ -272,6 +309,7 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
+        unitType,
       };
     }
 
@@ -283,6 +321,7 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
         vendorProductDescription: dedupedDescription,
         caseWeights: null,
         unitOfMeasure,
+        unitType,
       };
     }
 
@@ -291,6 +330,7 @@ export function validateExtractionResult(raw: unknown): ValidatedExtractionResul
       vendorProductDescription: dedupedDescription,
       caseWeights: filtered,
       unitOfMeasure,
+      unitType,
     };
   });
 
