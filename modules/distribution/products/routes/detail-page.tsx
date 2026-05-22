@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getProductById, getProducts } from "../services/products";
+import { getProductById } from "../services/products";
 
 import { ProductDetailPage } from "../components/product-detail-page";
 
@@ -28,13 +28,6 @@ export default async function ProductsDetailPage({
   } catch {
     notFound();
   }
-
-  await queryClient
-    .prefetchQuery({
-      queryKey: queryKeys.products.all,
-      queryFn: getProducts,
-    })
-    .catch(() => {});
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

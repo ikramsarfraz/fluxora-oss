@@ -527,8 +527,13 @@ export function AddProductForm(props?: {
         mode === "edit" && product
           ? await updateProductAction({ id: product.id, ...payload })
           : await createProductAction(payload);
-      queryClient.invalidateQueries({ queryKey: ["products"] });
-      queryClient.invalidateQueries({ queryKey: ["price-chart"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      if (mode === "edit" && product) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.detail(product.id),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
       invalidateSetupChecklistQuery(queryClient);
       toast.success(mode === "edit" ? "Product updated." : "Product created.");
       if (props?.onCreated) {

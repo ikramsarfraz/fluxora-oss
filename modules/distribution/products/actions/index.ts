@@ -42,7 +42,9 @@ export async function createProductAction(input: {
     sortOrder?: number;
   }[];
 }) {
-  return await createProduct(input);
+  const product = await createProduct(input);
+  revalidatePath("/products");
+  return product;
 }
 
 export async function updateProductAction(input: {
