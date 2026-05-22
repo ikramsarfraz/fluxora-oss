@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CsvImportModal, useCsvImportModal } from "@/modules/distribution/onboarding/components/csv-import-modal";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   AlertDialog,
@@ -16,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import {
   ListingAction,
   ListingErrorState,
@@ -24,13 +26,23 @@ import {
   MonoText,
   type ListingColumn,
 } from "@/components/listing-page";
-import { useDeleteProduct, useProductsPage } from "../hooks/use-products";
+import {
+  archiveProductAction,
+  permanentlyDeleteProductAction,
+  restoreProductAction,
+} from "@/modules/distribution/products/actions";
+import { useProductsPage } from "../hooks/use-products";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
+import { queryKeys } from "@/lib/query/keys";
 import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
 } from "../utils/product-uom";
-import type { ProductListItem, ProductListSort } from "../services/products";
+import type {
+  ProductArchivedFilter,
+  ProductListItem,
+  ProductListSort,
+} from "../services/products";
 
 type ProductRow = ProductListItem;
 
@@ -47,7 +59,19 @@ const COLUMNS: ListingColumn<ProductRow>[] = [
     header: "Name",
     sortKey: "name",
     render: row => ({
-      primary: <span style={{ fontWeight: 500 }}>{row.name}</span>,
+      primary: (
+        <span className="inline-flex items-center gap-1.5 font-medium">
+          {row.name}
+          {row.archivedAt ? (
+            <Badge
+              variant="secondary"
+              className="h-5 rounded-full px-1.5 text-[10px] font-medium uppercase tracking-wide"
+            >
+              Archived
+            </Badge>
+          ) : null}
+        </span>
+      ),
       secondary: row.productCategories?.map(c => c.category.name).join(", ") || undefined,
     }),
   },
@@ -73,15 +97,36 @@ const COLUMNS: ListingColumn<ProductRow>[] = [
   },
 ];
 
+const STATUS_SEGMENTS = [
+  { value: "active", label: "Active" },
+  { value: "archived", label: "Archived" },
+] as const;
+
+type LifecycleAction = "archive" | "restore" | "permanent-delete";
+
+type LifecycleTarget = {
+  action: LifecycleAction;
+  product: ProductRow;
+};
+
 export default function Products() {
   const router = useRouter();
-  const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null);
+  const queryClient = useQueryClient();
+  const [lifecycleTarget, setLifecycleTarget] = useState<LifecycleTarget | null>(
+    null,
+  );
   const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("products");
 
-  const pagination = useUrlPaginationState<ProductListSort>({
+  const pagination = useUrlPaginationState<
+    ProductListSort,
+    { archived: ProductArchivedFilter }
+  >({
     defaultSort: "createdAt",
     defaultDirection: "desc",
+    defaultFilters: { archived: "active" },
   });
+
+  const archivedFilter = pagination.filters.archived ?? "active";
 
   const { data, isLoading, isFetching, error, refetch } = useProductsPage({
     page: pagination.page,
@@ -89,9 +134,8 @@ export default function Products() {
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
+    archived: archivedFilter,
   });
-
-  const deleteProduct = useDeleteProduct();
 
   if (error) {
     return (
@@ -102,12 +146,87 @@ export default function Products() {
     );
   }
 
+  function lifecycleCopy(target: LifecycleTarget) {
+    switch (target.action) {
+      case "archive":
+        return {
+          title: "Archive product",
+          description: (
+            <>
+              Archive <strong>{target.product.name}</strong>? It’ll be hidden
+              from order and receiving pickers, but historical lines, prices,
+              and bills stay intact. You can restore it later from the
+              Archived tab.
+            </>
+          ),
+          confirm: "Archive",
+          // Archive is reversible (Restore lives one tab over), but it's
+          // still a removal-flavored action — use the destructive theme
+          // color so it's visually distinct from Restore.
+          variant: "destructive" as const,
+        };
+      case "restore":
+        return {
+          title: "Restore product",
+          description: (
+            <>
+              Restore <strong>{target.product.name}</strong>? It’ll be
+              selectable again on new orders and receiving.
+            </>
+          ),
+          confirm: "Restore",
+          variant: "default" as const,
+        };
+      case "permanent-delete":
+        return {
+          title: "Delete permanently",
+          description: (
+            <>
+              Delete <strong>{target.product.name}</strong> permanently?
+              This can’t be undone. If the product has any orders,
+              invoices, prices, or bills, the delete will fail — archive
+              it instead.
+            </>
+          ),
+          confirm: "Delete permanently",
+          variant: "destructive" as const,
+        };
+    }
+  }
+
+  async function runLifecycleAction(target: LifecycleTarget) {
+    const { action, product } = target;
+    try {
+      if (action === "archive") {
+        await archiveProductAction(product.id);
+        toast.success("Product archived.");
+      } else if (action === "restore") {
+        await restoreProductAction(product.id);
+        toast.success("Product restored.");
+      } else {
+        await permanentlyDeleteProductAction(product.id);
+        toast.success("Product deleted.");
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed.");
+    }
+    setLifecycleTarget(null);
+  }
+
+  const copy = lifecycleTarget ? lifecycleCopy(lifecycleTarget) : null;
+
   return (
     <>
       <CsvImportModal importType="products" open={importOpen} onClose={closeImport} />
       <ListingPage
         title="Products"
         subtitle="Manage your product catalog."
+        statusSegments={[...STATUS_SEGMENTS]}
+        activeSegment={archivedFilter}
+        onSegmentChange={value =>
+          pagination.setFilter("archived", value as ProductArchivedFilter)
+        }
         secondaryActions={
           <ListingSecondaryAction onClick={openImport}>
             <Upload className="size-3.5" />
@@ -125,20 +244,42 @@ export default function Products() {
         onRowClick={row => router.push(`/products/${row.id}`)}
         rowActions={[
           { label: "View", href: row => `/products/${row.id}` },
-          { label: "Delete", variant: "destructive", onClick: row => setDeletingProduct(row) },
+          {
+            label: "Archive",
+            isVisible: row => !row.archivedAt,
+            onClick: row => setLifecycleTarget({ action: "archive", product: row }),
+          },
+          {
+            label: "Restore",
+            isVisible: row => !!row.archivedAt,
+            onClick: row => setLifecycleTarget({ action: "restore", product: row }),
+          },
+          {
+            label: "Delete permanently",
+            variant: "destructive",
+            isVisible: row => !!row.archivedAt,
+            onClick: row =>
+              setLifecycleTarget({ action: "permanent-delete", product: row }),
+          },
         ]}
         rows={data?.data ?? []}
         total={data?.total ?? 0}
         isLoading={isLoading}
         isFetching={isFetching}
         searchPlaceholder="Search products, SKU…"
-        emptyTitle="No products yet"
-        emptyDescription="Get started by adding your first product to the catalog."
+        emptyTitle={archivedFilter === "archived" ? "No archived products" : "No products yet"}
+        emptyDescription={
+          archivedFilter === "archived"
+            ? "When you archive a product, it’ll show up here."
+            : "Get started by adding your first product to the catalog."
+        }
         emptyAction={
-          <ListingAction href="/products/new">
-            <Plus className="size-3.5" />
-            Add product
-          </ListingAction>
+          archivedFilter === "active" ? (
+            <ListingAction href="/products/new">
+              <Plus className="size-3.5" />
+              Add product
+            </ListingAction>
+          ) : undefined
         }
         page={data?.page ?? pagination.page}
         pageSize={data?.pageSize ?? pagination.pageSize}
@@ -152,28 +293,27 @@ export default function Products() {
         onSortChange={(key, dir) => pagination.setSort(key as ProductListSort, dir)}
       />
 
-      <AlertDialog open={!!deletingProduct} onOpenChange={open => { if (!open) setDeletingProduct(null); }}>
+      <AlertDialog
+        open={!!lifecycleTarget}
+        onOpenChange={open => {
+          if (!open) setLifecycleTarget(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete product</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete <strong>{deletingProduct?.name}</strong>? This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{copy?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{copy?.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              variant={copy?.variant}
               onClick={() => {
-                if (!deletingProduct) return;
-                deleteProduct.mutate(deletingProduct.id, {
-                  onSuccess: () => toast.success("Product deleted."),
-                  onError: (e: Error) => toast.error(e.message),
-                });
-                setDeletingProduct(null);
+                if (!lifecycleTarget) return;
+                void runLifecycleAction(lifecycleTarget);
               }}
             >
-              Delete
+              {copy?.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

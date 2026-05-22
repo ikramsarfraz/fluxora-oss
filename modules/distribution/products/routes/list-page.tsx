@@ -5,7 +5,11 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
-import { getProductsPage, type ProductListParams } from "../services/products";
+import {
+  getProductsPage,
+  type ProductArchivedFilter,
+  type ProductListParams,
+} from "../services/products";
 import { queryKeys } from "@/lib/query/keys";
 import { ListPageSkeleton } from "@/components/loading-skeletons";
 
@@ -17,6 +21,7 @@ type SearchParams = Promise<{
   search?: string;
   sort?: string;
   direction?: string;
+  archived?: string;
 }>;
 
 function parsePositiveInt(value: string | undefined, fallback: number) {
@@ -30,6 +35,12 @@ const SORT_KEYS = new Set<ProductListParams["sort"]>([
   "name",
   "defaultPricePerLb",
   "createdAt",
+]);
+
+const ARCHIVED_FILTERS = new Set<ProductArchivedFilter>([
+  "active",
+  "archived",
+  "all",
 ]);
 
 export default async function ProductsListPage({
@@ -51,6 +62,11 @@ export default async function ProductsListPage({
         ? (params.sort as ProductListParams["sort"])
         : "createdAt",
     direction: params.direction === "asc" ? "asc" : "desc",
+    archived:
+      params.archived &&
+      ARCHIVED_FILTERS.has(params.archived as ProductArchivedFilter)
+        ? (params.archived as ProductArchivedFilter)
+        : "active",
   };
 
   const queryClient = new QueryClient();
