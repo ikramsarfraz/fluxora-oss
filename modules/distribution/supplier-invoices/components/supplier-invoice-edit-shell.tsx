@@ -44,6 +44,12 @@ export function SupplierInvoiceEditShell({
         unitPrice: String(line.unitPrice ?? "0"),
         purchaseUnitAbbreviation:
           line.purchaseUnitAbbreviationSnapshot ?? "",
+        // Restore the pack-size snapshot when editing a draft so the
+        // user sees the original "Units per package" they entered, not
+        // a blank "1" default.
+        unitsPerPackage: line.conversionToBaseSnapshot
+          ? String(line.conversionToBaseSnapshot)
+          : "1",
         lotNumberOverride: "",
         expirationDateOverride: "",
       })),

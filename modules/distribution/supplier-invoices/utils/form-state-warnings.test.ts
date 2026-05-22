@@ -18,6 +18,7 @@ function makeLine(productId: string): SupplierInvoicePdfPrefillLine {
     caseWeightEntries: [""],
     unitPrice: "5",
     purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

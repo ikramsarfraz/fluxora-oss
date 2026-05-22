@@ -652,6 +652,13 @@ export function SupplierInvoiceForm({
           unitType: line.unitType,
           unitPrice: line.unitPrice || "0",
           caseWeightsLbs: serializeDraftCaseWeights(line),
+          // Carry unit-aware fields through to the server. The receiving
+          // service snapshots both onto supplier_invoice_lines so the
+          // bill detail page and any future inventory-explosion feature
+          // can recover the "12 ea per case" pack size at read time.
+          purchaseUnitAbbreviation:
+            line.purchaseUnitAbbreviation?.trim() || null,
+          unitsPerPackage: line.unitsPerPackage?.trim() || null,
           lotNumberOverride: line.lotNumberOverride?.trim() || null,
           expirationDateOverride: line.expirationDateOverride?.trim() || null,
         }));
@@ -867,6 +874,10 @@ export function SupplierInvoiceForm({
       unitType: line.unitType,
       unitPrice: line.unitPrice || "0",
       caseWeightsLbs: serializeDraftCaseWeights(line),
+      // Same as the autosave path above — propagate the UOM + pack
+      // size so the server snapshots the conversion for inventory math.
+      purchaseUnitAbbreviation: line.purchaseUnitAbbreviation?.trim() || null,
+      unitsPerPackage: line.unitsPerPackage?.trim() || null,
       lotNumberOverride: line.lotNumberOverride?.trim() || null,
       expirationDateOverride: line.expirationDateOverride?.trim() || null,
     }));

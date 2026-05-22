@@ -75,6 +75,10 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
         ),
         unitPrice: String(line.unitPrice ?? 0),
         purchaseUnitAbbreviation,
+        // AI flow doesn't yet extract pack size — leave "1" so the
+        // form-shape contract holds; the user can override in the
+        // PricingTypeTray once they're in the bill form.
+        unitsPerPackage: "1",
         lotNumberOverride: "",
         expirationDateOverride: "",
       },
@@ -131,6 +135,10 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
       caseWeightEntries,
       unitPrice: String(line.unitPrice ?? 0),
       purchaseUnitAbbreviation,
+      // Weight modes don't need a pack size; "1" keeps the field
+      // shape consistent and the form schema's positive-decimal rule
+      // satisfied without changing weight math.
+      unitsPerPackage: "1",
       lotNumberOverride: "",
       expirationDateOverride: "",
     },

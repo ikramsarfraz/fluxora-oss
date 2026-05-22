@@ -109,6 +109,13 @@ export type SupplierInvoiceLineInput = {
   purchaseUnitId?: string | null;
   /** Snapshot abbreviation persisted for display (e.g. "ea", "gal", "cs"). */
   purchaseUnitAbbreviation?: string | null;
+  /**
+   * How many base units (each, lb, gal) per purchase unit. e.g. 12 for
+   * a 12-pack case, 24 for a 24-pack. Persisted on the line so reports
+   * + future inventory-explosion features can split a case into eaches.
+   * Defaults to the product's purchase-unit conversion when omitted.
+   */
+  unitsPerPackage?: string | null;
 };
 
 export type SupplierInvoiceHeaderInput = {
@@ -171,6 +178,29 @@ function pricingUnitTypeSnapshotFor(
   if (unitType === "catch_weight") return "per_lb";
   if (unitType === "fixed_case") return "per_case";
   return null;
+}
+
+/**
+ * Conversion-factor snapshot. For unit-priced lines (per_each / per_unit)
+ * the user enters how many base units are in one purchase unit (e.g. 12
+ * for a 12-pack case); we store that on `conversion_to_base_snapshot`.
+ * For weight-priced lines the column stays null — case-of-meat weight
+ * lives in `weight_lbs` already.
+ *
+ * Falls back to "1" for unit-priced lines when the user leaves the
+ * field empty, so the column is never NULL on a row that actually
+ * needs a conversion (loose cans, single bottles).
+ */
+function normalizeUnitsPerPackage(
+  raw: string | null | undefined,
+  unitType: SupplierInvoiceLineUnitType,
+): string | null {
+  if (unitType !== "per_each" && unitType !== "per_unit") return null;
+  const trimmed = raw?.toString().trim();
+  if (!trimmed) return "1";
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return "1";
+  return trimmed;
 }
 
 /** Default abbreviation displayed when the user hasn't picked an explicit UOM. */
@@ -1013,6 +1043,13 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
             line.unitType,
             line.purchaseUnitAbbreviation,
           ),
+          // Conversion factor snapshot — e.g. "12" for a 12-pack case so
+          // a future "split case into eaches" feature can expand the lot
+          // into individual units without re-deriving from the product.
+          conversionToBaseSnapshot: normalizeUnitsPerPackage(
+            line.unitsPerPackage,
+            line.unitType,
+          ),
           pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
         })),
       )
@@ -1125,6 +1162,10 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
         purchaseUnitAbbreviationSnapshot: defaultPurchaseUnitAbbreviation(
           line.unitType,
           line.purchaseUnitAbbreviation,
+        ),
+        conversionToBaseSnapshot: normalizeUnitsPerPackage(
+          line.unitsPerPackage,
+          line.unitType,
         ),
         pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
       })),

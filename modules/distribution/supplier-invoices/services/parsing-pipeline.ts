@@ -1084,6 +1084,7 @@ function buildScannedPdfResult(sourceFilename: string): PipelineResult {
     caseWeightEntries: [""],
     unitPrice: "0",
     purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

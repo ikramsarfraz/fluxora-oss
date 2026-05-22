@@ -714,12 +714,44 @@ export function SupplierInvoiceDetailPage({
                             <TableCell className="text-right tabular-nums">
                               {/* Cases / Units cell — shows count + UOM abbreviation
                                   so per-each / per-unit lines read "48 ea" or
-                                  "5 case" instead of a bare number. */}
-                              {line.quantityCases.toLocaleString()}
-                              {line.unitType === "per_each" ||
-                              line.unitType === "per_unit"
-                                ? ` ${line.purchaseUnitAbbreviationSnapshot ?? line.product?.baseUnit?.abbreviation ?? "ea"}`
-                                : ""}
+                                  "5 case" instead of a bare number. When the
+                                  line carries a pack-size snapshot > 1 (e.g.
+                                  12-pack case), append "× 12 ea" so the
+                                  underlying base-unit count is visible at a
+                                  glance. */}
+                              {(() => {
+                                const isUnitMode =
+                                  line.unitType === "per_each" ||
+                                  line.unitType === "per_unit";
+                                const purchaseAbbr =
+                                  line.purchaseUnitAbbreviationSnapshot ??
+                                  line.product?.baseUnit?.abbreviation ??
+                                  "ea";
+                                const baseAbbr =
+                                  line.product?.baseUnit?.abbreviation ?? "ea";
+                                const packSize = Number(
+                                  line.conversionToBaseSnapshot ?? "1",
+                                );
+                                const showPackSize =
+                                  isUnitMode &&
+                                  Number.isFinite(packSize) &&
+                                  packSize > 1 &&
+                                  purchaseAbbr.toLowerCase() !==
+                                    baseAbbr.toLowerCase();
+                                return (
+                                  <div className="flex flex-col items-end">
+                                    <span>
+                                      {line.quantityCases.toLocaleString()}
+                                      {isUnitMode ? ` ${purchaseAbbr}` : ""}
+                                    </span>
+                                    {showPackSize ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        × {packSize} {baseAbbr}/{purchaseAbbr}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
                             {billIsAllNonWeight ? null : (
                               <TableCell className="text-right tabular-nums">

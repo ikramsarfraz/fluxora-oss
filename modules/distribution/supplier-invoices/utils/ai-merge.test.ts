@@ -266,6 +266,7 @@ test("mergeAiOverDeterministic: keeps deterministic lines when det totals match"
           caseWeightEntries: ["", ""],
           unitPrice: "2.00",
           purchaseUnitAbbreviation: "",
+          unitsPerPackage: "1",
           lotNumberOverride: "",
           expirationDateOverride: "",
         },

@@ -16,6 +16,12 @@ export type SupplierInvoicePdfPrefillLine = {
   unitPrice: string;
   /** Snapshot abbreviation (e.g. "ea", "gal") — empty for weight modes. */
   purchaseUnitAbbreviation: string;
+  /**
+   * Pack size — how many base units in one purchase unit (e.g. 12 for a
+   * 12-pack case). Defaults to "1" so weight-mode prefills don't need
+   * to set it; the form schema requires a positive decimal string.
+   */
+  unitsPerPackage: string;
   lotNumberOverride: string;
   expirationDateOverride: string;
 };
@@ -84,6 +90,7 @@ function emptyPrefillLine(): SupplierInvoicePdfPrefillLine {
     caseWeightEntries: [""],
     unitPrice: "0",
     purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

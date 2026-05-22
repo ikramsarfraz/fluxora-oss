@@ -62,6 +62,23 @@ export const supplierInvoiceLineSchema = z
       .string()
       .trim()
       .max(16, "Unit is too long."),
+    /**
+     * How many base units (each, lb, gal, …) are in one purchase unit.
+     * E.g. 12 for a case of 12 cans, 24 for a 24-pack, 40 for a 40-lb
+     * case of meat. Defaults to the product's purchase-unit conversion
+     * on selection; the user can edit per-line for shipments where the
+     * pack size differs (a special-run 6-pack, etc.).
+     *
+     * Persisted on `supplier_invoice_lines.conversion_to_base_snapshot`
+     * so reports + future inventory-explosion features can split a case
+     * into individual eaches at sale time.
+     */
+    unitsPerPackage: z
+      .string()
+      .trim()
+      .refine(v => v === "" || /^\d+(\.\d{1,4})?$/.test(v), {
+        message: "Enter a positive number.",
+      }),
     lotNumberOverride: z.string().trim().max(128),
     expirationDateOverride: z
       .string()
@@ -219,6 +236,7 @@ export function emptyLine(): SupplierInvoiceLineValues {
     caseWeightEntries: [""],
     unitPrice: "0",
     purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };

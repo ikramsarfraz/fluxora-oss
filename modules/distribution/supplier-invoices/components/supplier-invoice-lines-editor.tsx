@@ -716,6 +716,16 @@ function LineRow({
       purchaseDefault.abbreviation,
       { shouldDirty: true },
     );
+    // Pre-fill the pack size from the product's purchase-unit conversion
+    // (e.g. 12 for a 12-pack case). User can override per bill if the
+    // shipment came in a non-standard pack size.
+    setValue(
+      `lines.${index}.unitsPerPackage`,
+      purchaseDefault.conversionToBase
+        ? String(purchaseDefault.conversionToBase)
+        : "1",
+      { shouldDirty: true },
+    );
   }, [productId, productById, index, setValue]);
 
   // Sync caseWeightEntries length with quantityCases
@@ -1840,6 +1850,14 @@ function PricingTypeTray({
     setValue(`lines.${index}.purchaseUnitAbbreviation`, option.abbreviation, {
       shouldDirty: true,
     });
+    // Also propagate the conversion factor so a "case (12 ea)" pick
+    // pre-fills "12" in the Units-per-package input — the user only
+    // edits it if this particular shipment has a non-standard pack.
+    setValue(
+      `lines.${index}.unitsPerPackage`,
+      option.conversionToBase > 0 ? String(option.conversionToBase) : "1",
+      { shouldDirty: true },
+    );
     const lower = option.abbreviation.toLowerCase();
     let nextUnitType: SupplierInvoiceLineUnitType;
     if (lower === "lb" || lower === "lbs" || lower === "kg" || lower === "oz") {
@@ -1932,6 +1950,64 @@ function PricingTypeTray({
             Override if the supplier&apos;s pricing differs from the unit pick.
           </div>
         </div>
+        {/* Units-per-package: how many base units are in one purchase
+            unit. Pre-filled from the product's purchase-unit conversion
+            (12 for a 12-pack case, 24 for a 24-pack) but editable per
+            bill — a one-off shipment of 6-packs needs the override. */}
+        <UnitsPerPackageField
+          control={control}
+          index={index}
+          baseUnitAbbreviation={baseUnitAbbrev ?? "ea"}
+          purchaseUnitAbbreviation={currentAbbrev || "unit"}
+          disabled={disabled}
+        />
+      </div>
+    </div>
+  );
+}
+
+function UnitsPerPackageField({
+  control,
+  index,
+  baseUnitAbbreviation,
+  purchaseUnitAbbreviation,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  index: number;
+  baseUnitAbbreviation: string;
+  purchaseUnitAbbreviation: string;
+  disabled: boolean;
+}) {
+  const unitType = useWatch({ control, name: `lines.${index}.unitType` });
+  // Only meaningful for per_each / per_unit lines — weight modes use the
+  // weight tray instead. Hide the field entirely otherwise so it doesn't
+  // confuse the user on a catch_weight bill.
+  if (unitType !== "per_each" && unitType !== "per_unit") return null;
+  return (
+    <div style={{ flex: 1, minWidth: 180, maxWidth: 240 }}>
+      <label style={lbl}>
+        {baseUnitAbbreviation} per {purchaseUnitAbbreviation}
+      </label>
+      <Controller
+        control={control}
+        name={`lines.${index}.unitsPerPackage`}
+        render={({ field, fieldState }) => (
+          <Input
+            {...field}
+            type="number"
+            min={0}
+            step="0.0001"
+            disabled={disabled}
+            aria-invalid={fieldState.invalid}
+            placeholder={purchaseUnitAbbreviation === "ea" ? "1" : "e.g. 12"}
+            style={{ height: 36, borderRadius: 7, fontSize: 13 }}
+          />
+        )}
+      />
+      <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+        Pack size from the product&apos;s default — override if this
+        shipment came in a different pack.
       </div>
     </div>
   );

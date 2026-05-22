@@ -160,6 +160,21 @@ export const supplierInvoiceLineInputSchema = z
       .max(16, "Unit abbreviation is too long (max 16 characters).")
       .nullable()
       .optional(),
+    /**
+     * Conversion factor from purchase unit to base unit, captured on
+     * the line so reports + future inventory-split features can break
+     * a "case" back into individual eaches (e.g. 5 cases × 12 ea/case).
+     * Persisted on `conversion_to_base_snapshot`. Accepts up to 4
+     * fraction digits to support volume conversions (e.g. 0.236 L).
+     */
+    unitsPerPackage: z
+      .string()
+      .regex(/^\d+(\.\d{1,4})?$/, "Must be a positive decimal.")
+      .refine(v => Number(v) > 0, {
+        message: "Units per package must be greater than 0.",
+      })
+      .nullable()
+      .optional(),
   })
   .superRefine((line, ctx) => {
     // catch_weight requires a positive total weight; fixed_case may have
