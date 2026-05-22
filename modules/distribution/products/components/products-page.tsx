@@ -19,7 +19,10 @@ import {
 import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useDeleteProduct, useProductsPage } from "../hooks/use-products";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
-import { formatMoney } from "@/lib/utils/currency";
+import {
+  formatProductDefaultPrice,
+  getProductBaseUnitAbbreviation,
+} from "../utils/product-uom";
 import type { ProductListItem, ProductListSort } from "../services/products";
 
 type ProductRow = ProductListItem;
@@ -43,12 +46,23 @@ const COLUMNS: ListingColumn<ProductRow>[] = [
   },
   {
     key: "defaultPricePerLb",
-    header: "Price / lb",
+    header: "Default price",
     align: "right",
-    render: row =>
-      row.defaultPricePerLb
-        ? { primary: <MonoText>{formatMoney(row.defaultPricePerLb)}</MonoText> }
-        : { primary: <span style={{ color: "var(--color-subtle)" }}>—</span> },
+    render: row => {
+      const formatted = formatProductDefaultPrice(row.defaultPricePerLb);
+      if (formatted === "—") {
+        return { primary: <span className="text-subtle">—</span> };
+      }
+      const abbr = getProductBaseUnitAbbreviation(row);
+      return {
+        primary: (
+          <MonoText>
+            {formatted}
+            <span className="ml-1 text-[11px] text-subtle">/{abbr}</span>
+          </MonoText>
+        ),
+      };
+    },
   },
 ];
 

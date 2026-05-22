@@ -14,7 +14,7 @@ export default function ProductsNewPage() {
           sticky "Why we ask" explainer right. Single-column on small
           screens; side-by-side from lg upward. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        <AddProductForm />
+        <AddProductForm stickyFooter />
         <ProductFormSidePanel />
       </div>
     </div>

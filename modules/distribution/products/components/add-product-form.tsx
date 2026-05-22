@@ -146,10 +146,13 @@ function PricingExamplesPanel() {
           staff can pick when quoting an order — each has a conversion back to
           the base.
         </p>
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="sm"
           onClick={() => setOpen(v => !v)}
-          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-info-fg hover:text-info-fg/80"
+          aria-expanded={open}
+          className="mt-2 h-auto gap-1 p-0 text-xs font-medium text-info-fg hover:text-info-fg/80"
         >
           <ChevronDown
             className={cn(
@@ -158,7 +161,7 @@ function PricingExamplesPanel() {
             )}
           />
           {open ? "Hide examples" : "Show common setups"}
-        </button>
+        </Button>
         {open ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {PRICING_EXAMPLES.map(ex => (
@@ -449,10 +452,17 @@ export function AddProductForm(props?: {
   onCreated?: (result: { id: string }) => void;
   /** When provided, the Cancel button calls this instead of routing back. */
   onCancel?: () => void;
+  /**
+   * Pin the save/cancel bar to the viewport bottom. Pass `true` from route
+   * pages so the actions stay reachable on long forms; leave off inside
+   * modals where the dialog already manages footer placement.
+   */
+  stickyFooter?: boolean;
 }) {
   const mode = props?.mode ?? "create";
   const product = props?.product;
   const initialName = props?.initialName;
+  const stickyFooter = props?.stickyFooter ?? false;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -554,10 +564,32 @@ export function AddProductForm(props?: {
 
   const isPending = form.formState.isSubmitting;
 
+  const footer = (
+    <FormActionFooter
+      formId="form-add-product"
+      isPending={isPending}
+      onCancel={() => {
+        if (props?.onCancel) {
+          props.onCancel();
+        } else {
+          router.push(
+            mode === "edit" && product
+              ? `/products/${product.id}`
+              : "/products",
+          );
+        }
+      }}
+      pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
+      submitLabel={mode === "edit" ? "Save changes" : "Create product"}
+      sticky={stickyFooter}
+    />
+  );
+
   return (
-    <Card className="w-full">
-      <CardContent className="pt-6">
-        <form id="form-add-product" onSubmit={form.handleSubmit(onSubmit)}>
+    <div className="flex flex-col gap-3">
+      <Card className="w-full">
+        <CardContent className="pt-6">
+          <form id="form-add-product" onSubmit={form.handleSubmit(onSubmit)}>
           {mutationError ? (
             <FormErrorAlert
               title={
@@ -961,31 +993,47 @@ export function AddProductForm(props?: {
                     {form.formState.errors.salesUnits.message}
                   </p>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // Pre-fill with the next unused active UOM so the user
-                    // isn't immediately required to pick one.
-                    const usedIds = new Set(
-                      (salesUnits ?? []).map(u => u.unitId),
-                    );
-                    const nextUom = (unitsOfMeasure ?? []).find(
-                      u => u.isActive && !usedIds.has(u.id),
-                    );
-                    appendSalesUnit({
-                      unitId: nextUom?.id ?? "",
-                      conversionToBase: "1",
-                      isDefault: false,
-                      allowsFractional: true,
-                    });
-                  }}
-                  className="self-start"
-                >
-                  <Plus className="size-3.5 mr-1" />
-                  Add sales unit
-                </Button>
+                {(() => {
+                  // Disable when there are no UOMs left to pick — appending an
+                  // empty row only produces an immediate validation error.
+                  const usedIds = new Set(
+                    (salesUnits ?? []).map(u => u.unitId),
+                  );
+                  const nextUom = (unitsOfMeasure ?? []).find(
+                    u => u.isActive && !usedIds.has(u.id),
+                  );
+                  const noUomsAvailable = !nextUom;
+                  const noUomsLoaded =
+                    !unitsOfMeasure || unitsOfMeasure.length === 0;
+                  return (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={noUomsAvailable}
+                      title={
+                        noUomsLoaded
+                          ? "Add a unit of measure first."
+                          : noUomsAvailable
+                            ? "All units of measure are already used."
+                            : undefined
+                      }
+                      onClick={() => {
+                        if (!nextUom) return;
+                        appendSalesUnit({
+                          unitId: nextUom.id,
+                          conversionToBase: "1",
+                          isDefault: false,
+                          allowsFractional: true,
+                        });
+                      }}
+                      className="self-start"
+                    >
+                      <Plus className="size-3.5 mr-1" />
+                      Add sales unit
+                    </Button>
+                  );
+                })()}
               </div>
               <FieldDescription>
                 {baseUnitAbbreviation ? (
@@ -1017,25 +1065,11 @@ export function AddProductForm(props?: {
               </FieldDescription>
             </Field>
           </FieldGroup>
-        </form>
-      </CardContent>
-      <FormActionFooter
-        formId="form-add-product"
-        isPending={isPending}
-        onCancel={() => {
-          if (props?.onCancel) {
-            props.onCancel();
-          } else {
-            router.push(
-              mode === "edit" && product
-                ? `/products/${product.id}`
-                : "/products",
-            );
-          }
-        }}
-        pendingLabel={mode === "edit" ? "Saving…" : "Creating…"}
-        submitLabel={mode === "edit" ? "Save changes" : "Create product"}
-      />
-    </Card>
+          </form>
+        </CardContent>
+        {!stickyFooter ? footer : null}
+      </Card>
+      {stickyFooter ? footer : null}
+    </div>
   );
 }

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 
 import { useProduct, useDeleteProduct } from "../hooks/use-products";
-import { formatMoney } from "@/lib/utils/currency";
-import { getProductBaseUnitAbbreviation } from "../utils/product-uom";
+import {
+  formatProductDefaultPrice,
+  getProductBaseUnitAbbreviation,
+} from "../utils/product-uom";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
@@ -104,7 +106,21 @@ export function ProductDetailPage({ productId }: { productId: string }) {
             <span className="font-mono text-sm">{product.sku}</span>
           </DetailField>
           <DetailField label={`Default price / ${baseUnitAbbr}`}>
-            {formatMoney(product.defaultPricePerLb)}/{baseUnitAbbr}
+            {(() => {
+              const formatted = formatProductDefaultPrice(
+                product.defaultPricePerLb,
+              );
+              return formatted === "—" ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <>
+                  {formatted}
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    /{baseUnitAbbr}
+                  </span>
+                </>
+              );
+            })()}
           </DetailField>
           <DetailField label="Base unit">
             {product.baseUnit

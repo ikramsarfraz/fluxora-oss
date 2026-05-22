@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   formatPerUnitSuffix,
+  formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
   getProductBaseUnitName,
   getSnapshotAbbreviation,
@@ -23,18 +24,16 @@ test("getProductBaseUnitAbbreviation: returns abbreviation when present", () => 
   );
 });
 
-test("getProductBaseUnitAbbreviation: falls back to lb for null/missing base unit", () => {
+test("getProductBaseUnitAbbreviation: falls back to 'unit' for null/missing base unit", () => {
   // Historical products without an explicit baseUnit should still render
-  // a sensible suffix so the UI doesn't show a bare "/" or empty string.
-  assert.equal(getProductBaseUnitAbbreviation(null), "lb");
-  assert.equal(getProductBaseUnitAbbreviation(undefined), "lb");
-  assert.equal(
-    getProductBaseUnitAbbreviation({ baseUnit: null }),
-    "lb",
-  );
+  // a sensible suffix so the UI doesn't show a bare "/" or empty string —
+  // but a non-meat vertical shouldn't see "lb" rendered for missing data.
+  assert.equal(getProductBaseUnitAbbreviation(null), "unit");
+  assert.equal(getProductBaseUnitAbbreviation(undefined), "unit");
+  assert.equal(getProductBaseUnitAbbreviation({ baseUnit: null }), "unit");
   assert.equal(
     getProductBaseUnitAbbreviation({ baseUnit: { abbreviation: null } }),
-    "lb",
+    "unit",
   );
 });
 
@@ -42,7 +41,7 @@ test("getProductBaseUnitAbbreviation: falls back to lb for null/missing base uni
 // getProductBaseUnitName
 // ---------------------------------------------------------------------------
 
-test("getProductBaseUnitName: prefers full name, then abbreviation, then lb", () => {
+test("getProductBaseUnitName: prefers full name, then abbreviation, then 'unit'", () => {
   assert.equal(
     getProductBaseUnitName({
       baseUnit: { name: "Gallon", abbreviation: "gal" },
@@ -53,7 +52,7 @@ test("getProductBaseUnitName: prefers full name, then abbreviation, then lb", ()
     getProductBaseUnitName({ baseUnit: { name: null, abbreviation: "gal" } }),
     "gal",
   );
-  assert.equal(getProductBaseUnitName(null), "lb");
+  assert.equal(getProductBaseUnitName(null), "unit");
 });
 
 // ---------------------------------------------------------------------------
@@ -69,8 +68,9 @@ test("formatPerUnitSuffix: prepends a single slash to the abbreviation", () => {
     formatPerUnitSuffix({ baseUnit: { abbreviation: "case" } }),
     "/case",
   );
-  // Fallback path still produces "/lb".
-  assert.equal(formatPerUnitSuffix(null), "/lb");
+  // Fallback path produces "/unit" — explicit "no base unit was set" rather
+  // than the misleading "/lb".
+  assert.equal(formatPerUnitSuffix(null), "/unit");
 });
 
 // ---------------------------------------------------------------------------
@@ -101,6 +101,35 @@ test("getSnapshotAbbreviation: falls back to product base when snapshot empty", 
   );
 });
 
-test("getSnapshotAbbreviation: ultimate fallback is lb", () => {
-  assert.equal(getSnapshotAbbreviation(null, null), "lb");
+test("getSnapshotAbbreviation: ultimate fallback is 'unit'", () => {
+  assert.equal(getSnapshotAbbreviation(null, null), "unit");
+});
+
+// ---------------------------------------------------------------------------
+// formatProductDefaultPrice
+// ---------------------------------------------------------------------------
+
+test("formatProductDefaultPrice: renders dash for null / empty / zero", () => {
+  // The product form coerces empty input to "0" before insert and the
+  // column is NOT NULL, so "0" is the canonical "not set" sentinel — not
+  // an actual price of zero. Listing and detail surfaces must agree.
+  assert.equal(formatProductDefaultPrice(null), "—");
+  assert.equal(formatProductDefaultPrice(undefined), "—");
+  assert.equal(formatProductDefaultPrice(""), "—");
+  assert.equal(formatProductDefaultPrice("0"), "—");
+  assert.equal(formatProductDefaultPrice("0.00"), "—");
+  assert.equal(formatProductDefaultPrice(0), "—");
+});
+
+test("formatProductDefaultPrice: formats positive values as USD", () => {
+  assert.equal(formatProductDefaultPrice("8.99"), "$8.99");
+  assert.equal(formatProductDefaultPrice("12"), "$12.00");
+  assert.equal(formatProductDefaultPrice(1.5), "$1.50");
+});
+
+test("formatProductDefaultPrice: honors custom placeholder", () => {
+  assert.equal(
+    formatProductDefaultPrice("0", { placeholder: "Not set" }),
+    "Not set",
+  );
 });

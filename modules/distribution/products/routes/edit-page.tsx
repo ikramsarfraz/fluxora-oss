@@ -38,7 +38,7 @@ export default async function ProductsEditPage({
           sticky "Why we ask" explainer right. Same grid template as the
           new page so the form widths stay visually consistent. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-        <AddProductForm mode="edit" product={product} />
+        <AddProductForm mode="edit" product={product} stickyFooter />
         <ProductFormSidePanel />
       </div>
     </section>

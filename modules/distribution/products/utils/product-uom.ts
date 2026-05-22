@@ -7,31 +7,57 @@
  * No server-only imports — safe to use from client components and tests.
  */
 
+import { formatMoney } from "@/lib/utils/currency";
+
 type WithBaseUnit = {
   baseUnit?: { abbreviation?: string | null; name?: string | null } | null;
 };
 
+const FALLBACK_ABBREVIATION = "unit";
+
 /**
- * Render the abbreviation for a product's base UOM. Falls back to "lb"
- * for historical data that never carried a base unit — every catalog
- * row in production today has one, this is just defensive.
+ * Render the abbreviation for a product's base UOM. Falls back to "unit"
+ * for rows whose base UOM relation was unexpectedly null — historical
+ * data shouldn't trigger this, but a tenant in a non-meat vertical
+ * shouldn't see "lb" rendered for a missing base unit.
  */
 export function getProductBaseUnitAbbreviation(
   product: WithBaseUnit | null | undefined,
 ): string {
-  return product?.baseUnit?.abbreviation ?? "lb";
+  return product?.baseUnit?.abbreviation ?? FALLBACK_ABBREVIATION;
 }
 
 /**
  * Render the full unit name for places that have room for it (form
- * labels, helper text). Falls back to the abbreviation, then to "lb".
+ * labels, helper text). Falls back to the abbreviation, then to "unit".
  */
 export function getProductBaseUnitName(
   product: WithBaseUnit | null | undefined,
 ): string {
   return (
-    product?.baseUnit?.name ?? product?.baseUnit?.abbreviation ?? "lb"
+    product?.baseUnit?.name ??
+    product?.baseUnit?.abbreviation ??
+    FALLBACK_ABBREVIATION
   );
+}
+
+/**
+ * Render the catalog default price, treating `null`, empty string, and
+ * a stored "0" as "no default set" — the `products.default_price_per_lb`
+ * column is `NOT NULL` and the form coerces empty input to "0", so
+ * zero is the canonical sentinel for "user didn't fill this in" rather
+ * than an actual price of zero. Returns the placeholder (default "—")
+ * in that case so listing and detail surfaces stay consistent.
+ */
+export function formatProductDefaultPrice(
+  value: string | number | null | undefined,
+  options?: { placeholder?: string },
+): string {
+  const placeholder = options?.placeholder ?? "—";
+  if (value == null || value === "") return placeholder;
+  const n = typeof value === "string" ? parseFloat(value) : value;
+  if (!Number.isFinite(n) || n === 0) return placeholder;
+  return formatMoney(value);
 }
 
 /**
