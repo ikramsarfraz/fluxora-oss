@@ -13,6 +13,14 @@ export type AiLineLike = {
   unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit" | null;
   /** Optional UOM abbreviation from the AI; passed through to the form. */
   unitOfMeasure?: string | null;
+  /**
+   * Pack size extracted by the AI (e.g. 12 for a 12-pack case). Drives
+   * `unitsPerPackage` on the prefill line so the inventory rollup math
+   * (cases × pack) works without manual re-entry on the bill form.
+   * Null when the AI couldn't determine it — the line still prefills,
+   * the user just overrides the pack size in the form.
+   */
+  unitsPerPackage?: number | null;
 };
 
 export type AiLineConversion = {
@@ -61,6 +69,16 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
   // Non-weight modes short-circuit: no weight, no per-case array, no
   // back-calculation. quantityCases acts as the each / unit count.
   if (unitType === "per_each" || unitType === "per_unit") {
+    // Pack size:
+    //  - per_each → always 1 (one inventory row IS one base unit)
+    //  - per_unit → use the AI's extracted pack size when present;
+    //    fall back to 1 so the form has a sane default the user can
+    //    override in the PricingTypeTray.
+    const aiPack = Number(line.unitsPerPackage ?? 0);
+    const unitsPerPackage =
+      unitType === "per_unit" && Number.isFinite(aiPack) && aiPack > 0
+        ? String(aiPack)
+        : "1";
     return {
       line: {
         productId: "",
@@ -75,10 +93,7 @@ export function convertAiLineToPrefill(line: AiLineLike): AiLineConversion {
         ),
         unitPrice: String(line.unitPrice ?? 0),
         purchaseUnitAbbreviation,
-        // AI flow doesn't yet extract pack size — leave "1" so the
-        // form-shape contract holds; the user can override in the
-        // PricingTypeTray once they're in the bill form.
-        unitsPerPackage: "1",
+        unitsPerPackage,
         lotNumberOverride: "",
         expirationDateOverride: "",
       },

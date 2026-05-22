@@ -62,6 +62,14 @@ export type AiInvoiceLine = {
    * validator restricts this to a fixed allow-list (`AI_UNIT_OF_MEASURE_ALLOWLIST`).
    */
   unitOfMeasure?: string | null;
+  /**
+   * Pack size — base units per purchase unit (12 for a 12-pack, etc.).
+   * Used by per_unit lines so the inventory rollup math knows that 5
+   * cases of a 24-pack = 120 base units. Null for weight modes or when
+   * the AI couldn't determine the pack size; the user enters it on the
+   * bill form in those cases.
+   */
+  unitsPerPackage?: number | null;
   notes: string | null;
 };
 

@@ -68,12 +68,30 @@ unitOfMeasure (required for per_unit, optional for per_each, ignored for weight)
   → "gal"). If no UOM is printed and the line is clearly per-each (e.g.
   "12 EA" or "EACH"), set to "ea". When unclear, return null.
 
+unitsPerPackage (CRITICAL for per_unit lines):
+- How many base units (cans, bottles, individual pieces) are inside ONE
+  purchase unit. Examples:
+  - "12 PK COKE 5 CASES @ $9.99/CASE" → unitsPerPackage = 12
+  - "24-pack water 10 cases" → unitsPerPackage = 24
+  - "6 PK MILK GAL" → unitsPerPackage = 6 (6 gallons per case)
+  - "BEEF FRANKS 12 (12 oz) packets per case, 9 lb case" → unitsPerPackage = 12
+- Look for these signals in product name OR description:
+  "<N> PK", "<N>-pack", "<N> per case", "case of <N>", "<N> count"
+- For per_each lines this is 1 (one base unit IS the inventory row).
+- For weight lines (catch_weight / fixed_case) return null — pack size
+  is irrelevant to weight-priced items.
+- When the bill shows the quantity in cases but DOESN'T state the pack
+  size explicitly, return null — DON'T guess. The user can override
+  on the form. Better null than a wrong number that silently miscounts
+  inventory.
+
 BEVERAGES & NON-WEIGHT GOODS — CRITICAL:
 - Soda, water, juice, energy drinks, candy, chips, packaged snacks:
   these are NEVER catch_weight. Default to per_unit when a pack size /
   case is implied (e.g. "12 PK COKE"); per_each only when truly sold
   one-at-a-time. NEVER fabricate a weight for these — return
-  quantityWeight = null and let unitType + unitOfMeasure carry the truth.
+  quantityWeight = null and let unitType + unitOfMeasure +
+  unitsPerPackage carry the truth.
 
 PRODUCT NAME vs DESCRIPTION — CRITICAL:
 - Many invoices have TWO product columns. The first is a short Item code/name
