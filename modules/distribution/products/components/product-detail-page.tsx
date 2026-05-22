@@ -10,6 +10,10 @@ import {
   useArchiveProduct,
   usePermanentlyDeleteProduct,
   useProduct,
+  useProductCustomerPrices,
+  useProductInventorySummary,
+  useProductPurchaseIntelligence,
+  useProductRecentPurchases,
   useRestoreProduct,
 } from "../hooks/use-products";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -17,7 +21,9 @@ import {
   formatProductDefaultPrice,
   getProductBaseUnitAbbreviation,
 } from "../utils/product-uom";
-import { formatDisplayDateTime } from "@/lib/utils/date";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/date";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
+import { cn } from "@/lib/utils";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
@@ -57,6 +63,394 @@ const PURPOSE_LABELS: Record<string, string> = {
   pricing: "Pricing",
   display: "Display",
 };
+
+const UNIT_TYPE_LABELS: Record<string, string> = {
+  catch_weight: "by weight",
+  fixed_case: "fixed case",
+  per_each: "per each",
+  per_unit: "per unit",
+};
+
+// ── Detail-page sections ────────────────────────────────────────────────────
+// Each section is its own data-driven block with its own React Query
+// fetch. The detail page header renders immediately; these stream in as
+// their queries resolve, so a heavy inventory aggregation doesn't gate
+// the page from showing up.
+
+/**
+ * Inventory snapshot — three bucket totals (on hand / in motion /
+ * problem) + a lot-count badge on the headline. Renders a quiet
+ * skeleton row while loading and a "No inventory yet" line when the
+ * product has never been received.
+ */
+function ProductInventorySection({
+  productId,
+  baseUnitAbbreviation,
+}: {
+  productId: string;
+  baseUnitAbbreviation: string;
+}) {
+  const { data: summary, isLoading } = useProductInventorySummary(productId);
+
+  // Total rows across all three buckets — used to short-circuit to a
+  // friendly empty state when the product has never had stock.
+  const totalCases = summary
+    ? summary.onHand.cases + summary.inMotion.cases + summary.problem.cases
+    : 0;
+  const isEmpty = !isLoading && summary && totalCases === 0;
+
+  return (
+    <DetailSection
+      title="Inventory"
+      description={
+        summary && summary.onHandLotCount > 0
+          ? `${summary.onHandLotCount} lot${summary.onHandLotCount === 1 ? "" : "s"} on hand.`
+          : "Snapshot of current stock by status."
+      }
+    >
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading inventory…</p>
+      ) : isEmpty ? (
+        <p className="text-sm text-muted-foreground">
+          No inventory recorded for this product yet.
+        </p>
+      ) : summary ? (
+        <DetailGrid>
+          <InventoryBucket
+            label="On hand"
+            cases={summary.onHand.cases}
+            weightLbs={summary.onHand.weightLbs}
+            unitAbbr={baseUnitAbbreviation}
+            tone="default"
+          />
+          <InventoryBucket
+            label="In motion"
+            cases={summary.inMotion.cases}
+            weightLbs={summary.inMotion.weightLbs}
+            unitAbbr={baseUnitAbbreviation}
+            tone="default"
+          />
+          <InventoryBucket
+            label="Damaged / expired"
+            cases={summary.problem.cases}
+            weightLbs={summary.problem.weightLbs}
+            unitAbbr={baseUnitAbbreviation}
+            tone={summary.problem.cases > 0 ? "warning" : "default"}
+          />
+        </DetailGrid>
+      ) : null}
+    </DetailSection>
+  );
+}
+
+function InventoryBucket({
+  label,
+  cases,
+  weightLbs,
+  unitAbbr,
+  tone,
+}: {
+  label: string;
+  cases: number;
+  weightLbs: string;
+  unitAbbr: string;
+  tone: "default" | "warning";
+}) {
+  const weight = Number(weightLbs);
+  const hasWeight = Number.isFinite(weight) && weight > 0;
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-3 py-2",
+        tone === "warning"
+          ? "border-destructive/30 bg-destructive/5"
+          : "border-border-default",
+      )}
+    >
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-mono tabular-nums text-base font-medium">
+        {cases} {cases === 1 ? "case" : "cases"}
+      </p>
+      {hasWeight ? (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatWeightLbs(weightLbs)} {unitAbbr}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Last 5 supplier bills referencing this product. Useful for "what
+ * did we pay last time" and "how does that compare to the running
+ * average" at a glance.
+ */
+function ProductRecentPurchasesSection({
+  productId,
+  baseUnitAbbreviation,
+}: {
+  productId: string;
+  baseUnitAbbreviation: string;
+}) {
+  const { data: purchases, isLoading } = useProductRecentPurchases(productId);
+
+  return (
+    <DetailSection
+      title="Recent purchases"
+      description="Last 5 supplier bills that included this product."
+    >
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading purchases…</p>
+      ) : !purchases || purchases.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          This product hasn’t appeared on a supplier bill yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Unit cost</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {purchases.map(p => (
+                <TableRow key={p.lineId}>
+                  <TableCell className="font-mono tabular-nums text-xs">
+                    {formatDisplayDate(p.invoiceDate)}
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/suppliers/${p.supplierId}`}
+                      className="hover:underline"
+                    >
+                      {p.supplierName}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/supplier-invoices/${p.invoiceId}`}
+                      className="font-mono text-xs hover:underline"
+                    >
+                      {p.referenceNumber}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {UNIT_TYPE_LABELS[p.unitType] ?? p.unitType}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {formatMoney(p.unitPrice)}
+                    <span className="ml-1 text-[11px] text-muted-foreground">
+                      /{baseUnitAbbreviation}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-xs text-muted-foreground">
+                    {/* Show whichever quantity dimension is meaningful for
+                        the line. catch_weight rows track weight; the
+                        others (per_each / fixed_case) track cases. */}
+                    {p.unitType === "catch_weight"
+                      ? `${formatWeightLbs(p.weightLbs)} ${baseUnitAbbreviation}`
+                      : `${p.quantityCases} cs`}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </DetailSection>
+  );
+}
+
+/**
+ * Customers that have a product-specific price override. Useful for
+ * "who pays what" reference and as a guard before changing the
+ * product's default price.
+ */
+function ProductCustomerPricesSection({
+  productId,
+  baseUnitAbbreviation,
+}: {
+  productId: string;
+  baseUnitAbbreviation: string;
+}) {
+  const { data: prices, isLoading } = useProductCustomerPrices(productId);
+
+  return (
+    <DetailSection
+      title="Customer pricing"
+      description={
+        prices && prices.length > 0
+          ? `${prices.length} customer${prices.length === 1 ? "" : "s"} have a custom price for this product.`
+          : "Customers without an override use the default price above."
+      }
+    >
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading customer prices…</p>
+      ) : !prices || prices.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No customer-specific overrides yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Supplier scope</TableHead>
+                <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Updated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {prices.map(row => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <Link
+                      href={`/customers/${row.customerId}`}
+                      className="hover:underline"
+                    >
+                      {row.customerName}
+                    </Link>
+                    {row.customerArchivedAt ? (
+                      <Badge
+                        variant="secondary"
+                        className="ml-2 h-5 rounded-full px-1.5 text-[10px] uppercase tracking-wide"
+                      >
+                        Archived
+                      </Badge>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {row.supplierName ?? "Any supplier"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {formatMoney(row.pricePerLb)}
+                    <span className="ml-1 text-[11px] text-muted-foreground">
+                      /{baseUnitAbbreviation}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-xs text-muted-foreground">
+                    {formatDisplayDate(row.updatedAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </DetailSection>
+  );
+}
+
+/**
+ * MVP price intelligence. Three signals:
+ *   1. running average unit cost
+ *   2. most recent unit cost
+ *   3. delta of (2) vs. (1), as a percentage
+ *
+ * Below the 3-purchase threshold we still show the empty state — a
+ * baseline isn't meaningful with 1 or 2 data points. Above it, we
+ * surface the running stats. Drift alerts, per-supplier breakdown,
+ * and sparklines are tracked separately as future work (see GH issue).
+ */
+function ProductPriceIntelligenceSection({
+  productId,
+  productName,
+  baseUnitAbbreviation,
+}: {
+  productId: string;
+  productName: string;
+  baseUnitAbbreviation: string;
+}) {
+  const { data: intel, isLoading } = useProductPurchaseIntelligence(productId);
+
+  if (isLoading) {
+    return (
+      <DetailSection
+        title="Price intelligence"
+        description="Running cost average and most-recent purchase."
+      >
+        <p className="text-sm text-muted-foreground">Loading intelligence…</p>
+      </DetailSection>
+    );
+  }
+
+  // Below the 3-purchase threshold OR no purchases at all — show the
+  // existing empty state. Keeps the UX consistent with the prior gate
+  // while we ship more sophisticated drift signalling later.
+  if (!intel || intel.purchaseCount < 3) {
+    return (
+      <DetailSection
+        title="Price intelligence"
+        description="Unlocks after 3 purchases — enough to establish a baseline average and flag drift."
+      >
+        <SkuIntelligenceEmptyState
+          purchaseCount={intel?.purchaseCount ?? 0}
+          productName={productName}
+        />
+      </DetailSection>
+    );
+  }
+
+  const deltaPct =
+    intel.deltaFraction != null ? intel.deltaFraction * 100 : null;
+  const deltaTone =
+    deltaPct == null
+      ? "muted"
+      : Math.abs(deltaPct) < 2
+        ? "muted" // within 2% — noise, render quiet
+        : deltaPct > 0
+          ? "warning" // paying more than average → flag
+          : "positive"; // paying less → positive
+  const deltaSign = deltaPct != null && deltaPct >= 0 ? "+" : "";
+
+  return (
+    <DetailSection
+      title="Price intelligence"
+      description={`${intel.purchaseCount} purchase${intel.purchaseCount === 1 ? "" : "s"} on record.`}
+    >
+      <DetailGrid>
+        <DetailField label={`Average unit cost / ${baseUnitAbbreviation}`}>
+          <span className="font-mono tabular-nums">
+            {formatMoney(intel.averageUnitPrice)}
+          </span>
+        </DetailField>
+        <DetailField label="Most recent unit cost">
+          <span className="font-mono tabular-nums">
+            {intel.mostRecentUnitPrice
+              ? formatMoney(intel.mostRecentUnitPrice)
+              : "—"}
+          </span>
+          {intel.mostRecentDate ? (
+            <span className="ml-2 text-xs text-muted-foreground">
+              {formatDisplayDate(intel.mostRecentDate)}
+            </span>
+          ) : null}
+        </DetailField>
+        <DetailField label="Delta vs. average">
+          <span
+            className={cn(
+              "font-mono tabular-nums",
+              deltaTone === "warning" && "text-destructive",
+              deltaTone === "positive" && "text-forest-mid",
+              deltaTone === "muted" && "text-muted-foreground",
+            )}
+          >
+            {deltaPct == null
+              ? "—"
+              : `${deltaSign}${deltaPct.toFixed(1)}%`}
+          </span>
+        </DetailField>
+      </DetailGrid>
+    </DetailSection>
+  );
+}
 
 export function ProductDetailPage({ productId }: { productId: string }) {
   const router = useRouter();
@@ -245,17 +639,27 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         )}
       </DetailSection>
 
-      {product._purchaseCount < 3 && (
-        <DetailSection
-          title="Price intelligence"
-          description="Unlocks after 3 purchases — enough to establish a baseline average and flag drift."
-        >
-          <SkuIntelligenceEmptyState
-            purchaseCount={product._purchaseCount}
-            productName={product.name}
-          />
-        </DetailSection>
-      )}
+      {/* New detail-page surfaces — inventory snapshot, recent purchases,
+          customer-specific pricing, MVP price intelligence. Each section
+          owns its own React Query fetch so the headline renders
+          immediately and these stream in. */}
+      <ProductInventorySection
+        productId={productId}
+        baseUnitAbbreviation={baseUnitAbbr}
+      />
+      <ProductRecentPurchasesSection
+        productId={productId}
+        baseUnitAbbreviation={baseUnitAbbr}
+      />
+      <ProductCustomerPricesSection
+        productId={productId}
+        baseUnitAbbreviation={baseUnitAbbr}
+      />
+      <ProductPriceIntelligenceSection
+        productId={productId}
+        productName={product.name}
+        baseUnitAbbreviation={baseUnitAbbr}
+      />
 
       {/* Activity — audit trail from products.created_by_user_id /
           products.updated_by_user_id. Rows created before those columns
