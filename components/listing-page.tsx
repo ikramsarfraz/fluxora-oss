@@ -12,6 +12,9 @@ import {
   X,
 } from "lucide-react";
 
+import { AlertCircle } from "lucide-react";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -181,6 +184,90 @@ export function ListingAction({
     >
       <Link href={href}>{children}</Link>
     </Button>
+  );
+}
+
+/**
+ * Secondary action chip rendered alongside (or instead of) `ListingAction`
+ * in the listing header. Use for low-emphasis triggers like "Import CSV"
+ * and "Export CSV" — anything that isn't the listing's primary verb.
+ *
+ * Replaces the hand-rolled inline-style buttons that have accumulated
+ * across modules (products / customers / suppliers / etc.). Keeps the
+ * shadcn Button as the actual element so size, focus ring, disabled
+ * state, and theming stay consistent with the rest of the app.
+ *
+ * Pass `href` for navigation, `onClick` for modal/handler triggers —
+ * they're mutually exclusive. `disabled` only applies in the click form.
+ */
+export function ListingSecondaryAction(
+  props: {
+    children: React.ReactNode;
+    className?: string;
+  } & (
+    | { href: string; onClick?: never; disabled?: never }
+    | { href?: never; onClick: () => void; disabled?: boolean }
+  ),
+) {
+  const { children, className } = props;
+  const baseClass = cn("gap-1.5 text-[13px]", className);
+
+  if ("href" in props && props.href !== undefined) {
+    return (
+      <Button asChild size="sm" variant="outline" className={baseClass}>
+        <Link href={props.href}>{children}</Link>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={props.onClick}
+      disabled={props.disabled}
+      className={baseClass}
+    >
+      {children}
+    </Button>
+  );
+}
+
+/**
+ * Standard error fallback for listing pages — replaces the raw
+ * `<div style={{...}}>` + `<button>` blocks that listing pages render
+ * when their data query errors out. Uses the shadcn destructive alert
+ * so the message theming matches the rest of the app and the retry
+ * button picks up keyboard/focus affordances for free.
+ */
+export function ListingErrorState({
+  title = "We couldn't load this list.",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <Alert variant="destructive">
+      <AlertCircle className="size-4" />
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span>{message}</span>
+        {onRetry ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            className="shrink-0"
+          >
+            Retry
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }
 

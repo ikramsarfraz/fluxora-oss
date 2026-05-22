@@ -7,6 +7,7 @@ import {
 
 import { getSuppliers } from "../services/suppliers";
 import { queryKeys } from "@/lib/query/keys";
+import { ListPageSkeleton } from "@/components/loading-skeletons";
 
 import Suppliers from "../components/suppliers-page";
 
@@ -20,7 +21,7 @@ export default async function SuppliersListPage() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
+      <Suspense fallback={<ListPageSkeleton tableColumns={4} />}>
         <Suppliers />
       </Suspense>
     </HydrationBoundary>
