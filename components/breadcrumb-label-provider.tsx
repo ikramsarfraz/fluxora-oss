@@ -84,3 +84,20 @@ export function useSetBreadcrumbLabel(
     };
   }, [href, label, setLabel, clearLabel]);
 }
+
+/**
+ * Renderless client wrapper around `useSetBreadcrumbLabel`. Lets a server-
+ * component route override a parent breadcrumb segment without becoming a
+ * client component itself — drop `<BreadcrumbLabel href={…} label={…} />`
+ * anywhere in the tree.
+ */
+export function BreadcrumbLabel({
+  href,
+  label,
+}: {
+  href: string;
+  label: string | null | undefined;
+}) {
+  useSetBreadcrumbLabel(href, label);
+  return null;
+}

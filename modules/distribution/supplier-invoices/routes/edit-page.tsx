@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { notFound, redirect } from "next/navigation";
 
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { can } from "@/lib/auth/permissions";
 import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
@@ -36,6 +37,10 @@ export default async function SupplierInvoicesEditPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
+      <BreadcrumbLabel
+        href={`/supplier-invoices/${invoice.id}`}
+        label={invoice.referenceNumber}
+      />
       <SupplierInvoiceEditShell invoiceId={id} />
     </HydrationBoundary>
   );

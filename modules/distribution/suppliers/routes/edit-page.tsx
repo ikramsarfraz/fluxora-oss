@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
@@ -24,6 +25,7 @@ export default async function SuppliersEditPage({
 
   return (
     <section className="flex flex-col gap-6">
+      <BreadcrumbLabel href={`/suppliers/${supplier.id}`} label={supplier.name} />
       <PageHeader
         title="Edit supplier"
         description="Update supplier details and payment terms."

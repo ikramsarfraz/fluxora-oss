@@ -8,6 +8,7 @@ import { Lock } from "lucide-react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
+import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageError } from "@/components/page-error";
 import { PageHeader } from "@/components/page-header";
 import { PageLoading } from "@/components/page-loading";
@@ -101,6 +102,11 @@ export function OrderEditForm({ orderId }: { orderId: string }) {
   const { data: products } = useProducts();
   const { data: currentUser } = useCurrentPortalUser();
   const updateOrder = useUpdateSalesOrder();
+
+  useSetBreadcrumbLabel(
+    `/orders/${orderId}`,
+    order ? (order.orderNumber ?? order.id.slice(0, 8)) : null,
+  );
 
   const form = useForm<NewOrderFormValues>({
     resolver: zodResolver(newOrderFormSchema),

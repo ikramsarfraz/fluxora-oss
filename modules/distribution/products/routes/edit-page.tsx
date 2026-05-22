@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
@@ -23,6 +24,7 @@ export default async function ProductsEditPage({
 
   return (
     <section className="flex flex-col gap-6">
+      <BreadcrumbLabel href={`/products/${product.id}`} label={product.name} />
       <PageHeader
         title="Edit product"
         description="Update product details, categories, and unit mappings."
