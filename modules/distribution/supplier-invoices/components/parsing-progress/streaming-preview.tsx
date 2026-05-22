@@ -5,11 +5,14 @@ import { cn } from "@/lib/utils";
 
 import type { PreviewHeader, StreamingLine } from "./types";
 
+// Design-system tokens — keep this on-brand with the forest palette used
+// throughout the rest of the app. `accent` was off-brand blue; `goodSoft`
+// was a hardcoded OKLCH that didn't map to any token.
 const COLORS = {
   good: "var(--color-success-fg)",
-  goodSoft: "oklch(96% 0.03 155)",
-  accent: "oklch(58% 0.13 242)",
-  mutedSoft: "#9a9a93",
+  goodSoft: "var(--color-success-bg)",
+  accent: "var(--color-forest-mid)",
+  mutedSoft: "var(--color-muted)",
 } as const;
 
 export function StreamingPreview({
@@ -156,7 +159,7 @@ function LineRow({ line }: { line: StreamingLine }) {
           className="h-[14px] flex-1 rounded-[3px]"
           style={{
             background:
-              "repeating-linear-gradient(45deg, transparent 0 6px, oklch(94% 0.01 95) 6px 7px)",
+              "repeating-linear-gradient(45deg, transparent 0 6px, var(--color-border-default) 6px 7px)",
           }}
         />
       ) : (

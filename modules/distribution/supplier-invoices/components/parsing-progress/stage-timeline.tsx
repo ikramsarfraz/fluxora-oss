@@ -6,12 +6,15 @@ import { cn } from "@/lib/utils";
 
 import type { ParseStage, StageStatus } from "./types";
 
+// Design-system tokens — keep this on-brand with the forest palette used
+// throughout the rest of the app. Previously the in-progress affordances
+// used an off-brand blue (oklch 242) and a hardcoded gray (#9a9a93).
 const COLORS = {
   good: "var(--color-success-fg)",
-  accent: "oklch(58% 0.13 242)",
-  accentEnd: "oklch(70% 0.18 242)",
+  accent: "var(--color-forest-mid)",
+  accentEnd: "var(--color-forest-bright)",
   borderStrong: "var(--color-border-default)",
-  mutedSoft: "#9a9a93",
+  mutedSoft: "var(--color-muted)",
   danger: "var(--color-danger-fg)",
 } as const;
 
