@@ -14,7 +14,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-import { BboxOverlay } from "./bbox-overlay";
 import type { LineBbox } from "./line-bbox";
 import { PdfCanvas } from "./pdf-canvas";
 import type { ParsedLine } from "./types";
@@ -79,10 +78,6 @@ export function PdfPane({
    */
   accessory?: React.ReactNode;
 }) {
-  // Real PDF canvases are rendered at native CSS size scaled by zoom, so
-  // bboxes (in PDF user-space points) need `zoom/100` to align with the canvas.
-  const overlayScale = zoom / 100;
-
   // The pipeline result doesn't carry page count, so the `pages` prop is
   // usually a default of 1. We let pdfjs tell us the real count via
   // `onPageCount` once it parses the PDF, and reset whenever a new file
@@ -121,24 +116,19 @@ export function PdfPane({
         className="flex flex-1 justify-center overflow-y-auto p-6"
         style={{ alignItems: "flex-start" }}
       >
+        {/* BboxOverlay (click-to-map line highlights) is intentionally
+            disabled — the PDF pane is a read-only reference; all line
+            edits happen in the right-hand panel. PdfPane still accepts
+            lines / activeLineId / onLineClick / lineBboxes props so a
+            non-clicking visual overlay (e.g. active-line outline only)
+            can be re-introduced later without touching callers. */}
         {pdfFile ? (
           <PdfCanvas
             pdfFile={pdfFile}
             pageNumber={page}
             zoom={zoom}
             onPageCount={handlePageCount}
-          >
-            {lineBboxes ? (
-              <BboxOverlay
-                bboxes={lineBboxes}
-                lines={lines}
-                activeLineId={activeLineId}
-                scale={overlayScale}
-                pageNumber={page}
-                onLineClick={onLineClick}
-              />
-            ) : null}
-          </PdfCanvas>
+          />
         ) : pdfLoadError ? (
           <PdfFetchErrorCard fileName={fileName} />
         ) : (
