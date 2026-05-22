@@ -162,6 +162,14 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
     return <p className="text-sm text-muted-foreground">No line items yet.</p>;
   }
 
+  // Hide the "Weight (lbs)" column when every line on the order is
+  // non-weight (catalog of beverages). Mixed orders keep the column
+  // but show "—" for individual non-weight rows so the table doesn't
+  // misleadingly display "0.00" for every can-of-soda line.
+  const anyWeightLine = lines.some(
+    l => l.unitType === "catch_weight" || l.unitType === "fixed_case",
+  );
+
   const toggleRow = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -201,7 +209,9 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
             <TableHead>Product</TableHead>
             <TableHead>Sales unit</TableHead>
             <TableHead className="text-right">Cases</TableHead>
-            <TableHead className="text-right">Weight (lbs)</TableHead>
+            {anyWeightLine ? (
+              <TableHead className="text-right">Weight</TableHead>
+            ) : null}
             <TableHead className="text-right">Price basis</TableHead>
             <TableHead className="text-right">Line total</TableHead>
           </TableRow>
@@ -247,6 +257,7 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
                 canExpand={canExpand}
                 isOpen={isOpen}
                 fulfilledClass={fulfilledClass}
+                anyWeightLine={anyWeightLine}
                 onToggle={() => toggleRow(line.id)}
               />
             );
@@ -257,7 +268,10 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
             <tr className="border-t">
               <td />
               <td
-                colSpan={5}
+                // Subtotal spans every column except the trailing line
+                // total. Column count drops by 1 when the weight column
+                // is hidden on a pure non-weight order.
+                colSpan={anyWeightLine ? 5 : 4}
                 className="px-2 py-2 text-right text-sm text-muted-foreground"
               >
                 Subtotal
@@ -284,6 +298,12 @@ interface LineRowGroupProps {
   canExpand: boolean;
   isOpen: boolean;
   fulfilledClass: string;
+  /**
+   * Whether the parent order has at least one weight-priced line.
+   * When false the Weight column is hidden, so the row + the expanded
+   * breakdown drop their corresponding cells/colSpan by one.
+   */
+  anyWeightLine: boolean;
   onToggle: () => void;
 }
 
@@ -298,6 +318,7 @@ function LineRowGroup({
   canExpand,
   isOpen,
   fulfilledClass,
+  anyWeightLine,
   onToggle,
 }: LineRowGroupProps) {
   return (
@@ -362,9 +383,19 @@ function LineRowGroup({
         <TableCell className={cn("text-right tabular-nums", fulfilledClass)}>
           {getLineFulfilledQuantity(line)} / {line.expectedCases}
         </TableCell>
-        <TableCell className="text-right tabular-nums">
-          {getLineFulfilledWeight(line).toFixed(2)}
-        </TableCell>
+        {anyWeightLine ? (
+          <TableCell className="text-right tabular-nums">
+            {/* Per-line weight cell — only weight-priced rows render a
+                number. Non-weight rows on a mixed order show "—" so
+                "0.00" doesn't read as a real value. */}
+            {line.unitType === "catch_weight" ||
+            line.unitType === "fixed_case" ? (
+              getLineFulfilledWeight(line).toFixed(2)
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </TableCell>
+        ) : null}
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
             // The snapshot abbreviation is the truth — per_lb lines store
@@ -387,7 +418,7 @@ function LineRowGroup({
       {canExpand && isOpen && (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
           <TableCell />
-          <TableCell colSpan={6} className="py-4">
+          <TableCell colSpan={anyWeightLine ? 6 : 5} className="py-4">
             <LineBreakdown
               line={line}
               caseWeights={caseWeights}
