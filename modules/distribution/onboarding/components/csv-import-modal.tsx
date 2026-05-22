@@ -37,18 +37,27 @@ const CONFIGS: Record<ImportType, {
 }> = {
   products: {
     displayName: "Products",
+    // Columns mirror the products record fields the service can persist
+    // today (db/schema.ts → products + product_categories + product_units).
+    // `category` is matched case-insensitively against an existing
+    // tenant category — unmatched values are dropped and the product
+    // imports without a category. `unit` is matched against UoM
+    // abbreviation first, then name; sets the product's base unit and
+    // its single default sales unit at conversion 1.
+    //
+    // The previously-advertised `shelf_life_days` and `allergens`
+    // columns had no schema backing and were silently discarded — they
+    // were removed when the import was wired up.
     columns: [
       { key: "sku", label: "SKU", required: true },
       { key: "name", label: "Name", required: true },
       { key: "category", label: "Category" },
-      { key: "unit", label: "Unit" },
-      { key: "default_price", label: "Default price" },
-      { key: "shelf_life_days", label: "Shelf life (days)" },
-      { key: "allergens", label: "Allergens" },
+      { key: "unit", label: "Base unit (e.g. lb, ea, gal)" },
+      { key: "default_price", label: "Default price (per base unit)" },
     ],
     templateRows: [
-      { sku: "BEF-BRSK-01", name: "Beef Brisket", category: "beef", unit: "lb", default_price: "4.50", shelf_life_days: "14", allergens: "" },
-      { sku: "CHK-WNG-01", name: "Chicken Wings", category: "poultry", unit: "lb", default_price: "2.20", shelf_life_days: "10", allergens: "" },
+      { sku: "BEF-BRSK-01", name: "Beef Brisket", category: "Beef", unit: "lb", default_price: "4.50" },
+      { sku: "CHK-WNG-01", name: "Chicken Wings", category: "Chicken", unit: "lb", default_price: "2.20" },
     ],
   },
   suppliers: {
@@ -198,6 +207,12 @@ function validate(rows: ParsedRow[], importType: ImportType): ValidationError[] 
     if (importType === "products") {
       if (!row.name) rowErrors.push("name is required");
       if (!row.sku) rowErrors.push("sku is required");
+      if (row.default_price) {
+        const n = Number(row.default_price);
+        if (!Number.isFinite(n) || n < 0) {
+          rowErrors.push("default_price must be a non-negative number");
+        }
+      }
     } else if (importType === "suppliers") {
       if (!row.name) rowErrors.push("name is required");
       if (row.primary_contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.primary_contact_email)) {
@@ -562,16 +577,16 @@ export function CsvImportModal({
       return;
     }
 
-    // Fallback stub for import types that haven't been wired up yet (products
-    // and customers still go through this path). See GH #160-adjacent
-    // follow-ups for those.
-    setTimeout(() => {
-      setApplying(false);
-      toast.success(`Imported ${validRows.length} ${config.displayName.toLowerCase()}`);
-      onSuccess?.();
-      onClose();
-      reset();
-    }, 800);
+    // Fail loudly when an import type doesn't pass `onApply`. The old
+    // stub here mocked success with a setTimeout, which masked a real
+    // bug — the products import was unwired and silently dropped every
+    // row. Better to surface "we forgot to plumb this" as an obvious
+    // error than to ship a "success" toast over an empty DB.
+    setApplying(false);
+    setStep(2);
+    toast.error(
+      `Import for ${config.displayName.toLowerCase()} is not wired up. Pass onApply to <CsvImportModal>.`,
+    );
   }
 
   function downloadTemplate() {
