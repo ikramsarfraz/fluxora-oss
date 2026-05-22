@@ -50,21 +50,14 @@ fees vs lines:
 Line-item unit type:
 - "catch_weight" — line has BOTH weight and per-lb rate. (Meat sold by lb.)
 - "fixed_case" — line has a per-case rate, no weight. (Meat in fixed cases.)
-- "per_each" — non-weight item priced per INDIVIDUAL piece. The rate
-  reads "$X / EA" or "$X / each" and the quantity is in EA / pieces.
-  Examples: "WATER BOTTLE 16.9 OZ loose singles 48 EA $0.45/EA",
-  "CANDY BAR 24 EA $1.25/ea". quantityCases is the count of items;
-  unitPrice is $/each; unitOfMeasure MUST be "ea". NO weight column.
-- "per_unit" — non-weight item priced per CASE or other multi-pack UOM.
-  Rate reads "$X / CASE" or "$X / GAL" etc., quantity is in CS / cases.
-  Examples: "12 PK COKE 5 CASES @ $9.99/CASE", "milk 6 CS $14.20/CASE".
-  quantityCases is the count of cases; unitPrice is $/case;
-  unitOfMeasure is "case"/"cs"/"gal" etc. NEVER "ea".
+- "per_each" — non-weight item priced per piece (cans of soda, candy bars,
+  bottles of water, individual fruits). quantityCases is the count of items;
+  unitPrice is $/each. NO weight column expected.
+- "per_unit" — non-weight item priced per case or per other UOM
+  (case of 12 cans at $9.99/case, gallon jugs of milk at $4.50/gal,
+  bag of chips at $1.20/bag). quantityCases is the count of UOMs;
+  unitOfMeasure carries the abbreviation; unitPrice is $/UOM.
 - null when you cannot determine.
-- CRITICAL — per_each vs per_unit: read the RATE COLUMN carefully.
-  "/EA" or "/each" → ALWAYS per_each. "/CASE" or "/CS" or "/GAL" →
-  per_unit. Don't infer from the product name alone — let the rate
-  text decide.
 - quantityCases is the count field for ALL types; quantityWeight is TOTAL
   weight in lbs (catch_weight only — leave null for fixed/each/unit).
 
