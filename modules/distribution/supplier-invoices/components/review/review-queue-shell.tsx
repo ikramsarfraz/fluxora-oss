@@ -166,6 +166,15 @@ export function ReviewQueueShell({
   // calling onSubmitStart/onSubmitEnd.
   const [submitting, setSubmitting] = useState(false);
 
+  // Re-scan AlertDialog open state. Declared up here (not next to the
+  // mutation callbacks below) because several early-return paths sit
+  // between this hook and the JSX that uses it — putting `useState`
+  // after them violated the Rules of Hooks: the dialog's hook slot was
+  // present on renders that reached the bottom of the function but
+  // absent on renders that bailed early, throwing React's hook-order
+  // check.
+  const [rescanDialogOpen, setRescanDialogOpen] = useState(false);
+
   // Advisory claim on the current row — prevents two reviewers from racing
   // on the same invoice. `owned` is the happy path (this user has the
   // claim, heartbeats firing); `foreign` swaps the editable form for a
@@ -316,8 +325,8 @@ export function ReviewQueueShell({
   // Two-step rescan: clicking the header button just opens the AlertDialog;
   // confirming inside the dialog fires the mutation. Native `window.confirm`
   // was disruptive (focus jumps to the browser chrome) and looked out of
-  // place against the rest of the in-app modals.
-  const [rescanDialogOpen, setRescanDialogOpen] = useState(false);
+  // place against the rest of the in-app modals. `rescanDialogOpen` is
+  // declared at the top of the component (above the early returns).
   const onReparse: (() => void) | undefined = currentKey
     ? () => {
         if (rescanMutation.isPending) return;
