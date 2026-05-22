@@ -69,7 +69,13 @@ async function extractTextForPipeline(
 
   if (mode === "text-first") {
     try {
-      const layout = await extractPdfText(bytes);
+      // pdfjs-dist v5+ rejects Node's `Buffer` even though it extends
+      // Uint8Array — copy into a plain Uint8Array view so the strict
+      // instance check passes. Without this, every call falls through
+      // to pdf-parse with "Please provide binary data as `Uint8Array`".
+      const layout = await extractPdfText(
+        new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+      );
       if (layout.hasUsableText) {
         return {
           text: layout.combinedText,

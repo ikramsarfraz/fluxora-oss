@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -38,14 +40,17 @@ export type CacheStage = "invoice_extraction" | "vision_extraction";
 
 // Bump when extraction logic changes in a way that should invalidate prior
 // cache entries (prompt rewrites, validation rule changes that override AI
-// output like `reconcileUnitType` / `loose singles` overrides). Suffixed to
-// `pdf_content_hash` on both read and write so old rows become unreachable;
-// they remain in the table but are never read, and fresh writes use the new
-// key. A future migration can clean up orphans.
+// output like `reconcileUnitType` / `loose singles` overrides). We hash
+// `<pdfContentHash>:<version>` back to a 64-char sha256 hex so the result
+// still fits the `pdf_content_hash varchar(64)` column. Different version
+// → different stored hash, so old rows become unreachable (orphaned in-
+// table; a future cleanup migration can drop them).
 const CACHE_KEY_VERSION = "v2";
 
 function versionedHash(pdfContentHash: string): string {
-  return `${pdfContentHash}:${CACHE_KEY_VERSION}`;
+  return createHash("sha256")
+    .update(`${pdfContentHash}:${CACHE_KEY_VERSION}`)
+    .digest("hex");
 }
 
 /**
