@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
+import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   computeDraftLineWeight,
@@ -1692,25 +1693,27 @@ export function SupplierInvoiceForm({
           )}
         </div>
 
-        {/* Actions */}
-        <button
+        {/* Actions — design-system Button primitives so the forest-mid
+            primary CTA, secondary outline, and ghost cancel all match
+            every other action footer in the app. */}
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => router.push(cancelPath)}
           disabled={isPending}
-          style={ghostBtn(isPending)}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
           onClick={form.handleSubmit((values) => submit(values, false))}
           disabled={isPending || !canEdit}
           title={editDeniedReason}
-          style={secondaryBtn(isPending || !canEdit)}
         >
           {isPending ? "Saving…" : "Save draft"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={form.handleSubmit((values) => submit(values, true))}
           disabled={
@@ -1721,12 +1724,9 @@ export function SupplierInvoiceForm({
               ? `Acknowledge ${blockingChangesCount} line${blockingChangesCount === 1 ? "" : "s"} with changed supplier cost first.`
               : (editDeniedReason ?? completeDeniedReason)
           }
-          style={primaryBtn(
-            isPending || !canEdit || !canComplete || blockingChangesCount > 0,
-          )}
         >
           {isPending ? "Posting…" : "Complete & receive"}
-        </button>
+        </Button>
         </div>
       </div>
 
@@ -1748,47 +1748,8 @@ export function SupplierInvoiceForm({
 }
 
 // ── Button style helpers ───────────────────────────────────────────────────
-function ghostBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: "transparent",
-    color: C.ink,
-    border: `1px solid ${C.line}`,
-    padding: "9px 18px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
-
-function secondaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: C.surface,
-    color: C.ink,
-    border: `1px solid ${C.lineStrong}`,
-    padding: "9px 18px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
-
-function primaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: C.ink,
-    color: "var(--color-card)",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
+// Hand-rolled ghostBtn / secondaryBtn / primaryBtn style helpers were
+// removed when the action footer migrated to the design-system <Button>
+// primitive. The Button variants ("ghost", "secondary", default) cover
+// the same three roles with consistent forest-mid CTA color, hover
+// states, and focus rings that match every other footer in the app.
