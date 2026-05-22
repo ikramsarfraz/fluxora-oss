@@ -143,15 +143,33 @@ export function InventoryProductSummary() {
                         <MonoText>{row.totalCases.toLocaleString()}</MonoText>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        {/* Family-aware: weight products show "X.XX lb"
-                            (or kg, oz); non-weight products show their
-                            case count in the product's base UOM. */}
-                        <MonoText>
-                          {row.baseUnitFamily === "weight" ||
-                          row.baseUnitFamily == null
-                            ? `${formatWeightLbs(row.totalWeightLbs)} ${row.baseUnitAbbreviation ?? "lb"}`
-                            : `${row.totalCases.toLocaleString()} ${row.baseUnitAbbreviation ?? "ea"}`}
-                        </MonoText>
+                        {/* Family-aware:
+                              weight products  → "X.XX lb" / "kg" / "oz"
+                              non-weight       → "{cases × pack} {baseAbbr}"
+                            For non-weight products we display the
+                            base-unit total (so 5 cases of a 24-pack
+                            reads "120 ea"), with the case count
+                            underneath when the multiplication is
+                            non-trivial. */}
+                        {row.baseUnitFamily === "weight" ||
+                        row.baseUnitFamily == null ? (
+                          <MonoText>
+                            {formatWeightLbs(row.totalWeightLbs)}{" "}
+                            {row.baseUnitAbbreviation ?? "lb"}
+                          </MonoText>
+                        ) : (
+                          <div className="flex flex-col items-end">
+                            <MonoText>
+                              {row.totalUnits.toLocaleString()}{" "}
+                              {row.baseUnitAbbreviation ?? "ea"}
+                            </MonoText>
+                            {row.totalUnits !== row.totalCases ? (
+                              <span className="text-[10.5px] text-subtle">
+                                {row.totalCases.toLocaleString()} cs
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <MonoText>{row.itemCount.toLocaleString()}</MonoText>

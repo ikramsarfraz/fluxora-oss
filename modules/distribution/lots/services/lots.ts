@@ -70,6 +70,9 @@ export async function getLotById(lotId: string) {
           barcodeId: true,
           exactWeightLbs: true,
           cases: true,
+          // Pack size snapshot — drives the per-row "24 ea (1 cs)"
+          // display + the lot's Total Units aggregate.
+          unitsPerPackageSnapshot: true,
           costPerUnitSnapshot: true,
           costUnitTypeSnapshot: true,
           status: true,
@@ -237,6 +240,10 @@ export async function getLots() {
           exactWeightLbs: true,
           status: true,
           costUnitTypeSnapshot: true,
+          // Pack size snapshot — needed by `getLotTotals` to compute
+          // base-unit totals (cases × pack) instead of just summing
+          // case counts.
+          unitsPerPackageSnapshot: true,
         },
         with: {
           product: {

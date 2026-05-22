@@ -187,10 +187,23 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
             {/* Mixed-UOM safe: weight lots show "X.XX lb", non-weight
-                lots show their count in the product's base UOM. */}
-            {isLotNonWeight(lot)
-              ? `${totals.totalUnits} ${product?.baseUnit?.abbreviation ?? "ea"}`
-              : `${formatWeightLbs(totals.totalWeight)} ${product?.baseUnit?.abbreviation ?? "lb"}`}
+                lots show their base-unit count (cases × pack). The
+                secondary line shows the physical case count when the
+                pack multiplies — so 5 cases of a 24-pack reads
+                "120 ea / 5 cases". */}
+            {isLotNonWeight(lot) ? (
+              <>
+                {totals.totalUnits.toLocaleString()}{" "}
+                {product?.baseUnit?.abbreviation ?? "ea"}
+                {totals.totalCases !== totals.totalUnits ? (
+                  <div className="text-xs font-normal text-muted-foreground">
+                    {totals.totalCases.toLocaleString()} cs
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              `${formatWeightLbs(totals.totalWeight)} ${product?.baseUnit?.abbreviation ?? "lb"}`
+            )}
           </CardContent>
         </Card>
         <Card>

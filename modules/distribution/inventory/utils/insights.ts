@@ -168,6 +168,13 @@ export function formatInventoryQuantity(args: {
     | null;
   exactWeightLbs: string | number | null | undefined;
   cases: number | null | undefined;
+  /**
+   * Pack size — how many base units inside one case/box. Null/missing
+   * defaults to 1 (a per-each row where one inventory row IS one base
+   * unit). For per_unit rows this is the conversion snapshot captured
+   * at receive time (e.g. 24 for a 24-pack case).
+   */
+  unitsPerPackageSnapshot?: string | number | null | undefined;
   baseUnitAbbreviation: string | null | undefined;
 }): string {
   const baseAbbr = args.baseUnitAbbreviation?.trim() || null;
@@ -181,5 +188,13 @@ export function formatInventoryQuantity(args: {
     return `${weight.toFixed(2)} ${baseAbbr ?? "lb"}`;
   }
   const cases = Number(args.cases) || 0;
-  return `${cases} ${baseAbbr ?? "ea"}`;
+  const pack = Number(args.unitsPerPackageSnapshot ?? 1) || 1;
+  const totalBaseUnits = cases * pack;
+  // For pack-of-1 (per_each), display "1 ea". For multi-pack (24-pack
+  // case of a per_unit line), display "24 ea (1 cs)" so the user sees
+  // both the base-unit count and the physical case count at a glance.
+  if (pack > 1) {
+    return `${totalBaseUnits} ${baseAbbr ?? "ea"} (${cases} cs)`;
+  }
+  return `${totalBaseUnits} ${baseAbbr ?? "ea"}`;
 }

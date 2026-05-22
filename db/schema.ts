@@ -1466,6 +1466,21 @@ export const inventoryItems = pgTable(
       scale: 4,
     }).notNull(),
     cases: integer("cases").notNull().default(1),
+    /**
+     * Pack size snapshot — how many base units (each, lb, fl oz)
+     * are inside the case/box this inventory row represents. Snapshotted
+     * from `supplier_invoice_lines.conversion_to_base_snapshot` at
+     * receive time so a case-of-12 stays "12 ea per case" even if the
+     * product's default purchase unit is later changed.
+     *
+     * Null for legacy / catch-weight rows where one inventory_items
+     * row already represents one base unit (one lb of meat). The
+     * inventory-rollup math treats null as "1 per row".
+     */
+    unitsPerPackageSnapshot: numeric("units_per_package_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
     costPerUnitSnapshot: numeric("cost_per_unit_snapshot", {
       precision: 12,
       scale: 6,

@@ -299,7 +299,11 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
       // but the label would mislead. Per_each / per_unit rows feed the
       // separate totalUnits aggregate below.
       totalWeight: sql<string>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('catch_weight','fixed_case') or ${inventoryItems.costUnitTypeSnapshot} is null then ${inventoryItems.exactWeightLbs}::numeric else 0 end), 0)::text`,
-      totalUnits: sql<number>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('per_each','per_unit') then ${inventoryItems.cases} else 0 end), 0)::int`,
+      // Total base-units (eaches) across non-weight rows. Multiply
+      // cases × pack size so 5 cases of a 24-pack contribute 120, not
+      // 5. Pack size defaults to 1 when the snapshot is null (legacy
+      // rows or per_each lines where one row = one base unit).
+      totalUnits: sql<number>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('per_each','per_unit') then ${inventoryItems.cases}::numeric * coalesce(${inventoryItems.unitsPerPackageSnapshot}::numeric, 1) else 0 end), 0)::int`,
       expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '1 day' then 1 else 0 end), 0)::int`,
     })
     .from(inventoryItems)
@@ -1148,6 +1152,14 @@ export type InventoryProductSummaryRow = {
   name: string;
   totalCases: number;
   totalWeightLbs: string;
+  /**
+   * Total base units (eaches) on hand for this product — computed as
+   * SUM(cases × units_per_package_snapshot). For a non-weight product
+   * with 5 cases of a 24-pack, this is 120. Falls back to summing cases
+   * (= pack of 1) when no snapshot exists. Mirrors the row-level
+   * "55 cs × 24 ea/cs = 1320 ea" display in the inventory list.
+   */
+  totalUnits: number;
   itemCount: number;
   /**
    * Abbreviation of the product's base UOM ("lb", "ea", "gal", …). Used
@@ -1179,6 +1191,11 @@ export async function getInventoryProductSummary(): Promise<InventoryProductSumm
       name: products.name,
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
       totalWeightLbs: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      // Base-unit total: cases × pack size, summed across all rows.
+      // For non-weight products this is the "real" on-hand count
+      // (5 cases of 24 = 120 ea). For weight / per_each products
+      // pack size defaults to 1 and the value equals totalCases.
+      totalUnits: sql<number>`coalesce(sum(${inventoryItems.cases}::numeric * coalesce(${inventoryItems.unitsPerPackageSnapshot}::numeric, 1)), 0)::int`,
       itemCount: sql<number>`count(distinct ${inventoryItems.id})::int`,
       baseUnitAbbreviation: unitsOfMeasure.abbreviation,
       baseUnitFamily: unitsOfMeasure.family,

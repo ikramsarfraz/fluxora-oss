@@ -123,11 +123,14 @@ export function InventoryDetailPage({
     item.costUnitTypeSnapshot === "catch_weight"
       ? Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs)
       : Number(item.costPerUnitSnapshot) * item.cases;
-  // Renders "X.XX lb" / "5 ea" / "1 case" depending on the snapshot.
+  // Renders "X.XX lb" / "5 ea" / "24 ea (1 cs)" depending on the
+  // snapshot. Pack size lives on the inventory row now so multi-pack
+  // cases display both the base-unit count and the case count.
   const quantityLabel = formatInventoryQuantity({
     costUnitTypeSnapshot: item.costUnitTypeSnapshot,
     exactWeightLbs: item.exactWeightLbs,
     cases: item.cases,
+    unitsPerPackageSnapshot: item.unitsPerPackageSnapshot,
     baseUnitAbbreviation: baseUnitAbbr,
   });
   const isWeightItem =

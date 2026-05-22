@@ -30,12 +30,14 @@ export function getLotSourceInvoices(lot: LotLike) {
 
 export function getLotTotals(lot: LotLike) {
   // Split aggregates by family: weight items contribute to totalWeight,
-  // count items contribute to totalUnits. Without this, mixed-UOM lots
-  // (impossible today but supported by schema) would silently produce
-  // misleading numbers; even single-family lots benefit because the
-  // display layer can now show the correct unit suffix.
+  // count items contribute to totalUnits as `cases × pack-size` so a
+  // lot holding 5 cases of a 24-pack reports 120 units, not 5. Pack
+  // size defaults to 1 for legacy rows (one inventory_items row IS one
+  // base unit) so weight + per_each lots produce the same numbers as
+  // before this snapshot column was added.
   let totalWeight = 0;
   let totalUnits = 0;
+  let totalCases = 0;
   for (const item of lot.inventoryItems) {
     const isWeightMode =
       item.costUnitTypeSnapshot === "catch_weight" ||
@@ -44,13 +46,22 @@ export function getLotTotals(lot: LotLike) {
     if (isWeightMode) {
       totalWeight += Number(item.exactWeightLbs) || 0;
     } else {
-      totalUnits += Number(item.cases) || 0;
+      const cases = Number(item.cases) || 0;
+      const pack = Number(item.unitsPerPackageSnapshot ?? 1) || 1;
+      totalCases += cases;
+      totalUnits += cases * pack;
     }
   }
   return {
     inventoryItemCount: lot.inventoryItems.length,
     totalWeight,
     totalUnits,
+    /**
+     * Physical case count separate from totalUnits so the lot detail
+     * can render both "120 ea" and "(5 cs)" when the pack multiplies
+     * a single case into multiple sellable base units.
+     */
+    totalCases,
     statuses: lot.inventoryItems.map(item => item.status),
   };
 }

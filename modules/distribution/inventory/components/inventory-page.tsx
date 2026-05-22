@@ -102,6 +102,9 @@ const COLUMNS: ListingColumn<InventoryRow>[] = [
             costUnitTypeSnapshot: row.costUnitTypeSnapshot,
             exactWeightLbs: row.exactWeightLbs,
             cases: row.cases,
+            // Pack size lives on the inventory row now — drives the
+            // "120 ea (5 cs)" display for multi-pack rows.
+            unitsPerPackageSnapshot: row.unitsPerPackageSnapshot,
             baseUnitAbbreviation: row.product?.baseUnit?.abbreviation,
           })}
         </MonoText>

@@ -1442,6 +1442,18 @@ async function postSupplierInvoiceInternal(args: {
     // because each inventory_items row represents one purchase unit
     // (one case). For weight modes, unitPrice is $/lb so it stays too.
     // The intent is captured in `cost_unit_type_snapshot`.
+    // Carry the pack size snapshot forward so the inventory rollup can
+    // multiply N cases × Y eaches-per-case to show the real base-unit
+    // count. Weight modes use 1 (one base unit per row); per_each is
+    // also 1 (each row is one unit); per_unit gets the actual pack size.
+    const unitsPerPackageSnapshot =
+      line.unitType === "per_unit"
+        ? line.conversionToBaseSnapshot &&
+          Number(line.conversionToBaseSnapshot) > 0
+          ? String(line.conversionToBaseSnapshot)
+          : "1"
+        : null;
+
     const itemRows = Array.from({ length: caseCount }, (_, i) => {
       const caseWeightLbs = !isWeightMode
         ? "0"
@@ -1454,6 +1466,7 @@ async function postSupplierInvoiceInternal(args: {
         barcodeId: generateBarcode(),
         exactWeightLbs: caseWeightLbs,
         cases: 1,
+        unitsPerPackageSnapshot,
         costPerUnitSnapshot: line.unitPrice,
         costUnitTypeSnapshot: line.unitType,
         status: "in_stock" as const,

@@ -90,10 +90,29 @@ const COLUMNS: ListingColumn<LotRow>[] = [
       const totals = getLotTotals(row);
       const product = getLotPrimaryProduct(row);
       const baseAbbr = product?.baseUnit?.abbreviation ?? "lb";
-      const primary = isLotNonWeight(row)
-        ? `${totals.totalUnits} ${baseAbbr}`
-        : `${formatWeightLbs(totals.totalWeight)} ${baseAbbr}`;
-      return { primary: <MonoText>{primary}</MonoText> };
+      // Non-weight: show base units + case count when the pack expands
+      // multiple base units per case ("120 ea" with "5 cs" secondary).
+      // Weight + per_each: single value.
+      if (isLotNonWeight(row)) {
+        const showCasesSecondary = totals.totalCases !== totals.totalUnits;
+        return {
+          primary: (
+            <MonoText>
+              {totals.totalUnits} {baseAbbr}
+            </MonoText>
+          ),
+          secondary: showCasesSecondary
+            ? `${totals.totalCases} cs`
+            : undefined,
+        };
+      }
+      return {
+        primary: (
+          <MonoText>
+            {formatWeightLbs(totals.totalWeight)} {baseAbbr}
+          </MonoText>
+        ),
+      };
     },
   },
   {
