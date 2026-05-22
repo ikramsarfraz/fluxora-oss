@@ -724,6 +724,7 @@ function ReviewQueueHeaderForCurrent({
   onBackToBulk,
   onSkip,
   onReparse,
+  reparsePending = false,
 }: {
   fileName: string;
   counts: ReviewCounts;
@@ -742,6 +743,7 @@ function ReviewQueueHeaderForCurrent({
   onBackToBulk?: () => void;
   onSkip?: () => void;
   onReparse?: () => void;
+  reparsePending?: boolean;
 }) {
   // The real "Complete" handler lives in ReviewContainer. We dispatch a
   // custom event so the queue header can stay decoupled from the form
@@ -763,6 +765,7 @@ function ReviewQueueHeaderForCurrent({
       submitDisabled={submitDisabled}
       onBackToBulk={onBackToBulk}
       onReparse={onReparse}
+      reparsePending={reparsePending}
       onSkip={onSkip}
       onComplete={handleComplete}
     />
