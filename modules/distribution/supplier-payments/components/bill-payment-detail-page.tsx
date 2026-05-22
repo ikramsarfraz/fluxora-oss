@@ -32,7 +32,7 @@ import { useVoidSupplierInvoicePayment } from "@/modules/distribution/supplier-i
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
-import { formatDisplayDate } from "@/lib/utils/date";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/date";
 import type { BillPaymentDetail } from "../services/supplier-payments";
 import { formatBillPaymentReference } from "../utils/payment-reference";
 import { BillPaymentEditDialog } from "./bill-payment-edit-dialog";
@@ -46,16 +46,6 @@ function paymentMethodLabel(method: BillPaymentDetail["paymentMethod"]): string 
     credit_card: "Credit card",
   };
   return map[method] ?? method;
-}
-
-function formatDateTime(value: string | Date | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 export function BillPaymentDetailPage({ paymentId }: { paymentId: string }) {
@@ -275,7 +265,7 @@ export function BillPaymentDetailPage({ paymentId }: { paymentId: string }) {
             {payment.createdBy?.fullName ?? "—"}
           </DetailField>
           <DetailField label="Recorded at">
-            {formatDateTime(payment.createdAt)}
+            {formatDisplayDateTime(payment.createdAt)}
           </DetailField>
         </DetailGrid>
       </DetailSection>

@@ -31,7 +31,7 @@ import { usePayment, useVoidPayment } from "../hooks/use-payments";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/utils/currency";
-import { formatDisplayDate } from "@/lib/utils/date";
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/date";
 import type { PaymentDetail } from "../services/payments";
 import { PaymentEditDialog } from "./payment-edit-dialog";
 
@@ -46,16 +46,6 @@ function paymentMethodLabel(
     credit_card: "Credit card",
   };
   return map[method] ?? method;
-}
-
-function formatDateTime(value: string | Date | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
@@ -290,7 +280,7 @@ export function PaymentDetailPage({ paymentId }: { paymentId: string }) {
             {payment.createdBy?.fullName ?? "—"}
           </DetailField>
           <DetailField label="Recorded at">
-            {formatDateTime(payment.createdAt)}
+            {formatDisplayDateTime(payment.createdAt)}
           </DetailField>
         </DetailGrid>
       </DetailSection>

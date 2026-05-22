@@ -39,17 +39,7 @@ import {
   type ExpensePaymentMethod,
 } from "@/lib/expenses/metadata";
 import { formatMoney } from "@/lib/utils/currency";
-import { formatDisplayDate } from "@/lib/utils/date";
-
-function formatDateTime(value: string | Date | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
+import { formatDisplayDate, formatDisplayDateTime } from "@/lib/utils/date";
 
 export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
   const router = useRouter();
@@ -154,7 +144,7 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
             {expense.createdBy?.fullName ?? "—"}
           </DetailField>
           <DetailField label="Created at">
-            {formatDateTime(expense.createdAt)}
+            {formatDisplayDateTime(expense.createdAt)}
           </DetailField>
         </DetailGrid>
       </DetailSection>

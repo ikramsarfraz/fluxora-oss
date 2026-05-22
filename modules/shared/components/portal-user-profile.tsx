@@ -15,19 +15,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatDisplayDateTime } from "@/lib/utils/date";
 
 function roleLabel(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
-}
-
-function formatDateTime(value: string | Date | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 export type PortalUserProfileProps = {
@@ -125,11 +116,11 @@ export function PortalUserProfile({
           ) : null}
           <div>
             <p className="text-muted-foreground text-sm">Created</p>
-            <p>{formatDateTime(user.createdAt)}</p>
+            <p>{formatDisplayDateTime(user.createdAt)}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-sm">Updated</p>
-            <p>{formatDateTime(user.updatedAt)}</p>
+            <p>{formatDisplayDateTime(user.updatedAt)}</p>
           </div>
         </CardContent>
         {variant === "self" && selfActions ? (
