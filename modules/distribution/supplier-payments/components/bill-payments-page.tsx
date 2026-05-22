@@ -6,7 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, Receipt, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingErrorState, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -265,23 +265,10 @@ export function BillPaymentsPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button
-          type="button"
-          onClick={() => refetch()}
-          style={{
-            textDecoration: "underline",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "inherit",
-            fontSize: "inherit",
-          }}
-        >
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 

@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingErrorState, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
@@ -156,12 +156,10 @@ export function ExpensesPage() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "var(--color-danger-fg)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
