@@ -6,6 +6,7 @@ import {
   getOpenInvoicesForCustomerAction,
   getOpenInvoicesForPaymentAction,
   getSalesInvoiceByIdAction,
+  getSalesInvoicePaymentsPageAction,
   getSalesInvoicesAction,
   getSalesInvoicesPageAction,
   getSalesInvoicesSummaryAction,
@@ -39,6 +40,20 @@ export function useSalesInvoice(id: string) {
     queryKey: queryKeys.invoices.detail(id),
     queryFn: () => getSalesInvoiceByIdAction(id),
     enabled: !!id && isUuid(id),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Full payment history for one invoice. Detail page embeds the most-
+ * recent 10 inline; this hook backs the "View all N payments" toggle
+ * so the initial fetch stays bounded.
+ */
+export function useSalesInvoicePayments(id: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: queryKeys.invoices.payments(id),
+    queryFn: () => getSalesInvoicePaymentsPageAction(id),
+    enabled: (opts?.enabled ?? false) && !!id && isUuid(id),
     staleTime: 1000 * 60 * 5,
   });
 }

@@ -317,66 +317,110 @@ export async function generateInvoiceForSalesOrder(input: {
   });
 }
 
+/**
+ * Number of most-recent payments embedded in the invoice detail payload.
+ * Tenants with long payment histories (hundreds of partial payments on a
+ * single open balance) used to pay an N+1-ish load tax on every detail
+ * page hit; the rest are fetched via getSalesInvoicePaymentsPage when the
+ * user clicks "View all".
+ */
+export const SALES_INVOICE_PAYMENT_PREVIEW_LIMIT = 10;
+
 export async function getSalesInvoiceById(id: string) {
   const tenant = await getCurrentTenant();
-  return db.query.salesInvoices.findFirst({
-    where: and(eq(salesInvoices.id, id), eq(salesInvoices.tenantId, tenant.id)),
-    with: {
-      customer: {
-        with: {
-          addresses: true,
-        },
-      },
-      salesOrder: {
-        with: {
-          customer: {
-            with: {
-              addresses: true,
-            },
+  const [invoice, paymentCountRow] = await Promise.all([
+    db.query.salesInvoices.findFirst({
+      where: and(
+        eq(salesInvoices.id, id),
+        eq(salesInvoices.tenantId, tenant.id),
+      ),
+      with: {
+        customer: {
+          with: {
+            addresses: true,
           },
-          lines: {
-            with: {
-              product: true,
-              fulfillments: {
-                with: {
-                  inventoryItem: true,
+        },
+        salesOrder: {
+          with: {
+            customer: {
+              with: {
+                addresses: true,
+              },
+            },
+            lines: {
+              with: {
+                product: true,
+                fulfillments: {
+                  with: {
+                    inventoryItem: true,
+                  },
                 },
               },
             },
           },
         },
-      },
-      lines: {
-        with: {
-          product: {
-            // Eager-load baseUnit so the invoice detail page can render
-            // per-line UOM suffixes ("/lb", "/ea", "/gal") without an
-            // extra join. The invoice-line schema doesn't snapshot the
-            // unit itself — we read the product's current base UOM,
-            // which is locked once any bill lands.
-            with: {
-              baseUnit: {
-                columns: { id: true, abbreviation: true, family: true },
+        lines: {
+          with: {
+            product: {
+              // Eager-load baseUnit so the invoice detail page can render
+              // per-line UOM suffixes ("/lb", "/ea", "/gal") without an
+              // extra join. The invoice-line schema doesn't snapshot the
+              // unit itself — we read the product's current base UOM,
+              // which is locked once any bill lands.
+              with: {
+                baseUnit: {
+                  columns: { id: true, abbreviation: true, family: true },
+                },
               },
             },
           },
         },
-      },
-      payments: {
-        with: {
-          createdBy: true,
+        payments: {
+          with: {
+            createdBy: true,
+          },
+          orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+          limit: SALES_INVOICE_PAYMENT_PREVIEW_LIMIT,
         },
-        orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+        createdBy: true,
+        updatedBy: true,
       },
-      createdBy: true,
-      updatedBy: true,
-    },
-  });
+    }),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.salesInvoiceId, id),
+          eq(payments.tenantId, tenant.id),
+        ),
+      ),
+  ]);
+
+  if (!invoice) return undefined;
+  return { ...invoice, paymentCount: paymentCountRow[0]?.count ?? 0 };
 }
 
 export type SalesInvoiceDetail = NonNullable<
   Awaited<ReturnType<typeof getSalesInvoiceById>>
 >;
+
+/**
+ * Full paginated payment list for one invoice. Used by the detail page's
+ * "View all N payments" path so the initial getSalesInvoiceById payload
+ * stays bounded.
+ */
+export async function getSalesInvoicePaymentsPage(invoiceId: string) {
+  const tenant = await getCurrentTenant();
+  return db.query.payments.findMany({
+    where: and(
+      eq(payments.salesInvoiceId, invoiceId),
+      eq(payments.tenantId, tenant.id),
+    ),
+    with: { createdBy: true },
+    orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+  });
+}
 
 export async function getSalesInvoices() {
   const tenant = await getCurrentTenant();

@@ -80,6 +80,7 @@ export const queryKeys = {
     all: ["invoices"] as const,
     list: (params: unknown) => ["invoices", "list", params] as const,
     detail: (id: string) => ["invoices", id] as const,
+    payments: (id: string) => ["invoices", id, "payments"] as const,
   },
   supplierInvoices: {
     all: ["supplier-invoices"] as const,

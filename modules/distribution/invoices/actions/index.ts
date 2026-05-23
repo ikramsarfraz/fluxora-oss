@@ -4,6 +4,7 @@ import {
   getOpenInvoicesForCustomer,
   getOpenInvoicesForPayment,
   getSalesInvoiceById,
+  getSalesInvoicePaymentsPage,
   getSalesInvoices,
   getSalesInvoicesPage,
   getSalesInvoicesSummary,
@@ -23,6 +24,10 @@ export async function getSalesInvoicesPageAction(
 
 export async function getSalesInvoiceByIdAction(id: string) {
   return await getSalesInvoiceById(id);
+}
+
+export async function getSalesInvoicePaymentsPageAction(invoiceId: string) {
+  return await getSalesInvoicePaymentsPage(invoiceId);
 }
 
 export async function getOpenInvoicesForPaymentAction(

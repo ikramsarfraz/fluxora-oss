@@ -7,7 +7,7 @@ import { ChevronDown, ChevronRight, Download, Receipt } from "lucide-react";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { useSalesInvoice } from "../hooks/use-invoices";
+import { useSalesInvoice, useSalesInvoicePayments } from "../hooks/use-invoices";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
 import { InvoicePaymentEntryDialog } from "./invoice-payment-entry-dialog";
@@ -130,6 +130,10 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
 
   const [profitExpanded, setProfitExpanded] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [showAllPayments, setShowAllPayments] = useState(false);
+  const allPaymentsQuery = useSalesInvoicePayments(invoiceId, {
+    enabled: showAllPayments,
+  });
 
   useSetBreadcrumbLabel(`/invoices/${invoiceId}`, invoice?.invoiceNumber);
 
@@ -490,54 +494,93 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
             </div>
           </div>
 
-          {/* Payment history — visible once any payment has been recorded */}
-          {(invoice.payments?.length ?? 0) > 0 ? (
-            <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 28 : 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.muted, marginBottom: 10 }}>
-                Payment history
+          {/* Payment history — visible once any payment has been recorded.
+              Initial render uses the most-recent 10 embedded in the invoice
+              payload; clicking "View all" expands to the full list. */}
+          {(invoice.payments?.length ?? 0) > 0 ? (() => {
+            const embeddedPayments = invoice.payments ?? [];
+            const totalCount =
+              invoice.paymentCount ?? embeddedPayments.length;
+            const hasMore = totalCount > embeddedPayments.length;
+            // Use the full list once it's loaded; otherwise show the embedded preview.
+            const displayedPayments =
+              showAllPayments && allPaymentsQuery.data
+                ? allPaymentsQuery.data
+                : embeddedPayments;
+            return (
+              <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 28 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.muted, marginBottom: 10, display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span>Payment history</span>
+                  {totalCount > embeddedPayments.length && !showAllPayments ? (
+                    <span style={{ fontSize: 11, color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                      Showing {embeddedPayments.length} of {totalCount}
+                    </span>
+                  ) : null}
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Date</th>
+                      <th style={thStyle}>Method</th>
+                      <th style={thStyle}>Reference</th>
+                      <th style={thStyle}>Recorded by</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedPayments.map((payment, i) => {
+                      const ref = payment.referenceNumber ?? payment.checkNumber ?? null;
+                      return (
+                        <tr key={payment.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
+                          <td style={{ padding: "8px 0", fontSize: 13, fontFamily: C.mono, color: C.ink2 }}>
+                            <Link
+                              href={`/payments/${payment.id}`}
+                              style={{ color: "inherit", textDecoration: "none", borderBottom: `1px dashed ${C.line}` }}
+                            >
+                              {formatDisplayDate(payment.paymentDate)}
+                            </Link>
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                            {paymentMethodLabel(payment.paymentMethod)}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2, fontFamily: ref ? C.mono : "inherit" }}>
+                            {ref ?? <span style={{ color: C.muted }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                            {payment.createdBy?.fullName ?? <span style={{ color: C.muted }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, color: C.ink, fontWeight: 500 }}>
+                            {formatMoney(payment.amount)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {hasMore && !showAllPayments ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPayments(true)}
+                    disabled={allPaymentsQuery.isFetching}
+                    style={{
+                      marginTop: 12,
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      fontSize: 12,
+                      color: C.info,
+                      cursor: allPaymentsQuery.isFetching ? "default" : "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    {allPaymentsQuery.isFetching
+                      ? "Loading…"
+                      : `View all ${totalCount} payments`}
+                  </button>
+                ) : null}
               </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Date</th>
-                    <th style={thStyle}>Method</th>
-                    <th style={thStyle}>Reference</th>
-                    <th style={thStyle}>Recorded by</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(invoice.payments ?? []).map((payment, i) => {
-                    const ref = payment.referenceNumber ?? payment.checkNumber ?? null;
-                    return (
-                      <tr key={payment.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
-                        <td style={{ padding: "8px 0", fontSize: 13, fontFamily: C.mono, color: C.ink2 }}>
-                          <Link
-                            href={`/payments/${payment.id}`}
-                            style={{ color: "inherit", textDecoration: "none", borderBottom: `1px dashed ${C.line}` }}
-                          >
-                            {formatDisplayDate(payment.paymentDate)}
-                          </Link>
-                        </td>
-                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
-                          {paymentMethodLabel(payment.paymentMethod)}
-                        </td>
-                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2, fontFamily: ref ? C.mono : "inherit" }}>
-                          {ref ?? <span style={{ color: C.muted }}>—</span>}
-                        </td>
-                        <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
-                          {payment.createdBy?.fullName ?? <span style={{ color: C.muted }}>—</span>}
-                        </td>
-                        <td style={{ padding: "8px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, color: C.ink, fontWeight: 500 }}>
-                          {formatMoney(payment.amount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
+            );
+          })() : null}
 
           {/* Footer */}
           {(tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault) ? (
