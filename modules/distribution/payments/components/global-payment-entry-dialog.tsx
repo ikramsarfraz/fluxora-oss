@@ -41,7 +41,7 @@ import type { OpenInvoiceForPayment } from "@/modules/distribution/invoices/serv
 import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 type Step = "pick" | "enter";
 

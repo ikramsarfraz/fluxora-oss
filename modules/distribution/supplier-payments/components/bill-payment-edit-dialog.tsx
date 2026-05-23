@@ -36,7 +36,7 @@ import type { BillPaymentDetail } from "../services/supplier-payments";
 import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 interface FormValues {
   paymentDate: string;

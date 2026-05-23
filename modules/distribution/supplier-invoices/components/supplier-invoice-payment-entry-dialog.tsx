@@ -35,7 +35,7 @@ import { formatMoney } from "@/lib/utils/currency";
 import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 interface SupplierInvoicePaymentEntryDialogProps {
   open: boolean;

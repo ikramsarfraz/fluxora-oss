@@ -13,7 +13,7 @@ import {
   PAYMENT_METHOD_LABELS as PAYMENT_METHOD_LABEL,
   PAYMENT_METHOD_OPTIONS as SHARED_PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 // This review surface lets the user clear the payment method back to
 // "Not specified" (we capture during AI extraction; corrections are

@@ -42,7 +42,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);

@@ -38,7 +38,7 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import {
   PAYMENT_METHOD_OPTIONS,
   type PaymentMethod,
-} from "@/modules/shared";
+} from "@/modules/shared/utils/payment-methods";
 
 interface PaymentFormValues {
   paymentDate: string;
