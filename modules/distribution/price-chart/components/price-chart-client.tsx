@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
@@ -65,6 +65,15 @@ function overrideCount(prices: PriceChartData["prices"], customerId: string): nu
   return prices.filter(p => p.customer_id === customerId).length;
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 // ── CustomerList ──────────────────────────────────────────────────────────────
 
 function CustomerList({
@@ -103,6 +112,7 @@ function CustomerList({
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search customers…"
+            aria-label="Search customers"
             className="text-[13px]"
           />
         </InputGroup>
@@ -199,10 +209,11 @@ function CustomerCard({
   }, [allProducts, prices, customer.id]);
 
   function commitMarkup() {
-    const v = parseFloat(markupDraft);
-    if (Number.isFinite(v) && v >= 0) {
-      onMarkupChange(v);
-      toast.success(`Markup set to ${v}%`);
+    const raw = parseFloat(markupDraft);
+    if (Number.isFinite(raw) && raw >= 0) {
+      const clamped = Math.min(raw, 100);
+      onMarkupChange(clamped);
+      toast.success(`Markup set to ${clamped}%`);
     }
     setEditingMarkup(false);
   }
@@ -247,6 +258,7 @@ function CustomerCard({
                   if (e.key === "Enter") commitMarkup();
                   if (e.key === "Escape") setEditingMarkup(false);
                 }}
+                aria-label="Bulk markup percent"
                 className="w-14 h-7 text-sm font-semibold px-2"
               />
               <span className="text-xs text-subtle">%</span>
@@ -332,17 +344,23 @@ function FuelCard({
           type="number"
           step={0.5}
           min={0}
+          max={9999}
           value={val}
           onChange={e => setVal(e.target.value)}
           onBlur={() => {
             const n = parseFloat(val);
-            const amt = Number.isFinite(n) && n > 0 ? n.toFixed(2) : null;
-            onSave(amt);
+            const clamped =
+              Number.isFinite(n) && n > 0 ? Math.min(n, 9999) : null;
+            if (clamped != null && clamped !== n) {
+              setVal(clamped.toFixed(2));
+            }
+            onSave(clamped != null ? clamped.toFixed(2) : null);
           }}
           onKeyDown={e => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
           disabled={saving}
+          aria-label="Fuel surcharge amount in dollars"
           className="text-right font-mono tabular-nums font-medium text-[13px]"
         />
       </InputGroup>
@@ -399,6 +417,7 @@ function VendorPriceInput({
               (e.target as HTMLInputElement).blur();
             }
           }}
+          aria-label="Supplier-specific customer price per pound"
           className={cn(
             "w-22 pl-5 pr-1.5 text-right font-mono tabular-nums text-[12.5px] h-7",
             "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
@@ -697,6 +716,7 @@ function ProductRow({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
+                  aria-label={`Customer price per pound for ${prod.name}`}
                   className={cn(
                     "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
                     "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
@@ -793,10 +813,11 @@ function ProductTable({
     setExpandedProductId(null);
   }
 
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const { data: pageData } = useCustomerProductPricesPage(customer.id, {
     page,
     pageSize,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     filters: {
       category: catFilter === "all" ? undefined : catFilter,
       overridesOnly: modeFilter === "overrides" ? "true" : undefined,
@@ -873,6 +894,7 @@ function ProductTable({
               resetListPosition();
             }}
             placeholder="Search product or SKU…"
+            aria-label="Search products by name or SKU"
             className="text-[13px]"
           />
         </InputGroup>
