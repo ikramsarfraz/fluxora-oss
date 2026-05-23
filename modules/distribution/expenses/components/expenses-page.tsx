@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -16,8 +16,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingErrorState, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingErrorState, ListingPage, ListingSecondaryAction, MonoText, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { exportExpensesCsvAction } from "../actions";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import {
@@ -140,6 +141,7 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
 export function ExpensesPage() {
   const router = useRouter();
   const [deletingExpense, setDeletingExpense] = useState<ExpenseRow | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const { data: currentUser } = useCurrentPortalUser();
   const canManage = canManageExpenses(currentUser?.role);
@@ -172,6 +174,34 @@ export function ExpensesPage() {
 
   const deleteExpense = useDeleteExpense();
 
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const result = await exportExpensesCsvAction({
+        search: pagination.search,
+        sort: pagination.sort,
+        direction: pagination.direction,
+        filters: f,
+      });
+      const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        result.count === 0
+          ? "Exported 0 expenses."
+          : `Exported ${result.count} expense${result.count === 1 ? "" : "s"}.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (error) {
     return (
       <ListingErrorState
@@ -201,6 +231,12 @@ export function ExpensesPage() {
       <ListingPage
         title="Expenses"
         subtitle="Track operational costs and business expenditures."
+        secondaryActions={
+          <ListingSecondaryAction onClick={handleExportCsv} disabled={exporting}>
+            <Download className="size-3.5" />
+            {exporting ? "Exporting…" : "Export CSV"}
+          </ListingSecondaryAction>
+        }
         primaryAction={
           canManage
             ? (

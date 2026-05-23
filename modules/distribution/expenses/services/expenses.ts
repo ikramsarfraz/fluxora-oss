@@ -196,6 +196,84 @@ export async function getExpensesPage(input?: ExpenseListParams) {
 
 export type ExpenseListItem = Awaited<ReturnType<typeof getExpenses>>[number];
 
+/**
+ * Build the CSV export for the expenses listing, honoring the same filters
+ * + search the UI applies. Caller is responsible for the Blob/download —
+ * service just returns the rows.
+ */
+export async function exportExpensesCsv(input?: ExpenseListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "expenseDate",
+    defaultDirection: "desc",
+    defaultFilters: {} as ExpenseListFilters,
+  });
+  const f = query.filters;
+  const conditions = [
+    eq(expenses.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      expenses.category,
+      expenses.note,
+      portalUsers.fullName,
+    ]),
+  ];
+  if (f.dateFrom) conditions.push(gte(expenses.expenseDate, f.dateFrom));
+  if (f.dateTo) conditions.push(lte(expenses.expenseDate, f.dateTo));
+  if (f.amountMin) {
+    const n = Number(f.amountMin);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(gte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.amountMax) {
+    const n = Number(f.amountMax);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(lte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.paymentMethod) {
+    conditions.push(
+      eq(expenses.paymentMethod, f.paymentMethod as ExpensePaymentMethod),
+    );
+  }
+  if (f.recurrence === "schedules") {
+    conditions.push(ne(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "instances") {
+    conditions.push(isNotNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "oneoff") {
+    conditions.push(eq(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  const where = and(...conditions);
+
+  // Hard cap at 10k rows — anything larger should paginate through the API
+  // rather than ship as a single download.
+  const rows = await db.query.expenses.findMany({
+    where,
+    with: { createdBy: true },
+    orderBy: [desc(expenses.expenseDate), desc(expenses.createdAt)],
+    limit: 10_000,
+  });
+
+  return rows.map(r => ({
+    expenseDate: r.expenseDate,
+    category: r.category,
+    amount: r.amount,
+    paymentMethod: r.paymentMethod ?? "",
+    note: r.note ?? "",
+    recurrenceInterval: r.recurrenceInterval ?? "none",
+    recurrenceEndDate: r.recurrenceEndDate ?? "",
+    isRecurringSchedule:
+      r.recurrenceInterval && r.recurrenceInterval !== "none" && !r.recurrenceParentId
+        ? "yes"
+        : "no",
+    isMaterializedInstance: r.recurrenceParentId ? "yes" : "no",
+    createdBy: r.createdBy?.fullName ?? "",
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+  }));
+}
+
 export async function getExpenseById(id: string) {
   const tenant = await getCurrentTenant();
   const row = await db.query.expenses.findFirst({
