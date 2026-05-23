@@ -12,6 +12,11 @@ export type VisionExtractionResult = AiExtractionResult & {
 
 // 20 MB — OpenAI file content practical limit for inline base64
 const MAX_PDF_BYTES_FOR_VISION = 20 * 1024 * 1024;
+// Hard cap on pages. Beyond this the per-page token budget on OpenAI
+// vision blows the context window mid-extraction (or produces a $$$ bill
+// for a document that's almost certainly not a single supplier invoice —
+// e.g. a 200-page master shipping manifest accidentally uploaded).
+const MAX_PDF_PAGES_FOR_VISION = 50;
 
 function buildFailureResult(reason: string, rawContent = ""): VisionExtractionResult {
   return {
@@ -40,6 +45,15 @@ export async function extractSupplierInvoiceWithVision(
   if (input.pdfBuffer.byteLength > MAX_PDF_BYTES_FOR_VISION) {
     return buildFailureResult(
       `PDF exceeds maximum vision input size (${MAX_PDF_BYTES_FOR_VISION / (1024 * 1024)} MB).`,
+    );
+  }
+
+  if (
+    input.pdfPageCount != null &&
+    input.pdfPageCount > MAX_PDF_PAGES_FOR_VISION
+  ) {
+    return buildFailureResult(
+      `PDF has ${input.pdfPageCount} pages, exceeding the vision page limit (${MAX_PDF_PAGES_FOR_VISION}).`,
     );
   }
 

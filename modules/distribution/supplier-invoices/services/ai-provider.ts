@@ -198,6 +198,12 @@ export type VisionExtractionInput = {
   extractedText?: string;
   supplierHints?: string[];
   candidateSuppliers?: Array<{ id: string; name: string }>;
+  /**
+   * Page count of the source PDF. Used by the vision service to short-
+   * circuit before sending huge documents to OpenAI (token-limit / cost
+   * blowup). Pass the count from upstream extraction when known.
+   */
+  pdfPageCount?: number;
   debug?: boolean;
 };
 

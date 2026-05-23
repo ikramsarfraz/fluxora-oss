@@ -454,6 +454,7 @@ export async function runParsingPipeline(args: {
           extractedText,
           supplierHints: deterministicResult.unmatchedSupplierCandidates,
           candidateSuppliers: supplierRows,
+          pdfPageCount,
           debug,
         }).catch(() => null)
       : null;
@@ -526,6 +527,7 @@ export async function runParsingPipeline(args: {
           extractedText,
           supplierHints: deterministicResult.unmatchedSupplierCandidates,
           candidateSuppliers: supplierRows,
+          pdfPageCount,
           debug,
         }));
 
