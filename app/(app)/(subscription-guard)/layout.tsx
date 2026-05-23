@@ -11,6 +11,7 @@ import {
   shouldBlockTenantAccess,
 } from "@/lib/tenant-subscription-health";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
 /**
  * Hard subscription gate for tenant routes. `account/` and `billing-blocked/` live outside this
@@ -51,8 +52,16 @@ export default async function TenantSubscriptionGuardLayout({
     return children;
   }
 
+  // Onboarding redirect is owner-only. Invited admins / sales /
+  // accountants / warehouse users shouldn't be bounced into a form
+  // that overwrites tenant.name + businessCategory — that's the
+  // owner's call. Non-owners see whatever guarded route they were
+  // headed to (usually the dashboard's empty-state) instead.
   if (tenant.billCount === 0 && !tenant.welcomeSkippedAt) {
-    redirect("/get-started");
+    const currentUser = await getCurrentPortalUser();
+    if (currentUser.role === "owner") {
+      redirect("/get-started");
+    }
   }
 
   return children;

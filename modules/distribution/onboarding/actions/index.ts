@@ -16,6 +16,14 @@ export async function completeOnboarding(input: {
     getCurrentTenant(),
     getCurrentPortalUser(),
   ]);
+  // Onboarding overwrites tenant.name + tenant.businessCategory — only
+  // the workspace owner should be able to do that. Invited admins /
+  // sales users hitting this form (e.g. via a subscription-guard
+  // redirect when the owner hadn't skipped /get-started yet) could
+  // otherwise rename the workspace on the owner's behalf.
+  if (user.role !== "owner") {
+    throw new Error("Only the workspace owner can complete onboarding.");
+  }
   const now = new Date();
 
   await db
@@ -41,6 +49,12 @@ export async function skipWelcome() {
     getCurrentTenant(),
     getCurrentPortalUser(),
   ]);
+  // Same rationale as completeOnboarding — flipping welcomeSkippedAt
+  // closes the redirect-loop for every member of the workspace; only
+  // the owner should make that call.
+  if (user.role !== "owner") {
+    throw new Error("Only the workspace owner can skip onboarding.");
+  }
 
   await db
     .update(tenants)
