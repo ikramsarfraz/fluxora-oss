@@ -5,6 +5,7 @@ import { expenses, portalUsers } from "@/db/schema";
 import {
   canManageExpenses,
   nextRecurrenceDate,
+  planRecurringInstances,
   type ExpensePaymentMethod,
   type ExpenseRecurrenceInterval,
 } from "@/lib/expenses/metadata";
@@ -388,15 +389,16 @@ export async function materializeRecurringExpenses(options?: {
   let instancesCreated = 0;
 
   for (const schedule of schedules) {
-    let dueDate = schedule.recurrenceNextDueDate;
-    let safetyCounter = 0;
+    const plan = planRecurringInstances(
+      {
+        recurrenceInterval: schedule.recurrenceInterval as ExpenseRecurrenceInterval,
+        recurrenceEndDate: schedule.recurrenceEndDate,
+        recurrenceNextDueDate: schedule.recurrenceNextDueDate,
+      },
+      { today: todayISO, cap },
+    );
 
-    while (
-      dueDate != null &&
-      dueDate <= todayISO &&
-      (schedule.recurrenceEndDate == null || dueDate <= schedule.recurrenceEndDate) &&
-      safetyCounter < cap
-    ) {
+    for (const dueDate of plan.dueDates) {
       await db.insert(expenses).values({
         tenantId: schedule.tenantId,
         expenseDate: dueDate,
@@ -409,22 +411,11 @@ export async function materializeRecurringExpenses(options?: {
         createdByUserId: schedule.createdByUserId,
       });
       instancesCreated += 1;
-      safetyCounter += 1;
-      dueDate = nextRecurrenceDate(
-        dueDate,
-        schedule.recurrenceInterval as ExpenseRecurrenceInterval,
-      );
     }
 
-    // Advance the schedule. If we've passed the end date, null out next due.
-    const exhausted =
-      schedule.recurrenceEndDate != null &&
-      (dueDate == null || dueDate > schedule.recurrenceEndDate);
     await db
       .update(expenses)
-      .set({
-        recurrenceNextDueDate: exhausted ? null : dueDate,
-      })
+      .set({ recurrenceNextDueDate: plan.nextDueDate })
       .where(eq(expenses.id, schedule.id));
   }
 
