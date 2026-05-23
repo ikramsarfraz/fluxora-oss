@@ -5,6 +5,7 @@ import { cache } from "react";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
+import * as authSchema from "@/db/auth-schema";
 import { files, portalUsers, tenantBranding, tenants } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { getRequestTenantHostContext } from "@/lib/tenant-host";
@@ -102,7 +103,34 @@ export async function getCurrentTenant() {
   const tenantId = requestTenant.tenant.id;
 
   if (sessionTenantId && requestTenant.tenant.id !== sessionTenantId) {
-    throw new Error("Tenant session mismatch");
+    // Cross-tenant cookie reuse. The session row was bound to a
+    // different tenant than the one the current host classifies us
+    // into. Could be benign (user navigated between two tenants they
+    // belong to, since auth cookies span `rootDomain`'s subdomains)
+    // or hostile (stolen cookie pivoted onto a different tenant).
+    //
+    // Either way, kill the session row so the cookie can't be reused,
+    // and force a fresh sign-in on the new host. The user's cookie
+    // will reach the next request with no matching session and
+    // Better Auth will treat them as anonymous.
+    //
+    // Best-effort — a failure to delete shouldn't keep us from
+    // rejecting this request, since the throw below is the actual
+    // security boundary. Log so we can spot deletion failures in
+    // Sentry without blocking the user.
+    try {
+      await db
+        .delete(authSchema.session)
+        .where(eq(authSchema.session.id, session.session.id));
+    } catch (err) {
+      // Logged but swallowed — the throw below is what enforces
+      // access denial; session-row cleanup is a hardening step.
+      console.error(
+        "[tenants] failed to delete mismatched session row",
+        err,
+      );
+    }
+    throw new Error("Tenant session mismatch — please sign in again.");
   }
 
   const portalUser = await getTenantMembershipByAuthUserId({
