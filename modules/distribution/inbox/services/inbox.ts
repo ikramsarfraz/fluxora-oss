@@ -17,6 +17,7 @@ import {
   suppliers,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { money } from "@/lib/utils/money";
 import type {
   CashFlowSummary,
   InboxData,
@@ -449,9 +450,13 @@ export async function getInboxData(): Promise<InboxData> {
 
   if (activeConns.length > 0) {
     const allAccountIds = activeConns.flatMap(c => c.bankAccounts.map(a => a.id));
+    // Sum bank balances in Decimal — across many accounts Number drifts
+    // by sub-cent which then propagates into the displayed cash-flow
+    // delta. Returns as number at the dashboard boundary.
     const totalBalance = activeConns
       .flatMap(c => c.bankAccounts)
-      .reduce((s, a) => s + Number(a.currentBalance ?? 0), 0);
+      .reduce((s, a) => s.plus(money(a.currentBalance ?? 0)), money(0))
+      .toNumber();
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);

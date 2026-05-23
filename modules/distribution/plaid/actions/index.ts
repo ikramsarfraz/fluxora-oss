@@ -23,6 +23,7 @@ import { getPlaidClient } from "../services/plaid-client";
 import { confirmMatch, normalizePayeeText, rejectMatch } from "../services/transaction-matching";
 import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire";
 import { decryptToken } from "@/lib/crypto/token-encryption";
+import { money } from "@/lib/utils/money";
 
 // Bank reconciliation touches both AR (sales) and AP (supplier) bookkeeping;
 // either finance permission gates the dual-purpose actions.
@@ -312,12 +313,20 @@ export async function getOpenBillsForLinkingAction(txnId: string, proximity: "ex
     .limit(50);
 
   return {
-    bills: bills.map(b => ({
-      ...b,
-      totalAmount: Number(b.totalAmount),
-      delta: Number(b.totalAmount) - amount,
-      deltaPct: amount > 0 ? ((Number(b.totalAmount) - amount) / amount) * 100 : 0,
-    })),
+    bills: bills.map(b => {
+      // Delta + deltaPct displayed alongside the candidate bill list —
+      // Decimal subtraction keeps small-difference matches from showing
+      // a phantom 0.01 delta on an exact-match candidate.
+      const total = money(b.totalAmount);
+      const delta = total.minus(amount);
+      return {
+        ...b,
+        totalAmount: total.toNumber(),
+        delta: delta.toNumber(),
+        deltaPct:
+          amount > 0 ? Number(delta.div(amount).times(100).toFixed(4)) : 0,
+      };
+    }),
     transactionAmount: amount,
   };
 }
@@ -380,14 +389,19 @@ export async function getOpenSalesInvoicesForLinkingAction(
     .limit(50);
 
   return {
-    invoices: invoices.map(i => ({
-      ...i,
-      balanceDue: Number(i.balanceDue),
-      totalAmount: Number(i.totalAmount),
-      delta: Number(i.balanceDue) - amount,
-      deltaPct:
-        amount > 0 ? ((Number(i.balanceDue) - amount) / amount) * 100 : 0,
-    })),
+    invoices: invoices.map(i => {
+      const balance = money(i.balanceDue);
+      const total = money(i.totalAmount);
+      const delta = balance.minus(amount);
+      return {
+        ...i,
+        balanceDue: balance.toNumber(),
+        totalAmount: total.toNumber(),
+        delta: delta.toNumber(),
+        deltaPct:
+          amount > 0 ? Number(delta.div(amount).times(100).toFixed(4)) : 0,
+      };
+    }),
     transactionAmount: amount,
   };
 }

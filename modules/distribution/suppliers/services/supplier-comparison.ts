@@ -4,6 +4,7 @@ import { and, desc, eq, gte, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers, supplierInvoices } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { money } from "@/lib/utils/money";
 
 // ── Output types ────────────────────────────────────────────────────────────
 
@@ -266,7 +267,12 @@ export async function getSupplierComparisonData(
   const supplierStats: SupplierInComparison[] = allSuppliers
     .map(supplier => {
       const invs = supplierInvMap.get(supplier.id) ?? [];
-      const totalSpend = invs.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
+      // Decimal sum so total-spend is exact across many invoices per
+      // supplier — Number drift compounds and the comparison table sorts
+      // by this column, so even sub-cent ties can flip ordering.
+      const totalSpend = invs
+        .reduce((sum, inv) => sum.plus(money(inv.totalAmount)), money(0))
+        .toNumber();
       const lastDate = invs.length > 0 ? invs[0]!.invoiceDate : null;
       const daysSinceLast = lastDate
         ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000)
