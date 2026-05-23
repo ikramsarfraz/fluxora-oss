@@ -300,6 +300,11 @@ export function InventoryAdjustmentDialog({
               disabled={
                 Boolean(disabledReason) ||
                 adjustInventory.isPending ||
+                // Reason is required by the FieldError below the Select;
+                // mirror that gate here so the button's affordance matches
+                // the visible validation message instead of looking enabled
+                // and then throwing on submit.
+                !reason ||
                 (isDestructiveAdjustment && !confirmWriteOff)
               }
             >

@@ -505,6 +505,7 @@ export async function exportInventoryCsv(input?: {
   const rows = await db
     .select({
       id: inventoryItems.id,
+      lotId: inventoryItems.lotId,
       barcodeId: inventoryItems.barcodeId,
       productName: products.name,
       productSku: products.sku,
@@ -518,18 +519,6 @@ export async function exportInventoryCsv(input?: {
       expirationDate: lots.expirationDate,
       receiveDate: lots.receiveDate,
       supplierName: suppliers.name,
-      // Pull the first linked supplier-invoice number per item. Most items
-      // map 1:1 to a single receipt line; if a lot was split-received across
-      // multiple invoices the first one is fine for an export snapshot.
-      supplierInvoiceNumber: sql<string | null>`(
-        select si.invoice_number
-        from lot_receipts lr
-        inner join supplier_invoice_lines sil on sil.id = lr.supplier_invoice_line_id
-        inner join supplier_invoices si on si.id = sil.supplier_invoice_id
-        where lr.lot_id = ${lots.id}
-        order by si.invoice_date desc nulls last
-        limit 1
-      )`,
       createdAt: inventoryItems.createdAt,
     })
     .from(inventoryItems)
@@ -538,6 +527,54 @@ export async function exportInventoryCsv(input?: {
     .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
     .where(where)
     .orderBy(desc(inventoryItems.createdAt));
+
+  // Resolve the supplier-invoice number per lot in a second pass instead of
+  // a correlated subquery. The previous subquery referenced a column that
+  // doesn't exist on supplier_invoices (the TS field is `invoiceNumber` but
+  // the DB column is `supplier_invoice_number`) and Drizzle / pg surfaced
+  // it as a generic "Failed query". The fetch+stitch pattern matches what
+  // getInventoryItemById already does (services/inventory.ts ~line 824).
+  const lotIds = Array.from(new Set(rows.map(r => r.lotId)));
+  const invoiceByLotId = new Map<string, string | null>();
+  if (lotIds.length > 0) {
+    const receipts = await db.query.lotReceipts.findMany({
+      where: (lr, { inArray }) => inArray(lr.lotId, lotIds),
+      columns: { lotId: true },
+      with: {
+        supplierInvoiceLine: {
+          columns: { id: true },
+          with: {
+            supplierInvoice: {
+              columns: { invoiceNumber: true, invoiceDate: true },
+            },
+          },
+        },
+      },
+    });
+    // Group by lotId, keep the most-recent invoice (by invoiceDate desc,
+    // nulls last) per lot — same ordering the original subquery used.
+    type ReceiptRow = (typeof receipts)[number];
+    const byLot = new Map<string, ReceiptRow[]>();
+    for (const r of receipts) {
+      const list = byLot.get(r.lotId) ?? [];
+      list.push(r);
+      byLot.set(r.lotId, list);
+    }
+    for (const [lotId, list] of byLot) {
+      const sorted = [...list].sort((a, b) => {
+        const aDate = a.supplierInvoiceLine?.supplierInvoice?.invoiceDate ?? null;
+        const bDate = b.supplierInvoiceLine?.supplierInvoice?.invoiceDate ?? null;
+        if (aDate === bDate) return 0;
+        if (aDate == null) return 1; // nulls last
+        if (bDate == null) return -1;
+        return aDate < bDate ? 1 : -1; // desc
+      });
+      invoiceByLotId.set(
+        lotId,
+        sorted[0]?.supplierInvoiceLine?.supplierInvoice?.invoiceNumber ?? null,
+      );
+    }
+  }
 
   const headers = [
     { key: "barcode_id", label: "barcode_id" },
@@ -584,7 +621,7 @@ export async function exportInventoryCsv(input?: {
       expiration_date: row.expirationDate ?? "",
       receive_date: row.receiveDate ?? "",
       supplier: row.supplierName ?? "",
-      supplier_invoice_number: row.supplierInvoiceNumber ?? "",
+      supplier_invoice_number: invoiceByLotId.get(row.lotId) ?? "",
       created_at: row.createdAt.toISOString(),
     };
   });

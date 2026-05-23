@@ -66,7 +66,15 @@ export function InventoryDetailPage({
     useInventoryItem(inventoryItemId);
   const { data: currentUser } = useCurrentPortalUser();
 
-  useSetBreadcrumbLabel(`/inventory/${inventoryItemId}`, item?.barcodeId);
+  // The actual URL is /inventory/items/<id>; the previous path was a legacy
+  // /inventory/<id> route that no longer matches the breadcrumb's segment
+  // key, so the override was silently ignored and the humanized UUID
+  // ("9b66728b E984 4cfa…") leaked through. Provide a stable loading label
+  // too so the UUID never renders even for the first paint.
+  useSetBreadcrumbLabel(
+    `/inventory/items/${inventoryItemId}`,
+    item?.barcodeId ?? "Item",
+  );
 
   if (isLoading) {
     return <DetailPageSkeleton includeTable />;

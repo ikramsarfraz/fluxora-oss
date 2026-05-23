@@ -47,19 +47,25 @@ export function useAdjustInventoryItem() {
 
   return useMutation({
     mutationFn: adjustInventoryItemAction,
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+    onSuccess: (result, _variables) => {
+      // `inventory.all = ["inventory"]` is the root prefix, so this matches
+      // every inventory sub-key (list, detail, productSummary, casesOnHand,
+      // fifoAllocation). `refetchType: "all"` makes React Query refetch
+      // even unmounted observers — without it, the list page (typically
+      // unmounted at adjustment time) stayed showing stale totals until
+      // the user re-focused the window (refetchOnWindowFocus).
       queryClient.invalidateQueries({
-        queryKey: queryKeys.inventory.detail(variables.inventoryItemId),
+        queryKey: queryKeys.inventory.all,
+        refetchType: "all",
       });
-      // Rollups (on-hand by product widget, dashboard cases-on-hand) read from
-      // their own keys — invalidate them so they refresh after an adjustment.
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.productSummary });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.casesOnHand });
-      queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lots.all,
+        refetchType: "all",
+      });
       if (result?.lot?.id) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.lots.detail(result.lot.id),
+          refetchType: "all",
         });
       }
     },
@@ -97,13 +103,21 @@ export function useBulkAdjustLotInventory() {
   return useMutation({
     mutationFn: bulkAdjustLotInventoryAction,
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
-      // Same rollup story as the single-item path above.
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.productSummary });
-      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.casesOnHand });
-      queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
+      // Same prefix + refetchType: "all" story as useAdjustInventoryItem.
+      // Bulk adjust is launched from lot detail, where the inventory list
+      // is always unmounted — without refetchType: "all" the totals only
+      // refreshed when the user re-focused the window.
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.inventory.all,
+        refetchType: "all",
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.lots.all,
+        refetchType: "all",
+      });
       queryClient.invalidateQueries({
         queryKey: queryKeys.lots.detail(variables.lotId),
+        refetchType: "all",
       });
     },
   });
