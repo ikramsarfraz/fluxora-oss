@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db";
 import {
   categories,
@@ -11,6 +12,8 @@ import {
   unitsOfMeasure,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import type { PortalUserRole } from "@/lib/auth/permissions";
 import {
   buildTextSearchCondition,
   createPaginatedResult,
@@ -20,6 +23,49 @@ import {
   type PaginatedQueryInput,
   type PaginatedResult,
 } from "@/lib/pagination";
+
+// Mirror of the moneyString shape used in supplier-invoice validators — a
+// non-negative decimal with up to 4 fraction digits. Keeps prices and costs
+// from being persisted as gibberish ("abc", "1e30", negative, etc).
+const moneyDecimalSchema = z
+  .string()
+  .trim()
+  .regex(/^\d+(\.\d{1,4})?$/, "Must be a non-negative decimal with up to 4 fraction digits.");
+
+const uuidSchema = z.string().uuid("Invalid id.");
+
+const markupPercentSchema = z
+  .number()
+  .finite("Markup must be a finite number.")
+  .min(0, "Markup must be ≥ 0.")
+  .max(1000, "Markup must be ≤ 1000%.");
+
+const fuelSurchargeSchema = z
+  .union([moneyDecimalSchema, z.null()])
+  .refine(
+    v => v === null || Number(v) <= 9999,
+    "Fuel surcharge must be ≤ 9999.",
+  );
+
+/**
+ * Restricted to owner/admin per the security audit recommendation — pricing
+ * is high-trust data (margin exposure, fraud surface). Sales need to see
+ * prices via the order form, but only owners/admins can mutate them.
+ */
+function isPriceChartManager(role: PortalUserRole | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+async function requirePriceChartManager() {
+  const user = await getCurrentPortalUser();
+  if (!isPriceChartManager(user.role)) {
+    throw new Error(
+      "Forbidden: Your role does not allow editing the price chart.",
+    );
+  }
+}
+
+export { isPriceChartManager };
 
 export async function getPriceChartData() {
   const tenant = await getCurrentTenant();
@@ -126,22 +172,94 @@ export async function getPriceChartData() {
   };
 }
 
+/**
+ * Verifies that every provided entity ID belongs to the current tenant
+ * before a write proceeds. Without this guard the customer/product/supplier
+ * IDs come in from the action layer as raw strings — a forged server-
+ * action call could rewrite another tenant's price book because FKs alone
+ * don't enforce tenant isolation at the table level. Throws on any miss.
+ */
+async function assertEntitiesBelongToTenant(args: {
+  tenantId: string;
+  customerId?: string;
+  productId?: string;
+  supplierId?: string | null;
+}) {
+  const checks: Array<{ label: string; query: Promise<{ id: string } | undefined> }> = [];
+
+  if (args.customerId) {
+    checks.push({
+      label: "Customer",
+      query: db.query.customers.findFirst({
+        where: and(
+          eq(customers.id, args.customerId),
+          eq(customers.tenantId, args.tenantId),
+        ),
+        columns: { id: true },
+      }),
+    });
+  }
+  if (args.productId) {
+    checks.push({
+      label: "Product",
+      query: db.query.products.findFirst({
+        where: and(
+          eq(products.id, args.productId),
+          eq(products.tenantId, args.tenantId),
+        ),
+        columns: { id: true },
+      }),
+    });
+  }
+  if (args.supplierId) {
+    checks.push({
+      label: "Supplier",
+      query: db.query.suppliers.findFirst({
+        where: and(
+          eq(suppliers.id, args.supplierId),
+          eq(suppliers.tenantId, args.tenantId),
+        ),
+        columns: { id: true },
+      }),
+    });
+  }
+
+  const results = await Promise.all(checks.map(c => c.query));
+  for (let i = 0; i < results.length; i++) {
+    if (!results[i]) {
+      throw new Error(`${checks[i].label} not found in this tenant.`);
+    }
+  }
+}
+
 export async function setCustomerProductPrice(
   customerId: string,
   productId: string,
   pricePerLb: string,
   supplierId: string | null = null,
 ) {
+  uuidSchema.parse(customerId);
+  uuidSchema.parse(productId);
+  if (supplierId != null) uuidSchema.parse(supplierId);
+  const normalizedPrice = moneyDecimalSchema.parse(pricePerLb);
+  await requirePriceChartManager();
+  const tenant = await getCurrentTenant();
+  await assertEntitiesBelongToTenant({
+    tenantId: tenant.id,
+    customerId,
+    productId,
+    supplierId,
+  });
   await db
     .insert(customerProductPrices)
-    .values({ customerId, productId, supplierId, pricePerLb })
+    .values({ customerId, productId, supplierId, pricePerLb: normalizedPrice })
     .onConflictDoUpdate({
       target: [
         customerProductPrices.customerId,
         customerProductPrices.productId,
         customerProductPrices.supplierId,
       ],
-      set: { pricePerLb, updatedAt: new Date() },
+      set: { pricePerLb: normalizedPrice, updatedAt: new Date() },
     });
 }
 
@@ -150,6 +268,17 @@ export async function deleteCustomerProductPrice(
   productId: string,
   supplierId: string | null = null,
 ) {
+  uuidSchema.parse(customerId);
+  uuidSchema.parse(productId);
+  if (supplierId != null) uuidSchema.parse(supplierId);
+  await requirePriceChartManager();
+  const tenant = await getCurrentTenant();
+  await assertEntitiesBelongToTenant({
+    tenantId: tenant.id,
+    customerId,
+    productId,
+    supplierId,
+  });
   await db
     .delete(customerProductPrices)
     .where(
@@ -164,11 +293,11 @@ export async function deleteCustomerProductPrice(
 }
 
 export async function applyMarkupToCustomer(customerId: string, markupPercent = 7) {
+  uuidSchema.parse(customerId);
+  const markup = markupPercentSchema.parse(Number(markupPercent));
+  await requirePriceChartManager();
   const tenant = await getCurrentTenant();
-  const markup = Number(markupPercent);
-  if (!Number.isFinite(markup) || markup < 0) {
-    throw new Error("Markup must be a non-negative number.");
-  }
+  await assertEntitiesBelongToTenant({ tenantId: tenant.id, customerId });
 
   const [allProducts, vendorRows] = await Promise.all([
     db.query.products.findMany({
@@ -238,10 +367,13 @@ export async function updateCustomerFuelSurcharge(
   customerId: string,
   fuelSurchargeAmount: string | null,
 ) {
+  uuidSchema.parse(customerId);
+  const normalized = fuelSurchargeSchema.parse(fuelSurchargeAmount);
+  await requirePriceChartManager();
   const tenant = await getCurrentTenant();
   await db
     .update(customers)
-    .set({ fuelSurchargeAmount })
+    .set({ fuelSurchargeAmount: normalized })
     .where(and(eq(customers.id, customerId), eq(customers.tenantId, tenant.id)));
 }
 
@@ -250,16 +382,35 @@ export async function setProductSupplierCost(
   supplierId: string,
   costPerLb: string,
 ) {
+  uuidSchema.parse(productId);
+  uuidSchema.parse(supplierId);
+  const normalizedCost = moneyDecimalSchema.parse(costPerLb);
+  await requirePriceChartManager();
+  const tenant = await getCurrentTenant();
+  await assertEntitiesBelongToTenant({
+    tenantId: tenant.id,
+    productId,
+    supplierId,
+  });
   await db
     .insert(productSupplierCosts)
-    .values({ productId, supplierId, costPerLb })
+    .values({ productId, supplierId, costPerLb: normalizedCost })
     .onConflictDoUpdate({
       target: [productSupplierCosts.productId, productSupplierCosts.supplierId],
-      set: { costPerLb, updatedAt: new Date() },
+      set: { costPerLb: normalizedCost, updatedAt: new Date() },
     });
 }
 
 export async function deleteProductSupplierCost(productId: string, supplierId: string) {
+  uuidSchema.parse(productId);
+  uuidSchema.parse(supplierId);
+  await requirePriceChartManager();
+  const tenant = await getCurrentTenant();
+  await assertEntitiesBelongToTenant({
+    tenantId: tenant.id,
+    productId,
+    supplierId,
+  });
   await db
     .delete(productSupplierCosts)
     .where(

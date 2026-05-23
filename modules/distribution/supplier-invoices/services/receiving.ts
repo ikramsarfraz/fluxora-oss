@@ -842,7 +842,11 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
-  requirePermission(currentUser.role, "view_supplier_invoice");
+  // Defense-in-depth: the action layer guards this, but mirroring the
+  // reversal permission at the service level means a forged call path
+  // can't leak "what would change" data to users who couldn't execute
+  // the underlying reverse.
+  requirePermission(currentUser.role, "reverse_supplier_receipt");
 
   const invoice = await db.query.supplierInvoices.findFirst({
     where: and(

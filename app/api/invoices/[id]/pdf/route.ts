@@ -30,6 +30,13 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
+  // Defense-in-depth: getSalesInvoiceById already filters by tenant.id, but
+  // an explicit equality check here means a regression in the service-layer
+  // filter can't leak a cross-tenant PDF as a side effect.
+  if (invoice.tenantId !== tenant.id) {
+    return new Response("Not found", { status: 404 });
+  }
+
   const logoUrl = await getTenantLogoUrl(tenant).catch(() => null);
 
   const pdfBytes = await renderSalesInvoicePdf({
