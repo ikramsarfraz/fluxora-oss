@@ -191,16 +191,20 @@ function CustomerCard({
   const totalProducts = allProducts.length;
 
   const avgMargin = useMemo(() => {
+    const priceByProduct = new Map<string, string>();
+    for (const pr of prices) {
+      if (pr.customer_id === customer.id) {
+        priceByProduct.set(pr.product_id, pr.price_per_lb);
+      }
+    }
     let sum = 0;
     let count = 0;
     for (const p of allProducts) {
       const cost = Number(p.cost);
       if (!Number.isFinite(cost) || cost <= 0) continue;
-      const custPrice = prices.find(
-        pr => pr.customer_id === customer.id && pr.product_id === p.id,
-      );
-      if (!custPrice) continue;
-      const margin = marginPct(Number(custPrice.price_per_lb), cost);
+      const priceRaw = priceByProduct.get(p.id);
+      if (priceRaw == null) continue;
+      const margin = marginPct(Number(priceRaw), cost);
       if (margin == null) continue;
       sum += margin;
       count += 1;
@@ -1077,7 +1081,25 @@ export function PriceChartClient() {
           markup={markup}
           onMarkupChange={setMarkup}
           onApplyMarkup={() =>
-            applyMarkup.mutate({ customerId: customer.id, markupPercent: markup }, { onError })
+            applyMarkup.mutate(
+              { customerId: customer.id, markupPercent: markup },
+              {
+                onError,
+                onSuccess: result => {
+                  if (!result || result.rowsApplied === 0) {
+                    toast.message(
+                      "No products have supplier costs yet — nothing to mark up.",
+                    );
+                    return;
+                  }
+                  toast.success(
+                    `Applied ${markup}% markup to ${result.rowsApplied} product${
+                      result.rowsApplied === 1 ? "" : "s"
+                    }.`,
+                  );
+                },
+              },
+            )
           }
           applyingMarkup={
             applyMarkup.isPending && applyMarkup.variables?.customerId === customer.id

@@ -215,7 +215,7 @@ export async function applyMarkupToCustomer(customerId: string, markupPercent = 
     supplierId: null;
     pricePerLb: string;
   }[];
-  if (rows.length === 0) return;
+  if (rows.length === 0) return { rowsApplied: 0 };
   // Bulk markup updates the customer's DEFAULT price only (supplier_id IS NULL).
   await db
     .insert(customerProductPrices)
@@ -231,6 +231,7 @@ export async function applyMarkupToCustomer(customerId: string, markupPercent = 
         updatedAt: new Date(),
       },
     });
+  return { rowsApplied: rows.length };
 }
 
 export async function updateCustomerFuelSurcharge(
