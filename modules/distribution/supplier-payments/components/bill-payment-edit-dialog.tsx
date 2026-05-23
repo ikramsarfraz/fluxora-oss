@@ -32,27 +32,20 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/utils/currency";
-import type {
-  BillPaymentDetail,
-  BillPaymentMethod,
-} from "../services/supplier-payments";
+import type { BillPaymentDetail } from "../services/supplier-payments";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
 interface FormValues {
   paymentDate: string;
   amount: string;
-  paymentMethod: BillPaymentMethod;
+  paymentMethod: PaymentMethod;
   checkNumber: string;
   referenceNumber: string;
   notes: string;
 }
-
-const PAYMENT_METHOD_OPTIONS: Array<{ value: BillPaymentMethod; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 interface Props {
   open: boolean;

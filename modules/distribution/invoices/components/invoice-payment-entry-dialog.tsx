@@ -35,8 +35,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-
-type PaymentMethod = "cash" | "zelle" | "check" | "credit_card" | "ach";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
 interface PaymentFormValues {
   paymentDate: string;
@@ -46,14 +48,6 @@ interface PaymentFormValues {
   checkNumber: string;
   notes: string;
 }
-
-const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);

@@ -37,28 +37,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type {
-  BillPaymentMethod,
-  OpenBillForPayment,
-} from "../services/supplier-payments";
+import type { OpenBillForPayment } from "../services/supplier-payments";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
 type Step = "pick" | "enter";
-
-const PAYMENT_METHOD_OPTIONS: ReadonlyArray<{
-  value: BillPaymentMethod;
-  label: string;
-}> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 interface PaymentFormValues {
   paymentDate: string;
   amount: string;
-  paymentMethod: BillPaymentMethod;
+  paymentMethod: PaymentMethod;
   checkNumber: string;
   referenceNumber: string;
   notes: string;

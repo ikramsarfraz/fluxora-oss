@@ -4,3 +4,4 @@
 export * from "./services/auth";
 export * from "./services/portal-users";
 export * from "./services/signup-profile";
+export * from "./utils/payment-methods";

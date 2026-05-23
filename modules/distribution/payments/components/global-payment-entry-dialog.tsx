@@ -38,18 +38,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { OpenInvoiceForPayment } from "@/modules/distribution/invoices/services/invoicing";
-import type { PaymentMethod } from "../services/payments";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
 type Step = "pick" | "enter";
-
-type PaymentMethodOption = { value: PaymentMethod; label: string };
-const PAYMENT_METHOD_OPTIONS: ReadonlyArray<PaymentMethodOption> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 interface PaymentFormValues {
   paymentDate: string;

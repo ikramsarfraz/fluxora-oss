@@ -32,8 +32,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useRecordSupplierInvoicePayment } from "../hooks/use-supplier-invoices";
 import { formatMoney } from "@/lib/utils/currency";
-
-type PaymentMethod = "cash" | "check" | "ach" | "zelle" | "credit_card";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
 interface SupplierInvoicePaymentEntryDialogProps {
   open: boolean;
@@ -52,14 +54,6 @@ interface PaymentFormValues {
   referenceNumber: string;
   notes: string;
 }
-
-const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);

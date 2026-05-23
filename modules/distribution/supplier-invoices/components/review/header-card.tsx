@@ -8,31 +8,20 @@ import type { SupplierLookup } from "./map-pipeline-to-review-data";
 import { ParsedField } from "./parsed-field";
 import { SupplierPicker } from "./supplier-picker";
 import { REVIEW_COLORS } from "./tokens";
-import type {
-  ParsedHeader,
-  PaymentMethod,
-  SupplierCandidate,
-} from "./types";
+import type { ParsedHeader, SupplierCandidate } from "./types";
+import {
+  PAYMENT_METHOD_LABELS as PAYMENT_METHOD_LABEL,
+  PAYMENT_METHOD_OPTIONS as SHARED_PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared";
 
-const PAYMENT_METHOD_OPTIONS: Array<{
+// This review surface lets the user clear the payment method back to
+// "Not specified" (we capture during AI extraction; corrections are
+// common). Prepend the empty sentinel to the shared options.
+const PAYMENT_METHOD_OPTIONS: ReadonlyArray<{
   value: PaymentMethod | "";
   label: string;
-}> = [
-  { value: "", label: "Not specified" },
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
-
-const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
-  cash: "Cash",
-  check: "Check",
-  ach: "ACH",
-  zelle: "Zelle",
-  credit_card: "Credit card",
-};
+}> = [{ value: "", label: "Not specified" }, ...SHARED_PAYMENT_METHOD_OPTIONS];
 
 export function HeaderCard({
   parsed,
