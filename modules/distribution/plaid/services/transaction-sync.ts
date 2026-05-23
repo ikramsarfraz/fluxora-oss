@@ -6,6 +6,7 @@ import { db } from "@/db";
 import {
   bankAccounts,
   bankTransactions,
+  paymentMatches,
   plaidConnections,
 } from "@/db/schema";
 import { decryptToken } from "@/lib/crypto/token-encryption";
@@ -48,14 +49,40 @@ export async function syncConnection(connectionId: string): Promise<{
 
     const accountIdMap = await buildAccountIdMap(connection.tenantId, connectionId);
 
-    // Handle removed transactions
+    // Handle removed transactions. paymentMatches FKs back with onDelete=restrict,
+    // so a bulk delete throws on any txn that already has a match. Delete the
+    // unmatched subset; leave matched rows in place so the reconciliation audit
+    // trail (which invoice this paid) survives Plaid's revocation.
     if (data.removed.length > 0) {
       const plaidIds = data.removed.map(r => r.transaction_id).filter(Boolean) as string[];
       if (plaidIds.length > 0) {
-        await db
-          .delete(bankTransactions)
+        const txnRows = await db
+          .select({ id: bankTransactions.id, plaidId: bankTransactions.plaidTransactionId })
+          .from(bankTransactions)
           .where(inArray(bankTransactions.plaidTransactionId, plaidIds));
-        removed += plaidIds.length;
+        if (txnRows.length > 0) {
+          const txnIds = txnRows.map(r => r.id);
+          const matched = await db
+            .select({ id: paymentMatches.bankTransactionId })
+            .from(paymentMatches)
+            .where(inArray(paymentMatches.bankTransactionId, txnIds));
+          const matchedSet = new Set(matched.map(m => m.id));
+          const deletablePlaidIds = txnRows
+            .filter(r => !matchedSet.has(r.id))
+            .map(r => r.plaidId);
+          if (deletablePlaidIds.length > 0) {
+            await db
+              .delete(bankTransactions)
+              .where(inArray(bankTransactions.plaidTransactionId, deletablePlaidIds));
+            removed += deletablePlaidIds.length;
+          }
+          const retainedCount = txnRows.length - deletablePlaidIds.length;
+          if (retainedCount > 0) {
+            console.warn(
+              `[plaid/sync] connection=${connectionId} retained ${retainedCount} bank txn(s) plaid removed — referenced by payment_matches`,
+            );
+          }
+        }
       }
     }
 

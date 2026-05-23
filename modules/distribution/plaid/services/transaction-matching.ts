@@ -195,45 +195,23 @@ async function matchInflowToSalesInvoice(txn: BankTransaction): Promise<void> {
   });
   if (existing) return;
 
-  const status = best.autoApply ? "auto_applied" : "pending_review";
-
+  // AR auto-apply is structurally broken: applyArInflowToInvoice no-ops when
+  // confirmedByUserId is null (payments.createdByUserId is NOT NULL). Marking
+  // the match auto_applied without posting the payment leaves the invoice
+  // unpaid while the UI shows "matched." Until a system-user sentinel exists,
+  // every AR match goes to pending_review so the confirm step records the
+  // payment atomically.
   await db.insert(paymentMatches).values({
     tenantId: txn.tenantId,
     bankTransactionId: txn.id,
     salesInvoiceId: best.invoiceId,
-    status,
+    status: "pending_review",
     confidence: best.confidence.toFixed(4),
-    autoApplied: best.autoApply,
+    autoApplied: false,
     amountScore: best.factors.amountScore.toFixed(4),
     payeeScore: best.factors.payeeScore.toFixed(4),
     timingScore: best.factors.timingScore.toFixed(4),
   });
-
-  if (best.autoApply) {
-    await captureServerEvent({
-      userId: "system",
-      tenantId: txn.tenantId,
-      event: "payment_match.auto_applied",
-      properties: {
-        confidence: Number(best.confidence.toFixed(4)),
-        channel: txn.paymentMethod ?? "other",
-        direction: "inflow",
-      },
-    });
-    // Auto-apply the payment: insert a payments row and update the
-    // invoice's denormalized totals + status (mirrors the AR record
-    // path used by other surfaces).
-    await applyArInflowToInvoice({
-      tenantId: txn.tenantId,
-      salesInvoiceId: best.invoiceId,
-      bankTransactionId: txn.id,
-      paymentDate: txn.date,
-      amount: inflowAmount,
-      paymentMethod: txn.paymentMethod ?? "ach",
-      rawDescription: txn.rawDescription ?? null,
-      confirmedByUserId: null,
-    });
-  }
 }
 
 /**
@@ -249,18 +227,9 @@ async function applyArInflowToInvoice(args: {
   amount: number;
   paymentMethod: string;
   rawDescription: string | null;
-  confirmedByUserId: string | null;
+  confirmedByUserId: string;
 }): Promise<void> {
-  // System-driven path (auto_applied) has no user id; the payments
-  // schema requires one. Fall back to a sentinel: the bank transaction
-  // already records who confirmed (via payment_matches.confirmed_by_user_id)
-  // so audit trail isn't lost.
-  //
-  // For now: skip the insert if no user id (auto_applied paths defer
-  // creating the payments row to the confirm step). The match row
-  // still exists; UI will show "Confirm to record payment".
   const confirmedBy = args.confirmedByUserId;
-  if (!confirmedBy) return;
 
   const validMethod: "cash" | "check" | "ach" | "zelle" | "credit_card" =
     args.paymentMethod === "check" ||
