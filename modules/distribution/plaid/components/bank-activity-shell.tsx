@@ -101,6 +101,39 @@ export function BankActivityShell({ data }: { data: Data }) {
     : "never";
 
   const totalBalance = data.accounts.reduce((s, a) => s + a.currentBalance, 0);
+  const noConnections = data.accounts.length === 0;
+
+  if (noConnections) {
+    return (
+      <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Bank activity</h1>
+        </div>
+        <div
+          style={{
+            border: `1px dashed ${C.line}`,
+            borderRadius: C.radius,
+            padding: "48px 32px",
+            textAlign: "center",
+            background: C.surface,
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginBottom: 6 }}>
+            Connect your bank to get started
+          </div>
+          <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, maxWidth: 420, margin: "0 auto 20px" }}>
+            Once linked, we&apos;ll sync 90 days of transactions and start
+            matching outflows against your open bills automatically.
+          </div>
+          <Link href="/settings/integrations/banks">
+            <Button size="sm" className="h-9 px-4 text-[13px]">
+              Connect a bank
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
