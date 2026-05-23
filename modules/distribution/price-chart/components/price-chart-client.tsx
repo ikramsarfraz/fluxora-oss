@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
@@ -20,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -683,6 +685,11 @@ function ProductRow({
               variant="ghost"
               size="sm"
               onClick={onToggleExpand}
+              title={
+                expanded
+                  ? "Hide the per-supplier price overrides"
+                  : "This product is sold by multiple suppliers — set a different price depending on which supplier the line was sourced from"
+              }
               className="h-8 px-2 text-[12px] font-normal text-subtle hover:text-ink gap-1"
             >
               {expanded ? "Hide suppliers" : "Set per supplier"}
@@ -818,7 +825,7 @@ function ProductTable({
   }
 
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
-  const { data: pageData } = useCustomerProductPricesPage(customer.id, {
+  const { data: pageData, isPending } = useCustomerProductPricesPage(customer.id, {
     page,
     pageSize,
     search: debouncedSearch || undefined,
@@ -827,6 +834,10 @@ function ProductTable({
       overridesOnly: modeFilter === "overrides" ? "true" : undefined,
     },
   });
+  // First load → render skeleton rows so the table doesn't flash an empty
+  // "No products match" row before data arrives. Subsequent customer
+  // switches keep the prior page (placeholderData) so this only fires once.
+  const showSkeleton = isPending && !pageData;
 
   const priceMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -965,7 +976,28 @@ function ProductTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {grouped.length === 0 && (
+          {showSkeleton &&
+            Array.from({ length: 8 }).map((_, i) => (
+              <TableRow key={`skeleton:${i}`} className="hover:bg-transparent">
+                <TableCell className="py-3 px-4">
+                  <div className="flex items-center gap-3.5">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-4 w-44" />
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-4 text-right">
+                  <Skeleton className="h-4 w-16 ml-auto" />
+                </TableCell>
+                <TableCell className="py-3 px-4">
+                  <Skeleton className="h-9 w-28" />
+                </TableCell>
+                <TableCell className="py-3 px-4 text-right">
+                  <Skeleton className="h-3 w-10 ml-auto" />
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            ))}
+          {!showSkeleton && grouped.length === 0 && (
             <TableRow className="hover:bg-transparent">
               <TableCell colSpan={5} className="py-16 text-center text-[13px] text-subtle">
                 No products match.
@@ -1058,9 +1090,15 @@ export function PriceChartClient() {
   if (error) return <PageError message={(error as Error).message} />;
   if (!customer) {
     return (
-      <p className="py-16 text-center text-[13px] text-subtle">
-        No customers yet. Add a customer to get started.
-      </p>
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <p className="text-[13px] text-subtle text-center max-w-xs">
+          Price book is empty — add a customer to start setting per-customer
+          prices and margins.
+        </p>
+        <Button asChild size="sm">
+          <Link href="/customers/new">Add customer</Link>
+        </Button>
+      </div>
     );
   }
 
