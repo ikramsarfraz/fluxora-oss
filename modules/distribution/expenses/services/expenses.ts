@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { expenses, portalUsers } from "@/db/schema";
@@ -70,23 +70,78 @@ export type ExpenseListSort =
   | "amount"
   | "createdAt";
 
-export type ExpenseListParams = PaginatedQueryInput<ExpenseListSort>;
+/**
+ * URL-friendly filter slugs. All values are strings because they flow through
+ * the URL search params before reaching the server action.
+ *
+ *  - dateFrom / dateTo: inclusive YYYY-MM-DD bounds on `expenses.expense_date`.
+ *  - amountMin / amountMax: inclusive decimal bounds on `expenses.amount`.
+ *  - paymentMethod: a single `ExpensePaymentMethod` slug, or empty for any.
+ *  - recurrence: 'all' | 'schedules' | 'instances' | 'oneoff'.
+ */
+export type ExpenseListFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: string;
+  amountMax?: string;
+  paymentMethod?: string;
+  recurrence?: string;
+};
+
+export type ExpenseListParams = PaginatedQueryInput<
+  ExpenseListSort,
+  ExpenseListFilters
+>;
 
 export async function getExpensesPage(input?: ExpenseListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "expenseDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: {} as ExpenseListFilters,
   });
-  const where = and(
+  const f = query.filters;
+  const conditions = [
     eq(expenses.tenantId, tenant.id),
     buildTextSearchCondition(query.search, [
       expenses.category,
       expenses.note,
       portalUsers.fullName,
     ]),
-  );
+  ];
+  if (f.dateFrom) {
+    conditions.push(gte(expenses.expenseDate, f.dateFrom));
+  }
+  if (f.dateTo) {
+    conditions.push(lte(expenses.expenseDate, f.dateTo));
+  }
+  if (f.amountMin) {
+    const n = Number(f.amountMin);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(gte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.amountMax) {
+    const n = Number(f.amountMax);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(lte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.paymentMethod) {
+    conditions.push(
+      eq(expenses.paymentMethod, f.paymentMethod as ExpensePaymentMethod),
+    );
+  }
+  if (f.recurrence === "schedules") {
+    conditions.push(ne(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "instances") {
+    conditions.push(isNotNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "oneoff") {
+    conditions.push(eq(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  const where = and(...conditions);
   const [{ count }] = await db
     .select({ count: sql<number>`count(distinct ${expenses.id})::int` })
     .from(expenses)

@@ -21,6 +21,7 @@ import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import {
+  EXPENSE_PAYMENT_METHODS,
   canManageExpenses,
   expenseCategoryLabel,
   expensePaymentMethodLabel,
@@ -28,7 +29,11 @@ import {
 } from "@/lib/expenses/metadata";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { ExpenseListItem, ExpenseListSort } from "../services/expenses";
+import type {
+  ExpenseListFilters,
+  ExpenseListItem,
+  ExpenseListSort,
+} from "../services/expenses";
 
 type ExpenseRow = ExpenseListItem;
 
@@ -139,10 +144,22 @@ export function ExpensesPage() {
   const { data: currentUser } = useCurrentPortalUser();
   const canManage = canManageExpenses(currentUser?.role);
 
-  const pagination = useUrlPaginationState<ExpenseListSort>({
+  const pagination = useUrlPaginationState<ExpenseListSort, ExpenseListFilters>({
     defaultSort: "expenseDate",
     defaultDirection: "desc",
+    defaultFilters: {
+      dateFrom: "",
+      dateTo: "",
+      amountMin: "",
+      amountMax: "",
+      paymentMethod: "",
+      recurrence: "",
+    },
   });
+  const f = pagination.filters;
+  const hasActiveFilter = Boolean(
+    f.dateFrom || f.dateTo || f.amountMin || f.amountMax || f.paymentMethod || f.recurrence,
+  );
 
   const { data, isLoading, isFetching, error, refetch } = useExpensesPage({
     page: pagination.page,
@@ -150,6 +167,7 @@ export function ExpensesPage() {
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
+    filters: f,
   });
 
   const deleteExpense = useDeleteExpense();
@@ -165,6 +183,21 @@ export function ExpensesPage() {
 
   return (
     <>
+      <FilterBar
+        filters={f}
+        onChange={(key, value) => pagination.setFilter(key, value)}
+        onClear={() =>
+          pagination.setFilters({
+            dateFrom: "",
+            dateTo: "",
+            amountMin: "",
+            amountMax: "",
+            paymentMethod: "",
+            recurrence: "",
+          })
+        }
+        hasActiveFilter={hasActiveFilter}
+      />
       <ListingPage
         title="Expenses"
         subtitle="Track operational costs and business expenditures."
@@ -243,5 +276,152 @@ export function ExpensesPage() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function FilterBar({
+  filters,
+  onChange,
+  onClear,
+  hasActiveFilter,
+}: {
+  filters: ExpenseListFilters;
+  onChange: <K extends keyof ExpenseListFilters>(
+    key: K,
+    value: ExpenseListFilters[K],
+  ) => void;
+  onClear: () => void;
+  hasActiveFilter: boolean;
+}) {
+  const inputStyle: React.CSSProperties = {
+    fontSize: 13,
+    padding: "6px 10px",
+    border: "1px solid var(--color-border-default)",
+    borderRadius: 6,
+    background: "var(--color-card)",
+    color: "var(--color-ink)",
+    outline: "none",
+    fontFamily: "inherit",
+  };
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        marginBottom: 16,
+        flexWrap: "wrap",
+        alignItems: "flex-end",
+      }}
+    >
+      <Field label="Date from">
+        <input
+          type="date"
+          value={filters.dateFrom ?? ""}
+          onChange={e => onChange("dateFrom", e.target.value)}
+          aria-label="Filter by start date"
+          style={inputStyle}
+        />
+      </Field>
+      <Field label="Date to">
+        <input
+          type="date"
+          value={filters.dateTo ?? ""}
+          onChange={e => onChange("dateTo", e.target.value)}
+          aria-label="Filter by end date"
+          style={inputStyle}
+        />
+      </Field>
+      <Field label="Min amount">
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="0.00"
+          value={filters.amountMin ?? ""}
+          onChange={e => onChange("amountMin", e.target.value)}
+          aria-label="Filter by minimum amount"
+          style={{ ...inputStyle, width: 100 }}
+        />
+      </Field>
+      <Field label="Max amount">
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="0.00"
+          value={filters.amountMax ?? ""}
+          onChange={e => onChange("amountMax", e.target.value)}
+          aria-label="Filter by maximum amount"
+          style={{ ...inputStyle, width: 100 }}
+        />
+      </Field>
+      <Field label="Method">
+        <select
+          value={filters.paymentMethod ?? ""}
+          onChange={e => onChange("paymentMethod", e.target.value)}
+          aria-label="Filter by payment method"
+          style={inputStyle}
+        >
+          <option value="">Any</option>
+          {EXPENSE_PAYMENT_METHODS.map(m => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Type">
+        <select
+          value={filters.recurrence ?? ""}
+          onChange={e => onChange("recurrence", e.target.value)}
+          aria-label="Filter by recurrence type"
+          style={inputStyle}
+        >
+          <option value="">All</option>
+          <option value="oneoff">One-off</option>
+          <option value="schedules">Schedules</option>
+          <option value="instances">Auto-generated</option>
+        </select>
+      </Field>
+      {hasActiveFilter && (
+        <button
+          type="button"
+          onClick={onClear}
+          style={{
+            fontSize: 12,
+            padding: "6px 10px",
+            background: "transparent",
+            border: "1px solid var(--color-border-default)",
+            borderRadius: 6,
+            color: "var(--color-ink-warm)",
+            cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          Clear filters
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          color: "var(--color-subtle)",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+        }}
+      >
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }
