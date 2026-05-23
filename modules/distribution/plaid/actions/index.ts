@@ -15,6 +15,7 @@ import {
   suppliers,
 } from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
+import { can, requirePermission } from "@/lib/auth/permissions";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
@@ -23,8 +24,17 @@ import { confirmMatch, normalizePayeeText, rejectMatch } from "../services/trans
 import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire";
 import { decryptToken } from "@/lib/crypto/token-encryption";
 
+// Bank reconciliation touches both AR (sales) and AP (supplier) bookkeeping;
+// either finance permission gates the dual-purpose actions.
+function requireFinanceRole(role: string | null | undefined): void {
+  if (!can(role as never, "record_payment") && !can(role as never, "record_supplier_payment")) {
+    throw new Error("Forbidden: Your role does not allow reconciling bank transactions.");
+  }
+}
+
 export async function confirmPaymentMatch(matchId: string) {
   const [user, tenant] = await Promise.all([getCurrentPortalUser(), getCurrentTenant()]);
+  requireFinanceRole(user.role);
   await confirmMatch(matchId, user.id, tenant.id);
   await logAuditEvent({
     tenantId: tenant.id,
@@ -48,6 +58,7 @@ export async function rejectPaymentMatch(matchId: string) {
     getCurrentPortalUser(),
     getCurrentTenant(),
   ]);
+  requireFinanceRole(user.role);
   await rejectMatch(matchId, tenant.id);
   await logAuditEvent({
     tenantId: tenant.id,
@@ -63,6 +74,7 @@ export async function rejectPaymentMatch(matchId: string) {
 export async function linkToDifferentBill(matchId: string, newInvoiceId: string) {
   const user = await getCurrentPortalUser();
   const tenant = await getCurrentTenant();
+  requirePermission(user.role, "record_supplier_payment");
 
   const existing = await db.query.paymentMatches.findFirst({
     where: and(
@@ -95,6 +107,10 @@ export async function linkToDifferentBill(matchId: string, newInvoiceId: string)
 
 export async function fireSandboxTransactionAction(invoiceId: string) {
   const tenant = await getCurrentTenant();
+  const user = await getCurrentPortalUser();
+  if (user.role !== "owner" && user.role !== "admin") {
+    throw new Error("Forbidden: only owners and admins can fire sandbox transactions.");
+  }
   const result = await fireSandboxTransactionForInvoice(invoiceId, tenant.id);
   if (result.fired) {
     revalidatePath("/bank-activity");
@@ -108,6 +124,9 @@ export async function disconnectBank(connectionId: string) {
     getCurrentTenant(),
     getCurrentPortalUser(),
   ]);
+  if (user.role !== "owner" && user.role !== "admin") {
+    throw new Error("Forbidden: only owners and admins can disconnect bank connections.");
+  }
   const connection = await db.query.plaidConnections.findFirst({
     where: and(
       eq(plaidConnections.id, connectionId),
@@ -151,6 +170,7 @@ export async function disconnectBank(connectionId: string) {
 export async function linkTransactionToBillAction(txnId: string, invoiceId: string) {
   const user = await getCurrentPortalUser();
   const tenant = await getCurrentTenant();
+  requirePermission(user.role, "record_supplier_payment");
 
   const [txn, invoice] = await Promise.all([
     db.query.bankTransactions.findFirst({
@@ -225,6 +245,8 @@ export async function linkTransactionToBillAction(txnId: string, invoiceId: stri
 
 export async function dismissMysteryOutflowAction(txnId: string) {
   const tenant = await getCurrentTenant();
+  const user = await getCurrentPortalUser();
+  requireFinanceRole(user.role);
   await db
     .update(bankTransactions)
     .set({ mysteryDismissedAt: new Date(), isMysteryOutflow: false, updatedAt: new Date() })
@@ -235,6 +257,8 @@ export async function dismissMysteryOutflowAction(txnId: string) {
 
 export async function markAsNonBillExpenseAction(txnId: string) {
   const tenant = await getCurrentTenant();
+  const user = await getCurrentPortalUser();
+  requireFinanceRole(user.role);
   // Same effect as dismiss — clear the mystery flag + record the dismissal timestamp
   await db
     .update(bankTransactions)
@@ -380,6 +404,7 @@ export async function linkTransactionToSalesInvoiceAction(
 ) {
   const user = await getCurrentPortalUser();
   const tenant = await getCurrentTenant();
+  requirePermission(user.role, "record_payment");
 
   const [txn, invoice] = await Promise.all([
     db.query.bankTransactions.findFirst({
