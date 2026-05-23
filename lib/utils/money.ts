@@ -60,3 +60,12 @@ export function nonNegative(value: Decimal): Decimal {
 export function toMoneyString(value: Decimal): string {
   return value.toFixed(2);
 }
+
+/**
+ * Format for storage in a `numeric(_, 4)` column — line-level prices
+ * (unit price, cost-per-lb, weight) typically use scale=4 to absorb the
+ * extra precision needed for per-pound math without rounding errors.
+ */
+export function to4DecimalString(value: Decimal): string {
+  return value.toFixed(4);
+}

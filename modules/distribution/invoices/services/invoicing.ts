@@ -6,6 +6,7 @@ import {
   isPositiveMoney,
   money,
   nonNegative,
+  to4DecimalString,
   toMoneyString,
 } from "@/lib/utils/money";
 import {
@@ -34,14 +35,6 @@ function makeInvoiceNumber(prefix: string | null | undefined, id: string) {
   const numericSuffix = parseInt(String(id).replaceAll("-", "").slice(-6), 16);
   const base = `INV-${String(numericSuffix || 0).padStart(6, "0")}`;
   return prefix ? `${prefix}-${base}` : base;
-}
-
-function roundMoney4(value: number) {
-  return value.toFixed(4);
-}
-
-function roundMoney2(value: number) {
-  return value.toFixed(2);
 }
 
 export async function createInvoiceFromSalesOrder(input: {
@@ -86,7 +79,10 @@ export async function createInvoiceFromSalesOrder(input: {
     throw new Error("Sales order not found");
   }
 
-  let subtotal = 0;
+  // Subtotal accumulates exact decimals — Number-based summation across N
+  // lines drifts on per-pound math (0.25 lb * $4.99 etc.), and that drift
+  // shows up as a residual cent on the invoice total.
+  let subtotal = money(0);
   const invoiceLinesPayload: Array<{
     productId: string;
     quantityCases: number;
@@ -97,7 +93,7 @@ export async function createInvoiceFromSalesOrder(input: {
   }> = [];
 
   for (const line of order.lines) {
-    const billedWeight = Number(line.totalBilledWeightLbs ?? "0");
+    const billedWeight = money(line.totalBilledWeightLbs ?? "0");
     const fulfilledCases = line.fulfilledCases || line.expectedCases;
 
     // The order line's `pricePerLbOverride` is semantically
@@ -112,13 +108,13 @@ export async function createInvoiceFromSalesOrder(input: {
       (line.unitType === "fixed_case" ? "per_case" : "per_lb");
     const snapshotPrice =
       line.pricePerUnitSnapshot != null
-        ? Number(line.pricePerUnitSnapshot)
+        ? money(line.pricePerUnitSnapshot)
         : null;
     const overridePrice =
       line.pricePerLbOverride != null
-        ? Number(line.pricePerLbOverride)
+        ? money(line.pricePerLbOverride)
         : null;
-    const defaultPrice = Number(line.product.defaultPricePerLb);
+    const defaultPrice = money(line.product.defaultPricePerLb);
     // Snapshot wins; then override; then product default. For per_case
     // pricing the product-default fallback is rough (it's $/base-unit,
     // not $/case) — multiplied by conversion below to recover a sane
@@ -127,14 +123,15 @@ export async function createInvoiceFromSalesOrder(input: {
       snapshotPrice ??
       overridePrice ??
       (pricingType === "per_case"
-        ? defaultPrice *
-          Number(
-            line.pricingConversionSnapshot ??
-              line.conversionToBaseSnapshot ??
-              "1",
+        ? defaultPrice.times(
+            money(
+              line.pricingConversionSnapshot ??
+                line.conversionToBaseSnapshot ??
+                "1",
+            ),
           )
         : defaultPrice);
-    if (!Number.isFinite(unitPrice)) unitPrice = 0;
+    if (!unitPrice.isFinite()) unitPrice = money(0);
 
     // Line total math now mirrors the bill side:
     //   per_lb       → billedWeight × $/lb     (catch-weight meat)
@@ -142,41 +139,41 @@ export async function createInvoiceFromSalesOrder(input: {
     //   per_each / per_unit (no pricing snap) → cases × $/unit
     // Falling back to the case path when billedWeight is zero keeps
     // non-weight bills (cans of soda) from rendering "$0.00".
-    let lineTotal: number;
-    if (pricingType === "per_lb" && billedWeight > 0) {
-      lineTotal = billedWeight * unitPrice;
-    } else {
-      lineTotal = fulfilledCases * unitPrice;
-    }
+    const lineTotal =
+      pricingType === "per_lb" && billedWeight.gt(0)
+        ? billedWeight.times(unitPrice)
+        : money(fulfilledCases).times(unitPrice);
 
     const cogsAmount = (line.fulfillments ?? [])
       .filter(fulfillment => !fulfillment.reversedAt)
       .reduce(
         (sum, fulfillment) =>
-          sum + (Number(fulfillment.costAmountSnapshot ?? "0") || 0),
-        0,
+          sum.plus(money(fulfillment.costAmountSnapshot ?? "0")),
+        money(0),
       );
-    subtotal += lineTotal;
+    subtotal = subtotal.plus(lineTotal);
 
     invoiceLinesPayload.push({
       productId: line.productId,
       quantityCases: fulfilledCases,
-      billedWeightLbs: billedWeight.toFixed(4),
-      unitPrice: roundMoney4(unitPrice),
-      lineTotal: roundMoney2(lineTotal),
-      cogsAmountSnapshot: roundMoney4(cogsAmount),
+      billedWeightLbs: to4DecimalString(billedWeight),
+      unitPrice: to4DecimalString(unitPrice),
+      lineTotal: toMoneyString(lineTotal),
+      cogsAmountSnapshot: to4DecimalString(cogsAmount),
     });
   }
 
   const fuelSurchargeAmount =
     order.addFuelSurcharge && order.customer.fuelSurchargeAmount
-      ? Number(order.customer.fuelSurchargeAmount)
-      : 0;
+      ? money(order.customer.fuelSurchargeAmount)
+      : money(0);
 
-  const discountAmount = Number(input.discountAmount ?? "0");
-  const creditAmount = Number(input.creditAmount ?? "0");
-  const totalAmount =
-    subtotal + fuelSurchargeAmount - discountAmount - creditAmount;
+  const discountAmount = money(input.discountAmount ?? "0");
+  const creditAmount = money(input.creditAmount ?? "0");
+  const totalAmount = subtotal
+    .plus(fuelSurchargeAmount)
+    .minus(discountAmount)
+    .minus(creditAmount);
   const balanceDue = totalAmount;
 
   const [invoice] = await db
@@ -189,14 +186,14 @@ export async function createInvoiceFromSalesOrder(input: {
       invoiceDate: input.invoiceDate,
       dueDate: input.dueDate,
       status: "draft",
-      subtotal: subtotal.toFixed(2),
-      discountAmount: discountAmount.toFixed(2),
+      subtotal: toMoneyString(subtotal),
+      discountAmount: toMoneyString(discountAmount),
       creditType: input.creditType,
-      creditAmount: creditAmount.toFixed(2),
-      fuelSurchargeAmount: fuelSurchargeAmount.toFixed(2),
-      totalAmount: totalAmount.toFixed(2),
+      creditAmount: toMoneyString(creditAmount),
+      fuelSurchargeAmount: toMoneyString(fuelSurchargeAmount),
+      totalAmount: toMoneyString(totalAmount),
       amountPaid: "0",
-      balanceDue: balanceDue.toFixed(2),
+      balanceDue: toMoneyString(balanceDue),
       createdByUserId: input.createdByUserId,
     })
     .returning();

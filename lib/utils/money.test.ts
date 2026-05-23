@@ -88,3 +88,49 @@ test("bulk payment scenario: balance closes cleanly with Decimal math", () => {
   }
   assert.equal(balance.toString(), "0");
 });
+
+test("weight split: total - sum(parts) is exactly 0 with Decimal", () => {
+  // Mirrors distributeFulfillmentWeight: proportional split across N
+  // selections plus a complement (last entry absorbs the residual).
+  // With Number, the per-selection division leaves a sub-pound drift
+  // that the final entry has to absorb, and we can end up with a
+  // negative remainder when total drifts below sum-of-parts.
+  const total = money("100.0000");
+  const basis = [money("33"), money("33"), money("34")];
+  const totalBasis = basis.reduce((s, v) => s.plus(v), money(0));
+
+  let assigned = money(0);
+  const parts: string[] = [];
+  for (let i = 0; i < basis.length - 1; i++) {
+    const part = total.times(basis[i]).div(totalBasis);
+    parts.push(part.toFixed(4));
+    assigned = assigned.plus(money(part.toFixed(4)));
+  }
+  // Final piece is the exact complement
+  parts.push(total.minus(assigned).toFixed(4));
+
+  // Sum back must equal total exactly
+  const sum = parts.reduce((s, p) => s.plus(money(p)), money(0));
+  assert.equal(sum.toString(), "100");
+  // Final piece is non-negative (no FP-induced negative remainder)
+  assert.ok(money(parts[parts.length - 1]).gte(0));
+});
+
+test("line total: catch-weight math (lb * $/lb) is exact across many lines", () => {
+  // Common ERP scenario: 50 line items, each priced per-pound. With
+  // Number, summing 50 × (random lb × $/lb) drifts.
+  const weights = [12.34, 8.5, 22.1, 0.25, 11.75, 3.33];
+  const ratePerLb = "4.99";
+  let total = money(0);
+  for (const w of weights) {
+    total = total.plus(money(w).times(money(ratePerLb)));
+  }
+  // 6 lines × 4.99/lb produces an exact result
+  assert.equal(
+    total.toFixed(2),
+    weights
+      .map(w => Number((w * Number(ratePerLb)).toFixed(2)))
+      .reduce((s, v) => s + v, 0)
+      .toFixed(2),
+  );
+});

@@ -48,6 +48,11 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import {
+  money,
+  to4DecimalString,
+  toMoneyString,
+} from "@/lib/utils/money";
 
 function makeOrderNumber(id: string, prefix: string | null | undefined) {
   const base = `SO-${id.slice(0, 8).toUpperCase()}`;
@@ -60,9 +65,13 @@ function makeOrderNumber(id: string, prefix: string | null | undefined) {
  */
 function normalizeDiscountAmount(value: string | number | null | undefined): string {
   if (value == null || value === "") return "0.00";
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n) || n < 0) return "0.00";
-  return n.toFixed(2);
+  try {
+    const d = money(value);
+    if (!d.isFinite() || d.lt(0)) return "0.00";
+    return toMoneyString(d);
+  } catch {
+    return "0.00";
+  }
 }
 
 /**
@@ -163,10 +172,6 @@ function compareInventoryByOldestLot(
   return a.barcodeId.localeCompare(b.barcodeId);
 }
 
-function toFixedCostAmount(value: number) {
-  return value.toFixed(4);
-}
-
 function calculateFulfillmentCostSnapshot(input: {
   costPerUnitSnapshot: string;
   // Underlying enum widened — per_each / per_unit treated like fixed_case
@@ -179,8 +184,8 @@ function calculateFulfillmentCostSnapshot(input: {
   quantityFulfilled: number;
   weightLbs: number | null;
 }) {
-  const costPerUnit = Number(input.costPerUnitSnapshot ?? "0");
-  if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+  const costPerUnit = money(input.costPerUnitSnapshot ?? "0");
+  if (!costPerUnit.isFinite() || costPerUnit.lt(0)) {
     throw new Error("Invalid inventory cost snapshot on the selected fulfillment.");
   }
 
@@ -190,15 +195,18 @@ function calculateFulfillmentCostSnapshot(input: {
     );
   }
 
+  // Catch-weight uses billed weight × cost-per-lb; everything else multiplies
+  // count × per-unit cost. Decimal math keeps the line total exact across
+  // per-pound rates (where Number-based summation drifts a cent per few lines).
   const costAmount =
     input.costUnitTypeSnapshot === "catch_weight"
-      ? (input.weightLbs ?? 0) * costPerUnit
-      : input.quantityFulfilled * costPerUnit;
+      ? money(input.weightLbs ?? 0).times(costPerUnit)
+      : money(input.quantityFulfilled).times(costPerUnit);
 
   return {
     costPerUnitSnapshot: input.costPerUnitSnapshot,
     costUnitTypeSnapshot: input.costUnitTypeSnapshot,
-    costAmountSnapshot: toFixedCostAmount(costAmount),
+    costAmountSnapshot: to4DecimalString(costAmount),
   };
 }
 
@@ -231,26 +239,33 @@ function distributeFulfillmentWeight(
   if (totalWeightLbs == null) return selections.map(() => null);
   if (selections.length === 1) return [totalWeightLbs];
 
+  // Decimal math throughout: with Number, the proportional split + scale-4
+  // truncation would leave a drift of up to N × 0.00005 lb on the
+  // remainder, which then gets absorbed by the final selection. Exact
+  // arithmetic means the final selection's residual is just genuine
+  // rounding (one half-cent of a pound), not accumulated FP error.
+  const total = money(totalWeightLbs);
   const basis = selections.map(selection =>
     selection.allocatedWeightLbs > 0
-      ? selection.allocatedWeightLbs
-      : selection.quantityFulfilled,
+      ? money(selection.allocatedWeightLbs)
+      : money(selection.quantityFulfilled),
   );
-  const totalBasis = basis.reduce((sum, value) => sum + value, 0);
-  if (totalBasis <= 0) return selections.map(() => null);
+  const totalBasis = basis.reduce((sum, value) => sum.plus(value), money(0));
+  if (totalBasis.lte(0)) return selections.map(() => null);
 
   const weights: Array<number | null> = [];
-  let assignedWeight = 0;
+  let assignedWeight = money(0);
 
   for (let index = 0; index < selections.length; index += 1) {
     if (index === selections.length - 1) {
-      weights.push(Number((totalWeightLbs - assignedWeight).toFixed(4)));
+      weights.push(Number(to4DecimalString(total.minus(assignedWeight))));
       break;
     }
 
-    const nextWeight = Number(((totalWeightLbs * basis[index]) / totalBasis).toFixed(4));
-    weights.push(nextWeight);
-    assignedWeight += nextWeight;
+    const nextWeight = total.times(basis[index]).div(totalBasis);
+    const rounded = Number(to4DecimalString(nextWeight));
+    weights.push(rounded);
+    assignedWeight = assignedWeight.plus(money(rounded));
   }
 
   return weights;
@@ -658,8 +673,8 @@ function computePricingSnapshot(
     };
   }
 
-  const priceNum = parseFloat(resolvedPricePerLb);
-  if (!Number.isFinite(priceNum)) {
+  const priceNum = money(resolvedPricePerLb);
+  if (!priceNum.isFinite()) {
     return {
       pricingUnitTypeSnapshot: pricingUnitType,
       pricePerUnitSnapshot: null,
@@ -669,19 +684,19 @@ function computePricingSnapshot(
   }
 
   if (pricingUnitType === "per_case") {
-    const conv = parseFloat(conversionToBase);
+    const conv = money(conversionToBase);
     const pricePerCase =
-      Number.isFinite(conv) && conv > 0 ? priceNum * conv : priceNum;
+      conv.isFinite() && conv.gt(0) ? priceNum.times(conv) : priceNum;
     return {
       pricingUnitTypeSnapshot: pricingUnitType,
-      pricePerUnitSnapshot: pricePerCase.toFixed(4),
+      pricePerUnitSnapshot: to4DecimalString(pricePerCase),
       pricingConversionSnapshot: conversionToBase,
     };
   }
 
   return {
     pricingUnitTypeSnapshot: pricingUnitType,
-    pricePerUnitSnapshot: priceNum.toFixed(4),
+    pricePerUnitSnapshot: to4DecimalString(priceNum),
     pricingConversionSnapshot: null,
   };
 }
@@ -2267,16 +2282,25 @@ async function splitInventoryItemIfPartial(input: {
   if (!original) return;
 
   const remainderCases = input.originalCases - input.quantityConsumed;
-  const totalWeight = parseFloat(input.originalExactWeightLbs) || 0;
-  const consumedWeight =
-    totalWeight > 0 ? (totalWeight * input.quantityConsumed) / input.originalCases : 0;
-  const remainderWeight = totalWeight > 0 ? totalWeight - consumedWeight : 0;
+  // Decimal split + complement: the proportional cut (total * consumed /
+  // originalCases) then remainder = total - cut, all in exact arithmetic.
+  // With Number these two values could drift by a millionth of a pound;
+  // the residual then sticks around forever on the surviving inventory_item.
+  const totalWeight = money(input.originalExactWeightLbs);
+  const consumedWeight = totalWeight.gt(0)
+    ? totalWeight
+        .times(money(input.quantityConsumed))
+        .div(money(input.originalCases))
+    : money(0);
+  const remainderWeight = totalWeight.gt(0)
+    ? totalWeight.minus(consumedWeight)
+    : money(0);
 
   await db
     .update(inventoryItems)
     .set({
       cases: input.quantityConsumed,
-      exactWeightLbs: consumedWeight.toFixed(4),
+      exactWeightLbs: to4DecimalString(consumedWeight),
       updatedAt: new Date(),
     })
     .where(eq(inventoryItems.id, input.inventoryItemId));
@@ -2285,7 +2309,7 @@ async function splitInventoryItemIfPartial(input: {
     productId: original.productId,
     lotId: original.lotId,
     barcodeId: crypto.randomUUID(),
-    exactWeightLbs: remainderWeight.toFixed(4),
+    exactWeightLbs: to4DecimalString(remainderWeight),
     cases: remainderCases,
     costPerUnitSnapshot: original.costPerUnitSnapshot,
     costUnitTypeSnapshot: original.costUnitTypeSnapshot,
