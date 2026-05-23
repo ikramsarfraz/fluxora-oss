@@ -234,6 +234,12 @@ export const InlineDropzone = forwardRef<
             ? "Reading each file with AI. New rows will appear here as scans finish — this can take 10–30 seconds per page."
             : `Drag supplier-invoice PDFs here, or click to pick. Up to ${MAX_FILES_PER_BATCH} per batch, ${fmtBytes(MAX_FILE_BYTES)} each.`}
         </p>
+        {!isImporting && (
+          <p className="mt-2 max-w-[420px] text-[12px] text-muted">
+            One invoice per file — bundled multi-invoice PDFs are read as a
+            single bill.
+          </p>
+        )}
         {hiddenInput}
       </div>
     );
