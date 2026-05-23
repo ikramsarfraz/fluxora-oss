@@ -60,7 +60,7 @@ export type AccountSummary = {
 export async function getBankActivity(filter?: TransactionState | "all"): Promise<{
   transactions: ActivityTransaction[];
   accounts: AccountSummary[];
-  counts: Record<TransactionState, number> & { pending: number };
+  counts: Record<TransactionState, number> & { pending: number; mystery: number };
   lastSyncAt: Date | null;
 }> {
   const tenant = await getCurrentTenant();
@@ -93,7 +93,7 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
     return {
       transactions: [],
       accounts,
-      counts: { matched: 0, pending_review: 0, unmatched: 0, pending: 0 },
+      counts: { matched: 0, pending_review: 0, unmatched: 0, pending: 0, mystery: 0 },
       lastSyncAt: null,
     };
   }
@@ -130,11 +130,12 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
     limit: 200,
   });
 
-  const counters: Record<TransactionState, number> & { pending: number } = {
+  const counters: Record<TransactionState, number> & { pending: number; mystery: number } = {
     matched: 0,
     pending_review: 0,
     unmatched: 0,
     pending: 0,
+    mystery: 0,
   };
 
   const result: ActivityTransaction[] = [];
@@ -153,6 +154,7 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
 
     counters[state]++;
     if (txn.pending) counters.pending++;
+    if (txn.isMysteryOutflow && !txn.pending) counters.mystery++;
 
     if (filter && filter !== "all" && state !== filter) continue;
 

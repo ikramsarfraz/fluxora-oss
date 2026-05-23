@@ -34,7 +34,7 @@ const C = {
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
 
-type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending";
+type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending" | "mystery";
 
 export function BankActivityShell({ data }: { data: Data }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -82,7 +82,9 @@ export function BankActivityShell({ data }: { data: Data }) {
     ? data.transactions
     : filter === "pending"
       ? data.transactions.filter(t => t.pending)
-      : data.transactions.filter(t => t.state === filter);
+      : filter === "mystery"
+        ? data.transactions.filter(t => t.isMysteryOutflow && !t.pending)
+        : data.transactions.filter(t => t.state === filter);
 
   const q = searchText.trim().toLowerCase();
   const visible = q === ""
@@ -273,6 +275,7 @@ export function BankActivityShell({ data }: { data: Data }) {
             { key: "pending_review", label: "Pending review", count: data.counts.pending_review },
             { key: "unmatched", label: "Unmatched", count: data.counts.unmatched },
             { key: "pending", label: "Pending settlement", count: data.counts.pending },
+            { key: "mystery", label: "Mystery", count: data.counts.mystery },
           ] as const
         ).map(({ key, label, count }) => {
           const isActive = filter === key;

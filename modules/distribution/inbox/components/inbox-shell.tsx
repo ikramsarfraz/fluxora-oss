@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOutflow, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
 import { dismissMysteryOutflowAction } from "@/modules/distribution/plaid";
@@ -653,9 +654,19 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
           Mystery outflow
         </span>
         {outflows.length > 1 && (
-          <span style={{ fontSize: 10.5, color: C.red, marginLeft: "auto" }}>
+          <Link
+            href="/bank-activity"
+            style={{
+              fontSize: 10.5,
+              color: C.red,
+              marginLeft: "auto",
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
+            }}
+            title="See all mystery outflows on bank activity"
+          >
             +{outflows.length - 1} more
-          </span>
+          </Link>
         )}
       </div>
 
