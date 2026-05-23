@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { confirmPaymentMatch, rejectPaymentMatch } from "../actions";
+import {
+  confirmPaymentMatch,
+  rejectPaymentMatch,
+  syncAllConnectionsAction,
+} from "../actions";
 import { LinkToBillSheet } from "./link-to-bill-sheet";
 import type { getBankActivity } from "../services/bank-activity";
 
@@ -34,20 +38,59 @@ type Filter = "all" | "matched" | "pending_review" | "unmatched";
 
 export function BankActivityShell({ data }: { data: Data }) {
   const [filter, setFilter] = useState<Filter>("all");
+  const [searchText, setSearchText] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
   const [syncing, startSync] = useTransition();
 
   const handleSync = () => {
     startSync(async () => {
-      // Trigger all active connections to sync
-      router.refresh();
+      try {
+        const result = await syncAllConnectionsAction();
+        if (result.synced === 0 && result.failed === 0) {
+          toast.info("No active bank connections to sync.");
+        } else if (result.failed > 0) {
+          toast.warning(
+            `Synced ${result.synced} bank${result.synced === 1 ? "" : "s"}, ${result.failed} failed. Check connection status.`,
+          );
+        } else {
+          const totalChanges = result.totalAdded + result.totalModified + result.totalRemoved;
+          toast.success(
+            totalChanges > 0
+              ? `Synced ${result.synced} bank${result.synced === 1 ? "" : "s"}: ${result.totalAdded} new, ${result.totalModified} updated.`
+              : `Synced ${result.synced} bank${result.synced === 1 ? "" : "s"}. No new transactions.`,
+          );
+        }
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Sync failed.");
+      }
     });
   };
 
-  const visible = filter === "all"
+  // Re-auth banner: dedupe by institutionName so two accounts at the same
+  // bank don't render two banners.
+  const needsReauthInstitutions = Array.from(
+    new Map(
+      data.accounts
+        .filter(a => a.connectionStatus === "requires_reauth")
+        .map(a => [a.institutionName ?? "Bank", a]),
+    ).values(),
+  );
+
+  const stateFiltered = filter === "all"
     ? data.transactions
     : data.transactions.filter(t => t.state === filter);
+
+  const q = searchText.trim().toLowerCase();
+  const visible = q === ""
+    ? stateFiltered
+    : stateFiltered.filter(t => {
+        const merchant = (t.merchantName ?? "").toLowerCase();
+        const desc = (t.rawDescription ?? "").toLowerCase();
+        const invoiceNum = (t.match?.invoice.invoiceNumber ?? "").toLowerCase();
+        return merchant.includes(q) || desc.includes(q) || invoiceNum.includes(q);
+      });
 
   const lastSync = data.lastSyncAt
     ? timeSince(new Date(data.lastSyncAt))
@@ -75,7 +118,7 @@ export function BankActivityShell({ data }: { data: Data }) {
             className="h-8 px-3 text-[13px]"
           >
             <RefreshCw size={13} className={syncing ? "animate-spin" : ""} />
-            {syncing ? "Syncing…" : "Refresh"}
+            {syncing ? "Syncing…" : "Sync now"}
           </Button>
           <Link href="/settings/integrations/banks">
             <Button variant="outline" size="sm" className="h-8 px-3 text-[13px]">
@@ -84,6 +127,34 @@ export function BankActivityShell({ data }: { data: Data }) {
           </Link>
         </div>
       </div>
+
+      {/* Re-auth banner — one row per institution that needs reconnecting */}
+      {needsReauthInstitutions.length > 0 && (
+        <div
+          style={{
+            border: `1px solid ${C.warn}`,
+            background: C.warnSoft,
+            borderRadius: C.radius,
+            padding: "12px 16px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+          }}
+        >
+          <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
+            <strong style={{ color: C.warn }}>Reconnect required:</strong>{" "}
+            {needsReauthInstitutions.map(a => a.institutionName ?? "Bank").join(", ")}
+            {" — "}new transactions won&apos;t sync until you sign in again.
+          </div>
+          <Link href="/settings/integrations/banks">
+            <Button size="sm" className="h-8 px-3 text-[13px]">
+              Reconnect
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Accounts strip */}
       <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 24, paddingBottom: 4 }}>
@@ -155,8 +226,18 @@ export function BankActivityShell({ data }: { data: Data }) {
         </Link>
       </div>
 
-      {/* Filter chips */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      {/* Filter chips + search */}
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          marginBottom: 20,
+          alignItems: "center",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {(
           [
             { key: "all", label: "All", count: data.transactions.length },
@@ -206,6 +287,25 @@ export function BankActivityShell({ data }: { data: Data }) {
             </button>
           );
         })}
+        </div>
+        <input
+          type="search"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="Search merchant, description, invoice…"
+          aria-label="Filter transactions"
+          style={{
+            fontSize: 13,
+            padding: "6px 12px",
+            border: `1px solid ${C.line}`,
+            borderRadius: 6,
+            background: C.surface,
+            color: C.ink,
+            minWidth: 260,
+            outline: "none",
+            fontFamily: "inherit",
+          }}
+        />
       </div>
 
       {/* Transaction list */}
@@ -220,7 +320,9 @@ export function BankActivityShell({ data }: { data: Data }) {
             fontSize: 13,
           }}
         >
-          No transactions in this view.
+          {q !== ""
+            ? `No transactions match "${searchText}".`
+            : "No transactions in this view."}
         </div>
       ) : (
         <div

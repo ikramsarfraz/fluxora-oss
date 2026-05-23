@@ -20,6 +20,7 @@ import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getPlaidClient } from "../services/plaid-client";
+import { syncConnection } from "../services/transaction-sync";
 import { confirmMatch, normalizePayeeText, rejectMatch } from "../services/transaction-matching";
 import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire";
 import { decryptToken } from "@/lib/crypto/token-encryption";
@@ -494,4 +495,55 @@ export async function getConnectedBanks() {
         currentBalance: Number(a.currentBalance ?? 0),
       })),
     }));
+}
+
+export async function syncAllConnectionsAction() {
+  const user = await getCurrentPortalUser();
+  const tenant = await getCurrentTenant();
+  requireFinanceRole(user.role);
+
+  const conns = await db
+    .select({ id: plaidConnections.id })
+    .from(plaidConnections)
+    .where(
+      and(
+        eq(plaidConnections.tenantId, tenant.id),
+        eq(plaidConnections.status, "active"),
+      ),
+    );
+
+  if (conns.length === 0) {
+    return { synced: 0, failed: 0, totalAdded: 0, totalModified: 0, totalRemoved: 0 };
+  }
+
+  const settled = await Promise.allSettled(conns.map(c => syncConnection(c.id)));
+  let synced = 0;
+  let failed = 0;
+  let totalAdded = 0;
+  let totalModified = 0;
+  let totalRemoved = 0;
+  for (const r of settled) {
+    if (r.status === "fulfilled") {
+      synced += 1;
+      totalAdded += r.value.added;
+      totalModified += r.value.modified;
+      totalRemoved += r.value.removed;
+    } else {
+      failed += 1;
+    }
+  }
+
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "plaid.manual_sync",
+    resourceType: "plaid_connection",
+    resourceId: "all",
+    metadata: { synced, failed, totalAdded, totalModified, totalRemoved },
+  });
+
+  revalidatePath("/bank-activity");
+  revalidatePath("/inbox");
+  return { synced, failed, totalAdded, totalModified, totalRemoved };
 }
