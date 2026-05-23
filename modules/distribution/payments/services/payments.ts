@@ -12,6 +12,13 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import {
+  exceedsByCent,
+  isPositiveMoney,
+  money,
+  nonNegative,
+  toMoneyString,
+} from "@/lib/utils/money";
 
 export type PaymentMethod = "cash" | "check" | "ach" | "zelle" | "credit_card";
 
@@ -291,14 +298,19 @@ async function recomputeInvoiceTotals(invoiceId: string) {
     .from(payments)
     .where(eq(payments.salesInvoiceId, invoiceId));
 
-  const newAmountPaid = Number(agg?.total ?? 0);
-  const totalAmount = Number(invoice.totalAmount);
-  const newBalanceDue = Math.max(totalAmount - newAmountPaid, 0);
+  // Postgres SUM returns precise text; Decimal preserves it. Number()
+  // here used to truncate above 2^53 (not a real ERP risk) and, more
+  // commonly, leaked sub-cent drift on the balance-due subtraction —
+  // enough to keep an invoice marked partially_paid after the last
+  // edit/void zeroed out the balance.
+  const newAmountPaid = money(agg?.total ?? 0);
+  const totalAmount = money(invoice.totalAmount);
+  const newBalanceDue = nonNegative(totalAmount.minus(newAmountPaid));
 
   let nextStatus = invoice.status;
-  if (newAmountPaid >= totalAmount) {
+  if (newAmountPaid.gte(totalAmount)) {
     nextStatus = "paid";
-  } else if (newAmountPaid > 0) {
+  } else if (newAmountPaid.gt(0)) {
     nextStatus = "partially_paid";
   } else if (invoice.status === "paid" || invoice.status === "partially_paid") {
     // Reverted to no payments — drop back to the pre-payment "sent" state.
@@ -308,8 +320,8 @@ async function recomputeInvoiceTotals(invoiceId: string) {
   await db
     .update(salesInvoices)
     .set({
-      amountPaid: newAmountPaid.toFixed(2),
-      balanceDue: newBalanceDue.toFixed(2),
+      amountPaid: toMoneyString(newAmountPaid),
+      balanceDue: toMoneyString(newBalanceDue),
       status: nextStatus,
     })
     .where(eq(salesInvoices.id, invoiceId));
@@ -376,12 +388,15 @@ export async function updatePayment(
   }
 
   if (input.amount !== undefined) {
-    const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!isPositiveMoney(input.amount)) {
       throw new Error("Payment amount must be greater than 0.");
     }
+    const amount = money(input.amount);
     // The edited amount + sum of other payments on this invoice must not
-    // exceed the invoice total — would put balance_due negative.
+    // exceed the invoice total — would put balance_due negative. Decimal
+    // summation keeps the over-paid check tight; with Number, sub-cent
+    // drift on a heavily partial-paid invoice could either reject a
+    // legit edit or let an over-edit slip past the 1¢ tolerance.
     const invoice = await db.query.salesInvoices.findFirst({
       where: eq(salesInvoices.id, existing.salesInvoiceId),
       columns: { totalAmount: true },
@@ -399,14 +414,14 @@ export async function updatePayment(
           sql`${payments.id} != ${input.id}`,
         ),
       );
-    const otherSum = Number(agg?.total ?? 0);
-    const totalAmount = Number(invoice?.totalAmount ?? 0);
-    if (otherSum + amount - totalAmount > 0.01) {
+    const otherSum = money(agg?.total ?? 0);
+    const totalAmount = money(invoice?.totalAmount ?? 0);
+    if (exceedsByCent(otherSum.plus(amount), totalAmount)) {
       throw new Error(
         "Amount would push paid total over the invoice's grand total.",
       );
     }
-    patch.amount = input.amount;
+    patch.amount = toMoneyString(amount);
   }
 
   if (input.paymentMethod !== undefined) {
