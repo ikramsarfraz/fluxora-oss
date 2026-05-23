@@ -859,6 +859,18 @@ function ProductTable({
     return m;
   }, [pageData, customer.id]);
 
+  // Look up the current version for the default-price row of (product) or
+  // the per-supplier row of (product, supplier). Used to round-trip
+  // optimistic-concurrency tokens to the server. Returns undefined when
+  // there's no override yet (server will treat the call as a fresh INSERT).
+  function getRowVersion(productId: string, supplierId?: string | null): number | undefined {
+    const row = pageData?.data.find(r => r.id === productId);
+    if (!row) return undefined;
+    if (supplierId == null) return row.customerPriceVersion ?? undefined;
+    const vendor = row.vendors.find(v => v.supplier_id === supplierId);
+    return vendor?.customer_price_version ?? undefined;
+  }
+
   const categories = pageData?.allCategories ?? [];
 
   const grouped = useMemo(() => {
@@ -872,19 +884,10 @@ function ProductTable({
   }, [pageData]);
 
   function handleCommit(productId: string, rawValue: string) {
-    if (!rawValue.trim()) {
-      deletePrice.mutate({ customerId: customer.id, productId }, { onError });
-      return;
-    }
-    const v = parseFloat(rawValue);
-    if (!Number.isFinite(v) || v < 0) return;
-    setPrice.mutate({ customerId: customer.id, productId, pricePerLb: v.toFixed(2) }, { onError });
-  }
-
-  function handleCommitVendor(productId: string, supplierId: string, rawValue: string) {
+    const expectedVersion = getRowVersion(productId);
     if (!rawValue.trim()) {
       deletePrice.mutate(
-        { customerId: customer.id, productId, supplierId },
+        { customerId: customer.id, productId, expectedVersion },
         { onError },
       );
       return;
@@ -892,14 +895,47 @@ function ProductTable({
     const v = parseFloat(rawValue);
     if (!Number.isFinite(v) || v < 0) return;
     setPrice.mutate(
-      { customerId: customer.id, productId, supplierId, pricePerLb: v.toFixed(2) },
+      {
+        customerId: customer.id,
+        productId,
+        pricePerLb: v.toFixed(2),
+        expectedVersion,
+      },
+      { onError },
+    );
+  }
+
+  function handleCommitVendor(productId: string, supplierId: string, rawValue: string) {
+    const expectedVersion = getRowVersion(productId, supplierId);
+    if (!rawValue.trim()) {
+      deletePrice.mutate(
+        { customerId: customer.id, productId, supplierId, expectedVersion },
+        { onError },
+      );
+      return;
+    }
+    const v = parseFloat(rawValue);
+    if (!Number.isFinite(v) || v < 0) return;
+    setPrice.mutate(
+      {
+        customerId: customer.id,
+        productId,
+        supplierId,
+        pricePerLb: v.toFixed(2),
+        expectedVersion,
+      },
       { onError },
     );
   }
 
   function handleResetVendor(productId: string, supplierId: string) {
     deletePrice.mutate(
-      { customerId: customer.id, productId, supplierId },
+      {
+        customerId: customer.id,
+        productId,
+        supplierId,
+        expectedVersion: getRowVersion(productId, supplierId),
+      },
       { onError },
     );
   }
@@ -1037,7 +1073,11 @@ function ProductTable({
                   onCommit={handleCommit}
                   onReset={() =>
                     deletePrice.mutate(
-                      { customerId: customer.id, productId: prod.id },
+                      {
+                        customerId: customer.id,
+                        productId: prod.id,
+                        expectedVersion: getRowVersion(prod.id),
+                      },
                       { onError },
                     )
                   }

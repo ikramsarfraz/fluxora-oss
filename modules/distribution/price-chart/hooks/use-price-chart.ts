@@ -40,12 +40,19 @@ export function useSetCustomerPrice() {
       pricePerLb: string;
       /** Optional: scope the price to a specific supplier (overrides the default for that supplier). */
       supplierId?: string | null;
+      /**
+       * Version the client read before editing. When provided the server
+       * rejects the write if the row has moved on, surfacing a
+       * "refresh and retry" prompt instead of last-write-wins.
+       */
+      expectedVersion?: number;
     }) =>
       setCustomerProductPriceAction(
         input.customerId,
         input.productId,
         input.pricePerLb,
         input.supplierId ?? null,
+        input.expectedVersion,
       ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
@@ -58,11 +65,14 @@ export function useDeleteCustomerPrice() {
       customerId: string;
       productId: string;
       supplierId?: string | null;
+      /** Optional concurrency token — see useSetCustomerPrice. */
+      expectedVersion?: number;
     }) =>
       deleteCustomerProductPriceAction(
         input.customerId,
         input.productId,
         input.supplierId ?? null,
+        input.expectedVersion,
       ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
