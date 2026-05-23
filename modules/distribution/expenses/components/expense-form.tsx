@@ -41,8 +41,14 @@ import {
   type ExpenseFormValues,
 } from "../validators/expense.schemas";
 
+export type ExpenseFormPrefill = {
+  expenseDate?: string;
+  amount?: string;
+  note?: string;
+};
+
 type ExpenseFormProps =
-  | { mode: "create" }
+  | { mode: "create"; prefill?: ExpenseFormPrefill }
   | { mode: "edit"; expense: ExpenseDetail };
 
 export function ExpenseForm(props: ExpenseFormProps) {
@@ -67,11 +73,12 @@ export function ExpenseForm(props: ExpenseFormProps) {
           recurrenceEndDate: props.expense.recurrenceEndDate ?? "",
         }
       : {
-          expenseDate: new Date().toISOString().slice(0, 10),
+          expenseDate:
+            props.prefill?.expenseDate ?? new Date().toISOString().slice(0, 10),
           category: "other",
-          amount: "",
+          amount: props.prefill?.amount ?? "",
           paymentMethod: "",
-          note: "",
+          note: props.prefill?.note ?? "",
           recurrenceInterval: "none",
           recurrenceEndDate: "",
         };
