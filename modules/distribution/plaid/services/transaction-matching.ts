@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { levenshteinDistance } from "@/modules/distribution/supplier-invoices/utils/normalization";
+import { money, nonNegative, toMoneyString } from "@/lib/utils/money";
 
 type BankTransaction = typeof bankTransactions.$inferSelect;
 
@@ -249,20 +250,25 @@ async function applyArInflowToInvoice(args: {
     });
     if (!invoice) return;
 
-    const balanceDue = Number(invoice.balanceDue);
-    if (balanceDue <= 0) return; // already paid; nothing to do
+    const balanceDue = money(invoice.balanceDue);
+    if (balanceDue.lte(0)) return; // already paid; nothing to do
 
     // Apply the lesser of (txn amount, balance due) — we never over-apply.
-    const applied = Math.min(args.amount, balanceDue);
-    const newAmountPaid = Number(invoice.amountPaid) + applied;
-    const totalAmount = Number(invoice.totalAmount);
+    // Decimal math throughout: a Number-based Math.max(total - paid, 0)
+    // could leave a 1¢ residual on what's actually a fully-paid invoice
+    // and downstream aging would keep showing it as open.
+    const txnAmount = money(args.amount);
+    const applied = txnAmount.lt(balanceDue) ? txnAmount : balanceDue;
+    const newAmountPaid = money(invoice.amountPaid).plus(applied);
+    const totalAmount = money(invoice.totalAmount);
+    const newBalanceDue = nonNegative(totalAmount.minus(newAmountPaid));
 
     await tx.insert(payments).values({
       tenantId: args.tenantId,
       salesInvoiceId: args.salesInvoiceId,
       createdByUserId: confirmedBy,
       paymentDate: args.paymentDate,
-      amount: applied.toFixed(2),
+      amount: toMoneyString(applied),
       paymentMethod: validMethod,
       referenceNumber: args.rawDescription
         ? args.rawDescription.slice(0, 128)
@@ -273,14 +279,13 @@ async function applyArInflowToInvoice(args: {
     await tx
       .update(salesInvoices)
       .set({
-        amountPaid: newAmountPaid.toFixed(2),
-        balanceDue: Math.max(totalAmount - newAmountPaid, 0).toFixed(2),
-        status:
-          newAmountPaid >= totalAmount
-            ? "paid"
-            : newAmountPaid > 0
-              ? "partially_paid"
-              : invoice.status,
+        amountPaid: toMoneyString(newAmountPaid),
+        balanceDue: toMoneyString(newBalanceDue),
+        status: newAmountPaid.gte(totalAmount)
+          ? "paid"
+          : newAmountPaid.gt(0)
+            ? "partially_paid"
+            : invoice.status,
       })
       .where(eq(salesInvoices.id, args.salesInvoiceId));
   });

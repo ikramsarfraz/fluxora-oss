@@ -30,6 +30,12 @@ import {
   type PaginatedQueryInput,
 } from "@/lib/pagination";
 import {
+  exceedsByCent,
+  isPositiveMoney,
+  money,
+  toMoneyString,
+} from "@/lib/utils/money";
+import {
   buildSupplierInvoiceObjectKey,
   deleteFile,
   downloadFile,
@@ -1787,10 +1793,10 @@ export async function recordSupplierInvoicePayment(
     }
   }
 
-  const amount = Number(input.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!isPositiveMoney(input.amount)) {
     throw new Error("Payment amount must be greater than 0.");
   }
+  const amount = money(input.amount);
 
   try {
     await db.transaction(async tx => {
@@ -1813,9 +1819,11 @@ export async function recordSupplierInvoicePayment(
     }
 
     const summary = computePaymentSummary(invoice);
-    const balanceDue = Number(summary.balanceDue);
-    // Allow a 1¢ tolerance so exact-match payments don't trip FP equality.
-    if (amount - balanceDue > 0.01) {
+    const balanceDue = money(summary.balanceDue);
+    // 1¢ tolerance preserved (matches the AR `recordPayment` contract);
+    // exceedsByCent is Decimal-aware so exact-match payments don't trip
+    // the residual-FP edge case that bit the Number version.
+    if (exceedsByCent(amount, balanceDue)) {
       throw new Error(
         `Payment exceeds balance due. Balance due is $${summary.balanceDue}.`,
       );
@@ -1827,7 +1835,7 @@ export async function recordSupplierInvoicePayment(
       tenantId: tenant.id,
       supplierInvoiceId: input.supplierInvoiceId,
       paymentDate: input.paymentDate,
-      amount: amount.toFixed(2),
+      amount: toMoneyString(amount),
       paymentMethod: input.paymentMethod,
       checkNumber: trimmedCheckNumber,
       referenceNumber: trimmedReferenceNumber,
@@ -1841,12 +1849,13 @@ export async function recordSupplierInvoicePayment(
     // "Download PDF as paid", Plaid-match, and fully-paid banner on the
     // status column — without this flip those surfaces stay stale even
     // after the balance is zero.
-    const newPaidTotal = Number(summary.totalPaid) + amount;
-    const totalAmount = Number(invoice.totalAmount);
-    if (
-      newPaidTotal + 0.005 >= totalAmount &&
-      invoice.status === "completed"
-    ) {
+    //
+    // The Number version used `+0.005` as a fuzz to absorb FP drift on
+    // partial-payment sums. With Decimal the sum is exact, so a clean
+    // `gte` is correct — no tolerance needed.
+    const newPaidTotal = money(summary.totalPaid).plus(amount);
+    const totalAmount = money(invoice.totalAmount);
+    if (newPaidTotal.gte(totalAmount) && invoice.status === "completed") {
       await tx
         .update(supplierInvoices)
         .set({ status: "paid", updatedAt: new Date() })
@@ -1868,7 +1877,7 @@ export async function recordSupplierInvoicePayment(
       entityId: payment.id,
       entityLabel: invoice.invoiceNumber,
       contextJson: JSON.stringify({
-        amount: amount.toFixed(2),
+        amount: toMoneyString(amount),
         paymentMethod: paymentSummaryMethod,
         checkNumber: trimmedCheckNumber,
         referenceNumber: trimmedReferenceNumber,
@@ -2019,20 +2028,24 @@ export async function updateSupplierInvoicePayment(
   }
 
   if (input.amount !== undefined) {
-    const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!isPositiveMoney(input.amount)) {
       throw new Error("Payment amount must be greater than 0.");
     }
+    const amount = money(input.amount);
+    // Decimal accumulation across N sibling payments — Number-summed
+    // siblings could drift enough on a heavily partial-paid bill to
+    // either flag a legitimate edit as over-bill, or let an over-edit
+    // slip past the 1¢ tolerance check.
     const otherSum = (existing.supplierInvoice?.payments ?? [])
       .filter(p => p.id !== input.id)
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    const totalAmount = Number(existing.supplierInvoice?.totalAmount ?? 0);
-    if (otherSum + amount - totalAmount > 0.01) {
+      .reduce((sum, p) => sum.plus(money(p.amount ?? "0")), money(0));
+    const totalAmount = money(existing.supplierInvoice?.totalAmount ?? 0);
+    if (exceedsByCent(otherSum.plus(amount), totalAmount)) {
       throw new Error(
         "Amount would push paid total over the bill's grand total.",
       );
     }
-    patch.amount = amount.toFixed(2);
+    patch.amount = toMoneyString(amount);
   }
 
   if (input.paymentMethod !== undefined) {
