@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useLot } from "../hooks/use-lots";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -67,7 +68,13 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
   } = useLot(lotId);
   const { data: currentUser } = useCurrentPortalUser();
 
-  useSetBreadcrumbLabel(`/lots/${lotId}`, lot?.lotNumber);
+  // Lot detail is reachable from both /lots/<id> and /inventory/lots/<id>;
+  // use the live pathname so the override key matches whichever URL the
+  // user actually landed on (the breadcrumb component looks up overrides
+  // by exact href). Also pass a stable loading label so the humanized
+  // UUID never leaks through while `lot` is undefined.
+  const pathname = usePathname();
+  useSetBreadcrumbLabel(pathname ?? `/lots/${lotId}`, lot?.lotNumber ?? "Lot");
 
   if (isLoading) {
     // Match the lot detail layout: header + 3 metric cards + 3 detail
