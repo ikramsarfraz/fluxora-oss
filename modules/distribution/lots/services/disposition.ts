@@ -10,6 +10,7 @@ import {
 import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import { money, toMoneyString } from "@/lib/utils/money";
 import type { DispositionConfig, MarkdownConfig, DonateConfig } from "./disposition-analytics";
 
 export async function getPriorMarkdownStats(
@@ -68,7 +69,10 @@ export async function createDispositionDecision(input: {
       decidedByUserId: user.id,
       option: input.option,
       status: "draft",
-      expectedNet: input.expectedNet?.toFixed(2),
+      expectedNet:
+        input.expectedNet != null
+          ? toMoneyString(money(input.expectedNet))
+          : undefined,
       config: input.config,
     })
     .returning();
@@ -154,6 +158,10 @@ export async function recordMarkdownOutcome(input: {
 
   const now = new Date();
 
+  // Money fields (expectedNet, actualNet) routed through Decimal so the
+  // outcome row stores exactly what we computed — eliminates the
+  // banker's-rounding edge case that bites Number.toFixed for values
+  // that fall on a half-cent boundary in binary FP.
   await db.transaction(async tx => {
     await tx.insert(markdownHistories).values({
       tenantId: tenant.id,
@@ -163,8 +171,8 @@ export async function recordMarkdownOutcome(input: {
       discountPercent: input.discountPercent.toFixed(2),
       quantityOfferedLbs: input.quantityOfferedLbs.toFixed(4),
       actualSellThroughPct: input.actualSellThroughPct.toFixed(2),
-      expectedNet: input.expectedNet.toFixed(2),
-      actualNet: input.actualNet.toFixed(2),
+      expectedNet: toMoneyString(money(input.expectedNet)),
+      actualNet: toMoneyString(money(input.actualNet)),
       completedAt: now,
     });
 
@@ -173,7 +181,7 @@ export async function recordMarkdownOutcome(input: {
       .set({
         status: "completed",
         completedAt: now,
-        actualNet: input.actualNet.toFixed(2),
+        actualNet: toMoneyString(money(input.actualNet)),
       })
       .where(eq(dispositionDecisions.id, input.dispositionDecisionId));
 

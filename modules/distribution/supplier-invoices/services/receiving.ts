@@ -33,6 +33,7 @@ import {
   exceedsByCent,
   isPositiveMoney,
   money,
+  to4DecimalString,
   toMoneyString,
 } from "@/lib/utils/money";
 import {
@@ -161,24 +162,22 @@ export type UpdateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
 
 // -------------------- Helpers --------------------
 
-function roundTo(value: number, digits: number): string {
-  return value.toFixed(digits);
-}
-
 function computeLineTotal(line: {
   quantityCases: number;
   weightLbs: string;
   unitType: SupplierInvoiceLineUnitType;
   unitPrice: string;
 }): string {
-  const unitPrice = Number(line.unitPrice) || 0;
+  // Catch-weight uses billed weight × $/lb; everything else multiplies
+  // count × per-unit price. Decimal keeps a 50-line bill totaling
+  // exactly — Number summation drifts a cent per few lines on per-
+  // pound rates with fractional weights (the common meat case).
+  const unitPrice = money(line.unitPrice);
   if (line.unitType === "catch_weight") {
-    const weight = Number(line.weightLbs) || 0;
-    return roundTo(weight * unitPrice, 4);
+    return to4DecimalString(money(line.weightLbs).times(unitPrice));
   }
   // fixed_case, per_each, per_unit all use the count * price math.
-  const cases = Number(line.quantityCases) || 0;
-  return roundTo(cases * unitPrice, 4);
+  return to4DecimalString(money(line.quantityCases).times(unitPrice));
 }
 
 /** Pricing direction snapshot mirrors the sales-side `pricing_unit_type` enum. */
@@ -249,17 +248,22 @@ function normalizeSupplierInvoiceLine(
     return line;
   }
 
-  const totalWeight = parsedCaseWeights.reduce((sum, weight) => sum + weight, 0);
+  // Sum per-case weights in Decimal — a 24-case bill with sub-pound
+  // case weights would drift on Number summation.
+  const totalWeight = parsedCaseWeights.reduce(
+    (sum, weight) => sum.plus(money(weight)),
+    money(0),
+  );
   return {
     ...line,
-    weightLbs: roundTo(totalWeight, 4),
+    weightLbs: to4DecimalString(totalWeight),
     caseWeightsLbs: JSON.stringify(parsedCaseWeights),
   };
 }
 
 function sumTotals(values: string[]): string {
-  const total = values.reduce((acc, v) => acc + (Number(v) || 0), 0);
-  return roundTo(total, 4);
+  const total = values.reduce((acc, v) => acc.plus(money(v)), money(0));
+  return to4DecimalString(total);
 }
 
 function addDays(isoDate: string, days: number): string {
