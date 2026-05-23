@@ -15,6 +15,8 @@ import { BulkLandingLive } from "./bulk-landing/bulk-landing-live";
 import { ParseErrorDialog } from "./bulk-landing/parse-error-dialog";
 import type { BatchFile } from "./bulk-landing/types";
 import { useBulkBatchView } from "./bulk-landing/use-bulk-batch-view";
+import { useRescanBulkImportFile } from "../hooks/use-supplier-invoices";
+import { toast } from "sonner";
 
 type Tab = "inbox" | "bills";
 
@@ -92,6 +94,29 @@ export function SupplierBillsShell() {
     setParseErrorFile(null);
     triggerBulkImport();
   }, [triggerBulkImport]);
+
+  // In-place retry: re-runs the pipeline against the PDF already in R2
+  // for this row, no fresh upload required. Most parse_error rows are
+  // transient (connection / timeout / rate_limit) so this recovers
+  // without forcing the user to drag the file back in.
+  const rescanMutation = useRescanBulkImportFile();
+  const handleParseErrorRetry = useCallback(() => {
+    if (!parseErrorFile) return;
+    const id = parseErrorFile.id;
+    rescanMutation.mutate(id, {
+      onSuccess: row => {
+        if (row.status === "parse_error") {
+          toast.error("Re-scan still failed — try re-uploading the PDF.");
+        } else {
+          toast.success("Re-scan succeeded.");
+          setParseErrorFile(null);
+        }
+      },
+      onError: err => {
+        toast.error(err instanceof Error ? err.message : "Re-scan failed.");
+      },
+    });
+  }, [parseErrorFile, rescanMutation]);
 
   // ── Tab counts ──
   // Inbox count is the live pending-bulk-import row count. We don't fetch
@@ -212,6 +237,8 @@ export function SupplierBillsShell() {
           if (!open) setParseErrorFile(null);
         }}
         onReupload={handleParseErrorReupload}
+        onRetry={handleParseErrorRetry}
+        retrying={rescanMutation.isPending}
       />
     </>
   );

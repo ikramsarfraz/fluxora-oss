@@ -73,6 +73,8 @@ export function ParseErrorDialog({
   parseErrorCodes,
   onOpenChange,
   onReupload,
+  onRetry,
+  retrying = false,
 }: {
   /** The row that triggered the dialog. `null` keeps the dialog closed. */
   file: BatchFile | null;
@@ -86,6 +88,15 @@ export function ParseErrorDialog({
   onOpenChange: (open: boolean) => void;
   /** Opens the bulk-import sheet. The shell handles closing this dialog. */
   onReupload: () => void;
+  /**
+   * Re-run the parsing pipeline against the existing R2-stored PDF (no
+   * upload required). Hides the button when omitted. Most parse failures
+   * are transient (connection / timeout / rate_limit) so this is the
+   * preferred recovery path.
+   */
+  onRetry?: () => void;
+  /** Disables the retry button while the rescan mutation is in flight. */
+  retrying?: boolean;
 }) {
   const open = file !== null;
   const primaryCode = parseErrorCodes[0] ?? "unknown";
@@ -137,6 +148,16 @@ export function ParseErrorDialog({
           >
             Cancel
           </Button>
+          {onRetry ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onRetry}
+              disabled={retrying}
+            >
+              {retrying ? "Retrying…" : "Retry parsing"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             onClick={() => {

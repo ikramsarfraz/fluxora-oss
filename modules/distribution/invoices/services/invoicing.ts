@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  exceedsByCent,
+  isPositiveMoney,
+  money,
+  nonNegative,
+  toMoneyString,
+} from "@/lib/utils/money";
+import {
   customers,
   payments,
   salesInvoiceLines,
@@ -786,24 +793,24 @@ export async function recordPayment(input: {
     throw new Error("Sales invoice not found");
   }
 
-  const paymentAmount = Number(input.amount);
-  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+  if (!isPositiveMoney(input.amount)) {
     throw new Error("Payment amount must be greater than 0.");
   }
-  const currentPaid = Number(invoice.amountPaid);
-  const totalAmount = Number(invoice.totalAmount);
-  const currentBalanceDue = Number(invoice.balanceDue);
+  const paymentAmount = money(input.amount);
+  const currentPaid = money(invoice.amountPaid);
+  const totalAmount = money(invoice.totalAmount);
+  const currentBalanceDue = money(invoice.balanceDue);
 
-  if (currentBalanceDue <= 0) {
+  if (currentBalanceDue.lte(0)) {
     throw new Error("This invoice is already fully paid.");
   }
 
-  if (paymentAmount - currentBalanceDue > 0.01) {
+  if (exceedsByCent(paymentAmount, currentBalanceDue)) {
     throw new Error("Payment amount cannot exceed the invoice balance due.");
   }
 
-  const newAmountPaid = currentPaid + paymentAmount;
-  const newBalanceDue = totalAmount - newAmountPaid;
+  const newAmountPaid = currentPaid.plus(paymentAmount);
+  const newBalanceDue = totalAmount.minus(newAmountPaid);
 
   try {
     await db.insert(payments).values({
@@ -832,14 +839,13 @@ export async function recordPayment(input: {
   await db
     .update(salesInvoices)
     .set({
-      amountPaid: newAmountPaid.toFixed(2),
-      balanceDue: Math.max(newBalanceDue, 0).toFixed(2),
-      status:
-        newAmountPaid >= totalAmount
-          ? "paid"
-          : newAmountPaid > 0
-            ? "partially_paid"
-            : invoice.status,
+      amountPaid: toMoneyString(newAmountPaid),
+      balanceDue: toMoneyString(nonNegative(newBalanceDue)),
+      status: newAmountPaid.gte(totalAmount)
+        ? "paid"
+        : newAmountPaid.gt(0)
+          ? "partially_paid"
+          : invoice.status,
     })
     .where(eq(salesInvoices.id, input.salesInvoiceId));
 
@@ -898,8 +904,7 @@ export async function recordBulkPaymentForCustomer(input: {
   // before opening the transaction means simple input errors don't even
   // touch the DB.
   for (const a of input.allocations) {
-    const amount = Number(a.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!isPositiveMoney(a.amount)) {
       throw new Error("Each allocation amount must be greater than 0.");
     }
   }
@@ -960,24 +965,24 @@ export async function recordBulkPaymentForCustomer(input: {
           throw new Error("Invoice not found in the loaded batch.");
         }
 
-        const paymentAmount = Number(allocation.amount);
-        const currentBalanceDue = Number(invoice.balanceDue);
+        const paymentAmount = money(allocation.amount);
+        const currentBalanceDue = money(invoice.balanceDue);
 
-        if (currentBalanceDue <= 0) {
+        if (currentBalanceDue.lte(0)) {
           throw new Error(
             `Invoice ${invoice.invoiceNumber} is already fully paid.`,
           );
         }
-        if (paymentAmount - currentBalanceDue > 0.01) {
+        if (exceedsByCent(paymentAmount, currentBalanceDue)) {
           throw new Error(
             `Amount for invoice ${invoice.invoiceNumber} exceeds its balance due.`,
           );
         }
 
-        const currentPaid = Number(invoice.amountPaid);
-        const totalAmount = Number(invoice.totalAmount);
-        const newAmountPaid = currentPaid + paymentAmount;
-        const newBalanceDue = totalAmount - newAmountPaid;
+        const currentPaid = money(invoice.amountPaid);
+        const totalAmount = money(invoice.totalAmount);
+        const newAmountPaid = currentPaid.plus(paymentAmount);
+        const newBalanceDue = totalAmount.minus(newAmountPaid);
 
         // Anchor (i === 0) carries the user-supplied idempotency_key so
         // retries can find this batch. Subsequent rows share only the
@@ -1004,14 +1009,13 @@ export async function recordBulkPaymentForCustomer(input: {
         await tx
           .update(salesInvoices)
           .set({
-            amountPaid: newAmountPaid.toFixed(2),
-            balanceDue: Math.max(newBalanceDue, 0).toFixed(2),
-            status:
-              newAmountPaid >= totalAmount
-                ? "paid"
-                : newAmountPaid > 0
-                  ? "partially_paid"
-                  : invoice.status,
+            amountPaid: toMoneyString(newAmountPaid),
+            balanceDue: toMoneyString(nonNegative(newBalanceDue)),
+            status: newAmountPaid.gte(totalAmount)
+              ? "paid"
+              : newAmountPaid.gt(0)
+                ? "partially_paid"
+                : invoice.status,
           })
           .where(eq(salesInvoices.id, invoice.id));
 

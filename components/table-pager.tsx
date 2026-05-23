@@ -71,8 +71,11 @@ export function TablePager({
         >
           <ChevronLeft className="size-3.5" />
         </Button>
-        <span className="px-1.5 text-xs text-subtle">
-          {page} / {pageCount}
+        <span
+          className="px-1.5 text-xs text-subtle"
+          aria-label={`Page ${page} of ${pageCount}`}
+        >
+          Page {page} of {pageCount}
         </span>
         <Button
           type="button"
