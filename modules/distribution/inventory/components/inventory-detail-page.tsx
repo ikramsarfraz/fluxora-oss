@@ -77,7 +77,18 @@ export function InventoryDetailPage({
   );
 
   if (isLoading) {
-    return <DetailPageSkeleton includeTable />;
+    // Layout-matching skeleton:
+    //   header + 3 metric cards (quantity / cost / allocations) + 3
+    //   detail sections (adjustment actions, item details, lot+source) +
+    //   2 tables (allocations, fulfillments) + activity card placeholder.
+    return (
+      <DetailPageSkeleton
+        sections={3}
+        metricCards={3}
+        tables={2}
+        activityCard
+      />
+    );
   }
 
   if (isError || !item) {

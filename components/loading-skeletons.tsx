@@ -114,18 +114,47 @@ export function ListPageSkeleton({
 
 export function DetailPageSkeleton({
   sections = 3,
+  metricCards = 0,
+  tables = 0,
+  activityCard = false,
+  // includeTable kept for backwards-compatibility with existing call sites
+  // that haven't migrated to `tables` yet. Treated as `tables: 1` when true.
   includeTable = false,
 }: {
   sections?: number;
+  /** Renders an N-column row of metric cards between the header and the
+   *  detail sections. Inventory and lots detail pages put 3 cards here. */
+  metricCards?: number;
+  /** Renders this many table skeletons after the detail sections. */
+  tables?: number;
+  /** Reserves the bottom card-shaped placeholder for the activity feed
+   *  that orders, bills, and inventory all render below their tables. */
+  activityCard?: boolean;
   includeTable?: boolean;
 }) {
+  const tableCount = tables + (includeTable ? 1 : 0);
   return (
     <div className="flex flex-col gap-6">
       <PageHeaderSkeleton />
+      {metricCards > 0 ? (
+        <div
+          className="grid gap-3"
+          style={{
+            gridTemplateColumns: `repeat(${metricCards}, minmax(0, 1fr))`,
+          }}
+        >
+          {Array.from({ length: metricCards }).map((_, index) => (
+            <MetricCardSkeleton key={`metric-${index}`} />
+          ))}
+        </div>
+      ) : null}
       {Array.from({ length: sections }).map((_, index) => (
-        <DetailSectionSkeleton key={index} />
+        <DetailSectionSkeleton key={`section-${index}`} />
       ))}
-      {includeTable ? <TableSkeleton columns={6} /> : null}
+      {Array.from({ length: tableCount }).map((_, index) => (
+        <TableSkeleton key={`table-${index}`} columns={6} rows={4} />
+      ))}
+      {activityCard ? <DetailSectionSkeleton fields={6} /> : null}
     </div>
   );
 }

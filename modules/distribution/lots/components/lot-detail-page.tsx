@@ -69,7 +69,19 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
 
   useSetBreadcrumbLabel(`/lots/${lotId}`, lot?.lotNumber);
 
-  if (isLoading) return <DetailPageSkeleton includeTable />;
+  if (isLoading) {
+    // Match the lot detail layout: header + 3 metric cards + 3 detail
+    // sections + inventory-items table + activity card. Without this
+    // closeness the page jumps when real data arrives.
+    return (
+      <DetailPageSkeleton
+        sections={3}
+        metricCards={3}
+        tables={1}
+        activityCard
+      />
+    );
+  }
   if (isError || !lot) {
     return (
       <PageError
