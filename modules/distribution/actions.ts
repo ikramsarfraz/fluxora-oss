@@ -3,6 +3,7 @@
 import { assertTenantCanUseFeature } from "@/lib/subscription-plan-capabilities";
 import { getApAging, getArAging } from "@/modules/distribution/services/aging";
 import {
+  getActivityForInventoryItem,
   getActivityForSalesOrder,
   getActivityForSupplierInvoice,
 } from "@/modules/distribution/services/audit";
@@ -27,6 +28,12 @@ export async function getActivityForSupplierInvoiceAction(
   supplierInvoiceId: string,
 ) {
   return await getActivityForSupplierInvoice(supplierInvoiceId);
+}
+
+export async function getActivityForInventoryItemAction(
+  inventoryItemId: string,
+) {
+  return await getActivityForInventoryItem(inventoryItemId);
 }
 
 export async function getDashboardSummaryAction() {

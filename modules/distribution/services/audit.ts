@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditLogs,
+  inventoryItems,
   supplierInvoices,
   salesOrderLineAllocations,
   salesOrderFulfillments,
@@ -893,6 +894,228 @@ export async function getActivityForSupplierInvoice(
       entityLabel: attachment.file.originalFilename,
       changedFields: null,
     });
+  }
+
+  const all = [...auditItems, ...derivedItems];
+  all.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return all;
+}
+
+export async function getActivityForInventoryItem(
+  inventoryItemId: string,
+): Promise<ActivityTimelineItem[]> {
+  const tenant = await getCurrentTenant();
+
+  // Tenant-scope via the parent lot, matching getInventoryItemById's pattern.
+  const item = await db.query.inventoryItems.findFirst({
+    where: eq(inventoryItems.id, inventoryItemId),
+    columns: {
+      id: true,
+      lotId: true,
+      barcodeId: true,
+      createdAt: true,
+    },
+    with: {
+      lot: {
+        columns: {
+          id: true,
+          lotNumber: true,
+          receiveDate: true,
+          tenantId: true,
+        },
+      },
+      allocations: {
+        columns: { id: true, createdAt: true },
+        with: {
+          salesOrderLine: {
+            columns: { id: true },
+            with: {
+              salesOrder: {
+                columns: { id: true, orderNumber: true },
+                with: {
+                  customer: { columns: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      fulfillments: {
+        columns: {
+          id: true,
+          fulfilledAt: true,
+          reversedAt: true,
+          reversalReason: true,
+          quantityFulfilled: true,
+        },
+        with: {
+          salesOrder: {
+            columns: { id: true, orderNumber: true },
+            with: {
+              customer: { columns: { name: true } },
+            },
+          },
+          fulfilledBy: {
+            columns: { id: true, fullName: true, email: true },
+          },
+          reversedBy: {
+            columns: { id: true, fullName: true, email: true },
+          },
+        },
+      },
+      adjustments: {
+        columns: { id: true, createdAt: true, reason: true },
+      },
+    },
+  });
+
+  if (!item || item.lot.tenantId !== tenant.id) return [];
+
+  // The audit service already knows how to summarise rows from
+  // inventory_items / inventory_adjustments / sales_order_line_allocations
+  // / sales_order_fulfillments — see summarizeAudit() above.
+  const allocationIds = item.allocations.map(a => a.id);
+  const fulfillmentIds = item.fulfillments.map(f => f.id);
+  const adjustmentIds = item.adjustments.map(a => a.id);
+
+  const entityFilters = [
+    and(eq(auditLogs.entityTable, "inventory_items"), eq(auditLogs.entityId, item.id)),
+  ];
+  if (adjustmentIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "inventory_adjustments"),
+        inArray(auditLogs.entityId, adjustmentIds),
+      ),
+    );
+  }
+  if (allocationIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "sales_order_line_allocations"),
+        inArray(auditLogs.entityId, allocationIds),
+      ),
+    );
+  }
+  if (fulfillmentIds.length > 0) {
+    entityFilters.push(
+      and(
+        eq(auditLogs.entityTable, "sales_order_fulfillments"),
+        inArray(auditLogs.entityId, fulfillmentIds),
+      ),
+    );
+  }
+
+  const auditRows = await db.query.auditLogs.findMany({
+    where: and(eq(auditLogs.tenantId, tenant.id), or(...entityFilters)),
+    with: {
+      actorPortalUser: {
+        columns: { id: true, fullName: true, email: true },
+      },
+    },
+    orderBy: [desc(auditLogs.createdAt)],
+    limit: 200,
+  });
+
+  const auditItems: ActivityTimelineItem[] = auditRows.map(row => ({
+    id: row.id,
+    source: "audit",
+    scope: entityToScope(row.entityTable),
+    action: row.action,
+    summary: summarizeAudit(row),
+    at: row.createdAt.toISOString(),
+    actor: {
+      id: row.actorPortalUserId ?? row.actorPlatformUserId ?? null,
+      name: row.actorPortalUser?.fullName ?? null,
+      email: row.actorPortalUser?.email ?? null,
+      type: row.actorType,
+    },
+    entityTable: row.entityTable,
+    entityId: row.entityId,
+    entityLabel: row.entityLabel,
+    changedFields: safeParseStringArray(row.changedFieldsJson),
+  }));
+
+  // Derived baseline — guarantee the canonical lifecycle shows up even
+  // when audit_logs rows are missing or were written before the audit
+  // pipeline existed (received → allocated → fulfilled → reversed).
+  const derivedItems: ActivityTimelineItem[] = [];
+
+  derivedItems.push({
+    id: `derived:item-received:${item.id}`,
+    source: "derived",
+    scope: "other",
+    action: "insert",
+    summary: `Inventory item received into lot ${item.lot.lotNumber}`,
+    at: (item.lot.receiveDate
+      ? new Date(`${item.lot.receiveDate}T00:00:00`)
+      : item.createdAt
+    ).toISOString(),
+    actor: { id: null, name: null, email: null, type: "system" },
+    entityTable: "inventory_items",
+    entityId: item.id,
+    entityLabel: item.barcodeId,
+    changedFields: null,
+  });
+
+  for (const a of item.allocations) {
+    const so = a.salesOrderLine.salesOrder;
+    derivedItems.push({
+      id: `derived:allocation:${a.id}`,
+      source: "derived",
+      scope: "allocation",
+      action: "insert",
+      summary: `Allocated to order ${so.orderNumber ?? so.id.slice(0, 8)}${so.customer ? ` · ${so.customer.name}` : ""}`,
+      at: a.createdAt.toISOString(),
+      actor: { id: null, name: null, email: null, type: "system" },
+      entityTable: "sales_order_line_allocations",
+      entityId: a.id,
+      entityLabel: so.orderNumber,
+      changedFields: null,
+    });
+  }
+
+  for (const f of item.fulfillments) {
+    derivedItems.push({
+      id: `derived:fulfillment:${f.id}`,
+      source: "derived",
+      scope: "allocation",
+      action: "insert",
+      summary: `Fulfilled on order ${f.salesOrder.orderNumber ?? f.salesOrder.id.slice(0, 8)} (${f.quantityFulfilled} unit${f.quantityFulfilled === 1 ? "" : "s"})`,
+      at: f.fulfilledAt.toISOString(),
+      actor: {
+        id: f.fulfilledBy?.id ?? null,
+        name: f.fulfilledBy?.fullName ?? null,
+        email: f.fulfilledBy?.email ?? null,
+        type: f.fulfilledBy ? "portal_user" : "system",
+      },
+      entityTable: "sales_order_fulfillments",
+      entityId: f.id,
+      entityLabel: f.salesOrder.orderNumber,
+      changedFields: null,
+    });
+    if (f.reversedAt) {
+      derivedItems.push({
+        id: `derived:fulfillment-reversed:${f.id}`,
+        source: "derived",
+        scope: "allocation",
+        action: "update",
+        summary: f.reversalReason
+          ? `Fulfillment reversed on order ${f.salesOrder.orderNumber ?? f.salesOrder.id.slice(0, 8)}: ${f.reversalReason}`
+          : `Fulfillment reversed on order ${f.salesOrder.orderNumber ?? f.salesOrder.id.slice(0, 8)}`,
+        at: f.reversedAt.toISOString(),
+        actor: {
+          id: f.reversedBy?.id ?? null,
+          name: f.reversedBy?.fullName ?? null,
+          email: f.reversedBy?.email ?? null,
+          type: f.reversedBy ? "portal_user" : "system",
+        },
+        entityTable: "sales_order_fulfillments",
+        entityId: f.id,
+        entityLabel: f.salesOrder.orderNumber,
+        changedFields: null,
+      });
+    }
   }
 
   const all = [...auditItems, ...derivedItems];

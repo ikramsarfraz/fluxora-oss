@@ -33,7 +33,7 @@ import {
   ExpirationStateBadge,
   InventoryStatusBadge,
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
-import { InventoryMovementTimeline } from "./inventory-movement-timeline";
+import { InventoryItemActivityCard } from "./inventory-item-activity-card";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import {
@@ -472,12 +472,10 @@ export function InventoryDetailPage({
         )}
       </DetailSection>
 
-      <DetailSection
-        title="Movement history"
-        description="Chronological log of receipt, allocations, fulfillments, reversals, and adjustments for this inventory item."
-      >
-        <InventoryMovementTimeline item={item} />
-      </DetailSection>
+      {/* Shared ActivityCard — same surface used by order and supplier-invoice
+          detail pages. The card renders its own "Activity" header and an
+          expand-to-full toggle; no DetailSection wrapper needed. */}
+      <InventoryItemActivityCard inventoryItemId={inventoryItemId} />
 
       <InventoryAdjustmentDialog
         open={adjustDialogOpen}

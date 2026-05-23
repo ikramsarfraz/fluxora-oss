@@ -66,6 +66,7 @@ export const queryKeys = {
     all: ["inventory"] as const,
     list: (params: unknown) => ["inventory", "list", params] as const,
     detail: (id: string) => ["inventory", id] as const,
+    activity: (id: string) => ["inventory", id, "activity"] as const,
     casesOnHand: ["inventory", "cases-on-hand"] as const,
     productSummary: ["inventory", "product-summary"] as const,
     fifoAllocation: (productId: string, cases: number) =>
