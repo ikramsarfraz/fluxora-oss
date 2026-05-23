@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -826,6 +827,14 @@ export async function recordBulkPaymentForCustomer(input: {
   referenceNumber?: string;
   notes?: string;
   allocations: Array<{ salesInvoiceId: string; amount: string }>;
+  /**
+   * Client-generated UUID per bulk-submit attempt. Stored on the anchor
+   * (first allocation's) payment row's `idempotency_key`; the partial
+   * unique index dedupes against retries. Every row in the batch shares
+   * the same `batch_id` so the retry path can fetch the whole group by
+   * batch_id and return it instead of inserting duplicates.
+   */
+  idempotencyKey?: string | null;
 }): Promise<{
   createdPayments: Array<{ paymentId: string; invoiceId: string }>;
 }> {
@@ -851,84 +860,151 @@ export async function recordBulkPaymentForCustomer(input: {
     }
   }
 
-  return await db.transaction(async tx => {
-    const invoiceIds = input.allocations.map(a => a.salesInvoiceId);
-    const invoices = await tx.query.salesInvoices.findMany({
+  // Idempotency happy-path: if the anchor (idempotency_key) was already
+  // recorded, return the existing batch instead of duplicating it.
+  if (input.idempotencyKey) {
+    const anchor = await db.query.payments.findFirst({
       where: and(
-        inArray(salesInvoices.id, invoiceIds),
-        eq(salesInvoices.tenantId, tenant.id),
-        eq(salesInvoices.customerId, input.customerId),
+        eq(payments.tenantId, tenant.id),
+        eq(payments.idempotencyKey, input.idempotencyKey),
       ),
     });
-
-    if (invoices.length !== invoiceIds.length) {
-      throw new Error(
-        "One or more invoices were not found for this customer.",
-      );
+    if (anchor?.batchId) {
+      const batchRows = await db.query.payments.findMany({
+        where: and(
+          eq(payments.tenantId, tenant.id),
+          eq(payments.batchId, anchor.batchId),
+        ),
+      });
+      return {
+        createdPayments: batchRows.map(p => ({
+          paymentId: p.id,
+          invoiceId: p.salesInvoiceId,
+        })),
+      };
     }
+  }
 
-    const invoiceById = new Map(invoices.map(inv => [inv.id, inv]));
-    const createdPayments: Array<{ paymentId: string; invoiceId: string }> = [];
+  // Fresh batch_id so every row in this submit can be re-fetched as a
+  // unit on retry.
+  const batchId = randomUUID();
 
-    for (const allocation of input.allocations) {
-      const invoice = invoiceById.get(allocation.salesInvoiceId);
-      if (!invoice) {
-        throw new Error("Invoice not found in the loaded batch.");
-      }
+  try {
+    return await db.transaction(async tx => {
+      const invoiceIds = input.allocations.map(a => a.salesInvoiceId);
+      const invoices = await tx.query.salesInvoices.findMany({
+        where: and(
+          inArray(salesInvoices.id, invoiceIds),
+          eq(salesInvoices.tenantId, tenant.id),
+          eq(salesInvoices.customerId, input.customerId),
+        ),
+      });
 
-      const paymentAmount = Number(allocation.amount);
-      const currentBalanceDue = Number(invoice.balanceDue);
-
-      if (currentBalanceDue <= 0) {
+      if (invoices.length !== invoiceIds.length) {
         throw new Error(
-          `Invoice ${invoice.invoiceNumber} is already fully paid.`,
+          "One or more invoices were not found for this customer.",
         );
       }
-      if (paymentAmount - currentBalanceDue > 0.01) {
-        throw new Error(
-          `Amount for invoice ${invoice.invoiceNumber} exceeds its balance due.`,
-        );
+
+      const invoiceById = new Map(invoices.map(inv => [inv.id, inv]));
+      const createdPayments: Array<{ paymentId: string; invoiceId: string }> = [];
+
+      for (let i = 0; i < input.allocations.length; i++) {
+        const allocation = input.allocations[i];
+        const invoice = invoiceById.get(allocation.salesInvoiceId);
+        if (!invoice) {
+          throw new Error("Invoice not found in the loaded batch.");
+        }
+
+        const paymentAmount = Number(allocation.amount);
+        const currentBalanceDue = Number(invoice.balanceDue);
+
+        if (currentBalanceDue <= 0) {
+          throw new Error(
+            `Invoice ${invoice.invoiceNumber} is already fully paid.`,
+          );
+        }
+        if (paymentAmount - currentBalanceDue > 0.01) {
+          throw new Error(
+            `Amount for invoice ${invoice.invoiceNumber} exceeds its balance due.`,
+          );
+        }
+
+        const currentPaid = Number(invoice.amountPaid);
+        const totalAmount = Number(invoice.totalAmount);
+        const newAmountPaid = currentPaid + paymentAmount;
+        const newBalanceDue = totalAmount - newAmountPaid;
+
+        // Anchor (i === 0) carries the user-supplied idempotency_key so
+        // retries can find this batch. Subsequent rows share only the
+        // batch_id; that keeps the partial unique index on
+        // (tenant_id, idempotency_key) from collapsing the N rows into one.
+        const [inserted] = await tx
+          .insert(payments)
+          .values({
+            tenantId: tenant.id,
+            salesInvoiceId: invoice.id,
+            createdByUserId: currentUser.id,
+            paymentDate: input.paymentDate,
+            amount: allocation.amount,
+            paymentMethod: input.paymentMethod,
+            checkNumber: input.checkNumber,
+            referenceNumber: input.referenceNumber,
+            notes: input.notes,
+            idempotencyKey:
+              i === 0 ? (input.idempotencyKey ?? null) : null,
+            batchId,
+          })
+          .returning({ id: payments.id });
+
+        await tx
+          .update(salesInvoices)
+          .set({
+            amountPaid: newAmountPaid.toFixed(2),
+            balanceDue: Math.max(newBalanceDue, 0).toFixed(2),
+            status:
+              newAmountPaid >= totalAmount
+                ? "paid"
+                : newAmountPaid > 0
+                  ? "partially_paid"
+                  : invoice.status,
+          })
+          .where(eq(salesInvoices.id, invoice.id));
+
+        createdPayments.push({ paymentId: inserted.id, invoiceId: invoice.id });
       }
 
-      const currentPaid = Number(invoice.amountPaid);
-      const totalAmount = Number(invoice.totalAmount);
-      const newAmountPaid = currentPaid + paymentAmount;
-      const newBalanceDue = totalAmount - newAmountPaid;
-
-      const [inserted] = await tx
-        .insert(payments)
-        .values({
-          tenantId: tenant.id,
-          salesInvoiceId: invoice.id,
-          createdByUserId: currentUser.id,
-          paymentDate: input.paymentDate,
-          amount: allocation.amount,
-          paymentMethod: input.paymentMethod,
-          checkNumber: input.checkNumber,
-          referenceNumber: input.referenceNumber,
-          notes: input.notes,
-        })
-        .returning({ id: payments.id });
-
-      await tx
-        .update(salesInvoices)
-        .set({
-          amountPaid: newAmountPaid.toFixed(2),
-          balanceDue: Math.max(newBalanceDue, 0).toFixed(2),
-          status:
-            newAmountPaid >= totalAmount
-              ? "paid"
-              : newAmountPaid > 0
-                ? "partially_paid"
-                : invoice.status,
-        })
-        .where(eq(salesInvoices.id, invoice.id));
-
-      createdPayments.push({ paymentId: inserted.id, invoiceId: invoice.id });
+      return { createdPayments };
+    });
+  } catch (err) {
+    // Race-safety net: a concurrent submit with the same key may have
+    // landed between the happy-path check above and the anchor INSERT.
+    // 23505 on (tenant_id, idempotency_key) means that other submit won
+    // — re-fetch its batch and return it.
+    if (input.idempotencyKey && isUniqueViolation(err)) {
+      const anchor = await db.query.payments.findFirst({
+        where: and(
+          eq(payments.tenantId, tenant.id),
+          eq(payments.idempotencyKey, input.idempotencyKey),
+        ),
+      });
+      if (anchor?.batchId) {
+        const batchRows = await db.query.payments.findMany({
+          where: and(
+            eq(payments.tenantId, tenant.id),
+            eq(payments.batchId, anchor.batchId),
+          ),
+        });
+        return {
+          createdPayments: batchRows.map(p => ({
+            paymentId: p.id,
+            invoiceId: p.salesInvoiceId,
+          })),
+        };
+      }
     }
-
-    return { createdPayments };
-  });
+    throw err;
+  }
 }
 
 export async function recordPaymentForSalesOrderInvoice(input: {

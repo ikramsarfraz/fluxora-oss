@@ -1540,6 +1540,15 @@ async function postSupplierInvoiceInternal(args: {
 export async function reverseSupplierInvoice(input: {
   id: string;
   reason?: string | null;
+  /**
+   * Client-generated UUID per reverse-submit attempt. Stored on
+   * supplier_invoices.reverse_idempotency_key; the partial unique index
+   * ensures a second submit with the same key (double-click, retried
+   * fetch) cannot re-execute the destructive cascade. On 23505 the
+   * service returns the already-reversed invoice state instead of
+   * throwing.
+   */
+  idempotencyKey?: string | null;
 }) {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
@@ -1548,6 +1557,23 @@ export async function reverseSupplierInvoice(input: {
   }
   requirePermission(currentUser.role, "reverse_supplier_receipt");
 
+  // Idempotency happy-path — if this key already produced a reversal,
+  // return the (already-draft) invoice without re-running the cascade.
+  if (input.idempotencyKey) {
+    const existing = await db.query.supplierInvoices.findFirst({
+      where: and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        eq(supplierInvoices.id, input.id),
+        eq(supplierInvoices.reverseIdempotencyKey, input.idempotencyKey),
+      ),
+      columns: { id: true },
+    });
+    if (existing) {
+      return (await getSupplierInvoiceById(input.id))!;
+    }
+  }
+
+  try {
   await db.transaction(async tx => {
     // Load the invoice + all downstream rows inside the tx so the safety
     // check and subsequent deletes observe a consistent snapshot.
@@ -1643,6 +1669,10 @@ export async function reverseSupplierInvoice(input: {
     });
 
     const now = new Date();
+    // Set the idempotency key as part of the same UPDATE that flips
+    // status. The (tenant_id, reverse_idempotency_key) partial unique
+    // index is what guarantees a concurrent second submit hits 23505
+    // and bounces out to the catch below.
     await tx
       .update(supplierInvoices)
       .set({
@@ -1651,6 +1681,7 @@ export async function reverseSupplierInvoice(input: {
         completedByUserId: null,
         updatedByUserId: currentUser.id,
         updatedAt: now,
+        reverseIdempotencyKey: input.idempotencyKey ?? null,
       })
       .where(eq(supplierInvoices.id, input.id));
 
@@ -1674,6 +1705,16 @@ export async function reverseSupplierInvoice(input: {
       }),
     });
   });
+  } catch (err) {
+    // Race-safety net: a concurrent reverse-submit with the same key
+    // may have committed between our pre-check and the UPDATE — the
+    // partial unique index raises 23505. Treat it the same as the
+    // happy-path: return the already-reversed invoice.
+    if (input.idempotencyKey && isUniqueViolationErr(err)) {
+      return (await getSupplierInvoiceById(input.id))!;
+    }
+    throw err;
+  }
 
   return (await getSupplierInvoiceById(input.id))!;
 }

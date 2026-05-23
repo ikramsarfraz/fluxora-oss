@@ -41,6 +41,10 @@ export function SupplierInvoiceReversalDialog({
     { enabled: open },
   );
   const [reason, setReason] = useState("");
+  // One key per dialog mount — survives retries (network blip, react-query
+  // re-fire) so the server's partial unique index on
+  // (tenant_id, reverse_idempotency_key) dedupes a double-click.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   // Reset the reason when the dialog is closed so reopening starts fresh.
   // The preview query auto-refetches on open via its `enabled` flag + zero
@@ -63,7 +67,7 @@ export function SupplierInvoiceReversalDialog({
 
   function handleConfirm() {
     reverse.mutate(
-      { id: invoiceId, reason: reason.trim() || null },
+      { id: invoiceId, reason: reason.trim() || null, idempotencyKey },
       {
         onSuccess: () => {
           toast.success(`Receipt "${invoiceNumber}" reversed.`);

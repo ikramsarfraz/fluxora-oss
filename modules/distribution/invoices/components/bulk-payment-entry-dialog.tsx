@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+// crypto.randomUUID is a browser-native API on the renderer side here.
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
@@ -110,6 +111,11 @@ function Body({
     ? null
     : getPermissionDeniedReason("record_payment");
 
+  // One key per dialog mount — survives retries (network blip, react-query
+  // re-fire) so the server can dedupe against the (tenant_id,
+  // idempotency_key) partial unique index on the anchor row.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
   const [totalAmount, setTotalAmount] = useState<string>("");
   const [allocations, setAllocations] = useState<Record<string, string>>({});
   const [paymentDate, setPaymentDate] = useState<string>(todayString());
@@ -215,6 +221,7 @@ function Body({
         referenceNumber: referenceNumber.trim() || undefined,
         notes: notes.trim() || undefined,
         allocations: allocs,
+        idempotencyKey,
       });
       toast.success(
         `Recorded payment across ${result.createdPayments.length} invoice${result.createdPayments.length === 1 ? "" : "s"}.`,

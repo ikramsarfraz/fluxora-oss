@@ -1126,6 +1126,14 @@ export const customerProductPrices = pgTable(
       onDelete: "cascade",
     }),
     pricePerLb: numeric("price_per_lb", { precision: 10, scale: 4 }).notNull(),
+    /**
+     * Monotonic counter bumped on every update. Optimistic-concurrency
+     * token: writes pass the version they read; if the row has moved on,
+     * the conditional UPDATE matches 0 rows and the service throws so the
+     * client can refetch and let the user pick a side. Without this two
+     * parallel edits silently last-write-wins.
+     */
+    version: integer("version").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1226,6 +1234,14 @@ export const supplierInvoices = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /**
+     * Client-generated UUID per reverse-submit attempt. The partial unique
+     * index below guarantees a second submit with the same key cannot
+     * double-execute the destructive reverse path (deletes lots, inventory
+     * items, audit rows) even when the status guard's read-snapshot was
+     * concurrent. Mirrors the AR `payments.idempotency_key` contract.
+     */
+    reverseIdempotencyKey: uuid("reverse_idempotency_key"),
   },
   table => [
     index("supplier_invoices_tenant_id_idx").on(table.tenantId),
@@ -1242,6 +1258,9 @@ export const supplierInvoices = pgTable(
       table.invoiceDate,
     ),
     index("supplier_invoices_tenant_status_idx").on(table.tenantId, table.status),
+    uniqueIndex("supplier_invoices_tenant_reverse_idempotency_key_unique")
+      .on(table.tenantId, table.reverseIdempotencyKey)
+      .where(sql`${table.reverseIdempotencyKey} IS NOT NULL`),
   ],
 );
 
@@ -1951,6 +1970,17 @@ export const payments = pgTable(
      * don't need dedup.
      */
     idempotencyKey: uuid("idempotency_key"),
+    /**
+     * For bulk-payment submissions (one check applied across N invoices),
+     * every row in the batch shares the same batch_id while only the
+     * anchor row (first allocation) carries `idempotency_key`. On retry
+     * the service finds the anchor by key, reads its batch_id, and
+     * returns the whole batch instead of inserting duplicates.
+     *
+     * Null for single-invoice payments — those keep relying solely on
+     * the idempotency_key dedup.
+     */
+    batchId: uuid("batch_id"),
     /* Reconciliation columns — set when ops marks a payment as matching
      * a bank statement line. Cleared on un-reconcile. Migration 0050. */
     reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
@@ -1987,6 +2017,12 @@ export const payments = pgTable(
     uniqueIndex("payments_tenant_idempotency_key_unique")
       .on(table.tenantId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    // Bulk batch lookup: index covers the retry path (fetch all rows of a
+    // batch by batch_id) and the audit path (group bulk payments shown on
+    // the customer dashboard).
+    index("payments_tenant_batch_id_idx")
+      .on(table.tenantId, table.batchId)
+      .where(sql`${table.batchId} IS NOT NULL`),
   ],
 );
 

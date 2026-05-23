@@ -232,11 +232,31 @@ async function assertEntitiesBelongToTenant(args: {
   }
 }
 
+/**
+ * Thrown when an optimistic-concurrency check fails — the row has moved on
+ * since the client last read it. Surface this as a "refresh and retry" UX
+ * rather than silently overwriting the other writer's change.
+ */
+export class PriceConcurrencyError extends Error {
+  constructor(message = "This price was edited by someone else. Refresh and try again.") {
+    super(message);
+    this.name = "PriceConcurrencyError";
+  }
+}
+
 export async function setCustomerProductPrice(
   customerId: string,
   productId: string,
   pricePerLb: string,
   supplierId: string | null = null,
+  /**
+   * Version the client read before editing. When provided, the UPDATE
+   * path of the UPSERT only fires if the DB version matches; otherwise
+   * we throw PriceConcurrencyError so the UI can refresh. Omit on legacy
+   * clients (callers that don't read the version) — last-write-wins for
+   * those, preserving the pre-version-column behaviour.
+   */
+  expectedVersion?: number,
 ) {
   uuidSchema.parse(customerId);
   uuidSchema.parse(productId);
@@ -250,7 +270,7 @@ export async function setCustomerProductPrice(
     productId,
     supplierId,
   });
-  await db
+  const result = await db
     .insert(customerProductPrices)
     .values({ customerId, productId, supplierId, pricePerLb: normalizedPrice })
     .onConflictDoUpdate({
@@ -259,14 +279,31 @@ export async function setCustomerProductPrice(
         customerProductPrices.productId,
         customerProductPrices.supplierId,
       ],
-      set: { pricePerLb: normalizedPrice, updatedAt: new Date() },
-    });
+      set: {
+        pricePerLb: normalizedPrice,
+        version: sql`${customerProductPrices.version} + 1`,
+        updatedAt: new Date(),
+      },
+      where:
+        expectedVersion == null
+          ? undefined
+          : eq(customerProductPrices.version, expectedVersion),
+    })
+    .returning({ id: customerProductPrices.id });
+
+  // Empty returning ⇒ the row existed but the WHERE on conflict matched
+  // 0 rows, i.e. the version we read no longer matches what's stored.
+  if (result.length === 0 && expectedVersion != null) {
+    throw new PriceConcurrencyError();
+  }
 }
 
 export async function deleteCustomerProductPrice(
   customerId: string,
   productId: string,
   supplierId: string | null = null,
+  /** Optional concurrency token — see setCustomerProductPrice. */
+  expectedVersion?: number,
 ) {
   uuidSchema.parse(customerId);
   uuidSchema.parse(productId);
@@ -279,17 +316,26 @@ export async function deleteCustomerProductPrice(
     productId,
     supplierId,
   });
-  await db
+  const conditions = [
+    eq(customerProductPrices.customerId, customerId),
+    eq(customerProductPrices.productId, productId),
+    supplierId == null
+      ? sql`${customerProductPrices.supplierId} IS NULL`
+      : eq(customerProductPrices.supplierId, supplierId),
+  ];
+  if (expectedVersion != null) {
+    conditions.push(eq(customerProductPrices.version, expectedVersion));
+  }
+  const deleted = await db
     .delete(customerProductPrices)
-    .where(
-      and(
-        eq(customerProductPrices.customerId, customerId),
-        eq(customerProductPrices.productId, productId),
-        supplierId == null
-          ? sql`${customerProductPrices.supplierId} IS NULL`
-          : eq(customerProductPrices.supplierId, supplierId),
-      ),
-    );
+    .where(and(...conditions))
+    .returning({ id: customerProductPrices.id });
+
+  if (deleted.length === 0 && expectedVersion != null) {
+    // Could be the row's been edited (version moved) or already deleted.
+    // Either way the client's view is stale — ask them to refresh.
+    throw new PriceConcurrencyError();
+  }
 }
 
 export async function applyMarkupToCustomer(customerId: string, markupPercent = 7) {
@@ -442,6 +488,13 @@ export type CustomerProductRow = {
   baseUnitAbbreviation: string | null;
   /** Customer's default price for this product (applies when no per-supplier price is set). */
   customerPrice: string | null;
+  /**
+   * Optimistic-concurrency token for the default-price row. Null when no
+   * override exists (the row hasn't been created yet). Echo it back on
+   * setCustomerProductPrice / deleteCustomerProductPrice so the server
+   * can detect a parallel edit instead of silently last-write-wins.
+   */
+  customerPriceVersion: number | null;
   vendors: {
     supplier_id: string;
     supplier_name: string;
@@ -450,6 +503,8 @@ export type CustomerProductRow = {
     updated_at: string | null;
     /** Per-supplier customer price (overrides the default when the line's lot comes from this supplier). */
     customer_price: string | null;
+    /** Optimistic-concurrency token for the per-supplier row. Null when no override exists. */
+    customer_price_version: number | null;
   }[];
 };
 
@@ -570,6 +625,7 @@ export async function getCustomerProductPricesPage(
         productId: customerProductPrices.productId,
         supplierId: customerProductPrices.supplierId,
         pricePerLb: customerProductPrices.pricePerLb,
+        version: customerProductPrices.version,
       })
       .from(customerProductPrices)
       .where(
@@ -597,28 +653,45 @@ export async function getCustomerProductPricesPage(
     if (!categoryByProduct.has(r.productId)) categoryByProduct.set(r.productId, r.categoryName);
   }
 
-  const defaultPriceByProduct = new Map<string, string>();
-  // (productId, supplierId) → pricePerLb
-  const priceByProductSupplier = new Map<string, string>();
+  // Map values include the row's `version` so the client can round-trip
+  // it on edits for optimistic concurrency.
+  const defaultPriceByProduct = new Map<
+    string,
+    { pricePerLb: string; version: number }
+  >();
+  // (productId, supplierId) → { pricePerLb, version }
+  const priceByProductSupplier = new Map<
+    string,
+    { pricePerLb: string; version: number }
+  >();
   for (const r of priceRows) {
     if (r.supplierId == null) {
-      defaultPriceByProduct.set(r.productId, r.pricePerLb);
+      defaultPriceByProduct.set(r.productId, {
+        pricePerLb: r.pricePerLb,
+        version: r.version,
+      });
     } else {
-      priceByProductSupplier.set(`${r.productId}:${r.supplierId}`, r.pricePerLb);
+      priceByProductSupplier.set(`${r.productId}:${r.supplierId}`, {
+        pricePerLb: r.pricePerLb,
+        version: r.version,
+      });
     }
   }
 
   const vendorsByProduct = new Map<string, CustomerProductRow["vendors"]>();
   for (const r of vendorRows) {
     if (!vendorsByProduct.has(r.productId)) vendorsByProduct.set(r.productId, []);
+    const perSupplier = priceByProductSupplier.get(
+      `${r.productId}:${r.supplierId}`,
+    );
     vendorsByProduct.get(r.productId)!.push({
       supplier_id: r.supplierId,
       supplier_name: r.supplierName,
       cost_per_lb: r.costPerLb,
       last_received_at: r.lastReceivedAt?.toISOString() ?? null,
       updated_at: r.updatedAt?.toISOString() ?? null,
-      customer_price:
-        priceByProductSupplier.get(`${r.productId}:${r.supplierId}`) ?? null,
+      customer_price: perSupplier?.pricePerLb ?? null,
+      customer_price_version: perSupplier?.version ?? null,
     });
   }
   for (const [, vendors] of vendorsByProduct) {
@@ -628,6 +701,7 @@ export async function getCustomerProductPricesPage(
   const data: CustomerProductRow[] = pagedProducts.map(p => {
     const vendors = vendorsByProduct.get(p.id) ?? [];
     const cheapestVendor = vendors[0] ?? null;
+    const defaultPrice = defaultPriceByProduct.get(p.id);
     return {
       id: p.id,
       sku: p.sku,
@@ -635,7 +709,8 @@ export async function getCustomerProductPricesPage(
       cost: cheapestVendor?.cost_per_lb ?? null,
       category: categoryByProduct.get(p.id) ?? null,
       baseUnitAbbreviation: p.baseUnitAbbreviation,
-      customerPrice: defaultPriceByProduct.get(p.id) ?? null,
+      customerPrice: defaultPrice?.pricePerLb ?? null,
+      customerPriceVersion: defaultPrice?.version ?? null,
       vendors,
     };
   });
