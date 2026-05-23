@@ -467,12 +467,22 @@ function VendorSubRows({
   onResetVendor: (supplierId: string) => void;
   vendorResetState: { supplierId: string | null; isPending: boolean };
 }) {
-  // Vendors arrive sorted cheapest-first from the service.
-  const cheapestCost = Number(vendors[0]?.cost_per_lb ?? 0);
+  // Vendors arrive sorted cheapest-first from the service. The
+  // VendorPriceInput rendering and "+$delta" labels depend on this order,
+  // so re-sort defensively in case future changes break the service-side
+  // ordering — cheap, eliminates a class of subtle UI regressions.
+  const sortedVendors = useMemo(
+    () =>
+      [...vendors].sort(
+        (a, b) => Number(a.cost_per_lb) - Number(b.cost_per_lb),
+      ),
+    [vendors],
+  );
+  const cheapestCost = Number(sortedVendors[0]?.cost_per_lb ?? 0);
 
   return (
     <>
-      {vendors.map((v, i) => {
+      {sortedVendors.map((v, i) => {
         const cost = Number(v.cost_per_lb);
         const isCheapest = i === 0;
         const delta = cost - cheapestCost;
