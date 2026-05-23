@@ -517,12 +517,14 @@ export function ListingPage<TRow>({
               {emptyAction}
             </div>
           ) : (
-            <div
-              className={cn(
-                "transition-opacity",
-                isFetching && "opacity-60",
-              )}
-            >
+            <div>
+              {/*
+                Previously the table faded to opacity-60 during background
+                refetches. Combined with `staleTime: 0` (changed to 60s in
+                QueryProvider) every revisit produced a visible flicker.
+                The thin `<LoadingBar />` above is enough signal that data
+                is updating; the table stays stable.
+              */}
               <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
                   <TableRow className="border-divider hover:bg-transparent">

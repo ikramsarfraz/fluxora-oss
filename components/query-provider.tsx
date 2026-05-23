@@ -11,7 +11,13 @@ export function QueryProvider({ children }: { children: ReactNode }) {
           queries: {
             retry: 1,
             refetchOnWindowFocus: true,
-            staleTime: 0,
+            // Default freshness window. With staleTime: 0 every same-session
+            // revisit triggered a refetch — operators saw a loading bar and
+            // an opacity fade on lists they'd just been on. One minute is
+            // long enough to make routine back-navigation feel instant, short
+            // enough that data never looks stale to the eye. List/detail
+            // hooks that need different freshness already override this.
+            staleTime: 1000 * 60,
           },
         },
       })
