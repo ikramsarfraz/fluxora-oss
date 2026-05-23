@@ -225,8 +225,63 @@ function invalidateSupplierPaymentCaches(
 
 export function useRecordSupplierInvoicePayment() {
   const queryClient = useQueryClient();
+
+  // Structural shape of the cached supplier-invoice fields we mutate
+  // optimistically. The full type lives in the receiving service; copying
+  // just these four fields keeps the patch noise small.
+  type SupplierInvoiceBalanceFields = {
+    amountPaid: string;
+    balanceDue: string;
+    totalAmount: string;
+    status: string;
+  };
+
   return useMutation({
     mutationFn: recordSupplierInvoicePaymentAction,
+    onMutate: async variables => {
+      const invoiceKey = queryKeys.supplierInvoices.detail(
+        variables.supplierInvoiceId,
+      );
+      await queryClient.cancelQueries({ queryKey: invoiceKey });
+
+      const previousInvoice =
+        queryClient.getQueryData<SupplierInvoiceBalanceFields>(invoiceKey);
+      if (!previousInvoice) return { invoiceKey, previousInvoice: null };
+
+      const paymentAmount = Number(variables.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        return { invoiceKey, previousInvoice: null };
+      }
+
+      const newAmountPaid =
+        Number(previousInvoice.amountPaid) + paymentAmount;
+      const totalAmount = Number(previousInvoice.totalAmount);
+      const newBalanceDue = Math.max(totalAmount - newAmountPaid, 0);
+      const newStatus =
+        newAmountPaid >= totalAmount
+          ? "paid"
+          : newAmountPaid > 0
+            ? "partially_paid"
+            : previousInvoice.status;
+
+      queryClient.setQueryData<SupplierInvoiceBalanceFields>(invoiceKey, prev =>
+        prev
+          ? {
+              ...prev,
+              amountPaid: newAmountPaid.toFixed(2),
+              balanceDue: newBalanceDue.toFixed(2),
+              status: newStatus,
+            }
+          : prev,
+      );
+
+      return { invoiceKey, previousInvoice };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.invoiceKey && context.previousInvoice) {
+        queryClient.setQueryData(context.invoiceKey, context.previousInvoice);
+      }
+    },
     onSuccess: (_data, variables) => {
       invalidateSupplierPaymentCaches(queryClient, variables.supplierInvoiceId);
     },

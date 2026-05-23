@@ -112,6 +112,9 @@ export function useCreateCustomer() {
     mutationFn: createCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      // The price-chart screen's top-level query bundles the customer list;
+      // an add elsewhere needs to show up there too.
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
       invalidateSetupChecklistQuery(queryClient);
     },
   });
@@ -124,6 +127,7 @@ export function useArchiveCustomer() {
     mutationFn: archiveCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
     },
   });
 }
@@ -135,6 +139,7 @@ export function useRestoreCustomer() {
     mutationFn: restoreCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
     },
   });
 }
@@ -146,6 +151,7 @@ export function usePermanentlyDeleteCustomer() {
     mutationFn: permanentlyDeleteCustomerAction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
     },
   });
 }
