@@ -633,7 +633,7 @@ export function SupplierInvoiceDetailPage({
             <div className="overflow-hidden rounded-md border">
               <div style={{ overflowX: "auto" }}>
                 <Table>
-                  <TableHeader className="bg-muted">
+                  <TableHeader className="bg-divider">
                     <TableRow>
                       <TableHead>Product</TableHead>
                       <TableHead>SKU</TableHead>
@@ -902,7 +902,7 @@ export function SupplierInvoiceDetailPage({
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <Table>
-                    <TableHeader className="bg-muted">
+                    <TableHeader className="bg-divider">
                       <TableRow>
                         <TableHead>Lot #</TableHead>
                         <TableHead>Expires</TableHead>
@@ -1010,7 +1010,7 @@ export function SupplierInvoiceDetailPage({
               <div className="overflow-hidden rounded-md border">
                 <div style={{ overflowX: "auto" }}>
                   <Table>
-                    <TableHeader className="bg-muted">
+                    <TableHeader className="bg-divider">
                       <TableRow>
                         <TableHead>Date</TableHead>
                         <TableHead>Method</TableHead>

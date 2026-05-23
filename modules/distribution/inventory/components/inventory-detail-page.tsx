@@ -375,7 +375,7 @@ export function InventoryDetailPage({
           <div className="overflow-hidden rounded-md border">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted">
+                <TableHeader className="bg-divider">
                   <TableRow>
                     <TableHead>Order</TableHead>
                     <TableHead>Customer</TableHead>
@@ -440,7 +440,7 @@ export function InventoryDetailPage({
           <div className="overflow-hidden rounded-md border">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted">
+                <TableHeader className="bg-divider">
                   <TableRow>
                     <TableHead>Order</TableHead>
                     <TableHead>Customer</TableHead>

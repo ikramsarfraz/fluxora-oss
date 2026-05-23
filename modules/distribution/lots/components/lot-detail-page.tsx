@@ -343,7 +343,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           <div className="overflow-hidden rounded-md border">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted">
+                <TableHeader className="bg-divider">
                   <TableRow>
                     <TableHead>Invoice</TableHead>
                     <TableHead>Supplier</TableHead>
@@ -397,7 +397,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           <div className="overflow-hidden rounded-md border">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted">
+                <TableHeader className="bg-divider">
                   <TableRow>
                     <TableHead>Barcode</TableHead>
                     <TableHead>Product</TableHead>
@@ -499,7 +499,7 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           <div className="overflow-hidden rounded-md border">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-muted">
+                <TableHeader className="bg-divider">
                   <TableRow>
                     <TableHead>Completed</TableHead>
                     <TableHead className="text-right">Discount</TableHead>

@@ -104,7 +104,7 @@ export function InventoryAdjustmentHistory({
   return (
     <div className="overflow-x-auto rounded-md border">
       <Table>
-        <TableHeader className="bg-muted">
+        <TableHeader className="bg-divider">
           <TableRow>
             <TableHead>When</TableHead>
             {showBarcodeColumn ? <TableHead>Barcode</TableHead> : null}
