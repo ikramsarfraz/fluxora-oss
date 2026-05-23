@@ -178,6 +178,9 @@ export function InventoryDetailPage({
         title={item.barcodeId}
         description="Inspect inbound source, warehouse lifecycle, and outbound usage for this inventory item."
         badge={<InventoryStatusBadge status={item.status} />}
+        // The title is a barcode — render it in mono so it reads as a
+        // copyable identifier, matching the orders / bills detail pages.
+        variant="identifier"
       >
         <ExpirationStateBadge state={expirationState} />
       </DetailPageHeader>

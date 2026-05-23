@@ -192,6 +192,9 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         title={lot.lotNumber}
         description="Inspect inbound lot traceability, linked inventory, expiration risk, and outbound usage."
         badge={<LotOperationalStatusBadge status={lotStatus} />}
+        // Lot number is an identifier — mono treatment, same as the
+        // orders / bills / inventory detail pages.
+        variant="identifier"
       >
         <ExpirationStateBadge state={expirationState} />
         {(expirationState === "expiring_soon" || expirationState === "expired") && (

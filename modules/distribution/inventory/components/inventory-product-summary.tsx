@@ -63,7 +63,7 @@ export function InventoryProductSummary() {
 
   if (error) {
     return (
-      <div className="rounded-md border border-border-default bg-card px-4 py-3 text-[13px] text-subtle">
+      <div className="rounded-md border border-border-default bg-card px-4 py-3 text-sm text-subtle">
         Couldn’t load product totals.
       </div>
     );
@@ -82,11 +82,11 @@ export function InventoryProductSummary() {
           ) : (
             <ChevronDown className="size-3.5 text-subtle" />
           )}
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-subtle">
+          <span className="text-xs font-medium uppercase tracking-wide text-subtle">
             On-hand by product
           </span>
           {!isLoading && data ? (
-            <span className="text-[11px] text-subtle">· {data.length}</span>
+            <span className="text-xs text-subtle">· {data.length}</span>
           ) : null}
         </div>
       </button>
@@ -94,21 +94,21 @@ export function InventoryProductSummary() {
       {!collapsed ? (
         <div className="border-t border-border-default">
           {isLoading ? (
-            <div className="px-4 py-6 text-center text-[13px] text-subtle">Loading…</div>
+            <div className="px-4 py-6 text-center text-sm text-subtle">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-subtle">
+            <div className="px-4 py-6 text-center text-sm text-subtle">
               No products in stock.
             </div>
           ) : (
             <div className="max-h-[280px] overflow-auto">
-              <table className="w-full border-collapse text-[13px]">
+              <table className="w-full border-collapse text-sm">
                 <thead className="sticky top-0 bg-card">
                   <tr className="border-b border-border-default">
                     {HEADERS.map(h => (
                       <th
                         key={h.key}
                         className={cn(
-                          "px-4 py-2 text-[11px] font-medium uppercase tracking-[0.05em] text-subtle",
+                          "px-4 py-2 text-xs font-medium uppercase tracking-wide text-subtle",
                           h.align === "right" ? "text-right" : "text-left",
                         )}
                       >
@@ -135,7 +135,7 @@ export function InventoryProductSummary() {
                     >
                       <td className="px-4 py-2 text-ink">
                         <div className="font-medium">{row.name}</div>
-                        <div className="mt-0.5 text-[11px] text-subtle">
+                        <div className="mt-0.5 text-xs text-subtle">
                           <MonoText>{row.sku}</MonoText>
                         </div>
                       </td>
@@ -164,7 +164,7 @@ export function InventoryProductSummary() {
                               {row.baseUnitAbbreviation ?? "ea"}
                             </MonoText>
                             {row.totalUnits !== row.totalCases ? (
-                              <span className="text-[10.5px] text-subtle">
+                              <span className="text-xs text-subtle">
                                 {row.totalCases.toLocaleString()} cs
                               </span>
                             ) : null}
