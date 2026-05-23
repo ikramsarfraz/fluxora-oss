@@ -1,25 +1,12 @@
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { getLots } from "../services/lots";
-import { queryKeys } from "@/lib/query/keys";
+import { Suspense } from "react";
 
 import Lots from "../components/lots-page";
 
-export default async function LotsListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.lots.all,
-    queryFn: () => getLots(),
-  });
-
+// See orders/routes/list-page.tsx for the prefetch rationale.
+export default function LotsListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <Suspense>
       <Lots />
-    </HydrationBoundary>
+    </Suspense>
   );
 }

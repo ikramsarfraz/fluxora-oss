@@ -1,25 +1,14 @@
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { queryKeys } from "@/lib/query/keys";
-import { getProductCategories } from "@/modules/distribution/products/services/products";
+import { Suspense } from "react";
 
 import Categories from "../components/categories-page";
 
-export default async function CategoriesListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.categories.all,
-    queryFn: () => getProductCategories(),
-  });
-
+// The client component drives its own query; prefetching here just delayed
+// every navigation by a DB call (and Next.js Suspense fallback flash) for
+// data the client cache usually already has. Matches the orders pattern.
+export default function CategoriesListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <Suspense>
       <Categories />
-    </HydrationBoundary>
+    </Suspense>
   );
 }
