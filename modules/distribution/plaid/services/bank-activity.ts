@@ -25,6 +25,7 @@ export type ActivityTransaction = {
   checkNumber: number | null;
   isMysteryOutflow: boolean;
   pending: boolean;
+  accountId: string;
   accountName: string;
   accountMask: string | null;
   state: TransactionState;
@@ -169,6 +170,7 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
       checkNumber: txn.checkNumber ?? null,
       isMysteryOutflow: txn.isMysteryOutflow ?? false,
       pending: txn.pending,
+      accountId: txn.bankAccount?.id ?? "",
       accountName: txn.bankAccount?.name ?? "Unknown",
       accountMask: txn.bankAccount?.mask ?? null,
       state,

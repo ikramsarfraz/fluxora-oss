@@ -39,6 +39,7 @@ type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending" | "
 export function BankActivityShell({ data }: { data: Data }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [searchText, setSearchText] = useState("");
+  const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
   const [syncing, startSync] = useTransition();
@@ -78,13 +79,17 @@ export function BankActivityShell({ data }: { data: Data }) {
     ).values(),
   );
 
+  const accountFiltered = accountFilter
+    ? data.transactions.filter(t => t.accountId === accountFilter)
+    : data.transactions;
+
   const stateFiltered = filter === "all"
-    ? data.transactions
+    ? accountFiltered
     : filter === "pending"
-      ? data.transactions.filter(t => t.pending)
+      ? accountFiltered.filter(t => t.pending)
       : filter === "mystery"
-        ? data.transactions.filter(t => t.isMysteryOutflow && !t.pending)
-        : data.transactions.filter(t => t.state === filter);
+        ? accountFiltered.filter(t => t.isMysteryOutflow && !t.pending)
+        : accountFiltered.filter(t => t.state === filter);
 
   const q = searchText.trim().toLowerCase();
   const visible = q === ""
@@ -193,16 +198,24 @@ export function BankActivityShell({ data }: { data: Data }) {
         </div>
       )}
 
-      {/* Accounts strip */}
+      {/* Accounts strip — tiles are click-to-filter */}
       <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 24, paddingBottom: 4 }}>
-        {/* Total cash card */}
-        <div
+        {/* Total cash card — also clears the account filter */}
+        <button
+          type="button"
+          onClick={() => setAccountFilter(null)}
+          aria-pressed={accountFilter === null}
+          title={accountFilter ? "Clear account filter" : undefined}
           style={{
             flexShrink: 0,
             background: "#1c1917",
+            border: accountFilter === null ? "2px solid var(--color-success-fg)" : "2px solid transparent",
             borderRadius: C.radius,
             padding: "14px 18px",
             minWidth: 160,
+            cursor: "pointer",
+            textAlign: "left",
+            fontFamily: "inherit",
           }}
         >
           <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
@@ -214,20 +227,28 @@ export function BankActivityShell({ data }: { data: Data }) {
           <div style={{ fontSize: 11, color: "var(--color-subtle)", marginTop: 4 }}>
             {data.accounts.length} account{data.accounts.length !== 1 ? "s" : ""}
           </div>
-        </div>
+        </button>
 
         {data.accounts.map(account => {
           const health = accountHealth(account.connectionStatus, account.lastSyncAt);
+          const active = accountFilter === account.id;
           return (
-          <div
+          <button
             key={account.id}
+            type="button"
+            onClick={() => setAccountFilter(active ? null : account.id)}
+            aria-pressed={active}
+            title={active ? "Click to clear filter" : "Click to filter to this account"}
             style={{
               flexShrink: 0,
-              border: `1px solid ${C.line}`,
+              border: active ? `2px solid var(--color-success-fg)` : `2px solid ${C.line}`,
               borderRadius: C.radius,
               padding: "14px 18px",
               background: C.surface,
               minWidth: 150,
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "inherit",
             }}
           >
             <div
@@ -256,14 +277,14 @@ export function BankActivityShell({ data }: { data: Data }) {
                 {account.institutionName ?? "Bank"}
               </span>
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, fontFamily: C.mono }}>
+            <div style={{ fontSize: 15, fontWeight: 600, fontFamily: C.mono, color: C.ink }}>
               ${account.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
               {account.name}
               {account.mask ? ` ···${account.mask}` : ""}
             </div>
-          </div>
+          </button>
         );
         })}
 
