@@ -1338,6 +1338,12 @@ export const supplierInvoicePayments = pgTable(
     /** Bank reference / transaction ID. Mirrors AR `payments.reference_number`. */
     referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /**
+     * Idempotency key. See `payments.idempotencyKey` for the contract.
+     * Mirrors the AR side so AP double-submit protection works the
+     * same way.
+     */
+    idempotencyKey: uuid("idempotency_key"),
     /* Reconciliation columns — set when ops marks the AP payment as
      * matching a bank statement outflow. Mirrors AR `payments`. */
     reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
@@ -1367,6 +1373,12 @@ export const supplierInvoicePayments = pgTable(
     index("supplier_invoice_payments_unreconciled_idx")
       .on(table.tenantId, table.paymentDate)
       .where(sql`${table.reconciledAt} IS NULL`),
+    // Mirrors the AR `payments_tenant_idempotency_key_unique` index —
+    // partial, scoped per tenant. Lets supplier-payment submits dedup
+    // the same way.
+    uniqueIndex("supplier_invoice_payments_tenant_idempotency_key_unique")
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
     check(
       "supplier_invoice_payments_amount_positive",
       sql`${table.amount} > 0`,
@@ -1927,6 +1939,18 @@ export const payments = pgTable(
     checkNumber: varchar("check_number", { length: 64 }),
     referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /**
+     * Client-generated UUID per payment-submit attempt. Server INSERTs
+     * with this column populated; the partial unique index below
+     * guarantees a second submit with the same key (double-click,
+     * retried fetch) cannot create a duplicate row — the service
+     * detects the existing row and returns its invoice state instead.
+     *
+     * Nullable for rows created before migration 0059 (no historical
+     * keys to backfill) and for server-internal write paths that
+     * don't need dedup.
+     */
+    idempotencyKey: uuid("idempotency_key"),
     /* Reconciliation columns — set when ops marks a payment as matching
      * a bank statement line. Cleared on un-reconcile. Migration 0050. */
     reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
@@ -1955,6 +1979,14 @@ export const payments = pgTable(
     index("payments_unreconciled_idx")
       .on(table.tenantId, table.paymentDate)
       .where(sql`${table.reconciledAt} IS NULL`),
+    // Idempotency: partial unique index (only enforced when key is
+    // populated, so legacy rows from before migration 0059 don't
+    // conflict). Scoped per tenant so two tenants happening to pick
+    // the same UUID don't collide — though UUIDv4 collisions are
+    // already statistically impossible.
+    uniqueIndex("payments_tenant_idempotency_key_unique")
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
   ],
 );
 

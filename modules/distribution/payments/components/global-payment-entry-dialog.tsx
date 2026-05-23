@@ -242,6 +242,10 @@ function EnterPaymentStep({
 }) {
   const recordPayment = useRecordPaymentForSalesOrderInvoice();
   const { data: currentUser } = useCurrentPortalUser();
+  // One key per dialog mount. Persists across submit retries / network
+  // hiccups so a request that succeeded server-side but failed to
+  // deliver its response is recognized as the same event on retry.
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
   const canRecord = can(currentUser?.role, "record_payment");
   const recordDeniedReason = canRecord
     ? null
@@ -280,6 +284,7 @@ function EnterPaymentStep({
         checkNumber: values.checkNumber.trim() || undefined,
         referenceNumber: values.referenceNumber.trim() || undefined,
         notes: values.notes.trim() || undefined,
+        idempotencyKey,
       });
       toast.success("Payment recorded.");
       onComplete();

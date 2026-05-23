@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
@@ -131,6 +131,9 @@ function PaymentForm({
 }) {
   const recordPayment = useRecordSupplierInvoicePayment();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // One key per dialog mount — survives submit retries so a request
+  // that succeeded server-side but lost its response is recognized.
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
   const {
     control,
@@ -155,6 +158,7 @@ function PaymentForm({
         checkNumber: values.checkNumber.trim() || null,
         referenceNumber: values.referenceNumber.trim() || null,
         notes: values.notes.trim() || null,
+        idempotencyKey,
       });
       toast.success(`Payment recorded on ${invoiceNumber}.`);
       onClose();

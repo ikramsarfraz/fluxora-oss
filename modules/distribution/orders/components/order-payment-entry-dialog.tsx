@@ -138,6 +138,9 @@ function PaymentBody({
     ? null
     : getPermissionDeniedReason("record_payment");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // One key per dialog mount — survives submit retries so a request
+  // that succeeded server-side but lost its response is recognized.
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
   const openInvoices = useMemo(() => getOpenInvoices(order), [order]);
   const invoiceLookup = useMemo(
@@ -176,6 +179,7 @@ function PaymentBody({
         checkNumber: values.checkNumber.trim() || undefined,
         referenceNumber: values.referenceNumber.trim() || undefined,
         notes: values.notes.trim() || undefined,
+        idempotencyKey,
       });
       toast.success("Payment recorded.");
       onClose();

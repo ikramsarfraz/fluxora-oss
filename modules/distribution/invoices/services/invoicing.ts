@@ -11,6 +11,7 @@ import {
 import { markInventoryItemsSold } from "@/modules/distribution/services/inventory-state";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { requireTenantForMutation } from "@/lib/subscription-guard";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildTextSearchCondition,
@@ -44,7 +45,7 @@ export async function createInvoiceFromSalesOrder(input: {
   creditType?: "fixed" | "percentage";
   creditAmount?: string;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const order = await db.query.salesOrders.findFirst({
     where: and(
       eq(salesOrders.id, input.salesOrderId),
@@ -661,6 +662,35 @@ export type OpenInvoiceForCustomer = Awaited<
   ReturnType<typeof getOpenInvoicesForCustomer>
 >[number];
 
+/**
+ * Postgres unique-violation guard. Used to detect the race-safety
+ * 23505 fired by the (tenant_id, idempotency_key) partial unique
+ * index on `payments`.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
+
+/**
+ * Returns the same shape `recordPayment` does — used by the
+ * idempotency dedup paths to give the caller an identical-looking
+ * success response after the original submit has already committed.
+ */
+function readSalesInvoiceWithRelations(salesInvoiceId: string) {
+  return db.query.salesInvoices.findFirst({
+    where: eq(salesInvoices.id, salesInvoiceId),
+    with: {
+      payments: true,
+      lines: true,
+    },
+  });
+}
+
 export async function recordPayment(input: {
   salesInvoiceId: string;
   createdByUserId: string;
@@ -670,8 +700,36 @@ export async function recordPayment(input: {
   checkNumber?: string;
   referenceNumber?: string;
   notes?: string;
+  /**
+   * Client-generated UUID per payment-submit attempt. When provided,
+   * the service dedupes against the (tenant_id, idempotency_key)
+   * partial unique index — a second call with the same key returns
+   * the existing payment's invoice state instead of creating a
+   * duplicate row (double-click / retried fetch protection).
+   *
+   * Optional for legacy + server-internal call paths. Form-driven
+   * submits should always pass a stable per-form-instance UUID.
+   */
+  idempotencyKey?: string | null;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
+
+  // Idempotency happy-path: if this key has already produced a
+  // payment row, return the current invoice state straight away.
+  // The unique index below is what enforces correctness; this
+  // lookup just skips the 23505 round-trip in the common case.
+  if (input.idempotencyKey) {
+    const existing = await db.query.payments.findFirst({
+      where: and(
+        eq(payments.tenantId, tenant.id),
+        eq(payments.idempotencyKey, input.idempotencyKey),
+      ),
+    });
+    if (existing) {
+      return readSalesInvoiceWithRelations(existing.salesInvoiceId);
+    }
+  }
+
   const invoice = await db.query.salesInvoices.findFirst({
     where: and(
       eq(salesInvoices.id, input.salesInvoiceId),
@@ -702,17 +760,29 @@ export async function recordPayment(input: {
   const newAmountPaid = currentPaid + paymentAmount;
   const newBalanceDue = totalAmount - newAmountPaid;
 
-  await db.insert(payments).values({
-    tenantId: tenant.id,
-    salesInvoiceId: input.salesInvoiceId,
-    createdByUserId: input.createdByUserId,
-    paymentDate: input.paymentDate,
-    amount: input.amount,
-    paymentMethod: input.paymentMethod,
-    checkNumber: input.checkNumber,
-    referenceNumber: input.referenceNumber,
-    notes: input.notes,
-  });
+  try {
+    await db.insert(payments).values({
+      tenantId: tenant.id,
+      salesInvoiceId: input.salesInvoiceId,
+      createdByUserId: input.createdByUserId,
+      paymentDate: input.paymentDate,
+      amount: input.amount,
+      paymentMethod: input.paymentMethod,
+      checkNumber: input.checkNumber,
+      referenceNumber: input.referenceNumber,
+      notes: input.notes,
+      idempotencyKey: input.idempotencyKey ?? null,
+    });
+  } catch (err) {
+    // Race-safety net: a concurrent submit with the same key may
+    // have committed between our pre-check above and this INSERT.
+    // The partial unique index then raises 23505 — return the
+    // already-recorded payment's invoice state.
+    if (input.idempotencyKey && isUniqueViolation(err)) {
+      return readSalesInvoiceWithRelations(input.salesInvoiceId);
+    }
+    throw err;
+  }
 
   await db
     .update(salesInvoices)
@@ -728,13 +798,7 @@ export async function recordPayment(input: {
     })
     .where(eq(salesInvoices.id, input.salesInvoiceId));
 
-  return db.query.salesInvoices.findFirst({
-    where: eq(salesInvoices.id, input.salesInvoiceId),
-    with: {
-      payments: true,
-      lines: true,
-    },
-  });
+  return readSalesInvoiceWithRelations(input.salesInvoiceId);
 }
 
 /**
@@ -876,8 +940,10 @@ export async function recordPaymentForSalesOrderInvoice(input: {
   checkNumber?: string;
   referenceNumber?: string;
   notes?: string;
+  /** Forwarded to `recordPayment` — see that function's docstring. */
+  idempotencyKey?: string | null;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
 
   if (currentUser.tenantId !== tenant.id) {
@@ -910,6 +976,7 @@ export async function recordPaymentForSalesOrderInvoice(input: {
     checkNumber: input.checkNumber,
     referenceNumber: input.referenceNumber,
     notes: input.notes,
+    idempotencyKey: input.idempotencyKey ?? null,
   });
 }
 

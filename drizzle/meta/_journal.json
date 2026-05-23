@@ -414,6 +414,13 @@
 			"when": 1779101900000,
 			"tag": "0058_supplier_invoice_total_amount_scale",
 			"breakpoints": true
+		},
+		{
+			"idx": 59,
+			"version": "7",
+			"when": 1779102000000,
+			"tag": "0059_payment_idempotency_keys",
+			"breakpoints": true
 		}
 	]
 }

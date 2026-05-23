@@ -44,6 +44,7 @@ import {
 
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { requireTenantForMutation } from "@/lib/subscription-guard";
 
 /**
  * Transaction handle inferred from the active driver. Use this in any helper
@@ -1005,7 +1006,7 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
 // -------------------- Mutations --------------------
 
 export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
@@ -1683,7 +1684,24 @@ export type RecordSupplierInvoicePaymentInput = {
   checkNumber?: string | null;
   referenceNumber?: string | null;
   notes?: string | null;
+  /**
+   * Client-generated UUID per payment-submit attempt. Used by the
+   * (tenant_id, idempotency_key) partial unique index on
+   * `supplier_invoice_payments` to dedupe double-submits. See the AR
+   * `recordPayment` docstring for the contract.
+   */
+  idempotencyKey?: string | null;
 };
+
+/** See AR `invoicing.ts` for the canonical version of this guard. */
+function isUniqueViolationErr(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
 
 /**
  * Apply a payment to a supplier invoice. Runs inside a single transaction so
@@ -1701,19 +1719,36 @@ export type RecordSupplierInvoicePaymentInput = {
 export async function recordSupplierInvoicePayment(
   input: RecordSupplierInvoicePaymentInput,
 ) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
   requirePermission(currentUser.role, "record_supplier_payment");
 
+  // Idempotency happy-path — if this key already produced a payment,
+  // return the current supplier-invoice state without re-entering the
+  // balance-check transaction. The unique index below is what
+  // guarantees correctness; this lookup skips the 23505 round-trip.
+  if (input.idempotencyKey) {
+    const existing = await db.query.supplierInvoicePayments.findFirst({
+      where: and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        eq(supplierInvoicePayments.idempotencyKey, input.idempotencyKey),
+      ),
+    });
+    if (existing) {
+      return (await getSupplierInvoiceById(existing.supplierInvoiceId))!;
+    }
+  }
+
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Payment amount must be greater than 0.");
   }
 
-  await db.transaction(async tx => {
+  try {
+    await db.transaction(async tx => {
     const invoice = await tx.query.supplierInvoices.findFirst({
       where: and(
         eq(supplierInvoices.id, input.supplierInvoiceId),
@@ -1752,6 +1787,7 @@ export async function recordSupplierInvoicePayment(
       checkNumber: trimmedCheckNumber,
       referenceNumber: trimmedReferenceNumber,
       notes: input.notes?.trim() || null,
+      idempotencyKey: input.idempotencyKey ?? null,
       createdByUserId: currentUser.id,
     }).returning({ id: supplierInvoicePayments.id });
 
@@ -1793,7 +1829,17 @@ export async function recordSupplierInvoicePayment(
         referenceNumber: trimmedReferenceNumber,
       }),
     });
-  });
+    });
+  } catch (err) {
+    // Race-safety: a concurrent submit with the same key committed
+    // first; the partial unique index fires 23505 and the
+    // transaction rolls back. Return the supplier-invoice state
+    // reflecting the original successful submit.
+    if (input.idempotencyKey && isUniqueViolationErr(err)) {
+      return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
+    }
+    throw err;
+  }
 
   return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
 }

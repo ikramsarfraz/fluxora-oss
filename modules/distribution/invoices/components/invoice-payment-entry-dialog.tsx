@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
@@ -111,6 +111,9 @@ function PaymentBody({
   const recordPayment = useRecordPaymentForSalesOrderInvoice();
   const { data: currentUser } = useCurrentPortalUser();
   const canRecord = can(currentUser?.role, "record_payment");
+  // One key per dialog mount — survives submit retries so a request
+  // that succeeded server-side but lost its response is recognized.
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
   const recordDeniedReason = canRecord
     ? null
     : getPermissionDeniedReason("record_payment");
@@ -149,6 +152,7 @@ function PaymentBody({
         checkNumber: values.checkNumber.trim() || undefined,
         referenceNumber: values.referenceNumber.trim() || undefined,
         notes: values.notes.trim() || undefined,
+        idempotencyKey,
       });
       toast.success("Payment recorded.");
       onClose();

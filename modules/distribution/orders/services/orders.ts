@@ -37,6 +37,7 @@ import {
 } from "@/modules/distribution/services/inventory-state";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { requireTenantForMutation } from "@/lib/subscription-guard";
 import { assertCustomerWithinCreditLimit } from "@/modules/distribution/customers/services/customers";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
@@ -1674,7 +1675,7 @@ export async function updateSalesOrder(input: {
     pricePerLbOverride?: string | null;
   }>;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
 
   if (currentUser.tenantId !== tenant.id) {
@@ -1896,7 +1897,7 @@ export async function createSalesOrder(input: {
     pricePerLbOverride?: string;
   }>;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
 
   if (currentUser.tenantId !== tenant.id) {
