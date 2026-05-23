@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { categories } from "@/db/schema";
+import { categories, productCategories, products } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
 /**
@@ -113,6 +113,34 @@ export async function updateCategory(input: {
 
 export async function deleteCategory(categoryId: string) {
   const tenant = await getCurrentTenant();
+
+  // `product_categories.category_id` has ON DELETE CASCADE on the
+  // FK — letting a delete go through here silently strips the
+  // category tag off every product that referenced it. Block the
+  // hard delete when the category is still in use and surface a
+  // friendly error so the caller can choose: archive the category
+  // (preserves history, hides from pickers) or untag the products
+  // first. Tenant-scoped join via `products.tenant_id` so we don't
+  // count cross-tenant rows even though the FK is uuid-keyed.
+  const [{ count }] = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(
+      and(
+        eq(productCategories.categoryId, categoryId),
+        eq(products.tenantId, tenant.id),
+      ),
+    );
+
+  if (count > 0) {
+    throw new Error(
+      count === 1
+        ? "Can't delete: 1 product is tagged with this category. Archive the category instead, or untag the product first."
+        : `Can't delete: ${count} products are tagged with this category. Archive the category instead, or untag the products first.`,
+    );
+  }
+
   await db
     .delete(categories)
     .where(
