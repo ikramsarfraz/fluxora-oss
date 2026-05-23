@@ -34,7 +34,7 @@ const C = {
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
 
-type Filter = "all" | "matched" | "pending_review" | "unmatched";
+type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending";
 
 export function BankActivityShell({ data }: { data: Data }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -80,7 +80,9 @@ export function BankActivityShell({ data }: { data: Data }) {
 
   const stateFiltered = filter === "all"
     ? data.transactions
-    : data.transactions.filter(t => t.state === filter);
+    : filter === "pending"
+      ? data.transactions.filter(t => t.pending)
+      : data.transactions.filter(t => t.state === filter);
 
   const q = searchText.trim().toLowerCase();
   const visible = q === ""
@@ -179,7 +181,9 @@ export function BankActivityShell({ data }: { data: Data }) {
           </div>
         </div>
 
-        {data.accounts.map(account => (
+        {data.accounts.map(account => {
+          const health = accountHealth(account.connectionStatus, account.lastSyncAt);
+          return (
           <div
             key={account.id}
             style={{
@@ -191,8 +195,31 @@ export function BankActivityShell({ data }: { data: Data }) {
               minWidth: 150,
             }}
           >
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 500, marginBottom: 4 }}>
-              {account.institutionName ?? "Bank"}
+            <div
+              style={{
+                fontSize: 11,
+                color: C.muted,
+                fontWeight: 500,
+                marginBottom: 4,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span
+                aria-hidden
+                title={health.tooltip}
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: health.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {account.institutionName ?? "Bank"}
+              </span>
             </div>
             <div style={{ fontSize: 15, fontWeight: 600, fontFamily: C.mono }}>
               ${account.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
@@ -202,7 +229,8 @@ export function BankActivityShell({ data }: { data: Data }) {
               {account.mask ? ` ···${account.mask}` : ""}
             </div>
           </div>
-        ))}
+        );
+        })}
 
         <Link href="/settings/integrations/banks" style={{ textDecoration: "none" }}>
           <div
@@ -244,6 +272,7 @@ export function BankActivityShell({ data }: { data: Data }) {
             { key: "matched", label: "Matched", count: data.counts.matched },
             { key: "pending_review", label: "Pending review", count: data.counts.pending_review },
             { key: "unmatched", label: "Unmatched", count: data.counts.unmatched },
+            { key: "pending", label: "Pending settlement", count: data.counts.pending },
           ] as const
         ).map(({ key, label, count }) => {
           const isActive = filter === key;
@@ -731,4 +760,21 @@ function timeSince(date: Date): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+function accountHealth(
+  connectionStatus: string,
+  lastSyncAt: Date | null,
+): { color: string; tooltip: string } {
+  if (connectionStatus === "requires_reauth") {
+    return { color: "var(--color-danger-fg)", tooltip: "Reconnect required" };
+  }
+  if (!lastSyncAt) {
+    return { color: "var(--color-warning-fg)", tooltip: "Never synced" };
+  }
+  const hoursOld = (Date.now() - lastSyncAt.getTime()) / 3_600_000;
+  if (hoursOld <= 24) {
+    return { color: "var(--color-success-fg)", tooltip: `Synced ${timeSince(lastSyncAt)}` };
+  }
+  return { color: "var(--color-warning-fg)", tooltip: `Synced ${timeSince(lastSyncAt)} — stale` };
 }
