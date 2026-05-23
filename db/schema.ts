@@ -1192,7 +1192,7 @@ export const supplierInvoices = pgTable(
     invoiceDate: date("invoice_date").notNull(),
     receiveDate: date("receive_date").notNull(),
     status: supplierInvoiceStatusEnum("status").notNull().default("draft"),
-    totalAmount: numeric("total_amount", { precision: 12, scale: 4 })
+    totalAmount: numeric("total_amount", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
     amountPaid: numeric("amount_paid", { precision: 12, scale: 2 })

@@ -407,6 +407,13 @@
 			"when": 1779101800000,
 			"tag": "0057_inventory_units_per_package",
 			"breakpoints": true
+		},
+		{
+			"idx": 58,
+			"version": "7",
+			"when": 1779101900000,
+			"tag": "0058_supplier_invoice_total_amount_scale",
+			"breakpoints": true
 		}
 	]
 }
