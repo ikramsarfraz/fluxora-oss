@@ -16,6 +16,7 @@ import {
 
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { money, nonNegative } from "@/lib/utils/money";
 import type { SalesInvoiceDetail } from "@/modules/distribution/invoices/services/invoicing";
 
 export type InvoicePricingType = "per_lb" | "per_case" | "per_unit";
@@ -468,26 +469,33 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
 }
 
 function buildInvoiceTotals(invoice: SalesInvoiceDetail, lines: InvoicePdfLineItem[]) {
-  const subtotal = toNumber(invoice.subtotal);
-  const discount = toNumber(invoice.discountAmount) + toNumber(invoice.creditAmount);
-  const fuelSurcharge = toNumber(invoice.fuelSurchargeAmount);
-  const grandTotal = toNumber(invoice.totalAmount);
-  const preTaxTotal = subtotal - discount + fuelSurcharge;
-  const taxAmount = roundMoney(Math.max(0, grandTotal - preTaxTotal));
-  const taxRate =
-    taxAmount > 0 && preTaxTotal > 0
-      ? roundMoney(taxAmount / preTaxTotal)
-      : 0;
+  // Tax is derived rather than stored: grandTotal − (subtotal − discount +
+  // fuelSurcharge). With Number arithmetic this subtraction can leak a
+  // phantom 0.01 onto a clean no-tax invoice (subtotal sums of fractional
+  // weights drift, then grandTotal − preTaxTotal ≠ 0). Decimal makes
+  // the subtraction exact so no-tax stays no-tax.
+  const subtotalD = money(invoice.subtotal);
+  const discountD = money(invoice.discountAmount).plus(
+    money(invoice.creditAmount),
+  );
+  const fuelSurchargeD = money(invoice.fuelSurchargeAmount);
+  const grandTotalD = money(invoice.totalAmount);
+  const preTaxTotalD = subtotalD.minus(discountD).plus(fuelSurchargeD);
+  const taxAmountD = nonNegative(grandTotalD.minus(preTaxTotalD));
+  const taxRateD =
+    taxAmountD.gt(0) && preTaxTotalD.gt(0)
+      ? taxAmountD.div(preTaxTotalD)
+      : money(0);
 
   return {
     totalItems: lines.reduce((sum, line) => sum + line.quantity, 0),
     totalWeight: lines.reduce((sum, line) => sum + (line.totalWeight ?? 0), 0),
-    subtotal,
-    discount,
-    fuelSurcharge,
-    taxRate,
-    taxAmount,
-    grandTotal,
+    subtotal: subtotalD.toNumber(),
+    discount: discountD.toNumber(),
+    fuelSurcharge: fuelSurchargeD.toNumber(),
+    taxRate: Number(taxRateD.toFixed(4)),
+    taxAmount: Number(taxAmountD.toFixed(2)),
+    grandTotal: grandTotalD.toNumber(),
   };
 }
 
