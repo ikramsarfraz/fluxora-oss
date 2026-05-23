@@ -42,6 +42,8 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { TablePager } from "@/components/table-pager";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
@@ -269,6 +271,14 @@ export function SupplierInvoiceDetailPage({
   const [receivingPerPage, setReceivingPerPage] = useState(25);
 
   useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.referenceNumber);
+
+  // Pagination for the two non-receiving tables on this page (the
+  // receiving table at the bottom has its own state above — left
+  // unchanged to avoid touching the case-weight expand UI that's
+  // wired to it). Empty-array fallbacks keep the hook order stable
+  // across the loading/error early returns below.
+  const linesPagination = useClientPagination(invoice?.lines ?? [], 10);
+  const paymentsPagination = useClientPagination(invoice?.payments ?? [], 10);
 
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
@@ -620,37 +630,38 @@ export function SupplierInvoiceDetailPage({
             title="Line items"
             description="Products on this bill. Each line produced one lot when received."
           >
-            <div style={{ overflowX: "auto" }}>
-              <Table>
-                <TableHeader className="bg-muted">
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Unit type</TableHead>
-                    <TableHead className="text-right">Cases / Units</TableHead>
-                    {/* The weight column is meaningful only on a bill
-                        that has at least one weight-priced line. For
-                        per-each / per-unit bills, hide it entirely
-                        instead of showing "0.00" for every row. */}
-                    {billIsAllNonWeight ? null : (
-                      <TableHead className="text-right">Weight</TableHead>
-                    )}
-                    <TableHead className="text-right">Unit price</TableHead>
-                    <TableHead className="text-right">Line total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoice.lines.length === 0 ? (
+            <div className="overflow-hidden rounded-md border">
+              <div style={{ overflowX: "auto" }}>
+                <Table>
+                  <TableHeader className="bg-muted">
                     <TableRow>
-                      <TableCell
-                        colSpan={billIsAllNonWeight ? 6 : 7}
-                        className="text-muted-foreground h-20 text-center"
-                      >
-                        No lines on this invoice.
-                      </TableCell>
+                      <TableHead>Product</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Unit type</TableHead>
+                      <TableHead className="text-right">Cases / Units</TableHead>
+                      {/* The weight column is meaningful only on a bill
+                          that has at least one weight-priced line. For
+                          per-each / per-unit bills, hide it entirely
+                          instead of showing "0.00" for every row. */}
+                      {billIsAllNonWeight ? null : (
+                        <TableHead className="text-right">Weight</TableHead>
+                      )}
+                      <TableHead className="text-right">Unit price</TableHead>
+                      <TableHead className="text-right">Line total</TableHead>
                     </TableRow>
-                  ) : (
-                    invoice.lines.map(line => {
+                  </TableHeader>
+                  <TableBody>
+                    {invoice.lines.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={billIsAllNonWeight ? 6 : 7}
+                          className="text-muted-foreground h-20 text-center"
+                        >
+                          No lines on this invoice.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      linesPagination.rows.map(line => {
                       const caseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
                       const hasDetailedCaseWeights =
                         line.unitType === "catch_weight" && caseWeights.length > 0;
@@ -819,8 +830,10 @@ export function SupplierInvoiceDetailPage({
                       );
                     })
                   )}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination state={linesPagination} />
             </div>
           </Section>
 
@@ -994,19 +1007,20 @@ export function SupplierInvoiceDetailPage({
               title="Payment history"
               description="Payments applied to this bill."
             >
-              <div style={{ overflowX: "auto" }}>
-                <Table>
-                  <TableHeader className="bg-muted">
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Recorded by</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoice.payments.map(payment => (
+              <div className="overflow-hidden rounded-md border">
+                <div style={{ overflowX: "auto" }}>
+                  <Table>
+                    <TableHeader className="bg-muted">
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Recorded by</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentsPagination.rows.map(payment => (
                       <TableRow key={payment.id}>
                         <TableCell>
                           {formatDisplayDate(payment.paymentDate)}
@@ -1044,9 +1058,11 @@ export function SupplierInvoiceDetailPage({
                           {formatMoney(payment.amount)}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <TablePagination state={paymentsPagination} />
               </div>
             </Section>
           )}

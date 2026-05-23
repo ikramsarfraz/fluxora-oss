@@ -56,6 +56,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { SkuIntelligenceEmptyState } from "@/modules/distribution/components/empty-states";
 
 const PURPOSE_LABELS: Record<string, string> = {
@@ -195,6 +197,10 @@ function ProductRecentPurchasesSection({
   baseUnitAbbreviation: string;
 }) {
   const { data: purchases, isLoading } = useProductRecentPurchases(productId);
+  // Pagination hides itself when total <= page size, so this stays clean
+  // when the server is returning the 5-row preview but still works if the
+  // query is later widened to return the full purchase history.
+  const purchasesPagination = useClientPagination(purchases ?? [], 10);
 
   return (
     <DetailSection
@@ -208,20 +214,21 @@ function ProductRecentPurchasesSection({
           This product hasn’t appeared on a supplier bill yet.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Reference</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Unit cost</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {purchases.map(p => (
+        <div className="overflow-hidden rounded-md border">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Unit cost</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {purchasesPagination.rows.map(p => (
                 <TableRow key={p.lineId}>
                   <TableCell className="font-mono tabular-nums text-xs">
                     {formatDisplayDate(p.invoiceDate)}
@@ -260,9 +267,11 @@ function ProductRecentPurchasesSection({
                       : `${p.quantityCases} cs`}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <TablePagination state={purchasesPagination} />
         </div>
       )}
     </DetailSection>
@@ -282,6 +291,7 @@ function ProductCustomerPricesSection({
   baseUnitAbbreviation: string;
 }) {
   const { data: prices, isLoading } = useProductCustomerPrices(productId);
+  const pricesPagination = useClientPagination(prices ?? [], 10);
 
   return (
     <DetailSection
@@ -299,18 +309,19 @@ function ProductCustomerPricesSection({
           No customer-specific overrides yet.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Supplier scope</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {prices.map(row => (
+        <div className="overflow-hidden rounded-md border">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Supplier scope</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pricesPagination.rows.map(row => (
                 <TableRow key={row.id}>
                   <TableCell>
                     <Link
@@ -341,9 +352,11 @@ function ProductCustomerPricesSection({
                     {formatDisplayDate(row.updatedAt)}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <TablePagination state={pricesPagination} />
         </div>
       )}
     </DetailSection>
@@ -491,6 +504,11 @@ export function ProductDetailPage({ productId }: { productId: string }) {
   const canManageLifecycle =
     currentUser?.role === "admin" || currentUser?.role === "owner";
 
+  // Pagination for the Units of measure table. Most products have 2-5
+  // units configured so the control hides itself, but it's here for the
+  // outlier products that have a dozen+ purchase / sell / case variants.
+  const unitsPagination = useClientPagination(product?.productUnits ?? [], 10);
+
   if (isLoading) return <PageLoading message="Loading product..." />;
   if (isError || !product)
     return (
@@ -607,19 +625,20 @@ export function ProductDetailPage({ productId }: { productId: string }) {
         description="How this product is stocked, purchased, and sold."
       >
         {units.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>Purpose</TableHead>
-                  <TableHead>Conversion to base</TableHead>
-                  <TableHead>Fractional</TableHead>
-                  <TableHead>Default</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {units.map(pu => (
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Purpose</TableHead>
+                    <TableHead>Conversion to base</TableHead>
+                    <TableHead>Fractional</TableHead>
+                    <TableHead>Default</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {unitsPagination.rows.map(pu => (
                   <TableRow key={pu.id}>
                     <TableCell>
                       {pu.unit.abbreviation
@@ -643,11 +662,13 @@ export function ProductDetailPage({ productId }: { productId: string }) {
                           Default
                         </Badge>
                       ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={unitsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">No units configured.</p>

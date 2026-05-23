@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useInventoryItem } from "../hooks/use-inventory";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailField,
@@ -74,6 +76,19 @@ export function InventoryDetailPage({
   useSetBreadcrumbLabel(
     `/inventory/items/${inventoryItemId}`,
     item?.barcodeId ?? "Item",
+  );
+
+  // Pagination hooks live above the loading/error short-circuits to keep
+  // the hook-call order stable across renders. Pass empty arrays as a
+  // safe default when `item` is undefined; the hook produces a no-op
+  // state that doesn't render any rows.
+  const allocationsPagination = useClientPagination(
+    item?.allocations ?? [],
+    10,
+  );
+  const fulfillmentsPagination = useClientPagination(
+    item?.fulfillments ?? [],
+    10,
   );
 
   if (isLoading) {
@@ -354,21 +369,22 @@ export function InventoryDetailPage({
         description="Sales order lines currently reserving this inventory item."
       >
         {item.allocations.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Expected</TableHead>
-                  <TableHead className="text-right">Fulfilled</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Allocated at</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {item.allocations.map(allocation => (
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted">
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Expected</TableHead>
+                    <TableHead className="text-right">Fulfilled</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Allocated at</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allocationsPagination.rows.map(allocation => (
                   <TableRow key={allocation.id}>
                     <TableCell>
                       <Link
@@ -403,6 +419,8 @@ export function InventoryDetailPage({
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <TablePagination state={allocationsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -416,26 +434,27 @@ export function InventoryDetailPage({
         description="Outbound fulfillment rows linked to this inventory item."
       >
         {item.fulfillments.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  {isWeightItem ? (
-                    <TableHead className="text-right">
-                      Weight {baseUnitAbbr ?? "lb"}
-                    </TableHead>
-                  ) : null}
-                  <TableHead>Recorded by</TableHead>
-                  <TableHead>Fulfilled at</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {item.fulfillments.map(fulfillment => (
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted">
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    {isWeightItem ? (
+                      <TableHead className="text-right">
+                        Weight {baseUnitAbbr ?? "lb"}
+                      </TableHead>
+                    ) : null}
+                    <TableHead>Recorded by</TableHead>
+                    <TableHead>Fulfilled at</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fulfillmentsPagination.rows.map(fulfillment => (
                   <TableRow key={fulfillment.id}>
                     <TableCell>
                       <Link
@@ -475,6 +494,8 @@ export function InventoryDetailPage({
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <TablePagination state={fulfillmentsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">

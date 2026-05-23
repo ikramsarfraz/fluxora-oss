@@ -15,6 +15,8 @@ import {
 } from "@/components/detail-section";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -75,6 +77,20 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
   // UUID never leaks through while `lot` is undefined.
   const pathname = usePathname();
   useSetBreadcrumbLabel(pathname ?? `/lots/${lotId}`, lot?.lotNumber ?? "Lot");
+
+  // Pagination hooks for the three inline tables on this page. Defined
+  // here (above the loading short-circuit) so the hook-call order stays
+  // stable across renders; empty-array fallbacks make the pre-data
+  // state a no-op.
+  const receiptsPagination = useClientPagination(lot?.lotReceipts ?? [], 10);
+  const inventoryItemsPagination = useClientPagination(
+    lot?.inventoryItems ?? [],
+    10,
+  );
+  const markdownsPagination = useClientPagination(
+    lot?.markdownHistories ?? [],
+    10,
+  );
 
   if (isLoading) {
     // Match the lot detail layout: header + 3 metric cards + 3 detail
@@ -321,44 +337,47 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         description="Supplier invoices that created this lot."
       >
         {sourceInvoices.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Invoice date</TableHead>
-                  <TableHead>Receive date</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.lotReceipts.map(receipt => {
-                  const invoice = receipt.supplierInvoiceLine?.supplierInvoice;
-                  const receiptProduct = receipt.supplierInvoiceLine?.product;
-                  if (!invoice) return null;
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted">
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Invoice date</TableHead>
+                    <TableHead>Receive date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {receiptsPagination.rows.map(receipt => {
+                    const invoice = receipt.supplierInvoiceLine?.supplierInvoice;
+                    const receiptProduct = receipt.supplierInvoiceLine?.product;
+                    if (!invoice) return null;
 
-                  return (
-                    <TableRow key={receipt.id}>
-                      <TableCell>
-                        <Link
-                          href={`/supplier-invoices/${invoice.id}`}
-                          className="hover:underline"
-                        >
-                          {invoice.invoiceNumber}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{invoice.supplier?.name ?? "-"}</TableCell>
-                      <TableCell>{receiptProduct?.name ?? "-"}</TableCell>
-                      <TableCell>{formatDisplayDate(invoice.invoiceDate)}</TableCell>
-                      <TableCell>{formatDisplayDate(invoice.receiveDate)}</TableCell>
-                      <TableCell className="capitalize">{invoice.status}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    return (
+                      <TableRow key={receipt.id}>
+                        <TableCell>
+                          <Link
+                            href={`/supplier-invoices/${invoice.id}`}
+                            className="hover:underline"
+                          >
+                            {invoice.invoiceNumber}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{invoice.supplier?.name ?? "-"}</TableCell>
+                        <TableCell>{receiptProduct?.name ?? "-"}</TableCell>
+                        <TableCell>{formatDisplayDate(invoice.invoiceDate)}</TableCell>
+                        <TableCell>{formatDisplayDate(invoice.receiveDate)}</TableCell>
+                        <TableCell className="capitalize">{invoice.status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={receiptsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -372,56 +391,59 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         description="All inventory items currently tied to this lot."
       >
         {lot.inventoryItems.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">
-                    {isLotNonWeight(lot)
-                      ? `Qty (${product?.baseUnit?.abbreviation ?? "ea"})`
-                      : `Weight (${product?.baseUnit?.abbreviation ?? "lb"})`}
-                  </TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Allocations</TableHead>
-                  <TableHead className="text-right">Fulfillments</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.inventoryItems.map(item => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Link href={`/inventory/${item.id}`} className="hover:underline">
-                        {item.barcodeId}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {/* Per-item quantity — weight for catch/fixed,
-                          case-count for per_each / per_unit (one item
-                          row = one unit/case in the base UOM). */}
-                      {item.costUnitTypeSnapshot === "per_each" ||
-                      item.costUnitTypeSnapshot === "per_unit"
-                        ? item.cases
-                        : formatWeightLbs(item.exactWeightLbs)}
-                    </TableCell>
-                    <TableCell>
-                      <InventoryStatusBadge status={item.status} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item.allocations.length}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {
-                        item.fulfillments.filter(fulfillment => !fulfillment.reversedAt)
-                          .length
-                      }
-                    </TableCell>
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted">
+                  <TableRow>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">
+                      {isLotNonWeight(lot)
+                        ? `Qty (${product?.baseUnit?.abbreviation ?? "ea"})`
+                        : `Weight (${product?.baseUnit?.abbreviation ?? "lb"})`}
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Allocations</TableHead>
+                    <TableHead className="text-right">Fulfillments</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {inventoryItemsPagination.rows.map(item => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Link href={`/inventory/${item.id}`} className="hover:underline">
+                          {item.barcodeId}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {/* Per-item quantity — weight for catch/fixed,
+                            case-count for per_each / per_unit (one item
+                            row = one unit/case in the base UOM). */}
+                        {item.costUnitTypeSnapshot === "per_each" ||
+                        item.costUnitTypeSnapshot === "per_unit"
+                          ? item.cases
+                          : formatWeightLbs(item.exactWeightLbs)}
+                      </TableCell>
+                      <TableCell>
+                        <InventoryStatusBadge status={item.status} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {item.allocations.length}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {
+                          item.fulfillments.filter(fulfillment => !fulfillment.reversedAt)
+                            .length
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={inventoryItemsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -471,21 +493,22 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           title="Markdown outcomes"
           description="Recorded sell-through results for markdowns applied to this lot."
         >
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Completed</TableHead>
-                  <TableHead className="text-right">Discount</TableHead>
-                  <TableHead className="text-right">Qty offered</TableHead>
-                  <TableHead className="text-right">Sell-through</TableHead>
-                  <TableHead className="text-right">Expected net</TableHead>
-                  <TableHead className="text-right">Actual net</TableHead>
-                  <TableHead className="text-right">Variance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.markdownHistories.map(mh => {
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted">
+                  <TableRow>
+                    <TableHead>Completed</TableHead>
+                    <TableHead className="text-right">Discount</TableHead>
+                    <TableHead className="text-right">Qty offered</TableHead>
+                    <TableHead className="text-right">Sell-through</TableHead>
+                    <TableHead className="text-right">Expected net</TableHead>
+                    <TableHead className="text-right">Actual net</TableHead>
+                    <TableHead className="text-right">Variance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {markdownsPagination.rows.map(mh => {
                   const expected = Number(mh.expectedNet ?? 0);
                   const actual = Number(mh.actualNet ?? 0);
                   const variance = actual - expected;
@@ -530,8 +553,10 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
                     </TableRow>
                   );
                 })}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={markdownsPagination} />
           </div>
         </DetailSection>
       )}
