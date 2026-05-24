@@ -423,24 +423,24 @@
 			"breakpoints": true
 		},
 		{
-			"idx": 60,
-			"version": "7",
-			"when": 1779200000000,
-			"tag": "0060_expense_attachments",
-			"breakpoints": true
-		},
-		{
-			"idx": 61,
-			"version": "7",
-			"when": 1779200100000,
-			"tag": "0061_bank_transaction_transfer_pair",
-			"breakpoints": true
-		},
-		{
 			"idx": 62,
 			"version": "7",
+			"when": 1779200000000,
+			"tag": "0062_expense_attachments",
+			"breakpoints": true
+		},
+		{
+			"idx": 63,
+			"version": "7",
+			"when": 1779200100000,
+			"tag": "0063_bank_transaction_transfer_pair",
+			"breakpoints": true
+		},
+		{
+			"idx": 64,
+			"version": "7",
 			"when": 1779200200000,
-			"tag": "0062_expense_approval_workflow",
+			"tag": "0064_expense_approval_workflow",
 			"breakpoints": true
 		}
 	]
