@@ -154,13 +154,27 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
   }
 
   const combinedText = pageTexts.join("\n\n");
-  return {
+  const result = {
     combinedText,
     pageCount: pdf.numPages,
     charCount: combinedText.length,
     hasUsableText: combinedText.length >= MIN_CHARS_FOR_TEXT_MODE,
     rows: collectedRows,
   };
+
+  // Tear down the PDFDocumentProxy so pdfjs-dist releases its per-document
+  // worker state. Without this, parsing N PDFs in the same process (e.g. a
+  // bulk import loop) can leak document state between calls and — in some
+  // pdfjs versions — return stale-looking text on subsequent extractions.
+  // We swallow errors: cleanup failure mustn't fail the parse.
+  try {
+    await pdf.cleanup();
+    await pdf.destroy();
+  } catch {
+    /* defensive cleanup — ignore */
+  }
+
+  return result;
 }
 
 function rowToBbox(sortedSpans: Span[], page: number): PdfRowBbox {

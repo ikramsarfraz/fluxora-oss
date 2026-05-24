@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import pdfParse from "pdf-parse";
 import { and, count, isNull, eq } from "drizzle-orm";
 
@@ -171,6 +173,21 @@ export async function parseSupplierInvoicePdf(input: {
 
   const mode = readParseMode();
 
+  // Temporary diagnostic for the bulk-parse line-item cross-contamination
+  // we're chasing: log per-call inputs so we can confirm in dev whether two
+  // files in the same batch are receiving distinct bytes + distinct
+  // extracted text. Remove once root cause is fixed.
+  const bytesFingerprint = createHash("sha256")
+    .update(input.bytes)
+    .digest("hex")
+    .slice(0, 12);
+  console.log("[parse trace] entry", {
+    filename: originalFilename,
+    bytesLen: input.bytes.byteLength,
+    firstHex: input.bytes.subarray(0, 16).toString("hex"),
+    sha256Prefix: bytesFingerprint,
+  });
+
   const [extracted, [productCountRow]] = await Promise.all([
     extractTextForPipeline(input.bytes, mode),
     db
@@ -178,6 +195,14 @@ export async function parseSupplierInvoicePdf(input: {
       .from(products)
       .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
   ]);
+
+  console.log("[parse trace] extracted", {
+    filename: originalFilename,
+    sha256Prefix: bytesFingerprint,
+    extractor: extracted.textExtractor,
+    textLen: extracted.text.length,
+    textHead: extracted.text.slice(0, 120).replace(/\s+/g, " "),
+  });
 
   // Report each extractor-fallback hop so the cost shape stays visible
   // in PostHog. pdf-parse → vision is the one to watch most closely —
