@@ -4,8 +4,23 @@ import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   confirmPaymentMatch,
   dismissMysteryOutflowsBulkAction,
@@ -79,6 +94,15 @@ function sortTransactions(rows: Transaction[], key: SortKey): Transaction[] {
   }
 }
 
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+function parsePositiveInt(raw: string | null, fallback: number): number {
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export function BankActivityShell({ data }: { data: Data }) {
   const searchParams = useSearchParams();
   // Initial state is seeded from URL once at mount; subsequent updates go
@@ -89,38 +113,82 @@ export function BankActivityShell({ data }: { data: Data }) {
   const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
   const [accountFilter, setAccountFilterState] = useState<string | null>(() => searchParams.get("account") || null);
   const [sortKey, setSortKeyState] = useState<SortKey>(() => parseSortKey(searchParams.get("sort")));
+  const [page, setPageState] = useState<number>(() =>
+    parsePositiveInt(searchParams.get("page"), 1),
+  );
+  const [pageSize, setPageSizeState] = useState<number>(() =>
+    parsePositiveInt(searchParams.get("pageSize"), DEFAULT_PAGE_SIZE),
+  );
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedMysteryIds, setSelectedMysteryIds] = useState<Set<string>>(new Set());
   const router = useRouter();
   const [syncing, startSync] = useTransition();
   const [dismissingBulk, startBulkDismiss] = useTransition();
 
-  const writeUrlParam = useCallback((key: string, value: string | null, defaultValue: string) => {
-    const params = new URLSearchParams(window.location.search);
-    if (!value || value === defaultValue) params.delete(key);
-    else params.set(key, value);
-    const qs = params.toString();
-    const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-    window.history.replaceState(null, "", next);
-  }, []);
+  const writeUrlParams = useCallback(
+    (updates: Record<string, { value: string | null; default: string }>) => {
+      const params = new URLSearchParams(window.location.search);
+      for (const [key, { value, default: dflt }] of Object.entries(updates)) {
+        if (!value || value === dflt) params.delete(key);
+        else params.set(key, value);
+      }
+      const qs = params.toString();
+      const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      window.history.replaceState(null, "", next);
+    },
+    [],
+  );
+
+  const writeUrlParam = useCallback(
+    (key: string, value: string | null, defaultValue: string) =>
+      writeUrlParams({ [key]: { value, default: defaultValue } }),
+    [writeUrlParams],
+  );
 
   // Selection is only meaningful inside the Mystery view; reset whenever the
   // user changes filter so a stale selection can't accidentally batch-dismiss
-  // rows the user can no longer see.
+  // rows the user can no longer see. Filter/search/sort/account changes also
+  // reset to page 1 so the user doesn't land on an out-of-range page.
   function changeFilter(next: Filter) {
     if (next !== filter) setSelectedMysteryIds(new Set());
     setFilterState(next);
-    writeUrlParam("filter", next, "all");
+    setPageState(1);
+    writeUrlParams({
+      filter: { value: next, default: "all" },
+      page: { value: null, default: "1" },
+    });
   }
 
   function setAccountFilter(next: string | null) {
     setAccountFilterState(next);
-    writeUrlParam("account", next, "");
+    setPageState(1);
+    writeUrlParams({
+      account: { value: next, default: "" },
+      page: { value: null, default: "1" },
+    });
   }
 
   function setSortKey(next: SortKey) {
     setSortKeyState(next);
-    writeUrlParam("sort", next, "date-desc");
+    setPageState(1);
+    writeUrlParams({
+      sort: { value: next, default: "date-desc" },
+      page: { value: null, default: "1" },
+    });
+  }
+
+  function setPage(next: number) {
+    setPageState(next);
+    writeUrlParam("page", next === 1 ? null : String(next), "1");
+  }
+
+  function setPageSize(next: number) {
+    setPageSizeState(next);
+    setPageState(1);
+    writeUrlParams({
+      pageSize: { value: String(next), default: String(DEFAULT_PAGE_SIZE) },
+      page: { value: null, default: "1" },
+    });
   }
 
   function toggleMysterySelection(txnId: string) {
@@ -191,6 +259,16 @@ export function BankActivityShell({ data }: { data: Data }) {
 
   const visible = sortKey === "date-desc" ? searched : sortTransactions(searched, sortKey);
 
+  // Client-side pagination. Total/pageCount reflect the post-filter+search
+  // result; if a filter change leaves the current page out of range, clamp
+  // to a safe value so the user lands on real data instead of an empty list.
+  const total = visible.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paged = visible.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(total, safePage * pageSize);
+
   const lastSync = data.lastSyncAt
     ? timeSince(new Date(data.lastSyncAt))
     : "never";
@@ -200,23 +278,15 @@ export function BankActivityShell({ data }: { data: Data }) {
 
   if (noConnections) {
     return (
-      <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Bank activity</h1>
+      <div className="text-ink">
+        <div className="mb-6 flex items-start justify-between">
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight">Bank activity</h1>
         </div>
-        <div
-          style={{
-            border: `1px dashed ${C.line}`,
-            borderRadius: C.radius,
-            padding: "48px 32px",
-            textAlign: "center",
-            background: C.surface,
-          }}
-        >
-          <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginBottom: 6 }}>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border-default bg-card px-8 py-12 text-center">
+          <div className="text-base font-semibold text-ink">
             Connect your bank to get started
           </div>
-          <div style={{ fontSize: 13, color: C.muted, marginBottom: 20, maxWidth: 420, margin: "0 auto 20px" }}>
+          <div className="max-w-md text-[13px] text-subtle">
             Once linked, we&apos;ll sync 90 days of transactions and start
             matching outflows against your open bills automatically.
           </div>
@@ -231,16 +301,14 @@ export function BankActivityShell({ data }: { data: Data }) {
   }
 
   return (
-    <div style={{ fontFamily: "'Geist', system-ui, sans-serif", color: C.ink, lineHeight: "1.5" }}>
+    <div className="text-ink">
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Bank activity</h1>
-          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-            Synced {lastSync}
-          </div>
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight">Bank activity</h1>
+          <div className="mt-1 text-xs text-subtle">Synced {lastSync}</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="flex gap-2">
           <Button
             type="button"
             variant="outline"
@@ -260,23 +328,11 @@ export function BankActivityShell({ data }: { data: Data }) {
         </div>
       </div>
 
-      {/* Re-auth banner — one row per institution that needs reconnecting */}
+      {/* Re-auth banner — warning-tone alert card */}
       {needsReauthInstitutions.length > 0 && (
-        <div
-          style={{
-            border: `1px solid ${C.warn}`,
-            background: C.warnSoft,
-            borderRadius: C.radius,
-            padding: "12px 16px",
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
-            <strong style={{ color: C.warn }}>Reconnect required:</strong>{" "}
+        <div className="mb-5 flex items-center justify-between gap-4 rounded-lg border border-warning-border bg-warning-bg px-4 py-3">
+          <div className="text-[13px] leading-relaxed text-ink-warm">
+            <strong className="text-warning-fg">Reconnect required:</strong>{" "}
             {needsReauthInstitutions.map(a => a.institutionName ?? "Bank").join(", ")}
             {" — "}new transactions won&apos;t sync until you sign in again.
           </div>
@@ -289,32 +345,26 @@ export function BankActivityShell({ data }: { data: Data }) {
       )}
 
       {/* Accounts strip — tiles are click-to-filter */}
-      <div style={{ display: "flex", gap: 10, overflowX: "auto", marginBottom: 24, paddingBottom: 4 }}>
-        {/* Total cash card — also clears the account filter */}
+      <div className="mb-6 flex gap-2.5 overflow-x-auto pb-1">
+        {/* Total cash card — also clears the account filter. Stays dark for
+            intentional contrast against the tenant's accounts; selected
+            state is a token-driven ring. */}
         <button
           type="button"
           onClick={() => setAccountFilter(null)}
           aria-pressed={accountFilter === null}
           title={accountFilter ? "Clear account filter" : undefined}
-          style={{
-            flexShrink: 0,
-            background: "#1c1917",
-            border: accountFilter === null ? "2px solid var(--color-success-fg)" : "2px solid transparent",
-            borderRadius: C.radius,
-            padding: "14px 18px",
-            minWidth: 160,
-            cursor: "pointer",
-            textAlign: "left",
-            fontFamily: "inherit",
-          }}
+          className={`flex shrink-0 min-w-[160px] flex-col rounded-lg bg-ink px-4.5 py-3.5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            accountFilter === null ? "ring-2 ring-success-fg" : ""
+          }`}
         >
-          <div style={{ fontSize: 11, color: "var(--color-muted)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">
             Total cash
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--color-card)", fontFamily: C.mono }}>
+          <div className="font-mono text-[22px] font-bold tabular-nums text-card">
             ${totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: 11, color: "var(--color-subtle)", marginTop: 4 }}>
+          <div className="mt-1 text-[11px] text-subtle">
             {data.accounts.length} account{data.accounts.length !== 1 ? "s" : ""}
           </div>
         </button>
@@ -323,204 +373,130 @@ export function BankActivityShell({ data }: { data: Data }) {
           const health = accountHealth(account.connectionStatus, account.lastSyncAt);
           const active = accountFilter === account.id;
           return (
-          <button
-            key={account.id}
-            type="button"
-            onClick={() => setAccountFilter(active ? null : account.id)}
-            aria-pressed={active}
-            title={active ? "Click to clear filter" : "Click to filter to this account"}
-            style={{
-              flexShrink: 0,
-              border: active ? `2px solid var(--color-success-fg)` : `2px solid ${C.line}`,
-              borderRadius: C.radius,
-              padding: "14px 18px",
-              background: C.surface,
-              minWidth: 150,
-              cursor: "pointer",
-              textAlign: "left",
-              fontFamily: "inherit",
-            }}
-          >
-            <div
-              style={{
-                fontSize: 11,
-                color: C.muted,
-                fontWeight: 500,
-                marginBottom: 4,
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
+            <button
+              key={account.id}
+              type="button"
+              onClick={() => setAccountFilter(active ? null : account.id)}
+              aria-pressed={active}
+              title={active ? "Click to clear filter" : "Click to filter to this account"}
+              className={`flex shrink-0 min-w-[150px] flex-col rounded-lg border bg-card px-4.5 py-3.5 text-left transition hover:border-border-default focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                active
+                  ? "border-success-fg ring-2 ring-success-fg"
+                  : "border-border-soft"
+              }`}
             >
-              <span
-                aria-hidden
-                title={health.tooltip}
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: health.color,
-                  flexShrink: 0,
-                }}
-              />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {account.institutionName ?? "Bank"}
-              </span>
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 600, fontFamily: C.mono, color: C.ink }}>
-              ${account.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-              {account.name}
-              {account.mask ? ` ···${account.mask}` : ""}
-            </div>
-          </button>
-        );
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-subtle">
+                <span
+                  aria-hidden
+                  title={health.tooltip}
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{ background: health.color }}
+                />
+                <span className="truncate">{account.institutionName ?? "Bank"}</span>
+              </div>
+              <div className="font-mono text-[15px] font-semibold tabular-nums text-ink">
+                ${account.currentBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+              <div className="mt-0.5 text-[11px] text-subtle">
+                {account.name}
+                {account.mask ? ` ···${account.mask}` : ""}
+              </div>
+            </button>
+          );
         })}
 
-        <Link href="/settings/integrations/banks" style={{ textDecoration: "none" }}>
-          <div
-            style={{
-              flexShrink: 0,
-              border: `1px dashed ${C.line}`,
-              borderRadius: C.radius,
-              padding: "14px 18px",
-              background: C.surface,
-              minWidth: 120,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: C.muted,
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+        <Link href="/settings/integrations/banks" className="no-underline">
+          <div className="flex h-full shrink-0 min-w-[120px] items-center justify-center rounded-lg border border-dashed border-border-default bg-card px-4.5 py-3.5 text-[13px] text-subtle hover:text-ink">
             + Add another
           </div>
         </Link>
       </div>
 
-      {/* Filter chips + search */}
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          marginBottom: 20,
-          alignItems: "center",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {(
-          [
-            { key: "all", label: "All", count: data.transactions.length },
-            { key: "matched", label: "Matched", count: data.counts.matched },
-            { key: "pending_review", label: "Pending review", count: data.counts.pending_review },
-            { key: "unmatched", label: "Unmatched", count: data.counts.unmatched },
-            { key: "pending", label: "Pending settlement", count: data.counts.pending },
-            { key: "mystery", label: "Mystery", count: data.counts.mystery },
-          ] as const
-        ).map(({ key, label, count }) => {
-          const isActive = filter === key;
-          const isPending = key === "pending_review" && count > 0;
-          return (
-            <button
+      {/* Filter tabs (ToggleGroup, matches ListingPage status segments) + sort + search */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <ToggleGroup
+          type="single"
+          value={filter}
+          onValueChange={value => {
+            if (value) changeFilter(value as Filter);
+            setPageState(1);
+          }}
+          spacing={1}
+          variant="default"
+          size="sm"
+          className="rounded-md bg-divider p-0.5"
+        >
+          {(
+            [
+              { key: "all", label: "All", count: data.transactions.length },
+              { key: "matched", label: "Matched", count: data.counts.matched },
+              { key: "pending_review", label: "Pending review", count: data.counts.pending_review },
+              { key: "unmatched", label: "Unmatched", count: data.counts.unmatched },
+              { key: "pending", label: "Pending settlement", count: data.counts.pending },
+              { key: "mystery", label: "Mystery", count: data.counts.mystery },
+            ] as const
+          ).map(({ key, label, count }) => (
+            <ToggleGroupItem
               key={key}
-              type="button"
-              onClick={() => changeFilter(key)}
-              style={{
-                padding: "5px 12px",
-                borderRadius: 100,
-                fontSize: 13,
-                fontWeight: isActive ? 600 : 400,
-                border: `1px solid ${isActive ? (isPending ? C.warn : C.ink) : C.line}`,
-                background: isActive
-                  ? isPending ? C.warnSoft : C.ink
-                  : C.surface,
-                color: isActive
-                  ? isPending ? C.warn : "var(--color-card)"
-                  : isPending ? C.warn : C.ink2,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-              }}
+              value={key}
+              className="h-7 gap-1.5 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
             >
               {label}
-              <span
-                style={{
-                  fontSize: 11,
-                  background: isActive
-                    ? "rgba(255,255,255,0.2)"
-                    : isPending ? C.warn + "22" : C.line2,
-                  padding: "1px 6px",
-                  borderRadius: 100,
-                }}
-              >
+              <span className="rounded-full bg-divider/80 px-1.5 py-0.5 text-[10px] tabular-nums text-subtle group-data-[state=on]:bg-divider">
                 {count}
               </span>
-            </button>
-          );
-        })}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <select
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+
+        <div className="flex items-center gap-2">
+          <Select
             value={sortKey}
-            onChange={e => setSortKey(e.target.value as SortKey)}
-            aria-label="Sort transactions"
-            style={{
-              fontSize: 13,
-              padding: "6px 12px",
-              border: `1px solid ${C.line}`,
-              borderRadius: 6,
-              background: C.surface,
-              color: C.ink,
-              outline: "none",
-              fontFamily: "inherit",
-              cursor: "pointer",
-            }}
+            onValueChange={value => setSortKey(value as SortKey)}
           >
-            {SORT_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <input
+            <SelectTrigger
+              size="sm"
+              aria-label="Sort transactions"
+              className="h-8 w-[200px] border-border-default bg-card text-[13px] text-ink-warm shadow-none"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
             type="search"
             value={searchText}
             onChange={e => {
               const next = e.target.value;
               setSearchText(next);
-              writeUrlParam("q", next, "");
+              setPageState(1);
+              writeUrlParams({
+                q: { value: next, default: "" },
+                page: { value: null, default: "1" },
+              });
             }}
             placeholder="Search merchant, description, invoice…"
             aria-label="Filter transactions"
-            style={{
-              fontSize: 13,
-              padding: "6px 12px",
-              border: `1px solid ${C.line}`,
-              borderRadius: 6,
-              background: C.surface,
-              color: C.ink,
-              minWidth: 260,
-              outline: "none",
-              fontFamily: "inherit",
-            }}
+            className="h-8 w-[280px] border-border-default bg-card text-[13px] shadow-none"
           />
         </div>
       </div>
 
       {/* Bulk-select bar — Mystery view only. Surfaces select-all + dismiss
-          batch CTA when ≥1 row is checked. */}
-      {filter === "mystery" && visible.length > 0 && (
+          batch CTA when ≥1 row is checked on the current page. */}
+      {filter === "mystery" && paged.length > 0 && (
         <BulkMysteryBar
-          visibleIds={visible.map(t => t.id)}
+          visibleIds={paged.map(t => t.id)}
           selectedIds={selectedMysteryIds}
           onToggleAll={(allSelected) => {
             setSelectedMysteryIds(
-              allSelected ? new Set() : new Set(visible.map(t => t.id)),
+              allSelected ? new Set() : new Set(paged.map(t => t.id)),
             );
           }}
           onDismiss={() => {
@@ -542,42 +518,87 @@ export function BankActivityShell({ data }: { data: Data }) {
         />
       )}
 
-      {/* Transaction list */}
-      {visible.length === 0 ? (
-        <div
-          style={{
-            border: `1px dashed ${C.line}`,
-            borderRadius: C.radius,
-            padding: "40px",
-            textAlign: "center",
-            color: C.muted,
-            fontSize: 13,
-          }}
-        >
+      {/* Transaction list + pagination footer, wrapped in a single card so the
+          footer hangs off the list visually. Matches the ListingPage shape. */}
+      {paged.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border-default bg-card px-6 py-10 text-center text-[13px] text-subtle">
           {q !== ""
             ? `No transactions match "${searchText}".`
             : "No transactions in this view."}
         </div>
       ) : (
-        <div
-          style={{
-            border: `1px solid ${C.line}`,
-            borderRadius: C.radius,
-            overflow: "hidden",
-          }}
-        >
-          {visible.map((txn, i) => (
-            <TransactionRow
-              key={txn.id}
-              txn={txn}
-              isLast={i === visible.length - 1}
-              expanded={expandedId === txn.id}
-              onToggle={() => setExpandedId(expandedId === txn.id ? null : txn.id)}
-              selectable={filter === "mystery"}
-              selected={selectedMysteryIds.has(txn.id)}
-              onSelectionToggle={() => toggleMysterySelection(txn.id)}
-            />
-          ))}
+        <div className="overflow-hidden rounded-lg border border-border-soft bg-card">
+          <div>
+            {paged.map((txn, i) => (
+              <TransactionRow
+                key={txn.id}
+                txn={txn}
+                isLast={i === paged.length - 1}
+                expanded={expandedId === txn.id}
+                onToggle={() => setExpandedId(expandedId === txn.id ? null : txn.id)}
+                selectable={filter === "mystery"}
+                selected={selectedMysteryIds.has(txn.id)}
+                onSelectionToggle={() => toggleMysterySelection(txn.id)}
+              />
+            ))}
+          </div>
+
+          {/* Pagination footer — mirrors ListingPage's footer for visual parity */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-4 py-2.5">
+            <div className="flex items-center gap-1.5 text-xs text-subtle">
+              <span>Rows</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={value => setPageSize(Number(value))}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="h-7 w-[72px] border-border-default bg-card px-2 text-xs text-ink-warm shadow-none"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map(n => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="text-xs text-subtle tabular-nums">
+              {total > 0 ? `${rangeStart}-${rangeEnd} of ${total.toLocaleString()}` : "0 records"}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Previous"
+                disabled={safePage <= 1}
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
+                onClick={() => setPage(safePage - 1)}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <span className="px-1.5 text-xs tabular-nums text-subtle">
+                {safePage} / {pageCount}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Next"
+                disabled={safePage >= pageCount}
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
+                onClick={() => setPage(safePage + 1)}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -847,17 +868,14 @@ function TransactionRow({
               </span>
             </Link>
           ) : isUnmatched ? (
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={() => setLinkSheetOpen(true)}
-              style={{
-                padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                background: C.ink, color: "var(--color-card)", border: "none", cursor: "pointer",
-                fontFamily: "inherit",
-              }}
+              className="h-7 px-3 text-xs"
             >
               Link to bill
-            </button>
+            </Button>
           ) : (
             <span style={{ fontSize: 12, color: C.muted }}>—</span>
           )}
