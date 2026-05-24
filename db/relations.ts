@@ -11,6 +11,7 @@ import {
   customerProductPrices,
   customers,
   dispositionDecisions,
+  expenseAttachments,
   expenses,
   files,
   inventoryAdjustments,
@@ -735,7 +736,7 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
-export const expensesRelations = relations(expenses, ({ one }) => ({
+export const expensesRelations = relations(expenses, ({ one, many }) => ({
   createdBy: one(portalUsers, {
     fields: [expenses.createdByUserId],
     references: [portalUsers.id],
@@ -744,7 +745,22 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
     fields: [expenses.tenantId],
     references: [tenants.id],
   }),
+  attachments: many(expenseAttachments),
 }));
+
+export const expenseAttachmentsRelations = relations(
+  expenseAttachments,
+  ({ one }) => ({
+    expense: one(expenses, {
+      fields: [expenseAttachments.expenseId],
+      references: [expenses.id],
+    }),
+    file: one(files, {
+      fields: [expenseAttachments.fileId],
+      references: [files.id],
+    }),
+  }),
+);
 
 export const supportTicketsRelations = relations(
   supportTickets,

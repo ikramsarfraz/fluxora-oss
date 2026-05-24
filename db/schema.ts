@@ -147,6 +147,7 @@ export const fileCategoryEnum = pgEnum("file_category", [
   "sales_invoice_pdf",
   "sales_invoice_attachment",
   "sales_order_attachment",
+  "expense_attachment",
   "other",
 ]);
 
@@ -2034,6 +2035,37 @@ export const expenses = pgTable(
       "expenses_recurrence_end_after_start",
       sql`${table.recurrenceEndDate} IS NULL OR ${table.recurrenceStartDate} IS NULL OR ${table.recurrenceEndDate} >= ${table.recurrenceStartDate}`,
     ),
+  ],
+);
+
+// Pivot between expenses and the shared files table. Mirrors the supplier
+// invoice / sales order attachment pattern: tenant-scoped, cascade-delete
+// when either side is removed. Tenant ID is denormalized here (rather than
+// joining through files or expenses each time) so the listing query can stay
+// a single indexed lookup.
+export const expenseAttachments = pgTable(
+  "expense_attachments",
+  {
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    primaryKey({
+      name: "expense_attachments_pkey",
+      columns: [table.expenseId, table.fileId],
+    }),
+    index("expense_attachments_tenant_expense_idx").on(table.tenantId, table.expenseId),
+    index("expense_attachments_file_id_idx").on(table.fileId),
   ],
 );
 
