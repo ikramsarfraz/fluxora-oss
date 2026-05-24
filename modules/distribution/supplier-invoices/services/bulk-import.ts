@@ -86,6 +86,16 @@ async function processOneFile(
   file: BulkImportFileInput,
   args: ProcessOneFileArgs,
 ): Promise<BulkImportItemResult> {
+  // Defensive copy of the source bytes BEFORE the parse pipeline touches
+  // them. The pipeline streams the buffer to OpenAI / pdf-parse, and under
+  // Node 22+ undici can detach the underlying ArrayBuffer when forwarding
+  // a Buffer body for zero-copy transfer. After detach, the original
+  // `file.bytes` view is unusable — the subsequent createBulkImportFile
+  // R2 upload fails with "Cannot perform Construct on a detached
+  // ArrayBuffer". Holding our own copy here keeps persistence independent
+  // of whatever the pipeline does to its argument.
+  const persistBytes = Buffer.from(file.bytes);
+
   let pipeline: PipelineResult;
   try {
     pipeline = await parseSupplierInvoicePdf({
@@ -137,7 +147,7 @@ async function processOneFile(
       batchId: args.batchId,
       filename: file.originalFilename,
       mimeType: file.mimeType,
-      bytes: file.bytes,
+      bytes: persistBytes,
       pipelineResult: pipeline,
       status: rowStatus,
       parseErrorCodes:
