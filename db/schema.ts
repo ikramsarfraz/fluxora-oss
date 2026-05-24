@@ -90,6 +90,24 @@ export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval
   "annually",
 ]);
 
+// Expense approval lifecycle. Newly-created rows start in 'draft' so a
+// submitter can iterate before requesting approval; 'submitted' enters the
+// approver's queue; 'approved' clears the row for accounting to pay;
+// 'rejected' bounces it back to the submitter with a reason (legal next
+// state is 'draft' via reset, not directly back to 'submitted'); 'paid'
+// closes the row.
+//
+// Rows that predate this enum (the historical bulk created before the
+// workflow shipped) are backfilled to 'approved' so the new gating doesn't
+// suddenly hide them from the listing.
+export const expenseStatusEnum = pgEnum("expense_status", [
+  "draft",
+  "submitted",
+  "approved",
+  "rejected",
+  "paid",
+]);
+
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
@@ -2019,6 +2037,33 @@ export const expenses = pgTable(
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
+    /**
+     * Approval lifecycle. See expenseStatusEnum for the valid states and
+     * transitions. Newly-created rows default to 'draft' so the submitter
+     * can iterate; the listing's status filter scopes by this column.
+     */
+    status: expenseStatusEnum("status").notNull().default("draft"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedByUserId: uuid("submitted_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedByUserId: uuid("approved_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectedByUserId: uuid("rejected_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectionReason: text("rejection_reason"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2030,6 +2075,7 @@ export const expenses = pgTable(
       table.recurrenceNextDueDate,
     ),
     index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
+    index("expenses_tenant_status_idx").on(table.tenantId, table.status),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
     check(
       "expenses_recurrence_end_after_start",
