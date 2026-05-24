@@ -14,6 +14,13 @@ import {
   type UpdateExpenseInput,
 } from "../services/expenses";
 
+export {
+  getExpenseAttachmentDownloadUrlAction,
+  listExpenseAttachmentsAction,
+  removeExpenseAttachmentAction,
+  uploadExpenseAttachmentAction,
+} from "./attachments";
+
 export async function getExpensesAction() {
   return await getExpenses();
 }
