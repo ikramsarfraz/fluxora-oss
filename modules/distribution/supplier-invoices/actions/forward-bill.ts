@@ -19,6 +19,7 @@ import {
   RateLimitError,
 } from "@/lib/rate-limit";
 import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
+import { resolveForwardFromAddress } from "../utils/forward-from-address";
 
 export type ForwardBillInput = {
   supplierInvoiceId: string;
@@ -75,54 +76,13 @@ export async function forwardBillAction(input: ForwardBillInput) {
   if (input.recipients.length === 0) throw new Error("At least one recipient required");
   if (input.recipients.length > 10) throw new Error("Maximum 10 recipients");
 
-  // Build a tenant-aware From header so production recipients see the
-  // customer's brand in both the display name AND the address local-part —
-  // e.g. From: "City Diner" <city-diner-bills@fluxora.com>.
-  //
-  // Local + staging dev fall back to the single shared EMAIL_FROM address
-  // (set in .env.local). Reasons:
-  //   - lib/email.ts already requires EMAIL_FROM at module load — every
-  //     existing transactional path (auth, tenant-join, etc.) sends from
-  //     it. Reusing it here means local dev doesn't need any extra setup.
-  //   - Resend's free / hobby tiers usually only have one personal-domain
-  //     address verified. Forcing a tenant-aware From in dev would hit
-  //     "unverified domain" errors.
-  //   - Production has ROOT_DOMAIN's DKIM/SPF wired up, so the
-  //     <slug>-bills@<root> local-part variation signs cleanly with a
-  //     single verified domain — no per-tenant Resend domain needed.
-  //
-  // To force the tenant-aware path locally for testing, override NODE_ENV
-  // or temporarily branch the check below.
-  const isProd = process.env.NODE_ENV === "production";
-  const rootDomain = process.env.ROOT_DOMAIN ?? "example.com";
-  // Sanitize the slug to a safe email-local-part (a-z, 0-9, hyphen). Caps
-  // at 50 chars so adding the "-bills" suffix stays under RFC 5321's
-  // 64-char local-part limit. Falls back to "bills" if the slug isn't
-  // usable, so the email always sends from a valid address.
-  const safeSlug = tenant.slug
-    ?.toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 50);
-  const fromLocalPart = safeSlug ? `${safeSlug}-bills` : "bills";
-  // Display name pulled from tenant branding. Strip any chars that would
-  // break the quoted From header (double quote, backslash, newline).
-  const rawDisplayName =
-    tenant.displayName?.trim() || tenant.companyLegalName?.trim() || null;
-  const safeDisplayName = rawDisplayName
-    ? rawDisplayName.replace(/[\\"\r\n]/g, "").slice(0, 100)
-    : null;
-  const tenantAwareFrom = safeDisplayName
-    ? `"${safeDisplayName}" <${fromLocalPart}@${rootDomain}>`
-    : `${fromLocalPart}@${rootDomain}`;
-  // In prod, use the tenant-aware From. Outside prod, use EMAIL_FROM from
-  // env (already required to boot). EMAIL_FROM can also force-override
-  // prod when set explicitly — useful for staging or rollback.
-  const fromAddress = isProd
-    ? (process.env.EMAIL_FROM_OVERRIDE ?? tenantAwareFrom)
-    : (process.env.EMAIL_FROM ?? tenantAwareFrom);
-  const senderEmail = user.email ?? `${fromLocalPart}@${rootDomain}`;
+  // From + Reply-To resolution lives in resolveForwardFromAddress so the
+  // exact same logic powers the modal's helper text preview (via
+  // checkBillPdfAvailability). Recipient + sender see identical
+  // addresses to what the user just inspected.
+  const fromResolved = resolveForwardFromAddress(tenant);
+  const fromAddress = fromResolved.header;
+  const senderEmail = user.email ?? fromResolved.email;
 
   const htmlBody = input.messageBody
     .split("\n")

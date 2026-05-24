@@ -56,6 +56,11 @@ export function ForwardBillModal({
   // one checkbox per source; bills with no PDFs (typed-in or single-
   // upload parse) get an explainer instead.
   const [pdfSources, setPdfSources] = useState<BillPdfSource[] | null>(null);
+  // From + Reply-To resolved server-side so the helper text shows
+  // exactly the addresses the recipient will see. Null while loading.
+  const [fromEmail, setFromEmail] = useState<string | null>(null);
+  const [fromDisplayName, setFromDisplayName] = useState<string | null>(null);
+  const [replyToEmail, setReplyToEmail] = useState<string | null>(null);
   // Ids the user has checked. Defaults to ALL on first load — the
   // previous one-PDF-only behaviour is preserved when there's just one
   // file, and multi-file bills opt in to forwarding the whole set
@@ -73,6 +78,9 @@ export function ForwardBillModal({
         if (cancelled) return;
         setPdfSources(r.sources);
         setSelectedFileIds(new Set(r.sources.map(s => s.id)));
+        setFromEmail(r.fromEmail);
+        setFromDisplayName(r.fromDisplayName);
+        setReplyToEmail(r.replyToEmail);
       })
       .catch(() => {
         // Soft-fail: leave pdfSources=null. The action still double-
@@ -432,7 +440,24 @@ export function ForwardBillModal({
           </div>
 
           <div style={{ fontSize: 11, color: C.muted }}>
-            Sent via {process.env.NEXT_PUBLIC_FROM_ADDRESS ?? "billing@example.com"} · replies go to your address
+            {fromEmail ? (
+              <>
+                Sent via{" "}
+                <span style={{ fontFamily: C.mono }}>{fromEmail}</span>
+                {fromDisplayName ? (
+                  <>
+                    {" "}as <span style={{ color: C.ink2 }}>{fromDisplayName}</span>
+                  </>
+                ) : null}
+                {" · "}
+                replies go to{" "}
+                <span style={{ fontFamily: C.mono }}>
+                  {replyToEmail ?? "your address"}
+                </span>
+              </>
+            ) : (
+              "Loading sender info…"
+            )}
           </div>
         </div>
 

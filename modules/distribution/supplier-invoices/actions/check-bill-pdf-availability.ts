@@ -9,6 +9,8 @@ import {
   supplierInvoices,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+import { resolveForwardFromAddress } from "../utils/forward-from-address";
 
 export type BillPdfSource = {
   /**
@@ -31,6 +33,17 @@ export type BillPdfAvailability = {
   available: boolean;
   /** All PDFs on file, newest first. The modal renders one checkbox per entry. */
   sources: BillPdfSource[];
+  /**
+   * Bare email the recipient will see in the From header. Matches what
+   * forwardBillAction will actually send (resolved via the same
+   * resolveForwardFromAddress helper). Used by the modal's helper-text
+   * preview so the displayed address is always truthful.
+   */
+  fromEmail: string;
+  /** Display name shown alongside the from email — tenant brand. */
+  fromDisplayName: string | null;
+  /** The current user's email — Reply-To header value. */
+  replyToEmail: string | null;
 };
 
 /**
@@ -51,7 +64,19 @@ export type BillPdfAvailability = {
 export async function checkBillPdfAvailability(
   supplierInvoiceId: string,
 ): Promise<BillPdfAvailability> {
-  const tenant = await getCurrentTenant();
+  const [tenant, currentUser] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentPortalUser(),
+  ]);
+
+  // From/Reply-To are independent of whether the invoice exists — compute
+  // upfront so the modal can show them even before the PDF list resolves.
+  const fromResolved = resolveForwardFromAddress(tenant);
+  const previewEnvelope = {
+    fromEmail: fromResolved.email,
+    fromDisplayName: fromResolved.displayName,
+    replyToEmail: currentUser.email ?? null,
+  };
 
   // Tenant-scope check upfront so a forged invoiceId can't probe other
   // tenants' rows via the lists we return.
@@ -62,7 +87,9 @@ export async function checkBillPdfAvailability(
     ),
     columns: { id: true },
   });
-  if (!invoice) return { available: false, sources: [] };
+  if (!invoice) {
+    return { available: false, sources: [], ...previewEnvelope };
+  }
 
   // Pull every manual attachment + every bulk-import row tied to this
   // invoice in parallel. limit was the bug behind "only the last one
@@ -130,5 +157,5 @@ export async function checkBillPdfAvailability(
     return bt - at;
   });
 
-  return { available: sources.length > 0, sources };
+  return { available: sources.length > 0, sources, ...previewEnvelope };
 }
