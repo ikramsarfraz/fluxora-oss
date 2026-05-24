@@ -79,6 +79,7 @@ export type ExpenseListSort =
  *  - amountMin / amountMax: inclusive decimal bounds on `expenses.amount`.
  *  - paymentMethod: a single `ExpensePaymentMethod` slug, or empty for any.
  *  - recurrence: 'all' | 'schedules' | 'instances' | 'oneoff'.
+ *  - status: one of the expense_status enum values; empty for any.
  */
 export type ExpenseListFilters = {
   dateFrom?: string;
@@ -87,6 +88,7 @@ export type ExpenseListFilters = {
   amountMax?: string;
   paymentMethod?: string;
   recurrence?: string;
+  status?: string;
 };
 
 export type ExpenseListParams = PaginatedQueryInput<
@@ -141,6 +143,12 @@ export async function getExpensesPage(input?: ExpenseListParams) {
   } else if (f.recurrence === "oneoff") {
     conditions.push(eq(expenses.recurrenceInterval, "none"));
     conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  if (f.status) {
+    // Trust the enum at the type-level; an unknown string just yields zero rows.
+    conditions.push(
+      eq(expenses.status, f.status as "draft" | "submitted" | "approved" | "rejected" | "paid"),
+    );
   }
   const where = and(...conditions);
   const [{ count }] = await db
@@ -244,6 +252,12 @@ export async function exportExpensesCsv(input?: ExpenseListParams) {
   } else if (f.recurrence === "oneoff") {
     conditions.push(eq(expenses.recurrenceInterval, "none"));
     conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  if (f.status) {
+    // Trust the enum at the type-level; an unknown string just yields zero rows.
+    conditions.push(
+      eq(expenses.status, f.status as "draft" | "submitted" | "approved" | "rejected" | "paid"),
+    );
   }
   const where = and(...conditions);
 

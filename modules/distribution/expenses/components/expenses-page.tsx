@@ -28,6 +28,11 @@ import {
   expensePaymentMethodLabel,
   expenseRecurrenceLabel,
 } from "@/lib/expenses/metadata";
+import {
+  EXPENSE_STATUSES,
+  expenseStatusLabel,
+  expenseStatusTone,
+} from "../utils/expense-status";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type {
@@ -130,6 +135,46 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
     }),
   },
   {
+    key: "status",
+    header: "Status",
+    render: row => {
+      const tone = expenseStatusTone(row.status);
+      // Same palette as the detail-page badge for consistency.
+      const palette = (() => {
+        switch (tone) {
+          case "info":
+            return { bg: "var(--color-info-bg)", fg: "var(--color-info-fg)" };
+          case "success":
+            return { bg: "var(--color-success-bg)", fg: "var(--color-success-fg)" };
+          case "danger":
+            return { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" };
+          case "warning":
+            return { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" };
+          default:
+            return { bg: "var(--color-divider)", fg: "var(--color-ink-warm)" };
+        }
+      })();
+      return {
+        primary: (
+          <span
+            style={{
+              fontSize: 11,
+              padding: "2px 8px",
+              borderRadius: 100,
+              background: palette.bg,
+              color: palette.fg,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {expenseStatusLabel(row.status)}
+          </span>
+        ),
+      };
+    },
+  },
+  {
     key: "recordedBy",
     header: "Recorded by",
     render: row => ({
@@ -156,11 +201,12 @@ export function ExpensesPage() {
       amountMax: "",
       paymentMethod: "",
       recurrence: "",
+      status: "",
     },
   });
   const f = pagination.filters;
   const hasActiveFilter = Boolean(
-    f.dateFrom || f.dateTo || f.amountMin || f.amountMax || f.paymentMethod || f.recurrence,
+    f.dateFrom || f.dateTo || f.amountMin || f.amountMax || f.paymentMethod || f.recurrence || f.status,
   );
 
   const { data, isLoading, isFetching, error, refetch } = useExpensesPage({
@@ -224,6 +270,7 @@ export function ExpensesPage() {
             amountMax: "",
             paymentMethod: "",
             recurrence: "",
+            status: "",
           })
         }
         hasActiveFilter={hasActiveFilter}
@@ -419,6 +466,21 @@ function FilterBar({
           <option value="oneoff">One-off</option>
           <option value="schedules">Schedules</option>
           <option value="instances">Auto-generated</option>
+        </select>
+      </Field>
+      <Field label="Status">
+        <select
+          value={filters.status ?? ""}
+          onChange={e => onChange("status", e.target.value)}
+          aria-label="Filter by approval status"
+          style={inputStyle}
+        >
+          <option value="">All</option>
+          {EXPENSE_STATUSES.map(s => (
+            <option key={s} value={s}>
+              {expenseStatusLabel(s)}
+            </option>
+          ))}
         </select>
       </Field>
       {hasActiveFilter && (
