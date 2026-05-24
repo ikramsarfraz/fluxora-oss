@@ -9,6 +9,7 @@
 // at the cost of state being per-browser and lost on cache clear, which is
 // acceptable for an ephemeral review handoff.
 
+import { randomId } from "@/lib/random-id";
 import type { BulkImportItemResult } from "../services/bulk-import";
 
 export const BULK_IMPORT_LS_PREFIX = "fluxora:bulk-import:";
@@ -28,13 +29,7 @@ export type StoredBulkImportEntry = {
 };
 
 function randomKey(): string {
-  // Browser crypto when available; fall back to a slightly-less-random
-  // pattern so we still produce something usable in odd environments
-  // (tests, embedded webviews) without throwing.
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return randomId();
 }
 
 /**

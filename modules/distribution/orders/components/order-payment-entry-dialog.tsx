@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
@@ -133,7 +134,7 @@ function PaymentBody({
   const [submitError, setSubmitError] = useState<string | null>(null);
   // One key per dialog mount — survives submit retries so a request
   // that succeeded server-side but lost its response is recognized.
-  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
+  const idempotencyKey = useMemo(() => randomId(), []);
 
   const openInvoices = useMemo(() => getOpenInvoices(order), [order]);
   const invoiceLookup = useMemo(

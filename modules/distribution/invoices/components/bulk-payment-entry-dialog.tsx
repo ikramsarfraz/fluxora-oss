@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-// crypto.randomUUID is a browser-native API on the renderer side here.
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
@@ -108,7 +108,7 @@ function Body({
   // One key per dialog mount — survives retries (network blip, react-query
   // re-fire) so the server can dedupe against the (tenant_id,
   // idempotency_key) partial unique index on the anchor row.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomId());
 
   const [totalAmount, setTotalAmount] = useState<string>("");
   const [allocations, setAllocations] = useState<Record<string, string>>({});

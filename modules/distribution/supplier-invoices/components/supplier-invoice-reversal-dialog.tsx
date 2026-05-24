@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { randomId } from "@/lib/random-id";
 import { cn } from "@/lib/utils";
 
 import {
@@ -44,7 +45,7 @@ export function SupplierInvoiceReversalDialog({
   // One key per dialog mount — survives retries (network blip, react-query
   // re-fire) so the server's partial unique index on
   // (tenant_id, reverse_idempotency_key) dedupes a double-click.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => randomId());
 
   // Reset the reason when the dialog is closed so reopening starts fresh.
   // The preview query auto-refetches on open via its `enabled` flag + zero

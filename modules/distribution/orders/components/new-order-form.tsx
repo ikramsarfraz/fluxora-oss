@@ -17,6 +17,7 @@ import {
 } from "../hooks/use-orders";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import {
   isLimitReachedMessage,
@@ -60,10 +61,7 @@ function makeDefaultValues(): NewOrderFormValues {
     discountAmount: "",
     lines: [
       {
-        key:
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `line-${Date.now()}`,
+        key: randomId(),
         productId: "",
         salesUnitId: "",
         unitType: "catch_weight",

@@ -44,6 +44,7 @@ import {
   useFifoAllocation,
   useProductCasesOnHand,
 } from "@/modules/distribution/inventory/hooks/use-inventory";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import type { CustomerDetail } from "@/modules/distribution/customers/services/customers";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
@@ -87,10 +88,7 @@ interface NewOrderLinesTableProps {
 
 function newLineDefaults(): NewOrderFormValues["lines"][number] {
   return {
-    key:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    key: randomId(),
     productId: "",
     salesUnitId: "",
     unitType: "catch_weight",

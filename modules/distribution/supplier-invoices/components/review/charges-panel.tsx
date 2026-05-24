@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 
+import { randomId } from "@/lib/random-id";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,10 +53,7 @@ const CHARGE_TYPE_OPTIONS: Array<{
 
 export function emptyChargeDraft(): ChargeDraft {
   return {
-    id:
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `charge-${Math.random().toString(36).slice(2)}`,
+    id: randomId(),
     description: "",
     chargeType: "other",
     rate: "",

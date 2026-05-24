@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { OpenBillForPayment } from "../services/supplier-payments";
@@ -236,7 +237,7 @@ function EnterPaymentStep({
   const canRecord = can(currentUser?.role, "record_supplier_payment");
   // One key per dialog mount — survives submit retries so a request
   // that succeeded server-side but lost its response is recognized.
-  const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
+  const idempotencyKey = useMemo(() => randomId(), []);
   const recordDeniedReason = canRecord
     ? null
     : getPermissionDeniedReason("record_supplier_payment");
