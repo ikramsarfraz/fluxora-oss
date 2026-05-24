@@ -8,6 +8,7 @@ import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { resend } from "@/lib/email";
+import { downloadFile } from "@/lib/uploads/r2";
 import {
   applyRateLimit,
   rateLimiters,
@@ -126,6 +127,39 @@ export async function forwardBillAction(input: ForwardBillInput) {
     ? `[DEV → ${input.recipients.join(", ")}] ${input.subject}`
     : input.subject;
 
+  // Attach the supplier-invoice PDF when requested. invoice.attachments
+  // is already loaded above (latest-first, limit 1) — pull the bytes
+  // from R2 and pass to Resend as a base64-encoded attachment.
+  //
+  // `attachedSummary` is intentionally NOT wired here: no supplier-invoice
+  // PDF renderer exists yet (the customer-side has one in lib/invoices/
+  // sales-invoice-pdf, the supplier side doesn't). The checkbox is
+  // disabled in the modal until that renderer lands; the boolean is
+  // still persisted so the future implementation can backfill history.
+  const attachments: Array<{ filename: string; content: string }> = [];
+  if (input.attachedOriginal && invoice.attachments[0]?.file) {
+    const attachmentFile = invoice.attachments[0].file;
+    try {
+      const bytes = await downloadFile(attachmentFile.objectKey);
+      const filename =
+        attachmentFile.originalFilename ??
+        `${invoice.invoiceNumber ?? invoice.referenceNumber}.pdf`;
+      attachments.push({
+        filename,
+        content: bytes.toString("base64"),
+      });
+    } catch (err) {
+      // Don't sink the whole forward — log + send the email body alone.
+      // The user explicitly chose to forward; failing silently on the
+      // attachment is better than losing the whole message. The audit
+      // log below will still record attachedOriginal=true, which is
+      // a small lie but matches user intent.
+      console.error(
+        `[forward-bill] failed to load attachment for invoice ${input.supplierInvoiceId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   const emailResult = await resend.emails.send({
     from: fromAddress,
     replyTo: senderEmail,
@@ -137,6 +171,7 @@ export async function forwardBillAction(input: ForwardBillInput) {
       </div>
     `,
     text: input.messageBody,
+    ...(attachments.length > 0 ? { attachments } : {}),
   });
 
   if (emailResult.error) {

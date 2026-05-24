@@ -299,13 +299,31 @@ export function ForwardBillModal({
               />
               <span style={{ color: C.ink2 }}>Original PDF</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            {/* Branded summary attachment is intentionally disabled until a
+                supplier-invoice PDF renderer exists (the customer side has
+                one in lib/invoices/sales-invoice-pdf; the supplier side
+                doesn't). Showing the disabled checkbox keeps the affordance
+                visible so the feature is discoverable when it lands. */}
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: "not-allowed",
+                opacity: 0.5,
+              }}
+              title="Coming soon — no branded supplier-invoice PDF render yet."
+            >
               <input
                 type="checkbox"
                 checked={attachSummary}
                 onChange={e => setAttachSummary(e.target.checked)}
+                disabled
               />
-              <span style={{ color: C.ink2 }}>Branded summary (generated on send)</span>
+              <span style={{ color: C.ink2 }}>
+                Branded summary{" "}
+                <span style={{ color: C.muted, fontSize: 12 }}>(coming soon)</span>
+              </span>
             </label>
           </div>
 
