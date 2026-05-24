@@ -909,7 +909,7 @@ export function InboxShell({ data, firstName }: InboxShellProps) {
             delta: stats.priceAlerts > 0 ? "Fired overnight" : "No spikes",
             deltaColor: stats.priceAlerts > 0 ? C.red : C.text2,
             alert: stats.priceAlerts > 0,
-            route: "/price-chart",
+            route: "/prices",
           },
         ].map((stat, i) => (
           <div

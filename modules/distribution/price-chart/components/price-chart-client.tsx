@@ -4,7 +4,14 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, RotateCcw, Search, Truck, X } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { InputGroupButton } from "@/components/ui/input-group";
 import {
   useApplyMarkupToCustomer,
   useCustomerProductPricesPage,
@@ -14,7 +21,6 @@ import {
   useUpdateCustomerFuelSurcharge,
 } from "../hooks/use-price-chart";
 import type { CustomerProductRow, PriceChartData } from "../services/price-chart";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { TablePager } from "@/components/table-pager";
 import { Button } from "@/components/ui/button";
@@ -691,20 +697,33 @@ function ProductRow({
 
         <TableCell className="py-2 px-4">
           {multiVendor ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleExpand}
-              title={
-                expanded
-                  ? "Hide the per-supplier price overrides"
-                  : "This product is sold by multiple suppliers — set a different price depending on which supplier the line was sourced from"
-              }
-              className="h-8 px-2 text-[12px] font-normal text-subtle hover:text-ink gap-1"
-            >
-              {expanded ? "Hide suppliers" : "Set per supplier"}
-              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            </Button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onToggleExpand}
+                    className="h-8 px-2 text-[12px] font-normal text-subtle hover:text-ink gap-1"
+                  >
+                    {expanded ? "Hide suppliers" : "Set per supplier"}
+                    {!expanded ? (
+                      <Info
+                        size={12}
+                        className="text-subtle/70 group-hover:text-ink"
+                        aria-hidden
+                      />
+                    ) : null}
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px] text-[12px]">
+                  {expanded
+                    ? "Hide the per-supplier price overrides."
+                    : "This product is sold by multiple suppliers. Expand to set a different customer price depending on which supplier fulfilled the line."}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : (
             <div className="inline-flex items-center gap-2">
               <div className="relative inline-flex items-center">
@@ -958,6 +977,21 @@ function ProductTable({
             aria-label="Search products by name or SKU"
             className="text-[13px]"
           />
+          {search ? (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearch("");
+                  resetListPosition();
+                }}
+              >
+                <X size={14} />
+              </InputGroupButton>
+            </InputGroupAddon>
+          ) : null}
         </InputGroup>
 
         <ToggleGroup
@@ -1118,6 +1152,78 @@ function ProductTable({
   );
 }
 
+// ── Page-level skeleton ──────────────────────────────────────────────────────
+// Mimics the eventual layout: 75px-wide customer list on the left and a stack
+// of customer/fuel/products cards on the right. Lets the page reserve its
+// final shape on first load instead of replacing a centered spinner with
+// a wide two-column layout (caused a visible re-layout flash).
+
+function PriceChartSkeleton() {
+  return (
+    <div className="flex gap-4 items-start">
+      <Card
+        className="w-75 shrink-0 gap-0 p-0 rounded-[10px] overflow-hidden sticky top-20 flex-col"
+        style={{ maxHeight: "calc(100vh - 110px)" }}
+      >
+        <div className="px-4 pt-3.5 pb-2.5 border-b border-border-default">
+          <Skeleton className="h-3 w-20 mb-2.5" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+        <div className="py-2 flex flex-col gap-1.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-1.5">
+              <Skeleton className="h-7 w-7 rounded-[7px]" />
+              <div className="flex-1 flex flex-col gap-1">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-3.5">
+        {/* Customer card */}
+        <Card className="flex-row items-center gap-4 px-5 py-4 rounded-[10px]">
+          <Skeleton className="w-12 h-12 rounded-[10px]" />
+          <Skeleton className="h-5 w-40" />
+          <div className="flex-1" />
+          <Skeleton className="h-12 w-72" />
+          <Skeleton className="h-8 w-24" />
+        </Card>
+        {/* Fuel card */}
+        <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px]">
+          <Skeleton className="w-8 h-8 rounded-lg" />
+          <div className="flex-1 flex flex-col gap-1">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-2.5 w-48" />
+          </div>
+          <Skeleton className="h-8 w-20" />
+        </Card>
+        {/* Products card */}
+        <Card className="gap-0 p-0 rounded-[10px] overflow-hidden">
+          <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border-default bg-divider/40">
+            <Skeleton className="h-7 w-70" />
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-7 w-40" />
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3.5">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-4 w-44 flex-1" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-9 w-28" />
+                <Skeleton className="h-3 w-10" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PriceChartClient() {
@@ -1136,7 +1242,7 @@ export function PriceChartClient() {
   const effectiveSelected = selectedId ?? customers[0]?.id ?? null;
   const customer = customers.find(c => c.id === effectiveSelected) ?? null;
 
-  if (isLoading) return <PageLoading message="Loading price chart…" />;
+  if (isLoading) return <PriceChartSkeleton />;
   if (error) return <PageError message={(error as Error).message} />;
   if (!customer) {
     return (

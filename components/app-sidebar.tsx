@@ -122,7 +122,7 @@ const navMain: NavGroup[] = [
       },
       {
         title: "Prices",
-        url: "/price-chart",
+        url: "/prices",
         icon: TableProperties,
       },
     ],

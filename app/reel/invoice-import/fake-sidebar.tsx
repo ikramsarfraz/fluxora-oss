@@ -37,7 +37,7 @@ const NAV: NavGroup[] = [
       { title: "Orders", url: "/orders", icon: ShoppingCart },
       { title: "Customers", url: "/customers", icon: Users },
       { title: "Invoices", url: "/invoices", icon: Receipt },
-      { title: "Prices", url: "/price-chart", icon: TableProperties },
+      { title: "Prices", url: "/prices", icon: TableProperties },
     ],
   },
   {
