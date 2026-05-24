@@ -39,6 +39,20 @@ import {
   useUploadExpenseAttachment,
 } from "../hooks/use-expense-attachments";
 import {
+  useApproveExpense,
+  useMarkExpensePaid,
+  useRejectExpense,
+  useResetExpenseToDraft,
+  useSubmitExpense,
+} from "../hooks/use-expense-status";
+import {
+  canTransition,
+  expenseStatusLabel,
+  expenseStatusTone,
+  type ExpenseStatus,
+} from "../utils/expense-status";
+import { Textarea } from "@/components/ui/textarea";
+import {
   canManageExpenses,
   expenseCategoryLabel,
   expensePaymentMethodLabel,
@@ -92,9 +106,12 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         title={`${expenseCategoryLabel(expense.category)} · ${formatMoney(expense.amount)}`}
         description={`Expense recorded on ${formatDisplayDate(expense.expenseDate)}.`}
         badge={
-          <Badge variant="outline" className="font-normal">
-            {expenseCategoryLabel(expense.category)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="font-normal">
+              {expenseCategoryLabel(expense.category)}
+            </Badge>
+            <StatusBadge status={expense.status as ExpenseStatus} />
+          </div>
         }
       >
         <Button variant="outline" asChild>
@@ -121,6 +138,24 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
           </>
         ) : null}
       </DetailPageHeader>
+
+      {canManage && (
+        <ApprovalSection
+          expenseId={expense.id}
+          status={expense.status as ExpenseStatus}
+          submittedAt={expense.submittedAt}
+          submittedByName={null}
+          submittedByUserId={expense.submittedByUserId}
+          approvedAt={expense.approvedAt}
+          approvedByName={null}
+          rejectedAt={expense.rejectedAt}
+          rejectedByName={null}
+          rejectionReason={expense.rejectionReason}
+          paidAt={expense.paidAt}
+          paidByName={null}
+          currentUserId={currentUser?.id ?? null}
+        />
+      )}
 
       <DetailSection title="Summary">
         <DetailGrid>
@@ -219,6 +254,235 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: ExpenseStatus | string | null | undefined }) {
+  const tone = expenseStatusTone(status);
+  // Map tone → Tailwind classes that match the design system tokens used
+  // elsewhere on the page. Kept inline here rather than in design-system
+  // so the badge palette can drift independently if needed.
+  const className = (() => {
+    switch (tone) {
+      case "info":
+        return "bg-info-bg text-info-fg border-info-border";
+      case "success":
+        return "bg-success-bg text-success-fg border-success-border";
+      case "danger":
+        return "bg-danger-bg text-danger-fg border-danger-border";
+      case "warning":
+        return "bg-warning-bg text-warning-fg border-warning-border";
+      default:
+        return "bg-card text-ink-warm border-border-default";
+    }
+  })();
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${className}`}
+    >
+      {expenseStatusLabel(status)}
+    </span>
+  );
+}
+
+function ApprovalSection({
+  expenseId,
+  status,
+  submittedAt,
+  submittedByUserId,
+  approvedAt,
+  rejectedAt,
+  rejectionReason,
+  paidAt,
+  currentUserId,
+}: {
+  expenseId: string;
+  status: ExpenseStatus;
+  submittedAt: Date | null;
+  submittedByName: string | null;
+  submittedByUserId: string | null;
+  approvedAt: Date | null;
+  approvedByName: string | null;
+  rejectedAt: Date | null;
+  rejectedByName: string | null;
+  rejectionReason: string | null;
+  paidAt: Date | null;
+  paidByName: string | null;
+  currentUserId: string | null;
+}) {
+  const submit = useSubmitExpense(expenseId);
+  const approve = useApproveExpense(expenseId);
+  const reject = useRejectExpense(expenseId);
+  const reset = useResetExpenseToDraft(expenseId);
+  const markPaid = useMarkExpensePaid(expenseId);
+
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  // Disable approve when current user is the submitter — mirrors the
+  // server-side separation-of-duties check so the user sees the disabled
+  // affordance instead of just hitting an error toast.
+  const isSelfApprove = !!(
+    currentUserId && submittedByUserId && currentUserId === submittedByUserId
+  );
+
+  function handleSubmit() {
+    submit.mutate(undefined, {
+      onSuccess: () => toast.success("Submitted for approval."),
+      onError: (e: Error) => toast.error(e.message),
+    });
+  }
+
+  function handleApprove() {
+    approve.mutate(undefined, {
+      onSuccess: () => toast.success("Expense approved."),
+      onError: (e: Error) => toast.error(e.message),
+    });
+  }
+
+  function handleReject() {
+    reject.mutate(rejectReason, {
+      onSuccess: () => {
+        toast.success("Expense rejected.");
+        setRejectOpen(false);
+        setRejectReason("");
+      },
+      onError: (e: Error) => toast.error(e.message),
+    });
+  }
+
+  function handleReset() {
+    reset.mutate(undefined, {
+      onSuccess: () => toast.success("Returned to draft."),
+      onError: (e: Error) => toast.error(e.message),
+    });
+  }
+
+  function handleMarkPaid() {
+    markPaid.mutate(undefined, {
+      onSuccess: () => toast.success("Marked as paid."),
+      onError: (e: Error) => toast.error(e.message),
+    });
+  }
+
+  const canSubmit = canTransition(status, "submit");
+  const canApprove = canTransition(status, "approve");
+  const canReject = canTransition(status, "reject");
+  const canReset = canTransition(status, "reset");
+  const canMarkPaid = canTransition(status, "mark_paid");
+  const anyAction = canSubmit || canApprove || canReject || canReset || canMarkPaid;
+
+  return (
+    <DetailSection title="Approval">
+      {/* Timeline copy — surfaces who acted when */}
+      <div className="mb-3 text-sm text-muted-foreground">
+        {status === "draft" && (
+          <>This expense is a draft. Submit it for approval to start the workflow.</>
+        )}
+        {status === "submitted" && submittedAt && (
+          <>Submitted on {formatDisplayDateTime(submittedAt)}.</>
+        )}
+        {status === "approved" && approvedAt && (
+          <>Approved on {formatDisplayDateTime(approvedAt)}.</>
+        )}
+        {status === "rejected" && rejectedAt && (
+          <>
+            Rejected on {formatDisplayDateTime(rejectedAt)}.
+            {rejectionReason ? (
+              <span className="block mt-1 text-foreground">Reason: {rejectionReason}</span>
+            ) : null}
+          </>
+        )}
+        {status === "paid" && paidAt && (
+          <>Paid on {formatDisplayDateTime(paidAt)}.</>
+        )}
+      </div>
+
+      {anyAction ? (
+        <div className="flex flex-wrap gap-2">
+          {canSubmit && (
+            <Button
+              size="sm"
+              onClick={handleSubmit}
+              disabled={submit.isPending}
+            >
+              {submit.isPending ? "Submitting…" : "Submit for approval"}
+            </Button>
+          )}
+          {canApprove && (
+            <Button
+              size="sm"
+              onClick={handleApprove}
+              disabled={approve.isPending || isSelfApprove}
+              title={
+                isSelfApprove
+                  ? "You can't approve an expense you submitted."
+                  : undefined
+              }
+            >
+              {approve.isPending ? "Approving…" : "Approve"}
+            </Button>
+          )}
+          {canReject && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setRejectOpen(true)}
+              disabled={reject.isPending}
+            >
+              Reject
+            </Button>
+          )}
+          {canReset && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              disabled={reset.isPending}
+            >
+              {reset.isPending ? "Returning…" : "Return to draft"}
+            </Button>
+          )}
+          {canMarkPaid && (
+            <Button
+              size="sm"
+              onClick={handleMarkPaid}
+              disabled={markPaid.isPending}
+            >
+              {markPaid.isPending ? "Marking…" : "Mark as paid"}
+            </Button>
+          )}
+        </div>
+      ) : null}
+
+      <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject this expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              The submitter will see your reason and can edit + resubmit.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={rejectReason}
+            onChange={e => setRejectReason(e.target.value)}
+            rows={3}
+            placeholder="e.g. Missing receipt; please attach a copy and resubmit."
+            aria-label="Rejection reason"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reject.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={reject.isPending || rejectReason.trim().length === 0}
+              onClick={handleReject}
+            >
+              {reject.isPending ? "Rejecting…" : "Reject expense"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DetailSection>
   );
 }
 
