@@ -59,8 +59,41 @@ export async function forwardBillAction(input: ForwardBillInput) {
   if (input.recipients.length === 0) throw new Error("At least one recipient required");
   if (input.recipients.length > 10) throw new Error("Maximum 10 recipients");
 
-  const senderEmail = user.email ?? `bills@${process.env.ROOT_DOMAIN ?? "example.com"}`;
-  const fromAddress = process.env.EMAIL_FROM ?? `bills@${process.env.ROOT_DOMAIN ?? "example.com"}`;
+  // Build a tenant-aware From header so recipients see the customer's brand
+  // both in the display name AND in the address local-part — e.g.
+  //   From: "City Diner" <city-diner-bills@fluxora.com>
+  //
+  // Critical: only ONE domain (ROOT_DOMAIN) is verified in Resend. We don't
+  // need to add a Resend domain per tenant — varying the local-part is
+  // free, signs against the same DKIM key, and avoids the
+  // $/domain/month + onboarding cost of per-tenant sending domains.
+  // If/when we later add tenant-owned sending domains, this is the seam
+  // to swap.
+  const rootDomain = process.env.ROOT_DOMAIN ?? "example.com";
+  // Sanitize the slug to a safe email-local-part (a-z, 0-9, hyphen). Caps
+  // at 50 chars so adding the "-bills" suffix stays under RFC 5321's
+  // 64-char local-part limit. Falls back to "bills" if the slug isn't
+  // usable, so the email always sends from a valid address.
+  const safeSlug = tenant.slug
+    ?.toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 50);
+  const fromLocalPart = safeSlug ? `${safeSlug}-bills` : "bills";
+  // Display name pulled from tenant branding. Strip any chars that would
+  // break the quoted From header (double quote, backslash, newline).
+  const rawDisplayName =
+    tenant.displayName?.trim() || tenant.companyLegalName?.trim() || null;
+  const safeDisplayName = rawDisplayName
+    ? rawDisplayName.replace(/[\\"\r\n]/g, "").slice(0, 100)
+    : null;
+  const fromAddress =
+    process.env.EMAIL_FROM ??
+    (safeDisplayName
+      ? `"${safeDisplayName}" <${fromLocalPart}@${rootDomain}>`
+      : `${fromLocalPart}@${rootDomain}`);
+  const senderEmail = user.email ?? `${fromLocalPart}@${rootDomain}`;
 
   const htmlBody = input.messageBody
     .split("\n")
