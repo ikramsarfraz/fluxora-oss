@@ -313,10 +313,73 @@ export const InlineDropzone = forwardRef<
       <>
         {overlay}
         <div
+          role="button"
+          tabIndex={isImporting ? -1 : 0}
+          aria-disabled={isImporting}
+          aria-label="Drop PDFs to scan"
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!isImporting) setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={handleClick}
+          onKeyDown={(e) => {
+            if (isImporting) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          className={cn(
+            "flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-12 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
+            isDragging
+              ? "border-forest-mid bg-divider"
+              : "border-border-default bg-card hover:border-divider",
+            isImporting && "cursor-not-allowed border-forest-mid bg-divider/40",
+          )}
+        >
+          {isImporting ? (
+            <Loader2
+              className="mb-3 size-7 animate-spin text-forest"
+              strokeWidth={1.8}
+            />
+          ) : (
+            <Upload className="mb-3 size-7 text-subtle" strokeWidth={1.6} />
+          )}
+          <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-ink">
+            {isImporting
+              ? "Scanning your PDFs…"
+              : isDragging
+                ? "Drop to start scanning"
+                : "Drop PDFs to scan"}
+          </h2>
+          <p className="max-w-[420px] text-[13px] text-subtle">
+            {isImporting
+              ? "Reading each file with AI. New rows will appear here as scans finish — this can take 10–30 seconds per page."
+              : `Drag supplier-invoice PDFs here, or click to pick. Up to ${MAX_FILES_PER_BATCH} per batch, ${fmtBytes(MAX_FILE_BYTES)} each.`}
+          </p>
+          {!isImporting && (
+            <p className="mt-2 max-w-[420px] text-[12px] text-muted">
+              One invoice per file — bundled multi-invoice PDFs are read as a
+              single bill.
+            </p>
+          )}
+          {hiddenInput}
+        </div>
+      </>
+    );
+  }
+
+  // compact variant — slim strip above the file list.
+  return (
+    <>
+      {overlay}
+      <div
         role="button"
         tabIndex={isImporting ? -1 : 0}
         aria-disabled={isImporting}
-        aria-label="Drop PDFs to scan"
+        aria-label="Drop PDFs to add to this batch"
         onDragOver={(e) => {
           e.preventDefault();
           if (!isImporting) setIsDragging(true);
@@ -332,82 +395,22 @@ export const InlineDropzone = forwardRef<
           }
         }}
         className={cn(
-          "flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed p-12 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
+          "mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
           isDragging
-            ? "border-forest-mid bg-divider"
-            : "border-border-default bg-card hover:border-divider",
-          isImporting && "cursor-not-allowed border-forest-mid bg-divider/40",
+            ? "border-forest-mid bg-divider text-ink"
+            : isImporting
+              ? "cursor-not-allowed border-forest-mid bg-divider/50 text-ink"
+              : "border-border-default bg-card text-subtle hover:border-divider hover:text-ink",
         )}
       >
         {isImporting ? (
           <Loader2
-            className="mb-3 size-7 animate-spin text-forest"
+            className="size-3.5 animate-spin text-forest"
             strokeWidth={1.8}
           />
         ) : (
-          <Upload className="mb-3 size-7 text-subtle" strokeWidth={1.6} />
+          <Upload className="size-3.5" strokeWidth={1.6} />
         )}
-        <h2 className="mb-2 text-[16px] font-medium tracking-[-0.005em] text-ink">
-          {isImporting
-            ? "Scanning your PDFs…"
-            : isDragging
-              ? "Drop to start scanning"
-              : "Drop PDFs to scan"}
-        </h2>
-        <p className="max-w-[420px] text-[13px] text-subtle">
-          {isImporting
-            ? "Reading each file with AI. New rows will appear here as scans finish — this can take 10–30 seconds per page."
-            : `Drag supplier-invoice PDFs here, or click to pick. Up to ${MAX_FILES_PER_BATCH} per batch, ${fmtBytes(MAX_FILE_BYTES)} each.`}
-        </p>
-        {!isImporting && (
-          <p className="mt-2 max-w-[420px] text-[12px] text-muted">
-            One invoice per file — bundled multi-invoice PDFs are read as a
-            single bill.
-          </p>
-        )}
-        {hiddenInput}
-        </div>
-      </>
-    );
-  }
-
-  // compact variant — slim strip above the file list.
-  return (
-    <>
-      {overlay}
-      <div
-        role="button"
-        tabIndex={isImporting ? -1 : 0}
-        aria-disabled={isImporting}
-        aria-label="Drop PDFs to add to this batch"
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!isImporting) setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={handleDrop}
-      onClick={handleClick}
-      onKeyDown={(e) => {
-        if (isImporting) return;
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          inputRef.current?.click();
-        }
-      }}
-      className={cn(
-        "mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed px-4 py-3 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-forest",
-        isDragging
-          ? "border-forest-mid bg-divider text-ink"
-          : isImporting
-            ? "cursor-not-allowed border-forest-mid bg-divider/50 text-ink"
-            : "border-border-default bg-card text-subtle hover:border-divider hover:text-ink",
-      )}
-    >
-      {isImporting ? (
-        <Loader2 className="size-3.5 animate-spin text-forest" strokeWidth={1.8} />
-      ) : (
-        <Upload className="size-3.5" strokeWidth={1.6} />
-      )}
         <span>
           {isImporting
             ? "Scanning more PDFs…"
