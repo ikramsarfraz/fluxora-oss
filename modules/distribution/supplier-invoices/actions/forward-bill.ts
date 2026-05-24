@@ -1,8 +1,12 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { billForwards, supplierInvoices } from "@/db/schema";
+import {
+  billForwards,
+  bulkImportFiles,
+  supplierInvoices,
+} from "@/db/schema";
 import { logAuditEvent } from "@/lib/audit-log";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
@@ -127,9 +131,19 @@ export async function forwardBillAction(input: ForwardBillInput) {
     ? `[DEV → ${input.recipients.join(", ")}] ${input.subject}`
     : input.subject;
 
-  // Attach the supplier-invoice PDF when requested. invoice.attachments
-  // is already loaded above (latest-first, limit 1) — pull the bytes
-  // from R2 and pass to Resend as a base64-encoded attachment.
+  // Attach the supplier-invoice PDF when requested. The PDF can live in
+  // one of two places depending on how the bill was created:
+  //
+  //   1. Manually-uploaded bills → supplier_invoice_attachments → files
+  //      (already eagerly loaded as `invoice.attachments[0]?.file`)
+  //   2. Bulk-imported bills → bulk_import_files (the row that was
+  //      `reviewedAt`-flipped into this supplierInvoiceId)
+  //
+  // Most bills land via path #2 since bulk import is the common entry.
+  // The previous fix only checked path #1, which is why bulk-imported
+  // bills forwarded with `Original PDF` checked still arrived with no
+  // attachment. Check both, prefer the manual attachment when present
+  // (admin may have uploaded a corrected PDF on top of the bulk import).
   //
   // `attachedSummary` is intentionally NOT wired here: no supplier-invoice
   // PDF renderer exists yet (the customer-side has one in lib/invoices/
@@ -137,25 +151,72 @@ export async function forwardBillAction(input: ForwardBillInput) {
   // disabled in the modal until that renderer lands; the boolean is
   // still persisted so the future implementation can backfill history.
   const attachments: Array<{ filename: string; content: string }> = [];
-  if (input.attachedOriginal && invoice.attachments[0]?.file) {
-    const attachmentFile = invoice.attachments[0].file;
-    try {
-      const bytes = await downloadFile(attachmentFile.objectKey);
-      const filename =
-        attachmentFile.originalFilename ??
-        `${invoice.invoiceNumber ?? invoice.referenceNumber}.pdf`;
-      attachments.push({
-        filename,
-        content: bytes.toString("base64"),
-      });
-    } catch (err) {
-      // Don't sink the whole forward — log + send the email body alone.
-      // The user explicitly chose to forward; failing silently on the
-      // attachment is better than losing the whole message. The audit
-      // log below will still record attachedOriginal=true, which is
-      // a small lie but matches user intent.
-      console.error(
-        `[forward-bill] failed to load attachment for invoice ${input.supplierInvoiceId}: ${err instanceof Error ? err.message : String(err)}`,
+  if (input.attachedOriginal) {
+    type AttachmentSource = {
+      objectKey: string;
+      filename: string | null;
+      mimeType: string | null;
+    };
+    let source: AttachmentSource | null = null;
+
+    if (invoice.attachments[0]?.file) {
+      const f = invoice.attachments[0].file;
+      source = {
+        objectKey: f.objectKey,
+        filename: f.originalFilename,
+        mimeType: f.mimeType,
+      };
+    } else {
+      // Bulk-import path: look up the bulk_import_files row that was
+      // reviewed into this invoice. Filter out soft-deleted entries.
+      const [bulkRow] = await db
+        .select({
+          objectKey: bulkImportFiles.objectKey,
+          filename: bulkImportFiles.filename,
+          mimeType: bulkImportFiles.mimeType,
+        })
+        .from(bulkImportFiles)
+        .where(
+          and(
+            eq(bulkImportFiles.tenantId, tenant.id),
+            eq(bulkImportFiles.supplierInvoiceId, input.supplierInvoiceId),
+            isNull(bulkImportFiles.deletedAt),
+          ),
+        )
+        .orderBy(desc(bulkImportFiles.createdAt))
+        .limit(1);
+      if (bulkRow) {
+        source = {
+          objectKey: bulkRow.objectKey,
+          filename: bulkRow.filename,
+          mimeType: bulkRow.mimeType,
+        };
+      }
+    }
+
+    if (source) {
+      try {
+        const bytes = await downloadFile(source.objectKey);
+        const filename =
+          source.filename ??
+          `${invoice.invoiceNumber ?? invoice.referenceNumber}.pdf`;
+        attachments.push({
+          filename,
+          content: bytes.toString("base64"),
+        });
+      } catch (err) {
+        // Don't sink the whole forward — log + send the email body alone.
+        // The user explicitly chose to forward; failing silently on the
+        // attachment is better than losing the whole message. The audit
+        // log below will still record attachedOriginal=true, which is
+        // a small lie but matches user intent.
+        console.error(
+          `[forward-bill] failed to load attachment for invoice ${input.supplierInvoiceId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    } else {
+      console.warn(
+        `[forward-bill] attachedOriginal=true but no PDF found for invoice ${input.supplierInvoiceId} (neither supplier_invoice_attachments nor bulk_import_files)`,
       );
     }
   }
