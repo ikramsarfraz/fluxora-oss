@@ -99,3 +99,27 @@ export function expenseStatusTone(
       return "neutral";
   }
 }
+
+/**
+ * Pill palette for the shared `StatusPill` primitive in
+ * `@/components/listing-page`. Same { label, bg, color } shape as
+ * STATUS_PILL maps in orders / supplier-invoices listings so the
+ * visual language stays uniform across the app.
+ */
+export function expenseStatusPill(
+  status: ExpenseStatus | string | null | undefined,
+): { label: string; bg: string; color: string } {
+  const label = expenseStatusLabel(status);
+  switch (expenseStatusTone(status)) {
+    case "info":
+      return { label, bg: "var(--color-info-bg)", color: "var(--color-info-fg)" };
+    case "success":
+      return { label, bg: "var(--color-success-bg)", color: "var(--color-success-fg)" };
+    case "danger":
+      return { label, bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" };
+    case "warning":
+      return { label, bg: "var(--color-warning-bg)", color: "var(--color-warning-fg)" };
+    default:
+      return { label, bg: "var(--color-divider)", color: "var(--color-subtle)" };
+  }
+}

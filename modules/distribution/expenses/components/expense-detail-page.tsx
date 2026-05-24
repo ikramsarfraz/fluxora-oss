@@ -47,10 +47,10 @@ import {
 } from "../hooks/use-expense-status";
 import {
   canTransition,
-  expenseStatusLabel,
-  expenseStatusTone,
+  expenseStatusPill,
   type ExpenseStatus,
 } from "../utils/expense-status";
+import { StatusPill } from "@/components/listing-page";
 import { Textarea } from "@/components/ui/textarea";
 import {
   canManageExpenses,
@@ -106,12 +106,17 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         title={`${expenseCategoryLabel(expense.category)} · ${formatMoney(expense.amount)}`}
         description={`Expense recorded on ${formatDisplayDate(expense.expenseDate)}.`}
         badge={
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-normal">
-              {expenseCategoryLabel(expense.category)}
-            </Badge>
-            <StatusBadge status={expense.status as ExpenseStatus} />
-          </div>
+          (() => {
+            const pill = expenseStatusPill(expense.status);
+            return (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-normal">
+                  {expenseCategoryLabel(expense.category)}
+                </Badge>
+                <StatusPill label={pill.label} bg={pill.bg} color={pill.color} />
+              </div>
+            );
+          })()
         }
       >
         <Button variant="outline" asChild>
@@ -254,34 +259,6 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: ExpenseStatus | string | null | undefined }) {
-  const tone = expenseStatusTone(status);
-  // Map tone → Tailwind classes that match the design system tokens used
-  // elsewhere on the page. Kept inline here rather than in design-system
-  // so the badge palette can drift independently if needed.
-  const className = (() => {
-    switch (tone) {
-      case "info":
-        return "bg-info-bg text-info-fg border-info-border";
-      case "success":
-        return "bg-success-bg text-success-fg border-success-border";
-      case "danger":
-        return "bg-danger-bg text-danger-fg border-danger-border";
-      case "warning":
-        return "bg-warning-bg text-warning-fg border-warning-border";
-      default:
-        return "bg-card text-ink-warm border-border-default";
-    }
-  })();
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${className}`}
-    >
-      {expenseStatusLabel(status)}
-    </span>
   );
 }
 
@@ -550,9 +527,9 @@ function AttachmentsSection({
         aria-hidden
       />
       {canManage ? (
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-subtle">
-            Accepted: JPEG, PNG, WebP, HEIC, PDF · max 10 MB
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-muted-foreground text-xs">
+            JPEG, PNG, WebP, HEIC, or PDF · max 10 MB
           </span>
           <Button
             variant="outline"
@@ -566,55 +543,70 @@ function AttachmentsSection({
         </div>
       ) : null}
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-muted-foreground text-sm">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {canManage ? "No receipts attached yet." : "No receipts on this expense."}
-        </p>
+        // Matches the supplier-invoice attachments card empty state so the two
+        // surfaces feel like one feature.
+        <div className="border-muted-foreground/25 bg-muted/20 text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center text-sm">
+          <Paperclip className="size-8 opacity-50" />
+          <div className="font-medium">No receipts attached yet</div>
+          <div className="text-xs">
+            {canManage
+              ? "Use Upload to attach a photo or PDF."
+              : "Receipts will appear here when uploaded."}
+          </div>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="divide-border divide-y">
           {rows.map(row => (
             <li
               key={row.fileId}
-              className="flex items-center gap-3 rounded-md border border-border-default bg-card px-3 py-2"
+              className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
             >
-              <Paperclip className="size-4 text-subtle" />
-              <button
-                type="button"
-                onClick={() => handleDownload(row.fileId)}
-                className="flex-1 truncate text-left text-sm font-medium text-ink hover:underline"
-              >
-                {row.originalFilename ?? "Receipt"}
-              </button>
-              <span className="hidden text-xs text-subtle tabular-nums sm:inline">
-                {formatBytes(row.sizeBytes)}
-              </span>
-              <span className="hidden text-xs text-subtle sm:inline">
-                {formatDisplayDate(
-                  row.createdAt instanceof Date
-                    ? row.createdAt.toISOString().slice(0, 10)
-                    : String(row.createdAt).slice(0, 10),
-                )}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDownload(row.fileId)}
-                aria-label="Download receipt"
-              >
-                <Download className="size-4" />
-              </Button>
-              {canManage ? (
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(row.fileId)}
+                    className="truncate text-left text-sm font-medium hover:underline"
+                  >
+                    {row.originalFilename ?? "Receipt"}
+                  </button>
+                  <div className="text-muted-foreground truncate text-xs">
+                    {formatBytes(row.sizeBytes)}
+                    {row.mimeType ? ` · ${row.mimeType}` : ""}
+                    {` · uploaded ${formatDisplayDate(
+                      row.createdAt instanceof Date
+                        ? row.createdAt.toISOString().slice(0, 10)
+                        : String(row.createdAt).slice(0, 10),
+                    )}`}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  disabled={pendingDeleteId === row.fileId}
-                  onClick={() => handleRemove(row.fileId)}
-                  aria-label="Remove receipt"
+                  onClick={() => handleDownload(row.fileId)}
                 >
-                  <Trash2 className="size-4 text-danger-fg" />
+                  <Download className="size-4" />
+                  Download
                 </Button>
-              ) : null}
+                {canManage ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pendingDeleteId === row.fileId}
+                    onClick={() => handleRemove(row.fileId)}
+                  >
+                    <Trash2 className="size-4" />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

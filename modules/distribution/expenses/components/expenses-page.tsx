@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingErrorState, ListingPage, ListingSecondaryAction, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingErrorState, ListingPage, ListingSecondaryAction, MonoText, StatusPill, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { exportExpensesCsvAction } from "../actions";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
@@ -31,7 +31,7 @@ import {
 import {
   EXPENSE_STATUSES,
   expenseStatusLabel,
-  expenseStatusTone,
+  expenseStatusPill,
 } from "../utils/expense-status";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -138,39 +138,9 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
     key: "status",
     header: "Status",
     render: row => {
-      const tone = expenseStatusTone(row.status);
-      // Same palette as the detail-page badge for consistency.
-      const palette = (() => {
-        switch (tone) {
-          case "info":
-            return { bg: "var(--color-info-bg)", fg: "var(--color-info-fg)" };
-          case "success":
-            return { bg: "var(--color-success-bg)", fg: "var(--color-success-fg)" };
-          case "danger":
-            return { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" };
-          case "warning":
-            return { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" };
-          default:
-            return { bg: "var(--color-divider)", fg: "var(--color-ink-warm)" };
-        }
-      })();
+      const pill = expenseStatusPill(row.status);
       return {
-        primary: (
-          <span
-            style={{
-              fontSize: 11,
-              padding: "2px 8px",
-              borderRadius: 100,
-              background: palette.bg,
-              color: palette.fg,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            {expenseStatusLabel(row.status)}
-          </span>
-        ),
+        primary: <StatusPill label={pill.label} bg={pill.bg} color={pill.color} />,
       };
     },
   },
