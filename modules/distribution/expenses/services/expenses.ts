@@ -1,10 +1,11 @@
-import { and, desc, eq, inArray, isNotNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { expenses, portalUsers } from "@/db/schema";
 import {
   canManageExpenses,
   nextRecurrenceDate,
+  planRecurringInstances,
   type ExpensePaymentMethod,
   type ExpenseRecurrenceInterval,
 } from "@/lib/expenses/metadata";
@@ -70,23 +71,86 @@ export type ExpenseListSort =
   | "amount"
   | "createdAt";
 
-export type ExpenseListParams = PaginatedQueryInput<ExpenseListSort>;
+/**
+ * URL-friendly filter slugs. All values are strings because they flow through
+ * the URL search params before reaching the server action.
+ *
+ *  - dateFrom / dateTo: inclusive YYYY-MM-DD bounds on `expenses.expense_date`.
+ *  - amountMin / amountMax: inclusive decimal bounds on `expenses.amount`.
+ *  - paymentMethod: a single `ExpensePaymentMethod` slug, or empty for any.
+ *  - recurrence: 'all' | 'schedules' | 'instances' | 'oneoff'.
+ *  - status: one of the expense_status enum values; empty for any.
+ */
+export type ExpenseListFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: string;
+  amountMax?: string;
+  paymentMethod?: string;
+  recurrence?: string;
+  status?: string;
+};
+
+export type ExpenseListParams = PaginatedQueryInput<
+  ExpenseListSort,
+  ExpenseListFilters
+>;
 
 export async function getExpensesPage(input?: ExpenseListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "expenseDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: {} as ExpenseListFilters,
   });
-  const where = and(
+  const f = query.filters;
+  const conditions = [
     eq(expenses.tenantId, tenant.id),
     buildTextSearchCondition(query.search, [
       expenses.category,
       expenses.note,
       portalUsers.fullName,
     ]),
-  );
+  ];
+  if (f.dateFrom) {
+    conditions.push(gte(expenses.expenseDate, f.dateFrom));
+  }
+  if (f.dateTo) {
+    conditions.push(lte(expenses.expenseDate, f.dateTo));
+  }
+  if (f.amountMin) {
+    const n = Number(f.amountMin);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(gte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.amountMax) {
+    const n = Number(f.amountMax);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(lte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.paymentMethod) {
+    conditions.push(
+      eq(expenses.paymentMethod, f.paymentMethod as ExpensePaymentMethod),
+    );
+  }
+  if (f.recurrence === "schedules") {
+    conditions.push(ne(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "instances") {
+    conditions.push(isNotNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "oneoff") {
+    conditions.push(eq(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  if (f.status) {
+    // Trust the enum at the type-level; an unknown string just yields zero rows.
+    conditions.push(
+      eq(expenses.status, f.status as "draft" | "submitted" | "approved" | "rejected" | "paid"),
+    );
+  }
+  const where = and(...conditions);
   const [{ count }] = await db
     .select({ count: sql<number>`count(distinct ${expenses.id})::int` })
     .from(expenses)
@@ -139,6 +203,90 @@ export async function getExpensesPage(input?: ExpenseListParams) {
 }
 
 export type ExpenseListItem = Awaited<ReturnType<typeof getExpenses>>[number];
+
+/**
+ * Build the CSV export for the expenses listing, honoring the same filters
+ * + search the UI applies. Caller is responsible for the Blob/download —
+ * service just returns the rows.
+ */
+export async function exportExpensesCsv(input?: ExpenseListParams) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "expenseDate",
+    defaultDirection: "desc",
+    defaultFilters: {} as ExpenseListFilters,
+  });
+  const f = query.filters;
+  const conditions = [
+    eq(expenses.tenantId, tenant.id),
+    buildTextSearchCondition(query.search, [
+      expenses.category,
+      expenses.note,
+      portalUsers.fullName,
+    ]),
+  ];
+  if (f.dateFrom) conditions.push(gte(expenses.expenseDate, f.dateFrom));
+  if (f.dateTo) conditions.push(lte(expenses.expenseDate, f.dateTo));
+  if (f.amountMin) {
+    const n = Number(f.amountMin);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(gte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.amountMax) {
+    const n = Number(f.amountMax);
+    if (Number.isFinite(n) && n >= 0) {
+      conditions.push(lte(expenses.amount, n.toFixed(2)));
+    }
+  }
+  if (f.paymentMethod) {
+    conditions.push(
+      eq(expenses.paymentMethod, f.paymentMethod as ExpensePaymentMethod),
+    );
+  }
+  if (f.recurrence === "schedules") {
+    conditions.push(ne(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "instances") {
+    conditions.push(isNotNull(expenses.recurrenceParentId));
+  } else if (f.recurrence === "oneoff") {
+    conditions.push(eq(expenses.recurrenceInterval, "none"));
+    conditions.push(isNull(expenses.recurrenceParentId));
+  }
+  if (f.status) {
+    // Trust the enum at the type-level; an unknown string just yields zero rows.
+    conditions.push(
+      eq(expenses.status, f.status as "draft" | "submitted" | "approved" | "rejected" | "paid"),
+    );
+  }
+  const where = and(...conditions);
+
+  // Hard cap at 10k rows — anything larger should paginate through the API
+  // rather than ship as a single download.
+  const rows = await db.query.expenses.findMany({
+    where,
+    with: { createdBy: true },
+    orderBy: [desc(expenses.expenseDate), desc(expenses.createdAt)],
+    limit: 10_000,
+  });
+
+  return rows.map(r => ({
+    expenseDate: r.expenseDate,
+    category: r.category,
+    amount: r.amount,
+    paymentMethod: r.paymentMethod ?? "",
+    note: r.note ?? "",
+    recurrenceInterval: r.recurrenceInterval ?? "none",
+    recurrenceEndDate: r.recurrenceEndDate ?? "",
+    isRecurringSchedule:
+      r.recurrenceInterval && r.recurrenceInterval !== "none" && !r.recurrenceParentId
+        ? "yes"
+        : "no",
+    isMaterializedInstance: r.recurrenceParentId ? "yes" : "no",
+    createdBy: r.createdBy?.fullName ?? "",
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+  }));
+}
 
 export async function getExpenseById(id: string) {
   const tenant = await getCurrentTenant();
@@ -333,15 +481,16 @@ export async function materializeRecurringExpenses(options?: {
   let instancesCreated = 0;
 
   for (const schedule of schedules) {
-    let dueDate = schedule.recurrenceNextDueDate;
-    let safetyCounter = 0;
+    const plan = planRecurringInstances(
+      {
+        recurrenceInterval: schedule.recurrenceInterval as ExpenseRecurrenceInterval,
+        recurrenceEndDate: schedule.recurrenceEndDate,
+        recurrenceNextDueDate: schedule.recurrenceNextDueDate,
+      },
+      { today: todayISO, cap },
+    );
 
-    while (
-      dueDate != null &&
-      dueDate <= todayISO &&
-      (schedule.recurrenceEndDate == null || dueDate <= schedule.recurrenceEndDate) &&
-      safetyCounter < cap
-    ) {
+    for (const dueDate of plan.dueDates) {
       await db.insert(expenses).values({
         tenantId: schedule.tenantId,
         expenseDate: dueDate,
@@ -354,22 +503,11 @@ export async function materializeRecurringExpenses(options?: {
         createdByUserId: schedule.createdByUserId,
       });
       instancesCreated += 1;
-      safetyCounter += 1;
-      dueDate = nextRecurrenceDate(
-        dueDate,
-        schedule.recurrenceInterval as ExpenseRecurrenceInterval,
-      );
     }
 
-    // Advance the schedule. If we've passed the end date, null out next due.
-    const exhausted =
-      schedule.recurrenceEndDate != null &&
-      (dueDate == null || dueDate > schedule.recurrenceEndDate);
     await db
       .update(expenses)
-      .set({
-        recurrenceNextDueDate: exhausted ? null : dueDate,
-      })
+      .set({ recurrenceNextDueDate: plan.nextDueDate })
       .where(eq(expenses.id, schedule.id));
   }
 

@@ -77,6 +77,61 @@ export function nextRecurrenceDate(
 }
 
 /**
+ * Plan the set of expense instances to materialize from a recurring schedule.
+ *
+ * Walks forward from `recurrenceNextDueDate` adding one interval each step
+ * until the next computed date is past `today` or past `recurrenceEndDate`.
+ * Capped by `options.cap` to bound a single run's blast radius.
+ *
+ * Returns the list of due dates to insert (one expense row per date), the
+ * advanced `nextDueDate` to write back on the schedule, and `exhausted` —
+ * `true` when the schedule has run past its end date and should be parked
+ * with `recurrenceNextDueDate = null`.
+ *
+ * Pure function — no I/O. The cron caller is responsible for the inserts.
+ */
+export function planRecurringInstances(
+  schedule: {
+    recurrenceInterval: ExpenseRecurrenceInterval;
+    recurrenceEndDate: string | null;
+    recurrenceNextDueDate: string | null;
+  },
+  options: { today: string; cap: number },
+): { dueDates: string[]; nextDueDate: string | null; exhausted: boolean } {
+  if (
+    schedule.recurrenceInterval === "none" ||
+    schedule.recurrenceNextDueDate == null
+  ) {
+    return { dueDates: [], nextDueDate: schedule.recurrenceNextDueDate, exhausted: false };
+  }
+
+  const dueDates: string[] = [];
+  let due: string | null = schedule.recurrenceNextDueDate;
+  let safety = 0;
+
+  while (
+    due != null &&
+    due <= options.today &&
+    (schedule.recurrenceEndDate == null || due <= schedule.recurrenceEndDate) &&
+    safety < options.cap
+  ) {
+    dueDates.push(due);
+    safety += 1;
+    due = nextRecurrenceDate(due, schedule.recurrenceInterval);
+  }
+
+  const exhausted =
+    schedule.recurrenceEndDate != null &&
+    (due == null || due > schedule.recurrenceEndDate);
+
+  return {
+    dueDates,
+    nextDueDate: exhausted ? null : due,
+    exhausted,
+  };
+}
+
+/**
  * Add `months` to a UTC date, clamping the day-of-month so we don't roll into the next month
  * when the target month has fewer days (e.g. Jan 31 + 1 month → Feb 28/29, not Mar 3).
  */

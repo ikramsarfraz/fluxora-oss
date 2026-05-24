@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -20,10 +20,19 @@ import { captureServerEvent } from "@/lib/posthog-server";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getPlaidClient } from "../services/plaid-client";
+import { syncConnection } from "../services/transaction-sync";
 import { confirmMatch, normalizePayeeText, rejectMatch } from "../services/transaction-matching";
 import { fireSandboxTransactionForInvoice } from "../services/sandbox-auto-fire";
 import { decryptToken } from "@/lib/crypto/token-encryption";
 import { money } from "@/lib/utils/money";
+
+// Bank reconciliation touches both AR (sales) and AP (supplier) bookkeeping;
+// either finance permission gates the dual-purpose actions.
+function requireFinanceRole(role: string | null | undefined): void {
+  if (!can(role as never, "record_payment") && !can(role as never, "record_supplier_payment")) {
+    throw new Error("Forbidden: Your role does not allow reconciling bank transactions.");
+  }
+}
 
 // Bank reconciliation touches both AR (sales) and AP (supplier) bookkeeping;
 // either finance permission gates the dual-purpose actions.
@@ -269,6 +278,53 @@ export async function markAsNonBillExpenseAction(txnId: string) {
   revalidatePath("/bank-activity");
 }
 
+/**
+ * Bulk-equivalent of dismissMysteryOutflowAction. Tenant scoping is enforced
+ * by the WHERE clause (inArray + eq tenant), so the caller can pass any list
+ * of ids without leaking cross-tenant rows. Single audit-log entry rather
+ * than one per transaction keeps the trail readable for large batches.
+ */
+export async function dismissMysteryOutflowsBulkAction(txnIds: string[]) {
+  const tenant = await getCurrentTenant();
+  const user = await getCurrentPortalUser();
+  requireFinanceRole(user.role);
+
+  // Defensive: cap batch size + reject obviously bad input.
+  const cleaned = Array.from(new Set(txnIds.filter(id => typeof id === "string" && id.length > 0)));
+  if (cleaned.length === 0) return { dismissed: 0 };
+  if (cleaned.length > 200) {
+    throw new Error("Cannot dismiss more than 200 transactions in one batch.");
+  }
+
+  const result = await db
+    .update(bankTransactions)
+    .set({ mysteryDismissedAt: new Date(), isMysteryOutflow: false, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(bankTransactions.id, cleaned),
+        eq(bankTransactions.tenantId, tenant.id),
+        eq(bankTransactions.isMysteryOutflow, true),
+      ),
+    )
+    .returning({ id: bankTransactions.id });
+
+  if (result.length > 0) {
+    await logAuditEvent({
+      tenantId: tenant.id,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "plaid.mystery_outflows_dismissed_bulk",
+      resourceType: "bank_transaction",
+      resourceId: result.length === 1 ? result[0].id : `bulk:${result.length}`,
+      metadata: { count: result.length },
+    });
+  }
+
+  revalidatePath("/inbox");
+  revalidatePath("/bank-activity");
+  return { dismissed: result.length };
+}
+
 export async function getOpenBillsForLinkingAction(txnId: string, proximity: "exact" | "5pct" | "15pct" | "all") {
   const tenant = await getCurrentTenant();
 
@@ -508,4 +564,55 @@ export async function getConnectedBanks() {
         currentBalance: Number(a.currentBalance ?? 0),
       })),
     }));
+}
+
+export async function syncAllConnectionsAction() {
+  const user = await getCurrentPortalUser();
+  const tenant = await getCurrentTenant();
+  requireFinanceRole(user.role);
+
+  const conns = await db
+    .select({ id: plaidConnections.id })
+    .from(plaidConnections)
+    .where(
+      and(
+        eq(plaidConnections.tenantId, tenant.id),
+        eq(plaidConnections.status, "active"),
+      ),
+    );
+
+  if (conns.length === 0) {
+    return { synced: 0, failed: 0, totalAdded: 0, totalModified: 0, totalRemoved: 0 };
+  }
+
+  const settled = await Promise.allSettled(conns.map(c => syncConnection(c.id)));
+  let synced = 0;
+  let failed = 0;
+  let totalAdded = 0;
+  let totalModified = 0;
+  let totalRemoved = 0;
+  for (const r of settled) {
+    if (r.status === "fulfilled") {
+      synced += 1;
+      totalAdded += r.value.added;
+      totalModified += r.value.modified;
+      totalRemoved += r.value.removed;
+    } else {
+      failed += 1;
+    }
+  }
+
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "plaid.manual_sync",
+    resourceType: "plaid_connection",
+    resourceId: "all",
+    metadata: { synced, failed, totalAdded, totalModified, totalRemoved },
+  });
+
+  revalidatePath("/bank-activity");
+  revalidatePath("/inbox");
+  return { synced, failed, totalAdded, totalModified, totalRemoved };
 }

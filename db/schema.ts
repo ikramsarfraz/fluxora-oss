@@ -90,6 +90,24 @@ export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval
   "annually",
 ]);
 
+// Expense approval lifecycle. Newly-created rows start in 'draft' so a
+// submitter can iterate before requesting approval; 'submitted' enters the
+// approver's queue; 'approved' clears the row for accounting to pay;
+// 'rejected' bounces it back to the submitter with a reason (legal next
+// state is 'draft' via reset, not directly back to 'submitted'); 'paid'
+// closes the row.
+//
+// Rows that predate this enum (the historical bulk created before the
+// workflow shipped) are backfilled to 'approved' so the new gating doesn't
+// suddenly hide them from the listing.
+export const expenseStatusEnum = pgEnum("expense_status", [
+  "draft",
+  "submitted",
+  "approved",
+  "rejected",
+  "paid",
+]);
+
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
@@ -147,6 +165,7 @@ export const fileCategoryEnum = pgEnum("file_category", [
   "sales_invoice_pdf",
   "sales_invoice_attachment",
   "sales_order_attachment",
+  "expense_attachment",
   "other",
 ]);
 
@@ -2079,6 +2098,33 @@ export const expenses = pgTable(
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
+    /**
+     * Approval lifecycle. See expenseStatusEnum for the valid states and
+     * transitions. Newly-created rows default to 'draft' so the submitter
+     * can iterate; the listing's status filter scopes by this column.
+     */
+    status: expenseStatusEnum("status").notNull().default("draft"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedByUserId: uuid("submitted_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedByUserId: uuid("approved_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectedByUserId: uuid("rejected_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectionReason: text("rejection_reason"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2090,11 +2136,43 @@ export const expenses = pgTable(
       table.recurrenceNextDueDate,
     ),
     index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
+    index("expenses_tenant_status_idx").on(table.tenantId, table.status),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
     check(
       "expenses_recurrence_end_after_start",
       sql`${table.recurrenceEndDate} IS NULL OR ${table.recurrenceStartDate} IS NULL OR ${table.recurrenceEndDate} >= ${table.recurrenceStartDate}`,
     ),
+  ],
+);
+
+// Pivot between expenses and the shared files table. Mirrors the supplier
+// invoice / sales order attachment pattern: tenant-scoped, cascade-delete
+// when either side is removed. Tenant ID is denormalized here (rather than
+// joining through files or expenses each time) so the listing query can stay
+// a single indexed lookup.
+export const expenseAttachments = pgTable(
+  "expense_attachments",
+  {
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    primaryKey({
+      name: "expense_attachments_pkey",
+      columns: [table.expenseId, table.fileId],
+    }),
+    index("expense_attachments_tenant_expense_idx").on(table.tenantId, table.expenseId),
+    index("expense_attachments_file_id_idx").on(table.fileId),
   ],
 );
 
@@ -2834,6 +2912,13 @@ export const bankTransactions = pgTable(
     checkNumber: integer("check_number"),
     isMysteryOutflow: boolean("is_mystery_outflow").notNull().default(false),
     mysteryDismissedAt: timestamp("mystery_dismissed_at", { withTimezone: true }),
+    /**
+     * Set when this transaction has been paired with the matching opposite
+     * leg of an intra-bank transfer (e.g. $500 leaves Chase, $500 lands at
+     * Wells Fargo the same day). Both rows share the same pair id so the
+     * UI can render them as one logical movement. Null = unpaired.
+     */
+    transferPairId: uuid("transfer_pair_id"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -2847,6 +2932,7 @@ export const bankTransactions = pgTable(
     index("bank_transactions_date_idx").on(table.date),
     uniqueIndex("bank_transactions_plaid_txn_id_unique").on(table.plaidTransactionId),
     index("bank_transactions_mystery_idx").on(table.tenantId, table.isMysteryOutflow),
+    index("bank_transactions_transfer_pair_idx").on(table.transferPairId),
   ],
 );
 

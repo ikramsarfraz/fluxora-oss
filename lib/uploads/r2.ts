@@ -67,6 +67,18 @@ export function buildSalesOrderObjectKey(args: {
   return `tenants/${args.tenantId}/sales-orders/${args.salesOrderId}/${args.fileId}${suffix}`;
 }
 
+export function buildExpenseAttachmentObjectKey(args: {
+  tenantId: string;
+  expenseId: string;
+  fileId: string;
+  extension?: string | null;
+}): string {
+  const ext =
+    args.extension?.trim().replace(/^\.+/, "").toLowerCase() ?? "";
+  const suffix = ext ? `.${ext}` : "";
+  return `tenants/${args.tenantId}/expenses/${args.expenseId}/${args.fileId}${suffix}`;
+}
+
 export function buildSupportTicketObjectKey(args: {
   tenantId: string;
   ticketId: string;
