@@ -3,11 +3,13 @@
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
   type DragEvent,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +17,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 import { useBulkImportSupplierInvoices } from "../../hooks/use-supplier-invoices";
+import {
+  BulkParsingScreen,
+  type BulkParseFile,
+} from "./bulk-parsing-screen";
 
 const MAX_FILES_PER_BATCH = 10;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -53,11 +59,31 @@ export const InlineDropzone = forwardRef<
   InlineDropzoneHandle,
   { variant: "empty" | "compact" }
 >(function InlineDropzone({ variant }, ref) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const mutation = useBulkImportSupplierInvoices();
   const isImporting = mutation.isPending;
+
+  // Full-screen Option-2 batch loader. `null` = hidden; otherwise covers the
+  // viewport with the file table + summary metrics while the mutation runs,
+  // then flips to a "done" state the user dismisses. Real per-file streaming
+  // (with current_stage_id per row) is tracked in #278; until then the per-
+  // row state is generic "Scanning…" and the overall bar asymptotes the
+  // same way the single-PDF screen's does.
+  const [batchOverlay, setBatchOverlay] = useState<{
+    files: BulkParseFile[];
+    state: "running" | "done";
+    startedAt: number;
+    overallProgress: number;
+    elapsed: number;
+  } | null>(null);
+  // Set when the user dismisses an in-flight batch via the overlay Cancel
+  // button — the action keeps running server-side, but the late onSettled
+  // callback below skips flipping the (now-dismissed) overlay back into a
+  // done state.
+  const cancelledRef = useRef(false);
 
   useImperativeHandle(
     ref,
@@ -65,6 +91,44 @@ export const InlineDropzone = forwardRef<
       openFilePicker: () => inputRef.current?.click(),
     }),
     [],
+  );
+
+  // Tick: drive the asymptotic overall progress + elapsed while the batch
+  // is in its running phase. Same 100ms rate the single-PDF screen uses so
+  // the two loaders feel like one system.
+  useEffect(() => {
+    if (!batchOverlay || batchOverlay.state !== "running") return;
+    const id = setInterval(() => {
+      setBatchOverlay(prev => {
+        if (!prev || prev.state !== "running") return prev;
+        const elapsed = +(((Date.now() - prev.startedAt) / 1000)).toFixed(1);
+        const overallProgress =
+          prev.overallProgress >= 90
+            ? prev.overallProgress
+            : +(
+                prev.overallProgress +
+                Math.max(0.3, (90 - prev.overallProgress) * 0.03)
+              ).toFixed(1);
+        return { ...prev, elapsed, overallProgress };
+      });
+    }, 100);
+    return () => clearInterval(id);
+  }, [batchOverlay]);
+
+  const dismissBatchOverlay = useCallback(() => {
+    cancelledRef.current = true;
+    setBatchOverlay(null);
+  }, []);
+
+  const handleReviewFile = useCallback(
+    (bulkImportFileId: string) => {
+      cancelledRef.current = true;
+      setBatchOverlay(null);
+      router.push(
+        `/supplier-invoices/new?bulk-import-key=${encodeURIComponent(bulkImportFileId)}`,
+      );
+    },
+    [router],
   );
 
   const startImport = useCallback(
@@ -112,6 +176,23 @@ export const InlineDropzone = forwardRef<
       const formData = new FormData();
       for (const f of capped) formData.append("file", f);
 
+      // Mount the full-screen batch loader with the per-file metadata we
+      // already have on the client. Real outcomes get spliced in below once
+      // the action returns.
+      const startedAt = Date.now();
+      cancelledRef.current = false;
+      setBatchOverlay({
+        files: capped.map((f, i) => ({
+          id: `${startedAt}:${i}`,
+          name: f.name,
+          sizeLabel: fmtBytes(f.size),
+        })),
+        state: "running",
+        startedAt,
+        overallProgress: 5,
+        elapsed: 0,
+      });
+
       try {
         const result = await mutation.mutateAsync(formData);
         const { parsed, errored } = result.summary;
@@ -142,10 +223,40 @@ export const InlineDropzone = forwardRef<
         // landed server-side as part of the action, so a single invalidation
         // pulls them in. No need to seed the cache manually.
         await queryClient.invalidateQueries({ queryKey: QUEUE_KEY });
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Scan failed.",
+
+        // Splice the server's per-file outcomes into the overlay so each row
+        // flips from "Scanning…" to Parsed/Errored with its bulkImportFileId.
+        // Skip if the user dismissed mid-flight — their intent was to get
+        // out of the way, not to be re-presented with the result.
+        if (cancelledRef.current) return;
+        setBatchOverlay(prev =>
+          prev
+            ? {
+                ...prev,
+                state: "done",
+                overallProgress: 100,
+                files: prev.files.map((f, i) => {
+                  const item = result.items[i];
+                  if (!item) return { ...f, outcome: "errored", errorMessage: "No result returned" };
+                  if (item.status === "parsed") {
+                    return {
+                      ...f,
+                      outcome: "parsed",
+                      bulkImportFileId: item.bulkImportFileId,
+                    };
+                  }
+                  return {
+                    ...f,
+                    outcome: "errored",
+                    errorMessage: item.error,
+                  };
+                }),
+              }
+            : prev,
         );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Scan failed.");
+        if (!cancelledRef.current) setBatchOverlay(null);
       }
     },
     [mutation, queryClient],
@@ -185,9 +296,23 @@ export const InlineDropzone = forwardRef<
     />
   );
 
+  const overlay = batchOverlay ? (
+    <BulkParsingScreen
+      files={batchOverlay.files}
+      state={batchOverlay.state}
+      overallProgress={batchOverlay.overallProgress}
+      elapsed={batchOverlay.elapsed}
+      onCancel={dismissBatchOverlay}
+      onDismiss={dismissBatchOverlay}
+      onReviewFile={handleReviewFile}
+    />
+  ) : null;
+
   if (variant === "empty") {
     return (
-      <div
+      <>
+        {overlay}
+        <div
         role="button"
         tabIndex={isImporting ? -1 : 0}
         aria-disabled={isImporting}
@@ -241,17 +366,20 @@ export const InlineDropzone = forwardRef<
           </p>
         )}
         {hiddenInput}
-      </div>
+        </div>
+      </>
     );
   }
 
   // compact variant — slim strip above the file list.
   return (
-    <div
-      role="button"
-      tabIndex={isImporting ? -1 : 0}
-      aria-disabled={isImporting}
-      aria-label="Drop PDFs to add to this batch"
+    <>
+      {overlay}
+      <div
+        role="button"
+        tabIndex={isImporting ? -1 : 0}
+        aria-disabled={isImporting}
+        aria-label="Drop PDFs to add to this batch"
       onDragOver={(e) => {
         e.preventDefault();
         if (!isImporting) setIsDragging(true);
@@ -280,14 +408,15 @@ export const InlineDropzone = forwardRef<
       ) : (
         <Upload className="size-3.5" strokeWidth={1.6} />
       )}
-      <span>
-        {isImporting
-          ? "Scanning more PDFs…"
-          : isDragging
-            ? "Drop to add to this batch"
-            : "Drop more PDFs here or click to pick"}
-      </span>
-      {hiddenInput}
-    </div>
+        <span>
+          {isImporting
+            ? "Scanning more PDFs…"
+            : isDragging
+              ? "Drop to add to this batch"
+              : "Drop more PDFs here or click to pick"}
+        </span>
+        {hiddenInput}
+      </div>
+    </>
   );
 });
