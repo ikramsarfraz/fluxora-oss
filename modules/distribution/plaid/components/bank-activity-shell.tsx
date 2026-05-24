@@ -37,10 +37,37 @@ const C = {
 
 type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending" | "mystery";
 
+type SortKey = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "date-desc", label: "Date (newest first)" },
+  { value: "date-asc", label: "Date (oldest first)" },
+  { value: "amount-desc", label: "Amount (largest first)" },
+  { value: "amount-asc", label: "Amount (smallest first)" },
+];
+
+function sortTransactions(rows: Transaction[], key: SortKey): Transaction[] {
+  // Sort by absolute amount so a +$500 inflow and a -$500 outflow rank
+  // together when filtering by magnitude, which matches what users mean
+  // when they say "biggest transactions".
+  const sorted = [...rows];
+  switch (key) {
+    case "date-desc":
+      return sorted.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    case "date-asc":
+      return sorted.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+    case "amount-desc":
+      return sorted.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+    case "amount-asc":
+      return sorted.sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount));
+  }
+}
+
 export function BankActivityShell({ data }: { data: Data }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [searchText, setSearchText] = useState("");
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedMysteryIds, setSelectedMysteryIds] = useState<Set<string>>(new Set());
   const router = useRouter();
@@ -112,7 +139,7 @@ export function BankActivityShell({ data }: { data: Data }) {
         : accountFiltered.filter(t => t.state === filter);
 
   const q = searchText.trim().toLowerCase();
-  const visible = q === ""
+  const searched = q === ""
     ? stateFiltered
     : stateFiltered.filter(t => {
         const merchant = (t.merchantName ?? "").toLowerCase();
@@ -120,6 +147,8 @@ export function BankActivityShell({ data }: { data: Data }) {
         const invoiceNum = (t.match?.invoice.invoiceNumber ?? "").toLowerCase();
         return merchant.includes(q) || desc.includes(q) || invoiceNum.includes(q);
       });
+
+  const visible = sortKey === "date-desc" ? searched : sortTransactions(searched, sortKey);
 
   const lastSync = data.lastSyncAt
     ? timeSince(new Date(data.lastSyncAt))
@@ -394,24 +423,48 @@ export function BankActivityShell({ data }: { data: Data }) {
           );
         })}
         </div>
-        <input
-          type="search"
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          placeholder="Search merchant, description, invoice…"
-          aria-label="Filter transactions"
-          style={{
-            fontSize: 13,
-            padding: "6px 12px",
-            border: `1px solid ${C.line}`,
-            borderRadius: 6,
-            background: C.surface,
-            color: C.ink,
-            minWidth: 260,
-            outline: "none",
-            fontFamily: "inherit",
-          }}
-        />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            value={sortKey}
+            onChange={e => setSortKey(e.target.value as SortKey)}
+            aria-label="Sort transactions"
+            style={{
+              fontSize: 13,
+              padding: "6px 12px",
+              border: `1px solid ${C.line}`,
+              borderRadius: 6,
+              background: C.surface,
+              color: C.ink,
+              outline: "none",
+              fontFamily: "inherit",
+              cursor: "pointer",
+            }}
+          >
+            {SORT_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <input
+            type="search"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Search merchant, description, invoice…"
+            aria-label="Filter transactions"
+            style={{
+              fontSize: 13,
+              padding: "6px 12px",
+              border: `1px solid ${C.line}`,
+              borderRadius: 6,
+              background: C.surface,
+              color: C.ink,
+              minWidth: 260,
+              outline: "none",
+              fontFamily: "inherit",
+            }}
+          />
+        </div>
       </div>
 
       {/* Bulk-select bar — Mystery view only. Surfaces select-all + dismiss
