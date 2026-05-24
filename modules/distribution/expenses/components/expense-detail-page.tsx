@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { ArrowLeft, Download, Paperclip, Pencil, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Paperclip, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailField,
@@ -38,6 +45,8 @@ import {
   useRemoveExpenseAttachment,
   useUploadExpenseAttachment,
 } from "../hooks/use-expense-attachments";
+import { ActivityCard } from "@/modules/distribution/components/activity-card";
+import { buildExpenseActivityItems } from "../utils/expense-activity";
 import {
   useApproveExpense,
   useMarkExpensePaid,
@@ -213,16 +222,8 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
 
       <AttachmentsSection expenseId={expense.id} canManage={canManage} />
 
-      <DetailSection title="Metadata">
-        <DetailGrid>
-          <DetailField label="Created by">
-            {expense.createdBy?.fullName ?? "—"}
-          </DetailField>
-          <DetailField label="Created at">
-            {formatDisplayDateTime(expense.createdAt)}
-          </DetailField>
-        </DetailGrid>
-      </DetailSection>
+      <ExpenseActivitySection expense={expense} />
+
 
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent>
@@ -470,6 +471,18 @@ function formatBytes(bytes: number | null | undefined): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function ExpenseActivitySection({ expense }: { expense: ExpenseDetail }) {
+  // Same query the AttachmentsSection runs — TanStack dedupes by queryKey
+  // so this doesn't fire a second network call. We need the attachments
+  // here so the timeline can show upload events alongside the lifecycle
+  // transitions held directly on the expense row.
+  const { data: attachments, isLoading, isError } = useExpenseAttachments(expense.id);
+  const items = buildExpenseActivityItems(expense, attachments ?? []);
+  return (
+    <ActivityCard items={items} isLoading={isLoading} isError={isError} />
+  );
+}
+
 function AttachmentsSection({
   expenseId,
   canManage,
@@ -517,101 +530,116 @@ function AttachmentsSection({
   const rows = attachments ?? [];
 
   return (
-    <DetailSection title="Receipts">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
-        onChange={handleFileChange}
-        style={{ display: "none" }}
-        aria-hidden
-      />
-      {canManage ? (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-muted-foreground text-xs">
-            JPEG, PNG, WebP, HEIC, or PDF · max 10 MB
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={upload.isPending}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="size-4" />
-            {upload.isPending ? "Uploading…" : "Upload receipt"}
-          </Button>
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Paperclip className="size-4" />
+            Receipts
+          </CardTitle>
+          <CardDescription>
+            Attach photos or PDFs of receipts and invoices. JPEG, PNG, WebP, HEIC, or PDF · max 10 MB per file.
+          </CardDescription>
         </div>
-      ) : null}
-      {isLoading ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
-      ) : rows.length === 0 ? (
-        // Matches the supplier-invoice attachments card empty state so the two
-        // surfaces feel like one feature.
-        <div className="border-muted-foreground/25 bg-muted/20 text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center text-sm">
-          <Paperclip className="size-8 opacity-50" />
-          <div className="font-medium">No receipts attached yet</div>
-          <div className="text-xs">
-            {canManage
-              ? "Use Upload to attach a photo or PDF."
-              : "Receipts will appear here when uploaded."}
-          </div>
-        </div>
-      ) : (
-        <ul className="divide-border divide-y">
-          {rows.map(row => (
-            <li
-              key={row.fileId}
-              className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+        {canManage ? (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={upload.isPending}
+              aria-hidden
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={upload.isPending}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <Paperclip className="text-muted-foreground size-4 shrink-0" />
-                <div className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => handleDownload(row.fileId)}
-                    className="truncate text-left text-sm font-medium hover:underline"
-                  >
-                    {row.originalFilename ?? "Receipt"}
-                  </button>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {formatBytes(row.sizeBytes)}
-                    {row.mimeType ? ` · ${row.mimeType}` : ""}
-                    {` · uploaded ${formatDisplayDate(
-                      row.createdAt instanceof Date
-                        ? row.createdAt.toISOString().slice(0, 10)
-                        : String(row.createdAt).slice(0, 10),
-                    )}`}
+              {upload.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              Upload
+            </Button>
+          </div>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        ) : rows.length === 0 ? (
+          // Matches the supplier-invoice attachments card empty state so the
+          // two surfaces feel like one feature.
+          <div className="border-muted-foreground/25 bg-muted/20 text-muted-foreground flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-6 py-10 text-center text-sm">
+            <Paperclip className="size-8 opacity-50" />
+            <div className="font-medium">No receipts attached yet</div>
+            <div className="text-xs">
+              {canManage
+                ? "Use Upload to attach a photo or PDF."
+                : "Receipts will appear here when uploaded."}
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-border divide-y">
+            {rows.map(row => (
+              <li
+                key={row.fileId}
+                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                  <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(row.fileId)}
+                      className="truncate text-left text-sm font-medium hover:underline"
+                    >
+                      {row.originalFilename ?? "Receipt"}
+                    </button>
+                    <div className="text-muted-foreground truncate text-xs">
+                      {formatBytes(row.sizeBytes)}
+                      {row.mimeType ? ` · ${row.mimeType}` : ""}
+                      {` · uploaded ${formatDisplayDate(
+                        row.createdAt instanceof Date
+                          ? row.createdAt.toISOString().slice(0, 10)
+                          : String(row.createdAt).slice(0, 10),
+                      )}`}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDownload(row.fileId)}
-                >
-                  <Download className="size-4" />
-                  Download
-                </Button>
-                {canManage ? (
+                <div className="flex items-center gap-1">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={pendingDeleteId === row.fileId}
-                    onClick={() => handleRemove(row.fileId)}
+                    onClick={() => handleDownload(row.fileId)}
                   >
-                    <Trash2 className="size-4" />
-                    Remove
+                    <Download className="size-4" />
+                    Download
                   </Button>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DetailSection>
+                  {canManage ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={pendingDeleteId === row.fileId}
+                      onClick={() => handleRemove(row.fileId)}
+                    >
+                      <Trash2 className="size-4" />
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

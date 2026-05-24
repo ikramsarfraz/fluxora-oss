@@ -742,6 +742,27 @@ export const expensesRelations = relations(expenses, ({ one, many }) => ({
   createdBy: one(portalUsers, {
     fields: [expenses.createdByUserId],
     references: [portalUsers.id],
+    relationName: "expense_created_by",
+  }),
+  submittedBy: one(portalUsers, {
+    fields: [expenses.submittedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_submitted_by",
+  }),
+  approvedBy: one(portalUsers, {
+    fields: [expenses.approvedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_approved_by",
+  }),
+  rejectedBy: one(portalUsers, {
+    fields: [expenses.rejectedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_rejected_by",
+  }),
+  paidBy: one(portalUsers, {
+    fields: [expenses.paidByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_paid_by",
   }),
   tenant: one(tenants, {
     fields: [expenses.tenantId],

@@ -292,7 +292,16 @@ export async function getExpenseById(id: string) {
   const tenant = await getCurrentTenant();
   const row = await db.query.expenses.findFirst({
     where: and(eq(expenses.id, id), eq(expenses.tenantId, tenant.id)),
-    with: { createdBy: true },
+    with: {
+      // All five actor relations powered by their own relationName so the
+      // ActivityCard timeline can render each step ("Bob approved", "Alice
+      // submitted", …) without a follow-up query.
+      createdBy: true,
+      submittedBy: true,
+      approvedBy: true,
+      rejectedBy: true,
+      paidBy: true,
+    },
   });
   return row ?? null;
 }

@@ -16,6 +16,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ListingAction, ListingErrorState, ListingPage, ListingSecondaryAction, MonoText, StatusPill, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { exportExpensesCsvAction } from "../actions";
@@ -332,6 +341,10 @@ export function ExpensesPage() {
   );
 }
 
+// shadcn Select disallows value="" (collides with the placeholder slot),
+// so the "All" / "Any" entry rides a sentinel and we map at the boundary.
+const ALL_SENTINEL = "__all__";
+
 function FilterBar({
   filters,
   onChange,
@@ -346,46 +359,30 @@ function FilterBar({
   onClear: () => void;
   hasActiveFilter: boolean;
 }) {
-  const inputStyle: React.CSSProperties = {
-    fontSize: 13,
-    padding: "6px 10px",
-    border: "1px solid var(--color-border-default)",
-    borderRadius: 6,
-    background: "var(--color-card)",
-    color: "var(--color-ink)",
-    outline: "none",
-    fontFamily: "inherit",
-  };
+  const triggerClass = "h-8 w-[150px] border-border-default bg-card text-[13px] text-ink shadow-none";
+  const inputClass = "h-8 border-border-default bg-card text-[13px] shadow-none";
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 10,
-        marginBottom: 16,
-        flexWrap: "wrap",
-        alignItems: "flex-end",
-      }}
-    >
+    <div className="mb-4 flex flex-wrap items-end gap-2.5">
       <Field label="Date from">
-        <input
+        <Input
           type="date"
           value={filters.dateFrom ?? ""}
           onChange={e => onChange("dateFrom", e.target.value)}
           aria-label="Filter by start date"
-          style={inputStyle}
+          className={`${inputClass} w-[150px]`}
         />
       </Field>
       <Field label="Date to">
-        <input
+        <Input
           type="date"
           value={filters.dateTo ?? ""}
           onChange={e => onChange("dateTo", e.target.value)}
           aria-label="Filter by end date"
-          style={inputStyle}
+          className={`${inputClass} w-[150px]`}
         />
       </Field>
       <Field label="Min amount">
-        <input
+        <Input
           type="number"
           inputMode="decimal"
           min={0}
@@ -394,11 +391,11 @@ function FilterBar({
           value={filters.amountMin ?? ""}
           onChange={e => onChange("amountMin", e.target.value)}
           aria-label="Filter by minimum amount"
-          style={{ ...inputStyle, width: 100 }}
+          className={`${inputClass} w-[110px]`}
         />
       </Field>
       <Field label="Max amount">
-        <input
+        <Input
           type="number"
           inputMode="decimal"
           min={0}
@@ -407,69 +404,83 @@ function FilterBar({
           value={filters.amountMax ?? ""}
           onChange={e => onChange("amountMax", e.target.value)}
           aria-label="Filter by maximum amount"
-          style={{ ...inputStyle, width: 100 }}
+          className={`${inputClass} w-[110px]`}
         />
       </Field>
       <Field label="Method">
-        <select
-          value={filters.paymentMethod ?? ""}
-          onChange={e => onChange("paymentMethod", e.target.value)}
-          aria-label="Filter by payment method"
-          style={inputStyle}
+        <Select
+          value={filters.paymentMethod ? filters.paymentMethod : ALL_SENTINEL}
+          onValueChange={v => onChange("paymentMethod", v === ALL_SENTINEL ? "" : v)}
         >
-          <option value="">Any</option>
-          {EXPENSE_PAYMENT_METHODS.map(m => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by payment method"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>Any</SelectItem>
+            {EXPENSE_PAYMENT_METHODS.map(m => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Type">
-        <select
-          value={filters.recurrence ?? ""}
-          onChange={e => onChange("recurrence", e.target.value)}
-          aria-label="Filter by recurrence type"
-          style={inputStyle}
+        <Select
+          value={filters.recurrence ? filters.recurrence : ALL_SENTINEL}
+          onValueChange={v => onChange("recurrence", v === ALL_SENTINEL ? "" : v)}
         >
-          <option value="">All</option>
-          <option value="oneoff">One-off</option>
-          <option value="schedules">Schedules</option>
-          <option value="instances">Auto-generated</option>
-        </select>
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by recurrence type"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>All</SelectItem>
+            <SelectItem value="oneoff">One-off</SelectItem>
+            <SelectItem value="schedules">Schedules</SelectItem>
+            <SelectItem value="instances">Auto-generated</SelectItem>
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Status">
-        <select
-          value={filters.status ?? ""}
-          onChange={e => onChange("status", e.target.value)}
-          aria-label="Filter by approval status"
-          style={inputStyle}
+        <Select
+          value={filters.status ? filters.status : ALL_SENTINEL}
+          onValueChange={v => onChange("status", v === ALL_SENTINEL ? "" : v)}
         >
-          <option value="">All</option>
-          {EXPENSE_STATUSES.map(s => (
-            <option key={s} value={s}>
-              {expenseStatusLabel(s)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by approval status"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>All</SelectItem>
+            {EXPENSE_STATUSES.map(s => (
+              <SelectItem key={s} value={s}>
+                {expenseStatusLabel(s)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       {hasActiveFilter && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={onClear}
-          style={{
-            fontSize: 12,
-            padding: "6px 10px",
-            background: "transparent",
-            border: "1px solid var(--color-border-default)",
-            borderRadius: 6,
-            color: "var(--color-ink-warm)",
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
+          className="h-8 px-3 text-xs"
         >
           Clear filters
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -477,16 +488,8 @@ function FilterBar({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          color: "var(--color-subtle)",
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-        }}
-      >
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
         {label}
       </span>
       {children}
