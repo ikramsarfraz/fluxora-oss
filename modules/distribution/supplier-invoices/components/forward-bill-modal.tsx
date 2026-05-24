@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { X, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { forwardBillAction } from "../actions/forward-bill";
+import { checkBillPdfAvailability } from "../actions/check-bill-pdf-availability";
 
 const C = {
   ink: "var(--color-ink)",
@@ -48,7 +49,36 @@ export function ForwardBillModal({
   const [attachOriginal, setAttachOriginal] = useState(true);
   const [attachSummary, setAttachSummary] = useState(false);
   const [sending, setSending] = useState(false);
+  // null = not yet probed, false = no source PDF found, true = PDF available.
+  // Determines whether the "Original PDF" checkbox is interactive — bills
+  // posted via the single-upload parse flow or typed in directly have no
+  // source PDF stored anywhere, so we disable the affordance to set
+  // expectations before send.
+  const [pdfAvailable, setPdfAvailable] = useState<boolean | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    checkBillPdfAvailability(invoice.id)
+      .then(r => {
+        if (cancelled) return;
+        setPdfAvailable(r.available);
+        // Default the checkbox to OFF when nothing's available, so a
+        // distracted user clicking "Send" doesn't expect a PDF that
+        // isn't coming.
+        if (!r.available) setAttachOriginal(false);
+      })
+      .catch(() => {
+        // Soft-fail: leave pdfAvailable=null. The action still
+        // double-checks and will throw a clear error if the user sends
+        // with attachedOriginal=true and no PDF.
+        if (!cancelled) setPdfAvailable(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, invoice.id]);
 
   if (!open) return null;
 
@@ -291,13 +321,32 @@ export function ForwardBillModal({
             <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Attachments
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                cursor: pdfAvailable === false ? "not-allowed" : "pointer",
+                opacity: pdfAvailable === false ? 0.5 : 1,
+              }}
+              title={
+                pdfAvailable === false
+                  ? "This bill has no source PDF on file (posted from typed-in entry or single-upload parse, which doesn't retain the PDF)."
+                  : undefined
+              }
+            >
               <input
                 type="checkbox"
-                checked={attachOriginal}
+                checked={attachOriginal && pdfAvailable !== false}
                 onChange={e => setAttachOriginal(e.target.checked)}
+                disabled={pdfAvailable === false}
               />
-              <span style={{ color: C.ink2 }}>Original PDF</span>
+              <span style={{ color: C.ink2 }}>
+                Original PDF
+                {pdfAvailable === false ? (
+                  <span style={{ color: C.muted, fontSize: 12 }}> (no PDF on file)</span>
+                ) : null}
+              </span>
             </label>
             {/* Branded summary attachment is intentionally disabled until a
                 supplier-invoice PDF renderer exists (the customer side has

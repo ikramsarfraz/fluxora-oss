@@ -215,8 +215,14 @@ export async function forwardBillAction(input: ForwardBillInput) {
         );
       }
     } else {
-      console.warn(
-        `[forward-bill] attachedOriginal=true but no PDF found for invoice ${input.supplierInvoiceId} (neither supplier_invoice_attachments nor bulk_import_files)`,
+      // No source PDF on file — explicit error rather than silently
+      // sending body-only. The modal disables the checkbox upfront via
+      // checkBillPdfAvailability, so reaching this branch usually means
+      // the modal's pre-check failed (network blip, stale state, or
+      // direct action call). Treat it as a user-facing error so the
+      // sender knows to uncheck the box and retry.
+      throw new Error(
+        "This bill has no source PDF on file — uncheck \"Original PDF\" to send the message without an attachment.",
       );
     }
   }
