@@ -131,11 +131,14 @@
   --color-info-border: #B8CDBE;
   --color-info-fg: #1F3A2E;
 
-  /* ---------- Type ---------- */
-  --font-serif: var(--font-serif), ui-serif, Georgia, serif;
+  /* ---------- Type — all sans, no serif ---------- */
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-heading: var(--font-serif), ui-serif, Georgia, serif;
+  /* Transitional bridge: `font-serif` and `font-heading` utility classes still
+     exist in marketing/reel pages. Map both to the sans stack so any leftover
+     class renders Archivo instead of falling through to the system serif. */
+  --font-serif: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* ---------- Radius ---------- */
   --radius-sm: 4px;
@@ -247,14 +250,15 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
-/* Serif treatment for financial values */
+/* Financial values — sans, tabular, tight tracking. NO serif. */
 .financial,
 [data-financial],
 [data-amount] {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "lnum" 1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  font-weight: 600;
 }
 
 /* Disable dark mode for v1 — Fluxora is light-only */

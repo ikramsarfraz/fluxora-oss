@@ -26,9 +26,9 @@ export function Logomark({ size = 32, className }: Props) {
         x="22"
         y="33"
         textAnchor="middle"
-        fontFamily="Newsreader, ui-serif, Georgia, serif"
-        fontSize="30"
-        fontWeight="500"
+        fontFamily="Archivo, ui-sans-serif, sans-serif"
+        fontSize="28"
+        fontWeight="600"
         fill="#1F3A2E"
       >
         F

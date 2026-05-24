@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Newsreader, Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { QueryProvider } from "@/components/query-provider";
@@ -7,16 +7,10 @@ import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
 
-const serif = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  axes: ["opsz"],
-  display: "swap",
-});
-
-const sans = Geist({
+const sans = Archivo({
   subsets: ["latin"],
   variable: "--font-sans",
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 
@@ -40,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${serif.variable} ${mono.variable} h-full bg-background antialiased`}
+      className={`${sans.variable} ${mono.variable} h-full bg-background antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppErrorBoundary>
