@@ -597,29 +597,17 @@ function TransactionRow({
               </span>
             </Link>
           ) : isUnmatched ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-              <button
-                type="button"
-                onClick={() => setLinkSheetOpen(true)}
-                style={{
-                  padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: C.ink, color: "var(--color-card)", border: "none", cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                Link to bill
-              </button>
-              <Link
-                href={`/expenses/new?${new URLSearchParams({
-                  date: txn.date,
-                  amount: Math.abs(txn.amount).toFixed(2),
-                  note: (txn.merchantName ?? txn.rawDescription).slice(0, 200),
-                }).toString()}`}
-                style={{ fontSize: 11, color: C.muted, textDecoration: "underline", textUnderlineOffset: "2px" }}
-              >
-                Mark as expense
-              </Link>
-            </div>
+            <button
+              type="button"
+              onClick={() => setLinkSheetOpen(true)}
+              style={{
+                padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                background: C.ink, color: "var(--color-card)", border: "none", cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              Link to bill
+            </button>
           ) : (
             <span style={{ fontSize: 12, color: C.muted }}>—</span>
           )}
