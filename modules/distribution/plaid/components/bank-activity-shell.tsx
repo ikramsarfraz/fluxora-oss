@@ -756,6 +756,21 @@ function TransactionRow({
                 Mystery
               </span>
             )}
+            {txn.transferPairId && (
+              <span
+                title="Internal transfer between two of your accounts"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "var(--color-info-fg)",
+                  background: "var(--color-info-bg)",
+                  padding: "1px 5px",
+                  borderRadius: 4,
+                }}
+              >
+                Transfer
+              </span>
+            )}
           </div>
         </div>
 

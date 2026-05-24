@@ -25,6 +25,8 @@ export type ActivityTransaction = {
   checkNumber: number | null;
   isMysteryOutflow: boolean;
   pending: boolean;
+  /** Set when the transaction is paired with its opposite-leg counterpart. */
+  transferPairId: string | null;
   accountId: string;
   accountName: string;
   accountMask: string | null;
@@ -170,6 +172,7 @@ export async function getBankActivity(filter?: TransactionState | "all"): Promis
       checkNumber: txn.checkNumber ?? null,
       isMysteryOutflow: txn.isMysteryOutflow ?? false,
       pending: txn.pending,
+      transferPairId: txn.transferPairId ?? null,
       accountId: txn.bankAccount?.id ?? "",
       accountName: txn.bankAccount?.name ?? "Unknown",
       accountMask: txn.bankAccount?.mask ?? null,
