@@ -11,13 +11,15 @@ export function ParsingProgressScreen({
   job: ParseJobView;
   onCancel?: () => void;
 }) {
+  const isDone = job.overallProgress >= 100;
+
   return (
     <main className="-m-4 flex min-w-0 flex-1 flex-col bg-page">
-      <header className="px-8 pb-[22px] pt-[28px]">
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-subtle">
+      <header className="px-8 pb-[18px] pt-[24px]">
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
           Step 1 of 2 · Scanning
         </div>
-        <h1 className="mb-1.5 text-[26px] font-medium leading-tight tracking-[-0.015em] text-ink">
+        <h1 className="mb-1.5 text-[26px] font-semibold leading-tight tracking-[-0.03em] text-ink">
           Reading invoice
         </h1>
         <p className="max-w-[640px] text-[14px] text-subtle">
@@ -34,12 +36,14 @@ export function ParsingProgressScreen({
           elapsedSeconds={job.elapsedSeconds}
           overallProgress={job.overallProgress}
           stages={job.stages}
+          isDone={isDone}
         />
         <StreamingPreview
           header={job.header}
           lines={job.lines}
           lineCountLabel={job.lineCountLabel}
           averageParseLabel={job.averageParseLabel}
+          isDone={isDone}
           onCancel={onCancel}
         />
       </div>

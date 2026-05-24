@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
@@ -27,6 +27,10 @@ import {
   type BulkImportLockState,
 } from "../../hooks/use-bulk-import-file-lock";
 import { useRescanBulkImportFile } from "../../hooks/use-supplier-invoices";
+import {
+  RESCAN_STAGES,
+  RescanBanner,
+} from "../parsing-progress/rescan-banner";
 import type { AiExtractionErrorCode } from "../../services/ai-provider";
 import type { PipelineResult } from "../../services/parsing-pipeline";
 import { clearReviewOverrides } from "../../utils/review-overrides-storage";
@@ -175,6 +179,24 @@ export function ReviewQueueShell({
   // check.
   const [rescanDialogOpen, setRescanDialogOpen] = useState(false);
 
+  // Progress state for the re-scan banner shown over the form. `null` =
+  // banner hidden. `running` while the mutation is in flight (the
+  // stageIndex/elapsed advance on a 100ms tick so the StageTrack and
+  // ProgressBar animate even though the server call is a single shot).
+  // `done` after the mutation settles so the user sees a brief "Use new
+  // data" affordance before dismissing.
+  type RescanRun = {
+    phase: "running" | "done";
+    startedAt: number;
+    stageIndex: number;
+    elapsed: number;
+  };
+  const [rescanRun, setRescanRun] = useState<RescanRun | null>(null);
+  // Set when the user dismisses an in-flight rescan via the banner Cancel
+  // button — the mutation continues, but the success callback skips the
+  // done transition so the banner stays hidden.
+  const rescanCancelledRef = useRef(false);
+
   // Advisory claim on the current row — prevents two reviewers from racing
   // on the same invoice. `owned` is the happy path (this user has the
   // claim, heartbeats firing); `foreign` swaps the editable form for a
@@ -202,6 +224,25 @@ export function ReviewQueueShell({
   // the early returns) so the order of hook calls stays stable across
   // renders — react-hooks/rules-of-hooks.
   const rescanMutation = useRescanBulkImportFile();
+
+  // Tick: drive faux stage progression while the rescan banner is in its
+  // running phase. Same rate as the single-PDF parse screen so the two
+  // surfaces feel like they belong to the same family.
+  useEffect(() => {
+    if (!rescanRun || rescanRun.phase !== "running") return;
+    const id = setInterval(() => {
+      setRescanRun(prev => {
+        if (!prev || prev.phase !== "running") return prev;
+        const elapsed = +(((Date.now() - prev.startedAt) / 1000)).toFixed(1);
+        const stageIndex = Math.min(
+          RESCAN_STAGES.length - 1,
+          prev.stageIndex + 0.085,
+        );
+        return { ...prev, elapsed, stageIndex };
+      });
+    }, 100);
+    return () => clearInterval(id);
+  }, [rescanRun]);
 
   // Keyboard shortcuts:
   //  - ← / →                : previous / next invoice in the queue
@@ -337,6 +378,9 @@ export function ReviewQueueShell({
     if (!currentKey || rescanMutation.isPending) return;
     clearReviewOverrides(currentKey);
     captureClientEvent("review.rescan_triggered", { scope: "single" });
+    rescanCancelledRef.current = false;
+    const startedAt = Date.now();
+    setRescanRun({ phase: "running", startedAt, stageIndex: 0, elapsed: 0 });
     rescanMutation.mutate(currentKey, {
       onSuccess: row => {
         toast.success(
@@ -344,12 +388,31 @@ export function ReviewQueueShell({
             ? "Re-scan finished, but the AI couldn't read this invoice. Try re-uploading the PDF."
             : "Re-scan complete — review the updated fields.",
         );
+        if (rescanCancelledRef.current) return;
+        const elapsed = +(((Date.now() - startedAt) / 1000)).toFixed(1);
+        setRescanRun({
+          phase: "done",
+          startedAt,
+          stageIndex: RESCAN_STAGES.length - 1,
+          elapsed,
+        });
       },
       onError: err => {
         toast.error(err instanceof Error ? err.message : "Re-scan failed.");
+        // Banner hides on error — the toast carries the message and the
+        // user wants the form back, not a stuck "running" overlay.
+        setRescanRun(null);
       },
     });
     setRescanDialogOpen(false);
+  };
+
+  const dismissRescanBanner = () => {
+    // Used by both Cancel (during running) and Use-new-data (after done).
+    // For running: mark cancelled so a late success callback doesn't
+    // re-show the banner. For done: no-op flag is fine.
+    rescanCancelledRef.current = true;
+    setRescanRun(null);
   };
 
   // Render as a function so the ReviewScreen can hand back its
@@ -408,6 +471,21 @@ export function ReviewQueueShell({
           onRetry={lock.retry}
           onForceClaim={lock.forceClaim}
           onSkip={hasNext ? goNext : undefined}
+        />
+      ) : null}
+
+      {/* Re-scan progress banner: animates the parse stages while the
+          mutation runs, switches to a done state when it returns. The form
+          underneath has already re-rendered with the new pipeline result
+          (key is `${currentKey}:${updatedAt}` and updatedAt bumps on
+          success), so dismissing the banner reveals the refreshed fields. */}
+      {rescanRun ? (
+        <RescanBanner
+          stageIndex={rescanRun.stageIndex}
+          elapsed={rescanRun.elapsed}
+          done={rescanRun.phase === "done"}
+          onCancel={dismissRescanBanner}
+          onAccept={dismissRescanBanner}
         />
       ) : null}
 

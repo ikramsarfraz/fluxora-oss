@@ -390,6 +390,78 @@ kbd {
   .loading-dot { animation: none !important; }
 }
 
+/* ── PDF-import parse loaders ────────────────────────────────────────────
+   Vocabulary used by the StageDot / StageList / ProgressBar / StreamingLineItem
+   / SkeletonField / RescanBanner primitives. Class names match the design
+   handoff (`.shimmer-bg`, `.live-dot`, `.ring-spin`, `.bar-glide`,
+   `.line-appear`, `.banner-in`) so component code reads like the spec. */
+
+.parse-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-page) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes parse-livepulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.7); }
+}
+.parse-live-dot { animation: parse-livepulse 1.4s ease-in-out infinite; }
+
+.parse-ring-spin {
+  animation: loading-spin 1.1s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes parse-barglide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.parse-bar-glide { position: relative; overflow: hidden; }
+.parse-bar-glide::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  animation: parse-barglide 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes parse-lineappear {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.parse-line-appear {
+  animation: parse-lineappear 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes parse-bannerin {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.parse-banner-in {
+  animation: parse-bannerin 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .parse-shimmer,
+  .parse-live-dot,
+  .parse-ring-spin,
+  .parse-bar-glide::after,
+  .parse-line-appear,
+  .parse-banner-in { animation: none !important; }
+}
+
 /* ── Supplier-invoice review: PDF-line bidirectional highlight ──────────
    Applied to clickable line rows in the PDF preview pane. The active row
    gets a warn-tinted background + outline; matched-AND-active gets the

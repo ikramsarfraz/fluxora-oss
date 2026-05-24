@@ -1,23 +1,15 @@
 "use client";
 
-import { Check, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { ProgressBar, StageList, type StageItem } from "./primitives";
+import type { ParseStage } from "./types";
 
-import type { ParseStage, StageStatus } from "./types";
-
-// Design-system tokens — keep this on-brand with the forest palette used
-// throughout the rest of the app. Previously the in-progress affordances
-// used an off-brand blue (oklch 242) and a hardcoded gray (#9a9a93).
-const COLORS = {
-  good: "var(--color-success-fg)",
-  accent: "var(--color-forest-mid)",
-  accentEnd: "var(--color-forest-bright)",
-  borderStrong: "var(--color-border-default)",
-  mutedSoft: "var(--color-muted)",
-  danger: "var(--color-danger-fg)",
-} as const;
-
+/**
+ * Left card of the single-PDF parse screen: file strip on top, overall
+ * progress underneath, then the vertical stage list. Pure composition over
+ * the parsing primitives — all token + animation behaviour lives there.
+ */
 export function StageTimeline({
   fileName,
   fileSizeLabel,
@@ -25,6 +17,7 @@ export function StageTimeline({
   elapsedSeconds,
   overallProgress,
   stages,
+  isDone = false,
 }: {
   fileName: string;
   fileSizeLabel: string;
@@ -32,20 +25,21 @@ export function StageTimeline({
   elapsedSeconds: number;
   overallProgress: number;
   stages: ParseStage[];
+  isDone?: boolean;
 }) {
+  // ParseStage is structurally identical to StageItem — pass directly.
+  const items: StageItem[] = stages;
   return (
-    <div className="overflow-hidden rounded-[12px] border border-border-default bg-card">
+    <div className="overflow-hidden rounded-[10px] border border-border-default bg-card">
       <FileStrip
         fileName={fileName}
         fileSizeLabel={fileSizeLabel}
         uploadedLabel={uploadedLabel}
         elapsedSeconds={elapsedSeconds}
       />
-      <OverallProgress percent={overallProgress} />
-      <div className="px-[14px] pb-[18px] pt-[18px]">
-        {stages.map(stage => (
-          <StageRow key={stage.id} stage={stage} />
-        ))}
+      <OverallProgress percent={overallProgress} isDone={isDone} />
+      <div className="px-3 pb-3.5 pt-4">
+        <StageList stages={items} />
       </div>
     </div>
   );
@@ -63,133 +57,46 @@ function FileStrip({
   elapsedSeconds: number;
 }) {
   return (
-    <div className="flex items-center gap-[14px] border-b border-border-default px-[22px] py-[16px]">
+    <div className="flex items-center gap-3.5 border-b border-border-default px-5 py-3.5">
       <div
-        className="flex size-[38px] items-center justify-center rounded-[10px] border border-border-default bg-divider"
-        style={{ color: COLORS.danger }}
+        className="flex size-[34px] shrink-0 items-center justify-center rounded-[8px] border border-border-default bg-surface"
+        style={{ color: "var(--color-danger-fg)" }}
       >
         <FileText className="size-4" strokeWidth={1.6} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-mono text-[12.5px] font-medium text-ink">
+        <div className="truncate font-mono text-[12.5px] font-medium tabular-nums text-ink">
           {fileName}
         </div>
-        <div className="mt-0.5 text-[11px]" style={{ color: COLORS.mutedSoft }}>
-          {fileSizeLabel} · {uploadedLabel}
+        <div className="mt-0.5 text-[11px] text-muted">
+          {fileSizeLabel}
+          {fileSizeLabel ? " · " : ""}
+          {uploadedLabel}
         </div>
       </div>
-      <div className="text-right">
-        <div className="font-mono text-[12px] text-subtle tabular-nums">
+      <div className="shrink-0 text-right">
+        <div className="font-mono text-[13px] font-semibold tabular-nums text-ink">
           {elapsedSeconds.toFixed(1)}s
         </div>
-        <div className="text-[10px]" style={{ color: COLORS.mutedSoft }}>
-          elapsed
+        <div className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+          ELAPSED
         </div>
       </div>
     </div>
   );
 }
 
-function OverallProgress({ percent }: { percent: number }) {
+function OverallProgress({ percent, isDone }: { percent: number; isDone: boolean }) {
   const clamped = Math.max(0, Math.min(100, percent));
   return (
-    <div className="px-[22px] pb-[6px] pt-[18px]">
-      <div className="mb-[10px] flex items-baseline justify-between">
-        <div className="text-[13px] font-medium text-ink">Overall progress</div>
-        <div className="font-mono text-[13px] font-semibold tabular-nums">
+    <div className="px-5 pt-4">
+      <div className="mb-2 flex items-baseline justify-between">
+        <div className="text-[12.5px] font-medium text-ink">Overall progress</div>
+        <div className="font-mono text-[13px] font-semibold tabular-nums text-ink">
           {Math.round(clamped)}%
         </div>
       </div>
-      <div className="h-2 overflow-hidden rounded bg-divider">
-        <div
-          className="h-full rounded transition-[width] duration-150"
-          style={{
-            width: `${clamped}%`,
-            background: `linear-gradient(90deg, ${COLORS.accent}, ${COLORS.accentEnd})`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function StageRow({ stage }: { stage: ParseStage }) {
-  const running = stage.status === "running";
-  const queued = stage.status === "queued";
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-[10px] py-[10px]",
-        running ? "bg-divider" : "bg-transparent",
-      )}
-    >
-      <StageIndicator status={stage.status} />
-      <div className="flex flex-1 items-baseline justify-between">
-        <div>
-          <div
-            className={cn(
-              "text-[13px]",
-              stage.status === "done" ? "font-medium" : "font-semibold",
-              queued ? "text-subtle" : "text-ink",
-            )}
-          >
-            {stage.label}
-          </div>
-          {stage.detail ? (
-            <div
-              className={cn(
-                "mt-px text-[11px]",
-                running && "font-mono tabular-nums",
-              )}
-              style={{ color: COLORS.mutedSoft }}
-            >
-              {stage.detail}
-            </div>
-          ) : null}
-        </div>
-        {stage.time ? (
-          <div
-            className="font-mono text-[11px] tabular-nums"
-            style={{ color: running ? COLORS.accent : COLORS.mutedSoft }}
-          >
-            {stage.time}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function StageIndicator({ status }: { status: StageStatus }) {
-  if (status === "done") {
-    return (
-      <div
-        className="flex size-6 items-center justify-center rounded-full text-white"
-        style={{ background: COLORS.good }}
-      >
-        <Check className="size-[14px]" strokeWidth={2.4} />
-      </div>
-    );
-  }
-  if (status === "running") {
-    return (
-      <div
-        className="flex size-6 items-center justify-center rounded-full"
-        style={{ background: COLORS.accent }}
-      >
-        <span className="size-[10px] animate-pulse rounded-full bg-card" />
-      </div>
-    );
-  }
-  return (
-    <div
-      className="flex size-6 items-center justify-center rounded-full bg-divider"
-      style={{ border: `1px solid ${COLORS.borderStrong}` }}
-    >
-      <span
-        className="size-[6px] rounded-full"
-        style={{ background: COLORS.borderStrong }}
-      />
+      <ProgressBar value={clamped} isDone={isDone} height={8} />
     </div>
   );
 }
