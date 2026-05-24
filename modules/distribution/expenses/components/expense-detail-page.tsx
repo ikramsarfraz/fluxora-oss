@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowLeft, Download, Paperclip, Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -32,6 +32,12 @@ import {
   useDeleteExpense,
   useExpense,
 } from "../hooks/use-expenses";
+import {
+  openExpenseAttachmentDownload,
+  useExpenseAttachments,
+  useRemoveExpenseAttachment,
+  useUploadExpenseAttachment,
+} from "../hooks/use-expense-attachments";
 import {
   canManageExpenses,
   expenseCategoryLabel,
@@ -165,6 +171,8 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         </DetailSection>
       ) : null}
 
+      <AttachmentsSection expenseId={expense.id} canManage={canManage} />
+
       <DetailSection title="Metadata">
         <DetailGrid>
           <DetailField label="Created by">
@@ -211,6 +219,143 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentsSection({
+  expenseId,
+  canManage,
+}: {
+  expenseId: string;
+  canManage: boolean;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const { data: attachments, isLoading } = useExpenseAttachments(expenseId);
+  const upload = useUploadExpenseAttachment(expenseId);
+  const remove = useRemoveExpenseAttachment(expenseId);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset so picking the same file again still fires onChange
+    if (!file) return;
+    upload.mutate(file, {
+      onSuccess: () => toast.success("Receipt uploaded."),
+      onError: (err: Error) => toast.error(err.message),
+    });
+  }
+
+  function handleDownload(fileId: string) {
+    openExpenseAttachmentDownload({ expenseId, fileId }).catch((err: Error) =>
+      toast.error(err.message),
+    );
+  }
+
+  function handleRemove(fileId: string) {
+    setPendingDeleteId(fileId);
+    remove.mutate(fileId, {
+      onSuccess: () => {
+        toast.success("Receipt removed.");
+        setPendingDeleteId(null);
+      },
+      onError: (err: Error) => {
+        toast.error(err.message);
+        setPendingDeleteId(null);
+      },
+    });
+  }
+
+  const rows = attachments ?? [];
+
+  return (
+    <DetailSection title="Receipts">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+        aria-hidden
+      />
+      {canManage ? (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className="text-xs text-subtle">
+            Accepted: JPEG, PNG, WebP, HEIC, PDF · max 10 MB
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={upload.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="size-4" />
+            {upload.isPending ? "Uploading…" : "Upload receipt"}
+          </Button>
+        </div>
+      ) : null}
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {canManage ? "No receipts attached yet." : "No receipts on this expense."}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map(row => (
+            <li
+              key={row.fileId}
+              className="flex items-center gap-3 rounded-md border border-border-default bg-card px-3 py-2"
+            >
+              <Paperclip className="size-4 text-subtle" />
+              <button
+                type="button"
+                onClick={() => handleDownload(row.fileId)}
+                className="flex-1 truncate text-left text-sm font-medium text-ink hover:underline"
+              >
+                {row.originalFilename ?? "Receipt"}
+              </button>
+              <span className="hidden text-xs text-subtle tabular-nums sm:inline">
+                {formatBytes(row.sizeBytes)}
+              </span>
+              <span className="hidden text-xs text-subtle sm:inline">
+                {formatDisplayDate(
+                  row.createdAt instanceof Date
+                    ? row.createdAt.toISOString().slice(0, 10)
+                    : String(row.createdAt).slice(0, 10),
+                )}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDownload(row.fileId)}
+                aria-label="Download receipt"
+              >
+                <Download className="size-4" />
+              </Button>
+              {canManage ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pendingDeleteId === row.fileId}
+                  onClick={() => handleRemove(row.fileId)}
+                  aria-label="Remove receipt"
+                >
+                  <Trash2 className="size-4 text-danger-fg" />
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </DetailSection>
   );
 }
 

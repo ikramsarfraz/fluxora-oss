@@ -117,6 +117,7 @@ export const queryKeys = {
     all: ["expenses"] as const,
     list: (params: unknown) => ["expenses", "list", params] as const,
     detail: (id: string) => ["expenses", id] as const,
+    attachments: (id: string) => ["expenses", id, "attachments"] as const,
   },
   tenant: {
     branding: ["tenant", "branding"] as const,
