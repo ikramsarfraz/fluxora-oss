@@ -106,6 +106,14 @@ Every distribution module exports a `FEATURE` constant (e.g. `ORDERS_FEATURE`) r
 
 ## Drizzle migrations
 
+**Never write migration SQL files by hand.** Migrations are generated, not authored. Workflow for any schema change:
+
+1. Edit the Drizzle schema in [db/schema.ts](db/schema.ts) (or the relevant schema file).
+2. Run `pnpm db:generate` to let drizzle-kit produce the migration.
+3. Run `pnpm db:migrate` to apply it.
+
+Do **not** create or edit files in the `drizzle/` output directory directly, and do **not** hand-write SQL migration files under any circumstances.
+
 The full rule is in [AGENTS.md](AGENTS.md) — restated here because getting this wrong silently breaks production: **`drizzle/meta/_journal.json` entries' `when` values must be strictly increasing**, and a new entry's `when` must be greater than the max `created_at` already in the `__drizzle_migrations` table. After `drizzle-kit generate`, verify the new entry's `when` is the largest in the file; if not, bump it (e.g. `previousMax + 100000`). Drizzle silently skips out-of-order migrations — no error, table just never gets created.
 
 ## Conventions worth knowing
