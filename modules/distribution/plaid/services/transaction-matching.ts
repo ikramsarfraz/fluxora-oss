@@ -531,6 +531,8 @@ async function flagMysteryIfNeeded(txn: BankTransaction): Promise<void> {
   // Don't flag if already dismissed
   if (txn.mysteryDismissedAt) return;
   if (txn.isMysteryOutflow) return; // already flagged
+  // Don't flag once the pairing service has linked it to its opposite leg.
+  if (txn.transferPairId) return;
 
   // Don't flag known non-bill categories
   const cats = (txn.plaidCategory as string[] | null) ?? [];

@@ -13,6 +13,7 @@ import { decryptToken } from "@/lib/crypto/token-encryption";
 import { getPlaidClient } from "./plaid-client";
 import { runMatchingForTransaction } from "./transaction-matching";
 import { snapshotBalancesForConnection } from "./balance-snapshot";
+import { pairRecentTransfers } from "./transfer-pairing";
 
 export async function syncConnection(connectionId: string): Promise<{
   added: number;
@@ -165,6 +166,12 @@ export async function syncConnection(connectionId: string): Promise<{
 
   // Snapshot current balances so the inbox can compute 7-day balance change
   await snapshotBalancesForConnection(connectionId).catch(() => {});
+
+  // Look for intra-bank transfers across the tenant's recent posted txns.
+  // Scoped at the tenant level (not the connection) because a transfer
+  // spans two connections by definition. Failures here don't block the
+  // sync — pairing is non-critical metadata.
+  await pairRecentTransfers(connection.tenantId).catch(() => {});
 
   return { added, modified, removed };
 }
