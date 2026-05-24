@@ -21,6 +21,14 @@ export {
   uploadExpenseAttachmentAction,
 } from "./attachments";
 
+export {
+  approveExpenseAction,
+  markExpensePaidAction,
+  rejectExpenseAction,
+  resetExpenseToDraftAction,
+  submitExpenseAction,
+} from "./status";
+
 export async function getExpensesAction() {
   return await getExpenses();
 }
