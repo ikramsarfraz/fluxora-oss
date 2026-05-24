@@ -2805,6 +2805,13 @@ export const bankTransactions = pgTable(
     checkNumber: integer("check_number"),
     isMysteryOutflow: boolean("is_mystery_outflow").notNull().default(false),
     mysteryDismissedAt: timestamp("mystery_dismissed_at", { withTimezone: true }),
+    /**
+     * Set when this transaction has been paired with the matching opposite
+     * leg of an intra-bank transfer (e.g. $500 leaves Chase, $500 lands at
+     * Wells Fargo the same day). Both rows share the same pair id so the
+     * UI can render them as one logical movement. Null = unpaired.
+     */
+    transferPairId: uuid("transfer_pair_id"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -2818,6 +2825,7 @@ export const bankTransactions = pgTable(
     index("bank_transactions_date_idx").on(table.date),
     uniqueIndex("bank_transactions_plaid_txn_id_unique").on(table.plaidTransactionId),
     index("bank_transactions_mystery_idx").on(table.tenantId, table.isMysteryOutflow),
+    index("bank_transactions_transfer_pair_idx").on(table.transferPairId),
   ],
 );
 
