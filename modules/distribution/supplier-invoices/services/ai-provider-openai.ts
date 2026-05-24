@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 
@@ -288,6 +290,19 @@ export class OpenAiProvider implements AiProvider {
       candidateProducts: limitedProducts,
     });
 
+    const userMsgFingerprint = createHash("sha256")
+      .update(userMessage)
+      .digest("hex")
+      .slice(0, 12);
+    console.log("[parse trace] ai-call", {
+      filename: input.filename,
+      model,
+      truncatedTextLen: truncatedText.length,
+      truncatedTextHead: truncatedText.slice(0, 100).replace(/\s+/g, " "),
+      userMessageLen: userMessage.length,
+      userMessageSha256Prefix: userMsgFingerprint,
+    });
+
     let parsed: unknown;
     let usage: AiCallUsage | null = null;
 
@@ -325,6 +340,20 @@ export class OpenAiProvider implements AiProvider {
         });
       }
       parsed = message?.parsed;
+      console.log("[parse trace] ai-resp", {
+        filename: input.filename,
+        userMessageSha256Prefix: userMsgFingerprint,
+        rawFirstLine:
+          parsed && typeof parsed === "object" && "lines" in parsed && Array.isArray((parsed as { lines?: unknown }).lines)
+            ? JSON.stringify((parsed as { lines: unknown[] }).lines[0])?.slice(0, 200)
+            : null,
+        rawTotalAmount:
+          parsed && typeof parsed === "object" && "totalAmount" in parsed
+            ? (parsed as { totalAmount: unknown }).totalAmount
+            : null,
+        promptTokens: response.usage?.prompt_tokens,
+        completionTokens: response.usage?.completion_tokens,
+      });
       if (parsed == null) {
         return buildNoOutputExtractionResult({
           errorCode: "no_output",
