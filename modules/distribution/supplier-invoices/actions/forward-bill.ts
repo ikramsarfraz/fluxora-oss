@@ -59,16 +59,25 @@ export async function forwardBillAction(input: ForwardBillInput) {
   if (input.recipients.length === 0) throw new Error("At least one recipient required");
   if (input.recipients.length > 10) throw new Error("Maximum 10 recipients");
 
-  // Build a tenant-aware From header so recipients see the customer's brand
-  // both in the display name AND in the address local-part — e.g.
-  //   From: "City Diner" <city-diner-bills@fluxora.com>
+  // Build a tenant-aware From header so production recipients see the
+  // customer's brand in both the display name AND the address local-part —
+  // e.g. From: "City Diner" <city-diner-bills@fluxora.com>.
   //
-  // Critical: only ONE domain (ROOT_DOMAIN) is verified in Resend. We don't
-  // need to add a Resend domain per tenant — varying the local-part is
-  // free, signs against the same DKIM key, and avoids the
-  // $/domain/month + onboarding cost of per-tenant sending domains.
-  // If/when we later add tenant-owned sending domains, this is the seam
-  // to swap.
+  // Local + staging dev fall back to the single shared EMAIL_FROM address
+  // (set in .env.local). Reasons:
+  //   - lib/email.ts already requires EMAIL_FROM at module load — every
+  //     existing transactional path (auth, tenant-join, etc.) sends from
+  //     it. Reusing it here means local dev doesn't need any extra setup.
+  //   - Resend's free / hobby tiers usually only have one personal-domain
+  //     address verified. Forcing a tenant-aware From in dev would hit
+  //     "unverified domain" errors.
+  //   - Production has ROOT_DOMAIN's DKIM/SPF wired up, so the
+  //     <slug>-bills@<root> local-part variation signs cleanly with a
+  //     single verified domain — no per-tenant Resend domain needed.
+  //
+  // To force the tenant-aware path locally for testing, override NODE_ENV
+  // or temporarily branch the check below.
+  const isProd = process.env.NODE_ENV === "production";
   const rootDomain = process.env.ROOT_DOMAIN ?? "example.com";
   // Sanitize the slug to a safe email-local-part (a-z, 0-9, hyphen). Caps
   // at 50 chars so adding the "-bills" suffix stays under RFC 5321's
@@ -88,11 +97,15 @@ export async function forwardBillAction(input: ForwardBillInput) {
   const safeDisplayName = rawDisplayName
     ? rawDisplayName.replace(/[\\"\r\n]/g, "").slice(0, 100)
     : null;
-  const fromAddress =
-    process.env.EMAIL_FROM ??
-    (safeDisplayName
-      ? `"${safeDisplayName}" <${fromLocalPart}@${rootDomain}>`
-      : `${fromLocalPart}@${rootDomain}`);
+  const tenantAwareFrom = safeDisplayName
+    ? `"${safeDisplayName}" <${fromLocalPart}@${rootDomain}>`
+    : `${fromLocalPart}@${rootDomain}`;
+  // In prod, use the tenant-aware From. Outside prod, use EMAIL_FROM from
+  // env (already required to boot). EMAIL_FROM can also force-override
+  // prod when set explicitly — useful for staging or rollback.
+  const fromAddress = isProd
+    ? (process.env.EMAIL_FROM_OVERRIDE ?? tenantAwareFrom)
+    : (process.env.EMAIL_FROM ?? tenantAwareFrom);
   const senderEmail = user.email ?? `${fromLocalPart}@${rootDomain}`;
 
   const htmlBody = input.messageBody
@@ -100,11 +113,24 @@ export async function forwardBillAction(input: ForwardBillInput) {
     .map(line => `<p style="margin: 0 0 8px;">${line || "&nbsp;"}</p>`)
     .join("");
 
+  // Dev-only safety net: when EMAIL_FORWARD_OVERRIDE_TO is set, every
+  // outbound goes to that single inbox instead of the user-typed
+  // recipients. Lets a developer click "Forward" against a real
+  // supplier bill without paging the actual supplier. The DB row +
+  // audit log below STILL record `input.recipients` so the bill_forwards
+  // history matches what a developer would see in production — the
+  // override is purely about where the bytes get delivered.
+  const overrideTo = process.env.EMAIL_FORWARD_OVERRIDE_TO?.trim();
+  const deliveryRecipients = overrideTo ? [overrideTo] : input.recipients;
+  const overrideSubject = overrideTo
+    ? `[DEV → ${input.recipients.join(", ")}] ${input.subject}`
+    : input.subject;
+
   const emailResult = await resend.emails.send({
     from: fromAddress,
     replyTo: senderEmail,
-    to: input.recipients,
-    subject: input.subject,
+    to: deliveryRecipients,
+    subject: overrideSubject,
     html: `
       <div style="font-family: system-ui, sans-serif; max-width: 600px; color: #0c0a09;">
         ${htmlBody}
