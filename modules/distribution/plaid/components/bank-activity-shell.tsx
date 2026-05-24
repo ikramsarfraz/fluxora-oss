@@ -8,6 +8,7 @@ import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react
 import { Button } from "@/components/ui/button";
 import {
   confirmPaymentMatch,
+  dismissMysteryOutflowsBulkAction,
   rejectPaymentMatch,
   syncAllConnectionsAction,
 } from "../actions";
@@ -41,8 +42,27 @@ export function BankActivityShell({ data }: { data: Data }) {
   const [searchText, setSearchText] = useState("");
   const [accountFilter, setAccountFilter] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedMysteryIds, setSelectedMysteryIds] = useState<Set<string>>(new Set());
   const router = useRouter();
   const [syncing, startSync] = useTransition();
+  const [dismissingBulk, startBulkDismiss] = useTransition();
+
+  // Selection is only meaningful inside the Mystery view; reset whenever the
+  // user changes filter so a stale selection can't accidentally batch-dismiss
+  // rows the user can no longer see.
+  function changeFilter(next: Filter) {
+    if (next !== filter) setSelectedMysteryIds(new Set());
+    setFilter(next);
+  }
+
+  function toggleMysterySelection(txnId: string) {
+    setSelectedMysteryIds(prev => {
+      const next = new Set(prev);
+      if (next.has(txnId)) next.delete(txnId);
+      else next.add(txnId);
+      return next;
+    });
+  }
 
   const handleSync = () => {
     startSync(async () => {
@@ -338,7 +358,7 @@ export function BankActivityShell({ data }: { data: Data }) {
             <button
               key={key}
               type="button"
-              onClick={() => setFilter(key)}
+              onClick={() => changeFilter(key)}
               style={{
                 padding: "5px 12px",
                 borderRadius: 100,
@@ -394,6 +414,36 @@ export function BankActivityShell({ data }: { data: Data }) {
         />
       </div>
 
+      {/* Bulk-select bar — Mystery view only. Surfaces select-all + dismiss
+          batch CTA when ≥1 row is checked. */}
+      {filter === "mystery" && visible.length > 0 && (
+        <BulkMysteryBar
+          visibleIds={visible.map(t => t.id)}
+          selectedIds={selectedMysteryIds}
+          onToggleAll={(allSelected) => {
+            setSelectedMysteryIds(
+              allSelected ? new Set() : new Set(visible.map(t => t.id)),
+            );
+          }}
+          onDismiss={() => {
+            const ids = Array.from(selectedMysteryIds);
+            startBulkDismiss(async () => {
+              try {
+                const result = await dismissMysteryOutflowsBulkAction(ids);
+                toast.success(
+                  `Dismissed ${result.dismissed} mystery outflow${result.dismissed === 1 ? "" : "s"}.`,
+                );
+                setSelectedMysteryIds(new Set());
+                router.refresh();
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Bulk dismiss failed.");
+              }
+            });
+          }}
+          pending={dismissingBulk}
+        />
+      )}
+
       {/* Transaction list */}
       {visible.length === 0 ? (
         <div
@@ -425,10 +475,77 @@ export function BankActivityShell({ data }: { data: Data }) {
               isLast={i === visible.length - 1}
               expanded={expandedId === txn.id}
               onToggle={() => setExpandedId(expandedId === txn.id ? null : txn.id)}
+              selectable={filter === "mystery"}
+              selected={selectedMysteryIds.has(txn.id)}
+              onSelectionToggle={() => toggleMysterySelection(txn.id)}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function BulkMysteryBar({
+  visibleIds,
+  selectedIds,
+  onToggleAll,
+  onDismiss,
+  pending,
+}: {
+  visibleIds: string[];
+  selectedIds: Set<string>;
+  onToggleAll: (allSelected: boolean) => void;
+  onDismiss: () => void;
+  pending: boolean;
+}) {
+  const visibleSelectedCount = visibleIds.filter(id => selectedIds.has(id)).length;
+  const allSelected = visibleSelectedCount === visibleIds.length && visibleIds.length > 0;
+  const hasSelection = selectedIds.size > 0;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "8px 12px",
+        marginBottom: 8,
+        border: `1px solid ${C.line}`,
+        borderRadius: C.radius,
+        background: C.surface,
+        fontSize: 13,
+      }}
+    >
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={allSelected}
+          ref={el => {
+            // Indeterminate when *some* but not all visible rows are selected.
+            if (el) el.indeterminate = visibleSelectedCount > 0 && !allSelected;
+          }}
+          onChange={() => onToggleAll(allSelected)}
+        />
+        <span style={{ color: C.ink2 }}>
+          {hasSelection ? `${selectedIds.size} selected` : "Select all"}
+        </span>
+      </label>
+      <span style={{ marginLeft: "auto" }}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onDismiss}
+          disabled={!hasSelection || pending}
+          className="h-8 px-3 text-[13px]"
+        >
+          {pending
+            ? "Dismissing…"
+            : hasSelection
+              ? `Dismiss ${selectedIds.size}`
+              : "Dismiss selected"}
+        </Button>
+      </span>
     </div>
   );
 }
@@ -438,11 +555,17 @@ function TransactionRow({
   isLast,
   expanded,
   onToggle,
+  selectable,
+  selected,
+  onSelectionToggle,
 }: {
   txn: Transaction;
   isLast: boolean;
   expanded: boolean;
   onToggle: () => void;
+  selectable: boolean;
+  selected: boolean;
+  onSelectionToggle: () => void;
 }) {
   const [confirming, startConfirm] = useTransition();
   const [rejecting, startReject] = useTransition();
@@ -485,16 +608,30 @@ function TransactionRow({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "28px 1fr auto auto auto",
+          gridTemplateColumns: selectable
+            ? "28px 28px 1fr auto auto auto"
+            : "28px 1fr auto auto auto",
           gap: 12,
           alignItems: "center",
           padding: "12px 16px",
           borderBottom: isLast && !expanded ? "none" : `1px solid ${C.line2}`,
-          background: expanded ? "var(--color-page)" : C.surface,
+          background: selected ? "var(--color-warning-bg)" : (expanded ? "var(--color-page)" : C.surface),
           cursor: isPendingReview ? "pointer" : undefined,
         }}
         onClick={isPendingReview ? onToggle : undefined}
       >
+        {/* Bulk-select checkbox — Mystery view only */}
+        {selectable && (
+          <div onClick={e => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onSelectionToggle}
+              aria-label={`Select ${txn.merchantName ?? "transaction"} for bulk action`}
+            />
+          </div>
+        )}
+
         {/* Status icon */}
         <StateIcon state={txn.state} pending={txn.pending} />
 

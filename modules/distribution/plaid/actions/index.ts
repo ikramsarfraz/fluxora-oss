@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -267,6 +267,53 @@ export async function markAsNonBillExpenseAction(txnId: string) {
     .where(and(eq(bankTransactions.id, txnId), eq(bankTransactions.tenantId, tenant.id)));
   revalidatePath("/inbox");
   revalidatePath("/bank-activity");
+}
+
+/**
+ * Bulk-equivalent of dismissMysteryOutflowAction. Tenant scoping is enforced
+ * by the WHERE clause (inArray + eq tenant), so the caller can pass any list
+ * of ids without leaking cross-tenant rows. Single audit-log entry rather
+ * than one per transaction keeps the trail readable for large batches.
+ */
+export async function dismissMysteryOutflowsBulkAction(txnIds: string[]) {
+  const tenant = await getCurrentTenant();
+  const user = await getCurrentPortalUser();
+  requireFinanceRole(user.role);
+
+  // Defensive: cap batch size + reject obviously bad input.
+  const cleaned = Array.from(new Set(txnIds.filter(id => typeof id === "string" && id.length > 0)));
+  if (cleaned.length === 0) return { dismissed: 0 };
+  if (cleaned.length > 200) {
+    throw new Error("Cannot dismiss more than 200 transactions in one batch.");
+  }
+
+  const result = await db
+    .update(bankTransactions)
+    .set({ mysteryDismissedAt: new Date(), isMysteryOutflow: false, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(bankTransactions.id, cleaned),
+        eq(bankTransactions.tenantId, tenant.id),
+        eq(bankTransactions.isMysteryOutflow, true),
+      ),
+    )
+    .returning({ id: bankTransactions.id });
+
+  if (result.length > 0) {
+    await logAuditEvent({
+      tenantId: tenant.id,
+      actorUserId: user.id,
+      actorEmail: user.email,
+      action: "plaid.mystery_outflows_dismissed_bulk",
+      resourceType: "bank_transaction",
+      resourceId: result.length === 1 ? result[0].id : `bulk:${result.length}`,
+      metadata: { count: result.length },
+    });
+  }
+
+  revalidatePath("/inbox");
+  revalidatePath("/bank-activity");
+  return { dismissed: result.length };
 }
 
 export async function getOpenBillsForLinkingAction(txnId: string, proximity: "exact" | "5pct" | "15pct" | "all") {
