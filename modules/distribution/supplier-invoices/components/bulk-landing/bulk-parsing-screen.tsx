@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowRight, FileText, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,20 @@ export function BulkParsingScreen({
   const scanning = isDone ? 0 : total - done - errored;
   const queued = 0;
 
+  // Portal the overlay into shadcn's SidebarInset (the main-content wrapper)
+  // so the app sidebar stays visible and interactive while the batch runs.
+  // SidebarInset is `position: relative`, so an `absolute inset-0` child
+  // fills exactly the content column, no matter the sidebar's expanded /
+  // collapsed state. Falls back to in-place render before the mount node is
+  // located (one tick after first paint).
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const node = document.querySelector<HTMLElement>(
+      '[data-slot="sidebar-inset"]',
+    );
+    setMountNode(node);
+  }, []);
+
   // ETA heuristic — extrapolate from current elapsed/progress. Capped so a
   // near-zero progress doesn't produce minutes-long estimates that the user
   // will only see for one render.
@@ -89,9 +104,12 @@ export function BulkParsingScreen({
           ),
         );
 
-  return (
+  const screen = (
     <div
-      className="parse-banner-in fixed inset-0 z-50 flex flex-col overflow-y-auto bg-page"
+      className={cn(
+        "parse-banner-in z-40 flex flex-col overflow-y-auto bg-page",
+        mountNode ? "absolute inset-0" : "fixed inset-0 z-50",
+      )}
       role="dialog"
       aria-modal="true"
       aria-label={isDone ? "Batch scan complete" : "Scanning your batch"}
@@ -196,6 +214,8 @@ export function BulkParsingScreen({
       </div>
     </div>
   );
+
+  return mountNode ? createPortal(screen, mountNode) : screen;
 }
 
 function Metric({
