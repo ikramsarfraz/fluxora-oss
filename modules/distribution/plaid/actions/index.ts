@@ -34,14 +34,6 @@ function requireFinanceRole(role: string | null | undefined): void {
   }
 }
 
-// Bank reconciliation touches both AR (sales) and AP (supplier) bookkeeping;
-// either finance permission gates the dual-purpose actions.
-function requireFinanceRole(role: string | null | undefined): void {
-  if (!can(role as never, "record_payment") && !can(role as never, "record_supplier_payment")) {
-    throw new Error("Forbidden: Your role does not allow reconciling bank transactions.");
-  }
-}
-
 export async function confirmPaymentMatch(matchId: string) {
   const [user, tenant] = await Promise.all([getCurrentPortalUser(), getCurrentTenant()]);
   requireFinanceRole(user.role);
