@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { RefreshCw, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,23 @@ const C = {
 
 type Filter = "all" | "matched" | "pending_review" | "unmatched" | "pending" | "mystery";
 
+const FILTER_VALUES: Filter[] = ["all", "matched", "pending_review", "unmatched", "pending", "mystery"];
+
+function parseFilter(raw: string | null): Filter {
+  return (FILTER_VALUES as readonly string[]).includes(raw ?? "")
+    ? (raw as Filter)
+    : "all";
+}
+
 type SortKey = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
+
+const SORT_VALUES: SortKey[] = ["date-desc", "date-asc", "amount-desc", "amount-asc"];
+
+function parseSortKey(raw: string | null): SortKey {
+  return (SORT_VALUES as readonly string[]).includes(raw ?? "")
+    ? (raw as SortKey)
+    : "date-desc";
+}
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "date-desc", label: "Date (newest first)" },
@@ -64,22 +80,47 @@ function sortTransactions(rows: Transaction[], key: SortKey): Transaction[] {
 }
 
 export function BankActivityShell({ data }: { data: Data }) {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [searchText, setSearchText] = useState("");
-  const [accountFilter, setAccountFilter] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("date-desc");
+  const searchParams = useSearchParams();
+  // Initial state is seeded from URL once at mount; subsequent updates go
+  // through setters that also rewrite the URL via History.replaceState
+  // (one-way; we don't re-listen for popstate because the page is a server
+  // component and a back/forward will re-render with the new params anyway).
+  const [filter, setFilterState] = useState<Filter>(() => parseFilter(searchParams.get("filter")));
+  const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
+  const [accountFilter, setAccountFilterState] = useState<string | null>(() => searchParams.get("account") || null);
+  const [sortKey, setSortKeyState] = useState<SortKey>(() => parseSortKey(searchParams.get("sort")));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedMysteryIds, setSelectedMysteryIds] = useState<Set<string>>(new Set());
   const router = useRouter();
   const [syncing, startSync] = useTransition();
   const [dismissingBulk, startBulkDismiss] = useTransition();
 
+  const writeUrlParam = useCallback((key: string, value: string | null, defaultValue: string) => {
+    const params = new URLSearchParams(window.location.search);
+    if (!value || value === defaultValue) params.delete(key);
+    else params.set(key, value);
+    const qs = params.toString();
+    const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", next);
+  }, []);
+
   // Selection is only meaningful inside the Mystery view; reset whenever the
   // user changes filter so a stale selection can't accidentally batch-dismiss
   // rows the user can no longer see.
   function changeFilter(next: Filter) {
     if (next !== filter) setSelectedMysteryIds(new Set());
-    setFilter(next);
+    setFilterState(next);
+    writeUrlParam("filter", next, "all");
+  }
+
+  function setAccountFilter(next: string | null) {
+    setAccountFilterState(next);
+    writeUrlParam("account", next, "");
+  }
+
+  function setSortKey(next: SortKey) {
+    setSortKeyState(next);
+    writeUrlParam("sort", next, "date-desc");
   }
 
   function toggleMysterySelection(txnId: string) {
@@ -449,7 +490,11 @@ export function BankActivityShell({ data }: { data: Data }) {
           <input
             type="search"
             value={searchText}
-            onChange={e => setSearchText(e.target.value)}
+            onChange={e => {
+              const next = e.target.value;
+              setSearchText(next);
+              writeUrlParam("q", next, "");
+            }}
             placeholder="Search merchant, description, invoice…"
             aria-label="Filter transactions"
             style={{
