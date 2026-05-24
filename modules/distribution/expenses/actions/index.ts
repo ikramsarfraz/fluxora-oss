@@ -14,20 +14,78 @@ import {
   type UpdateExpenseInput,
 } from "../services/expenses";
 
-export {
-  getExpenseAttachmentDownloadUrlAction,
-  listExpenseAttachmentsAction,
-  removeExpenseAttachmentAction,
-  uploadExpenseAttachmentAction,
+// "use server" files can only export async functions, so re-exports
+// via `export { x } from "./y"` are rejected by the Next.js compiler.
+// Inline async wrappers around the attachment + status actions keep
+// the barrel's import surface intact for hooks + components.
+import {
+  getExpenseAttachmentDownloadUrlAction as _getExpenseAttachmentDownloadUrlAction,
+  listExpenseAttachmentsAction as _listExpenseAttachmentsAction,
+  removeExpenseAttachmentAction as _removeExpenseAttachmentAction,
+  uploadExpenseAttachmentAction as _uploadExpenseAttachmentAction,
 } from "./attachments";
 
-export {
-  approveExpenseAction,
-  markExpensePaidAction,
-  rejectExpenseAction,
-  resetExpenseToDraftAction,
-  submitExpenseAction,
+import {
+  approveExpenseAction as _approveExpenseAction,
+  markExpensePaidAction as _markExpensePaidAction,
+  rejectExpenseAction as _rejectExpenseAction,
+  resetExpenseToDraftAction as _resetExpenseToDraftAction,
+  submitExpenseAction as _submitExpenseAction,
 } from "./status";
+
+export async function getExpenseAttachmentDownloadUrlAction(
+  ...args: Parameters<typeof _getExpenseAttachmentDownloadUrlAction>
+) {
+  return _getExpenseAttachmentDownloadUrlAction(...args);
+}
+
+export async function listExpenseAttachmentsAction(
+  ...args: Parameters<typeof _listExpenseAttachmentsAction>
+) {
+  return _listExpenseAttachmentsAction(...args);
+}
+
+export async function removeExpenseAttachmentAction(
+  ...args: Parameters<typeof _removeExpenseAttachmentAction>
+) {
+  return _removeExpenseAttachmentAction(...args);
+}
+
+export async function uploadExpenseAttachmentAction(
+  ...args: Parameters<typeof _uploadExpenseAttachmentAction>
+) {
+  return _uploadExpenseAttachmentAction(...args);
+}
+
+export async function approveExpenseAction(
+  ...args: Parameters<typeof _approveExpenseAction>
+) {
+  return _approveExpenseAction(...args);
+}
+
+export async function markExpensePaidAction(
+  ...args: Parameters<typeof _markExpensePaidAction>
+) {
+  return _markExpensePaidAction(...args);
+}
+
+export async function rejectExpenseAction(
+  ...args: Parameters<typeof _rejectExpenseAction>
+) {
+  return _rejectExpenseAction(...args);
+}
+
+export async function resetExpenseToDraftAction(
+  ...args: Parameters<typeof _resetExpenseToDraftAction>
+) {
+  return _resetExpenseToDraftAction(...args);
+}
+
+export async function submitExpenseAction(
+  ...args: Parameters<typeof _submitExpenseAction>
+) {
+  return _submitExpenseAction(...args);
+}
 
 export async function getExpensesAction() {
   return await getExpenses();
