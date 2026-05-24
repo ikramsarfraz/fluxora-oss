@@ -6,7 +6,10 @@ import { X, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { forwardBillAction } from "../actions/forward-bill";
-import { checkBillPdfAvailability } from "../actions/check-bill-pdf-availability";
+import {
+  checkBillPdfAvailability,
+  type BillPdfSource,
+} from "../actions/check-bill-pdf-availability";
 
 const C = {
   ink: "var(--color-ink)",
@@ -46,15 +49,20 @@ export function ForwardBillModal({
   const [invalidEmails, setInvalidEmails] = useState<Set<string>>(new Set());
   const [subject, setSubject] = useState(buildDefaultSubject(invoice));
   const [body, setBody] = useState(buildDefaultBody(invoice));
-  const [attachOriginal, setAttachOriginal] = useState(true);
   const [attachSummary, setAttachSummary] = useState(false);
   const [sending, setSending] = useState(false);
-  // null = not yet probed, false = no source PDF found, true = PDF available.
-  // Determines whether the "Original PDF" checkbox is interactive — bills
-  // posted via the single-upload parse flow or typed in directly have no
-  // source PDF stored anywhere, so we disable the affordance to set
-  // expectations before send.
-  const [pdfAvailable, setPdfAvailable] = useState<boolean | null>(null);
+  // null = not yet probed, [] = no PDFs on file, [...] = list of attach-
+  // able PDFs (manual uploads + bulk-import original). The modal renders
+  // one checkbox per source; bills with no PDFs (typed-in or single-
+  // upload parse) get an explainer instead.
+  const [pdfSources, setPdfSources] = useState<BillPdfSource[] | null>(null);
+  // Ids the user has checked. Defaults to ALL on first load — the
+  // previous one-PDF-only behaviour is preserved when there's just one
+  // file, and multi-file bills opt in to forwarding the whole set
+  // unless the user unchecks some.
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -63,22 +71,27 @@ export function ForwardBillModal({
     checkBillPdfAvailability(invoice.id)
       .then(r => {
         if (cancelled) return;
-        setPdfAvailable(r.available);
-        // Default the checkbox to OFF when nothing's available, so a
-        // distracted user clicking "Send" doesn't expect a PDF that
-        // isn't coming.
-        if (!r.available) setAttachOriginal(false);
+        setPdfSources(r.sources);
+        setSelectedFileIds(new Set(r.sources.map(s => s.id)));
       })
       .catch(() => {
-        // Soft-fail: leave pdfAvailable=null. The action still
-        // double-checks and will throw a clear error if the user sends
-        // with attachedOriginal=true and no PDF.
-        if (!cancelled) setPdfAvailable(null);
+        // Soft-fail: leave pdfSources=null. The action still double-
+        // checks server-side and will throw a clear error if the user
+        // submits with selections that don't resolve.
+        if (!cancelled) setPdfSources(null);
       });
     return () => {
       cancelled = true;
     };
   }, [open, invoice.id]);
+
+  const toggleFile = (id: string) =>
+    setSelectedFileIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   if (!open) return null;
 
@@ -140,13 +153,17 @@ export function ForwardBillModal({
     }
     setSending(true);
     try {
+      const attachedFileIds = Array.from(selectedFileIds);
       await forwardBillAction({
         supplierInvoiceId: invoice.id,
         recipients,
         subject,
         messageBody: body,
-        attachedOriginal: attachOriginal,
+        // Derived from the explicit selection — kept on the input
+        // until the legacy field is removed in a follow-up.
+        attachedOriginal: attachedFileIds.length > 0,
         attachedSummary: attachSummary,
+        attachedFileIds,
       });
       toast.success("Bill forwarded.");
       onOpenChange(false);
@@ -321,33 +338,71 @@ export function ForwardBillModal({
             <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Attachments
             </div>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                cursor: pdfAvailable === false ? "not-allowed" : "pointer",
-                opacity: pdfAvailable === false ? 0.5 : 1,
-              }}
-              title={
-                pdfAvailable === false
-                  ? "This bill has no source PDF on file (posted from typed-in entry or single-upload parse, which doesn't retain the PDF)."
-                  : undefined
-              }
-            >
-              <input
-                type="checkbox"
-                checked={attachOriginal && pdfAvailable !== false}
-                onChange={e => setAttachOriginal(e.target.checked)}
-                disabled={pdfAvailable === false}
-              />
-              <span style={{ color: C.ink2 }}>
-                Original PDF
-                {pdfAvailable === false ? (
-                  <span style={{ color: C.muted, fontSize: 12 }}> (no PDF on file)</span>
-                ) : null}
-              </span>
-            </label>
+            {pdfSources === null ? (
+              <div style={{ fontSize: 12, color: C.muted, paddingLeft: 4 }}>
+                Loading attachments…
+              </div>
+            ) : pdfSources.length === 0 ? (
+              <div
+                style={{ fontSize: 12, color: C.muted, paddingLeft: 4 }}
+                title="Posted from typed-in entry or single-upload parse, which doesn't retain the PDF."
+              >
+                No PDF on file for this bill.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {pdfSources.map(src => {
+                  const checked = selectedFileIds.has(src.id);
+                  return (
+                    <label
+                      key={src.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleFile(src.id)}
+                      />
+                      <Paperclip
+                        size={12}
+                        style={{ color: C.muted, flexShrink: 0 }}
+                        aria-hidden
+                      />
+                      <span
+                        style={{
+                          color: C.ink2,
+                          fontFamily: C.mono,
+                          fontSize: 12.5,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          minWidth: 0,
+                        }}
+                        title={src.filename}
+                      >
+                        {src.filename}
+                      </span>
+                      {src.source === "bulk-import" ? (
+                        <span
+                          style={{
+                            color: C.muted,
+                            fontSize: 11,
+                            flexShrink: 0,
+                          }}
+                        >
+                          original
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
             {/* Branded summary attachment is intentionally disabled until a
                 supplier-invoice PDF renderer exists (the customer side has
                 one in lib/invoices/sales-invoice-pdf; the supplier side

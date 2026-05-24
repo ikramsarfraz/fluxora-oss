@@ -4,33 +4,49 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   bulkImportFiles,
+  files,
   supplierInvoiceAttachments,
   supplierInvoices,
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
+export type BillPdfSource = {
+  /**
+   * Namespaced id, encodes the underlying table:
+   *   `file:<uuid>`  — supplier_invoice_attachments.fileId (manual upload)
+   *   `bulk:<uuid>`  — bulk_import_files.id
+   * The Forward modal echoes selected ids back to forwardBillAction.
+   */
+  id: string;
+  source: "manual-upload" | "bulk-import";
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  /** Sort + display key. */
+  uploadedAt: Date | null;
+};
+
 export type BillPdfAvailability = {
-  /** Whether forwarding with `attachedOriginal=true` will actually deliver a PDF. */
+  /** Whether at least one PDF is available to attach. */
   available: boolean;
-  /** Where the PDF lives, when available. Useful for telemetry / debugging. */
-  source: "manual-upload" | "bulk-import" | null;
+  /** All PDFs on file, newest first. The modal renders one checkbox per entry. */
+  sources: BillPdfSource[];
 };
 
 /**
- * The Forward modal calls this on mount to decide whether to enable the
- * "Original PDF" checkbox. There are two source paths for the PDF and
- * both can be missing on the same bill:
+ * The Forward modal calls this on mount to render its attachment picker.
+ * Bills can have ANY of:
  *
- *   1. Manual upload via uploadSupplierInvoiceAttachmentAction →
- *      supplier_invoice_attachments → files
- *   2. Bulk import via bulkImportSupplierInvoicesAction →
- *      bulk_import_files (back-referenced by supplierInvoiceId on review)
+ *   1. Multiple manual uploads via uploadSupplierInvoiceAttachmentAction
+ *      → supplier_invoice_attachments → files
+ *   2. A bulk-import original via bulkImportSupplierInvoicesAction
+ *      → bulk_import_files (back-referenced by supplierInvoiceId on review)
  *
  * Bills posted through the single-upload `/supplier-invoices/new` parse
  * flow currently have NEITHER — the source PDF is parsed in memory and
- * discarded. Bills typed in directly with no PDF source obviously also
- * have neither. In both cases the modal should disable the checkbox so
- * the user knows up front the email won't carry a PDF.
+ * discarded (tracked separately as #276). Bills typed in directly with
+ * no PDF source obviously also have neither. The modal disables the
+ * attachment block in those cases.
  */
 export async function checkBillPdfAvailability(
   supplierInvoiceId: string,
@@ -38,7 +54,7 @@ export async function checkBillPdfAvailability(
   const tenant = await getCurrentTenant();
 
   // Tenant-scope check upfront so a forged invoiceId can't probe other
-  // tenants' rows via the booleans we return.
+  // tenants' rows via the lists we return.
   const invoice = await db.query.supplierInvoices.findFirst({
     where: and(
       eq(supplierInvoices.id, supplierInvoiceId),
@@ -46,17 +62,38 @@ export async function checkBillPdfAvailability(
     ),
     columns: { id: true },
   });
-  if (!invoice) return { available: false, source: null };
+  if (!invoice) return { available: false, sources: [] };
 
-  // Run both lookups in parallel.
-  const [manualRow, bulkRow] = await Promise.all([
-    db.query.supplierInvoiceAttachments.findFirst({
-      where: eq(supplierInvoiceAttachments.supplierInvoiceId, supplierInvoiceId),
-      columns: { fileId: true },
-      orderBy: [desc(supplierInvoiceAttachments.createdAt)],
-    }),
+  // Pull every manual attachment + every bulk-import row tied to this
+  // invoice in parallel. limit was the bug behind "only the last one
+  // gets sent" — now we return the full list and let the modal decide
+  // what to forward.
+  const [manualRows, bulkRows] = await Promise.all([
     db
-      .select({ id: bulkImportFiles.id })
+      .select({
+        id: files.id,
+        filename: files.originalFilename,
+        mimeType: files.mimeType,
+        sizeBytes: files.sizeBytes,
+        uploadedAt: files.createdAt,
+      })
+      .from(supplierInvoiceAttachments)
+      .innerJoin(files, eq(files.id, supplierInvoiceAttachments.fileId))
+      .where(
+        and(
+          eq(supplierInvoiceAttachments.supplierInvoiceId, supplierInvoiceId),
+          eq(files.tenantId, tenant.id),
+        ),
+      )
+      .orderBy(desc(supplierInvoiceAttachments.createdAt)),
+    db
+      .select({
+        id: bulkImportFiles.id,
+        filename: bulkImportFiles.filename,
+        mimeType: bulkImportFiles.mimeType,
+        sizeBytes: bulkImportFiles.sizeBytes,
+        uploadedAt: bulkImportFiles.createdAt,
+      })
       .from(bulkImportFiles)
       .where(
         and(
@@ -65,11 +102,33 @@ export async function checkBillPdfAvailability(
           isNull(bulkImportFiles.deletedAt),
         ),
       )
-      .limit(1)
-      .then(rows => rows[0] ?? null),
+      .orderBy(desc(bulkImportFiles.createdAt)),
   ]);
 
-  if (manualRow) return { available: true, source: "manual-upload" };
-  if (bulkRow) return { available: true, source: "bulk-import" };
-  return { available: false, source: null };
+  const sources: BillPdfSource[] = [
+    ...manualRows.map(r => ({
+      id: `file:${r.id}`,
+      source: "manual-upload" as const,
+      filename: r.filename ?? "attachment.pdf",
+      mimeType: r.mimeType,
+      sizeBytes: r.sizeBytes,
+      uploadedAt: r.uploadedAt,
+    })),
+    ...bulkRows.map(r => ({
+      id: `bulk:${r.id}`,
+      source: "bulk-import" as const,
+      filename: r.filename,
+      mimeType: r.mimeType,
+      sizeBytes: r.sizeBytes,
+      uploadedAt: r.uploadedAt,
+    })),
+  ];
+  // Newest-first across both sources.
+  sources.sort((a, b) => {
+    const at = a.uploadedAt?.getTime() ?? 0;
+    const bt = b.uploadedAt?.getTime() ?? 0;
+    return bt - at;
+  });
+
+  return { available: sources.length > 0, sources };
 }

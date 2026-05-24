@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   billForwards,
@@ -25,8 +25,20 @@ export type ForwardBillInput = {
   recipients: string[];
   subject: string;
   messageBody: string;
+  /**
+   * @deprecated since multi-file picker landed. Now derived from
+   * attachedFileIds.length > 0 and recorded on the bill_forwards row
+   * for back-compat. Kept on the input so older clients still validate.
+   */
   attachedOriginal: boolean;
   attachedSummary: boolean;
+  /**
+   * Namespaced file ids from BillPdfSource — `file:<uuid>` for a
+   * manually-uploaded attachment, `bulk:<uuid>` for the bulk-import
+   * original. Empty array sends body-only. Each id is validated below
+   * against the invoice's actual sources before download.
+   */
+  attachedFileIds?: string[];
 };
 
 export async function forwardBillAction(input: ForwardBillInput) {
@@ -54,7 +66,6 @@ export async function forwardBillAction(input: ForwardBillInput) {
       attachments: {
         with: { file: true },
         orderBy: (a, { desc }) => [desc(a.createdAt)],
-        limit: 1,
       },
     },
   });
@@ -131,19 +142,14 @@ export async function forwardBillAction(input: ForwardBillInput) {
     ? `[DEV → ${input.recipients.join(", ")}] ${input.subject}`
     : input.subject;
 
-  // Attach the supplier-invoice PDF when requested. The PDF can live in
-  // one of two places depending on how the bill was created:
+  // Build the attachment list from the user's per-file selection. The
+  // modal calls checkBillPdfAvailability on open and lets the user
+  // check/uncheck each available PDF; selected ids ride through here as
+  // namespaced strings (`file:<uuid>` or `bulk:<uuid>`).
   //
-  //   1. Manually-uploaded bills → supplier_invoice_attachments → files
-  //      (already eagerly loaded as `invoice.attachments[0]?.file`)
-  //   2. Bulk-imported bills → bulk_import_files (the row that was
-  //      `reviewedAt`-flipped into this supplierInvoiceId)
-  //
-  // Most bills land via path #2 since bulk import is the common entry.
-  // The previous fix only checked path #1, which is why bulk-imported
-  // bills forwarded with `Original PDF` checked still arrived with no
-  // attachment. Check both, prefer the manual attachment when present
-  // (admin may have uploaded a corrected PDF on top of the bulk import).
+  // Back-compat: older callers that still send `attachedOriginal: true`
+  // without an explicit attachedFileIds get "all available" — keeps
+  // existing automations working while the UI migrates.
   //
   // `attachedSummary` is intentionally NOT wired here: no supplier-invoice
   // PDF renderer exists yet (the customer-side has one in lib/invoices/
@@ -151,78 +157,85 @@ export async function forwardBillAction(input: ForwardBillInput) {
   // disabled in the modal until that renderer lands; the boolean is
   // still persisted so the future implementation can backfill history.
   const attachments: Array<{ filename: string; content: string }> = [];
-  if (input.attachedOriginal) {
-    type AttachmentSource = {
-      objectKey: string;
-      filename: string | null;
-      mimeType: string | null;
-    };
-    let source: AttachmentSource | null = null;
+  type AttachmentSource = {
+    objectKey: string;
+    filename: string | null;
+    mimeType: string | null;
+  };
+  // Build a lookup over EVERY source attached to this invoice. The user's
+  // selection is validated against this map — no forged ids slip through.
+  const sourceById = new Map<string, AttachmentSource>();
+  for (const att of invoice.attachments) {
+    if (!att.file) continue;
+    sourceById.set(`file:${att.file.id}`, {
+      objectKey: att.file.objectKey,
+      filename: att.file.originalFilename,
+      mimeType: att.file.mimeType,
+    });
+  }
+  const bulkRows = await db
+    .select({
+      id: bulkImportFiles.id,
+      objectKey: bulkImportFiles.objectKey,
+      filename: bulkImportFiles.filename,
+      mimeType: bulkImportFiles.mimeType,
+    })
+    .from(bulkImportFiles)
+    .where(
+      and(
+        eq(bulkImportFiles.tenantId, tenant.id),
+        eq(bulkImportFiles.supplierInvoiceId, input.supplierInvoiceId),
+        isNull(bulkImportFiles.deletedAt),
+      ),
+    );
+  for (const r of bulkRows) {
+    sourceById.set(`bulk:${r.id}`, {
+      objectKey: r.objectKey,
+      filename: r.filename,
+      mimeType: r.mimeType,
+    });
+  }
 
-    if (invoice.attachments[0]?.file) {
-      const f = invoice.attachments[0].file;
-      source = {
-        objectKey: f.objectKey,
-        filename: f.originalFilename,
-        mimeType: f.mimeType,
-      };
-    } else {
-      // Bulk-import path: look up the bulk_import_files row that was
-      // reviewed into this invoice. Filter out soft-deleted entries.
-      const [bulkRow] = await db
-        .select({
-          objectKey: bulkImportFiles.objectKey,
-          filename: bulkImportFiles.filename,
-          mimeType: bulkImportFiles.mimeType,
-        })
-        .from(bulkImportFiles)
-        .where(
-          and(
-            eq(bulkImportFiles.tenantId, tenant.id),
-            eq(bulkImportFiles.supplierInvoiceId, input.supplierInvoiceId),
-            isNull(bulkImportFiles.deletedAt),
-          ),
-        )
-        .orderBy(desc(bulkImportFiles.createdAt))
-        .limit(1);
-      if (bulkRow) {
-        source = {
-          objectKey: bulkRow.objectKey,
-          filename: bulkRow.filename,
-          mimeType: bulkRow.mimeType,
-        };
-      }
+  // Resolve which ids to actually download.
+  const requestedIds = input.attachedFileIds
+    ? input.attachedFileIds
+    : input.attachedOriginal
+      ? Array.from(sourceById.keys())
+      : [];
+
+  if (input.attachedOriginal && requestedIds.length === 0) {
+    // attachedOriginal=true survived but no candidates → explicit error
+    // so the sender knows to uncheck rather than silently sending
+    // body-only.
+    throw new Error(
+      "This bill has no source PDF on file — uncheck \"Original PDF\" to send the message without an attachment.",
+    );
+  }
+
+  for (const id of requestedIds) {
+    const source = sourceById.get(id);
+    if (!source) {
+      // Forged or stale id — ignore rather than throw, so a single
+      // missing entry doesn't kill the whole send. Logged for triage.
+      console.warn(
+        `[forward-bill] attached file id ${id} not on invoice ${input.supplierInvoiceId}`,
+      );
+      continue;
     }
-
-    if (source) {
-      try {
-        const bytes = await downloadFile(source.objectKey);
-        const filename =
-          source.filename ??
-          `${invoice.invoiceNumber ?? invoice.referenceNumber}.pdf`;
-        attachments.push({
-          filename,
-          content: bytes.toString("base64"),
-        });
-      } catch (err) {
-        // Don't sink the whole forward — log + send the email body alone.
-        // The user explicitly chose to forward; failing silently on the
-        // attachment is better than losing the whole message. The audit
-        // log below will still record attachedOriginal=true, which is
-        // a small lie but matches user intent.
-        console.error(
-          `[forward-bill] failed to load attachment for invoice ${input.supplierInvoiceId}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    } else {
-      // No source PDF on file — explicit error rather than silently
-      // sending body-only. The modal disables the checkbox upfront via
-      // checkBillPdfAvailability, so reaching this branch usually means
-      // the modal's pre-check failed (network blip, stale state, or
-      // direct action call). Treat it as a user-facing error so the
-      // sender knows to uncheck the box and retry.
-      throw new Error(
-        "This bill has no source PDF on file — uncheck \"Original PDF\" to send the message without an attachment.",
+    try {
+      const bytes = await downloadFile(source.objectKey);
+      const filename =
+        source.filename ??
+        `${invoice.invoiceNumber ?? invoice.referenceNumber}.pdf`;
+      attachments.push({
+        filename,
+        content: bytes.toString("base64"),
+      });
+    } catch (err) {
+      // Don't sink the whole forward on a single R2 hiccup — log + keep
+      // going with the other selected attachments + the body.
+      console.error(
+        `[forward-bill] failed to load attachment ${id} for invoice ${input.supplierInvoiceId}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -245,6 +258,11 @@ export async function forwardBillAction(input: ForwardBillInput) {
     throw new Error(`Email failed: ${emailResult.error.message}`);
   }
 
+  // bill_forwards.attachedOriginal is the legacy column — derive it
+  // from whether ANY file actually went out. The audit log carries the
+  // richer count + selected ids for forensic lookups.
+  const anyAttached = attachments.length > 0;
+
   await db.insert(billForwards).values({
     tenantId: tenant.id,
     supplierInvoiceId: input.supplierInvoiceId,
@@ -252,7 +270,7 @@ export async function forwardBillAction(input: ForwardBillInput) {
     recipients: input.recipients,
     subject: input.subject,
     messageBody: input.messageBody,
-    attachedOriginal: input.attachedOriginal,
+    attachedOriginal: anyAttached,
     attachedSummary: input.attachedSummary,
     deliveryStatus: "sent",
     deliveryEvents: [],
@@ -268,8 +286,10 @@ export async function forwardBillAction(input: ForwardBillInput) {
     metadata: {
       recipientCount: input.recipients.length,
       subject: input.subject,
-      attachedOriginal: input.attachedOriginal,
+      attachedOriginal: anyAttached,
       attachedSummary: input.attachedSummary,
+      attachedFileIds: requestedIds,
+      attachedFileCount: attachments.length,
     },
   });
 
@@ -279,6 +299,7 @@ export async function forwardBillAction(input: ForwardBillInput) {
     event: "bill.forwarded",
     properties: {
       recipient_count: input.recipients.length,
+      attachment_count: attachments.length,
       includes_summary: input.attachedSummary,
     },
   });
