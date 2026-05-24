@@ -145,7 +145,7 @@ function CustomerList({
               <div
                 className={cn(
                   "w-7 h-7 shrink-0 rounded-[7px] grid place-items-center text-[11px] font-semibold",
-                  isActive ? "bg-primary text-white" : "bg-muted text-ink-warm",
+                  isActive ? "bg-primary text-white" : "bg-divider text-ink-warm",
                 )}
               >
                 {initials(c.name)}
@@ -350,7 +350,7 @@ function FuelCard({
           Flat fee added to every order. Set to 0 to waive.
         </div>
       </div>
-      <InputGroup className="w-20 bg-card" data-disabled={saving ? "true" : undefined}>
+      <InputGroup className="w-32 bg-card" data-disabled={saving ? "true" : undefined}>
         <InputGroupAddon align="inline-start">$</InputGroupAddon>
         <InputGroupInput
           type="number"
@@ -643,7 +643,7 @@ function ProductRow({
       <TableRow className={expanded ? "border-0" : undefined}>
         <TableCell className="py-3 px-4">
           <div className="flex items-center gap-3.5">
-            <div className="font-mono text-[10.5px] text-subtle bg-muted px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
+            <div className="font-mono text-[10.5px] text-subtle bg-divider px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
               {prod.sku}
             </div>
             <div>
@@ -664,7 +664,15 @@ function ProductRow({
                 variant="ghost"
                 size="sm"
                 onClick={onToggleExpand}
-                className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
+                className={cn(
+                  "gap-1.5 px-1.5 h-7 font-normal hover:bg-divider/60",
+                  // Same lifted-card-on-divider treatment the segmented
+                  // filter toggles use: subtle border + light card bg + xs
+                  // shadow rather than the heavy muted-tan that used to
+                  // signal "active."
+                  expanded &&
+                    "border border-border-default bg-card text-ink shadow-xs",
+                )}
                 title="Expand to see each supplier"
               >
                 <span className="text-subtle">
@@ -996,8 +1004,10 @@ function ProductTable({
 
         <ToggleGroup
           type="single"
-          variant="outline"
-          spacing={0}
+          variant="default"
+          size="sm"
+          spacing={1}
+          className="rounded-md bg-divider p-0.5"
           value={catFilter}
           onValueChange={v => {
             if (!v) return;
@@ -1005,16 +1015,29 @@ function ProductTable({
             resetListPosition();
           }}
         >
-          <ToggleGroupItem value="all" size="sm">All</ToggleGroupItem>
+          <ToggleGroupItem
+            value="all"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            All
+          </ToggleGroupItem>
           {categories.map(c => (
-            <ToggleGroupItem key={c} value={c} size="sm">{c}</ToggleGroupItem>
+            <ToggleGroupItem
+              key={c}
+              value={c}
+              className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+            >
+              {c}
+            </ToggleGroupItem>
           ))}
         </ToggleGroup>
 
         <ToggleGroup
           type="single"
-          variant="outline"
-          spacing={0}
+          variant="default"
+          size="sm"
+          spacing={1}
+          className="rounded-md bg-divider p-0.5"
           value={modeFilter}
           onValueChange={v => {
             if (!v) return;
@@ -1022,8 +1045,18 @@ function ProductTable({
             resetListPosition();
           }}
         >
-          <ToggleGroupItem value="all" size="sm">All products</ToggleGroupItem>
-          <ToggleGroupItem value="overrides" size="sm">Customer prices</ToggleGroupItem>
+          <ToggleGroupItem
+            value="all"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            All products
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="overrides"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            Customer prices
+          </ToggleGroupItem>
         </ToggleGroup>
 
         <div className="flex-1" />
