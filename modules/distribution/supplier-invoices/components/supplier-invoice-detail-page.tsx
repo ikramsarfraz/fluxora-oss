@@ -1067,11 +1067,9 @@ export function SupplierInvoiceDetailPage({
             </Section>
           )}
 
-          {/* Source PDF — renders only when the bill has a PDF attached. */}
-          <SupplierInvoicePdfPreviewCard
-            supplierInvoiceId={invoiceId}
-            attachments={invoice.attachments}
-          />
+          {/* Source PDF(s) — the card loads its own list of attachments
+              (manual + bulk-import) and renders a picker if multiple. */}
+          <SupplierInvoicePdfPreviewCard supplierInvoiceId={invoiceId} />
 
           {/* Attachments */}
           <SupplierInvoiceAttachmentsCard
