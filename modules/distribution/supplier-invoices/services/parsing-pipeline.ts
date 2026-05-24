@@ -419,17 +419,6 @@ export async function runParsingPipeline(args: {
       ])
     : [null, null];
 
-  console.log("[parse trace] cache", {
-    sourceFilename,
-    pdfContentHashPrefix: pdfContentHash?.slice(0, 12) ?? null,
-    textCacheHit: cachedTextExtraction !== null,
-    visionCacheHit: cachedVisionExtraction !== null,
-    cachedTextFirstLine:
-      cachedTextExtraction?.lines[0]
-        ? `weight=${cachedTextExtraction.lines[0].quantityWeight} price=${cachedTextExtraction.lines[0].unitPrice}`
-        : null,
-  });
-
   // Stage 3 + speculative Stage 4. When the extracted PDF text is clearly
   // lossy (image-heavy or table structure lost), vision is almost certainly
   // going to be the path that produces the final result — so we dispatch it

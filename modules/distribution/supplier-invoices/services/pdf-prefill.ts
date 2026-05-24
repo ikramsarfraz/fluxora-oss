@@ -1,7 +1,5 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
-
 import pdfParse from "pdf-parse";
 import { and, count, isNull, eq } from "drizzle-orm";
 
@@ -173,20 +171,19 @@ export async function parseSupplierInvoicePdf(input: {
 
   const mode = readParseMode();
 
-  // Temporary diagnostic for the bulk-parse line-item cross-contamination
-  // we're chasing: log per-call inputs so we can confirm in dev whether two
-  // files in the same batch are receiving distinct bytes + distinct
-  // extracted text. Remove once root cause is fixed.
-  const bytesFingerprint = createHash("sha256")
-    .update(input.bytes)
-    .digest("hex")
-    .slice(0, 12);
-  console.log("[parse trace] entry", {
-    filename: originalFilename,
-    bytesLen: input.bytes.byteLength,
-    firstHex: input.bytes.subarray(0, 16).toString("hex"),
-    sha256Prefix: bytesFingerprint,
-  });
+  // Reserve a clean copy of the source bytes BEFORE the extractor touches
+  // them. pdfjs-dist's getDocument({data}) detaches the underlying
+  // ArrayBuffer when it forwards bytes to its parser; after that, the
+  // original `input.bytes` Buffer still has the correct byteLength but
+  // any read of its contents yields zeros. Downstream
+  // runParsingPipeline -> hashPdfBytes -> SHA-256 then resolves to the
+  // empty-input hash (e3b0c44298fc…) for EVERY parse in this Node
+  // process, which collides every file in a bulk batch onto the same
+  // ai_extraction_cache key — the first parse populates it, every
+  // subsequent file in the batch hits it and returns the first file's
+  // AI extraction. (#TODO follow-up: also harden the single-file action
+  // paths in actions/index.ts that have the same shape.)
+  const pipelineBytes = Buffer.from(input.bytes);
 
   const [extracted, [productCountRow]] = await Promise.all([
     extractTextForPipeline(input.bytes, mode),
@@ -195,14 +192,6 @@ export async function parseSupplierInvoicePdf(input: {
       .from(products)
       .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt))),
   ]);
-
-  console.log("[parse trace] extracted", {
-    filename: originalFilename,
-    sha256Prefix: bytesFingerprint,
-    extractor: extracted.textExtractor,
-    textLen: extracted.text.length,
-    textHead: extracted.text.slice(0, 120).replace(/\s+/g, " "),
-  });
 
   // Report each extractor-fallback hop so the cost shape stays visible
   // in PostHog. pdf-parse → vision is the one to watch most closely —
@@ -229,7 +218,7 @@ export async function parseSupplierInvoicePdf(input: {
     sourceFilename: originalFilename,
     tenantId: tenant.id,
     pdfPageCount: extracted.pageCount,
-    pdfBytes: input.bytes,
+    pdfBytes: pipelineBytes,
     debug: process.env.NODE_ENV === "development",
     firstBillMode: productCount === 0,
   });
