@@ -26,6 +26,7 @@ export type AuditAction =
   | "bill.delete"
   | "bill.forward"
   | "bill.mark_paid_manually"
+  | "invoice.send"
   | "bulk_import.upload"
   | "bulk_import.rescan"
   | "bulk_import.row_deleted"

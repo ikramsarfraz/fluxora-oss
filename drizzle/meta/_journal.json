@@ -428,6 +428,13 @@
 			"when": 1779102100000,
 			"tag": "0060_idempotency_and_concurrency",
 			"breakpoints": true
+		},
+		{
+			"idx": 61,
+			"version": "7",
+			"when": 1779102200000,
+			"tag": "0061_sales_invoice_emails",
+			"breakpoints": true
 		}
 	]
 }

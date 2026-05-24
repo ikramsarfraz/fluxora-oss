@@ -28,6 +28,7 @@ import {
   products,
   productSupplierCosts,
   productUnits,
+  salesInvoiceEmails,
   salesInvoiceFiles,
   salesInvoiceLines,
   salesInvoices,
@@ -703,6 +704,7 @@ export const salesInvoicesRelations = relations(
       references: [tenants.id],
     }),
     files: many(salesInvoiceFiles),
+    emails: many(salesInvoiceEmails),
   }),
 );
 
@@ -1044,3 +1046,21 @@ export const billForwardsRelations = relations(billForwards, ({ one }) => ({
     references: [portalUsers.id],
   }),
 }));
+
+export const salesInvoiceEmailsRelations = relations(
+  salesInvoiceEmails,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [salesInvoiceEmails.tenantId],
+      references: [tenants.id],
+    }),
+    salesInvoice: one(salesInvoices, {
+      fields: [salesInvoiceEmails.salesInvoiceId],
+      references: [salesInvoices.id],
+    }),
+    sentBy: one(portalUsers, {
+      fields: [salesInvoiceEmails.sentByUserId],
+      references: [portalUsers.id],
+    }),
+  }),
+);

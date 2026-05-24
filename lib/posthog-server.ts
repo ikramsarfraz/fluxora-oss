@@ -40,7 +40,8 @@ export type AnalyticsEvent =
   | "payment_match.auto_applied"
   | "markdown.applied"
   | "supplier.switched_primary"
-  | "bill.forwarded";
+  | "bill.forwarded"
+  | "invoice.sent";
 
 /**
  * Captures an event from a server action / route handler. No-op when

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Download, Receipt } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Receipt, Send } from "lucide-react";
 
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
@@ -11,6 +11,7 @@ import { useSalesInvoice, useSalesInvoicePayments } from "../hooks/use-invoices"
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
 import { InvoicePaymentEntryDialog } from "./invoice-payment-entry-dialog";
+import { SendInvoiceModal } from "./send-invoice-modal";
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
@@ -130,6 +131,7 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
 
   const [profitExpanded, setProfitExpanded] = useState(false);
   const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [sendInvoiceOpen, setSendInvoiceOpen] = useState(false);
   const [showAllPayments, setShowAllPayments] = useState(false);
   const allPaymentsQuery = useSalesInvoicePayments(invoiceId, {
     enabled: showAllPayments,
@@ -177,6 +179,15 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
   const canRecordPayment = can(currentUser?.role, "record_payment");
   const showRecordPaymentCta =
     !balancePaid && invoice.status !== "void" && canRecordPayment;
+  // "Send" is shown for any non-void invoice. Same audience as
+  // generate_invoice (owner/admin/accounting) — the AR send is a
+  // follow-on action to invoice generation.
+  const canSendInvoice = can(currentUser?.role, "generate_invoice");
+  const showSendInvoiceCta = invoice.status !== "void" && canSendInvoice;
+  // Send becomes the primary CTA when the invoice is still draft
+  // (haven't billed the customer yet); for sent/partially_paid it sits
+  // as a secondary action next to Download.
+  const sendIsPrimary = invoice.status === "draft";
 
   function toggleProfit() {
     const next = !profitExpanded;
@@ -246,15 +257,48 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
               Record payment
             </button>
           ) : null}
+          {showSendInvoiceCta ? (
+            <button
+              type="button"
+              onClick={() => setSendInvoiceOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 14px",
+                // Primary (filled) when draft AND no other primary CTA
+                // has claimed the slot. If Record Payment is showing,
+                // Send drops to secondary so we never have two filled
+                // buttons competing for attention.
+                background: sendIsPrimary && !showRecordPaymentCta ? C.ink : C.surface,
+                color: sendIsPrimary && !showRecordPaymentCta ? "var(--color-page)" : C.ink2,
+                border: sendIsPrimary && !showRecordPaymentCta ? "none" : `1px solid ${C.line}`,
+                borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Send style={{ width: 14, height: 14 }} />
+              {invoice.sendCount && invoice.sendCount > 0 ? "Resend" : "Send to customer"}
+            </button>
+          ) : null}
           <a
             href={pdfUrl}
             download
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               padding: "8px 14px",
-              background: showRecordPaymentCta ? C.surface : C.ink,
-              color: showRecordPaymentCta ? C.ink2 : "var(--color-page)",
-              border: showRecordPaymentCta ? `1px solid ${C.line}` : "none",
+              // Filled only when nothing else is taking the primary slot.
+              // Record Payment is primary > Send is primary (draft) > Download.
+              background:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? C.surface
+                  : C.ink,
+              color:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? C.ink2
+                  : "var(--color-page)",
+              border:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? `1px solid ${C.line}`
+                  : "none",
               borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500, textDecoration: "none",
             }}
           >
@@ -696,6 +740,21 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
           invoiceDate: invoice.invoiceDate ?? null,
           status: invoice.status,
           balanceDue: invoice.balanceDue ?? "0",
+        }}
+      />
+
+      <SendInvoiceModal
+        open={sendInvoiceOpen}
+        onOpenChange={setSendInvoiceOpen}
+        invoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate ?? "",
+          dueDate: invoice.dueDate ?? null,
+          totalAmount: invoice.totalAmount ?? "0",
+          balanceDue: invoice.balanceDue ?? "0",
+          customerName: invoice.customer?.name ?? null,
+          status: invoice.status,
         }}
       />
     </div>

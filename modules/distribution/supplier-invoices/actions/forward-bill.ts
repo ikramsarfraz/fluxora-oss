@@ -19,7 +19,7 @@ import {
   RateLimitError,
 } from "@/lib/rate-limit";
 import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
-import { resolveForwardFromAddress } from "../utils/forward-from-address";
+import { resolveOutboundFromAddress } from "@/lib/email-from-address";
 
 export type ForwardBillInput = {
   supplierInvoiceId: string;
@@ -76,11 +76,11 @@ export async function forwardBillAction(input: ForwardBillInput) {
   if (input.recipients.length === 0) throw new Error("At least one recipient required");
   if (input.recipients.length > 10) throw new Error("Maximum 10 recipients");
 
-  // From + Reply-To resolution lives in resolveForwardFromAddress so the
-  // exact same logic powers the modal's helper text preview (via
+  // From + Reply-To resolution lives in resolveOutboundFromAddress so
+  // the exact same logic powers the modal's helper text preview (via
   // checkBillPdfAvailability). Recipient + sender see identical
   // addresses to what the user just inspected.
-  const fromResolved = resolveForwardFromAddress(tenant);
+  const fromResolved = resolveOutboundFromAddress(tenant, "bills");
   const fromAddress = fromResolved.header;
   const senderEmail = user.email ?? fromResolved.email;
 

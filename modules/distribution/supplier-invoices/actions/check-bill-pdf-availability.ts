@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
-import { resolveForwardFromAddress } from "../utils/forward-from-address";
+import { resolveOutboundFromAddress } from "@/lib/email-from-address";
 
 export type BillPdfSource = {
   /**
@@ -36,7 +36,7 @@ export type BillPdfAvailability = {
   /**
    * Bare email the recipient will see in the From header. Matches what
    * forwardBillAction will actually send (resolved via the same
-   * resolveForwardFromAddress helper). Used by the modal's helper-text
+   * resolveOutboundFromAddress helper). Used by the modal's helper-text
    * preview so the displayed address is always truthful.
    */
   fromEmail: string;
@@ -71,7 +71,7 @@ export async function checkBillPdfAvailability(
 
   // From/Reply-To are independent of whether the invoice exists — compute
   // upfront so the modal can show them even before the PDF list resolves.
-  const fromResolved = resolveForwardFromAddress(tenant);
+  const fromResolved = resolveOutboundFromAddress(tenant, "bills");
   const previewEnvelope = {
     fromEmail: fromResolved.email,
     fromDisplayName: fromResolved.displayName,

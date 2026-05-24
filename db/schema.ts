@@ -213,6 +213,17 @@ export const billForwardDeliveryStatusEnum = pgEnum("bill_forward_delivery_statu
   "delivered",
 ]);
 
+/**
+ * Mirrors bill_forward_delivery_status — kept as a parallel enum
+ * because AR (sales invoices) and AP (supplier bills) are owned by
+ * different modules and we don't want a schema rename in one to
+ * cascade into the other's state machine.
+ */
+export const salesInvoiceEmailDeliveryStatusEnum = pgEnum(
+  "sales_invoice_email_delivery_status",
+  ["sent", "bounced", "delivered"],
+);
+
 export const aliasSourceEnum = pgEnum("alias_source", [
   "manual",
   "ai_suggested",
@@ -1868,6 +1879,20 @@ export const salesInvoices = pgTable(
     balanceDue: numeric("balance_due", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
+    /**
+     * When the invoice was most recently emailed to the customer via
+     * sendInvoiceToCustomerAction. Null = never sent. Updated on
+     * every successful send (including resends), so the detail page
+     * can show a "Last sent …" badge without re-aggregating
+     * sales_invoice_emails.
+     */
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    /**
+     * Total successful sends. Bumped together with last_sent_at.
+     * Distinct from sales_invoice_emails row count so UI can render
+     * "Resend (3rd time)" without an extra COUNT.
+     */
+    sendCount: integer("send_count").notNull().default(0),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {
@@ -2941,6 +2966,59 @@ export const billForwards = pgTable(
   table => [
     index("bill_forwards_tenant_id_idx").on(table.tenantId),
     index("bill_forwards_invoice_id_idx").on(table.supplierInvoiceId),
+  ],
+);
+
+/**
+ * AR-side parallel to bill_forwards. Records every outbound send of a
+ * customer-facing sales invoice — who, when, the recipients, and
+ * (importantly) whether the rendered PDF was attached. The detail page
+ * reads this for the "Sent" history panel and the audit log carries
+ * the structured copy.
+ *
+ * On_delete:restrict on salesInvoiceId means a successful send pins the
+ * invoice — you can void it but the audit history is preserved.
+ */
+export const salesInvoiceEmails = pgTable(
+  "sales_invoice_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    salesInvoiceId: uuid("sales_invoice_id")
+      .notNull()
+      .references(() => salesInvoices.id, { onDelete: "restrict" }),
+    sentByUserId: uuid("sent_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    recipients: jsonb("recipients").notNull().default([]),
+    /** Optional cc list. Stored separately so the detail page can render them in muted style. */
+    ccRecipients: jsonb("cc_recipients").notNull().default([]),
+    subject: text("subject").notNull(),
+    messageBody: text("message_body").notNull(),
+    /** True when the rendered invoice PDF was attached. False for body-only sends (rare). */
+    attachedPdf: boolean("attached_pdf").notNull().default(true),
+    deliveryStatus: salesInvoiceEmailDeliveryStatusEnum("delivery_status")
+      .notNull()
+      .default("sent"),
+    deliveryEvents: jsonb("delivery_events").notNull().default([]),
+    /**
+     * Resend's message id from `emails.send()`. Used later when we add
+     * webhook-based delivery tracking (Phase 2 / #271) — bounce events
+     * carry this id back so we can look up the row and flip status.
+     */
+    resendMessageId: text("resend_message_id"),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("sales_invoice_emails_tenant_id_idx").on(table.tenantId),
+    index("sales_invoice_emails_invoice_id_idx").on(table.salesInvoiceId),
+    // Used by the eventual Resend webhook handler — sparse, so partial.
+    index("sales_invoice_emails_resend_message_id_idx")
+      .on(table.resendMessageId)
+      .where(sql`${table.resendMessageId} IS NOT NULL`),
   ],
 );
 
