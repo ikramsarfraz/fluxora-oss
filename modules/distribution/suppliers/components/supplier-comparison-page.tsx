@@ -155,6 +155,7 @@ function PriceCellView({
   const bg = bgColors[status] ?? c.card;
   const textColor = priceColors[status] ?? c.text;
 
+  // eslint-disable-next-line react-hooks/purity
   const days = Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000);
   const lastLabel = `last ${daysSinceLabel(days)}`;
 

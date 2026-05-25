@@ -140,6 +140,8 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
   useSetBreadcrumbLabel(`/invoices/${invoiceId}`, invoice?.invoiceNumber);
 
   useEffect(() => {
+    // Hydrate from localStorage post-mount to avoid SSR hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfitExpanded(localStorage.getItem("invoice-profit-expanded") === "true");
   }, []);
 

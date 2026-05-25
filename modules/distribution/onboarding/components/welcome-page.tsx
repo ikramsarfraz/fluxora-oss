@@ -493,7 +493,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                 marginBottom: 10,
               }}
             >
-              What you'll get on day 1
+              What you&apos;ll get on day 1
             </div>
             <div
               style={{
@@ -574,7 +574,7 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
                 border: "1px solid rgba(255,255,255,0.15)",
               }}
             >
-              No fake data, no demo mode. If we can't compute something yet, we'll say so — and tell you how many more invoices it needs.
+              No fake data, no demo mode. If we can&apos;t compute something yet, we&apos;ll say so — and tell you how many more invoices it needs.
             </div>
           </div>
         </div>

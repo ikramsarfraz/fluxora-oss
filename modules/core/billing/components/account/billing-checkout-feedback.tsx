@@ -45,7 +45,9 @@ export function BillingCheckoutFeedback(props: {
     clearUrlParams();
   }, [clearUrlParams]);
 
-  dismissRef.current = dismiss;
+  useEffect(() => {
+    dismissRef.current = dismiss;
+  }, [dismiss]);
 
   const [confirmState, setConfirmState] = useState<"loading" | "verified" | "unverified">(() => {
     if (props.kind !== "success") {

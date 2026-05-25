@@ -171,6 +171,8 @@ function NumStepper({
 function OfflineBanner() {
   const [offline, setOffline] = React.useState(false);
   React.useEffect(() => {
+    // Hydrate from navigator.onLine post-mount (not available during SSR).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOffline(!navigator.onLine);
     const on = () => setOffline(false);
     const off = () => setOffline(true);
@@ -214,7 +216,12 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
   const [lineStates, setLineStates] = React.useState<Record<string, LineState>>({});
   const [flaggingLineId, setFlaggingLineId] = React.useState<string | null>(null);
   const [receiverSig, setReceiverSig] = React.useState<string | null>(null);
-  const [startedAt] = React.useState(Date.now());
+  const [startedAt] = React.useState(() => Date.now());
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const [isRecording, setIsRecording] = React.useState(false);
@@ -331,7 +338,7 @@ export function MobileReceiveFlow({ invoiceId }: { invoiceId: string }) {
     return sum + total;
   }, 0);
 
-  const elapsedMin = Math.round((Date.now() - startedAt) / 60000);
+  const elapsedMin = Math.round((now - startedAt) / 60000);
 
   async function handleFinish() {
     try {

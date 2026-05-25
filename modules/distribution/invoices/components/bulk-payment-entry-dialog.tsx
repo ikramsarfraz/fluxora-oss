@@ -123,6 +123,7 @@ function Body({
   // (e.g. another tab recorded a payment and we re-fetch).
   useEffect(() => {
     if (openInvoices) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAllocations(
         Object.fromEntries(openInvoices.map(inv => [inv.id, ""])),
       );

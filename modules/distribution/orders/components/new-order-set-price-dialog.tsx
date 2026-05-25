@@ -60,6 +60,7 @@ export function NewOrderSetPriceDialog({
   // Reset the input whenever the dialog is reopened for a different line.
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValue(initialPrice ?? "");
       setError(null);
     }

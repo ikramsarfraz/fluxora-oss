@@ -112,6 +112,8 @@ export function BillingSubscriptionRefreshHint(props: {
       };
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     }
+    // Syncs sessionStorage state into React state on mount/prop changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshHintEligibility();
   }, [
     bootstrapFromCheckoutSuccess,
@@ -127,6 +129,8 @@ export function BillingSubscriptionRefreshHint(props: {
     const ms = hideAfterEpoch - Date.now();
     if (ms <= 0) {
       sessionStorage.removeItem(STORAGE_KEY);
+      // Hide-after-epoch passed before we could schedule a timer; clear now.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHintVisible(false);
       setHideAfterEpoch(null);
       return;

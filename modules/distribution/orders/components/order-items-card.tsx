@@ -832,6 +832,8 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
   const canGenerateInvoiceOnSave = otherOpenLineCount === 0 && fillingFullRemaining;
   useEffect(() => {
     if (!canGenerateInvoiceOnSave && generateInvoiceOnSave) {
+      // Toggle off the invoice-on-save flag if conditions stop holding.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGenerateInvoiceOnSave(false);
     }
   }, [canGenerateInvoiceOnSave, generateInvoiceOnSave]);

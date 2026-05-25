@@ -326,6 +326,7 @@ export function createAiProvider(): AiProvider {
     }
 
     // Lazy import to avoid bundling OpenAI SDK when using other providers.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { OpenAiProvider } = require("./ai-provider-openai") as typeof import("./ai-provider-openai");
 
     _provider = new OpenAiProvider({

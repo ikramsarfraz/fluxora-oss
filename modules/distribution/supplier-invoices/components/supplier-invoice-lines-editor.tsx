@@ -1767,6 +1767,7 @@ function LotExpiresTray({
             style={{ height: 36, borderRadius: 7, fontSize: 12 }}
             {...register(`lines.${index}.expirationDateOverride`)}
           />
+          {/* eslint-disable-next-line react-hooks/purity */}
           {expiryValue && new Date(expiryValue) < new Date(Date.now() + 30 * 86400_000) && (
             <div style={{ fontSize: 10, color: "oklch(60% 0.14 65)", marginTop: 3, paddingLeft: 2, fontWeight: 600 }}>
               Expires within 30 days

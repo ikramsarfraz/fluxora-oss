@@ -44,9 +44,11 @@ export function SyncStatusPill({
   staleDays,
   onRefresh,
 }: SyncStatusPillProps) {
-  const [syncState, setSyncState] = useState<SyncState>(
-    activeJob ? "syncing" : staleDays !== undefined && staleDays >= 2 ? "stale" : initialState,
-  );
+  const syncState: SyncState = activeJob
+    ? "syncing"
+    : staleDays !== undefined && staleDays >= 2
+      ? "stale"
+      : initialState;
   const [minutesAgoStr, setMinutesAgoStr] = useState<string>("");
 
   useEffect(() => {
@@ -59,12 +61,6 @@ export function SyncStatusPill({
     const id = setInterval(update, 30000);
     return () => clearInterval(id);
   }, [lastSyncedAt]);
-
-  useEffect(() => {
-    if (activeJob) setSyncState("syncing");
-    else if (staleDays !== undefined && staleDays >= 2) setSyncState("stale");
-    else setSyncState("idle");
-  }, [activeJob, staleDays]);
 
   const isStale = syncState === "stale";
   const isSyncing = syncState === "syncing";

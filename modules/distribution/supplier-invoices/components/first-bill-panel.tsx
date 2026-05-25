@@ -35,6 +35,8 @@ function PdfPane({ file }: { file: File }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     const u = URL.createObjectURL(file);
+    // Object URL must be created post-mount and revoked on unmount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [file]);

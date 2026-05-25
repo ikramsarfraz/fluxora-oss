@@ -346,11 +346,10 @@ export function SupplierInvoiceReceivePage({ invoiceId }: { invoiceId: string })
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
-  if (isMobile) return <MobileReceiveFlow invoiceId={invoiceId} />;
   const completeMutation = useCompleteSupplierInvoice();
-
   const [lineStates, setLineStates] = useState<Record<string, ReceiveState>>({});
 
+  if (isMobile) return <MobileReceiveFlow invoiceId={invoiceId} />;
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
     return <PageError message={error ? (error as Error).message : "Bill not found."} />;

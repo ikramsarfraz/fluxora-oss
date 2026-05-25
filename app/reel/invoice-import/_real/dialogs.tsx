@@ -54,6 +54,8 @@ function CreateSupplierDialog({ prefillName }: { prefillName: string }) {
   const pending = localPending || state.dialogPending;
 
   useEffect(() => {
+    // Reset name when reel rewinds and prefill changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(prefillName);
   }, [prefillName]);
 
@@ -166,6 +168,8 @@ function CreateProductDialog({
   const pending = localPending || state.dialogPending;
 
   useEffect(() => {
+    // Reset name when reel rewinds and prefill changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(prefillName);
   }, [prefillName]);
 

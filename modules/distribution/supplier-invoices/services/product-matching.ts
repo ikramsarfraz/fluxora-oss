@@ -293,7 +293,7 @@ export async function matchProductsMultiStage(args: {
       topCandidatesMap.set(vendorName, scored.slice(0, 5));
     }
 
-    let aiMatches: Map<string, { suggestedProductId: string | null; confidence: number }> =
+    const aiMatches: Map<string, { suggestedProductId: string | null; confidence: number }> =
       new Map();
 
     try {

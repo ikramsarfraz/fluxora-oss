@@ -87,6 +87,8 @@ export function PdfPane({
     null,
   );
   useEffect(() => {
+    // Reset page count when a new PDF loads so a prior count doesn't leak in.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDiscoveredPageCount(null);
   }, [pdfFile]);
   const handlePageCount = useCallback((count: number) => {

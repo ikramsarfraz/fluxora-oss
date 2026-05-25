@@ -115,7 +115,7 @@ export function IngestionPanel({
   onDiscard,
   onJumpToFirstIssue,
 }: IngestionPanelProps) {
-  const startTimeRef = useRef<number>(Date.now());
+  const startTimeRef = useRef<number>(0);
   const [elapsed, setElapsed] = useState(0);
   const [stageIdx, setStageIdx] = useState(0); // 0-6, which stage is active
   const [subProgress, setSubProgress] = useState(0);
@@ -124,6 +124,8 @@ export function IngestionPanel({
   useEffect(() => {
     if (!isParsing) return;
     startTimeRef.current = Date.now();
+    // Reset progress state each time parsing (re)starts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setElapsed(0);
     setStageIdx(0);
     setSubProgress(0);
@@ -322,7 +324,7 @@ export function IngestionPanel({
               <ul style={{ margin: 0, padding: "8px 12px 10px 28px", fontSize: 12, color: C.text2 }}>
                 {isError && <li style={{ marginBottom: 3 }}>Extraction failed: {parseError?.message}</li>}
                 {!isError && reviewCount > 0 && (
-                  <li style={{ marginBottom: 3 }}>{reviewCount} product{reviewCount > 1 ? "s" : ""} couldn't be auto-matched</li>
+                  <li style={{ marginBottom: 3 }}>{reviewCount} product{reviewCount > 1 ? "s" : ""} couldn&apos;t be auto-matched</li>
                 )}
                 {!isError && reconcileGap > 0 && (
                   <li style={{ marginBottom: 3 }}>Reconcile gap of ~${reconcileGap.toFixed(2)} needs review</li>

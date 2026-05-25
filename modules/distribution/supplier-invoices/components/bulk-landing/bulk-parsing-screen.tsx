@@ -86,6 +86,8 @@ export function BulkParsingScreen({
     const node = document.querySelector<HTMLElement>(
       '[data-slot="sidebar-inset"]',
     );
+    // Locate the portal mount node post-mount; null until then is fine.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMountNode(node);
   }, []);
 

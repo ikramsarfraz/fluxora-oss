@@ -548,7 +548,7 @@ export function ReviewQueueShell({
             <AlertDialogTitle>Re-scan this invoice?</AlertDialogTitle>
             <AlertDialogDescription>
               The AI will read the PDF again and rebuild the line items.
-              Any edits you've made to product matches, weights, charges, or
+              Any edits you&apos;ve made to product matches, weights, charges, or
               other fields on this row will be cleared.
             </AlertDialogDescription>
           </AlertDialogHeader>

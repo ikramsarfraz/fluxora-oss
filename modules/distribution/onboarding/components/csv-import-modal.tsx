@@ -889,6 +889,8 @@ export function useCsvImportModal(importType: ImportType) {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("import") === "true") {
+      // Open the modal post-mount based on URL state, then strip the param.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(true);
       router.replace(pathname, { scroll: false });
     }

@@ -148,6 +148,7 @@ export function useProductSkuPreview(
     // Skip the debounce on empty so the chip clears immediately when the
     // user deletes everything — no awkward stale preview after a clear.
     if (!trimmed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDebouncedName("");
       setDebouncedCategory(categoryName ?? null);
       return;

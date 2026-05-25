@@ -91,6 +91,8 @@ export function InventoryAdjustmentDialog({
 
   useEffect(() => {
     if (open) {
+      // Reset form state each time the dialog (re)opens for a different item.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetStatus("unchanged");
       setCorrectedWeightLbs("");
       setReason("");
@@ -103,6 +105,7 @@ export function InventoryAdjustmentDialog({
   // Re-arm the confirmation any time the user changes status or weight — the
   // checkbox should only "stick" for the exact configuration the user reviewed.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConfirmWriteOff(false);
   }, [targetStatus, correctedWeightLbs]);
 

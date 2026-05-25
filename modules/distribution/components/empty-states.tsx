@@ -108,7 +108,7 @@ export function ReceivingFirstReceiptBanner({ productName }: { productName: stri
           First receipt for {productName}
         </div>
         <div style={{ color: "#1d4ed8", lineHeight: 1.45 }}>
-          We can't flag catch-weight variance yet — every weight you record becomes part of the baseline going forward.{" "}
+          We can&apos;t flag catch-weight variance yet — every weight you record becomes part of the baseline going forward.{" "}
           <span style={{ fontWeight: 500 }}>No SKU baseline yet · 1st observation.</span>
         </div>
       </div>
@@ -138,7 +138,7 @@ export function MarkdownColdStartBanner({
         lineHeight: 1.5,
       }}
     >
-      <strong>No prior markdowns to predict from.</strong> Recommendation badge hidden until we've seen 3+ {category} markdowns.{" "}
+      <strong>No prior markdowns to predict from.</strong> Recommendation badge hidden until we&apos;ve seen 3+ {category} markdowns.{" "}
       Options show ranges, not predictions. Currently have {priorCount} of 3 needed.
     </div>
   );

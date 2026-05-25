@@ -1271,7 +1271,7 @@ export function LotDecisionPage({ lotId }: { lotId: string }) {
                 color: c.amber,
               }}
             >
-              No prior markdowns to predict from. Recommendation badge hidden until we've seen 3+ markdowns in this category.
+              No prior markdowns to predict from. Recommendation badge hidden until we&apos;ve seen 3+ markdowns in this category.
             </div>
           )
         )}

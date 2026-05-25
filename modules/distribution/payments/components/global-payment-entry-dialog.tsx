@@ -80,6 +80,7 @@ export function GlobalPaymentEntryDialog({ open, onOpenChange }: Props) {
   useEffect(() => {
     if (!open) {
       // Reset when closing — re-opening starts fresh.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep("pick");
       setSelectedInvoice(null);
     }

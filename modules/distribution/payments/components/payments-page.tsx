@@ -251,15 +251,6 @@ export function PaymentsPage() {
     pagination.search,
   );
 
-  if (error) {
-    return (
-      <ListingErrorState
-        message={(error as Error).message}
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
   const hasActiveFilters = Boolean(
     pagination.filters.method ||
       pagination.filters.dateFrom ||
@@ -270,6 +261,15 @@ export function PaymentsPage() {
 
   const rows = data?.data ?? [];
   const rowIdsOnPage = useMemo(() => rows.map(r => r.id), [rows]);
+
+  if (error) {
+    return (
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
+    );
+  }
   const allOnPageSelected =
     rowIdsOnPage.length > 0 && rowIdsOnPage.every(id => selectedIds.has(id));
   const someOnPageSelected =
