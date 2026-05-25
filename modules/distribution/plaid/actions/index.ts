@@ -1,15 +1,17 @@
 "use server";
 
-import { and, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
   bankAccounts,
   bankTransactions,
   customers,
+  expenses,
   payeeAliases,
   paymentMatches,
   plaidConnections,
+  portalUsers,
   salesInvoices,
   supplierInvoices,
   suppliers,
@@ -607,4 +609,181 @@ export async function syncAllConnectionsAction() {
   revalidatePath("/bank-activity");
   revalidatePath("/inbox");
   return { synced, failed, totalAdded, totalModified, totalRemoved };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Expense ↔ bank-transaction match (issue #258)                              */
+/*                                                                            */
+/* The two flows mirror getOpenBillsForLinkingAction / linkTransactionToBill: */
+/*  - getOpenExpensesForLinkingAction: candidate expenses for a given txn,    */
+/*    scoped by amount + a 60-day date window and excluding voided rows +     */
+/*    expenses already linked to ANY bank txn.                                */
+/*  - linkTransactionToExpenseAction: confirms the user's pick, inserts the   */
+/*    payment_matches row with status=confirmed and writes an audit event.    */
+/* No payee-alias side effect — expense rows don't carry a supplier identity. */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export async function getOpenExpensesForLinkingAction(
+  txnId: string,
+  proximity: "exact" | "5pct" | "15pct" | "all",
+) {
+  const tenant = await getCurrentTenant();
+
+  const txn = await db.query.bankTransactions.findFirst({
+    where: and(
+      eq(bankTransactions.id, txnId),
+      eq(bankTransactions.tenantId, tenant.id),
+    ),
+  });
+  if (!txn) throw new Error("Transaction not found");
+
+  const txnAmount = Math.abs(Number(txn.amount));
+  const toleranceMap = { exact: 0.001, "5pct": 0.05, "15pct": 0.15, all: 10 };
+  const tolerance = toleranceMap[proximity];
+
+  // Day-of-txn ± 60 days. Bank-txn-driven expenses (subscriptions, fees)
+  // almost always post on or near the bank date; a wider window adds noise.
+  const txnDate = new Date(`${txn.date}T00:00:00Z`);
+  const windowStart = new Date(txnDate);
+  windowStart.setDate(windowStart.getDate() - 60);
+  const windowEnd = new Date(txnDate);
+  windowEnd.setDate(windowEnd.getDate() + 60);
+  const windowStartIso = windowStart.toISOString().slice(0, 10);
+  const windowEndIso = windowEnd.toISOString().slice(0, 10);
+
+  const rows = await db
+    .select({
+      id: expenses.id,
+      expenseDate: expenses.expenseDate,
+      category: expenses.category,
+      amount: expenses.amount,
+      note: expenses.note,
+      paymentMethod: expenses.paymentMethod,
+      createdByName: portalUsers.fullName,
+    })
+    .from(expenses)
+    .leftJoin(portalUsers, eq(expenses.createdByUserId, portalUsers.id))
+    .where(
+      and(
+        eq(expenses.tenantId, tenant.id),
+        // Soft-delete tombstones stay out of the picker (issue #270).
+        isNull(expenses.deletedAt),
+        gte(expenses.expenseDate, windowStartIso),
+        lte(expenses.expenseDate, windowEndIso),
+        // Skip expenses already linked to any bank txn — the partial
+        // unique index would reject a second match anyway and the empty
+        // option in the UI confused early testers.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${paymentMatches}
+          WHERE ${paymentMatches.expenseId} = ${expenses.id}
+            AND ${paymentMatches.status} != 'rejected'
+        )`,
+        proximity === "all"
+          ? sql`1=1`
+          : and(
+              gte(expenses.amount, (txnAmount * (1 - tolerance)).toFixed(2)),
+              lte(expenses.amount, (txnAmount * (1 + tolerance)).toFixed(2)),
+            ),
+      ),
+    )
+    .orderBy(sql`abs(${expenses.amount}::numeric - ${txnAmount})`)
+    .limit(50);
+
+  return {
+    expenses: rows.map(r => {
+      const amount = money(r.amount);
+      const delta = amount.minus(txnAmount);
+      return {
+        id: r.id,
+        expenseDate: r.expenseDate,
+        category: r.category,
+        amount: amount.toNumber(),
+        note: r.note,
+        paymentMethod: r.paymentMethod,
+        createdByName: r.createdByName,
+        delta: delta.toNumber(),
+        deltaPct:
+          txnAmount > 0
+            ? Number(delta.div(txnAmount).times(100).toFixed(4))
+            : 0,
+      };
+    }),
+    transactionAmount: txnAmount,
+  };
+}
+
+export async function linkTransactionToExpenseAction(
+  txnId: string,
+  expenseId: string,
+) {
+  const user = await getCurrentPortalUser();
+  const tenant = await getCurrentTenant();
+  // Same gate as the AP/AR link actions — recording payment reconciliation.
+  requireFinanceRole(user.role);
+
+  const [txn, expense] = await Promise.all([
+    db.query.bankTransactions.findFirst({
+      where: and(
+        eq(bankTransactions.id, txnId),
+        eq(bankTransactions.tenantId, tenant.id),
+      ),
+    }),
+    db.query.expenses.findFirst({
+      where: and(
+        eq(expenses.id, expenseId),
+        eq(expenses.tenantId, tenant.id),
+        isNull(expenses.deletedAt),
+      ),
+    }),
+  ]);
+  if (!txn) throw new Error("Transaction not found");
+  if (!expense) throw new Error("Expense not found");
+
+  // Reject any existing pending/auto match for this transaction so the
+  // user's explicit pick replaces it. Mirrors linkTransactionToBillAction.
+  const existing = await db.query.paymentMatches.findFirst({
+    where: and(
+      eq(paymentMatches.bankTransactionId, txnId),
+      eq(paymentMatches.tenantId, tenant.id),
+      or(
+        eq(paymentMatches.status, "pending_review"),
+        eq(paymentMatches.status, "auto_applied"),
+      ),
+    ),
+  });
+  if (existing) {
+    await rejectMatch(existing.id, tenant.id);
+  }
+
+  const [inserted] = await db
+    .insert(paymentMatches)
+    .values({
+      tenantId: tenant.id,
+      bankTransactionId: txnId,
+      expenseId,
+      status: "confirmed",
+      // Max confidence — user explicitly picked it.
+      confidence: "1.0000",
+      autoApplied: false,
+      amountScore: "1.0000",
+      payeeScore: "0.0000",
+      timingScore: "1.0000",
+      confirmedByUserId: user.id,
+      confirmedAt: new Date(),
+    })
+    .returning({ id: paymentMatches.id });
+
+  await logAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "payment_match.confirmed",
+    resourceType: "payment_match",
+    resourceId: inserted.id,
+    metadata: { target: "expense", expenseId },
+  });
+
+  revalidatePath("/bank-activity");
+  revalidatePath(`/expenses/${expenseId}`);
+  return { matchId: inserted.id };
 }
