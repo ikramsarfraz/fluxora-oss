@@ -3,11 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { CashFlowSummary, InboxData, InboxItem, ExpiringLotEntry, MysteryOutflow, PriceMover, ReauthBanner, TodayScheduleEntry } from "../types";
 import { dismissMysteryOutflowAction } from "@/modules/distribution/plaid";
 import { InboxEmptyState, PriceAlertsEmptyState } from "@/modules/distribution/components/empty-states";
 import { captureException } from "@/lib/sentry-scope";
+import { queryKeys } from "@/lib/query/keys";
 
 // ── Design tokens (mapped to the warm system in globals.css) ──────────────
 const C = {
@@ -615,6 +617,7 @@ function TodayScheduleCard({ entries }: { entries: TodayScheduleEntry[] }) {
 
 function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [dismissing, startDismiss] = useTransition();
 
   if (outflows.length === 0) return null;
@@ -720,6 +723,11 @@ function MysteryOutflowCard({ outflows }: { outflows: MysteryOutflow[] }) {
               try {
                 await dismissMysteryOutflowAction(txn.id);
                 toast.info("Hidden. It won't appear here again.");
+                // RSC refresh fetches new inbox data; the bell summary is on
+                // its own React Query cache so it needs explicit invalidation
+                // to drop the badge count immediately instead of after the
+                // 2-min staleTime.
+                queryClient.invalidateQueries({ queryKey: queryKeys.inbox.bellSummary });
                 router.refresh();
               } catch (err) {
                 captureException(err, {
