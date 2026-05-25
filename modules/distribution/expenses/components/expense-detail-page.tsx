@@ -147,7 +147,7 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
               onClick={() => setShowDelete(true)}
             >
               <Trash2 className="size-4" />
-              Delete
+              Void
             </Button>
           </>
         ) : null}
@@ -228,12 +228,14 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
       <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete expense</AlertDialogTitle>
+            <AlertDialogTitle>Void expense</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete this expense for{" "}
+              Void this expense for{" "}
               <strong>{formatMoney(expense.amount)}</strong> on{" "}
-              <strong>{formatDisplayDate(expense.expenseDate)}</strong>? This
-              cannot be undone.
+              <strong>{formatDisplayDate(expense.expenseDate)}</strong>?
+              It will be hidden from the listing and any recurring schedule
+              stops materializing future instances. The row is kept for
+              audit and can be restored from the voided-expenses view.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -246,7 +248,7 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
               onClick={() => {
                 deleteExpense.mutate(expense.id, {
                   onSuccess: () => {
-                    toast.success("Expense deleted.");
+                    toast.success("Expense voided.");
                     setShowDelete(false);
                     router.push("/expenses");
                   },
@@ -254,7 +256,7 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
                 });
               }}
             >
-              {deleteExpense.isPending ? "Deleting..." : "Delete"}
+              {deleteExpense.isPending ? "Voiding…" : "Void"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

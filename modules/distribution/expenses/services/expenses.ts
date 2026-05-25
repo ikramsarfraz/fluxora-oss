@@ -59,7 +59,10 @@ async function requireExpenseManager() {
 export async function getExpenses() {
   const tenant = await getCurrentTenant();
   return db.query.expenses.findMany({
-    where: eq(expenses.tenantId, tenant.id),
+    where: and(
+      eq(expenses.tenantId, tenant.id),
+      isNull(expenses.deletedAt),
+    ),
     with: { createdBy: true },
     orderBy: [desc(expenses.expenseDate), desc(expenses.createdAt)],
   });
@@ -106,6 +109,10 @@ export async function getExpensesPage(input?: ExpenseListParams) {
   const f = query.filters;
   const conditions = [
     eq(expenses.tenantId, tenant.id),
+    // Soft-delete tombstones (issue #270) stay out of every list/export
+    // surface. A dedicated "voided expenses" view can drop this filter
+    // later when we surface restore.
+    isNull(expenses.deletedAt),
     buildTextSearchCondition(query.search, [
       expenses.category,
       expenses.note,
@@ -219,6 +226,10 @@ export async function exportExpensesCsv(input?: ExpenseListParams) {
   const f = query.filters;
   const conditions = [
     eq(expenses.tenantId, tenant.id),
+    // Soft-delete tombstones (issue #270) stay out of every list/export
+    // surface. A dedicated "voided expenses" view can drop this filter
+    // later when we surface restore.
+    isNull(expenses.deletedAt),
     buildTextSearchCondition(query.search, [
       expenses.category,
       expenses.note,
@@ -291,16 +302,25 @@ export async function exportExpensesCsv(input?: ExpenseListParams) {
 export async function getExpenseById(id: string) {
   const tenant = await getCurrentTenant();
   const row = await db.query.expenses.findFirst({
-    where: and(eq(expenses.id, id), eq(expenses.tenantId, tenant.id)),
+    where: and(
+      eq(expenses.id, id),
+      eq(expenses.tenantId, tenant.id),
+      // Soft-deleted rows are tombstoned (issue #270). A direct hit on a
+      // voided expense reads as not-found from the detail page; the
+      // future restore flow will route through a separate endpoint that
+      // doesn't apply this filter.
+      isNull(expenses.deletedAt),
+    ),
     with: {
-      // All five actor relations powered by their own relationName so the
-      // ActivityCard timeline can render each step ("Bob approved", "Alice
-      // submitted", …) without a follow-up query.
+      // All actor relations powered by their own relationName so the
+      // ActivityCard timeline can render each step ("Bob approved",
+      // "Alice submitted", …) without a follow-up query.
       createdBy: true,
       submittedBy: true,
       approvedBy: true,
       rejectedBy: true,
       paidBy: true,
+      deletedBy: true,
     },
   });
   return row ?? null;
@@ -438,9 +458,32 @@ export async function updateExpense(input: UpdateExpenseInput) {
 
 export async function deleteExpense(id: string) {
   const current = await requireExpenseManager();
-  await db
-    .delete(expenses)
-    .where(and(eq(expenses.id, id), eq(expenses.tenantId, current.tenantId)));
+  // Soft delete (issue #270): financial-system audit trail requires that
+  // we keep the row + the actor + the timestamp instead of issuing a SQL
+  // DELETE. WHERE deleted_at IS NULL on the UPDATE makes the operation
+  // idempotent — the affected-row count drops to 0 on a re-attempt so
+  // we can detect "already voided" and surface a clear error.
+  const result = await db
+    .update(expenses)
+    .set({
+      deletedAt: new Date(),
+      deletedByUserId: current.id,
+    })
+    .where(
+      and(
+        eq(expenses.id, id),
+        eq(expenses.tenantId, current.tenantId),
+        isNull(expenses.deletedAt),
+      ),
+    )
+    .returning({ id: expenses.id });
+  if (result.length === 0) {
+    // Either the id is wrong / cross-tenant or the row was already voided.
+    // Surface the latter as a precise message; the route-level filter
+    // already returns 404 for the former so this path is exercised mainly
+    // by the rare double-click case.
+    throw new Error("Expense not found or already voided.");
+  }
   return { success: true as const };
 }
 
@@ -484,6 +527,10 @@ export async function materializeRecurringExpenses(options?: {
           sql`${expenses.recurrenceEndDate} IS NULL`,
           sql`${expenses.recurrenceNextDueDate} <= ${expenses.recurrenceEndDate}`,
         ),
+        // Voided schedules stop materializing new instances. Already-
+        // materialized children stay (they happened, they're real) —
+        // they only become hidden if their own row is voided.
+        isNull(expenses.deletedAt),
       ),
     );
 

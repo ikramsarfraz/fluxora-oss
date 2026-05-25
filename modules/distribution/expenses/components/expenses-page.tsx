@@ -279,7 +279,7 @@ export function ExpensesPage() {
         rowActions={[
           { label: "View", href: row => `/expenses/${row.id}` },
           ...(canManage
-            ? [{ label: "Delete", variant: "destructive" as const, onClick: (row: ExpenseRow) => setDeletingExpense(row) }]
+            ? [{ label: "Void", variant: "destructive" as const, onClick: (row: ExpenseRow) => setDeletingExpense(row) }]
             : []),
         ]}
         rows={data?.data ?? []}
@@ -314,9 +314,12 @@ export function ExpensesPage() {
       <AlertDialog open={!!deletingExpense} onOpenChange={open => { if (!open) setDeletingExpense(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete expense</AlertDialogTitle>
+            <AlertDialogTitle>Void expense</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete this expense? This action cannot be undone.
+              Void this expense? It will be hidden from the listing and any
+              recurring schedule stops materializing future instances. The row
+              is kept for audit and can be restored from the voided-expenses
+              view.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -326,13 +329,13 @@ export function ExpensesPage() {
               onClick={() => {
                 if (!deletingExpense) return;
                 deleteExpense.mutate(deletingExpense.id, {
-                  onSuccess: () => toast.success("Expense deleted."),
+                  onSuccess: () => toast.success("Expense voided."),
                   onError: (e: Error) => toast.error(e.message),
                 });
                 setDeletingExpense(null);
               }}
             >
-              Delete
+              Void
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -93,6 +93,14 @@ export function buildExpenseActivityItems(
     user: expense.paidBy ?? null,
   });
 
+  pushExpenseEvent({
+    id: `expense-${expense.id}-voided`,
+    action: "expense.voided",
+    summary: "Voided",
+    at: expense.deletedAt,
+    user: expense.deletedBy ?? null,
+  });
+
   for (const att of attachments) {
     items.push({
       id: `attachment-${att.fileId}`,

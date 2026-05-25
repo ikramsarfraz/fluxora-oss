@@ -764,6 +764,11 @@ export const expensesRelations = relations(expenses, ({ one, many }) => ({
     references: [portalUsers.id],
     relationName: "expense_paid_by",
   }),
+  deletedBy: one(portalUsers, {
+    fields: [expenses.deletedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_deleted_by",
+  }),
   tenant: one(tenants, {
     fields: [expenses.tenantId],
     references: [tenants.id],

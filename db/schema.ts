@@ -2125,6 +2125,19 @@ export const expenses = pgTable(
       () => portalUsers.id,
       { onDelete: "set null" },
     ),
+    /**
+     * Soft-delete tombstone (issue #270). Every read filters
+     * `deleted_at IS NULL`; the deleteExpense path sets these instead
+     * of issuing a SQL DELETE so the audit trail of who voided what
+     * when survives, and the cron stops materializing instances of a
+     * voided schedule without losing the historical instances that
+     * already exist.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedByUserId: uuid("deleted_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2137,6 +2150,10 @@ export const expenses = pgTable(
     ),
     index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
     index("expenses_tenant_status_idx").on(table.tenantId, table.status),
+    index("expenses_tenant_deleted_at_idx").on(
+      table.tenantId,
+      table.deletedAt,
+    ),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
     check(
       "expenses_recurrence_end_after_start",
