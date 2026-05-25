@@ -417,17 +417,113 @@ or admin role) and `bob` (also a manager role).
 
 ---
 
+## 15. Bank-activity pagination + design-system pass (3 min)
+
+Added later — verify the post-merge polish on `/bank-activity`.
+
+- [ ] Filter chips render as a `ToggleGroup` (rounded segmented
+  control on a `bg-divider` track), not the pre-merge pill row.
+- [ ] Account tiles use card-surface tokens; the selected tile shows
+  a `ring-success-fg` outline; Total cash tile uses `bg-ink`.
+- [ ] "Link to bill" inline button on unmatched outflows is the
+  shadcn `Button` primitive (rounded-md, default variant), not the
+  pre-merge inline-styled ink pill.
+- [ ] Pagination footer at the bottom of the transaction list: Rows
+  selector left, "N-M of total" centre, prev/next + page indicator
+  right. Default `pageSize=20`; options are 10/25/50/100.
+- [ ] `?page=` + `?pageSize=` round-trip through the URL alongside
+  `?filter=` / `?sort=` / `?q=` / `?account=`. Refresh keeps the page.
+- [ ] Click "Link to bill" — modal opens **centered** (shadcn
+  `Dialog`, `sm:max-w-2xl`), not anchored to the bottom of the
+  viewport. Inside: proximity tabs are a `ToggleGroup` matching the
+  outer filter chips; the exact-match row has a `border-l-success-fg`
+  + `bg-success-bg/40` accent; Link buttons are shadcn `Button`s.
+
+---
+
+## 16. Soft-delete / void (3 min)
+
+Added later — verify issue #270 + migrations 0065.
+
+Pre-condition: `pnpm db:migrate` has applied `0065_expense_soft_delete`
+(adds `expenses.deleted_at` + `expenses.deleted_by_user_id` +
+`expenses_tenant_deleted_at_idx`).
+
+### List action
+
+- [ ] On `/expenses`, the row action menu reads **"Void"** (not
+  "Delete"). Confirm dialog title is "Void expense"; body explains
+  hidden-from-listing + cron-stops + restorable-from-audit; primary
+  button reads "Void"; toast on success reads "Expense voided."
+- [ ] After voiding, the row disappears from the listing immediately.
+- [ ] Verify in DB: `expenses.deleted_at` is set; `deleted_by_user_id`
+  matches the current user.
+
+### Detail action
+
+- [ ] On `/expenses/<id>` (a live row), the header "Delete" button is
+  now **"Void"** with the same trash icon; confirm dialog mirrors the
+  list dialog's copy ("Void this expense for $X on …"); button reads
+  "Void" / "Voiding…"; success toast "Expense voided." and router
+  pushes back to `/expenses`.
+
+### Idempotency + 404 behavior
+
+- [ ] Navigate directly to a known-voided expense's URL
+  (`/expenses/<id>`) — page should resolve to "Expense not found"
+  (the `getExpenseById` filter excludes voided rows).
+- [ ] If you can force a double-click on Void (slow network), only
+  the first request succeeds. The second receives
+  "Expense not found or already voided." in a toast — no duplicate
+  audit rows, no second `deleted_at` overwrite.
+
+### Filter + export + cron coverage
+
+- [ ] Apply `?status=submitted` (or any other filter) to `/expenses`
+  — voided rows still excluded. Same for "Schedules", "Auto-generated",
+  date-range, amount-range, search-text. Counts on the chips reflect
+  only live rows.
+- [ ] Click **Export CSV** with any filter set. Open the file — no
+  voided row appears in any column.
+- [ ] If you have a recurring schedule, void it. Wait for the
+  materialize cron (or hit
+  `/api/cron/materialize-recurring-expenses`). Verify it does **not**
+  create new instances for the voided schedule. Existing materialized
+  instances stay live (they happened, they're real).
+
+### Activity timeline
+
+- [ ] Void an expense (don't navigate away). Re-fetch its detail page
+  is now 404, so the activity timeline isn't directly visible —
+  intentional for v1. The `expense.voided` event is captured in the
+  `deletedAt` / `deletedByUserId` columns and will surface once the
+  voided-expenses view (audit follow-up) ships.
+
+### Cross-tenant / RBAC
+
+- [ ] Sign in as a sales-role user (no `canManageExpenses`). The
+  list row action menu does **not** include "Void"; the detail page
+  does not render the "Void" button. Confirm a direct POST to the
+  delete action also rejects with "Your role does not allow…".
+
+---
+
 ## What to file as a bug
 
-If anything in sections 1–13 fails, file under the v1 audit follow-up
+If anything in sections 1–16 fails, file under the v1 audit follow-up
 backlog. Reference the merge commit `c5c680d8` and the section number.
 
 Known deferred items (NOT bugs — already filed):
-- **#269** plaid duplicate-match partial unique index (race window
-  exists; needs migration)
-- **#270** expenses hard-delete → soft-delete (deletes are permanent
-  until this lands)
 - **#258** expense ↔ bank-feed reconciliation match-row integration
+- **#287** drizzle/meta/ snapshot drift — `pnpm db:generate` is
+  currently blocked; migrations 0065 + 0066 are hand-written
+  exceptions until that's fixed.
+
+Recently closed:
+- **#269** shipped in 2e7b1f20 (partial unique indexes on
+  payment_matches + onConflictDoNothing in matcher) + migration 0066.
+- **#270** shipped in 0f87fc32 (soft-delete code) + 885a6af0
+  (hand-written 0065 migration).
 
 Known cosmetic warnings (pre-existing):
 - `bankAccounts`, `desc`, `sum`, `between`, etc. unused-import
