@@ -29,6 +29,9 @@ export type AnalyticsEvent =
   | "welcome.completed"
   | "welcome.skipped"
   | "pdf.parsed"
+  | "pdf.text_extractor_fallback"
+  | "bulk_import.processed"
+  | "bulk_import.rescanned"
   | "first_bill.saved"
   | "bill.saved"
   | "bill.received"
@@ -37,7 +40,8 @@ export type AnalyticsEvent =
   | "payment_match.auto_applied"
   | "markdown.applied"
   | "supplier.switched_primary"
-  | "bill.forwarded";
+  | "bill.forwarded"
+  | "invoice.sent";
 
 /**
  * Captures an event from a server action / route handler. No-op when

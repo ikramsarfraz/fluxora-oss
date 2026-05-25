@@ -8,7 +8,10 @@ import { useSupplierInvoice } from "../hooks/use-supplier-invoices";
 import { inferWeightDraftState } from "@/modules/distribution/supplier-invoices/utils/case-weights";
 
 import { SupplierInvoiceForm } from "./supplier-invoice-form";
-import type { SupplierInvoiceFormValues } from "./supplier-invoice-form.schema";
+import type {
+  SupplierInvoiceChargeType,
+  SupplierInvoiceFormValues,
+} from "./supplier-invoice-form.schema";
 
 export function SupplierInvoiceEditShell({
   invoiceId,
@@ -21,7 +24,7 @@ export function SupplierInvoiceEditShell({
     if (!invoice) return undefined;
     return {
       supplierId: invoice.supplierId,
-      invoiceNumber: invoice.invoiceNumber,
+      supplierInvoiceNumber: invoice.invoiceNumber ?? "",
       invoiceDate: invoice.invoiceDate,
       receiveDate: invoice.receiveDate,
       paymentMethod: invoice.paymentMethod ?? null,
@@ -39,8 +42,23 @@ export function SupplierInvoiceEditShell({
         quantityCases: String(line.quantityCases ?? 0),
         weightLbs: String(line.weightLbs ?? "0"),
         unitPrice: String(line.unitPrice ?? "0"),
+        purchaseUnitAbbreviation:
+          line.purchaseUnitAbbreviationSnapshot ?? "",
+        // Restore the pack-size snapshot when editing a draft so the
+        // user sees the original "Units per package" they entered, not
+        // a blank "1" default.
+        unitsPerPackage: line.conversionToBaseSnapshot
+          ? String(line.conversionToBaseSnapshot)
+          : "1",
         lotNumberOverride: "",
         expirationDateOverride: "",
+      })),
+      charges: (invoice.charges ?? []).map(c => ({
+        description: c.description,
+        chargeType: (c.chargeType as SupplierInvoiceChargeType) ?? "other",
+        rate: c.rate ? String(c.rate) : "",
+        includeInInventoryCost: c.includeInInventoryCost ?? false,
+        amount: String(c.amount ?? "0"),
       })),
     };
   }, [invoice]);

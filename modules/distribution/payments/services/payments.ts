@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db";
 import { customers, payments, salesInvoices } from "@/db/schema";
@@ -12,6 +12,65 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import {
+  exceedsByCent,
+  isPositiveMoney,
+  money,
+  nonNegative,
+  toMoneyString,
+} from "@/lib/utils/money";
+
+export type PaymentMethod = "cash" | "check" | "ach" | "zelle" | "credit_card";
+
+const PAYMENT_METHODS: ReadonlySet<PaymentMethod> = new Set([
+  "cash",
+  "check",
+  "ach",
+  "zelle",
+  "credit_card",
+]);
+
+export type PaymentFilters = {
+  /** Single method to filter by; ignored if not in the enum. */
+  method?: string;
+  /** Inclusive lower bound on payment_date (YYYY-MM-DD). */
+  dateFrom?: string;
+  /** Inclusive upper bound on payment_date (YYYY-MM-DD). */
+  dateTo?: string;
+  /**
+   * "unreconciled" (default), "reconciled", or "all". Drives the
+   * end-of-month workflow — ops sees the unmatched queue by default,
+   * can flip to all/reconciled for audits.
+   */
+  reconciled?: "all" | "reconciled" | "unreconciled";
+};
+
+/**
+ * Build the SQL clauses for the current filter set. Returns an array of
+ * conditions to AND into the where clause — keeps the listing and summary
+ * services in sync without copy-paste.
+ */
+function buildPaymentFilterClauses(filters: PaymentFilters): SQL[] {
+  const clauses: SQL[] = [];
+  if (filters.method && PAYMENT_METHODS.has(filters.method as PaymentMethod)) {
+    clauses.push(eq(payments.paymentMethod, filters.method as PaymentMethod));
+  }
+  if (filters.dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateFrom)) {
+    clauses.push(gte(payments.paymentDate, filters.dateFrom));
+  }
+  if (filters.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(filters.dateTo)) {
+    clauses.push(lte(payments.paymentDate, filters.dateTo));
+  }
+  // Default is "unreconciled" (the end-of-month working queue).
+  // Explicit "all" or "reconciled" override.
+  const reconciled = filters.reconciled ?? "unreconciled";
+  if (reconciled === "unreconciled") {
+    clauses.push(sql`${payments.reconciledAt} IS NULL`);
+  } else if (reconciled === "reconciled") {
+    clauses.push(sql`${payments.reconciledAt} IS NOT NULL`);
+  }
+  return clauses;
+}
 
 /**
  * Tenant-scoped list of customer payments, newest first. Each row is joined
@@ -39,17 +98,21 @@ export type PaymentListSort =
   | "paymentMethod"
   | "createdAt";
 
-export type PaymentListParams = PaginatedQueryInput<PaymentListSort>;
+export type PaymentListParams = PaginatedQueryInput<
+  PaymentListSort,
+  PaymentFilters
+>;
 
 export async function getPaymentsPage(input?: PaymentListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "paymentDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: {} as PaymentFilters,
   });
   const where = and(
     eq(payments.tenantId, tenant.id),
+    ...buildPaymentFilterClauses(query.filters),
     buildTextSearchCondition(query.search, [
       payments.referenceNumber,
       payments.checkNumber,
@@ -120,6 +183,58 @@ export async function getPaymentsPage(input?: PaymentListParams) {
 /** Row shape returned by `getPayments()` (client-safe via `import type`). */
 export type PaymentListItem = Awaited<ReturnType<typeof getPayments>>[number];
 
+export type PaymentsSummary = {
+  totalAmount: number;
+  count: number;
+  byMethod: Array<{ method: PaymentMethod; count: number; amount: number }>;
+};
+
+/**
+ * Aggregate stats for the current filter set — drives the KPI strip above
+ * the payments listing. Excludes pagination, applies the same filter
+ * clauses as getPaymentsPage so the numbers always match what's visible.
+ */
+export async function getPaymentsSummary(
+  filters: PaymentFilters = {},
+  search: string = "",
+): Promise<PaymentsSummary> {
+  const tenant = await getCurrentTenant();
+  const where = and(
+    eq(payments.tenantId, tenant.id),
+    ...buildPaymentFilterClauses(filters),
+    buildTextSearchCondition(search, [
+      payments.referenceNumber,
+      payments.checkNumber,
+      salesInvoices.invoiceNumber,
+      customers.name,
+    ]),
+  );
+
+  const rows = await db
+    .select({
+      method: payments.paymentMethod,
+      count: sql<number>`count(*)::int`,
+      amount: sql<string>`coalesce(sum(${payments.amount}::numeric), 0)`,
+    })
+    .from(payments)
+    .leftJoin(salesInvoices, eq(salesInvoices.id, payments.salesInvoiceId))
+    .leftJoin(customers, eq(customers.id, salesInvoices.customerId))
+    .where(where)
+    .groupBy(payments.paymentMethod);
+
+  const byMethod = rows.map(row => ({
+    method: row.method as PaymentMethod,
+    count: row.count,
+    amount: Number(row.amount),
+  }));
+
+  return {
+    totalAmount: byMethod.reduce((sum, m) => sum + m.amount, 0),
+    count: byMethod.reduce((sum, m) => sum + m.count, 0),
+    byMethod,
+  };
+}
+
 /**
  * Tenant-scoped payment detail. Returns `null` if no payment matches.
  */
@@ -131,6 +246,14 @@ export async function getPaymentById(id: string) {
       salesInvoice: {
         with: {
           customer: true,
+          // All payment events on this invoice — the detail page shows the
+          // current event prominently and the rest as "other payments on
+          // this invoice" so partial-payment context is visible without a
+          // separate roundtrip.
+          payments: {
+            with: { createdBy: true },
+            orderBy: [desc(payments.paymentDate), desc(payments.createdAt)],
+          },
         },
       },
       createdBy: true,
@@ -142,3 +265,261 @@ export async function getPaymentById(id: string) {
 export type PaymentDetail = NonNullable<
   Awaited<ReturnType<typeof getPaymentById>>
 >;
+
+/* -------------------------------------------------------------------------- */
+/* Mutations — void + update                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Recompute a sales invoice's amount_paid / balance_due / status from the
+ * sum of its current payment rows. Called after voiding or editing a
+ * payment so the denormalized invoice totals stay in sync.
+ *
+ * Status mapping:
+ *  - sum >= total            → "paid"
+ *  - 0 < sum < total         → "partially_paid"
+ *  - sum === 0 AND status is currently a payment-derived state ("paid" or
+ *    "partially_paid") → revert to "sent"
+ *  - sum === 0 AND status is anything else (draft, void) → leave alone
+ */
+async function recomputeInvoiceTotals(invoiceId: string) {
+  const invoice = await db.query.salesInvoices.findFirst({
+    where: eq(salesInvoices.id, invoiceId),
+    columns: { id: true, totalAmount: true, status: true },
+  });
+  if (!invoice) {
+    throw new Error("Invoice not found.");
+  }
+
+  const [agg] = await db
+    .select({
+      total: sql<string>`coalesce(sum(${payments.amount}::numeric), 0)`,
+    })
+    .from(payments)
+    .where(eq(payments.salesInvoiceId, invoiceId));
+
+  // Postgres SUM returns precise text; Decimal preserves it. Number()
+  // here used to truncate above 2^53 (not a real ERP risk) and, more
+  // commonly, leaked sub-cent drift on the balance-due subtraction —
+  // enough to keep an invoice marked partially_paid after the last
+  // edit/void zeroed out the balance.
+  const newAmountPaid = money(agg?.total ?? 0);
+  const totalAmount = money(invoice.totalAmount);
+  const newBalanceDue = nonNegative(totalAmount.minus(newAmountPaid));
+
+  let nextStatus = invoice.status;
+  if (newAmountPaid.gte(totalAmount)) {
+    nextStatus = "paid";
+  } else if (newAmountPaid.gt(0)) {
+    nextStatus = "partially_paid";
+  } else if (invoice.status === "paid" || invoice.status === "partially_paid") {
+    // Reverted to no payments — drop back to the pre-payment "sent" state.
+    nextStatus = "sent";
+  }
+
+  await db
+    .update(salesInvoices)
+    .set({
+      amountPaid: toMoneyString(newAmountPaid),
+      balanceDue: toMoneyString(newBalanceDue),
+      status: nextStatus,
+    })
+    .where(eq(salesInvoices.id, invoiceId));
+}
+
+/**
+ * Hard-delete a payment row and recompute the parent invoice's totals.
+ * The void is permanent — there's no soft-delete column on the payments
+ * table. Audit comes via the standard activity feed (recorded by the
+ * action wrapper, not the service).
+ */
+export async function voidPayment(id: string): Promise<{ invoiceId: string }> {
+  const tenant = await getCurrentTenant();
+  const existing = await db.query.payments.findFirst({
+    where: and(eq(payments.id, id), eq(payments.tenantId, tenant.id)),
+    columns: { id: true, salesInvoiceId: true },
+  });
+  if (!existing) {
+    throw new Error("Payment not found.");
+  }
+
+  await db
+    .delete(payments)
+    .where(and(eq(payments.id, id), eq(payments.tenantId, tenant.id)));
+
+  await recomputeInvoiceTotals(existing.salesInvoiceId);
+
+  return { invoiceId: existing.salesInvoiceId };
+}
+
+export type UpdatePaymentInput = {
+  id: string;
+  paymentDate?: string;
+  amount?: string;
+  paymentMethod?: PaymentMethod;
+  checkNumber?: string | null;
+  referenceNumber?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Edit a payment in place. Only the supplied fields are written.
+ * Recomputes parent invoice totals if amount changed (or always — cheap
+ * enough that we just always do it, keeps the invariant simple).
+ */
+export async function updatePayment(
+  input: UpdatePaymentInput,
+): Promise<{ invoiceId: string }> {
+  const tenant = await getCurrentTenant();
+  const existing = await db.query.payments.findFirst({
+    where: and(eq(payments.id, input.id), eq(payments.tenantId, tenant.id)),
+  });
+  if (!existing) {
+    throw new Error("Payment not found.");
+  }
+
+  const patch: Partial<typeof payments.$inferInsert> = {};
+
+  if (input.paymentDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) {
+      throw new Error("Payment date must be a valid YYYY-MM-DD value.");
+    }
+    patch.paymentDate = input.paymentDate;
+  }
+
+  if (input.amount !== undefined) {
+    if (!isPositiveMoney(input.amount)) {
+      throw new Error("Payment amount must be greater than 0.");
+    }
+    const amount = money(input.amount);
+    // The edited amount + sum of other payments on this invoice must not
+    // exceed the invoice total — would put balance_due negative. Decimal
+    // summation keeps the over-paid check tight; with Number, sub-cent
+    // drift on a heavily partial-paid invoice could either reject a
+    // legit edit or let an over-edit slip past the 1¢ tolerance.
+    const invoice = await db.query.salesInvoices.findFirst({
+      where: eq(salesInvoices.id, existing.salesInvoiceId),
+      columns: { totalAmount: true },
+    });
+    const [agg] = await db
+      .select({
+        total: sql<string>`coalesce(sum(${payments.amount}::numeric), 0)`,
+      })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.salesInvoiceId, existing.salesInvoiceId),
+          // Exclude THIS payment from the sum so we can compare against
+          // its proposed new value.
+          sql`${payments.id} != ${input.id}`,
+        ),
+      );
+    const otherSum = money(agg?.total ?? 0);
+    const totalAmount = money(invoice?.totalAmount ?? 0);
+    if (exceedsByCent(otherSum.plus(amount), totalAmount)) {
+      throw new Error(
+        "Amount would push paid total over the invoice's grand total.",
+      );
+    }
+    patch.amount = toMoneyString(amount);
+  }
+
+  if (input.paymentMethod !== undefined) {
+    if (!PAYMENT_METHODS.has(input.paymentMethod)) {
+      throw new Error("Unknown payment method.");
+    }
+    patch.paymentMethod = input.paymentMethod;
+  }
+
+  if (input.checkNumber !== undefined) {
+    patch.checkNumber = input.checkNumber?.trim() || null;
+  }
+  if (input.referenceNumber !== undefined) {
+    patch.referenceNumber = input.referenceNumber?.trim() || null;
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { invoiceId: existing.salesInvoiceId };
+  }
+
+  await db
+    .update(payments)
+    .set(patch)
+    .where(and(eq(payments.id, input.id), eq(payments.tenantId, tenant.id)));
+
+  await recomputeInvoiceTotals(existing.salesInvoiceId);
+
+  return { invoiceId: existing.salesInvoiceId };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Bulk reconciliation                                                        */
+/* -------------------------------------------------------------------------- */
+
+export type BulkReconcileResult = {
+  /** How many rows were actually updated — excludes any already in the target state. */
+  updated: number;
+};
+
+/**
+ * Mark N customer payments as reconciled against a bank statement line.
+ * `reference` is optional (sometimes ops just wants the audit trail of
+ * "we checked these"). Already-reconciled rows are passed over silently;
+ * the count returned reflects only the new updates.
+ */
+export async function bulkReconcilePayments(
+  ids: string[],
+  reference: string | null,
+  reconciledByUserId: string,
+): Promise<BulkReconcileResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const trimmedRef = reference?.trim() || null;
+
+  const result = await db
+    .update(payments)
+    .set({
+      reconciledAt: new Date(),
+      reconciledByUserId,
+      reconciliationReference: trimmedRef,
+    })
+    .where(
+      and(
+        eq(payments.tenantId, tenant.id),
+        inArray(payments.id, ids),
+        sql`${payments.reconciledAt} IS NULL`,
+      ),
+    )
+    .returning({ id: payments.id });
+
+  return { updated: result.length };
+}
+
+/** Reverse of bulkReconcilePayments — clears the three reconciliation columns. */
+export async function bulkUnreconcilePayments(
+  ids: string[],
+): Promise<BulkReconcileResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+
+  const result = await db
+    .update(payments)
+    .set({
+      reconciledAt: null,
+      reconciledByUserId: null,
+      reconciliationReference: null,
+    })
+    .where(
+      and(
+        eq(payments.tenantId, tenant.id),
+        inArray(payments.id, ids),
+        sql`${payments.reconciledAt} IS NOT NULL`,
+      ),
+    )
+    .returning({ id: payments.id });
+
+  return { updated: result.length };
+}

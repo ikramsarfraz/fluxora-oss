@@ -15,6 +15,27 @@ const moneyString = z
     message: "Must be a valid amount.",
   });
 
+/**
+ * Closed set of line unit types. Two weight-aware modes (catch_weight,
+ * fixed_case) and two unit-priced modes (per_each, per_unit) for
+ * beverages and other non-weight items. Kept in sync with the DB enum
+ * and the AI schema.
+ */
+export const supplierInvoiceLineUnitTypes = [
+  "catch_weight",
+  "fixed_case",
+  "per_each",
+  "per_unit",
+] as const;
+export type SupplierInvoiceLineUnitType =
+  (typeof supplierInvoiceLineUnitTypes)[number];
+
+export function isWeightLineUnitType(
+  unitType: SupplierInvoiceLineUnitType,
+): boolean {
+  return unitType === "catch_weight" || unitType === "fixed_case";
+}
+
 // All string fields use plain `z.string()` (never `.default()` + `.optional()`)
 // so that the zod *input* and *output* types stay identical. react-hook-form's
 // generic `Resolver` needs these to match to compile cleanly.
@@ -22,7 +43,7 @@ export const supplierInvoiceLineSchema = z
   .object({
     id: z.string().optional(),
     productId: z.string().uuid("Product is required."),
-    unitType: z.enum(["catch_weight", "fixed_case"]),
+    unitType: z.enum(supplierInvoiceLineUnitTypes),
     weightEntryMode: z.enum(supplierInvoiceWeightEntryModes),
     quantityCases: z
       .string()
@@ -32,6 +53,32 @@ export const supplierInvoiceLineSchema = z
     defaultCaseWeightLbs: moneyString,
     caseWeightEntries: z.array(moneyString),
     unitPrice: moneyString,
+    /**
+     * Abbreviation of the purchase UOM (e.g. "ea", "cs", "gal"). Only
+     * meaningful for per_each / per_unit lines; weight modes leave it
+     * empty and the renderer falls back to "lb" / "cs".
+     */
+    purchaseUnitAbbreviation: z
+      .string()
+      .trim()
+      .max(16, "Unit is too long."),
+    /**
+     * How many base units (each, lb, gal, …) are in one purchase unit.
+     * E.g. 12 for a case of 12 cans, 24 for a 24-pack, 40 for a 40-lb
+     * case of meat. Defaults to the product's purchase-unit conversion
+     * on selection; the user can edit per-line for shipments where the
+     * pack size differs (a special-run 6-pack, etc.).
+     *
+     * Persisted on `supplier_invoice_lines.conversion_to_base_snapshot`
+     * so reports + future inventory-explosion features can split a case
+     * into individual eaches at sale time.
+     */
+    unitsPerPackage: z
+      .string()
+      .trim()
+      .refine(v => v === "" || /^\d+(\.\d{1,4})?$/.test(v), {
+        message: "Enter a positive number.",
+      }),
     lotNumberOverride: z.string().trim().max(128),
     expirationDateOverride: z
       .string()
@@ -46,8 +93,14 @@ export const supplierInvoiceLineSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["quantityCases"],
-        message: "Enter a positive case count.",
+        message: "Enter a positive quantity.",
       });
+      return;
+    }
+
+    // Non-weight modes only need a positive quantity + unit price; weight
+    // tray is irrelevant.
+    if (line.unitType === "per_each" || line.unitType === "per_unit") {
       return;
     }
 
@@ -99,14 +152,53 @@ export type SupplierInvoiceLineValues = z.infer<
   typeof supplierInvoiceLineSchema
 >;
 
+export const supplierInvoiceChargeTypes = [
+  "freight",
+  "fuel",
+  "tax",
+  "discount",
+  // Meat-supplier categories — the AI extractor already classifies fees
+  // into these buckets, so the manual form mirrors the same options to
+  // keep the two surfaces in sync.
+  "processing",
+  "inspection",
+  "cod",
+  "refrigeration",
+  "other",
+] as const;
+export type SupplierInvoiceChargeType = (typeof supplierInvoiceChargeTypes)[number];
+
+export const supplierInvoiceChargeSchema = z.object({
+  description: z.string().trim().min(1, "Description is required.").max(256),
+  chargeType: z.enum(supplierInvoiceChargeTypes),
+  rate: z.string().trim().refine(v => v === "" || /^\d+(\.\d{1,4})?$/.test(v), {
+    message: "Must be a valid percentage.",
+  }),
+  includeInInventoryCost: z.boolean(),
+  amount: moneyString,
+});
+
+export type SupplierInvoiceChargeValues = z.infer<typeof supplierInvoiceChargeSchema>;
+
+export function emptyCharge(): SupplierInvoiceChargeValues {
+  return {
+    description: "",
+    chargeType: "other",
+    rate: "",
+    includeInInventoryCost: false,
+    amount: "",
+  };
+}
+
 export const supplierInvoiceFormSchema = z
   .object({
     supplierId: z.string().uuid("Supplier is required."),
-    invoiceNumber: z
-      .string()
-      .trim()
-      .min(1, "Invoice number is required.")
-      .max(64),
+    /**
+     * The supplier's printed invoice number, optional because some bills
+     * (hand-written, scanned without OCR, etc.) don't carry one. Stored
+     * verbatim — uniqueness per (tenant, supplier) is enforced at the DB.
+     */
+    supplierInvoiceNumber: z.string().trim().max(64),
     invoiceDate: z
       .string()
       .trim()
@@ -122,6 +214,7 @@ export const supplierInvoiceFormSchema = z
     lines: z
       .array(supplierInvoiceLineSchema)
       .min(1, "Add at least one line."),
+    charges: z.array(supplierInvoiceChargeSchema),
   })
   .refine(data => data.receiveDate >= data.invoiceDate, {
     path: ["receiveDate"],
@@ -142,20 +235,29 @@ export function emptyLine(): SupplierInvoiceLineValues {
     defaultCaseWeightLbs: "",
     caseWeightEntries: [""],
     unitPrice: "0",
+    purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };
 }
 
 /**
- * Recomputes the line total in cents precision. `fixed_case` lines price
- * per-case; `catch_weight` lines price per-lb.
+ * Recomputes the line total in cents precision.
+ *   catch_weight → total weight * unitPrice (price is $/lb)
+ *   fixed_case   → quantityCases * unitPrice (price is $/case)
+ *   per_each     → quantityCases * unitPrice (price is $/each; the
+ *                  "cases" field acts as the each count)
+ *   per_unit     → quantityCases * unitPrice (price is $/UOM)
  */
-export function computeLineTotal(line: SupplierInvoiceLineValues): number {
+export function computeLineTotal(
+  line: Partial<SupplierInvoiceLineValues>,
+): number {
   const unitPrice = Number(line.unitPrice) || 0;
   if (line.unitType === "catch_weight") {
     return computeDraftLineWeight(line) * unitPrice;
   }
+  // fixed_case, per_each, per_unit all multiply the count field by price.
   return (Number(line.quantityCases) || 0) * unitPrice;
 }
 

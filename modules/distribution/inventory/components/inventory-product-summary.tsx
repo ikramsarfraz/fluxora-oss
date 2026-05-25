@@ -14,7 +14,11 @@ type SortDirection = "asc" | "desc";
 const HEADERS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "name", label: "Product" },
   { key: "totalCases", label: "Cases", align: "right" },
-  { key: "totalWeightLbs", label: "Weight (lb)", align: "right" },
+  // Generic "Quantity" label — the cell renders weight for weight-family
+  // products and count for non-weight products, each with the right
+  // abbreviation. Sort still operates on the weight column (zero for
+  // non-weight rows, which clusters them).
+  { key: "totalWeightLbs", label: "Quantity", align: "right" },
   { key: "itemCount", label: "Items", align: "right" },
 ];
 
@@ -59,52 +63,52 @@ export function InventoryProductSummary() {
 
   if (error) {
     return (
-      <div className="rounded-md border border-stone-line bg-stone-surface px-4 py-3 text-[13px] text-stone-muted">
+      <div className="rounded-md border border-border-default bg-card px-4 py-3 text-sm text-subtle">
         Couldn’t load product totals.
       </div>
     );
   }
 
   return (
-    <section className="overflow-hidden rounded-md border border-stone-line bg-stone-surface">
+    <section className="overflow-hidden rounded-md border border-border-default bg-card">
       <button
         type="button"
         onClick={() => setCollapsed(c => !c)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-stone-line/40"
+        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-surface-deep/40"
       >
         <div className="flex items-center gap-2">
           {collapsed ? (
-            <ChevronRight className="size-3.5 text-stone-muted" />
+            <ChevronRight className="size-3.5 text-subtle" />
           ) : (
-            <ChevronDown className="size-3.5 text-stone-muted" />
+            <ChevronDown className="size-3.5 text-subtle" />
           )}
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted">
+          <span className="text-xs font-medium uppercase tracking-wide text-subtle">
             On-hand by product
           </span>
           {!isLoading && data ? (
-            <span className="text-[11px] text-stone-muted">· {data.length}</span>
+            <span className="text-xs text-subtle">· {data.length}</span>
           ) : null}
         </div>
       </button>
 
       {!collapsed ? (
-        <div className="border-t border-stone-line">
+        <div className="border-t border-border-default">
           {isLoading ? (
-            <div className="px-4 py-6 text-center text-[13px] text-stone-muted">Loading…</div>
+            <div className="px-4 py-6 text-center text-sm text-subtle">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[13px] text-stone-muted">
+            <div className="px-4 py-6 text-center text-sm text-subtle">
               No products in stock.
             </div>
           ) : (
             <div className="max-h-[280px] overflow-auto">
-              <table className="w-full border-collapse text-[13px]">
-                <thead className="sticky top-0 bg-stone-surface">
-                  <tr className="border-b border-stone-line">
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 bg-card">
+                  <tr className="border-b border-border-default">
                     {HEADERS.map(h => (
                       <th
                         key={h.key}
                         className={cn(
-                          "px-4 py-2 text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted",
+                          "px-4 py-2 text-xs font-medium uppercase tracking-wide text-subtle",
                           h.align === "right" ? "text-right" : "text-left",
                         )}
                       >
@@ -112,7 +116,7 @@ export function InventoryProductSummary() {
                           type="button"
                           onClick={() => handleSort(h.key)}
                           className={cn(
-                            "inline-flex items-center gap-1 hover:text-stone-ink",
+                            "inline-flex items-center gap-1 hover:text-ink",
                             h.align === "right" ? "ml-auto" : "",
                           )}
                         >
@@ -127,11 +131,11 @@ export function InventoryProductSummary() {
                   {rows.map(row => (
                     <tr
                       key={row.productId}
-                      className="border-b border-stone-line/60 last:border-b-0 hover:bg-stone-line/30"
+                      className="border-b border-border-default/60 last:border-b-0 hover:bg-surface-deep/30"
                     >
-                      <td className="px-4 py-2 text-stone-ink">
+                      <td className="px-4 py-2 text-ink">
                         <div className="font-medium">{row.name}</div>
-                        <div className="mt-0.5 text-[11px] text-stone-muted">
+                        <div className="mt-0.5 text-xs text-subtle">
                           <MonoText>{row.sku}</MonoText>
                         </div>
                       </td>
@@ -139,7 +143,33 @@ export function InventoryProductSummary() {
                         <MonoText>{row.totalCases.toLocaleString()}</MonoText>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <MonoText>{formatWeightLbs(row.totalWeightLbs)}</MonoText>
+                        {/* Family-aware:
+                              weight products  → "X.XX lb" / "kg" / "oz"
+                              non-weight       → "{cases × pack} {baseAbbr}"
+                            For non-weight products we display the
+                            base-unit total (so 5 cases of a 24-pack
+                            reads "120 ea"), with the case count
+                            underneath when the multiplication is
+                            non-trivial. */}
+                        {row.baseUnitFamily === "weight" ||
+                        row.baseUnitFamily == null ? (
+                          <MonoText>
+                            {formatWeightLbs(row.totalWeightLbs)}{" "}
+                            {row.baseUnitAbbreviation ?? "lb"}
+                          </MonoText>
+                        ) : (
+                          <div className="flex flex-col items-end">
+                            <MonoText>
+                              {row.totalUnits.toLocaleString()}{" "}
+                              {row.baseUnitAbbreviation ?? "ea"}
+                            </MonoText>
+                            {row.totalUnits !== row.totalCases ? (
+                              <span className="text-xs text-subtle">
+                                {row.totalCases.toLocaleString()} cs
+                              </span>
+                            ) : null}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <MonoText>{row.itemCount.toLocaleString()}</MonoText>

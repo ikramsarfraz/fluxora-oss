@@ -45,19 +45,19 @@ import { OrderSidebar } from "./order-sidebar";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -315,7 +315,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
+                className="size-[30px] border-border-default bg-card text-ink-warm shadow-none hover:bg-divider"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -470,7 +470,7 @@ function PrimaryBtn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+      className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-50"
     >
       {children}
     </Button>
@@ -489,7 +489,7 @@ function SecondaryBtn({
       type="button"
       onClick={onClick}
       variant="outline"
-      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2"
+      className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider"
     >
       {children}
     </Button>

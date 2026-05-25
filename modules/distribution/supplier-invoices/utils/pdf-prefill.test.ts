@@ -107,7 +107,7 @@ test("parses the attached supplier invoice text", () => {
   assert.equal(result.sourceFilename, "Invoice 57876.pdf");
   assert.deepEqual(result.unmatchedSupplierCandidates, []);
   assert.equal(result.values.supplierId, "supplier-1");
-  assert.equal(result.values.invoiceNumber, "57876");
+  assert.equal(result.values.supplierInvoiceNumber, "57876");
   assert.equal(result.values.invoiceDate, "2026-04-20");
   assert.equal(result.values.receiveDate, "2026-04-20");
   assert.equal(result.values.paymentMethod, null);
@@ -156,11 +156,11 @@ test("leaves unresolved suppliers and products for the user", () => {
     "JUMBO CHICKEN TENDER",
     "JUMBO CHICKEN BREAST",
   ]);
-  assert.match(result.warnings.join(" "), /Supplier was not matched/);
-  assert.match(result.warnings.join(" "), /Some product lines were not matched/);
+  // Final-state warnings are evaluated by buildFormStateWarnings in the
+  // pipeline (see form-state-warnings.test.ts), not by the parser itself.
 });
 
-test("warns when parsed line totals do not match the PDF balance", () => {
+test("flags total-balance mismatches in totalComparison", () => {
   const result = parseSupplierInvoicePdfText({
     text: SAMPLE_INVOICE_TEXT.replace(/\$1,536\.80/g, "$1,500.00"),
     sourceFilename: "Invoice 57876.pdf",
@@ -175,7 +175,6 @@ test("warns when parsed line totals do not match the PDF balance", () => {
   assert.equal(result.totalComparison.computedLineTotal, "1536.80");
   assert.equal(result.totalComparison.variance, "36.80");
   assert.equal(result.totalComparison.matches, false);
-  assert.match(result.warnings.join(" "), /line totals do not match/i);
 });
 
 test("returns an editable placeholder when no line items can be read", () => {
@@ -188,7 +187,18 @@ test("returns an editable placeholder when no line items can be read", () => {
 
   assert.equal(result.values.lines.length, 1);
   assert.equal(result.values.lines[0].productId, "");
-  assert.match(result.warnings.join(" "), /No invoice line items/);
+});
+
+test("leaves invoiceDate empty when no date is found in the text", () => {
+  const result = parseSupplierInvoicePdfText({
+    text: "Invoice 12345 Balance Due $12.00",
+    sourceFilename: "empty.pdf",
+    suppliers: [],
+    products: [],
+  });
+
+  assert.equal(result.values.invoiceDate, "");
+  assert.equal(result.values.receiveDate, "");
 });
 
 test("parses Brewer Livestock packed invoice rows", () => {
@@ -204,7 +214,7 @@ test("parses Brewer Livestock packed invoice rows", () => {
   });
 
   assert.equal(result.values.supplierId, "supplier-brewer");
-  assert.equal(result.values.invoiceNumber, "137098");
+  assert.equal(result.values.supplierInvoiceNumber, "137098");
   assert.equal(result.values.invoiceDate, "2026-04-21");
   assert.deepEqual(
     result.values.lines.map(line => ({
@@ -244,6 +254,128 @@ test("parses Brewer Livestock packed invoice rows", () => {
   assert.match(result.warnings.join(" "), /Cut Fee, Delivery Charge/);
 });
 
+// ---------------------------------------------------------------------------
+// Regression: flexible header detection (generic keyword matching)
+// ---------------------------------------------------------------------------
+
+const NONSTANDARD_HEADER_INVOICE = `
+Custom Meats Inc.
+Invoice No: 9001
+Date: 05/01/2026
+Bill To: Acme Distribution
+
+Product | Cases | Weight (lbs) | Price/lb | Total Amount
+Beef Brisket Boneless 2 110.50 4.20 464.10
+Lamb Shoulder Bone-In 1 38.20 5.50 210.10
+
+Balance Due: $674.20
+`;
+
+test("parses invoice with non-standard header using generic keyword detection", () => {
+  const result = parseSupplierInvoicePdfText({
+    text: NONSTANDARD_HEADER_INVOICE,
+    sourceFilename: "custom-meats-9001.pdf",
+    suppliers: [],
+    products: [],
+  });
+
+  assert.ok(result.values.lines.length >= 2, "should extract at least 2 lines from non-standard header");
+  assert.ok(
+    result.unmatchedLineDescriptions.length >= 2,
+    "should have unmatched descriptions for both lines",
+  );
+  const hasBeef = result.unmatchedLineDescriptions.some(d => /beef/i.test(d));
+  const hasLamb = result.unmatchedLineDescriptions.some(d => /lamb/i.test(d));
+  assert.ok(hasBeef, "should detect Beef Brisket row");
+  assert.ok(hasLamb, "should detect Lamb Shoulder row");
+});
+
+// ---------------------------------------------------------------------------
+// Regression: wider tolerance for catch-weight rounding
+// ---------------------------------------------------------------------------
+
+const ROUNDED_AMOUNT_INVOICE = `
+Meat Co Invoice
+DESCRIPTIONQUANTITYWEIGHTPRICEAMOUNT
+Premium Lamb Leg B/I 2cs 350.50 2.89 1013.00
+Goat Shoulder 1cs 48.30 5.45 263.00
+
+BALANCE DUE $1,276.00
+`;
+
+test("parses catch-weight row where invoice rounds amount (tolerance regression)", () => {
+  // 350.50 × 2.89 = 1012.945, invoice shows 1013.00 → delta 0.055 > old 0.02 limit
+  // 48.30 × 5.45 = 263.235, invoice shows 263.00 → delta 0.235 > old 0.02 limit
+  const result = parseSupplierInvoicePdfText({
+    text: ROUNDED_AMOUNT_INVOICE,
+    sourceFilename: "meatco-rounding.pdf",
+    suppliers: [],
+    products: [],
+  });
+
+  assert.equal(result.values.lines.length, 2, "should parse both rounded-amount rows");
+  const lambLine = result.values.lines[0];
+  assert.equal(lambLine.unitType, "catch_weight");
+  assert.equal(lambLine.weightLbs, "350.5000");
+  assert.equal(lambLine.unitPrice, "2.8900");
+});
+
+// ---------------------------------------------------------------------------
+// Regression: generic fallback (no header at all)
+// ---------------------------------------------------------------------------
+
+const NO_HEADER_INVOICE = `
+Fresh Farms Supply
+Invoice #55123 Date: 04/30/2026
+
+Chicken Breast BNLS 5cs 200.50 3.10 621.55
+Turkey Whole 2cs 85.00 2.75 233.75
+
+Total: $855.30
+`;
+
+test("extracts lines via generic fallback when no table header exists", () => {
+  const result = parseSupplierInvoicePdfText({
+    text: NO_HEADER_INVOICE,
+    sourceFilename: "fresh-farms-55123.pdf",
+    suppliers: [],
+    products: [],
+  });
+
+  assert.ok(result.values.lines.length >= 2, "generic fallback should extract at least 2 lines");
+  const hasChicken = result.unmatchedLineDescriptions.some(d => /chicken/i.test(d));
+  const hasTurkey = result.unmatchedLineDescriptions.some(d => /turkey/i.test(d));
+  assert.ok(hasChicken, "generic fallback should detect chicken row");
+  assert.ok(hasTurkey, "generic fallback should detect turkey row");
+});
+
+// ---------------------------------------------------------------------------
+// Regression: merge guard — real det lines must not be overwritten by AI
+// ---------------------------------------------------------------------------
+
+test("parseSupplierInvoicePdfText returns real lines even when productId is empty", () => {
+  // This test verifies the deterministic parser does return real lines for the Brewer
+  // invoice without product matches — the merge fix ensures AI never replaces them.
+  const result = parseSupplierInvoicePdfText({
+    text: BREWER_INVOICE_TEXT,
+    sourceFilename: "brewer-137098.pdf",
+    suppliers: [{ id: "supplier-brewer", name: "Brewer Livestock" }],
+    products: [], // no products — productId will be ""
+  });
+
+  // All 3 inventory lines should be extracted despite no product matches
+  assert.equal(result.values.lines.length, 3, "should have 3 real parsed lines");
+  assert.ok(
+    result.unmatchedLineDescriptions.length === 3,
+    "all 3 descriptions should be in unmatchedLineDescriptions",
+  );
+  // Each line should have real weight and price data
+  for (const line of result.values.lines) {
+    assert.ok(Number(line.weightLbs) > 0, `line should have weight > 0: ${JSON.stringify(line)}`);
+    assert.ok(Number(line.unitPrice) > 0, `line should have price > 0: ${JSON.stringify(line)}`);
+  }
+});
+
 test("parses Zabiha/Fatima packed catch-weight and fixed-case rows", () => {
   const result = parseSupplierInvoicePdfText({
     text: ZABIHA_INVOICE_TEXT,
@@ -262,7 +394,7 @@ test("parses Zabiha/Fatima packed catch-weight and fixed-case rows", () => {
   });
 
   assert.equal(result.values.supplierId, "supplier-zabiha");
-  assert.equal(result.values.invoiceNumber, "243192");
+  assert.equal(result.values.supplierInvoiceNumber, "243192");
   assert.equal(result.values.invoiceDate, "2026-04-20");
   assert.equal(result.values.lines.length, 9);
   assert.deepEqual(

@@ -44,9 +44,11 @@ export function SyncStatusPill({
   staleDays,
   onRefresh,
 }: SyncStatusPillProps) {
-  const [syncState, setSyncState] = useState<SyncState>(
-    activeJob ? "syncing" : staleDays !== undefined && staleDays >= 2 ? "stale" : initialState,
-  );
+  const syncState: SyncState = activeJob
+    ? "syncing"
+    : staleDays !== undefined && staleDays >= 2
+      ? "stale"
+      : initialState;
   const [minutesAgoStr, setMinutesAgoStr] = useState<string>("");
 
   useEffect(() => {
@@ -59,12 +61,6 @@ export function SyncStatusPill({
     const id = setInterval(update, 30000);
     return () => clearInterval(id);
   }, [lastSyncedAt]);
-
-  useEffect(() => {
-    if (activeJob) setSyncState("syncing");
-    else if (staleDays !== undefined && staleDays >= 2) setSyncState("stale");
-    else setSyncState("idle");
-  }, [activeJob, staleDays]);
 
   const isStale = syncState === "stale";
   const isSyncing = syncState === "syncing";
@@ -82,19 +78,19 @@ export function SyncStatusPill({
         alignItems: "center",
         gap: 10,
         padding: "7px 12px",
-        background: isStale ? "#fffbeb" : isSyncing ? "#eff6ff" : "#fff",
-        border: `1px solid ${isStale ? "#fde68a" : isSyncing ? "#bfdbfe" : "#e7e7ea"}`,
+        background: isStale ? "var(--color-warning-bg)" : isSyncing ? "#eff6ff" : "var(--color-card)",
+        border: `1px solid ${isStale ? "var(--color-warning-border)" : isSyncing ? "#bfdbfe" : "var(--color-border-default)"}`,
         borderRadius: 999,
         boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
         fontSize: 12,
-        color: isStale ? "#d97706" : isSyncing ? "#2563eb" : "#52525b",
+        color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-subtle)",
         pointerEvents: "auto",
       }}
     >
       {/* Icon */}
       <span
         style={{
-          color: isStale ? "#d97706" : isSyncing ? "#2563eb" : "#a1a1aa",
+          color: isStale ? "var(--color-warning-fg)" : isSyncing ? "var(--color-forest-mid)" : "var(--color-muted)",
           display: "flex",
           alignItems: "center",
           animation: isSyncing ? "loading-spin 1.5s linear infinite" : undefined,
@@ -120,7 +116,7 @@ export function SyncStatusPill({
             style={{
               background: "none",
               border: "none",
-              color: "#d97706",
+              color: "var(--color-warning-fg)",
               fontWeight: 600,
               textDecoration: "underline",
               cursor: "pointer",
@@ -147,7 +143,7 @@ export function SyncStatusPill({
             border: "1px solid #e7e7ea",
             background: "transparent",
             cursor: "pointer",
-            color: "#52525b",
+            color: "var(--color-subtle)",
             fontFamily: "inherit",
           }}
         >

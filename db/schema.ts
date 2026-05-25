@@ -90,14 +90,55 @@ export const expenseRecurrenceIntervalEnum = pgEnum("expense_recurrence_interval
   "annually",
 ]);
 
+// Expense approval lifecycle. Newly-created rows start in 'draft' so a
+// submitter can iterate before requesting approval; 'submitted' enters the
+// approver's queue; 'approved' clears the row for accounting to pay;
+// 'rejected' bounces it back to the submitter with a reason (legal next
+// state is 'draft' via reset, not directly back to 'submitted'); 'paid'
+// closes the row.
+//
+// Rows that predate this enum (the historical bulk created before the
+// workflow shipped) are backfilled to 'approved' so the new gating doesn't
+// suddenly hide them from the listing.
+export const expenseStatusEnum = pgEnum("expense_status", [
+  "draft",
+  "submitted",
+  "approved",
+  "rejected",
+  "paid",
+]);
+
 export const lineUnitTypeEnum = pgEnum("line_unit_type", [
   "catch_weight",
   "fixed_case",
+  // Non-weight modes — added for beverages and other unit-priced SKUs:
+  //   per_each → price is $/each unit (e.g. one can of soda)
+  //   per_unit → price is $/purchase-uom (e.g. $9.99/case of 12)
+  // Math is `quantity * unitPrice`; `weight_lbs` is unused for these and
+  // typically zero. UI hides the weight tray when these are selected.
+  "per_each",
+  "per_unit",
 ]);
 
 export const pricingUnitTypeEnum = pgEnum("pricing_unit_type", [
   "per_lb",
   "per_case",
+]);
+
+/**
+ * Classifier for `units_of_measure` rows. Drives:
+ *   - The product form's UOM picker (filter, group, family-match guard)
+ *   - Reports / dashboards — group weight-based aggregates separately
+ *     from count-based, prevent summing lb + ea into a nonsense total.
+ *   - Display surfaces (price chart, supplier comparison) that need to
+ *     flag mixed-family aggregations to the user.
+ */
+export const uomFamilyEnum = pgEnum("uom_family", [
+  "weight",
+  "count",
+  "volume",
+  "length",
+  "other",
 ]);
 
 export const inventoryItemStatusEnum = pgEnum("inventory_item_status", [
@@ -124,6 +165,7 @@ export const fileCategoryEnum = pgEnum("file_category", [
   "sales_invoice_pdf",
   "sales_invoice_attachment",
   "sales_order_attachment",
+  "expense_attachment",
   "other",
 ]);
 
@@ -138,7 +180,80 @@ export const fileStorageProviderEnum = pgEnum("file_storage_provider", ["r2"]);
 
 export const supplierInvoiceStatusEnum = pgEnum("supplier_invoice_status", [
   "draft",
+  "posted",
+  "receiving",
+  "reconciled",
   "completed",
+  "paid",
+]);
+
+export const bulkImportStatusEnum = pgEnum("bulk_import_status", [
+  // Parsing finished cleanly — the user can pick this row from the bulk
+  // landing screen and walk through review.
+  "parsed",
+  // Parsing finished but the user has already posted the bill from this
+  // entry. We keep the row for audit + recovery (TTL is operator-controlled).
+  "reviewed",
+  // Legacy value, retained for enum-stability — never written by current
+  // code. Superseded by `parse_error`. Safe to drop in a follow-up once we
+  // confirm no rows in any environment carry this value.
+  "errored",
+  // Parsing failed — set when `PipelineResult.parseStatus === "parse_error"`.
+  // The R2 object is still stored so a future re-parse handler can retry
+  // without re-uploading; today's recovery is for the user to re-upload from
+  // the bulk landing screen. `parse_error_codes` carries the coarse-grained
+  // failure class (connection, timeout, refusal, …) for telemetry.
+  "parse_error",
+]);
+
+export const plaidConnectionStatusEnum = pgEnum("plaid_connection_status", [
+  "active",
+  "requires_reauth",
+  "disconnected",
+]);
+
+export const bankTransactionChannelEnum = pgEnum("bank_transaction_channel", [
+  "ach",
+  "wire",
+  "check",
+  "other",
+]);
+
+export const paymentMatchStatusEnum = pgEnum("payment_match_status", [
+  "pending_review",
+  "confirmed",
+  "auto_applied",
+  "rejected",
+]);
+
+export const billForwardDeliveryStatusEnum = pgEnum("bill_forward_delivery_status", [
+  "sent",
+  "bounced",
+  "delivered",
+]);
+
+/**
+ * Mirrors bill_forward_delivery_status — kept as a parallel enum
+ * because AR (sales invoices) and AP (supplier bills) are owned by
+ * different modules and we don't want a schema rename in one to
+ * cascade into the other's state machine.
+ */
+export const salesInvoiceEmailDeliveryStatusEnum = pgEnum(
+  "sales_invoice_email_delivery_status",
+  ["sent", "bounced", "delivered"],
+);
+
+export const aliasSourceEnum = pgEnum("alias_source", [
+  "manual",
+  "ai_suggested",
+  "confirmed",
+  "parser",
+]);
+
+export const parserTypeEnum = pgEnum("parser_type", [
+  "deterministic",
+  "ai_fallback",
+  "hybrid",
 ]);
 
 export const auditActionEnum = pgEnum("audit_action", [
@@ -199,6 +314,43 @@ export const productUnitPurposeEnum = pgEnum("product_unit_purpose", [
   "display",
 ]);
 
+// -------------------- Lot lifecycle --------------------
+
+export const lotStateEnum = pgEnum("lot_state", [
+  "active",
+  "expiring",
+  "marked_down",
+  "reserved",
+  "donated",
+  "repurposed",
+  "discarded",
+]);
+
+export const dispositionOptionEnum = pgEnum("disposition_option", [
+  "markdown",
+  "outreach",
+  "donate",
+  "repurpose",
+  "discard",
+]);
+
+export const dispositionStatusEnum = pgEnum("disposition_status", [
+  "draft",
+  "scheduled",
+  "applied",
+  "completed",
+  "cancelled",
+]);
+
+// -------------------- Tenant onboarding --------------------
+
+export const businessCategoryEnum = pgEnum("business_category", [
+  "meat_poultry",
+  "seafood",
+  "produce",
+  "bakery_dry",
+]);
+
 /** Product / billing plan for a tenant (Stripe product mapping comes later). */
 export const tenantSubscriptionPlanEnum = pgEnum("tenant_subscription_plan", [
   "free",
@@ -254,6 +406,22 @@ export const tenants = pgTable(
     currentPeriodEndsAt: timestamp("current_period_ends_at", { withTimezone: true }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+    /** Primary business category set during onboarding (drives category-specific defaults). */
+    businessCategory: businessCategoryEnum("business_category"),
+    /** Running count of supplier invoices posted; drives first-bill-mode and data-readiness gates. */
+    billCount: integer("bill_count").notNull().default(0),
+    /**
+     * Monotonically increasing counter used to mint per-tenant system
+     * reference numbers (e.g. IB-000001) for supplier invoices. Atomically
+     * incremented inside the create-invoice transaction.
+     */
+    supplierInvoiceCounter: integer("supplier_invoice_counter")
+      .notNull()
+      .default(0),
+    /** Whether the onboarding welcome flow has been completed. */
+    onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+    /** Set when the user explicitly skips or finishes the welcome flow; stops the cold-start redirect. */
+    welcomeSkippedAt: timestamp("welcome_skipped_at", { withTimezone: true }),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),
@@ -526,13 +694,23 @@ export const unitsOfMeasure = pgTable(
     name: varchar("name", { length: 128 }).notNull().unique(),
     abbreviation: varchar("abbreviation", { length: 16 }),
     notes: text("notes"),
+    /**
+     * Classifier for the unit. Drives family-match validation when picking
+     * a base UOM + alternate sales/purchase UOMs on a product, and lets
+     * reports group weight-vs-count aggregates correctly. Defaults to
+     * 'other' so unseeded admin-added rows stay valid until classified.
+     */
+    family: uomFamilyEnum("family").notNull().default("other"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  table => [index("units_of_measure_is_active_idx").on(table.isActive)],
+  table => [
+    index("units_of_measure_is_active_idx").on(table.isActive),
+    index("units_of_measure_family_idx").on(table.family),
+  ],
 );
 
 export const tenantBranding = pgTable(
@@ -639,12 +817,32 @@ export const customers = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "restrict" }),
     name: varchar("name", { length: 255 }).notNull(),
+    email: varchar("email", { length: 320 }),
     phoneNumber: varchar("phone_number", { length: 64 }),
     fuelSurchargeAmount: numeric("fuel_surcharge_amount", {
       precision: 10,
       scale: 2,
     }),
     abbreviation: varchar("invoice_prefix", { length: 32 }),
+    taxId: varchar("tax_id", { length: 64 }),
+    /**
+     * AR payment terms in days (net N). `null` means no terms configured;
+     * AR aging falls back to Net-0 (invoice date) in that case — mirrors
+     * how `suppliers.net_days` works on the AP side.
+     */
+    netDays: integer("net_days"),
+    /**
+     * Free-text memo, workspace-internal. Shown on the detail page and
+     * editable from the form. Up to 4,000 chars (parity with suppliers).
+     */
+    notes: text("notes"),
+    /**
+     * Soft AR limit. The detail page + new-order form display current
+     * balance against this number so ops can see when a customer is
+     * about to go over. Not enforced at order submit — informational only
+     * for v1.
+     */
+    creditLimit: numeric("credit_limit", { precision: 12, scale: 2 }),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {
@@ -676,6 +874,10 @@ export const customers = pgTable(
     index("customers_tenant_id_idx").on(table.tenantId),
     uniqueIndex("customers_tenant_name_unique").on(table.tenantId, table.name),
     index("customers_archived_at_idx").on(table.archivedAt),
+    index("customers_tenant_email_idx").on(table.tenantId, table.email),
+    uniqueIndex("customers_tenant_invoice_prefix_unique")
+      .on(table.tenantId, table.abbreviation)
+      .where(sql`${table.abbreviation} IS NOT NULL`),
   ],
 );
 
@@ -716,6 +918,22 @@ export const suppliers = pgTable(
      * AP aging falls back to Net-0 (invoice date) in that case.
      */
     netDays: integer("net_days"),
+    /* Primary contact — who AP staff actually email/call. */
+    primaryContactName: varchar("primary_contact_name", { length: 255 }),
+    primaryContactEmail: varchar("primary_contact_email", { length: 320 }),
+    primaryContactPhone: varchar("primary_contact_phone", { length: 32 }),
+    /* US EIN, normalized to "##-#######" by the service. */
+    taxId: varchar("tax_id", { length: 64 }),
+    /** Buyer-side account number with this supplier (appears on their invoices). */
+    accountNumber: varchar("account_number", { length: 64 }),
+    /* Remit-to address — US only for v1; country column intentionally omitted. */
+    addressLine1: varchar("address_line1", { length: 255 }),
+    addressLine2: varchar("address_line2", { length: 255 }),
+    addressCity: varchar("address_city", { length: 128 }),
+    addressRegion: varchar("address_region", { length: 128 }),
+    addressPostalCode: varchar("address_postal_code", { length: 32 }),
+    websiteUrl: varchar("website_url", { length: 512 }),
+    notes: text("notes"),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {
@@ -938,6 +1156,14 @@ export const customerProductPrices = pgTable(
       onDelete: "cascade",
     }),
     pricePerLb: numeric("price_per_lb", { precision: 10, scale: 4 }).notNull(),
+    /**
+     * Monotonic counter bumped on every update. Optimistic-concurrency
+     * token: writes pass the version they read; if the row has moved on,
+     * the conditional UPDATE matches 0 rows and the service throws so the
+     * client can refetch and let the user pick a side. Without this two
+     * parallel edits silently last-write-wins.
+     */
+    version: integer("version").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -984,11 +1210,27 @@ export const supplierInvoices = pgTable(
     supplierId: uuid("supplier_id")
       .notNull()
       .references(() => suppliers.id, { onDelete: "restrict" }),
-    invoiceNumber: varchar("invoice_number", { length: 64 }).notNull(),
+    /**
+     * System-assigned, tenant-unique identifier (e.g. "IB-000001") minted on
+     * insert from `tenants.supplier_invoice_counter`. This is the canonical
+     * reference for searching and audit.
+     */
+    referenceNumber: varchar("reference_number", { length: 32 }).notNull(),
+    /**
+     * The supplier's printed invoice number, exactly as written on the bill.
+     * Optional because some hand-written or scanned bills have no number.
+     * Uniqueness is enforced per (tenant, supplier) when non-null so the
+     * same bill can't be imported twice from the same supplier.
+     *
+     * Kept as `invoiceNumber` on the TS side to avoid a sweeping cross-module
+     * rename; the DB column is `supplier_invoice_number` to make the intent
+     * obvious in raw SQL / pgAdmin contexts.
+     */
+    invoiceNumber: varchar("supplier_invoice_number", { length: 64 }),
     invoiceDate: date("invoice_date").notNull(),
     receiveDate: date("receive_date").notNull(),
     status: supplierInvoiceStatusEnum("status").notNull().default("draft"),
-    totalAmount: numeric("total_amount", { precision: 12, scale: 4 })
+    totalAmount: numeric("total_amount", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
     amountPaid: numeric("amount_paid", { precision: 12, scale: 2 })
@@ -1022,19 +1264,33 @@ export const supplierInvoices = pgTable(
       .notNull()
       .defaultNow()
       .$onUpdate(() => new Date()),
+    /**
+     * Client-generated UUID per reverse-submit attempt. The partial unique
+     * index below guarantees a second submit with the same key cannot
+     * double-execute the destructive reverse path (deletes lots, inventory
+     * items, audit rows) even when the status guard's read-snapshot was
+     * concurrent. Mirrors the AR `payments.idempotency_key` contract.
+     */
+    reverseIdempotencyKey: uuid("reverse_idempotency_key"),
   },
   table => [
     index("supplier_invoices_tenant_id_idx").on(table.tenantId),
     index("supplier_invoices_supplier_id_idx").on(table.supplierId),
-    uniqueIndex("supplier_invoices_tenant_invoice_number_unique").on(
+    uniqueIndex("supplier_invoices_tenant_reference_number_unique").on(
       table.tenantId,
-      table.invoiceNumber,
+      table.referenceNumber,
     ),
+    uniqueIndex("supplier_invoices_tenant_supplier_inv_number_unique")
+      .on(table.tenantId, table.supplierId, table.invoiceNumber)
+      .where(sql`${table.invoiceNumber} IS NOT NULL`),
     index("supplier_invoices_tenant_invoice_date_idx").on(
       table.tenantId,
       table.invoiceDate,
     ),
     index("supplier_invoices_tenant_status_idx").on(table.tenantId, table.status),
+    uniqueIndex("supplier_invoices_tenant_reverse_idempotency_key_unique")
+      .on(table.tenantId, table.reverseIdempotencyKey)
+      .where(sql`${table.reverseIdempotencyKey} IS NOT NULL`),
   ],
 );
 
@@ -1058,6 +1314,42 @@ export const supplierInvoiceLines = pgTable(
       .default("0"),
     unitType: lineUnitTypeEnum("unit_type").notNull().default("catch_weight"),
     caseWeightsLbs: text("case_weights_lbs"),
+    /**
+     * Unit-of-measure for the purchase, when the line is priced per_each
+     * or per_unit. Nullable for catch_weight / fixed_case lines (their
+     * unit is implicit). FK → `units_of_measure`. Snapshot columns below
+     * preserve the abbreviation and conversion factor at the moment of
+     * record so later edits to a UOM definition don't rewrite history.
+     */
+    purchaseUnitId: uuid("purchase_unit_id").references(
+      () => unitsOfMeasure.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Quantity expressed in the line's purchase unit (cases of soda,
+     * gallons of milk, each, etc.). For legacy catch_weight/fixed_case
+     * rows this mirrors `quantity_cases`; for new modes it carries the
+     * truth that the math reads.
+     */
+    quantity: numeric("quantity", { precision: 12, scale: 4 })
+      .notNull()
+      .default("0"),
+    /** Conversion to base UOM at moment of record. e.g. 12 for a case-of-12. */
+    conversionToBaseSnapshot: numeric("conversion_to_base_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
+    /** Abbreviation snapshot used for UI rendering: lb, cs, ea, gal, … */
+    purchaseUnitAbbreviationSnapshot: varchar(
+      "purchase_unit_abbreviation_snapshot",
+      { length: 16 },
+    ),
+    /**
+     * Pricing direction snapshot mirrors the sales-side concept: per_lb
+     * for catch_weight rows, per_case for fixed_case. per_each / per_unit
+     * rows leave this null — the line_unit_type itself encodes them.
+     */
+    pricingUnitTypeSnapshot: pricingUnitTypeEnum("pricing_unit_type_snapshot"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1067,6 +1359,9 @@ export const supplierInvoiceLines = pgTable(
       table.supplierInvoiceId,
     ),
     index("supplier_invoice_lines_product_id_idx").on(table.productId),
+    index("supplier_invoice_lines_purchase_unit_id_idx").on(
+      table.purchaseUnitId,
+    ),
   ],
 );
 
@@ -1083,8 +1378,31 @@ export const supplierInvoicePayments = pgTable(
     paymentDate: date("payment_date").notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     paymentMethod: paymentMethodEnum("payment_method").notNull(),
-    reference: varchar("reference", { length: 128 }),
+    /**
+     * Check number — separate from reference_number so accounting exports
+     * can distinguish physical-artifact identifiers from generic references.
+     * Mirrors the AR `payments.check_number` column.
+     */
+    checkNumber: varchar("check_number", { length: 64 }),
+    /** Bank reference / transaction ID. Mirrors AR `payments.reference_number`. */
+    referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /**
+     * Idempotency key. See `payments.idempotencyKey` for the contract.
+     * Mirrors the AR side so AP double-submit protection works the
+     * same way.
+     */
+    idempotencyKey: uuid("idempotency_key"),
+    /* Reconciliation columns — set when ops marks the AP payment as
+     * matching a bank statement outflow. Mirrors AR `payments`. */
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    reconciledByUserId: uuid("reconciled_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    reconciliationReference: varchar("reconciliation_reference", {
+      length: 255,
+    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1101,9 +1419,44 @@ export const supplierInvoicePayments = pgTable(
       table.tenantId,
       table.paymentDate,
     ),
+    index("supplier_invoice_payments_unreconciled_idx")
+      .on(table.tenantId, table.paymentDate)
+      .where(sql`${table.reconciledAt} IS NULL`),
+    // Mirrors the AR `payments_tenant_idempotency_key_unique` index —
+    // partial, scoped per tenant. Lets supplier-payment submits dedup
+    // the same way.
+    uniqueIndex("supplier_invoice_payments_tenant_idempotency_key_unique")
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
     check(
       "supplier_invoice_payments_amount_positive",
       sql`${table.amount} > 0`,
+    ),
+  ],
+);
+
+export const supplierInvoiceCharges = pgTable(
+  "supplier_invoice_charges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "cascade" }),
+    description: varchar("description", { length: 256 }).notNull(),
+    chargeType: varchar("charge_type", { length: 32 }).notNull().default("other"),
+    rate: numeric("rate", { precision: 8, scale: 4 }),
+    includeInInventoryCost: boolean("include_in_inventory_cost").notNull().default(false),
+    amount: numeric("amount", { precision: 12, scale: 4 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("supplier_invoice_charges_invoice_id_idx").on(table.supplierInvoiceId),
+    check(
+      "supplier_invoice_charges_charge_type_check",
+      sql`${table.chargeType} IN ('freight','fuel','tax','discount','processing','inspection','cod','refrigeration','other')`,
     ),
   ],
 );
@@ -1121,6 +1474,7 @@ export const lots = pgTable(
       .references(() => suppliers.id, { onDelete: "restrict" }),
     receiveDate: date("receive_date").notNull(),
     expirationDate: date("expiration_date").notNull(),
+    state: lotStateEnum("state").notNull().default("active"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1173,6 +1527,21 @@ export const inventoryItems = pgTable(
       scale: 4,
     }).notNull(),
     cases: integer("cases").notNull().default(1),
+    /**
+     * Pack size snapshot — how many base units (each, lb, fl oz)
+     * are inside the case/box this inventory row represents. Snapshotted
+     * from `supplier_invoice_lines.conversion_to_base_snapshot` at
+     * receive time so a case-of-12 stays "12 ea per case" even if the
+     * product's default purchase unit is later changed.
+     *
+     * Null for legacy / catch-weight rows where one inventory_items
+     * row already represents one base unit (one lb of meat). The
+     * inventory-rollup math treats null as "1 per row".
+     */
+    unitsPerPackageSnapshot: numeric("units_per_package_snapshot", {
+      precision: 12,
+      scale: 4,
+    }),
     costPerUnitSnapshot: numeric("cost_per_unit_snapshot", {
       precision: 12,
       scale: 6,
@@ -1255,6 +1624,9 @@ export const salesOrders = pgTable(
     dueDate: date("due_date"),
     status: orderStatusEnum("status").notNull().default("sales_order"),
     addFuelSurcharge: boolean("add_fuel_surcharge").notNull().default(true),
+    discountAmount: numeric("discount_amount", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
     customerNotes: text("customer_notes"),
     internalNotes: text("internal_notes"),
     createdByUserId: uuid("created_by_user_id")
@@ -1526,6 +1898,20 @@ export const salesInvoices = pgTable(
     balanceDue: numeric("balance_due", { precision: 12, scale: 2 })
       .notNull()
       .default("0"),
+    /**
+     * When the invoice was most recently emailed to the customer via
+     * sendInvoiceToCustomerAction. Null = never sent. Updated on
+     * every successful send (including resends), so the detail page
+     * can show a "Last sent …" badge without re-aggregating
+     * sales_invoice_emails.
+     */
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    /**
+     * Total successful sends. Bumped together with last_sent_at.
+     * Distinct from sales_invoice_emails row count so UI can render
+     * "Resend (3rd time)" without an extra COUNT.
+     */
+    sendCount: integer("send_count").notNull().default(0),
     createdByUserId: uuid("created_by_user_id").references(
       () => portalUsers.id,
       {
@@ -1616,6 +2002,39 @@ export const payments = pgTable(
     checkNumber: varchar("check_number", { length: 64 }),
     referenceNumber: varchar("reference_number", { length: 128 }),
     notes: text("notes"),
+    /**
+     * Client-generated UUID per payment-submit attempt. Server INSERTs
+     * with this column populated; the partial unique index below
+     * guarantees a second submit with the same key (double-click,
+     * retried fetch) cannot create a duplicate row — the service
+     * detects the existing row and returns its invoice state instead.
+     *
+     * Nullable for rows created before migration 0059 (no historical
+     * keys to backfill) and for server-internal write paths that
+     * don't need dedup.
+     */
+    idempotencyKey: uuid("idempotency_key"),
+    /**
+     * For bulk-payment submissions (one check applied across N invoices),
+     * every row in the batch shares the same batch_id while only the
+     * anchor row (first allocation) carries `idempotency_key`. On retry
+     * the service finds the anchor by key, reads its batch_id, and
+     * returns the whole batch instead of inserting duplicates.
+     *
+     * Null for single-invoice payments — those keep relying solely on
+     * the idempotency_key dedup.
+     */
+    batchId: uuid("batch_id"),
+    /* Reconciliation columns — set when ops marks a payment as matching
+     * a bank statement line. Cleared on un-reconcile. Migration 0050. */
+    reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+    reconciledByUserId: uuid("reconciled_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    reconciliationReference: varchar("reconciliation_reference", {
+      length: 255,
+    }),
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
@@ -1630,6 +2049,24 @@ export const payments = pgTable(
       table.tenantId,
       table.paymentDate,
     ),
+    // Speeds up the default "show unreconciled" filter on /payments.
+    index("payments_unreconciled_idx")
+      .on(table.tenantId, table.paymentDate)
+      .where(sql`${table.reconciledAt} IS NULL`),
+    // Idempotency: partial unique index (only enforced when key is
+    // populated, so legacy rows from before migration 0059 don't
+    // conflict). Scoped per tenant so two tenants happening to pick
+    // the same UUID don't collide — though UUIDv4 collisions are
+    // already statistically impossible.
+    uniqueIndex("payments_tenant_idempotency_key_unique")
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    // Bulk batch lookup: index covers the retry path (fetch all rows of a
+    // batch by batch_id) and the audit path (group bulk payments shown on
+    // the customer dashboard).
+    index("payments_tenant_batch_id_idx")
+      .on(table.tenantId, table.batchId)
+      .where(sql`${table.batchId} IS NOT NULL`),
   ],
 );
 
@@ -1661,6 +2098,46 @@ export const expenses = pgTable(
     createdByUserId: uuid("created_by_user_id")
       .notNull()
       .references(() => portalUsers.id, { onDelete: "restrict" }),
+    /**
+     * Approval lifecycle. See expenseStatusEnum for the valid states and
+     * transitions. Newly-created rows default to 'draft' so the submitter
+     * can iterate; the listing's status filter scopes by this column.
+     */
+    status: expenseStatusEnum("status").notNull().default("draft"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedByUserId: uuid("submitted_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedByUserId: uuid("approved_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectedByUserId: uuid("rejected_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    rejectionReason: text("rejection_reason"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Soft-delete tombstone (issue #270). Every read filters
+     * `deleted_at IS NULL`; the deleteExpense path sets these instead
+     * of issuing a SQL DELETE so the audit trail of who voided what
+     * when survives, and the cron stops materializing instances of a
+     * voided schedule without losing the historical instances that
+     * already exist.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedByUserId: uuid("deleted_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -1672,11 +2149,47 @@ export const expenses = pgTable(
       table.recurrenceNextDueDate,
     ),
     index("expenses_recurrence_parent_idx").on(table.recurrenceParentId),
+    index("expenses_tenant_status_idx").on(table.tenantId, table.status),
+    index("expenses_tenant_deleted_at_idx").on(
+      table.tenantId,
+      table.deletedAt,
+    ),
     check("expenses_amount_nonnegative", sql`${table.amount} >= 0`),
     check(
       "expenses_recurrence_end_after_start",
       sql`${table.recurrenceEndDate} IS NULL OR ${table.recurrenceStartDate} IS NULL OR ${table.recurrenceEndDate} >= ${table.recurrenceStartDate}`,
     ),
+  ],
+);
+
+// Pivot between expenses and the shared files table. Mirrors the supplier
+// invoice / sales order attachment pattern: tenant-scoped, cascade-delete
+// when either side is removed. Tenant ID is denormalized here (rather than
+// joining through files or expenses each time) so the listing query can stay
+// a single indexed lookup.
+export const expenseAttachments = pgTable(
+  "expense_attachments",
+  {
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    primaryKey({
+      name: "expense_attachments_pkey",
+      columns: [table.expenseId, table.fileId],
+    }),
+    index("expense_attachments_tenant_expense_idx").on(table.tenantId, table.expenseId),
+    index("expense_attachments_file_id_idx").on(table.fileId),
   ],
 );
 
@@ -1815,6 +2328,108 @@ export const supplierInvoiceAttachments = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// Bulk-import history. Each row records one PDF that a user uploaded through
+// the bulk-import flow. The row pins:
+//   - the parsed PipelineResult JSON (so the Review screen can prefill
+//     without re-parsing),
+//   - the original PDF's R2 object key (so we can serve it to the Review
+//     screen on demand, and so audit / recovery has the source bytes),
+//   - the lifecycle status (parsed → reviewed; errored on parse failure),
+//   - soft-delete flag (Phase B) so users can dismiss rows without waiting
+//     on a server round-trip; a future sweep can hard-delete.
+//
+// Replaces the prior 24h localStorage handoff with a durable, cross-device,
+// audit-friendly history. PDFs live in R2; this table keeps the metadata.
+// ---------------------------------------------------------------------------
+export const bulkImportFiles = pgTable(
+  "bulk_import_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    uploadedByUserId: uuid("uploaded_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Shared across every file submitted in a single bulk-import action call,
+     * so the queue carousel + landing screen can group "imported together"
+     * rows even though they are siblings rather than children of a parent
+     * row.
+     */
+    batchId: uuid("batch_id").notNull(),
+    /** Original filename as uploaded by the user (already path-safe). */
+    filename: varchar("filename", { length: 512 }).notNull(),
+    mimeType: varchar("mime_type", { length: 255 }),
+    sizeBytes: integer("size_bytes"),
+    /** R2 key the PDF was uploaded under. Object key is unique per row. */
+    objectKey: varchar("object_key", { length: 1024 }).notNull(),
+    /** Frozen `PipelineResult` JSON — used by the Review screen to prefill. */
+    pipelineResult: jsonb("pipeline_result"),
+    status: bulkImportStatusEnum("status").notNull().default("parsed"),
+    /**
+     * When `status === 'parse_error'`, the coarse-grained AI failure codes
+     * surfaced by the pipeline (e.g. `["connection"]` for the bulk-import
+     * multipage bug we just fixed). Null on successful parses. Persisted as
+     * a string[] jsonb so future retry logic can filter (e.g. auto-retry on
+     * "connection" / "timeout" but not on "refusal").
+     */
+    parseErrorCodes: jsonb("parse_error_codes").$type<string[]>(),
+    /** Set when the user has posted a bill from this entry. */
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    /** The resulting supplier invoice id, set together with reviewedAt. */
+    supplierInvoiceId: uuid("supplier_invoice_id").references(
+      () => supplierInvoices.id,
+      { onDelete: "set null" },
+    ),
+    /**
+     * Phase B soft-delete flag. Reads filter on `deleted_at IS NULL`. The
+     * underlying R2 object is intentionally retained — storage is cheap and
+     * recovery is "set deleted_at = null".
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    /**
+     * Advisory claim — set when a reviewer opens this row in the queue, kept
+     * fresh via a heartbeat, and cleared on unmount / submit. A second
+     * reviewer who opens the same row while the claim is still fresh sees a
+     * read-only banner instead of an editable form. Auto-expires when the
+     * heartbeat lapses (closed tab, crashed browser) so the row never
+     * permanently strands.
+     */
+    claimedByUserId: uuid("claimed_by_user_id").references(
+      () => portalUsers.id,
+      { onDelete: "set null" },
+    ),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("bulk_import_files_object_key_unique").on(table.objectKey),
+    // Drives the bulk-landing list query: pending rows for the current tenant
+    // ordered by created_at desc.
+    index("bulk_import_files_tenant_status_created_at_idx").on(
+      table.tenantId,
+      table.status,
+      table.createdAt,
+    ),
+    // Drives "all files in this batch" lookups for the queue carousel.
+    index("bulk_import_files_batch_id_idx").on(table.batchId),
+    // Drives the soft-delete filter — pending = (status=parsed AND deleted_at IS NULL).
+    index("bulk_import_files_tenant_deleted_at_idx").on(
+      table.tenantId,
+      table.deletedAt,
+    ),
+  ],
+);
+
 export const salesOrderAttachments = pgTable(
   "sales_order_attachments",
   {
@@ -1911,6 +2526,711 @@ export const auditLogs = pgTable(
     index("audit_logs_actor_portal_user_idx").on(table.actorPortalUserId),
     index("audit_logs_actor_platform_user_idx").on(table.actorPlatformUserId),
     index("audit_logs_action_created_at_idx").on(table.action, table.createdAt),
+  ],
+);
+
+// -------------------- Supplier import profiles + aliases --------------------
+
+export const supplierImportProfiles = pgTable(
+  "supplier_import_profiles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    profileName: varchar("profile_name", { length: 128 }).notNull(),
+    detectionKeywords: jsonb("detection_keywords").$type<string[]>().notNull().default([]),
+    parserType: parserTypeEnum("parser_type").notNull().default("deterministic"),
+    parsingRules: jsonb("parsing_rules")
+      .$type<{
+        headerFields?: Record<string, string>;
+        lineParsing?: Record<string, unknown>;
+        exclusions?: string[];
+        feePatterns?: string[];
+        totalsPattern?: string;
+      }>()
+      .notNull()
+      .default({}),
+    confidenceThreshold: numeric("confidence_threshold", {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default("60"),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_import_profiles_tenant_id_idx").on(table.tenantId),
+    index("supplier_import_profiles_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("supplier_import_profiles_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.profileName,
+    ),
+  ],
+);
+
+export const supplierProductAliases = pgTable(
+  "supplier_product_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    vendorProductName: varchar("vendor_product_name", { length: 256 }).notNull(),
+    normalizedVendorProductName: varchar("normalized_vendor_product_name", {
+      length: 256,
+    }).notNull(),
+    internalProductId: uuid("internal_product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    confidence: numeric("confidence", { precision: 5, scale: 2 }).notNull().default("100"),
+    source: aliasSourceEnum("source").notNull().default("manual"),
+    createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("supplier_product_aliases_tenant_id_idx").on(table.tenantId),
+    index("supplier_product_aliases_supplier_id_idx").on(table.supplierId),
+    index("supplier_product_aliases_product_id_idx").on(table.internalProductId),
+    uniqueIndex("supplier_product_aliases_tenant_supplier_name_unique").on(
+      table.tenantId,
+      table.supplierId,
+      table.normalizedVendorProductName,
+    ),
+  ],
+);
+
+// -------------------- AI usage events --------------------
+//
+// One row per OpenAI call made during invoice parsing. Drives platform-admin
+// cost transparency: which tenants are burning the most tokens, how often the
+// gpt-4o escalation path fires, and per-month cost trajectory. Persistence
+// lives at the row level (not aggregated) so we can drill into the failure
+// pattern when a tenant hits a cost spike — e.g. "this one PDF triggered 4
+// escalations in 30s because of a flaky OpenAI window."
+
+export const aiUsageStageEnum = pgEnum("ai_usage_stage", [
+  // Text-based invoice extraction (the primary AI call per upload).
+  "invoice_extraction",
+  // Vision-based extraction (fired when text-AI failed or returned a low-
+  // quality result). More expensive than text per call.
+  "vision_extraction",
+  // Per-line product matching (smaller structured outputs; cheap on mini).
+  "product_matching",
+]);
+
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /**
+     * The user that triggered the parse (nullable because automated /
+     * system-driven parses may not have a portal-user context). Maps to
+     * portalUsers via the same FK shape as bulk_import_files.
+     */
+    portalUserId: uuid("portal_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    stage: aiUsageStageEnum("stage").notNull(),
+    /** Exact model id sent to OpenAI (e.g. "gpt-4o-mini", "gpt-4o"). */
+    model: varchar("model", { length: 64 }).notNull(),
+    /**
+     * When set, this row is the escalation attempt that followed a transient
+     * failure on `escalated_from_model`. Lets us cleanly compute "escalations
+     * fired N times this month" and the marginal cost they added.
+     */
+    escalatedFromModel: varchar("escalated_from_model", { length: 64 }),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    /**
+     * Total cost of THIS call in micro-USD (1 = $0.000001). Integer to avoid
+     * float rounding across aggregates. The reader converts to display dollars
+     * with `formatAiUsageCost`.
+     */
+    costMicros: integer("cost_micros").notNull().default(0),
+    /** Whether the OpenAI call returned a usable result (status=success). */
+    succeeded: boolean("succeeded").notNull(),
+    /**
+     * Coarse-grained AiExtractionErrorCode when the call failed; null on
+     * success. Mirrors `bulk_import_files.parse_error_codes` so the admin
+     * page can group failures by category.
+     */
+    errorCode: varchar("error_code", { length: 32 }),
+    /**
+     * Best-effort link back to the source bulk-import row, when the call was
+     * made through that path. Set to null for direct parses (e.g. legacy
+     * single-PDF upload). ON DELETE SET NULL so we keep the audit even when
+     * the bulk-import row is soft-deleted + later hard-removed.
+     */
+    sourceBulkImportFileId: uuid("source_bulk_import_file_id").references(
+      () => bulkImportFiles.id,
+      { onDelete: "set null" },
+    ),
+    /** Original filename — kept denormalised for fast list rendering. */
+    sourceFilename: varchar("source_filename", { length: 512 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    // Drives the admin per-tenant aggregate query.
+    index("ai_usage_events_tenant_created_at_idx").on(
+      table.tenantId,
+      table.createdAt,
+    ),
+    // Drives "escalations fired in the last 24h" admin filter.
+    index("ai_usage_events_escalated_idx").on(table.escalatedFromModel),
+    // Drives the per-source drilldown.
+    index("ai_usage_events_source_bulk_import_file_idx").on(
+      table.sourceBulkImportFileId,
+    ),
+  ],
+);
+
+// -------------------- AI extraction cache --------------------
+//
+// When a tenant re-uploads a PDF we've already AI-parsed (identical bytes →
+// same SHA-256), look it up here and skip the OpenAI call entirely. The
+// cached JSON is the RAW AiExtractionResult from the original parse — i.e.
+// supplier name + line text + totals + token usage — NOT the post-matching
+// PipelineResult. On cache hit the pipeline re-runs deterministic product
+// matching against the current catalog, so renamed/deleted products don't
+// produce stale alias references.
+//
+// Scope is per-tenant (uniqueness on tenant_id + hash) — never share cached
+// extractions across tenants because the prompt includes that tenant's
+// known suppliers + product candidates, which influences the AI's choice
+// of supplierName and the unmatched-line composition.
+
+export const aiExtractionCache = pgTable(
+  "ai_extraction_cache",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** SHA-256 hex of the PDF bytes (64 chars). */
+    pdfContentHash: varchar("pdf_content_hash", { length: 64 }).notNull(),
+    /**
+     * Frozen AiExtractionResult from the original parse. Includes lines,
+     * supplier name, totals, warnings, reasoning, and usage metadata. Read
+     * back as `AiExtractionResult` (cast at the boundary) and fed back into
+     * the pipeline as if the AI had just returned it.
+     */
+    aiExtractionJson: jsonb("ai_extraction_json").notNull(),
+    /**
+     * Stage the cached extraction came from. Lets us cache vision results
+     * separately from text-AI results — useful when text-AI was bypassed
+     * (e.g. scanned PDF) and only vision succeeded.
+     */
+    stage: aiUsageStageEnum("stage").notNull(),
+    /** Model that produced the cached extraction. Useful for invalidating
+     *  on model upgrades — a follow-up could nuke rows where model is below
+     *  a threshold version. */
+    model: varchar("model", { length: 64 }).notNull(),
+    /** Original filename — kept for the admin drilldown / debugging. */
+    sourceFilename: varchar("source_filename", { length: 512 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    // Primary lookup path. Unique to dedupe re-parses of the same PDF.
+    uniqueIndex("ai_extraction_cache_tenant_hash_stage_unique").on(
+      table.tenantId,
+      table.pdfContentHash,
+      table.stage,
+    ),
+    // Drives a future TTL/cleanup job ("delete entries older than 90 days").
+    index("ai_extraction_cache_created_at_idx").on(table.createdAt),
+  ],
+);
+
+// -------------------- Lot disposition decisions --------------------
+
+export const dispositionDecisions = pgTable(
+  "disposition_decisions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    lotId: uuid("lot_id")
+      .notNull()
+      .references(() => lots.id, { onDelete: "restrict" }),
+    decidedByUserId: uuid("decided_by_user_id")
+      .notNull()
+      .references(() => portalUsers.id, { onDelete: "restrict" }),
+    option: dispositionOptionEnum("option").notNull(),
+    status: dispositionStatusEnum("status").notNull().default("draft"),
+    expectedNet: numeric("expected_net", { precision: 12, scale: 2 }),
+    actualNet: numeric("actual_net", { precision: 12, scale: 2 }),
+    /** JSONB config blob — shape depends on option (MarkdownConfig | DonateConfig | etc.) */
+    config: jsonb("config").notNull().default({}),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("disposition_decisions_tenant_id_idx").on(table.tenantId),
+    index("disposition_decisions_lot_id_idx").on(table.lotId),
+    index("disposition_decisions_status_idx").on(table.status),
+    index("disposition_decisions_option_idx").on(table.option),
+  ],
+);
+
+/**
+ * Records the outcome of completed markdowns so the recommendation algorithm
+ * can learn category-level sell-through rates over time.
+ */
+export const markdownHistories = pgTable(
+  "markdown_histories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    lotId: uuid("lot_id").references(() => lots.id, { onDelete: "set null" }),
+    dispositionDecisionId: uuid("disposition_decision_id").references(
+      () => dispositionDecisions.id,
+      { onDelete: "set null" },
+    ),
+    /** Category of the product (beef, chicken, etc.) drives the prior pool. */
+    productCategory: varchar("product_category", { length: 128 }).notNull(),
+    discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull(),
+    quantityOfferedLbs: numeric("quantity_offered_lbs", { precision: 12, scale: 4 }).notNull(),
+    actualSellThroughPct: numeric("actual_sell_through_pct", { precision: 5, scale: 2 }),
+    expectedNet: numeric("expected_net", { precision: 12, scale: 2 }),
+    actualNet: numeric("actual_net", { precision: 12, scale: 2 }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("markdown_histories_tenant_id_idx").on(table.tenantId),
+    index("markdown_histories_product_category_idx").on(table.productCategory),
+    index("markdown_histories_completed_at_idx").on(table.completedAt),
+  ],
+);
+
+// -------------------- Plaid connections --------------------
+
+export const plaidConnections = pgTable(
+  "plaid_connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    plaidItemId: varchar("plaid_item_id", { length: 256 }).notNull(),
+    encryptedAccessToken: text("encrypted_access_token").notNull(),
+    institutionId: varchar("institution_id", { length: 128 }),
+    institutionName: varchar("institution_name", { length: 256 }),
+    status: plaidConnectionStatusEnum("status").notNull().default("active"),
+    transactionCursor: text("transaction_cursor"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("plaid_connections_tenant_id_idx").on(table.tenantId),
+    uniqueIndex("plaid_connections_plaid_item_id_unique").on(table.plaidItemId),
+  ],
+);
+
+export const bankAccounts = pgTable(
+  "bank_accounts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    plaidConnectionId: uuid("plaid_connection_id")
+      .notNull()
+      .references(() => plaidConnections.id, { onDelete: "cascade" }),
+    plaidAccountId: varchar("plaid_account_id", { length: 256 }).notNull(),
+    name: varchar("name", { length: 256 }).notNull(),
+    officialName: varchar("official_name", { length: 256 }),
+    mask: varchar("mask", { length: 8 }),
+    type: varchar("type", { length: 64 }).notNull(),
+    subtype: varchar("subtype", { length: 64 }),
+    currentBalance: numeric("current_balance", { precision: 14, scale: 2 }),
+    availableBalance: numeric("available_balance", { precision: 14, scale: 2 }),
+    isoCurrencyCode: varchar("iso_currency_code", { length: 8 }).default("USD"),
+    balanceUpdatedAt: timestamp("balance_updated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("bank_accounts_tenant_id_idx").on(table.tenantId),
+    index("bank_accounts_connection_id_idx").on(table.plaidConnectionId),
+    uniqueIndex("bank_accounts_plaid_account_id_unique").on(table.plaidAccountId),
+  ],
+);
+
+export const bankTransactions = pgTable(
+  "bank_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "cascade" }),
+    plaidTransactionId: varchar("plaid_transaction_id", { length: 256 }).notNull(),
+    date: date("date").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    merchantName: varchar("merchant_name", { length: 256 }),
+    rawDescription: text("raw_description").notNull(),
+    paymentChannel: bankTransactionChannelEnum("payment_channel").default("other"),
+    pending: boolean("pending").notNull().default(false),
+    isoCurrencyCode: varchar("iso_currency_code", { length: 8 }).default("USD"),
+    plaidCategory: jsonb("plaid_category").default([]),
+    paymentMethod: varchar("payment_method", { length: 20 }).notNull().default("other"),
+    checkNumber: integer("check_number"),
+    isMysteryOutflow: boolean("is_mystery_outflow").notNull().default(false),
+    mysteryDismissedAt: timestamp("mystery_dismissed_at", { withTimezone: true }),
+    /**
+     * Set when this transaction has been paired with the matching opposite
+     * leg of an intra-bank transfer (e.g. $500 leaves Chase, $500 lands at
+     * Wells Fargo the same day). Both rows share the same pair id so the
+     * UI can render them as one logical movement. Null = unpaired.
+     */
+    transferPairId: uuid("transfer_pair_id"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("bank_transactions_tenant_id_idx").on(table.tenantId),
+    index("bank_transactions_account_id_idx").on(table.bankAccountId),
+    index("bank_transactions_date_idx").on(table.date),
+    uniqueIndex("bank_transactions_plaid_txn_id_unique").on(table.plaidTransactionId),
+    index("bank_transactions_mystery_idx").on(table.tenantId, table.isMysteryOutflow),
+    index("bank_transactions_transfer_pair_idx").on(table.transferPairId),
+  ],
+);
+
+export const paymentMatches = pgTable(
+  "payment_matches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankTransactionId: uuid("bank_transaction_id")
+      .notNull()
+      .references(() => bankTransactions.id, { onDelete: "restrict" }),
+    /**
+     * For OUTFLOW txn matches (we paid a bill). NULL for AR matches.
+     * Exactly one of supplier_invoice_id / sales_invoice_id is non-null;
+     * CHECK constraint enforces it (migration 0049).
+     */
+    supplierInvoiceId: uuid("supplier_invoice_id").references(
+      () => supplierInvoices.id,
+      { onDelete: "restrict" },
+    ),
+    /**
+     * For INFLOW txn matches (a customer paid us). NULL for AP matches.
+     * Added in migration 0049 to extend the bill-only matcher with AR.
+     */
+    salesInvoiceId: uuid("sales_invoice_id").references(
+      () => salesInvoices.id,
+      { onDelete: "restrict" },
+    ),
+    /**
+     * For OUTFLOW txn matches that resolve to an internal expense (e.g. a
+     * subscription, fee, or non-bill spend the user recorded as an
+     * expense). NULL for AP / AR matches. Added in migration 0067 (issue
+     * #258) so the expenses module and the bank-feed stop telling two
+     * different stories about the same money.
+     */
+    expenseId: uuid("expense_id").references(() => expenses.id, {
+      onDelete: "restrict",
+    }),
+    status: paymentMatchStatusEnum("status").notNull().default("pending_review"),
+    confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
+    autoApplied: boolean("auto_applied").notNull().default(false),
+    amountScore: numeric("amount_score", { precision: 5, scale: 4 }),
+    payeeScore: numeric("payee_score", { precision: 5, scale: 4 }),
+    timingScore: numeric("timing_score", { precision: 5, scale: 4 }),
+    confirmedByUserId: uuid("confirmed_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("payment_matches_tenant_id_idx").on(table.tenantId),
+    index("payment_matches_txn_id_idx").on(table.bankTransactionId),
+    index("payment_matches_invoice_id_idx").on(table.supplierInvoiceId),
+    index("payment_matches_sales_invoice_id_idx").on(table.salesInvoiceId),
+    index("payment_matches_expense_id_idx").on(table.expenseId),
+    index("payment_matches_status_idx").on(table.status),
+    // Partial unique indexes (issue #269 for the AP/AR pair; extended in
+    // issue #258 for the expense pair) close the check-then-insert race.
+    uniqueIndex("payment_matches_tenant_txn_supplier_unique")
+      .on(table.tenantId, table.bankTransactionId, table.supplierInvoiceId)
+      .where(sql`${table.supplierInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
+    uniqueIndex("payment_matches_tenant_txn_sales_unique")
+      .on(table.tenantId, table.bankTransactionId, table.salesInvoiceId)
+      .where(sql`${table.salesInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
+    uniqueIndex("payment_matches_tenant_txn_expense_unique")
+      .on(table.tenantId, table.bankTransactionId, table.expenseId)
+      .where(sql`${table.expenseId} IS NOT NULL AND ${table.status} != 'rejected'`),
+    // Exactly one of the three target FKs must be set. The arithmetic
+    // form keeps the constraint readable as we add resolution targets.
+    check(
+      "payment_matches_one_target_only",
+      sql`(
+        (CASE WHEN ${table.supplierInvoiceId} IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN ${table.salesInvoiceId} IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN ${table.expenseId} IS NOT NULL THEN 1 ELSE 0 END)
+      ) = 1`,
+    ),
+  ],
+);
+
+// Payee aliases: bank raw description strings → supplier records
+// Separate from supplier_product_aliases (which map vendor product names → internal products)
+export const payeeAliases = pgTable(
+  "payee_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    rawText: text("raw_text").notNull(),
+    normalizedText: varchar("normalized_text", { length: 512 }).notNull(),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    source: aliasSourceEnum("source").notNull().default("confirmed"),
+    channel: varchar("channel", { length: 20 }).notNull().default("ach"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    index("payee_aliases_tenant_id_idx").on(table.tenantId),
+    index("payee_aliases_supplier_id_idx").on(table.supplierId),
+    uniqueIndex("payee_aliases_tenant_channel_normalized_unique").on(
+      table.tenantId,
+      table.channel,
+      table.normalizedText,
+    ),
+  ],
+);
+
+export const billForwards = pgTable(
+  "bill_forwards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    supplierInvoiceId: uuid("supplier_invoice_id")
+      .notNull()
+      .references(() => supplierInvoices.id, { onDelete: "restrict" }),
+    sentByUserId: uuid("sent_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    recipients: jsonb("recipients").notNull().default([]),
+    subject: text("subject").notNull(),
+    messageBody: text("message_body").notNull(),
+    attachedOriginal: boolean("attached_original").notNull().default(true),
+    attachedSummary: boolean("attached_summary").notNull().default(false),
+    deliveryStatus: billForwardDeliveryStatusEnum("delivery_status").notNull().default("sent"),
+    deliveryEvents: jsonb("delivery_events").notNull().default([]),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("bill_forwards_tenant_id_idx").on(table.tenantId),
+    index("bill_forwards_invoice_id_idx").on(table.supplierInvoiceId),
+  ],
+);
+
+/**
+ * AR-side parallel to bill_forwards. Records every outbound send of a
+ * customer-facing sales invoice — who, when, the recipients, and
+ * (importantly) whether the rendered PDF was attached. The detail page
+ * reads this for the "Sent" history panel and the audit log carries
+ * the structured copy.
+ *
+ * On_delete:restrict on salesInvoiceId means a successful send pins the
+ * invoice — you can void it but the audit history is preserved.
+ */
+export const salesInvoiceEmails = pgTable(
+  "sales_invoice_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    salesInvoiceId: uuid("sales_invoice_id")
+      .notNull()
+      .references(() => salesInvoices.id, { onDelete: "restrict" }),
+    sentByUserId: uuid("sent_by_user_id").references(() => portalUsers.id, {
+      onDelete: "set null",
+    }),
+    recipients: jsonb("recipients").notNull().default([]),
+    /** Optional cc list. Stored separately so the detail page can render them in muted style. */
+    ccRecipients: jsonb("cc_recipients").notNull().default([]),
+    subject: text("subject").notNull(),
+    messageBody: text("message_body").notNull(),
+    /** True when the rendered invoice PDF was attached. False for body-only sends (rare). */
+    attachedPdf: boolean("attached_pdf").notNull().default(true),
+    deliveryStatus: salesInvoiceEmailDeliveryStatusEnum("delivery_status")
+      .notNull()
+      .default("sent"),
+    deliveryEvents: jsonb("delivery_events").notNull().default([]),
+    /**
+     * Resend's message id from `emails.send()`. Used later when we add
+     * webhook-based delivery tracking (Phase 2 / #271) — bounce events
+     * carry this id back so we can look up the row and flip status.
+     */
+    resendMessageId: text("resend_message_id"),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    index("sales_invoice_emails_tenant_id_idx").on(table.tenantId),
+    index("sales_invoice_emails_invoice_id_idx").on(table.salesInvoiceId),
+    // Used by the eventual Resend webhook handler — sparse, so partial.
+    index("sales_invoice_emails_resend_message_id_idx")
+      .on(table.resendMessageId)
+      .where(sql`${table.resendMessageId} IS NOT NULL`),
+  ],
+);
+
+export const bankAccountBalanceSnapshots = pgTable(
+  "bank_account_balance_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    bankAccountId: uuid("bank_account_id")
+      .notNull()
+      .references(() => bankAccounts.id, { onDelete: "cascade" }),
+    snapshotDate: date("snapshot_date").notNull(),
+    balance: numeric("balance", { precision: 14, scale: 2 }).notNull(),
+    availableBalance: numeric("available_balance", { precision: 14, scale: 2 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  table => [
+    uniqueIndex("balance_snapshots_account_date_unique").on(table.bankAccountId, table.snapshotDate),
+    index("balance_snapshots_tenant_date_idx").on(table.tenantId, table.snapshotDate),
+  ],
+);
+
+// -------------------- Webhook idempotency --------------------
+
+/**
+ * Dedupe table for inbound Plaid webhooks. The primary key is the SHA-256
+ * hex digest of the `Plaid-Verification` JWT — unique per delivery attempt
+ * and produced only after signature verification succeeds, so attacker
+ * spam can never bloat this table.
+ */
+export const plaidWebhookSeen = pgTable(
+  "plaid_webhook_seen",
+  {
+    webhookId: varchar("webhook_id", { length: 64 }).primaryKey(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("plaid_webhook_seen_received_at_idx").on(table.receivedAt),
+  ],
+);
+
+// -------------------- Audit log --------------------
+
+/**
+ * Append-only record of destructive / sensitive actions. The `actor_user_id`
+ * intentionally has no foreign key — audit rows must survive user deletion,
+ * and the `actor_email` is denormalized for the same reason.
+ *
+ * UPDATE / DELETE are revoked at the DB level by migration 0034.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    actorUserId: uuid("actor_user_id").notNull(),
+    actorEmail: text("actor_email"),
+    action: varchar("action", { length: 64 }).notNull(),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: text("resource_id"),
+    metadata: jsonb("metadata").notNull().default({}),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("audit_log_tenant_idx").on(table.tenantId, table.occurredAt),
+    index("audit_log_actor_idx").on(table.actorUserId, table.occurredAt),
+    index("audit_log_resource_idx").on(table.resourceType, table.resourceId),
+    index("audit_log_action_idx").on(
+      table.tenantId,
+      table.action,
+      table.occurredAt,
+    ),
   ],
 );
 

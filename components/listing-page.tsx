@@ -12,6 +12,9 @@ import {
   X,
 } from "lucide-react";
 
+import { AlertCircle } from "lucide-react";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -51,7 +54,14 @@ function isTwoLine(v: unknown): v is TwoLineCell {
 
 export interface ListingColumn<TRow> {
   key: string;
-  header: string;
+  /**
+   * Column header. Most callers pass a string label. ReactNode is
+   * accepted so callers that need an interactive header element (e.g.
+   * a select-all checkbox on a multi-select listing) can render it.
+   * When non-string, `sortKey` should not be set — the sort UI assumes
+   * a label it can wrap with a button.
+   */
+  header: React.ReactNode;
   sortKey?: string;
   align?: "left" | "right" | "center";
   width?: string;
@@ -88,6 +98,14 @@ export interface ListingPageProps<TRow> {
   subtitle?: string;
   primaryAction?: React.ReactNode;
   secondaryActions?: React.ReactNode;
+  /**
+   * Suppress the entire title + subtitle + actions row. Used when this
+   * component is embedded inside a parent that already owns those slots
+   * (e.g. a tabbed shell with shared header chrome). The body, filters,
+   * pagination, etc. still render normally.
+   */
+  hideHeader?: boolean;
+  belowHeader?: React.ReactNode;
   savedViews?: SavedView[];
   activeView?: string;
   onViewChange?: (id: string) => void;
@@ -135,7 +153,7 @@ function SortIcon({
 
 function LoadingBar() {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-stone-line2">
+    <div className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-divider">
       <div className="h-full w-2/5 animate-[listing-slide_1.2s_ease-in-out_infinite] rounded-sm bg-primary" />
     </div>
   );
@@ -159,13 +177,97 @@ export function ListingAction({
       variant={variant}
       className={cn(
         variant === "default" &&
-          "border-stone-ink bg-stone-ink text-stone-surface hover:bg-stone-ink/90",
+          "border-forest-mid bg-forest-mid text-card-warm hover:bg-forest",
         "text-[13px]",
         className,
       )}
     >
       <Link href={href}>{children}</Link>
     </Button>
+  );
+}
+
+/**
+ * Secondary action chip rendered alongside (or instead of) `ListingAction`
+ * in the listing header. Use for low-emphasis triggers like "Import CSV"
+ * and "Export CSV" — anything that isn't the listing's primary verb.
+ *
+ * Replaces the hand-rolled inline-style buttons that have accumulated
+ * across modules (products / customers / suppliers / etc.). Keeps the
+ * shadcn Button as the actual element so size, focus ring, disabled
+ * state, and theming stay consistent with the rest of the app.
+ *
+ * Pass `href` for navigation, `onClick` for modal/handler triggers —
+ * they're mutually exclusive. `disabled` only applies in the click form.
+ */
+export function ListingSecondaryAction(
+  props: {
+    children: React.ReactNode;
+    className?: string;
+  } & (
+    | { href: string; onClick?: never; disabled?: never }
+    | { href?: never; onClick: () => void; disabled?: boolean }
+  ),
+) {
+  const { children, className } = props;
+  const baseClass = cn("gap-1.5 text-[13px]", className);
+
+  if ("href" in props && props.href !== undefined) {
+    return (
+      <Button asChild size="sm" variant="outline" className={baseClass}>
+        <Link href={props.href}>{children}</Link>
+      </Button>
+    );
+  }
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={props.onClick}
+      disabled={props.disabled}
+      className={baseClass}
+    >
+      {children}
+    </Button>
+  );
+}
+
+/**
+ * Standard error fallback for listing pages — replaces the raw
+ * `<div style={{...}}>` + `<button>` blocks that listing pages render
+ * when their data query errors out. Uses the shadcn destructive alert
+ * so the message theming matches the rest of the app and the retry
+ * button picks up keyboard/focus affordances for free.
+ */
+export function ListingErrorState({
+  title = "We couldn't load this list.",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <Alert variant="destructive">
+      <AlertCircle className="size-4" />
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <span>{message}</span>
+        {onRetry ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            className="shrink-0"
+          >
+            Retry
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -182,8 +284,8 @@ function HeaderToggleCount({
       className={cn(
         "h-5 rounded-full px-1.5 text-[11px]",
         active
-          ? "bg-stone-ink text-stone-surface"
-          : "bg-stone-line text-stone-muted",
+          ? "bg-forest-mid text-card-warm"
+          : "bg-surface-deep text-subtle",
       )}
     >
       {count}
@@ -196,6 +298,8 @@ export function ListingPage<TRow>({
   subtitle,
   primaryAction,
   secondaryActions,
+  hideHeader,
+  belowHeader,
   savedViews,
   activeView,
   onViewChange,
@@ -245,24 +349,27 @@ export function ListingPage<TRow>({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="m-0 text-[22px] font-semibold leading-tight tracking-normal text-stone-ink">
-            {title}
-          </h1>
-          {subtitle ? (
-            <p className="mt-1 mb-0 text-[13px] text-stone-muted">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-        {(secondaryActions || primaryAction) && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {secondaryActions}
-            {primaryAction}
+      {!hideHeader ? (
+        <div className="mb-0 flex flex-col gap-3 pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+          <div>
+            <h1 className="m-0 text-[22px] font-medium leading-tight tracking-normal text-ink">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-1 mb-0 text-[13px] text-subtle">
+                {subtitle}
+              </p>
+            ) : null}
           </div>
-        )}
-      </div>
+          {(secondaryActions || primaryAction) && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {secondaryActions}
+              {primaryAction}
+            </div>
+          )}
+        </div>
+      ) : null}
+      {belowHeader}
 
       {savedViews && savedViews.length > 0 ? (
         <ToggleGroup
@@ -271,7 +378,7 @@ export function ListingPage<TRow>({
           onValueChange={value => {
             if (value) onViewChange?.(value);
           }}
-          className="mb-0 w-full justify-start rounded-none border-b border-stone-line"
+          className="mb-0 w-full justify-start rounded-none border-b border-border-default"
           variant="default"
           size="sm"
         >
@@ -282,7 +389,7 @@ export function ListingPage<TRow>({
                 key={view.id}
                 value={view.id}
                 className={cn(
-                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-stone-muted hover:bg-transparent hover:text-stone-ink data-[state=on]:border-stone-ink data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-stone-ink",
+                  "-mb-px h-auto rounded-none border-b-2 border-transparent px-3.5 py-2.5 text-[13px] font-normal text-subtle hover:bg-transparent hover:text-ink data-[state=on]:border-forest-mid data-[state=on]:bg-transparent data-[state=on]:font-semibold data-[state=on]:text-ink",
                 )}
               >
                 {view.label}
@@ -297,22 +404,22 @@ export function ListingPage<TRow>({
 
       {kpis && kpis.length > 0 ? (
         <div
-          className="my-4 grid overflow-hidden rounded-md border border-stone-line bg-stone-line"
+          className="my-4 grid overflow-hidden rounded-md border border-border-default bg-surface-deep"
           style={{
             gridTemplateColumns: `repeat(${kpis.length}, minmax(0, 1fr))`,
             gap: 1,
           }}
         >
           {kpis.map((kpi, i) => (
-            <div key={i} className="bg-stone-surface px-4.5 py-3.5">
-              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-stone-muted">
+            <div key={i} className="bg-card px-4.5 py-3.5">
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-subtle">
                 {kpi.label}
               </div>
-              <div className="font-mono text-[22px] font-semibold leading-tight text-stone-ink">
+              <div className="font-mono text-[22px] font-semibold leading-tight text-ink">
                 {kpi.value}
               </div>
               {kpi.sub ? (
-                <div className="mt-0.5 text-[11px] text-stone-muted">
+                <div className="mt-0.5 text-[11px] text-subtle">
                   {kpi.sub}
                 </div>
               ) : null}
@@ -323,9 +430,9 @@ export function ListingPage<TRow>({
 
       {headerExtra ? <div className="mb-4">{headerExtra}</div> : null}
 
-      <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-        <div className="flex flex-wrap items-center gap-2.5 border-b border-stone-line2 px-4 py-3">
-          <InputGroup className="h-8 max-w-80 flex-[1_1_180px] border-stone-line bg-stone-line2 shadow-none">
+      <Card className="mt-4 gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+        <div className="flex flex-wrap items-center gap-2.5 border-b border-divider px-4 py-3">
+          <InputGroup className="h-8 max-w-80 flex-[1_1_180px] border-border-default bg-divider shadow-none">
             <InputGroupAddon align="inline-start">
               <Search className="size-3.5" />
             </InputGroupAddon>
@@ -357,7 +464,7 @@ export function ListingPage<TRow>({
                 if (value) onSegmentChange?.(value);
               }}
               spacing={1}
-              className="rounded-md bg-stone-line2 p-0.5"
+              className="rounded-md bg-divider p-0.5"
               variant="default"
               size="sm"
             >
@@ -365,7 +472,7 @@ export function ListingPage<TRow>({
                 <ToggleGroupItem
                   key={seg.value}
                   value={seg.value}
-                  className="h-7 rounded px-2.5 text-xs font-normal text-stone-muted shadow-none hover:bg-transparent hover:text-stone-ink data-[state=on]:border data-[state=on]:border-stone-line data-[state=on]:bg-stone-surface data-[state=on]:font-medium data-[state=on]:text-stone-ink data-[state=on]:shadow-xs"
+                  className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
                 >
                   {seg.label}
                 </ToggleGroupItem>
@@ -373,7 +480,7 @@ export function ListingPage<TRow>({
             </ToggleGroup>
           ) : null}
 
-          <div className="ml-auto whitespace-nowrap text-xs text-stone-muted">
+          <div className="ml-auto whitespace-nowrap text-xs text-subtle">
             {isLoading
               ? "Loading..."
               : total > 0
@@ -386,12 +493,12 @@ export function ListingPage<TRow>({
           {isFetching && !isLoading ? <LoadingBar /> : null}
 
           {isLoading ? (
-            <div className="px-6 py-12 text-center text-[13px] text-stone-muted">
+            <div className="px-6 py-12 text-center text-[13px] text-subtle">
               <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton
                     key={i}
-                    className="h-3.5 rounded-sm bg-stone-line2"
+                    className="h-3.5 rounded-sm bg-divider"
                     style={{ width: `${60 + (i % 3) * 15}%`, opacity: 1 - i * 0.1 }}
                   />
                 ))}
@@ -399,33 +506,35 @@ export function ListingPage<TRow>({
             </div>
           ) : isEmpty ? (
             <div className="px-6 py-16 text-center">
-              <div className="mb-1.5 text-sm font-medium text-stone-ink">
+              <div className="mb-1.5 text-sm font-medium text-ink">
                 {emptyTitle}
               </div>
               {emptyDescription ? (
-                <div className="mb-4 text-[13px] text-stone-muted">
+                <div className="mb-4 text-[13px] text-subtle">
                   {emptyDescription}
                 </div>
               ) : null}
               {emptyAction}
             </div>
           ) : (
-            <div
-              className={cn(
-                "transition-opacity",
-                isFetching && "opacity-60",
-              )}
-            >
-              <Table className="text-[13px] text-stone-ink2">
+            <div>
+              {/*
+                Previously the table faded to opacity-60 during background
+                refetches. Combined with `staleTime: 0` (changed to 60s in
+                QueryProvider) every revisit produced a visible flicker.
+                The thin `<LoadingBar />` above is enough signal that data
+                is updating; the table stays stable.
+              */}
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
+                  <TableRow className="border-divider hover:bg-transparent">
                     {columns.map(col => (
                       <TableHead
                         key={col.key}
                         style={{ width: col.width }}
                         onClick={() => col.sortKey && handleSort(col)}
                         className={cn(
-                          "h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted",
+                          "h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle",
                           col.sortKey && "cursor-pointer",
                           col.align === "right" && "text-right",
                           col.align === "center" && "text-center",
@@ -446,7 +555,7 @@ export function ListingPage<TRow>({
                       </TableHead>
                     ))}
                     {rowActions && rowActions.length > 0 ? (
-                      <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                      <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                     ) : null}
                   </TableRow>
                 </TableHeader>
@@ -455,7 +564,7 @@ export function ListingPage<TRow>({
                     <TableRow>
                       <TableCell
                         colSpan={columns.length + (rowActions ? 1 : 0)}
-                        className="px-6 py-8 text-center text-[13px] text-stone-muted"
+                        className="px-6 py-8 text-center text-[13px] text-subtle"
                       >
                         No results match your search.
                       </TableCell>
@@ -471,7 +580,7 @@ export function ListingPage<TRow>({
                           key={rowId}
                           onClick={onRowClick ? () => onRowClick(row) : undefined}
                           className={cn(
-                            "group/row border-stone-line2 hover:bg-stone-line2",
+                            "group/row border-divider hover:bg-divider",
                             onRowClick && "cursor-pointer",
                           )}
                         >
@@ -490,7 +599,7 @@ export function ListingPage<TRow>({
                                   <div>
                                     <div>{value.primary}</div>
                                     {value.secondary !== undefined ? (
-                                      <div className="mt-px text-[11px] text-stone-muted">
+                                      <div className="mt-px text-[11px] text-subtle">
                                         {value.secondary}
                                       </div>
                                     ) : null}
@@ -516,7 +625,7 @@ export function ListingPage<TRow>({
                                         variant="outline"
                                         size="xs"
                                         className={cn(
-                                          "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                          "border-border-default bg-card text-xs text-ink-warm hover:bg-divider",
                                           isDestructive &&
                                             "text-destructive hover:text-destructive",
                                         )}
@@ -537,7 +646,7 @@ export function ListingPage<TRow>({
                                       variant="outline"
                                       size="xs"
                                       className={cn(
-                                        "border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2",
+                                        "border-border-default bg-card text-xs text-ink-warm hover:bg-divider",
                                         isDestructive &&
                                           "text-destructive hover:text-destructive",
                                       )}
@@ -564,8 +673,8 @@ export function ListingPage<TRow>({
         </div>
 
         {!hidePagination && !isLoading && !isEmpty ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-line2 px-4 py-2.5">
-            <div className="flex items-center gap-1.5 text-xs text-stone-muted">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider px-4 py-2.5">
+            <div className="flex items-center gap-1.5 text-xs text-subtle">
               <span>Rows</span>
               <Select
                 value={String(pageSize)}
@@ -573,7 +682,7 @@ export function ListingPage<TRow>({
               >
                 <SelectTrigger
                   size="sm"
-                  className="h-7 w-[72px] border-stone-line bg-stone-surface px-2 text-xs text-stone-ink2 shadow-none"
+                  className="h-7 w-[72px] border-border-default bg-card px-2 text-xs text-ink-warm shadow-none"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -587,7 +696,7 @@ export function ListingPage<TRow>({
               </Select>
             </div>
 
-            <div className="text-xs text-stone-muted">
+            <div className="text-xs text-subtle">
               {total > 0 ? `${start}-${end} of ${total.toLocaleString()}` : "0 records"}
             </div>
 
@@ -598,12 +707,12 @@ export function ListingPage<TRow>({
                 size="icon-xs"
                 aria-label="Previous"
                 disabled={page <= 1}
-                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
                 onClick={() => onPageChange(page - 1)}
               >
                 <ChevronLeft className="size-3.5" />
               </Button>
-              <span className="px-1.5 text-xs text-stone-muted">
+              <span className="px-1.5 text-xs text-subtle">
                 {page} / {pageCount || 1}
               </span>
               <Button
@@ -612,7 +721,7 @@ export function ListingPage<TRow>({
                 size="icon-xs"
                 aria-label="Next"
                 disabled={page >= pageCount}
-                className="size-7 border-stone-line bg-stone-surface text-stone-ink2 shadow-none disabled:bg-stone-line2"
+                className="size-7 border-border-default bg-card text-ink-warm shadow-none disabled:bg-divider"
                 onClick={() => onPageChange(page + 1)}
               >
                 <ChevronRight className="size-3.5" />

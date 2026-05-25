@@ -37,9 +37,9 @@ export function PurchasingSection({ purchasing }: Props) {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-semibold text-stone-ink">Purchasing</h2>
-          <p className="mt-0.5 text-xs text-stone-muted">
+        <div className="border-b border-border-default pb-3">
+          <h2 className="text-sm font-medium text-ink">Purchasing</h2>
+          <p className="mt-0.5 text-xs text-subtle">
             Supplier activity and open payables.
           </p>
         </div>
@@ -68,9 +68,9 @@ function statusBadge(status: string) {
 function RecentSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Recent supplier invoices</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Recent supplier invoices</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Newest 8 across all statuses.
         </CardDescription>
       </CardHeader>
@@ -122,9 +122,9 @@ function RecentSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[]
 function UnpaidSupplierInvoicesCard({ rows }: { rows: RecentSupplierInvoiceRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Unpaid supplier invoices</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Unpaid supplier invoices</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Completed invoices with balance remaining.
         </CardDescription>
       </CardHeader>
@@ -177,9 +177,9 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
 
   return (
     <Card className="shadow-none">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Spend by supplier</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Spend by supplier</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Completed invoice totals, last 90 days.
         </CardDescription>
       </CardHeader>
@@ -207,13 +207,13 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-stone-line2">
+                    <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-divider">
                       <div
                         className="absolute inset-y-0 left-0 rounded-full bg-primary"
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="w-14 text-right text-xs text-stone-muted tabular-nums">
+                    <span className="w-14 text-right text-xs text-subtle tabular-nums">
                       {row.invoiceCount} inv
                     </span>
                   </div>
@@ -229,7 +229,7 @@ function SpendBySupplierCard({ rows }: { rows: SpendBySupplierRow[] }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-xs text-stone-muted">
+    <p className="px-6 py-6 text-center text-xs text-subtle">
       {children}
     </p>
   );

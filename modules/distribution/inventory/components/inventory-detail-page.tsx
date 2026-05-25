@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useInventoryItem } from "../hooks/use-inventory";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailField,
@@ -33,10 +35,11 @@ import {
   ExpirationStateBadge,
   InventoryStatusBadge,
 } from "@/modules/distribution/components/warehouse/warehouse-badges";
-import { InventoryAdjustmentHistory } from "@/modules/distribution/components/warehouse/inventory-adjustment-history";
+import { InventoryItemActivityCard } from "./inventory-item-activity-card";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatMoney } from "@/lib/utils/currency";
 import {
+  formatInventoryQuantity,
   formatWeightLbs,
   getExpirationState,
 } from "../utils/insights";
@@ -65,10 +68,42 @@ export function InventoryDetailPage({
     useInventoryItem(inventoryItemId);
   const { data: currentUser } = useCurrentPortalUser();
 
-  useSetBreadcrumbLabel(`/inventory/${inventoryItemId}`, item?.barcodeId);
+  // The actual URL is /inventory/items/<id>; the previous path was a legacy
+  // /inventory/<id> route that no longer matches the breadcrumb's segment
+  // key, so the override was silently ignored and the humanized UUID
+  // ("9b66728b E984 4cfa…") leaked through. Provide a stable loading label
+  // too so the UUID never renders even for the first paint.
+  useSetBreadcrumbLabel(
+    `/inventory/items/${inventoryItemId}`,
+    item?.barcodeId ?? "Item",
+  );
+
+  // Pagination hooks live above the loading/error short-circuits to keep
+  // the hook-call order stable across renders. Pass empty arrays as a
+  // safe default when `item` is undefined; the hook produces a no-op
+  // state that doesn't render any rows.
+  const allocationsPagination = useClientPagination(
+    item?.allocations ?? [],
+    10,
+  );
+  const fulfillmentsPagination = useClientPagination(
+    item?.fulfillments ?? [],
+    10,
+  );
 
   if (isLoading) {
-    return <DetailPageSkeleton includeTable />;
+    // Layout-matching skeleton:
+    //   header + 3 metric cards (quantity / cost / allocations) + 3
+    //   detail sections (adjustment actions, item details, lot+source) +
+    //   2 tables (allocations, fulfillments) + activity card placeholder.
+    return (
+      <DetailPageSkeleton
+        sections={3}
+        metricCards={3}
+        tables={2}
+        activityCard
+      />
+    );
   }
 
   if (isError || !item) {
@@ -103,11 +138,39 @@ export function InventoryDetailPage({
       ? getWarehouseCorrectionDeniedReason()
       : workflowAdjustmentBlockedReason;
 
-  const costUnitLabel = item.costUnitTypeSnapshot === "fixed_case" ? "case" : "lb";
-  const totalCostValue =
+  // Unit label for "Unit cost" — historically "lb" or "case"; now also
+  // covers per_each / per_unit by reading the line's snapshot
+  // abbreviation when present, else falling back to the product's base
+  // UOM, else the legacy lb/case mapping.
+  const baseUnitAbbr = item.product?.baseUnit?.abbreviation ?? null;
+  const costUnitLabel =
     item.costUnitTypeSnapshot === "fixed_case"
-      ? Number(item.costPerUnitSnapshot) * item.cases
-      : Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs);
+      ? "case"
+      : item.costUnitTypeSnapshot === "per_each"
+        ? baseUnitAbbr ?? "ea"
+        : item.costUnitTypeSnapshot === "per_unit"
+          ? baseUnitAbbr ?? "unit"
+          : baseUnitAbbr ?? "lb";
+  // Total inventory value: weight × per-lb for catch_weight; case-count ×
+  // per-case for everything else (fixed_case / per_each / per_unit).
+  const totalCostValue =
+    item.costUnitTypeSnapshot === "catch_weight"
+      ? Number(item.costPerUnitSnapshot) * Number(item.exactWeightLbs)
+      : Number(item.costPerUnitSnapshot) * item.cases;
+  // Renders "X.XX lb" / "5 ea" / "24 ea (1 cs)" depending on the
+  // snapshot. Pack size lives on the inventory row now so multi-pack
+  // cases display both the base-unit count and the case count.
+  const quantityLabel = formatInventoryQuantity({
+    costUnitTypeSnapshot: item.costUnitTypeSnapshot,
+    exactWeightLbs: item.exactWeightLbs,
+    cases: item.cases,
+    unitsPerPackageSnapshot: item.unitsPerPackageSnapshot,
+    baseUnitAbbreviation: baseUnitAbbr,
+  });
+  const isWeightItem =
+    item.costUnitTypeSnapshot === "catch_weight" ||
+    item.costUnitTypeSnapshot === "fixed_case" ||
+    item.costUnitTypeSnapshot == null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -115,6 +178,9 @@ export function InventoryDetailPage({
         title={item.barcodeId}
         description="Inspect inbound source, warehouse lifecycle, and outbound usage for this inventory item."
         badge={<InventoryStatusBadge status={item.status} />}
+        // The title is a barcode — render it in mono so it reads as a
+        // copyable identifier, matching the orders / bills detail pages.
+        variant="identifier"
       >
         <ExpirationStateBadge state={expirationState} />
       </DetailPageHeader>
@@ -153,11 +219,11 @@ export function InventoryDetailPage({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Exact weight
+              {isWeightItem ? "Exact weight" : "Quantity"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {formatWeightLbs(item.exactWeightLbs)} lb
+            {quantityLabel}
           </CardContent>
         </Card>
         <Card>
@@ -198,8 +264,8 @@ export function InventoryDetailPage({
           <DetailField label="Barcode / inventory ID">
             <span className="font-mono text-sm">{item.barcodeId}</span>
           </DetailField>
-          <DetailField label="Exact weight">
-            {formatWeightLbs(item.exactWeightLbs)} lb
+          <DetailField label={isWeightItem ? "Exact weight" : "Quantity"}>
+            {quantityLabel}
           </DetailField>
           <DetailField label="Unit cost">
             {formatMoney(item.costPerUnitSnapshot)} / {costUnitLabel}
@@ -222,7 +288,7 @@ export function InventoryDetailPage({
       >
         <DetailGrid className="lg:grid-cols-3">
           <DetailField label="Lot number">
-            <Link href={`/lots/${item.lot.id}`} className="hover:underline">
+            <Link href={`/inventory/lots/${item.lot.id}`} className="hover:underline">
               {item.lot.lotNumber}
             </Link>
           </DetailField>
@@ -262,8 +328,19 @@ export function InventoryDetailPage({
           <DetailField label="Receipt line">
             {sourceReceiptLine ? (
               <span>
-                {sourceReceiptLine.quantityCases.toLocaleString()} cases /{" "}
-                {formatWeightLbs(sourceReceiptLine.weightLbs)} lb
+                {sourceReceiptLine.quantityCases.toLocaleString()} cases
+                {/* Only render weight for weight-priced receipt lines.
+                    Non-weight lines (cans, gal jugs) keep just the
+                    case/unit count which is the meaningful metric there. */}
+                {sourceReceiptLine.unitType === "catch_weight" ||
+                sourceReceiptLine.unitType === "fixed_case" ? (
+                  <>
+                    {" "}
+                    /{" "}
+                    {formatWeightLbs(sourceReceiptLine.weightLbs)}{" "}
+                    {sourceReceiptLine.product?.baseUnit?.abbreviation ?? "lb"}
+                  </>
+                ) : null}
               </span>
             ) : (
               <span className="text-muted-foreground">-</span>
@@ -295,21 +372,22 @@ export function InventoryDetailPage({
         description="Sales order lines currently reserving this inventory item."
       >
         {item.allocations.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Expected</TableHead>
-                  <TableHead className="text-right">Fulfilled</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Allocated at</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {item.allocations.map(allocation => (
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-divider">
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Expected</TableHead>
+                    <TableHead className="text-right">Fulfilled</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Allocated at</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allocationsPagination.rows.map(allocation => (
                   <TableRow key={allocation.id}>
                     <TableCell>
                       <Link
@@ -344,6 +422,8 @@ export function InventoryDetailPage({
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <TablePagination state={allocationsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -357,22 +437,27 @@ export function InventoryDetailPage({
         description="Outbound fulfillment rows linked to this inventory item."
       >
         {item.fulfillments.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Weight lbs</TableHead>
-                  <TableHead>Recorded by</TableHead>
-                  <TableHead>Fulfilled at</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {item.fulfillments.map(fulfillment => (
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-divider">
+                  <TableRow>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
+                    {isWeightItem ? (
+                      <TableHead className="text-right">
+                        Weight {baseUnitAbbr ?? "lb"}
+                      </TableHead>
+                    ) : null}
+                    <TableHead>Recorded by</TableHead>
+                    <TableHead>Fulfilled at</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fulfillmentsPagination.rows.map(fulfillment => (
                   <TableRow key={fulfillment.id}>
                     <TableCell>
                       <Link
@@ -389,9 +474,11 @@ export function InventoryDetailPage({
                     <TableCell className="text-right tabular-nums">
                       {fulfillment.quantityFulfilled.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatWeightLbs(fulfillment.weightLbs)}
-                    </TableCell>
+                    {isWeightItem ? (
+                      <TableCell className="text-right tabular-nums">
+                        {formatWeightLbs(fulfillment.weightLbs)}
+                      </TableCell>
+                    ) : null}
                     <TableCell>{actorLabel(fulfillment.fulfilledBy)}</TableCell>
                     <TableCell>
                       {new Date(fulfillment.fulfilledAt).toLocaleString()}
@@ -410,6 +497,8 @@ export function InventoryDetailPage({
                 ))}
               </TableBody>
             </Table>
+            </div>
+            <TablePagination state={fulfillmentsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -418,12 +507,10 @@ export function InventoryDetailPage({
         )}
       </DetailSection>
 
-      <DetailSection
-        title="Adjustment history"
-        description="Warehouse correction records for this inventory item."
-      >
-        <InventoryAdjustmentHistory adjustments={item.adjustments} />
-      </DetailSection>
+      {/* Shared ActivityCard — same surface used by order and supplier-invoice
+          detail pages. The card renders its own "Activity" header and an
+          expand-to-full toggle; no DetailSection wrapper needed. */}
+      <InventoryItemActivityCard inventoryItemId={inventoryItemId} />
 
       <InventoryAdjustmentDialog
         open={adjustDialogOpen}

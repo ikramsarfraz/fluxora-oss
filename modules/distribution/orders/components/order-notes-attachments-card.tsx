@@ -25,13 +25,13 @@ import type { SalesOrderDetail } from "../services/orders";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
   radius: "10px",
   radiusSm: "6px",
 } as const;
@@ -220,7 +220,7 @@ export function OrderNotesAttachmentsCard({ order }: OrderNotesAttachmentsCardPr
               type="button"
               variant="outline"
               size="xs"
-              className="ml-auto border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
+              className="ml-auto border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadMutation.isPending}
             >

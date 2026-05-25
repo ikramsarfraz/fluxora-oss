@@ -4,8 +4,8 @@ import {
   cancelSalesOrder,
   createSalesOrder,
   deleteSalesOrder,
+  findOpenDraftForCustomer,
   getSalesOrderById,
-  getSalesOrders,
   getSalesOrdersPage,
   getSalesOrderAttachmentDownload,
   markSalesOrderLineShortShipped,
@@ -22,10 +22,6 @@ import {
   recordPaymentForSalesOrderInvoice,
 } from "@/modules/distribution/invoices/services/invoicing";
 
-export async function getSalesOrdersAction() {
-  return await getSalesOrders();
-}
-
 export async function getSalesOrdersPageAction(
   input?: Parameters<typeof getSalesOrdersPage>[0],
 ) {
@@ -34,6 +30,10 @@ export async function getSalesOrdersPageAction(
 
 export async function getSalesOrderByIdAction(id: string) {
   return await getSalesOrderById(id);
+}
+
+export async function findOpenDraftForCustomerAction(customerId: string) {
+  return await findOpenDraftForCustomer(customerId);
 }
 
 export async function deleteSalesOrderAction(id: string) {

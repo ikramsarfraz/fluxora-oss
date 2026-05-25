@@ -36,10 +36,10 @@ import type { BillingBannerState } from "@/lib/billing-utils";
 // ============================================================================
 
 const STATUS_STYLES: Record<TenantSubscriptionStatus, { bg: string; text: string; dot: string }> = {
-  active: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
-  trialing: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", dot: "bg-blue-500" },
-  past_due: { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
-  canceled: { bg: "bg-red-500/10", text: "text-red-600 dark:text-red-400", dot: "bg-red-500" },
+  active: { bg: "bg-success-fg/10", text: "text-success-fg dark:text-success-fg", dot: "bg-success-fg" },
+  trialing: { bg: "bg-forest/10", text: "text-forest dark:text-forest", dot: "bg-forest" },
+  past_due: { bg: "bg-warning-fg/10", text: "text-warning-fg dark:text-warning-fg", dot: "bg-warning-fg" },
+  canceled: { bg: "bg-danger-fg/10", text: "text-danger-fg dark:text-danger-fg", dot: "bg-danger-fg" },
   comped: { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", dot: "bg-purple-500" },
 };
 
@@ -107,19 +107,19 @@ export function PlanOverviewCard({
         : "from-muted/50 via-transparent to-transparent";
 
   const iconBg = subscriptionPlan === "enterprise"
-    ? "bg-amber-500/10"
+    ? "bg-warning-fg/10"
     : subscriptionPlan === "growth"
       ? "bg-primary/10"
       : subscriptionPlan === "starter"
-        ? "bg-blue-500/10"
+        ? "bg-forest/10"
         : "bg-muted";
 
   const iconColor = subscriptionPlan === "enterprise"
-    ? "text-amber-600 dark:text-amber-400"
+    ? "text-warning-fg dark:text-warning-fg"
     : subscriptionPlan === "growth"
       ? "text-primary"
       : subscriptionPlan === "starter"
-        ? "text-blue-600 dark:text-blue-400"
+        ? "text-forest dark:text-forest"
         : "text-muted-foreground";
 
   return (
@@ -147,7 +147,7 @@ export function PlanOverviewCard({
             </div>
             <div className="space-y-1.5">
               <div className="flex flex-wrap items-center gap-2.5">
-                <CardTitle className="text-xl font-semibold tracking-tight">{planLabel} Plan</CardTitle>
+                <CardTitle className="text-xl font-medium tracking-tight">{planLabel} Plan</CardTitle>
                 <BillingStatusBadge status={subscriptionStatus} />
               </div>
               {billingPeriodText && (
@@ -202,16 +202,16 @@ const USAGE_STATE_STYLES: Record<SubscriptionUsageState, {
     badge: "",
   },
   warning: { 
-    progress: "bg-amber-500", 
-    text: "text-amber-600 dark:text-amber-400",
+    progress: "bg-warning-fg", 
+    text: "text-warning-fg dark:text-warning-fg",
     glow: "shadow-[0_0_8px_rgba(245,158,11,0.3)]",
-    badge: "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    badge: "border-amber-500/50 bg-warning-fg/10 text-warning-fg dark:text-warning-fg",
   },
   at_limit: { 
-    progress: "bg-red-500", 
-    text: "text-red-600 dark:text-red-400",
+    progress: "bg-danger-fg", 
+    text: "text-danger-fg dark:text-danger-fg",
     glow: "shadow-[0_0_8px_rgba(239,68,68,0.3)]",
-    badge: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/50",
+    badge: "bg-danger-fg/10 text-danger-fg dark:text-danger-fg border-red-500/50",
   },
 };
 
@@ -256,20 +256,20 @@ export function UsageRow({
             state === "normal" 
               ? "border-border/50 hover:border-border hover:bg-muted/30" 
               : state === "warning"
-                ? "border-amber-500/30 hover:border-amber-500/50 bg-amber-500/[0.02]"
-                : "border-red-500/30 hover:border-red-500/50 bg-red-500/[0.02]"
+                ? "border-amber-500/30 hover:border-amber-500/50 bg-warning-fg/[0.02]"
+                : "border-red-500/30 hover:border-red-500/50 bg-danger-fg/[0.02]"
           )}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
                   state === "normal" ? "bg-muted group-hover:bg-muted/80" :
-                  state === "warning" ? "bg-amber-500/10" : "bg-red-500/10"
+                  state === "warning" ? "bg-warning-fg/10" : "bg-danger-fg/10"
                 )}>
                   <Icon className={cn(
                     "h-4 w-4 transition-colors",
                     state === "normal" ? "text-muted-foreground" :
-                    state === "warning" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"
+                    state === "warning" ? "text-warning-fg dark:text-warning-fg" : "text-danger-fg dark:text-danger-fg"
                   )} />
                 </div>
                 <div>
@@ -282,8 +282,8 @@ export function UsageRow({
                       <span className={cn(
                         "text-xs font-medium tabular-nums",
                         state === "normal" ? "text-muted-foreground/70" :
-                        state === "warning" ? "text-amber-600/80 dark:text-amber-400/80" : 
-                        "text-red-600/80 dark:text-red-400/80"
+                        state === "warning" ? "text-warning-fg/80 dark:text-warning-fg/80" : 
+                        "text-danger-fg/80 dark:text-danger-fg/80"
                       )}>
                         ({Math.round(percent)}%)
                       </span>
@@ -380,7 +380,7 @@ export function UsageCard({
       {anyIssue && showUpgradeCta && (
         <CardFooter className="border-t bg-muted/30 px-6 py-3">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-warning-fg" />
             <p className="text-xs text-muted-foreground">
               {atLimitCount > 0 
                 ? `You've reached ${atLimitCount} plan limit${atLimitCount > 1 ? "s" : ""}. Upgrade to avoid service interruptions.`
@@ -449,22 +449,22 @@ const BANNER_STYLES: Record<"warning" | "destructive" | "info" | "default", {
   icon: string;
 }> = {
   warning: { 
-    bg: "bg-amber-500/5", 
+    bg: "bg-warning-fg/5", 
     border: "border-amber-500/30", 
-    iconBg: "bg-amber-500/10",
-    icon: "text-amber-500" 
+    iconBg: "bg-warning-fg/10",
+    icon: "text-warning-fg" 
   },
   destructive: { 
-    bg: "bg-red-500/5", 
+    bg: "bg-danger-fg/5", 
     border: "border-red-500/30", 
-    iconBg: "bg-red-500/10",
-    icon: "text-red-500" 
+    iconBg: "bg-danger-fg/10",
+    icon: "text-danger-fg" 
   },
   info: { 
-    bg: "bg-blue-500/5", 
+    bg: "bg-forest/5", 
     border: "border-blue-500/30", 
-    iconBg: "bg-blue-500/10",
-    icon: "text-blue-500" 
+    iconBg: "bg-forest/10",
+    icon: "text-forest" 
   },
   default: { 
     bg: "bg-primary/5", 

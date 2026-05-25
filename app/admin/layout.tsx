@@ -44,8 +44,8 @@ export default async function PlatformAdminLayout({
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center p-6">
         <div className="w-full rounded-2xl border bg-card p-8 text-center shadow-sm">
-          <p className="text-sm font-medium text-blue-700">Platform Admin</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+          <p className="text-sm font-medium text-forest">Platform Admin</p>
+          <h1 className="mt-3 text-3xl font-medium tracking-tight text-ink">
             Access denied
           </h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -63,14 +63,14 @@ export default async function PlatformAdminLayout({
       <SidebarProvider>
         <PlatformAdminSidebar destinations={destinations} user={session.user} />
         <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator
               orientation="vertical"
               className="mr-2 data-vertical:h-4 data-vertical:self-auto"
             />
             <div>
-              <p className="text-sm font-medium text-slate-900">Platform Admin</p>
+              <p className="text-sm font-medium text-ink">Platform Admin</p>
               <p className="text-xs text-muted-foreground">{platformUser.role}</p>
             </div>
           </header>

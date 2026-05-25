@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useLot } from "../hooks/use-lots";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
@@ -14,6 +15,8 @@ import {
 } from "@/components/detail-section";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,6 +54,7 @@ import {
   getLotPrimaryProduct,
   getLotSourceInvoices,
   getLotTotals,
+  isLotNonWeight,
 } from "./lot-view-helpers";
 import { LotExtendExpirationDialog } from "./lot-extend-expiration-dialog";
 import { LotWriteOffDialog } from "./lot-write-off-dialog";
@@ -66,9 +70,41 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
   } = useLot(lotId);
   const { data: currentUser } = useCurrentPortalUser();
 
-  useSetBreadcrumbLabel(`/lots/${lotId}`, lot?.lotNumber);
+  // Lot detail is reachable from both /lots/<id> and /inventory/lots/<id>;
+  // use the live pathname so the override key matches whichever URL the
+  // user actually landed on (the breadcrumb component looks up overrides
+  // by exact href). Also pass a stable loading label so the humanized
+  // UUID never leaks through while `lot` is undefined.
+  const pathname = usePathname();
+  useSetBreadcrumbLabel(pathname ?? `/lots/${lotId}`, lot?.lotNumber ?? "Lot");
 
-  if (isLoading) return <DetailPageSkeleton includeTable />;
+  // Pagination hooks for the three inline tables on this page. Defined
+  // here (above the loading short-circuit) so the hook-call order stays
+  // stable across renders; empty-array fallbacks make the pre-data
+  // state a no-op.
+  const receiptsPagination = useClientPagination(lot?.lotReceipts ?? [], 10);
+  const inventoryItemsPagination = useClientPagination(
+    lot?.inventoryItems ?? [],
+    10,
+  );
+  const markdownsPagination = useClientPagination(
+    lot?.markdownHistories ?? [],
+    10,
+  );
+
+  if (isLoading) {
+    // Match the lot detail layout: header + 3 metric cards + 3 detail
+    // sections + inventory-items table + activity card. Without this
+    // closeness the page jumps when real data arrives.
+    return (
+      <DetailPageSkeleton
+        sections={3}
+        metricCards={3}
+        tables={1}
+        activityCard
+      />
+    );
+  }
   if (isError || !lot) {
     return (
       <PageError
@@ -156,8 +192,18 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         title={lot.lotNumber}
         description="Inspect inbound lot traceability, linked inventory, expiration risk, and outbound usage."
         badge={<LotOperationalStatusBadge status={lotStatus} />}
+        // Lot number is an identifier — mono treatment, same as the
+        // orders / bills / inventory detail pages.
+        variant="identifier"
       >
         <ExpirationStateBadge state={expirationState} />
+        {(expirationState === "expiring_soon" || expirationState === "expired") && (
+          <Link href={`/inventory/lots/${lot.id}/decide`}>
+            <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white gap-1">
+              Make disposition decision
+            </Button>
+          </Link>
+        )}
       </DetailPageHeader>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -174,11 +220,28 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total weight
+              {isLotNonWeight(lot) ? "Total units" : "Total weight"}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
-            {formatWeightLbs(totals.totalWeight)} lb
+            {/* Mixed-UOM safe: weight lots show "X.XX lb", non-weight
+                lots show their base-unit count (cases × pack). The
+                secondary line shows the physical case count when the
+                pack multiplies — so 5 cases of a 24-pack reads
+                "120 ea / 5 cases". */}
+            {isLotNonWeight(lot) ? (
+              <>
+                {totals.totalUnits.toLocaleString()}{" "}
+                {product?.baseUnit?.abbreviation ?? "ea"}
+                {totals.totalCases !== totals.totalUnits ? (
+                  <div className="text-xs font-normal text-muted-foreground">
+                    {totals.totalCases.toLocaleString()} cs
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              `${formatWeightLbs(totals.totalWeight)} ${product?.baseUnit?.abbreviation ?? "lb"}`
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -277,44 +340,47 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         description="Supplier invoices that created this lot."
       >
         {sourceInvoices.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Invoice date</TableHead>
-                  <TableHead>Receive date</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.lotReceipts.map(receipt => {
-                  const invoice = receipt.supplierInvoiceLine?.supplierInvoice;
-                  const receiptProduct = receipt.supplierInvoiceLine?.product;
-                  if (!invoice) return null;
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-divider">
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Supplier</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Invoice date</TableHead>
+                    <TableHead>Receive date</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {receiptsPagination.rows.map(receipt => {
+                    const invoice = receipt.supplierInvoiceLine?.supplierInvoice;
+                    const receiptProduct = receipt.supplierInvoiceLine?.product;
+                    if (!invoice) return null;
 
-                  return (
-                    <TableRow key={receipt.id}>
-                      <TableCell>
-                        <Link
-                          href={`/supplier-invoices/${invoice.id}`}
-                          className="hover:underline"
-                        >
-                          {invoice.invoiceNumber}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{invoice.supplier?.name ?? "-"}</TableCell>
-                      <TableCell>{receiptProduct?.name ?? "-"}</TableCell>
-                      <TableCell>{formatDisplayDate(invoice.invoiceDate)}</TableCell>
-                      <TableCell>{formatDisplayDate(invoice.receiveDate)}</TableCell>
-                      <TableCell className="capitalize">{invoice.status}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    return (
+                      <TableRow key={receipt.id}>
+                        <TableCell>
+                          <Link
+                            href={`/supplier-invoices/${invoice.id}`}
+                            className="hover:underline"
+                          >
+                            {invoice.invoiceNumber}
+                          </Link>
+                        </TableCell>
+                        <TableCell>{invoice.supplier?.name ?? "-"}</TableCell>
+                        <TableCell>{receiptProduct?.name ?? "-"}</TableCell>
+                        <TableCell>{formatDisplayDate(invoice.invoiceDate)}</TableCell>
+                        <TableCell>{formatDisplayDate(invoice.receiveDate)}</TableCell>
+                        <TableCell className="capitalize">{invoice.status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={receiptsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -328,46 +394,59 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
         description="All inventory items currently tied to this lot."
       >
         {lot.inventoryItems.length > 0 ? (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader className="bg-muted">
-                <TableRow>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Weight lbs</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Allocations</TableHead>
-                  <TableHead className="text-right">Fulfillments</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lot.inventoryItems.map(item => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Link href={`/inventory/${item.id}`} className="hover:underline">
-                        {item.barcodeId}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatWeightLbs(item.exactWeightLbs)}
-                    </TableCell>
-                    <TableCell>
-                      <InventoryStatusBadge status={item.status} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item.allocations.length}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {
-                        item.fulfillments.filter(fulfillment => !fulfillment.reversedAt)
-                          .length
-                      }
-                    </TableCell>
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-divider">
+                  <TableRow>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">
+                      {isLotNonWeight(lot)
+                        ? `Qty (${product?.baseUnit?.abbreviation ?? "ea"})`
+                        : `Weight (${product?.baseUnit?.abbreviation ?? "lb"})`}
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Allocations</TableHead>
+                    <TableHead className="text-right">Fulfillments</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {inventoryItemsPagination.rows.map(item => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Link href={`/inventory/${item.id}`} className="hover:underline">
+                          {item.barcodeId}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{item.product?.name ?? product?.name ?? "-"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {/* Per-item quantity — weight for catch/fixed,
+                            case-count for per_each / per_unit (one item
+                            row = one unit/case in the base UOM). */}
+                        {item.costUnitTypeSnapshot === "per_each" ||
+                        item.costUnitTypeSnapshot === "per_unit"
+                          ? item.cases
+                          : formatWeightLbs(item.exactWeightLbs)}
+                      </TableCell>
+                      <TableCell>
+                        <InventoryStatusBadge status={item.status} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {item.allocations.length}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {
+                          item.fulfillments.filter(fulfillment => !fulfillment.reversedAt)
+                            .length
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={inventoryItemsPagination} />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -411,6 +490,79 @@ export function LotDetailPage({ lotId }: { lotId: string }) {
           emptyMessage="No lot-related inventory adjustments recorded yet."
         />
       </DetailSection>
+
+      {lot.markdownHistories.length > 0 && (
+        <DetailSection
+          title="Markdown outcomes"
+          description="Recorded sell-through results for markdowns applied to this lot."
+        >
+          <div className="overflow-hidden rounded-md border">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-divider">
+                  <TableRow>
+                    <TableHead>Completed</TableHead>
+                    <TableHead className="text-right">Discount</TableHead>
+                    <TableHead className="text-right">Qty offered</TableHead>
+                    <TableHead className="text-right">Sell-through</TableHead>
+                    <TableHead className="text-right">Expected net</TableHead>
+                    <TableHead className="text-right">Actual net</TableHead>
+                    <TableHead className="text-right">Variance</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {markdownsPagination.rows.map(mh => {
+                  const expected = Number(mh.expectedNet ?? 0);
+                  const actual = Number(mh.actualNet ?? 0);
+                  const variance = actual - expected;
+                  const fmt = (n: number) =>
+                    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+                  return (
+                    <TableRow key={mh.id}>
+                      <TableCell className="text-muted-foreground">
+                        {mh.completedAt ? formatDisplayDate(mh.completedAt) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {Number(mh.discountPercent).toFixed(1)}%
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {Number(mh.quantityOfferedLbs).toLocaleString("en-US", { maximumFractionDigits: 0 })} lb
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.actualSellThroughPct != null
+                          ? `${Number(mh.actualSellThroughPct).toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.expectedNet != null ? fmt(expected) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {mh.actualNet != null ? fmt(actual) : "—"}
+                      </TableCell>
+                      <TableCell
+                        className={[
+                          "text-right tabular-nums font-medium",
+                          variance > 0
+                            ? "text-green-600"
+                            : variance < 0
+                              ? "text-destructive"
+                              : "text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        {mh.expectedNet != null && mh.actualNet != null
+                          ? `${variance >= 0 ? "+" : ""}${fmt(variance)}`
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination state={markdownsPagination} />
+          </div>
+        </DetailSection>
+      )}
 
       <DetailSection
         title="Write off as loss"

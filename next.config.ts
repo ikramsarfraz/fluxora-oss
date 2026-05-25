@@ -3,6 +3,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["localtest.me", "*.localtest.me"],
+  experimental: {
+    serverActions: {
+      // Bulk import accepts up to 10 PDFs at ~25 MB each. Default 1 MB body
+      // limit on server actions would reject the request before it reaches
+      // any validation. 50 MB matches the practical upper bound here while
+      // staying well below platform limits.
+      bodySizeLimit: "50mb",
+    },
+  },
   /**
    * `@react-pdf/renderer` and its transitive packages rely on the client-side
    * React build (they read `__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE`).
@@ -31,6 +40,7 @@ const nextConfig: NextConfig = {
     "@react-pdf/types",
     "fontkit",
     "pdf-parse",
+    "pdfjs-dist",
   ],
 };
 

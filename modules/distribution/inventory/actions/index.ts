@@ -3,6 +3,7 @@
 import {
   adjustInventoryItem,
   bulkAdjustLotInventory,
+  exportInventoryCsv,
   getFifoAllocationForProduct,
   getInventoryItemById,
   getInventoryItems,
@@ -57,4 +58,10 @@ export async function getFifoAllocationForProductAction(
   requestedCases: number,
 ) {
   return await getFifoAllocationForProduct(productId, requestedCases);
+}
+
+export async function exportInventoryCsvAction(
+  input?: Parameters<typeof exportInventoryCsv>[0],
+) {
+  return await exportInventoryCsv(input);
 }

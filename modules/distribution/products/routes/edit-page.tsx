@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
 import { getProductById } from "../services/products";
 
 import { AddProductForm } from "../components/add-product-form";
+import { ProductFormSidePanel } from "../components/product-form-side-panel";
 
 export default async function ProductsEditPage({
   params,
@@ -20,8 +22,18 @@ export default async function ProductsEditPage({
   const product = await getProductById(id);
   if (!product) notFound();
 
+  // Archived products are read-only. The detail page hides the Edit
+  // button, but a stale browser tab or a hand-typed URL can still
+  // land here — bounce back to the detail page. Once there, the
+  // "Archived" badge and Lifecycle section's Restore button give the
+  // user the next step.
+  if (product.archivedAt) {
+    redirect(`/products/${product.id}`);
+  }
+
   return (
     <section className="flex flex-col gap-6">
+      <BreadcrumbLabel href={`/products/${product.id}`} label={product.name} />
       <PageHeader
         title="Edit product"
         description="Update product details, categories, and unit mappings."
@@ -33,7 +45,13 @@ export default async function ProductsEditPage({
           </Link>
         </Button>
       </PageHeader>
-      <AddProductForm mode="edit" product={product} />
+      {/* Mirrors the customer + supplier edit-page layout: form left,
+          sticky "Why we ask" explainer right. Same grid template as the
+          new page so the form widths stay visually consistent. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <AddProductForm mode="edit" product={product} stickyFooter />
+        <ProductFormSidePanel />
+      </div>
     </section>
   );
 }

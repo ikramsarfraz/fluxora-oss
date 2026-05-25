@@ -1,9 +1,17 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, RotateCcw, Search, Truck } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, RotateCcw, Search, Truck, X } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { InputGroupButton } from "@/components/ui/input-group";
 import {
   useApplyMarkupToCustomer,
   useCustomerProductPricesPage,
@@ -13,13 +21,13 @@ import {
   useUpdateCustomerFuelSurcharge,
 } from "../hooks/use-price-chart";
 import type { CustomerProductRow, PriceChartData } from "../services/price-chart";
-import { PageLoading } from "@/components/page-loading";
 import { PageError } from "@/components/page-error";
 import { TablePager } from "@/components/table-pager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -65,6 +73,15 @@ function overrideCount(prices: PriceChartData["prices"], customerId: string): nu
   return prices.filter(p => p.customer_id === customerId).length;
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(handle);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 // ── CustomerList ──────────────────────────────────────────────────────────────
 
 function CustomerList({
@@ -88,9 +105,9 @@ function CustomerList({
       className="w-75 shrink-0 gap-0 p-0 rounded-[10px] overflow-hidden sticky top-20 flex-col"
       style={{ maxHeight: "calc(100vh - 110px)" }}
     >
-      <div className="px-4 pt-3.5 pb-2.5 border-b border-stone-line">
+      <div className="px-4 pt-3.5 pb-2.5 border-b border-border-default">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold text-stone-muted uppercase tracking-wider">
+          <span className="text-[11px] font-semibold text-subtle uppercase tracking-wider">
             Customers
           </span>
           <Badge variant="secondary" className="text-[11px] px-2">{filtered.length}</Badge>
@@ -103,6 +120,7 @@ function CustomerList({
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search customers…"
+            aria-label="Search customers"
             className="text-[13px]"
           />
         </InputGroup>
@@ -127,16 +145,16 @@ function CustomerList({
               <div
                 className={cn(
                   "w-7 h-7 shrink-0 rounded-[7px] grid place-items-center text-[11px] font-semibold",
-                  isActive ? "bg-primary text-white" : "bg-muted text-stone-ink2",
+                  isActive ? "bg-primary text-white" : "bg-divider text-ink-warm",
                 )}
               >
                 {initials(c.name)}
               </div>
               <div className="min-w-0 flex-1 text-left">
-                <div className="text-[13px] font-medium leading-snug truncate text-stone-ink">
+                <div className="text-[13px] font-medium leading-snug truncate text-ink">
                   {c.name}
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-stone-muted">
+                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-subtle">
                   {fuel && Number(fuel) > 0 && <span>${fmt(fuel)} fuel</span>}
                   {ovr > 0 && (
                     <span className="text-primary font-medium flex items-center gap-1">
@@ -181,16 +199,20 @@ function CustomerCard({
   const totalProducts = allProducts.length;
 
   const avgMargin = useMemo(() => {
+    const priceByProduct = new Map<string, string>();
+    for (const pr of prices) {
+      if (pr.customer_id === customer.id) {
+        priceByProduct.set(pr.product_id, pr.price_per_lb);
+      }
+    }
     let sum = 0;
     let count = 0;
     for (const p of allProducts) {
       const cost = Number(p.cost);
       if (!Number.isFinite(cost) || cost <= 0) continue;
-      const custPrice = prices.find(
-        pr => pr.customer_id === customer.id && pr.product_id === p.id,
-      );
-      if (!custPrice) continue;
-      const margin = marginPct(Number(custPrice.price_per_lb), cost);
+      const priceRaw = priceByProduct.get(p.id);
+      if (priceRaw == null) continue;
+      const margin = marginPct(Number(priceRaw), cost);
       if (margin == null) continue;
       sum += margin;
       count += 1;
@@ -199,10 +221,11 @@ function CustomerCard({
   }, [allProducts, prices, customer.id]);
 
   function commitMarkup() {
-    const v = parseFloat(markupDraft);
-    if (Number.isFinite(v) && v >= 0) {
-      onMarkupChange(v);
-      toast.success(`Markup set to ${v}%`);
+    const raw = parseFloat(markupDraft);
+    if (Number.isFinite(raw) && raw >= 0) {
+      const clamped = Math.min(raw, 100);
+      onMarkupChange(clamped);
+      toast.success(`Markup set to ${clamped}%`);
     }
     setEditingMarkup(false);
   }
@@ -213,11 +236,11 @@ function CustomerCard({
         {initials(customer.name)}
       </div>
       <div>
-        <div className="text-lg font-semibold tracking-tight text-stone-ink">{customer.name}</div>
+        <div className="text-lg font-semibold tracking-tight text-ink">{customer.name}</div>
       </div>
       <div className="flex-1" />
 
-      <div className="flex border border-stone-line rounded-md overflow-hidden">
+      <div className="flex border border-border-default rounded-md overflow-hidden">
         <Button
           variant="ghost"
           onClick={() => {
@@ -226,9 +249,9 @@ function CustomerCard({
             setTimeout(() => inputRef.current?.select(), 0);
           }}
           title="Click to edit bulk markup"
-          className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-stone-line px-3.5 py-2.5 hover:bg-muted/60"
+          className="h-auto min-w-27.5 flex-col items-start gap-0.5 rounded-none border-r border-border-default px-3.5 py-2.5 hover:bg-muted/60"
         >
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Bulk markup
           </span>
           {editingMarkup ? (
@@ -247,40 +270,41 @@ function CustomerCard({
                   if (e.key === "Enter") commitMarkup();
                   if (e.key === "Escape") setEditingMarkup(false);
                 }}
+                aria-label="Bulk markup percent"
                 className="w-14 h-7 text-sm font-semibold px-2"
               />
-              <span className="text-xs text-stone-muted">%</span>
+              <span className="text-xs text-subtle">%</span>
             </div>
           ) : (
-            <div className="text-base font-semibold tracking-tight text-stone-ink">
+            <div className="text-base font-semibold tracking-tight text-ink">
               {markup}
-              <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+              <span className="text-xs text-subtle font-medium ml-px">%</span>
             </div>
           )}
         </Button>
 
-        <div className="px-3.5 py-2.5 min-w-32.5 border-r border-stone-line flex flex-col gap-0.5">
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+        <div className="px-3.5 py-2.5 min-w-32.5 border-r border-border-default flex flex-col gap-0.5">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Customer prices
           </span>
-          <div className="text-base font-semibold tracking-tight text-stone-ink">
+          <div className="text-base font-semibold tracking-tight text-ink">
             {ovr}
-            <span className="text-xs text-stone-muted font-medium ml-0.5">/ {totalProducts}</span>
+            <span className="text-xs text-subtle font-medium ml-0.5">/ {totalProducts}</span>
           </div>
         </div>
 
         <div className="px-3.5 py-2.5 min-w-30 flex flex-col gap-0.5">
-          <span className="text-[10.5px] text-stone-muted uppercase tracking-[0.04em] font-semibold">
+          <span className="text-[10.5px] text-subtle uppercase tracking-[0.04em] font-semibold">
             Avg margin
           </span>
-          <div className="text-base font-semibold tracking-tight text-stone-ink">
+          <div className="text-base font-semibold tracking-tight text-ink">
             {avgMargin == null ? (
-              <span className="text-stone-muted/60 text-sm font-normal">—</span>
+              <span className="text-subtle/60 text-sm font-normal">—</span>
             ) : (
               <>
                 {avgMargin >= 0 ? "+" : ""}
                 {avgMargin.toFixed(1)}
-                <span className="text-xs text-stone-muted font-medium ml-px">%</span>
+                <span className="text-xs text-subtle font-medium ml-px">%</span>
               </>
             )}
           </div>
@@ -316,33 +340,39 @@ function FuelCard({
   const [val, setVal] = useState(current);
 
   return (
-    <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-status-warn-soft ring-status-warn/20">
-      <div className="w-8 h-8 shrink-0 rounded-lg bg-status-warn/20 text-status-warn grid place-items-center">
+    <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px] bg-warning-bg ring-warning-border/20">
+      <div className="w-8 h-8 shrink-0 rounded-lg bg-warning-fg/20 text-warning-fg grid place-items-center">
         <Truck size={16} />
       </div>
       <div className="flex-1">
-        <div className="text-[12.5px] font-medium text-stone-ink">Fuel surcharge</div>
-        <div className="text-[11.5px] text-stone-muted mt-0.5">
+        <div className="text-[12.5px] font-medium text-ink">Fuel surcharge</div>
+        <div className="text-[11.5px] text-subtle mt-0.5">
           Flat fee added to every order. Set to 0 to waive.
         </div>
       </div>
-      <InputGroup className="w-20 bg-white" data-disabled={saving ? "true" : undefined}>
+      <InputGroup className="w-32 bg-card" data-disabled={saving ? "true" : undefined}>
         <InputGroupAddon align="inline-start">$</InputGroupAddon>
         <InputGroupInput
           type="number"
           step={0.5}
           min={0}
+          max={9999}
           value={val}
           onChange={e => setVal(e.target.value)}
           onBlur={() => {
             const n = parseFloat(val);
-            const amt = Number.isFinite(n) && n > 0 ? n.toFixed(2) : null;
-            onSave(amt);
+            const clamped =
+              Number.isFinite(n) && n > 0 ? Math.min(n, 9999) : null;
+            if (clamped != null && clamped !== n) {
+              setVal(clamped.toFixed(2));
+            }
+            onSave(clamped != null ? clamped.toFixed(2) : null);
           }}
           onKeyDown={e => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
           disabled={saving}
+          aria-label="Fuel surcharge amount in dollars"
           className="text-right font-mono tabular-nums font-medium text-[13px]"
         />
       </InputGroup>
@@ -370,7 +400,7 @@ function VendorPriceInput({
   return (
     <div className="inline-flex items-center gap-1.5">
       <div className="relative inline-flex items-center">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-muted/70 text-[10.5px] font-mono pointer-events-none">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-subtle/70 text-[10.5px] font-mono pointer-events-none">
           $
         </span>
         <Input
@@ -399,11 +429,12 @@ function VendorPriceInput({
               (e.target as HTMLInputElement).blur();
             }
           }}
+          aria-label="Supplier-specific customer price per pound"
           className={cn(
             "w-22 pl-5 pr-1.5 text-right font-mono tabular-nums text-[12.5px] h-7",
             "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
             focused
-              ? "border-ring bg-white ring-2 ring-ring/40"
+              ? "border-ring bg-card ring-2 ring-ring/40"
               : hasValue
                 ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
                 : "border-transparent bg-transparent shadow-none",
@@ -442,12 +473,22 @@ function VendorSubRows({
   onResetVendor: (supplierId: string) => void;
   vendorResetState: { supplierId: string | null; isPending: boolean };
 }) {
-  // Vendors arrive sorted cheapest-first from the service.
-  const cheapestCost = Number(vendors[0]?.cost_per_lb ?? 0);
+  // Vendors arrive sorted cheapest-first from the service. The
+  // VendorPriceInput rendering and "+$delta" labels depend on this order,
+  // so re-sort defensively in case future changes break the service-side
+  // ordering — cheap, eliminates a class of subtle UI regressions.
+  const sortedVendors = useMemo(
+    () =>
+      [...vendors].sort(
+        (a, b) => Number(a.cost_per_lb) - Number(b.cost_per_lb),
+      ),
+    [vendors],
+  );
+  const cheapestCost = Number(sortedVendors[0]?.cost_per_lb ?? 0);
 
   return (
     <>
-      {vendors.map((v, i) => {
+      {sortedVendors.map((v, i) => {
         const cost = Number(v.cost_per_lb);
         const isCheapest = i === 0;
         const delta = cost - cheapestCost;
@@ -459,17 +500,17 @@ function VendorSubRows({
         return (
           <TableRow
             key={`${customerId}:${productId}:${v.supplier_id}`}
-            className="bg-stone-line2/60 hover:bg-stone-line2/80 border-stone-line2"
+            className="bg-divider/60 hover:bg-divider/80 border-divider"
           >
             <TableCell className="py-2 pl-8 pr-4">
               <div className="flex items-center gap-2">
-                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-stone-line" />
+                <div className="w-0.5 self-stretch rounded-sm shrink-0 mr-1 bg-surface-deep" />
                 <div>
-                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-stone-ink">
+                  <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink">
                     {v.supplier_name}
                   </div>
                   {v.last_received_at && (
-                    <div className="text-[11px] text-stone-muted/70 mt-0.5">
+                    <div className="text-[11px] text-subtle/70 mt-0.5">
                       Last received{" "}
                       {new Date(v.last_received_at).toLocaleDateString(undefined, {
                         month: "short",
@@ -485,7 +526,7 @@ function VendorSubRows({
               <span
                 className={cn(
                   "font-mono tabular-nums text-[13px]",
-                  isCheapest ? "font-semibold text-stone-ink" : "font-medium text-stone-muted",
+                  isCheapest ? "font-semibold text-ink" : "font-medium text-subtle",
                 )}
               >
                 ${fmt(v.cost_per_lb)}
@@ -494,7 +535,7 @@ function VendorSubRows({
                 <div
                   className={cn(
                     "text-[10.5px] font-mono tabular-nums mt-0.5",
-                    delta > 0 ? "text-destructive" : "text-status-good",
+                    delta > 0 ? "text-destructive" : "text-success-fg",
                   )}
                 >
                   {delta > 0 ? "+" : ""}${Math.abs(delta).toFixed(2)} ({deltaPct > 0 ? "+" : ""}
@@ -516,16 +557,16 @@ function VendorSubRows({
             <TableCell className="py-2 text-right">
               {(() => {
                 if (v.customer_price == null) {
-                  return <span className="text-[11px] text-stone-muted/60">—</span>;
+                  return <span className="text-[11px] text-subtle/60">—</span>;
                 }
                 const m = marginPct(Number(v.customer_price), cost);
-                if (m == null) return <span className="text-[11px] text-stone-muted/60">—</span>;
+                if (m == null) return <span className="text-[11px] text-subtle/60">—</span>;
                 const cls =
                   m >= 5
-                    ? "text-status-good"
+                    ? "text-success-fg"
                     : m < 0
                       ? "text-destructive"
-                      : "text-stone-muted";
+                      : "text-subtle";
                 return (
                   <span className={cn("font-mono tabular-nums text-[11.5px]", cls)}>
                     {m >= 0 ? "+" : ""}
@@ -580,12 +621,12 @@ function ProductRow({
 
   const marginClass =
     displayMargin == null
-      ? "text-stone-muted/60"
+      ? "text-subtle/60"
       : displayMargin >= 5
-        ? "text-status-good"
+        ? "text-success-fg"
         : displayMargin < 0
           ? "text-destructive"
-          : "text-stone-muted";
+          : "text-subtle";
 
   const multiVendor = prod.vendors.length > 1;
 
@@ -602,13 +643,13 @@ function ProductRow({
       <TableRow className={expanded ? "border-0" : undefined}>
         <TableCell className="py-3 px-4">
           <div className="flex items-center gap-3.5">
-            <div className="font-mono text-[10.5px] text-stone-muted bg-muted px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
+            <div className="font-mono text-[10.5px] text-subtle bg-divider px-1.5 py-0.5 rounded min-w-21.5 text-center shrink-0 tracking-wide">
               {prod.sku}
             </div>
             <div>
-              <div className="text-[13px] font-medium text-stone-ink">{prod.name}</div>
+              <div className="text-[13px] font-medium text-ink">{prod.name}</div>
               {multiVendor && (
-                <div className="text-[11px] text-stone-muted/70 mt-0.5">
+                <div className="text-[11px] text-subtle/70 mt-0.5">
                   {prod.vendors.length} suppliers
                 </div>
               )}
@@ -623,18 +664,26 @@ function ProductRow({
                 variant="ghost"
                 size="sm"
                 onClick={onToggleExpand}
-                className={cn("gap-1.5 px-1.5 h-7 font-normal", expanded && "bg-muted")}
+                className={cn(
+                  "gap-1.5 px-1.5 h-7 font-normal hover:bg-divider/60",
+                  // Same lifted-card-on-divider treatment the segmented
+                  // filter toggles use: subtle border + light card bg + xs
+                  // shadow rather than the heavy muted-tan that used to
+                  // signal "active."
+                  expanded &&
+                    "border border-border-default bg-card text-ink shadow-xs",
+                )}
                 title="Expand to see each supplier"
               >
-                <span className="text-stone-muted">
+                <span className="text-subtle">
                   {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
                 </span>
-                <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+                <span className="font-mono tabular-nums text-[13px] font-medium text-ink-warm">
                   {costsDiffer && minCost != null && maxCost != null ? (
                     <>
-                      <span className="text-[11px] text-stone-muted font-normal mr-0.5">from</span>
+                      <span className="text-[11px] text-subtle font-normal mr-0.5">from</span>
                       ${fmt(minCost)}
-                      <span className="text-stone-muted/60 mx-0.5">–</span>${fmt(maxCost)}
+                      <span className="text-subtle/60 mx-0.5">–</span>${fmt(maxCost)}
                     </>
                   ) : (
                     <>${fmt(minCost ?? prod.cost)}</>
@@ -642,31 +691,51 @@ function ProductRow({
                 </span>
               </Button>
             ) : (
-              <span className="font-mono tabular-nums text-[13px] font-medium text-stone-ink2">
+              <span className="font-mono tabular-nums text-[13px] font-medium text-ink-warm">
                 ${fmt(prod.cost)}
-                <span className="text-[11px] text-stone-muted ml-0.5">/lb</span>
+                <span className="text-[11px] text-subtle ml-0.5">
+                  /{prod.baseUnitAbbreviation ?? "lb"}
+                </span>
               </span>
             )
           ) : (
-            <span className="text-[12px] text-stone-muted/60">No cost</span>
+            <span className="text-[12px] text-subtle/60">No cost</span>
           )}
         </TableCell>
 
         <TableCell className="py-2 px-4">
           {multiVendor ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleExpand}
-              className="h-8 px-2 text-[12px] font-normal text-stone-muted hover:text-stone-ink gap-1"
-            >
-              {expanded ? "Hide suppliers" : "Set per supplier"}
-              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            </Button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onToggleExpand}
+                    className="h-8 px-2 text-[12px] font-normal text-subtle hover:text-ink gap-1"
+                  >
+                    {expanded ? "Hide suppliers" : "Set per supplier"}
+                    {!expanded ? (
+                      <Info
+                        size={12}
+                        className="text-subtle/70 group-hover:text-ink"
+                        aria-hidden
+                      />
+                    ) : null}
+                    {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[280px] text-[12px]">
+                  {expanded
+                    ? "Hide the per-supplier price overrides."
+                    : "This product is sold by multiple suppliers. Expand to set a different customer price depending on which supplier fulfilled the line."}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : (
             <div className="inline-flex items-center gap-2">
               <div className="relative inline-flex items-center">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-muted/70 text-xs font-mono pointer-events-none">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-subtle/70 text-xs font-mono pointer-events-none">
                   $
                 </span>
                 <Input
@@ -695,11 +764,12 @@ function ProductRow({
                       (e.target as HTMLInputElement).blur();
                     }
                   }}
+                  aria-label={`Customer price per pound for ${prod.name}`}
                   className={cn(
                     "w-27.5 pl-6 pr-2 text-right font-mono tabular-nums text-[13px] h-9",
                     "focus-visible:ring-0 focus-visible:border-transparent focus-visible:shadow-none",
                     focused
-                      ? "border-ring bg-white ring-3 ring-ring/50"
+                      ? "border-ring bg-card ring-3 ring-ring/50"
                       : isOverride
                         ? "border-primary/20 bg-primary/5 text-primary font-semibold shadow-none"
                         : "border-transparent bg-transparent shadow-none",
@@ -718,14 +788,14 @@ function ProductRow({
 
         <TableCell className="py-3 px-4 text-right">
           {multiVendor ? (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-subtle/60">—</span>
           ) : displayMargin != null ? (
             <span className={cn("font-mono tabular-nums text-[12px]", marginClass)}>
               {displayMargin >= 0 ? "+" : ""}
               {displayMargin.toFixed(1)}%
             </span>
           ) : (
-            <span className="text-[12px] text-stone-muted/60">—</span>
+            <span className="text-[12px] text-subtle/60">—</span>
           )}
         </TableCell>
 
@@ -761,7 +831,7 @@ function ProductRow({
       )}
       {expanded && (
         <TableRow className="hover:bg-transparent border-0">
-          <TableCell colSpan={5} className="h-px bg-stone-line p-0" />
+          <TableCell colSpan={5} className="h-px bg-surface-deep p-0" />
         </TableRow>
       )}
     </>
@@ -791,15 +861,20 @@ function ProductTable({
     setExpandedProductId(null);
   }
 
-  const { data: pageData } = useCustomerProductPricesPage(customer.id, {
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const { data: pageData, isPending } = useCustomerProductPricesPage(customer.id, {
     page,
     pageSize,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     filters: {
       category: catFilter === "all" ? undefined : catFilter,
       overridesOnly: modeFilter === "overrides" ? "true" : undefined,
     },
   });
+  // First load → render skeleton rows so the table doesn't flash an empty
+  // "No products match" row before data arrives. Subsequent customer
+  // switches keep the prior page (placeholderData) so this only fires once.
+  const showSkeleton = isPending && !pageData;
 
   const priceMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -810,6 +885,18 @@ function ProductTable({
     }
     return m;
   }, [pageData, customer.id]);
+
+  // Look up the current version for the default-price row of (product) or
+  // the per-supplier row of (product, supplier). Used to round-trip
+  // optimistic-concurrency tokens to the server. Returns undefined when
+  // there's no override yet (server will treat the call as a fresh INSERT).
+  function getRowVersion(productId: string, supplierId?: string | null): number | undefined {
+    const row = pageData?.data.find(r => r.id === productId);
+    if (!row) return undefined;
+    if (supplierId == null) return row.customerPriceVersion ?? undefined;
+    const vendor = row.vendors.find(v => v.supplier_id === supplierId);
+    return vendor?.customer_price_version ?? undefined;
+  }
 
   const categories = pageData?.allCategories ?? [];
 
@@ -824,19 +911,10 @@ function ProductTable({
   }, [pageData]);
 
   function handleCommit(productId: string, rawValue: string) {
-    if (!rawValue.trim()) {
-      deletePrice.mutate({ customerId: customer.id, productId }, { onError });
-      return;
-    }
-    const v = parseFloat(rawValue);
-    if (!Number.isFinite(v) || v < 0) return;
-    setPrice.mutate({ customerId: customer.id, productId, pricePerLb: v.toFixed(2) }, { onError });
-  }
-
-  function handleCommitVendor(productId: string, supplierId: string, rawValue: string) {
+    const expectedVersion = getRowVersion(productId);
     if (!rawValue.trim()) {
       deletePrice.mutate(
-        { customerId: customer.id, productId, supplierId },
+        { customerId: customer.id, productId, expectedVersion },
         { onError },
       );
       return;
@@ -844,14 +922,47 @@ function ProductTable({
     const v = parseFloat(rawValue);
     if (!Number.isFinite(v) || v < 0) return;
     setPrice.mutate(
-      { customerId: customer.id, productId, supplierId, pricePerLb: v.toFixed(2) },
+      {
+        customerId: customer.id,
+        productId,
+        pricePerLb: v.toFixed(2),
+        expectedVersion,
+      },
+      { onError },
+    );
+  }
+
+  function handleCommitVendor(productId: string, supplierId: string, rawValue: string) {
+    const expectedVersion = getRowVersion(productId, supplierId);
+    if (!rawValue.trim()) {
+      deletePrice.mutate(
+        { customerId: customer.id, productId, supplierId, expectedVersion },
+        { onError },
+      );
+      return;
+    }
+    const v = parseFloat(rawValue);
+    if (!Number.isFinite(v) || v < 0) return;
+    setPrice.mutate(
+      {
+        customerId: customer.id,
+        productId,
+        supplierId,
+        pricePerLb: v.toFixed(2),
+        expectedVersion,
+      },
       { onError },
     );
   }
 
   function handleResetVendor(productId: string, supplierId: string) {
     deletePrice.mutate(
-      { customerId: customer.id, productId, supplierId },
+      {
+        customerId: customer.id,
+        productId,
+        supplierId,
+        expectedVersion: getRowVersion(productId, supplierId),
+      },
       { onError },
     );
   }
@@ -859,7 +970,7 @@ function ProductTable({
   return (
     <Card className="gap-0 p-0 rounded-[10px] overflow-hidden">
       {/* toolbar */}
-      <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-stone-line bg-stone-line2/40">
+      <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border-default bg-divider/40">
         <InputGroup className="flex-none w-70 min-w-50">
           <InputGroupAddon align="inline-start">
             <Search size={14} />
@@ -871,14 +982,32 @@ function ProductTable({
               resetListPosition();
             }}
             placeholder="Search product or SKU…"
+            aria-label="Search products by name or SKU"
             className="text-[13px]"
           />
+          {search ? (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearch("");
+                  resetListPosition();
+                }}
+              >
+                <X size={14} />
+              </InputGroupButton>
+            </InputGroupAddon>
+          ) : null}
         </InputGroup>
 
         <ToggleGroup
           type="single"
-          variant="outline"
-          spacing={0}
+          variant="default"
+          size="sm"
+          spacing={1}
+          className="rounded-md bg-divider p-0.5"
           value={catFilter}
           onValueChange={v => {
             if (!v) return;
@@ -886,16 +1015,29 @@ function ProductTable({
             resetListPosition();
           }}
         >
-          <ToggleGroupItem value="all" size="sm">All</ToggleGroupItem>
+          <ToggleGroupItem
+            value="all"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            All
+          </ToggleGroupItem>
           {categories.map(c => (
-            <ToggleGroupItem key={c} value={c} size="sm">{c}</ToggleGroupItem>
+            <ToggleGroupItem
+              key={c}
+              value={c}
+              className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+            >
+              {c}
+            </ToggleGroupItem>
           ))}
         </ToggleGroup>
 
         <ToggleGroup
           type="single"
-          variant="outline"
-          spacing={0}
+          variant="default"
+          size="sm"
+          spacing={1}
+          className="rounded-md bg-divider p-0.5"
           value={modeFilter}
           onValueChange={v => {
             if (!v) return;
@@ -903,12 +1045,22 @@ function ProductTable({
             resetListPosition();
           }}
         >
-          <ToggleGroupItem value="all" size="sm">All products</ToggleGroupItem>
-          <ToggleGroupItem value="overrides" size="sm">Customer prices</ToggleGroupItem>
+          <ToggleGroupItem
+            value="all"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            All products
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="overrides"
+            className="h-7 rounded px-2.5 text-xs font-normal text-subtle shadow-none hover:bg-transparent hover:text-ink data-[state=on]:border data-[state=on]:border-border-default data-[state=on]:bg-card data-[state=on]:font-medium data-[state=on]:text-ink data-[state=on]:shadow-xs"
+          >
+            Customer prices
+          </ToggleGroupItem>
         </ToggleGroup>
 
         <div className="flex-1" />
-        <span className="text-[12px] text-stone-muted">{pageData?.total ?? 0} products</span>
+        <span className="text-[12px] text-subtle">{pageData?.total ?? 0} products</span>
       </div>
 
       <Table>
@@ -927,7 +1079,7 @@ function ProductTable({
                 key={i}
                 className={cn(
                   align,
-                  "text-[11px] font-semibold text-stone-muted uppercase tracking-[0.04em] bg-stone-line2/40 px-4 py-2.5 h-auto",
+                  "text-[11px] font-medium text-subtle uppercase tracking-[0.04em] bg-divider/40 px-4 py-2.5 h-auto",
                 )}
                 style={{ width: w }}
               >
@@ -937,9 +1089,30 @@ function ProductTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {grouped.length === 0 && (
+          {showSkeleton &&
+            Array.from({ length: 8 }).map((_, i) => (
+              <TableRow key={`skeleton:${i}`} className="hover:bg-transparent">
+                <TableCell className="py-3 px-4">
+                  <div className="flex items-center gap-3.5">
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-4 w-44" />
+                  </div>
+                </TableCell>
+                <TableCell className="py-3 px-4 text-right">
+                  <Skeleton className="h-4 w-16 ml-auto" />
+                </TableCell>
+                <TableCell className="py-3 px-4">
+                  <Skeleton className="h-9 w-28" />
+                </TableCell>
+                <TableCell className="py-3 px-4 text-right">
+                  <Skeleton className="h-3 w-10 ml-auto" />
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            ))}
+          {!showSkeleton && grouped.length === 0 && (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={5} className="py-16 text-center text-[13px] text-stone-muted">
+              <TableCell colSpan={5} className="py-16 text-center text-[13px] text-subtle">
                 No products match.
               </TableCell>
             </TableRow>
@@ -950,12 +1123,12 @@ function ProductTable({
                 <TableCell
                   colSpan={5}
                   className={cn(
-                    "bg-stone-line2/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-stone-muted uppercase tracking-widest",
-                    gi > 0 && "border-t border-stone-line",
+                    "bg-divider/40 px-4 py-3 pb-1.5 text-[11px] font-semibold text-subtle uppercase tracking-widest",
+                    gi > 0 && "border-t border-border-default",
                   )}
                 >
                   {cat}
-                  <span className="text-stone-muted/60 ml-2 font-medium">{prods.length}</span>
+                  <span className="text-subtle/60 ml-2 font-medium">{prods.length}</span>
                 </TableCell>
               </TableRow>
               {prods.map(prod => (
@@ -967,7 +1140,11 @@ function ProductTable({
                   onCommit={handleCommit}
                   onReset={() =>
                     deletePrice.mutate(
-                      { customerId: customer.id, productId: prod.id },
+                      {
+                        customerId: customer.id,
+                        productId: prod.id,
+                        expectedVersion: getRowVersion(prod.id),
+                      },
                       { onError },
                     )
                   }
@@ -1008,6 +1185,78 @@ function ProductTable({
   );
 }
 
+// ── Page-level skeleton ──────────────────────────────────────────────────────
+// Mimics the eventual layout: 75px-wide customer list on the left and a stack
+// of customer/fuel/products cards on the right. Lets the page reserve its
+// final shape on first load instead of replacing a centered spinner with
+// a wide two-column layout (caused a visible re-layout flash).
+
+function PriceChartSkeleton() {
+  return (
+    <div className="flex gap-4 items-start">
+      <Card
+        className="w-75 shrink-0 gap-0 p-0 rounded-[10px] overflow-hidden sticky top-20 flex-col"
+        style={{ maxHeight: "calc(100vh - 110px)" }}
+      >
+        <div className="px-4 pt-3.5 pb-2.5 border-b border-border-default">
+          <Skeleton className="h-3 w-20 mb-2.5" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+        <div className="py-2 flex flex-col gap-1.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-1.5">
+              <Skeleton className="h-7 w-7 rounded-[7px]" />
+              <div className="flex-1 flex flex-col gap-1">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-3.5">
+        {/* Customer card */}
+        <Card className="flex-row items-center gap-4 px-5 py-4 rounded-[10px]">
+          <Skeleton className="w-12 h-12 rounded-[10px]" />
+          <Skeleton className="h-5 w-40" />
+          <div className="flex-1" />
+          <Skeleton className="h-12 w-72" />
+          <Skeleton className="h-8 w-24" />
+        </Card>
+        {/* Fuel card */}
+        <Card className="flex-row items-center gap-3.5 px-4 py-3 rounded-[10px]">
+          <Skeleton className="w-8 h-8 rounded-lg" />
+          <div className="flex-1 flex flex-col gap-1">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-2.5 w-48" />
+          </div>
+          <Skeleton className="h-8 w-20" />
+        </Card>
+        {/* Products card */}
+        <Card className="gap-0 p-0 rounded-[10px] overflow-hidden">
+          <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-border-default bg-divider/40">
+            <Skeleton className="h-7 w-70" />
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-7 w-40" />
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3.5">
+                <Skeleton className="h-5 w-20" />
+                <Skeleton className="h-4 w-44 flex-1" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-9 w-28" />
+                <Skeleton className="h-3 w-10" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PriceChartClient() {
@@ -1026,13 +1275,19 @@ export function PriceChartClient() {
   const effectiveSelected = selectedId ?? customers[0]?.id ?? null;
   const customer = customers.find(c => c.id === effectiveSelected) ?? null;
 
-  if (isLoading) return <PageLoading message="Loading price chart…" />;
+  if (isLoading) return <PriceChartSkeleton />;
   if (error) return <PageError message={(error as Error).message} />;
   if (!customer) {
     return (
-      <p className="py-16 text-center text-[13px] text-stone-muted">
-        No customers yet. Add a customer to get started.
-      </p>
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <p className="text-[13px] text-subtle text-center max-w-xs">
+          Price book is empty — add a customer to start setting per-customer
+          prices and margins.
+        </p>
+        <Button asChild size="sm">
+          <Link href="/customers/new">Add customer</Link>
+        </Button>
+      </div>
     );
   }
 
@@ -1053,7 +1308,25 @@ export function PriceChartClient() {
           markup={markup}
           onMarkupChange={setMarkup}
           onApplyMarkup={() =>
-            applyMarkup.mutate({ customerId: customer.id, markupPercent: markup }, { onError })
+            applyMarkup.mutate(
+              { customerId: customer.id, markupPercent: markup },
+              {
+                onError,
+                onSuccess: result => {
+                  if (!result || result.rowsApplied === 0) {
+                    toast.message(
+                      "No products have supplier costs yet — nothing to mark up.",
+                    );
+                    return;
+                  }
+                  toast.success(
+                    `Applied ${markup}% markup to ${result.rowsApplied} product${
+                      result.rowsApplied === 1 ? "" : "s"
+                    }.`,
+                  );
+                },
+              },
+            )
           }
           applyingMarkup={
             applyMarkup.isPending && applyMarkup.variables?.customerId === customer.id

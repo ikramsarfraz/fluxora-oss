@@ -11,11 +11,13 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { SubscriptionUpgradeMessage } from "@/modules/core/billing/components/subscription/subscription-upgrade-message";
 import {
   useCreateSalesOrder,
+  useOpenDraftForCustomer,
   useUpdateSalesOrder,
   useUpdateSalesOrderStatus,
 } from "../hooks/use-orders";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import {
   isLimitReachedMessage,
@@ -30,13 +32,13 @@ import {
   newOrderFormSchema,
   type NewOrderFormValues,
 } from "./new-order-form.schema";
-import { calculateLineTotal } from "./new-order-line-utils";
+import { useLinesSubtotal } from "./use-lines-subtotal";
 
 const C = {
-  ink: "#0c0a09",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
+  ink: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -59,10 +61,7 @@ function makeDefaultValues(): NewOrderFormValues {
     discountAmount: "",
     lines: [
       {
-        key:
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `line-${Date.now()}`,
+        key: randomId(),
         productId: "",
         salesUnitId: "",
         unitType: "catch_weight",
@@ -82,15 +81,24 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const [autoSaveStatus, setAutoSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  // Drafts the user has explicitly chosen to ignore on this page load.
+  // Without this the banner would re-render every time their typing
+  // triggers a refetch.
+  const [dismissedDraftIds, setDismissedDraftIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const draftIdRef = useRef<string | null>(null);
   const autoSaveInProgressRef = useRef(false);
   const isPendingRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // Tracks the in-flight autosave promise so submit can await it before
+  // reading draftIdRef — without this, a user clicking Confirm while an
+  // autosave is mid-flight would race and create a duplicate order.
+  const autoSavePromiseRef = useRef<Promise<unknown> | null>(null);
 
   const { data: products } = useProducts();
-  const { data: customers } = useCustomers();
 
   const createOrder = useCreateSalesOrder();
   const updateOrder = useUpdateSalesOrder();
@@ -110,28 +118,35 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
   const customerId = useWatch({ control: form.control, name: "customerId" });
   const addFuelSurcharge = useWatch({ control: form.control, name: "addFuelSurcharge" });
   const discountAmount = useWatch({ control: form.control, name: "discountAmount" });
+  const { data: selectedCustomer } = useCustomer(customerId);
+  const { data: existingDraft } = useOpenDraftForCustomer(customerId);
+  // Hide the banner if this draft is the session's own autosaved row,
+  // or the user already dismissed it. The dismiss set is keyed by
+  // draft id so picking a different customer with its own draft
+  // resurfaces the banner.
+  const showExistingDraftBanner =
+    !!existingDraft &&
+    existingDraft.id !== draftIdRef.current &&
+    !dismissedDraftIds.has(existingDraft.id);
+  const productsById = useMemo(() => {
+    const map = new Map<string, ProductListItem>();
+    for (const p of products ?? []) map.set(p.id, p);
+    return map;
+  }, [products]);
+  // Shared with the right-rail Estimate card — both surfaces respect
+  // real allocated weight on catch-weight lines so they agree with each
+  // other and with the per-row line total inside NewOrderLinesTable.
+  const { subtotal, filledLineCount } = useLinesSubtotal(lines, productsById);
   const { lineCount, estTotal } = useMemo(() => {
-    const productsById = new Map<string, ProductListItem>();
-    for (const p of products ?? []) productsById.set(p.id, p);
-
-    const customer = customers?.find(c => c.id === customerId) ?? null;
-    const filledLines = (lines ?? []).filter(l => l.productId);
-
-    let subtotal = 0;
-    for (const l of filledLines) {
-      subtotal += calculateLineTotal(l, productsById.get(l.productId)) ?? 0;
-    }
-
     const fuel = addFuelSurcharge
-      ? Number(customer?.fuelSurchargeAmount ?? 0) || 0
+      ? Number(selectedCustomer?.fuelSurchargeAmount ?? 0) || 0
       : 0;
     const disc = Number(discountAmount) > 0 ? Number(discountAmount) : 0;
-
     return {
-      lineCount: filledLines.length,
+      lineCount: filledLineCount,
       estTotal: Math.max(0, subtotal + fuel - disc),
     };
-  }, [lines, products, customers, customerId, addFuelSurcharge, discountAmount]);
+  }, [subtotal, filledLineCount, selectedCustomer, addFuelSurcharge, discountAmount]);
 
   useEffect(() => {
     isPendingRef.current = pendingMode !== null;
@@ -168,30 +183,39 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           orderDate: v.orderDate,
           dueDate: v.deliveryDate || undefined,
           addFuelSurcharge: v.addFuelSurcharge,
+          discountAmount: v.discountAmount || undefined,
           customerNotes: v.customerNotes || undefined,
           internalNotes: v.internalNotes || undefined,
           lines: orderLines,
         };
 
-        try {
-          if (!draftIdRef.current) {
-            const order = await createOrder.mutateAsync({
-              ...payload,
-              status: "sales_order",
-            });
-            if (order?.id) draftIdRef.current = order.id;
-          } else {
-            await updateOrder.mutateAsync({
-              id: draftIdRef.current,
-              ...payload,
-            });
+        const work = (async () => {
+          try {
+            if (!draftIdRef.current) {
+              const order = await createOrder.mutateAsync({
+                ...payload,
+                status: "sales_order",
+              });
+              if (order?.id) draftIdRef.current = order.id;
+            } else {
+              await updateOrder.mutateAsync({
+                id: draftIdRef.current,
+                ...payload,
+              });
+            }
+            setAutoSaveStatus("saved");
+          } catch {
+            setAutoSaveStatus("error");
+          } finally {
+            autoSaveInProgressRef.current = false;
           }
-          setAutoSaveStatus("saved");
-        } catch {
-          setAutoSaveStatus("error");
-        } finally {
-          autoSaveInProgressRef.current = false;
-        }
+        })();
+        autoSavePromiseRef.current = work;
+        work.finally(() => {
+          if (autoSavePromiseRef.current === work) {
+            autoSavePromiseRef.current = null;
+          }
+        });
       }, 1500);
     });
 
@@ -210,6 +234,21 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
     }
     const values = form.getValues();
     setPendingMode(mode);
+
+    // Cancel any pending autosave timer that hasn't fired yet, and wait
+    // for an in-flight autosave to finish so draftIdRef is up to date
+    // before we read it. Without this, clicking Confirm mid-autosave
+    // could create a duplicate order (draftIdRef still null while the
+    // autosave's createOrder is in flight).
+    clearTimeout(autoSaveTimerRef.current);
+    if (autoSavePromiseRef.current) {
+      try {
+        await autoSavePromiseRef.current;
+      } catch {
+        // Autosave errors don't block explicit submit — we surface
+        // any real failure from the calls below.
+      }
+    }
 
     const orderLines = values.lines
       .filter((l) => l.productId && l.salesUnitId)
@@ -232,6 +271,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           orderDate: values.orderDate,
           dueDate: values.deliveryDate || undefined,
           addFuelSurcharge: values.addFuelSurcharge,
+          discountAmount: values.discountAmount || undefined,
           customerNotes: values.customerNotes || undefined,
           internalNotes: values.internalNotes || undefined,
           lines: orderLines,
@@ -251,6 +291,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           orderDate: values.orderDate,
           dueDate: values.deliveryDate || undefined,
           addFuelSurcharge: values.addFuelSurcharge,
+          discountAmount: values.discountAmount || undefined,
           customerNotes: values.customerNotes || undefined,
           internalNotes: values.internalNotes || undefined,
           lines: orderLines,
@@ -276,8 +317,10 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
       <form
         id="new-order-form"
         onSubmit={e => {
+          // Form submit fires from Enter in any focused input. We swallow
+          // it to avoid an inadvertent confirm — explicit confirm/save
+          // happens via the buttons in the sticky action bar.
           e.preventDefault();
-          void handleSubmit("confirm");
         }}
         style={{ paddingBottom: "72px" }}
       >
@@ -314,7 +357,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
               onClick={() => router.push("/orders")}
               disabled={isPending}
               variant="outline"
-              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+              className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
             >
               Cancel
             </Button>
@@ -323,7 +366,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
               onClick={() => void handleSubmit("draft")}
               disabled={isPending}
               variant="outline"
-              className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+              className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
             >
               {pendingMode === "draft" ? "Saving…" : "Save draft"}
             </Button>
@@ -336,7 +379,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             style={{
               padding: "12px 16px",
               marginBottom: "20px",
-              background: "oklch(97% 0.04 25)",
+              background: "var(--color-danger-bg)",
               border: "1px solid oklch(80% 0.1 25)",
               borderRadius: C.radiusSm,
               fontSize: "13px",
@@ -348,6 +391,62 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             ) : (
               stripSubscriptionEnforcementPrefix(submitError)
             )}
+          </div>
+        )}
+
+        {/* Existing-draft banner — surfaces when the picked customer
+            already has an unconfirmed draft from a previous session, so
+            the user can resume that one instead of accidentally
+            creating a duplicate via the autosave path. */}
+        {showExistingDraftBanner && existingDraft && (
+          <div
+            style={{
+              padding: "12px 16px",
+              marginBottom: "20px",
+              background: "var(--color-info-bg)",
+              border: "1px solid var(--color-info-border)",
+              borderRadius: C.radiusSm,
+              fontSize: "13px",
+              color: "var(--color-info-fg)",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+            }}
+          >
+            <span style={{ flex: 1 }}>
+              <b style={{ fontWeight: 500 }}>Existing draft</b> for{" "}
+              {selectedCustomer?.name ?? "this customer"}
+              {" — "}
+              <span style={{ fontFamily: C.mono }}>
+                {existingDraft.orderNumber ?? existingDraft.id.slice(0, 8)}
+              </span>
+              {", last edited "}
+              {new Date(existingDraft.updatedAt).toLocaleDateString()}.
+            </span>
+            <Button
+              type="button"
+              onClick={() => router.push(`/orders/${existingDraft.id}/edit`)}
+              variant="outline"
+              size="xs"
+              className="h-7 border-border-default bg-card px-3 text-[12px] text-ink shadow-none hover:bg-divider"
+            >
+              Resume draft
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                setDismissedDraftIds(prev => {
+                  const next = new Set(prev);
+                  next.add(existingDraft.id);
+                  return next;
+                })
+              }
+              variant="ghost"
+              size="xs"
+              className="h-7 px-2 text-[12px] text-subtle hover:bg-divider hover:text-ink"
+            >
+              Start fresh
+            </Button>
           </div>
         )}
 
@@ -364,7 +463,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             <NewOrderCustomerCard control={form.control} />
             <NewOrderLinesTable control={form.control} setValue={form.setValue} />
             {form.formState.errors.lines?.root && (
-              <p style={{ fontSize: "13px", color: "oklch(55% 0.22 25)" }}>
+              <p style={{ fontSize: "13px", color: "var(--color-danger-fg)" }}>
                 {form.formState.errors.lines.root.message}
               </p>
             )}
@@ -419,7 +518,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
                   width: 6,
                   height: 6,
                   borderRadius: "50%",
-                  background: "oklch(58% 0.13 155)",
+                  background: "var(--color-success-fg)",
                   flexShrink: 0,
                 }}
               />
@@ -427,7 +526,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             </span>
           )}
           {autoSaveStatus === "error" && (
-            <span style={{ fontSize: "12px", color: "oklch(70% 0.13 70)" }}>
+            <span style={{ fontSize: "12px", color: "var(--color-warning-fg)" }}>
               Auto-save failed
             </span>
           )}
@@ -437,7 +536,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           onClick={() => void handleSubmit("draft")}
           disabled={isPending}
           variant="outline"
-          className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-60"
+          className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-60"
         >
           {pendingMode === "draft" ? "Saving…" : "Save draft"}
         </Button>
@@ -445,7 +544,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           type="button"
           onClick={() => void handleSubmit("confirm")}
           disabled={isPending}
-          className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-60"
+          className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-60"
         >
           {pendingMode === "confirm" ? "Confirming…" : "Confirm order"}
         </Button>

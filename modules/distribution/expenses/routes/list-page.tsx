@@ -1,28 +1,13 @@
 import { Suspense } from "react";
-import {
-  HydrationBoundary,
-  QueryClient,
-  dehydrate,
-} from "@tanstack/react-query";
-
-import { queryKeys } from "@/lib/query/keys";
-import { getExpenses } from "../services/expenses";
 
 import { ExpensesPage } from "../components/expenses-page";
 
-export default async function ExpensesListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.expenses.all,
-    queryFn: () => getExpenses(),
-  });
-
+// Client drives its own paginated query. See orders/routes/list-page.tsx
+// for the rationale on why server prefetching here was a net negative.
+export default function ExpensesListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <ExpensesPage />
-      </Suspense>
-    </HydrationBoundary>
+    <Suspense>
+      <ExpensesPage />
+    </Suspense>
   );
 }

@@ -14,17 +14,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatMoney } from "@/lib/utils/currency";
+import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import {
   useGenerateInvoiceForSalesOrder,
   useRecordSalesOrderFulfillment,
   useMarkSalesOrderLineShortShipped,
 } from "../hooks/use-orders";
+import { OrderFulfillmentReversalDialog } from "./order-fulfillment-reversal-dialog";
 
 import type { SalesOrderDetail } from "../services/orders";
 import type { OrderActionAvailability } from "./order-action-rules";
 import {
+  formatFulfillmentTimestamp,
+  getLineAllFulfillmentRecords,
   getLineFulfillmentState,
   getLineFulfilledQuantity,
   getLineFulfilledWeight,
@@ -34,16 +37,16 @@ import {
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  warn: "oklch(70% 0.13 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  warn: "var(--color-warning-fg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -54,7 +57,11 @@ type Line = SalesOrderDetail["lines"][number];
 // ── Pricing helpers (mirror order-lines-table.tsx logic) ───────────────────
 function getLinePricingUnitType(line: Line): "per_lb" | "per_case" {
   if (line.pricingUnitTypeSnapshot) return line.pricingUnitTypeSnapshot;
-  return line.unitType === "fixed_case" ? "per_case" : "per_lb";
+  // All non-catch_weight intrinsic types price per-purchase-unit; the
+  // snapshot abbreviation propagated alongside renders the actual UOM
+  // suffix ("/ea", "/case") so this binary collapse is just for the
+  // pricing-direction enum, not the displayed label.
+  return line.unitType === "catch_weight" ? "per_lb" : "per_case";
 }
 
 function getLinePricePerUnit(line: Line): number {
@@ -84,9 +91,41 @@ function computeLineTotal(line: Line): number | null {
     if (!Number.isFinite(cases) || cases <= 0) return null;
     return price * cases;
   }
+  // per_lb / catch-weight. Priority order matches the new-order
+  // estimate (useLinesSubtotal) so the detail page agrees with the
+  // pre-confirm preview the user just looked at:
+  //   1. Real fulfilled weight, once a fulfillment record exists.
+  //   2. Sum of allocated inventory items' exactWeightLbs — the
+  //      weights captured at receiving time, available as soon as the
+  //      order is allocated even before fulfillment.
+  //   3. expectedCases × conversionToBaseSnapshot — the product's
+  //      stated avg-case-weight, used only as a last-resort estimate
+  //      when no real numbers are around.
   const weight = getLineFulfilledWeight(line);
-  if (!Number.isFinite(weight)) return null;
-  return price * weight;
+  if (Number.isFinite(weight) && weight > 0) {
+    return price * weight;
+  }
+  const allocations = line.allocations ?? [];
+  const allocatedCases = allocations.reduce(
+    (sum, a) => sum + Math.max(0, a.inventoryItem?.cases ?? 0),
+    0,
+  );
+  const allocationCovers =
+    line.expectedCases > 0 && allocatedCases >= line.expectedCases;
+  if (allocationCovers) {
+    const allocatedWeight = allocations.reduce(
+      (sum, a) => sum + (parseFloat(a.inventoryItem?.exactWeightLbs ?? "0") || 0),
+      0,
+    );
+    if (allocatedWeight > 0) {
+      return price * allocatedWeight;
+    }
+  }
+  const conversion = parseFloat(line.conversionToBaseSnapshot ?? "");
+  if (Number.isFinite(conversion) && conversion > 0 && line.expectedCases > 0) {
+    return price * conversion * line.expectedCases;
+  }
+  return null;
 }
 
 function formatUnit(line: Line): string {
@@ -155,9 +194,7 @@ export function OrderItemsCard({
     `${totalCases} case${totalCases === 1 ? "" : "s"}`,
   ];
   if (totalWeight > 0)
-    headerParts.push(
-      `${totalWeight.toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`,
-    );
+    headerParts.push(`${formatWeightLbs(totalWeight)} lbs`);
 
   // Sorted payments for totals display
   const allPayments = useMemo(
@@ -211,7 +248,10 @@ export function OrderItemsCard({
           <LineRow
             key={line.id}
             line={line}
+            orderId={order.id}
             awaitingFulfillment={awaitingFulfillment && !hasInvoice}
+            canReverseFulfillment={actionState.canReverseFulfillment}
+            reverseFulfillmentReason={actionState.reverseFulfillmentReason}
           />
         ))}
       </div>
@@ -350,25 +390,27 @@ function TotalsRow({
 
 function LineRow({
   line,
+  orderId,
   awaitingFulfillment,
+  canReverseFulfillment,
+  reverseFulfillmentReason,
 }: {
   line: Line;
+  orderId: string;
   awaitingFulfillment: boolean;
+  canReverseFulfillment: boolean;
+  reverseFulfillmentReason: string | null;
 }) {
   const price = getLinePricePerUnit(line);
   const pricingUnit = getLinePricingUnitType(line);
   const total = computeLineTotal(line);
   const unit = formatUnit(line);
   const fulfillState = getLineFulfillmentState(line);
-  const fulfillments = getLineFulfillmentRecords(line);
-  const firstFulfillment = fulfillments?.[0];
+  const allFulfillments = getLineAllFulfillmentRecords(line);
   const suggestedLot = line.allocations?.[0]?.inventoryItem?.lot?.lotNumber;
-  const lotExpiry =
-    firstFulfillment?.lot?.expirationDate ??
-    line.allocations?.[0]?.inventoryItem?.lot?.expirationDate;
 
   const showToFulfillTag = awaitingFulfillment && fulfillState === "not_started";
-  const hasDetail = firstFulfillment != null || suggestedLot != null;
+  const hasDetail = allFulfillments.length > 0 || suggestedLot != null;
 
   return (
     <div>
@@ -446,7 +488,13 @@ function LineRow({
               }}
             >
               {line.product?.sku ?? ""}
-              {line.unitType === "fixed_case" ? " · Fixed case" : " · Catch weight"}
+              {line.unitType === "catch_weight"
+                ? " · Catch weight"
+                : line.unitType === "fixed_case"
+                  ? " · Fixed case"
+                  : line.unitType === "per_each"
+                    ? " · Per each"
+                    : " · Per unit"}
               {awaitingFulfillment && suggestedLot ? ` · suggest lot ${suggestedLot}` : ""}
             </div>
           </div>
@@ -486,9 +534,7 @@ function LineRow({
           }}
         >
           {Number.isFinite(price)
-            ? pricingUnit === "per_lb"
-              ? `${formatMoney(price)}/lb`
-              : `${formatMoney(price)}/${unit}`
+            ? `${formatMoney(price)}/${unit}`
             : "—"}
         </div>
 
@@ -509,94 +555,199 @@ function LineRow({
       </div>
 
       {/* Lot & fulfillment detail <details> */}
-      {hasDetail && <LotDisclosure line={line} firstFulfillment={firstFulfillment} lotExpiry={lotExpiry} />}
+      {hasDetail && (
+        <LotDisclosure
+          line={line}
+          orderId={orderId}
+          canReverseFulfillment={canReverseFulfillment}
+          reverseFulfillmentReason={reverseFulfillmentReason}
+        />
+      )}
     </div>
   );
 }
 
 // ── LotDisclosure ──────────────────────────────────────────────────────────
 
-type FulfillmentRecord = NonNullable<ReturnType<typeof getLineFulfillmentRecords>>[number];
+type FulfillmentRecord = NonNullable<ReturnType<typeof getLineAllFulfillmentRecords>>[number];
 
 function LotDisclosure({
   line,
-  firstFulfillment,
-  lotExpiry,
+  orderId,
+  canReverseFulfillment,
+  reverseFulfillmentReason,
 }: {
   line: Line;
-  firstFulfillment: FulfillmentRecord | undefined;
-  lotExpiry: string | Date | null | undefined;
+  orderId: string;
+  canReverseFulfillment: boolean;
+  reverseFulfillmentReason: string | null;
 }) {
+  const allFulfillments = getLineAllFulfillmentRecords(line);
+  const [reversalTarget, setReversalTarget] = useState<FulfillmentRecord | null>(
+    null,
+  );
+  // Default-open the disclosure when the line has at least one active
+  // (non-reversed) fulfillment. Without this the Reverse action was
+  // tucked behind a collapsed `Lot & fulfillment detail · N entries`
+  // toggle — the audit log was easy to overlook entirely.
+  const hasActiveFulfillment = allFulfillments.some(f => !f.reversedAt);
+
+  // Allocated-but-not-yet-fulfilled lots — shown as a hint above the
+  // fulfillment list so the warehouse user can see what's reserved.
+  const allocatedLot =
+    line.allocations?.[0]?.inventoryItem?.lot ?? null;
+  const allocatedLotExpiry = allocatedLot?.expirationDate ?? null;
+  const productLabel = line.product
+    ? `${line.product.sku} · ${line.product.name}`
+    : "Line item";
+
   return (
-    <details style={{ borderBottom: `1px solid ${C.line2}` }}>
-      <summary
-        style={{
-          listStyle: "none",
-          WebkitAppearance: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          fontSize: "12px",
-          color: C.muted,
-          padding: "10px 20px",
-          userSelect: "none",
-        }}
+    <>
+      <details
+        open={hasActiveFulfillment || undefined}
+        style={{ borderBottom: `1px solid ${C.line2}` }}
       >
-        <ChevronIcon />
-        Lot &amp; fulfillment detail
-      </summary>
-      <div style={{ padding: "0 20px 16px", fontSize: "13px", color: C.ink2 }}>
-        {(firstFulfillment?.lot?.lotNumber ??
-          line.allocations?.[0]?.inventoryItem?.lot?.lotNumber) && (
-          <DisclosureRow borderBottom>
-            <span>Lot</span>
-            <span>
-              <span
+        <summary
+          style={{
+            listStyle: "none",
+            WebkitAppearance: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "12px",
+            color: C.muted,
+            padding: "10px 20px",
+            userSelect: "none",
+          }}
+        >
+          <ChevronIcon />
+          Lot &amp; fulfillment detail
+          {allFulfillments.length > 1 ? ` · ${allFulfillments.length} entries` : null}
+        </summary>
+        <div style={{ padding: "0 20px 16px", fontSize: "13px", color: C.ink2 }}>
+          {allFulfillments.length === 0 && allocatedLot && (
+            <DisclosureRow>
+              <span>Allocated lot</span>
+              <span>
+                <LotPill lotNumber={allocatedLot.lotNumber} />
+                {allocatedLotExpiry && (
+                  <span style={{ color: C.warn, marginLeft: "8px" }}>
+                    expires {formatDisplayDate(allocatedLotExpiry)}
+                  </span>
+                )}
+              </span>
+            </DisclosureRow>
+          )}
+          {allFulfillments.map((fulfillment, index) => {
+            const lot = fulfillment.lot ?? fulfillment.inventoryItem?.lot ?? null;
+            const isReversed = !!fulfillment.reversedAt;
+            const isLast = index === allFulfillments.length - 1;
+
+            return (
+              <div
+                key={fulfillment.id}
                 style={{
-                  display: "inline-flex",
-                  padding: "2px 7px",
-                  borderRadius: "4px",
-                  fontSize: "11px",
-                  fontWeight: 500,
-                  background: C.line2,
-                  color: C.ink2,
-                  fontFamily: C.mono,
+                  borderBottom: isLast ? undefined : `1px dashed ${C.line2}`,
+                  paddingBottom: isLast ? 0 : "8px",
+                  marginBottom: isLast ? 0 : "8px",
+                  opacity: isReversed ? 0.6 : 1,
                 }}
               >
-                {firstFulfillment?.lot?.lotNumber ??
-                  line.allocations?.[0]?.inventoryItem?.lot?.lotNumber}
-              </span>
-              {lotExpiry && (
-                <span style={{ color: C.warn, marginLeft: "8px" }}>
-                  expires {formatDisplayDate(lotExpiry)}
-                </span>
-              )}
-            </span>
-          </DisclosureRow>
-        )}
-        {firstFulfillment && (
-          <DisclosureRow borderBottom={!!firstFulfillment.fulfilledBy?.fullName}>
-            <span>Fulfilled</span>
-            <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
-              {firstFulfillment.quantityFulfilled.toLocaleString()} cases
-              {firstFulfillment.weightLbs
-                ? ` · ${Number(firstFulfillment.weightLbs).toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs`
-                : ""}
-              {firstFulfillment.fulfilledAt
-                ? ` · ${formatDisplayDate(firstFulfillment.fulfilledAt)}`
-                : ""}
-            </span>
-          </DisclosureRow>
-        )}
-        {firstFulfillment?.fulfilledBy?.fullName && (
-          <DisclosureRow>
-            <span>Recorded by</span>
-            <span>{firstFulfillment.fulfilledBy.fullName}</span>
-          </DisclosureRow>
-        )}
-      </div>
-    </details>
+                <DisclosureRow>
+                  <span>
+                    {isReversed ? "Reversed" : "Fulfilled"}
+                    {lot ? (
+                      <>
+                        {" · "}
+                        <LotPill lotNumber={lot.lotNumber} />
+                      </>
+                    ) : null}
+                  </span>
+                  <span style={{ fontFamily: C.mono, fontFeatureSettings: "'tnum' 1" }}>
+                    {fulfillment.quantityFulfilled.toLocaleString()} cases
+                    {fulfillment.weightLbs
+                      ? ` · ${formatWeightLbs(fulfillment.weightLbs)} lbs`
+                      : ""}
+                    {" · "}
+                    {formatFulfillmentTimestamp(fulfillment.fulfilledAt)}
+                  </span>
+                </DisclosureRow>
+                {(fulfillment.fulfilledBy?.fullName || !isReversed) && (
+                  <DisclosureRow>
+                    <span style={{ fontSize: "12px", color: C.muted }}>
+                      {isReversed && fulfillment.reversedBy?.fullName
+                        ? `Reversed by ${fulfillment.reversedBy.fullName}`
+                        : fulfillment.fulfilledBy?.fullName
+                          ? `Recorded by ${fulfillment.fulfilledBy.fullName}`
+                          : ""}
+                    </span>
+                    {!isReversed ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setReversalTarget(fulfillment)}
+                        disabled={!canReverseFulfillment}
+                        title={
+                          !canReverseFulfillment
+                            ? (reverseFulfillmentReason ?? undefined)
+                            : "Reverse this fulfillment"
+                        }
+                        className="h-7 border-border-default bg-card px-2.5 text-xs text-ink-warm shadow-none hover:bg-divider hover:text-ink disabled:opacity-50"
+                      >
+                        Reverse fulfillment
+                      </Button>
+                    ) : null}
+                  </DisclosureRow>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </details>
+
+      <OrderFulfillmentReversalDialog
+        open={!!reversalTarget}
+        onOpenChange={open => {
+          if (!open) setReversalTarget(null);
+        }}
+        orderId={orderId}
+        fulfillment={
+          reversalTarget
+            ? {
+                id: reversalTarget.id,
+                quantityFulfilled: reversalTarget.quantityFulfilled,
+                weightLbs: reversalTarget.weightLbs,
+                fulfilledAt: reversalTarget.fulfilledAt,
+                notes: reversalTarget.notes,
+                reversedAt: reversalTarget.reversedAt,
+                productLabel,
+                fulfilledBy: reversalTarget.fulfilledBy,
+              }
+            : null
+        }
+      />
+    </>
+  );
+}
+
+function LotPill({ lotNumber }: { lotNumber: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        padding: "2px 7px",
+        borderRadius: "4px",
+        fontSize: "11px",
+        fontWeight: 500,
+        background: C.line2,
+        color: C.ink2,
+        fontFamily: C.mono,
+      }}
+    >
+      {lotNumber}
+    </span>
   );
 }
 
@@ -665,8 +816,27 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
 
   const [casesValue, setCasesValue] = useState(String(remaining || ""));
   const [weightValue, setWeightValue] = useState("");
-  const [generateInvoiceOnSave, setGenerateInvoiceOnSave] = useState(true);
+  const [generateInvoiceOnSave, setGenerateInvoiceOnSave] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // The invoice-on-save toggle only makes sense when this fulfillment
+  // will close every remaining line on the order — otherwise
+  // `generateInvoiceForSalesOrder` rejects and the user is left wondering
+  // why no invoice appeared. We surface the option only on the last
+  // open line, when the user is filling its full remaining quantity.
+  const otherOpenLineCount = openLines.filter(l => l.id !== selectedLineId).length;
+  const fillingFullRemaining =
+    !!casesValue &&
+    Number.isInteger(parseInt(casesValue, 10)) &&
+    parseInt(casesValue, 10) === remaining;
+  const canGenerateInvoiceOnSave = otherOpenLineCount === 0 && fillingFullRemaining;
+  useEffect(() => {
+    if (!canGenerateInvoiceOnSave && generateInvoiceOnSave) {
+      // Toggle off the invoice-on-save flag if conditions stop holding.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setGenerateInvoiceOnSave(false);
+    }
+  }, [canGenerateInvoiceOnSave, generateInvoiceOnSave]);
 
   const prevLineRef = useRef(selectedLineId);
   useEffect(() => {
@@ -677,17 +847,63 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     }
   }, [selectedLineId, remaining]);
 
+  // One row per distinct allocated lot. We keep each underlying
+  // inventory item separately so the dropdown can show case + weight
+  // totals scaled to whatever the user just typed in the cases input
+  // (proportional take from each item if a partial case is pulled).
   const lotOptions = useMemo(() => {
     if (!selectedLine) return [];
-    return (selectedLine.allocations ?? [])
-      .filter(a => a.inventoryItem?.lot?.lotNumber)
-      .map(a => ({
-        id: a.inventoryItem!.lot!.lotNumber!,
-        lotNumber: a.inventoryItem!.lot!.lotNumber!,
-        cases: a.inventoryItem?.cases ?? 1,
-        expirationDate: a.inventoryItem?.lot?.expirationDate,
-      }));
+    const map = new Map<
+      string,
+      {
+        id: string;
+        lotNumber: string;
+        items: Array<{ cases: number; weightLbs: number }>;
+        receiveDate: string | Date | null | undefined;
+        expirationDate: string | Date | null | undefined;
+      }
+    >();
+    for (const allocation of selectedLine.allocations ?? []) {
+      const lot = allocation.inventoryItem?.lot;
+      if (!lot?.id) continue;
+      const cases = allocation.inventoryItem?.cases ?? 1;
+      const weight =
+        parseFloat(allocation.inventoryItem?.exactWeightLbs ?? "0") || 0;
+      const existing = map.get(lot.id);
+      if (existing) {
+        existing.items.push({ cases, weightLbs: weight });
+      } else {
+        map.set(lot.id, {
+          id: lot.id,
+          lotNumber: lot.lotNumber,
+          items: [{ cases, weightLbs: weight }],
+          receiveDate: lot.receiveDate ?? null,
+          expirationDate: lot.expirationDate ?? null,
+        });
+      }
+    }
+    return [...map.values()];
   }, [selectedLine]);
+
+  function lotTotalCases(items: Array<{ cases: number }>) {
+    return items.reduce((sum, item) => sum + Math.max(0, item.cases), 0);
+  }
+
+  function lotWeightForCases(
+    items: Array<{ cases: number; weightLbs: number }>,
+    requestedCases: number,
+  ) {
+    let remaining = requestedCases;
+    let total = 0;
+    for (const item of items) {
+      if (remaining <= 0) break;
+      if (item.cases <= 0 || item.weightLbs <= 0) continue;
+      const taken = Math.min(item.cases, remaining);
+      total += (taken / item.cases) * item.weightLbs;
+      remaining -= taken;
+    }
+    return total;
+  }
 
   const [selectedLotId, setSelectedLotId] = useState("");
   const effectiveSelectedLotId = lotOptions.some(lot => lot.id === selectedLotId)
@@ -695,7 +911,105 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
     : (lotOptions[0]?.id ?? "");
 
   const isCatchWeight = selectedLine?.unitType === "catch_weight";
+  // True when the sales unit is itself a weight (lb/pound) — i.e. the
+  // customer is buying pounds directly, not cases that get weighed.
+  // For weight-priced lines the fulfilled lbs is the user's source of
+  // truth (actual scale weight at packing time). For case-priced
+  // catch-weight lines, the cases' exactWeightLbs recorded at receiving
+  // ARE the source of truth — letting the warehouse user retype them
+  // here would just create drift between inventory and shipment.
+  const isWeightSalesUnit = (() => {
+    if (!selectedLine) return false;
+    const tokens = [
+      selectedLine.salesUnitAbbreviationSnapshot,
+      selectedLine.salesUnitNameSnapshot,
+      selectedLine.salesUnit?.abbreviation,
+      selectedLine.salesUnit?.name,
+    ];
+    // Match the expanded weight-token set used by the server-side
+    // over-ship cap (orders.ts) so the fulfillment dialog's "weight
+    // editable" branch fires for kg/oz catalogs too, not just lb.
+    const WEIGHT_TOKENS = new Set([
+      "lb",
+      "lbs",
+      "pound",
+      "pounds",
+      "kg",
+      "kilogram",
+      "kilograms",
+      "oz",
+      "ounce",
+      "ounces",
+      "g",
+      "gram",
+      "grams",
+    ]);
+    return tokens.some(t =>
+      WEIGHT_TOKENS.has((t ?? "").trim().toLowerCase()),
+    );
+  })();
+  // Catch-weight + case unit → weight is locked to the picked items'
+  // recorded weights. Catch-weight + lb unit → weight is editable.
+  const weightInputLocked = isCatchWeight && !isWeightSalesUnit;
   const isSubmitting = createFulfillment.isPending || markShortShipped.isPending;
+
+  // Auto-populate the weight field from the picked lot's recorded
+  // inventory items. The exact case weights were captured when the
+  // supplier bill was received, so 95% of fulfillment runs match those
+  // numbers exactly — no need to make the warehouse user re-type them.
+  // We only set the value when the field is empty or still equal to
+  // whatever we last auto-filled; once the user types their own number
+  // we stop clobbering it.
+  const lastAutoFilledWeightRef = useRef<string>("");
+  useEffect(() => {
+    if (!isCatchWeight) return;
+    if (!selectedLine) return;
+    const qty = parseInt(casesValue, 10);
+    if (!Number.isInteger(qty) || qty <= 0) return;
+
+    const items = (selectedLine.allocations ?? [])
+      .filter(allocation =>
+        effectiveSelectedLotId
+          ? allocation.inventoryItem?.lotId === effectiveSelectedLotId
+          : true,
+      )
+      .map(allocation => allocation.inventoryItem)
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+    let remainingCases = qty;
+    let totalWeight = 0;
+    for (const item of items) {
+      if (remainingCases <= 0) break;
+      const itemCases = item.cases ?? 1;
+      const itemWeight = parseFloat(item.exactWeightLbs ?? "0") || 0;
+      if (itemCases <= 0 || itemWeight <= 0) continue;
+      const taken = Math.min(itemCases, remainingCases);
+      totalWeight += (taken / itemCases) * itemWeight;
+      remainingCases -= taken;
+    }
+
+    if (totalWeight <= 0) return;
+    const formatted = totalWeight.toFixed(4);
+    setWeightValue(prev => {
+      // When the input is locked (catch-weight + case unit), the
+      // recorded case weights are the source of truth — always sync.
+      // Otherwise only auto-fill when the field is empty or still
+      // matching the last auto-fill, so a user-typed value stays.
+      if (weightInputLocked) {
+        lastAutoFilledWeightRef.current = formatted;
+        return formatted;
+      }
+      if (prev !== "" && prev !== lastAutoFilledWeightRef.current) return prev;
+      lastAutoFilledWeightRef.current = formatted;
+      return formatted;
+    });
+  }, [
+    isCatchWeight,
+    weightInputLocked,
+    selectedLine,
+    effectiveSelectedLotId,
+    casesValue,
+  ]);
 
   async function handleSubmit(isPartial: boolean) {
     setSubmitError(null);
@@ -713,21 +1027,56 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
       return;
     }
 
+    // For weight-priced lines, the billed lbs (`weightValue`) is the
+    // bound on what gets shipped, not the integer `qty`. Block any
+    // submission that would push the cumulative billed weight past
+    // the ordered weight — partial fulfillments can't aggregate to an
+    // over-ship either. Tiny tolerance for scale rounding.
+    if (isWeightSalesUnit && weightValue && selectedLine) {
+      const weight = parseFloat(weightValue);
+      if (Number.isFinite(weight) && weight > 0) {
+        const orderedLbs = selectedLine.expectedCases;
+        const alreadyBilledLbs =
+          parseFloat(selectedLine.totalBilledWeightLbs ?? "0") || 0;
+        const remainingLbs = Math.max(0, orderedLbs - alreadyBilledLbs);
+        if (weight - remainingLbs > 0.0025) {
+          setSubmitError(
+            `Weight ${weight.toFixed(2)} lb exceeds the ${remainingLbs.toFixed(2)} lb remaining on this order.`,
+          );
+          return;
+        }
+      }
+    }
+
     try {
       await createFulfillment.mutateAsync({
         salesOrderId: order.id,
         salesOrderLineId: selectedLineId,
         quantityFulfilled: qty,
         weightLbs: weightValue || undefined,
+        // Honor the warehouse user's lot pick. When no lot is selected
+        // (single allocation, or auto-allocated), the service falls
+        // through to FIFO across the line's allocated inventory.
+        lotId: effectiveSelectedLotId || undefined,
       });
       toast.success("Fulfillment recorded.");
 
-      if (generateInvoiceOnSave) {
+      // Only attempted when the UI confirmed this is the closing
+      // fulfillment for the order — see canGenerateInvoiceOnSave above.
+      // Errors here are surfaced (not swallowed) so the user knows the
+      // invoice didn't generate.
+      if (generateInvoiceOnSave && canGenerateInvoiceOnSave) {
         try {
-          const invoice = await generateInvoice.mutateAsync({ salesOrderId: order.id });
+          const invoice = await generateInvoice.mutateAsync({
+            salesOrderId: order.id,
+          });
           toast.success(`Invoice ${invoice?.invoiceNumber ?? ""} generated.`);
-        } catch {
-          // Order may not be ready to invoice yet; ignore silently
+        } catch (err) {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : "Could not generate invoice.";
+          toast.error(`Fulfillment saved, but invoice did not generate: ${msg}`);
         }
       }
 
@@ -803,7 +1152,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
           onClick={onClose}
           variant="outline"
           size="xs"
-          className="shrink-0 border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2"
+          className="shrink-0 border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider"
         >
           Cancel
         </Button>
@@ -818,7 +1167,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               value={selectedLineId}
               onValueChange={setSelectedLineId}
             >
-              <SelectTrigger className="border-stone-line bg-stone-surface text-sm shadow-none">
+              <SelectTrigger className="border-border-default bg-card text-sm shadow-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -853,7 +1202,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               step="1"
               value={casesValue}
               onChange={e => setCasesValue(e.target.value)}
-              className="min-w-0 flex-1 border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
+              className="min-w-0 flex-1 border-border-default bg-card font-mono text-sm text-ink shadow-none"
             />
             <span style={{ fontSize: "12px", color: C.muted, flexShrink: 0 }}>
               / {remaining}
@@ -868,11 +1217,40 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             type="number"
             min="0"
             step="0.0001"
-            placeholder={isCatchWeight ? "required" : "optional"}
+            placeholder={
+              weightInputLocked
+                ? "from picked lot"
+                : isCatchWeight
+                  ? "required"
+                  : "optional"
+            }
             value={weightValue}
             onChange={e => setWeightValue(e.target.value)}
-            className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none"
+            readOnly={weightInputLocked}
+            aria-readonly={weightInputLocked}
+            title={
+              weightInputLocked
+                ? "Weight is the sum of the picked lot's recorded case weights. Edit the case count or pick a different lot to change it."
+                : undefined
+            }
+            className={
+              weightInputLocked
+                ? "cursor-not-allowed border-border-default bg-divider font-mono text-sm text-ink shadow-none"
+                : "border-border-default bg-card font-mono text-sm text-ink shadow-none"
+            }
           />
+          {weightInputLocked ? (
+            <span
+              style={{
+                display: "block",
+                marginTop: "4px",
+                fontSize: "11px",
+                color: C.muted,
+              }}
+            >
+              From recorded case weights. Change the case count to adjust.
+            </span>
+          ) : null}
         </label>
 
         {/* Lot */}
@@ -883,18 +1261,92 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
               value={effectiveSelectedLotId}
               onValueChange={setSelectedLotId}
             >
-              <SelectTrigger className="border-stone-line bg-stone-surface font-mono text-sm text-stone-ink shadow-none">
-                <SelectValue />
+              <SelectTrigger className="border-border-default bg-card font-mono text-sm text-ink shadow-none">
+                {(() => {
+                  // Render the trigger ourselves so the collapsed view
+                  // is a clean, left-aligned lot number instead of the
+                  // option's multi-line content.
+                  const selected = lotOptions.find(
+                    l => l.id === effectiveSelectedLotId,
+                  );
+                  return (
+                    <span
+                      style={{
+                        flex: 1,
+                        textAlign: "left",
+                        color: selected ? C.ink : C.muted,
+                      }}
+                    >
+                      {selected ? selected.lotNumber : "Select lot…"}
+                    </span>
+                  );
+                })()}
               </SelectTrigger>
               <SelectContent>
-                {lotOptions.map(l => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.lotNumber} · {l.cases.toLocaleString()} cs
-                    {l.expirationDate
-                      ? ` · exp ${formatDisplayDate(l.expirationDate)}`
-                      : ""}
-                  </SelectItem>
-                ))}
+                {lotOptions.map(l => {
+                  // Mirror the customer picker pattern: lot number on
+                  // top, receiving details on a muted second line. The
+                  // displayed cases + weight reflect what the user
+                  // would actually pull from this lot for the current
+                  // `casesValue` (capped by what the lot has), so the
+                  // picker stays honest as the cases input changes.
+                  const totalCases = lotTotalCases(l.items);
+                  const requestedCases = (() => {
+                    const n = parseInt(casesValue, 10);
+                    return Number.isInteger(n) && n > 0 ? n : 0;
+                  })();
+                  const displayCases =
+                    requestedCases > 0
+                      ? Math.min(requestedCases, totalCases)
+                      : totalCases;
+                  const displayWeight = lotWeightForCases(l.items, displayCases);
+
+                  const detailParts: string[] = [];
+                  detailParts.push(
+                    `${displayCases.toLocaleString()}${
+                      requestedCases > 0 && displayCases < totalCases
+                        ? ` of ${totalCases.toLocaleString()}`
+                        : ""
+                    } ${displayCases === 1 ? "case" : "cases"}`,
+                  );
+                  if (displayWeight > 0) {
+                    detailParts.push(`${displayWeight.toFixed(2)} lb`);
+                  }
+                  if (l.receiveDate) {
+                    detailParts.push(
+                      `received ${formatDisplayDate(l.receiveDate)}`,
+                    );
+                  }
+                  if (l.expirationDate) {
+                    detailParts.push(`exp ${formatDisplayDate(l.expirationDate)}`);
+                  }
+                  return (
+                    <SelectItem key={l.id} value={l.id}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "1px",
+                          minWidth: 0,
+                          textAlign: "left",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: C.mono,
+                            fontWeight: 500,
+                            textAlign: "left",
+                          }}
+                        >
+                          {l.lotNumber}
+                        </span>
+                        <span style={{ fontSize: "11px", color: C.muted }}>
+                          {detailParts.join(" · ")}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           ) : (
@@ -918,7 +1370,7 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
           style={{
             padding: "0 20px 8px",
             fontSize: "12px",
-            color: "oklch(55% 0.22 25)",
+            color: "var(--color-danger-fg)",
           }}
         >
           {submitError}
@@ -945,36 +1397,50 @@ function InlineFulfillDrawer({ order, actionState, onClose }: InlineFulfillDrawe
             flexWrap: "wrap",
           }}
         >
-          <label
-            style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
-          >
-            <Checkbox
-              checked={generateInvoiceOnSave}
-              onCheckedChange={checked => setGenerateInvoiceOnSave(checked === true)}
-            />
-            Generate invoice on save
-          </label>
+          {canGenerateInvoiceOnSave ? (
+            <label
+              style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}
+            >
+              <Checkbox
+                checked={generateInvoiceOnSave}
+                onCheckedChange={checked =>
+                  setGenerateInvoiceOnSave(checked === true)
+                }
+              />
+              Generate invoice on save
+            </label>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", gap: "8px" }}>
-          <Button
-            type="button"
-            disabled={isSubmitting || !actionState.canFulfill}
-            onClick={() => void handleSubmit(true)}
-            variant="outline"
-            size="sm"
-            className="border-stone-line bg-stone-surface text-xs text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
-          >
-            Save as partial
-          </Button>
+          {/* "Save partial" only renders when the user has actually reduced
+              the cases count below the line's remaining — otherwise both
+              buttons submitted the same payload and the partial label
+              was misleading. */}
+          {fillingFullRemaining ? null : (
+            <Button
+              type="button"
+              disabled={isSubmitting || !actionState.canFulfill}
+              onClick={() => void handleSubmit(true)}
+              variant="outline"
+              size="sm"
+              className="border-border-default bg-card text-xs text-ink shadow-none hover:bg-divider disabled:opacity-50"
+            >
+              Save {casesValue || 0} of {remaining}
+            </Button>
+          )}
           <Button
             type="button"
             disabled={isSubmitting || !actionState.canFulfill}
             onClick={() => void handleSubmit(false)}
             size="sm"
-            className="border-stone-ink bg-stone-ink text-xs text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+            className="border-forest-mid bg-forest-mid text-xs text-card-warm hover:bg-forest disabled:opacity-50"
           >
-            {isSubmitting ? "Saving…" : "Confirm & fulfill"}
+            {isSubmitting
+              ? "Saving…"
+              : fillingFullRemaining
+                ? `Fulfill all ${remaining}`
+                : `Fulfill all ${remaining} (skip partial)`}
           </Button>
         </div>
       </div>

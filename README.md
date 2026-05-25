@@ -39,10 +39,10 @@ Detailed guides live under **`docs/`** so this page stays lean. Start here:
 
 See **[docs/local-development.md](docs/local-development.md)** for host routing (`localtest.me`, `admin.` subdomain behavior) and UAT URLs.
 
-1. **`npm install`**
+1. **`pnpm install`**
 2. Copy **`.env.local.example`** → **`.env.local`** — set at minimum `DATABASE_URL`, `BETTER_AUTH_*`, `ROOT_DOMAIN`; add Stripe vars if you exercise billing. For Subscription Checkout use `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`; configure `STRIPE_PRICE_*` ids or populate the Stripe catalog with metadata **`plan=starter`**, **`growth`**, or **`enterprise`** (**[stripe subscriptions](docs/stripe-subscriptions.md)**).
-3. **`npm run db:migrate`**
-4. **`npm run dev`**
+3. **`pnpm db:migrate`**
+4. **`pnpm dev`**
 
 ## Billing in brief
 
@@ -60,37 +60,43 @@ Then sign in as a tenant owner or admin, open `/account/billing`, start Checkout
 
 ## Layout
 
+Domain logic lives under `modules/` (see [CLAUDE.md](CLAUDE.md) and [docs/module-architecture.md](docs/module-architecture.md) for the rationale and full rules). The App Router carries thin route files that re-export from the owning module.
+
 ```
 app/
-  (app)/            # Authenticated app shell (sidebar + breadcrumb)
-    (admin)/        # Admin-only routes (users, invite)
-    (dashboard)/    # Dashboard / overview
-    account/        # User account & profile (& billing route)
-    customers/      # Customer management
-    expenses/       # Expense tracking
-    inventory/      # Inventory items
-    invoice/        # New sales order entry
-    lots/           # Lot management
-    monthly-report/ # Monthly report
-    orders/         # Sales orders
-    payments/       # Payments
-    price-chart/    # Price list
-    products/       # Product catalogue
-    supplier-invoices/
-    suppliers/
-    units-of-measure/
-  (auth)/           # Unauthenticated pages (sign-in, sign-up, invite, reset)
-  api/              # Next.js route handlers (Better Auth + ERP APIs + Stripe webhook)
+  (app)/                          # Authenticated tenant app shell
+    (subscription-guard)/         # Routes gated by an active subscription
+      orders/, customers/, products/, inventory/, lots/,
+      invoices/, supplier-invoices/, suppliers/, payments/,
+      bill-payments/, expenses/, categories/, price-chart/,
+      bank-activity/, inbox/, configuration/, units-of-measure/,
+      (dashboard)/, (settings)/, settings/, support/,
+      tenant-admin/, user-management/
+    account/                      # User account & profile
+    invoice-import/               # Marketing demo (PDF → order lines)
+  (auth)/                         # Sign-in, sign-up, invite, password reset
+  (marketing)/, pricing/, features/, changelog/, reel/
+  (onboarding)/, onboarding/, select-destination/
+  admin/                          # Platform-admin host (admin.<root>)
+  api/                            # Better Auth, ERP APIs, Stripe + Plaid webhooks
 
-components/         # Shared React components (app shell, auth, UI primitives)
-  ui/               # shadcn/ui components
+modules/
+  core/                           # Tenant-agnostic infra
+    feature-flags/, tenants/, billing/, platform-admin/, workspace-settings/
+  distribution/                   # Business vertical (each is self-contained:
+    orders/, customers/, products/, inventory/, lots/,
+    invoices/, supplier-invoices/, suppliers/, payments/,
+    supplier-payments/, expenses/, categories/, units-of-measure/,
+    price-chart/, configuration/, plaid/, inbox/, onboarding/
+  shared/                         # Domain-agnostic primitives used by 2+ modules
 
-db/                 # Drizzle schema, migrations, relations, seed
-emails/             # React Email templates (verification, reset, invite)
-hooks/              # React Query hooks (use-users, use-user-invitations, …)
-lib/
-  api/              # Typed fetch client + per-resource API functions
-  query/            # React Query key registry
-  utils/            # Shared utilities
-services/           # Server-only business logic (portal-users, invitations, auth)
+components/                       # Shared React (app shell, auth, UI primitives)
+  ui/                             # shadcn/ui components
+db/                               # Drizzle schema, migrations, relations, seed
+emails/                           # React Email templates
+hooks/                            # Cross-cutting React Query hooks
+lib/                              # Pure utilities, query keys, auth helpers
+proxy.ts                          # Next.js 16 middleware (host routing, rate limits)
 ```
+
+Each module's `index.ts` is its only public entry point — external code imports `@/modules/distribution/orders`, never the internals.

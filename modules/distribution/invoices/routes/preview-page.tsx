@@ -5,6 +5,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
+import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
 import { getSalesInvoiceById } from "../services/invoicing";
 
 import { InvoicePdfPreview } from "../components/invoice-pdf-preview";
@@ -17,8 +18,15 @@ export default async function InvoicesPreviewPage({
   const { id } = await params;
   if (!isUuid(id)) notFound();
 
-  const invoice = await getSalesInvoiceById(id);
+  const [tenant, invoice] = await Promise.all([
+    getCurrentTenantCached(),
+    getSalesInvoiceById(id),
+  ]);
   if (!invoice) notFound();
+  // Defense-in-depth: getSalesInvoiceById already filters by tenant.id, but
+  // an explicit equality check means a regression in the service-layer
+  // filter can't leak a cross-tenant preview through this route.
+  if (invoice.tenantId !== tenant.id) notFound();
 
   return (
     <section className="flex flex-col gap-6">
@@ -38,7 +46,7 @@ export default async function InvoicesPreviewPage({
           </Button>
         </div>
         <div>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">
+          <h1 className="font-mono text-2xl font-medium tracking-tight">
             {invoice.invoiceNumber}
           </h1>
           <div className="text-sm text-muted-foreground">

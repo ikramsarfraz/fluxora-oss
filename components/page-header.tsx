@@ -17,11 +17,11 @@ export function PageHeader({
     <div className={cn("flex flex-col gap-1", className)}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h1 className="font-serif text-[26px] font-medium tracking-[-0.02em] leading-tight text-ink">
             {title}
           </h1>
           {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-sm text-subtle mt-1">{description}</p>
           )}
         </div>
         {children && <div className="flex items-center gap-2">{children}</div>}

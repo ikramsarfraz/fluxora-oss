@@ -75,6 +75,10 @@ export function useUrlPaginationState<
   );
 
   useEffect(() => {
+    // Mirror the server-provided searchParams into the optimistic snapshot
+    // that writeParams/popstate also write to. Disable rule: this is the
+    // canonical "sync external prop to local state" path for this hook.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setParamsSnapshot(searchParams.toString());
   }, [searchParams]);
 
@@ -167,6 +171,9 @@ export function useUrlPaginationState<
   );
 
   useEffect(() => {
+    // Reset the search-box value when the URL's `search` param changes
+    // out-of-band (back/forward, programmatic nav). Intentional sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearchInput(search);
   }, [search]);
 

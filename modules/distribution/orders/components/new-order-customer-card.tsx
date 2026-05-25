@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Controller, useWatch, type Control } from "react-hook-form";
 
 import {
@@ -17,22 +18,26 @@ import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/utils/currency";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
-import type { CustomerListItem } from "@/modules/distribution/customers/services/customers";
+import {
+  useCustomer,
+  useCustomerCreditSnapshot,
+  useCustomerSearch,
+} from "@/modules/distribution/customers/hooks/use-customers";
+import type { CustomerSearchResult } from "@/modules/distribution/customers/services/customers";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -43,9 +48,14 @@ interface NewOrderCustomerCardProps {
 }
 
 export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
-  const { data: customers, isLoading } = useCustomers();
   const customerId = useWatch({ control, name: "customerId" });
-  const selected = customers?.find(c => c.id === customerId) ?? null;
+  const [query, setQuery] = useState("");
+  const { data: searchResults, isFetching } = useCustomerSearch(query);
+  // When a customer is already selected (e.g. ?customerId= deep-link or
+  // editing an existing order), resolve the full record by id so we can
+  // render the chip without waiting for the user to type.
+  const { data: selected, isLoading: selectedLoading } = useCustomer(customerId);
+  const { data: credit } = useCustomerCreditSnapshot(customerId);
   const isStep1Done = !!selected;
 
   const defaultAddress = selected
@@ -69,7 +79,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
     : "";
 
   return (
-    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface p-5 shadow-none ring-0 sm:p-[22px]">
+    <Card className="gap-0 rounded-[10px] border-border-default bg-card p-5 shadow-none ring-0 sm:p-[22px]">
       {/* Section header */}
       <div
         style={{
@@ -88,7 +98,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
             height: "18px",
             borderRadius: "50%",
             background: isStep1Done ? C.good : C.ink,
-            color: "#fff",
+            color: "var(--color-card)",
             display: "grid",
             placeItems: "center",
             fontSize: "10px",
@@ -110,10 +120,15 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
             {!selected ? (
               <div>
                 <Combobox
-                  items={customers ?? []}
-                  itemToStringValue={(c: CustomerListItem) => c.name}
+                  items={searchResults ?? []}
+                  itemToStringValue={(c: CustomerSearchResult) => c.name}
+                  inputValue={query}
+                  onInputValueChange={setQuery}
+                  // Server is the filter — don't run the built-in client filter
+                  // on top of results, otherwise paginated results disappear.
+                  filter={null}
                   value={null}
-                  onValueChange={(c: CustomerListItem | null) =>
+                  onValueChange={(c: CustomerSearchResult | null) =>
                     field.onChange(c?.id ?? "")
                   }
                 >
@@ -123,26 +138,28 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                         type="button"
                         variant="outline"
                         aria-invalid={fieldState.invalid}
-                        className="h-auto w-full justify-start border-stone-line bg-stone-surface px-3.5 py-2.5 text-sm font-normal text-stone-muted shadow-none hover:bg-stone-line2"
-                        disabled={isLoading}
+                        className="h-auto w-full justify-start border-border-default bg-card px-3.5 py-2.5 text-sm font-normal text-subtle shadow-none hover:bg-divider"
+                        disabled={selectedLoading}
                       >
                         <ComboboxValue>
-                          {isLoading
-                            ? "Loading customers…"
-                            : "Search customers by name, ID, or phone…"}
+                          {selectedLoading
+                            ? "Loading customer…"
+                            : "Search customers by name, phone, or email…"}
                         </ComboboxValue>
                       </Button>
                     }
                   />
                   <ComboboxContent>
                     <ComboboxInput showTrigger={false} placeholder="Search customers…" />
-                    <ComboboxEmpty>No customers found.</ComboboxEmpty>
+                    <ComboboxEmpty>
+                      {isFetching ? "Searching…" : "No customers found."}
+                    </ComboboxEmpty>
                     <ComboboxList>
-                      {(c: CustomerListItem) => {
-                        const addr =
-                          c.addresses?.find(a => a.isDefault) ?? c.addresses?.[0];
-                        const loc = addr
-                          ? [addr.city, addr.state].filter(Boolean).join(", ")
+                      {(c: CustomerSearchResult) => {
+                        const loc = c.defaultAddress
+                          ? [c.defaultAddress.city, c.defaultAddress.state]
+                              .filter(Boolean)
+                              .join(", ")
                           : null;
                         return (
                           <ComboboxItem key={c.id} value={c}>
@@ -158,7 +175,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                               <div>
                                 <div style={{ fontWeight: 500 }}>{c.name}</div>
                                 <div style={{ fontSize: "12px", color: C.muted }}>
-                                  {[c.phoneNumber, loc].filter(Boolean).join(" · ") || "No contact info"}
+                                  {[c.phoneNumber, c.email, loc].filter(Boolean).join(" · ") || "No contact info"}
                                 </div>
                               </div>
                             </div>
@@ -190,7 +207,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                       height: "34px",
                       borderRadius: "50%",
                       background: C.ink,
-                      color: "#fff",
+                      color: "var(--color-card)",
                       display: "grid",
                       placeItems: "center",
                       fontWeight: 600,
@@ -211,7 +228,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                     onClick={() => field.onChange("")}
                     variant="ghost"
                     size="xs"
-                    className="shrink-0 text-xs text-stone-muted hover:bg-white/50 hover:text-stone-ink"
+                    className="shrink-0 text-xs text-subtle hover:bg-card/50 hover:text-ink"
                   >
                     Change
                   </Button>
@@ -219,7 +236,8 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
 
                 {/* Info chips */}
                 {(selected.fuelSurchargeAmount ||
-                  selected.abbreviation) && (
+                  selected.abbreviation ||
+                  credit) && (
                   <div
                     style={{
                       display: "flex",
@@ -228,6 +246,12 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                       marginTop: "10px",
                     }}
                   >
+                    {credit ? (
+                      <CreditExposureChip
+                        balanceDue={credit.balanceDue}
+                        creditLimit={credit.creditLimit}
+                      />
+                    ) : null}
                     {selected.fuelSurchargeAmount &&
                       Number(selected.fuelSurchargeAmount) > 0 && (
                         <span
@@ -259,7 +283,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                           color: C.ink2,
                         }}
                       >
-                        <b style={{ fontWeight: 500 }}>Abbreviation</b> ·{" "}
+                        <b style={{ fontWeight: 500 }}>Invoice prefix</b> ·{" "}
                         <span style={{ fontFamily: C.mono }}>{selected.abbreviation}</span>
                       </span>
                     )}
@@ -295,7 +319,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                 {...field}
                 id="new-order-order-date"
                 type="date"
-                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && (
@@ -319,7 +343,7 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
                 {...field}
                 id="new-order-delivery-date"
                 type="date"
-                className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                 aria-invalid={fieldState.invalid}
               />
             </div>
@@ -327,5 +351,69 @@ export function NewOrderCustomerCard({ control }: NewOrderCustomerCardProps) {
         />
       </div>
     </Card>
+  );
+}
+
+/**
+ * Chip showing open AR balance against the customer's credit limit.
+ * Three tones:
+ *   - No limit configured     → neutral, just shows the balance.
+ *   - Within 80% of limit     → neutral with "of $X limit" helper.
+ *   - 80–100% of limit         → warning (amber).
+ *   - Over limit               → danger (red). Server also blocks new
+ *     orders in this state via assertCustomerWithinCreditLimit.
+ */
+function CreditExposureChip({
+  balanceDue,
+  creditLimit,
+}: {
+  balanceDue: string;
+  creditLimit: string | null;
+}) {
+  const balance = parseFloat(balanceDue);
+  const limit = creditLimit ? parseFloat(creditLimit) : null;
+  if (!Number.isFinite(balance) && (limit == null || !Number.isFinite(limit))) {
+    return null;
+  }
+
+  let tone: "neutral" | "warning" | "danger" = "neutral";
+  let trailing: string | null = null;
+  if (limit != null && Number.isFinite(limit) && limit > 0) {
+    if (balance > limit) tone = "danger";
+    else if (balance >= limit * 0.8) tone = "warning";
+    trailing =
+      tone === "danger"
+        ? `over $${limit.toFixed(2)} limit`
+        : `of $${limit.toFixed(2)} limit`;
+  }
+
+  const palette =
+    tone === "danger"
+      ? { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" }
+      : tone === "warning"
+        ? { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" }
+        : { bg: C.line2, fg: C.ink2 };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "4px 10px",
+        borderRadius: "100px",
+        fontSize: "12px",
+        background: palette.bg,
+        color: palette.fg,
+      }}
+    >
+      <b style={{ fontWeight: 500 }}>
+        {tone === "danger" ? "Over limit" : "Balance"}
+      </b>{" "}
+      · {formatMoney(balanceDue)}
+      {trailing ? (
+        <span style={{ opacity: 0.85 }}> {trailing}</span>
+      ) : null}
+    </span>
   );
 }

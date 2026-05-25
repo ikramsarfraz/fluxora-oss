@@ -14,6 +14,7 @@ const MAGIC_LINK_PATH = "/api/auth/sign-in/magic-link";
 /** Paths the generic API rate limiter should NOT apply to. */
 function isRateLimitExempt(pathname: string): boolean {
   return (
+    pathname === "/api/plaid/webhook" ||
     pathname === "/api/stripe/webhook" ||
     pathname.startsWith("/api/cron/") ||
     pathname.startsWith("/api/auth/")
@@ -90,7 +91,13 @@ function isSharedAuthPath(pathname: string) {
 }
 
 function isRootOnlyPath(pathname: string) {
-  return pathname === "/" || pathname.startsWith("/features") || pathname.startsWith("/pricing");
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/features") ||
+    pathname.startsWith("/pricing") ||
+    pathname.startsWith("/reel") ||
+    pathname.startsWith("/marketing")
+  );
 }
 
 function isTenantAdminPath(pathname: string) {
@@ -109,9 +116,12 @@ export async function proxy(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const requestHeaders = new Headers(request.headers);
+  // Prevent clients from forging tenant identity — slug is derived
+  // exclusively from the hostname and re-set below.
+  requestHeaders.delete("x-tenant-slug");
   /** Passed to tenant RSC layout for subscription guards (see `app/(app)/layout.tsx`). */
   requestHeaders.set(TENANT_ROUTE_PATH_HEADER, pathname);
-  const hostContext = getRequestTenantHostContextFromHeaders(request.headers);
+  const hostContext = getRequestTenantHostContextFromHeaders(requestHeaders);
   const tenantSlug = hostContext.tenantSlug;
   const isTenantHost = hostContext.isTenantHost;
   const isPlatformAdminHost = hostContext.isPlatformAdminHost;
@@ -119,8 +129,6 @@ export async function proxy(request: NextRequest) {
 
   if (tenantSlug) {
     requestHeaders.set("x-tenant-slug", tenantSlug);
-  } else {
-    requestHeaders.delete("x-tenant-slug");
   }
 
   if (isPlatformAdminHost) {
@@ -190,7 +198,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname === "/features" || pathname === "/pricing") {
+  if (
+    pathname === "/features" ||
+    pathname === "/pricing" ||
+    pathname.startsWith("/marketing")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

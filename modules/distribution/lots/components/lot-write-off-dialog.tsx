@@ -62,6 +62,8 @@ export function LotWriteOffDialog({
 
   useEffect(() => {
     if (open) {
+      // Reset form each time the dialog opens.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetStatus("expired");
       setReason("expired");
       setNotes("");
@@ -70,6 +72,8 @@ export function LotWriteOffDialog({
   }, [open]);
 
   useEffect(() => {
+    // Keep reason in sync with the chosen target status.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReason(targetStatus === "expired" ? "expired" : "damaged");
   }, [targetStatus]);
 

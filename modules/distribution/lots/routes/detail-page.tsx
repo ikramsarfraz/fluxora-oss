@@ -1,16 +1,14 @@
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 
-import { queryKeys } from "@/lib/query/keys";
 import { isUuid } from "@/lib/utils/uuid";
-import { getLotById } from "../services/lots";
 
 import { LotDetailPage } from "../components/lot-detail-page";
 
+// See inventory/routes/detail-page.tsx for the same rationale: prefetching
+// the lot warmed the cache and silently suppressed the client-side
+// DetailPageSkeleton. We now keep only the cheap UUID-format check on the
+// server (cheap 404 for invalid format) and let the client own the
+// loading state so the tailored skeleton actually shows.
 export default async function LotsDetailPage({
   params,
 }: {
@@ -19,19 +17,5 @@ export default async function LotsDetailPage({
   const { id } = await params;
   if (!isUuid(id)) notFound();
 
-  const queryClient = new QueryClient();
-  try {
-    await queryClient.prefetchQuery({
-      queryKey: queryKeys.lots.detail(id),
-      queryFn: () => getLotById(id),
-    });
-  } catch {
-    notFound();
-  }
-
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <LotDetailPage lotId={id} />
-    </HydrationBoundary>
-  );
+  return <LotDetailPage lotId={id} />;
 }

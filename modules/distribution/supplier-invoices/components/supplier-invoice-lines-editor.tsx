@@ -17,9 +17,11 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CreateProductDialog } from "./create-product-dialog";
 import {
   computeDraftLineWeight,
   formatEditableWeight,
@@ -28,26 +30,55 @@ import {
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 import { supplierInvoiceLineCostPerLb } from "@/modules/distribution/supplier-invoices/utils/cost";
+import { getDefaultPurchaseUnit } from "@/modules/distribution/supplier-invoices/utils/product-purchase-defaults";
 import type { SupplierCostDiffEntry } from "@/modules/distribution/supplier-invoices/services/receiving";
 
 import {
   computeLineTotal,
   emptyLine,
+  isWeightLineUnitType,
   type SupplierInvoiceFormValues,
+  type SupplierInvoiceLineUnitType,
 } from "./supplier-invoice-form.schema";
+
+/**
+ * Resolves the unit-price suffix shown after the dollar input.
+ *   catch_weight → "/lb"
+ *   fixed_case   → "/cs"
+ *   per_each     → "/ea" (or the explicit abbreviation, if entered)
+ *   per_unit     → "/{abbr}" with a sensible default of "/unit"
+ */
+function priceSuffixFor(
+  unitType: SupplierInvoiceLineUnitType,
+  abbreviation: string | undefined | null,
+): string {
+  const trimmed = abbreviation?.trim();
+  if (unitType === "catch_weight") return "/lb";
+  if (unitType === "fixed_case") return "/cs";
+  if (unitType === "per_each") return trimmed ? `/${trimmed}` : "/ea";
+  return trimmed ? `/${trimmed}` : "/unit";
+}
+
+function quantityHeaderFor(
+  unitType: SupplierInvoiceLineUnitType,
+): string {
+  if (unitType === "per_each") return "Units";
+  if (unitType === "per_unit") return "Qty";
+  return "Cases";
+}
 
 // ─── Design tokens ─────────────────────────────────────────────────────────
 const T = {
-  surface: "#ffffff",
-  surfaceAlt: "#f5f5f4",
-  border: "#e7e5e4",
-  borderStrong: "#d4d1c7",
-  text: "#0c0a09",
-  muted: "#78716c",
-  mutedSoft: "#a8a29e",
-  accent: "oklch(60% 0.15 240)",
-  accentBorder: "oklch(60% 0.15 240 / 0.22)",
-  accentSoft: "oklch(96% 0.03 240)",
+  surface: "var(--color-card)",
+  surfaceAlt: "var(--color-divider)",
+  border: "var(--color-border-default)",
+  borderStrong: "var(--color-border-default)",
+  text: "var(--color-ink)",
+  muted: "var(--color-subtle)",
+  mutedSoft: "var(--color-muted)",
+  accent: "var(--color-info-fg)",
+  accentBorder: "color-mix(in oklch, var(--color-info-border) 80%, transparent)",
+  accentSoft: "var(--color-info-bg)",
   mono: "var(--font-mono)",
 } as const;
 
@@ -78,6 +109,8 @@ type Props = {
   products: ProductListItem[];
   productsLoading: boolean;
   disabled?: boolean;
+  /** Per-line vendor product names from PDF import, indexed to match form lines array. */
+  vendorProductNames?: (string | null)[];
   /** Selected supplier for the bill (form-level value). */
   supplierId: string;
   /** Currently-recorded cost + customer dependents, keyed by productId. */
@@ -167,8 +200,8 @@ function Segmented({
           type="button"
           onClick={() => !disabled && onChange(o.v)}
           style={{
-            background: value === o.v ? "#0c0a09" : "transparent",
-            color: value === o.v ? "#fff" : T.muted,
+            background: value === o.v ? "var(--color-ink)" : "transparent",
+            color: value === o.v ? "var(--color-card)" : T.muted,
             border: "none",
             padding: "6px 12px",
             borderRadius: 5,
@@ -205,20 +238,38 @@ function FooterStats({
 }) {
   const lines = useWatch({ control, name: "lines" });
   const arr = lines ?? [];
+
+  // Split totals by mode so mixed bills (e.g. meat + beverages) don't
+  // misleadingly sum a fake "weight" across the unit-priced lines.
   const totalCases = arr.reduce(
     (s, l) => s + (getPositiveInteger(l?.quantityCases) || 0),
     0,
   );
-  const totalWeight = arr.reduce(
+  const weightLines = arr.filter(l =>
+    isWeightLineUnitType(
+      (l?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType,
+    ),
+  );
+  const totalWeight = weightLines.reduce(
     (s, l) => s + computeDraftLineWeight(l ?? {}),
     0,
   );
+  const unitCount = arr.reduce((s, l) => {
+    const type = (l?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType;
+    if (type === "per_each" || type === "per_unit") {
+      return s + (getPositiveInteger(l?.quantityCases) || 0);
+    }
+    return s;
+  }, 0);
   const invoiceTotal = arr.reduce((s, l) => s + computeLineTotal(l ?? {}), 0);
   return (
     <div style={{ display: "flex", gap: 24, alignItems: "baseline" }}>
       <Stat label="Lines" value={lineCount} />
       <Stat label="Cases" value={totalCases} />
-      <Stat label="Total weight" value={`${fmt2(totalWeight)} lb`} />
+      {weightLines.length > 0 ? (
+        <Stat label="Total weight" value={`${fmt2(totalWeight)} lb`} />
+      ) : null}
+      {unitCount > 0 ? <Stat label="Units" value={unitCount} /> : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <div
           style={{
@@ -280,6 +331,7 @@ export function SupplierInvoiceLinesEditor({
   products,
   productsLoading,
   disabled = false,
+  vendorProductNames,
   supplierId,
   costDiffByProductId,
   acknowledgedKeys,
@@ -295,6 +347,11 @@ export function SupplierInvoiceLinesEditor({
     sku: p.sku,
   }));
   const productNameById = new Map(products.map(p => [p.id, p.name] as const));
+  // Pass the full record down so LineRow can resolve a product's default
+  // purchase UOM the moment the user picks it. We keep the lighter
+  // `productOptions` for the picker itself to avoid passing every product
+  // through the Select children prop.
+  const productById = new Map(products.map(p => [p.id, p] as const));
 
   return (
     <div>
@@ -316,8 +373,8 @@ export function SupplierInvoiceLinesEditor({
       >
         <div>Product</div>
         <div>Pricing</div>
-        <div style={{ textAlign: "center" }}>Cases</div>
-        <div style={{ textAlign: "right" }}>Weight (lbs)</div>
+        <div style={{ textAlign: "center" }}>Cases / Units</div>
+        <div style={{ textAlign: "right" }}>Weight or UOM</div>
         <div style={{ textAlign: "right" }}>Unit price</div>
         <div style={{ textAlign: "right" }}>Line total</div>
         <div />
@@ -348,9 +405,11 @@ export function SupplierInvoiceLinesEditor({
             disabled={disabled}
             onRemove={() => remove(index)}
             canRemove={fields.length > 1}
+            vendorProductName={vendorProductNames?.[index] ?? null}
             supplierId={supplierId}
             costDiffByProductId={costDiffByProductId}
             productNameById={productNameById}
+            productById={productById}
             acknowledgedKeys={acknowledgedKeys}
             onToggleAck={onToggleAck}
           />
@@ -423,12 +482,14 @@ function CostDiffCallout({
       : null;
   const accent =
     variant === "new"
-      ? "oklch(58% 0.13 155)"
+      ? "var(--color-success-fg)"
       : "oklch(60% 0.16 35)";
   const accentSoft =
     variant === "new" ? "oklch(95% 0.04 155 / 0.55)" : "oklch(95% 0.05 60 / 0.6)";
   const accentBorder =
-    variant === "new" ? "oklch(58% 0.13 155 / 0.3)" : "oklch(60% 0.16 35 / 0.3)";
+    variant === "new"
+      ? "color-mix(in oklch, var(--color-success-fg) 30%, transparent)"
+      : "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)";
 
   return (
     <div
@@ -495,7 +556,7 @@ function CostDiffCallout({
             {deltaPct != null ? (
               <span
                 style={{
-                  color: deltaPct >= 0 ? accent : "oklch(58% 0.13 155)",
+                  color: deltaPct >= 0 ? accent : "var(--color-success-fg)",
                   fontWeight: 500,
                 }}
               >
@@ -575,9 +636,11 @@ function LineRow({
   disabled,
   onRemove,
   canRemove,
+  vendorProductName,
   supplierId,
   costDiffByProductId,
   productNameById,
+  productById,
   acknowledgedKeys,
   onToggleAck,
 }: {
@@ -590,22 +653,33 @@ function LineRow({
   disabled: boolean;
   onRemove: () => void;
   canRemove: boolean;
+  vendorProductName?: string | null;
   supplierId: string;
   costDiffByProductId: Map<string, SupplierCostDiffEntry>;
   productNameById: Map<string, string>;
+  productById: Map<string, ProductListItem>;
   acknowledgedKeys: Set<LineCostAckKey>;
   onToggleAck: (key: LineCostAckKey) => void;
 }) {
   const line = useWatch({ control, name: `lines.${index}` });
   const [expanded, setExpanded] = useState(false);
+  const [lotOpen, setLotOpen] = useState(false);
+
+  // Inline create-product flow — mirrors the bulk-import review path so the
+  // user can add a missing catalog product without leaving the bill form.
+  const [createProductOpen, setCreateProductOpen] = useState(false);
+  const CREATE_PRODUCT_SENTINEL = "__create_new_product__";
 
   const productId = line?.productId ?? "";
-  const unitType = line?.unitType ?? "catch_weight";
+  const unitType = (line?.unitType ?? "catch_weight") as SupplierInvoiceLineUnitType;
   const weightEntryMode = (line?.weightEntryMode ??
     "total_weight") as SupplierInvoiceWeightEntryMode;
   const quantityCases = getPositiveInteger(line?.quantityCases);
   const sku = products.find((p) => p.id === productId)?.sku ?? "";
   const isCatchWeight = unitType === "catch_weight";
+  const isWeightMode = isWeightLineUnitType(unitType);
+  const isUnitMode = unitType === "per_each" || unitType === "per_unit";
+  const purchaseUnitAbbreviation = line?.purchaseUnitAbbreviation ?? "";
 
   // Auto-open tray when switching to catch_weight
   const prevUnitTypeRef = useRef(unitType);
@@ -615,6 +689,44 @@ function LineRow({
     }
     prevUnitTypeRef.current = unitType;
   }, [unitType]);
+
+  // Auto-fill the line's UOM + unit type from the product's defaults when
+  // the user picks (or changes) the product. Reads in priority order from
+  // product_units rows (purpose='purchase') → product.baseUnit. This is
+  // the moment that connects the product-create form's UOM data to the
+  // bill line, so the user sees "/ea" or "/case" without typing anything.
+  const prevProductIdRef = useRef(productId);
+  useEffect(() => {
+    const prev = prevProductIdRef.current;
+    prevProductIdRef.current = productId;
+    // Skip the initial mount (when prev === productId because both started
+    // as the same value), only react to actual productId transitions.
+    if (prev === productId) return;
+    if (!productId) return;
+
+    const product = productById.get(productId);
+    const purchaseDefault = getDefaultPurchaseUnit(product);
+    if (!purchaseDefault) return;
+
+    setValue(`lines.${index}.unitType`, purchaseDefault.unitType, {
+      shouldDirty: true,
+    });
+    setValue(
+      `lines.${index}.purchaseUnitAbbreviation`,
+      purchaseDefault.abbreviation,
+      { shouldDirty: true },
+    );
+    // Pre-fill the pack size from the product's purchase-unit conversion
+    // (e.g. 12 for a 12-pack case). User can override per bill if the
+    // shipment came in a non-standard pack size.
+    setValue(
+      `lines.${index}.unitsPerPackage`,
+      purchaseDefault.conversionToBase
+        ? String(purchaseDefault.conversionToBase)
+        : "1",
+      { shouldDirty: true },
+    );
+  }, [productId, productById, index, setValue]);
 
   // Sync caseWeightEntries length with quantityCases
   useEffect(() => {
@@ -655,10 +767,13 @@ function LineRow({
 
   const totalWeightLbs = isCatchWeight
     ? computeDraftLineWeight(line ?? {})
-    : Number(line?.weightLbs ?? "0") || 0;
+    : isWeightMode
+      ? Number(line?.weightLbs ?? "0") || 0
+      : 0;
 
   // Live per-lb cost recomputed as the user types. Matches what the server
-  // would write into productSupplierCosts at completion.
+  // would write into productSupplierCosts at completion. Unit-priced lines
+  // (per_each, per_unit) return null and the callout is suppressed.
   const liveCostPerLb = (() => {
     if (!supplierId || !productId) return null;
     return supplierInvoiceLineCostPerLb({
@@ -748,13 +863,39 @@ function LineRow({
       >
         {/* 1. Product */}
         <div>
+          {vendorProductName && (
+            <div
+              style={{
+                fontSize: 10,
+                color: T.mutedSoft,
+                fontFamily: T.mono,
+                marginBottom: 4,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              title={`Vendor name: ${vendorProductName}`}
+            >
+              {vendorProductName}
+            </div>
+          )}
           <Controller
             control={control}
             name={`lines.${index}.productId`}
             render={({ field, fieldState }) => (
               <Select
                 value={field.value || ""}
-                onValueChange={field.onChange}
+                onValueChange={value => {
+                  // Intercept the sentinel — open the create dialog
+                  // without setting the form value, so the row stays
+                  // empty until the new product exists. The dialog's
+                  // onCreated handler writes the real id below.
+                  if (value === CREATE_PRODUCT_SENTINEL) {
+                    setCreateProductOpen(true);
+                    return;
+                  }
+                  field.onChange(value);
+                }}
                 disabled={disabled || productsLoading}
               >
                 <SelectTrigger
@@ -765,7 +906,7 @@ function LineRow({
                     borderRadius: 8,
                     border: `1px solid ${
                       fieldState.invalid
-                        ? "oklch(0.55 0.22 25)"
+                        ? "var(--color-danger-fg)"
                         : T.border
                     }`,
                     fontSize: 14,
@@ -783,6 +924,13 @@ function LineRow({
                       {p.label}
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <SelectItem value={CREATE_PRODUCT_SENTINEL}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Plus className="h-3.5 w-3.5" />
+                      Create new product…
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -834,7 +982,13 @@ function LineRow({
                   flexShrink: 0,
                 }}
               />
-              {isCatchWeight ? "Variable weight" : "Fixed case"}
+              {unitType === "catch_weight"
+                ? "Variable weight"
+                : unitType === "fixed_case"
+                  ? "Fixed case"
+                  : unitType === "per_each"
+                    ? "Per each"
+                    : "Per unit"}
             </div>
           </div>
           <div
@@ -845,9 +999,13 @@ function LineRow({
               paddingLeft: 2,
             }}
           >
-            {isCatchWeight
+            {unitType === "catch_weight"
               ? "Priced per lb · weight per case"
-              : "Priced per case · fixed weight"}
+              : unitType === "fixed_case"
+                ? "Priced per case · fixed weight"
+                : unitType === "per_each"
+                  ? "Priced per piece · no weight"
+                  : "Priced per UOM · no weight"}
           </div>
         </div>
 
@@ -861,8 +1019,54 @@ function LineRow({
           {...register(`lines.${index}.quantityCases`)}
         />
 
-        {/* 4. Weight — toggle button for catch_weight, plain input for fixed */}
-        {isCatchWeight ? (
+        {/* 4. Weight (catch/fixed) or UOM input (per_each/per_unit) */}
+        {isUnitMode ? (
+          <div>
+            <div style={{ position: "relative" }}>
+              <Input
+                type="text"
+                placeholder={unitType === "per_each" ? "ea" : "case / gal / bag"}
+                disabled={disabled}
+                maxLength={16}
+                style={{
+                  height: 38,
+                  textAlign: "right",
+                  paddingRight: 12,
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+                {...register(`lines.${index}.purchaseUnitAbbreviation`)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded((o) => !o)}
+              style={{
+                marginTop: 4,
+                fontSize: 11,
+                color: expanded ? T.accent : T.mutedSoft,
+                background: "none",
+                border: "none",
+                padding: "0 2px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                gap: 3,
+              }}
+            >
+              <ChevronDown
+                style={{
+                  width: 10,
+                  height: 10,
+                  transform: expanded ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s",
+                }}
+              />
+              Pricing
+            </button>
+          </div>
+        ) : isCatchWeight ? (
           <button
             type="button"
             onClick={() => setExpanded((o) => !o)}
@@ -970,7 +1174,7 @@ function LineRow({
                   transition: "transform 0.15s",
                 }}
               />
-              Lot · expires
+              Weight
             </button>
           </div>
         )}
@@ -1016,23 +1220,53 @@ function LineRow({
               pointerEvents: "none",
             }}
           >
-            {isCatchWeight ? "/lb" : "/cs"}
+            {priceSuffixFor(unitType, purchaseUnitAbbreviation)}
           </span>
         </div>
 
-        {/* 6. Line total */}
-        <div
-          style={{
-            textAlign: "right",
-            fontFamily: T.mono,
-            fontSize: 15,
-            fontWeight: 600,
-            color: T.text,
-            fontVariantNumeric: "tabular-nums",
-            marginTop: 8,
-          }}
-        >
-          <LineRowTotal control={control} index={index} />
+        {/* 6. Line total + lot toggle */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <div
+            style={{
+              fontFamily: T.mono,
+              fontSize: 15,
+              fontWeight: 600,
+              color: T.text,
+              fontVariantNumeric: "tabular-nums",
+              marginTop: 8,
+            }}
+          >
+            <LineRowTotal control={control} index={index} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setLotOpen(o => !o)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 3,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color: lotOpen ? T.accent : T.mutedSoft,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 0,
+              fontFamily: "inherit",
+            }}
+          >
+            <ChevronDown
+              style={{
+                width: 9,
+                height: 9,
+                transform: lotOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.12s",
+              }}
+            />
+            Lot
+          </button>
         </div>
 
         {/* 7. Delete */}
@@ -1073,8 +1307,14 @@ function LineRow({
         />
       ) : null}
 
-      {/* Expanded tray */}
-      {expanded ? (
+      {/* Pricing tray:
+            - catch_weight → CatchWeightTray (weight modes + pricing type)
+            - fixed_case / per_each / per_unit → PricingTypeTray (just unit
+              picker + pricing-type override).
+          The previous code rendered LotExpiresTray here too, which then
+          got rendered AGAIN by the Lot chevron below — the trays are now
+          single-responsibility so each toggle opens exactly one. */}
+      {expanded && isCatchWeight && (
         <div
           style={{
             background: T.surfaceAlt,
@@ -1082,29 +1322,76 @@ function LineRow({
             borderTop: `1px dashed ${T.borderStrong}`,
           }}
         >
-          {isCatchWeight ? (
-            <CatchWeightTray
-              control={control}
-              register={register}
-              setValue={setValue}
-              index={index}
-              line={line}
-              quantityCases={quantityCases}
-              totalWeightLbs={totalWeightLbs}
-              weightEntryMode={weightEntryMode}
-              onModeChange={handleModeChange}
-              disabled={disabled}
-            />
-          ) : (
-            <LotExpiresTray
-              control={control}
-              register={register}
-              index={index}
-              disabled={disabled}
-            />
-          )}
+          <CatchWeightTray
+            control={control}
+            register={register}
+            setValue={setValue}
+            index={index}
+            line={line}
+            quantityCases={quantityCases}
+            totalWeightLbs={totalWeightLbs}
+            weightEntryMode={weightEntryMode}
+            onModeChange={handleModeChange}
+            disabled={disabled}
+          />
         </div>
-      ) : null}
+      )}
+
+      {expanded && !isCatchWeight && (
+        <div
+          style={{
+            background: T.surfaceAlt,
+            padding: "20px 28px 22px",
+            borderTop: `1px dashed ${T.borderStrong}`,
+          }}
+        >
+          <PricingTypeTray
+            control={control}
+            setValue={setValue}
+            index={index}
+            product={productById.get(productId) ?? null}
+            disabled={disabled}
+          />
+        </div>
+      )}
+
+      {/* Lot drawer — pure lot + expiry. Available on every line type.
+          Uses the same surface token (var(--color-divider) via T.surfaceAlt)
+          as the Catch-weight and Pricing trays so all three expanded
+          drawers read as the same design-system surface. The previous
+          one-off blue OKLCH literal didn't match the form's palette. */}
+      {lotOpen && (
+        <div
+          style={{
+            background: T.surfaceAlt,
+            padding: "16px 28px 18px",
+            borderTop: `1px dashed ${T.borderStrong}`,
+          }}
+        >
+          <LotExpiresTray
+            control={control}
+            register={register}
+            index={index}
+            disabled={disabled}
+          />
+        </div>
+      )}
+
+      <CreateProductDialog
+        open={createProductOpen}
+        onOpenChange={setCreateProductOpen}
+        initialName={vendorProductName ?? ""}
+        onCreated={productId => {
+          // Apply the newly-created product to this row. The products
+          // prop is sourced from `useProducts()` higher up — that hook
+          // is invalidated by AddProductForm so the new product appears
+          // in the dropdown on the next render too.
+          setValue(`lines.${index}.productId`, productId, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
+        }}
+      />
     </div>
   );
 }
@@ -1369,7 +1656,7 @@ function CatchWeightTray({
           </div>
         ))}
 
-      {/* Lot + Expires + Pricing type */}
+      {/* Pricing type */}
       <div
         style={{
           display: "flex",
@@ -1377,57 +1664,9 @@ function CatchWeightTray({
           marginTop: 18,
           paddingTop: 16,
           borderTop: `1px dashed ${T.borderStrong}`,
-          flexWrap: "wrap",
         }}
       >
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-          <label style={lbl}>
-            Lot #{" "}
-            <span
-              style={{
-                color: T.mutedSoft,
-                fontWeight: 400,
-                textTransform: "none",
-                letterSpacing: 0,
-              }}
-            >
-              (optional)
-            </span>
-          </label>
-          <Input
-            placeholder="auto-generated"
-            disabled={disabled}
-            style={{
-              height: 38,
-              borderRadius: 8,
-              fontFamily: T.mono,
-              fontSize: 13,
-            }}
-            {...register(`lines.${index}.lotNumberOverride`)}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-          <label style={lbl}>
-            Expires{" "}
-            <span
-              style={{
-                color: T.mutedSoft,
-                fontWeight: 400,
-                textTransform: "none",
-                letterSpacing: 0,
-              }}
-            >
-              (optional)
-            </span>
-          </label>
-          <Input
-            type="date"
-            disabled={disabled}
-            style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-            {...register(`lines.${index}.expirationDateOverride`)}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
+        <div style={{ minWidth: 180, maxWidth: 220 }}>
           <label style={lbl}>Pricing type</label>
           <Controller
             control={control}
@@ -1448,6 +1687,8 @@ function CatchWeightTray({
                     Variable weight
                   </SelectItem>
                   <SelectItem value="fixed_case">Fixed case</SelectItem>
+                  <SelectItem value="per_each">Per each</SelectItem>
+                  <SelectItem value="per_unit">Per unit</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -1458,7 +1699,13 @@ function CatchWeightTray({
   );
 }
 
-// ── Fixed-case tray (lot / expires / type) ─────────────────────────────────
+// ── Lot & expiry drawer ────────────────────────────────────────────────────
+/**
+ * Lot + expiry only. Previously this tray also carried the "Pricing
+ * type" select, which caused the tray to render TWICE on non-catch-weight
+ * lines (once via the Weight/Pricing chevron, once via the Lot chevron)
+ * — split so each tray has a single responsibility.
+ */
 function LotExpiresTray({
   control,
   register,
@@ -1470,78 +1717,302 @@ function LotExpiresTray({
   index: number;
   disabled: boolean;
 }) {
+  const lotValue = useWatch({ control, name: `lines.${index}.lotNumberOverride` });
+  const expiryValue = useWatch({ control, name: `lines.${index}.expirationDateOverride` });
+
   return (
-    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-        <label style={lbl}>
-          Lot #{" "}
-          <span
-            style={{
-              color: T.mutedSoft,
-              fontWeight: 400,
-              textTransform: "none",
-              letterSpacing: 0,
-            }}
-          >
-            (optional)
-          </span>
-        </label>
-        <Input
-          placeholder="auto-generated"
-          disabled={disabled}
-          style={{
-            height: 38,
-            borderRadius: 8,
-            fontFamily: T.mono,
-            fontSize: 13,
-          }}
-          {...register(`lines.${index}.lotNumberOverride`)}
-        />
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: T.muted,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          marginBottom: 12,
+        }}
+      >
+        Lot & expiry
       </div>
-      <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
-        <label style={lbl}>
-          Expires{" "}
-          <span
-            style={{
-              color: T.mutedSoft,
-              fontWeight: 400,
-              textTransform: "none",
-              letterSpacing: 0,
-            }}
-          >
-            (optional)
-          </span>
-        </label>
-        <Input
-          type="date"
-          disabled={disabled}
-          style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-          {...register(`lines.${index}.expirationDateOverride`)}
-        />
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 320 }}>
+          <label style={lbl}>
+            Lot number{" "}
+            <span style={{ color: T.mutedSoft, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              (optional)
+            </span>
+          </label>
+          <Input
+            placeholder="auto-generated on receive"
+            disabled={disabled}
+            style={{ height: 36, borderRadius: 7, fontFamily: T.mono, fontSize: 12 }}
+            {...register(`lines.${index}.lotNumberOverride`)}
+          />
+          {!lotValue && (
+            <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 3, paddingLeft: 2 }}>
+              Format: SUPP-YYYYMMDD-SKU
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 180, maxWidth: 260 }}>
+          <label style={lbl}>
+            Expiration date{" "}
+            <span style={{ color: T.mutedSoft, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              (optional)
+            </span>
+          </label>
+          <Input
+            type="date"
+            disabled={disabled}
+            style={{ height: 36, borderRadius: 7, fontSize: 12 }}
+            {...register(`lines.${index}.expirationDateOverride`)}
+          />
+          {/* eslint-disable-next-line react-hooks/purity */}
+          {expiryValue && new Date(expiryValue) < new Date(Date.now() + 30 * 86400_000) && (
+            <div style={{ fontSize: 10, color: "oklch(60% 0.14 65)", marginTop: 3, paddingLeft: 2, fontWeight: 600 }}>
+              Expires within 30 days
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ flex: 1, minWidth: 160, maxWidth: 220 }}>
-        <label style={lbl}>Pricing type</label>
-        <Controller
-          control={control}
-          name={`lines.${index}.unitType`}
-          render={({ field }) => (
+    </div>
+  );
+}
+
+/**
+ * Pricing-mode picker for fixed_case / per_each / per_unit lines. Surfaces
+ * the line's unit-type Select AND a "Pricing unit" quick-pick populated
+ * from the product's known product_units rows — so when the supplier
+ * sells "Salam Cola" by the case, the user picks "cs (12 ea)" from a
+ * dropdown instead of typing the abbreviation freehand.
+ *
+ * Falls back gracefully: when the product has no extra units defined,
+ * the tray shows just the unit-type select; the abbreviation stays as
+ * the freetext input in the main row.
+ */
+function PricingTypeTray({
+  control,
+  setValue,
+  index,
+  product,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  setValue: UseFormSetValue<SupplierInvoiceFormValues>;
+  index: number;
+  product: ProductListItem | null | undefined;
+  disabled: boolean;
+}) {
+  const currentAbbrev =
+    useWatch({ control, name: `lines.${index}.purchaseUnitAbbreviation` }) ?? "";
+  const baseUnitAbbrev = product?.baseUnit?.abbreviation ?? null;
+
+  // De-duplicate the product's UoM rows by unit id so the picker doesn't
+  // show "Each" twice when the product has both a sales row and a base
+  // unit pointing at it.
+  const rawRows = (product?.productUnits ?? []).map(u => ({
+    unitId: u.unitId,
+    abbreviation: u.unit?.abbreviation ?? "",
+    name: u.unit?.name ?? "",
+    conversionToBase: Number(u.conversionToBase) || 1,
+    purpose: u.purpose,
+    isDefault: u.isDefault,
+    sortOrder: u.sortOrder,
+  }));
+  // Make sure the base UoM is always pickable, even when no product_units
+  // row references it (very small / new products).
+  if (
+    product?.baseUnitId &&
+    baseUnitAbbrev &&
+    !rawRows.some(r => r.unitId === product.baseUnitId)
+  ) {
+    rawRows.unshift({
+      unitId: product.baseUnitId,
+      abbreviation: baseUnitAbbrev,
+      name: product.baseUnit?.name ?? baseUnitAbbrev,
+      conversionToBase: 1,
+      purpose: "stock",
+      isDefault: false,
+      sortOrder: -1,
+    });
+  }
+  const uniqueByUnitId = new Map<string, (typeof rawRows)[number]>();
+  for (const row of rawRows) {
+    if (!uniqueByUnitId.has(row.unitId)) uniqueByUnitId.set(row.unitId, row);
+  }
+  const pricingUnitOptions = [...uniqueByUnitId.values()].sort((a, b) => {
+    // Base unit (conversion 1) first, then by sortOrder.
+    if (a.conversionToBase !== b.conversionToBase) {
+      if (a.conversionToBase === 1) return -1;
+      if (b.conversionToBase === 1) return 1;
+    }
+    return a.sortOrder - b.sortOrder;
+  });
+
+  function applyPricingUnit(option: (typeof pricingUnitOptions)[number]) {
+    // Set the abbreviation snapshot and infer a sensible unit type from
+    // it (lb/kg → catch_weight, ea → per_each, anything else → per_unit).
+    setValue(`lines.${index}.purchaseUnitAbbreviation`, option.abbreviation, {
+      shouldDirty: true,
+    });
+    // Also propagate the conversion factor so a "case (12 ea)" pick
+    // pre-fills "12" in the Units-per-package input — the user only
+    // edits it if this particular shipment has a non-standard pack.
+    setValue(
+      `lines.${index}.unitsPerPackage`,
+      option.conversionToBase > 0 ? String(option.conversionToBase) : "1",
+      { shouldDirty: true },
+    );
+    const lower = option.abbreviation.toLowerCase();
+    let nextUnitType: SupplierInvoiceLineUnitType;
+    if (lower === "lb" || lower === "lbs" || lower === "kg" || lower === "oz") {
+      nextUnitType = "catch_weight";
+    } else if (lower === "ea" || lower === "each" || lower === "pc") {
+      nextUnitType = "per_each";
+    } else if (option.conversionToBase === 1) {
+      // Base unit but not a weight/each variant — treat as per_unit
+      // (matches gal, L, etc. as base).
+      nextUnitType = "per_unit";
+    } else {
+      nextUnitType = "per_unit";
+    }
+    setValue(`lines.${index}.unitType`, nextUnitType, { shouldDirty: true });
+  }
+
+  // Match the current abbreviation back to one of the options so the
+  // Select reflects the user's prior pick (or AI prefill).
+  const selectedOption =
+    pricingUnitOptions.find(
+      o => o.abbreviation.toLowerCase() === currentAbbrev.trim().toLowerCase(),
+    ) ?? null;
+
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: T.muted,
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+          marginBottom: 12,
+        }}
+      >
+        Pricing
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {pricingUnitOptions.length > 0 ? (
+          <div style={{ flex: 1, minWidth: 220, maxWidth: 320 }}>
+            <label style={lbl}>How is the bill priced?</label>
             <Select
-              value={field.value}
-              onValueChange={field.onChange}
+              value={selectedOption?.unitId ?? ""}
+              onValueChange={unitId => {
+                const option = pricingUnitOptions.find(o => o.unitId === unitId);
+                if (option) applyPricingUnit(option);
+              }}
               disabled={disabled}
             >
-              <SelectTrigger
-                style={{ height: 38, borderRadius: 8, fontSize: 13 }}
-              >
-                <SelectValue />
+              <SelectTrigger style={{ height: 36, borderRadius: 7, fontSize: 12 }}>
+                <SelectValue placeholder="Pick a unit…" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="catch_weight">Variable weight</SelectItem>
-                <SelectItem value="fixed_case">Fixed case</SelectItem>
+                {pricingUnitOptions.map(o => (
+                  <SelectItem key={o.unitId} value={o.unitId}>
+                    {o.name || o.abbreviation}
+                    {o.abbreviation ? ` (${o.abbreviation})` : ""}
+                    {o.conversionToBase !== 1 && baseUnitAbbrev
+                      ? ` — ${o.conversionToBase} ${baseUnitAbbrev} per ${o.abbreviation || "unit"}`
+                      : ""}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          )}
+            <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+              Picks the unit + price-per direction in one step.
+            </div>
+          </div>
+        ) : null}
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 260 }}>
+          <label style={lbl}>Pricing type</label>
+          <Controller
+            control={control}
+            name={`lines.${index}.unitType`}
+            render={({ field }) => (
+              <Select value={field.value} onValueChange={field.onChange} disabled={disabled}>
+                <SelectTrigger style={{ height: 36, borderRadius: 7, fontSize: 12 }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="catch_weight">Variable weight (/lb)</SelectItem>
+                  <SelectItem value="fixed_case">Fixed case (/cs)</SelectItem>
+                  <SelectItem value="per_each">Per each (/ea)</SelectItem>
+                  <SelectItem value="per_unit">Per unit (/UOM)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+            Override if the supplier&apos;s pricing differs from the unit pick.
+          </div>
+        </div>
+        {/* Units-per-package: how many base units are in one purchase
+            unit. Pre-filled from the product's purchase-unit conversion
+            (12 for a 12-pack case, 24 for a 24-pack) but editable per
+            bill — a one-off shipment of 6-packs needs the override. */}
+        <UnitsPerPackageField
+          control={control}
+          index={index}
+          baseUnitAbbreviation={baseUnitAbbrev ?? "ea"}
+          purchaseUnitAbbreviation={currentAbbrev || "unit"}
+          disabled={disabled}
         />
+      </div>
+    </div>
+  );
+}
+
+function UnitsPerPackageField({
+  control,
+  index,
+  baseUnitAbbreviation,
+  purchaseUnitAbbreviation,
+  disabled,
+}: {
+  control: Control<SupplierInvoiceFormValues>;
+  index: number;
+  baseUnitAbbreviation: string;
+  purchaseUnitAbbreviation: string;
+  disabled: boolean;
+}) {
+  const unitType = useWatch({ control, name: `lines.${index}.unitType` });
+  // Only meaningful for per_each / per_unit lines — weight modes use the
+  // weight tray instead. Hide the field entirely otherwise so it doesn't
+  // confuse the user on a catch_weight bill.
+  if (unitType !== "per_each" && unitType !== "per_unit") return null;
+  return (
+    <div style={{ flex: 1, minWidth: 180, maxWidth: 240 }}>
+      <label style={lbl}>
+        {baseUnitAbbreviation} per {purchaseUnitAbbreviation}
+      </label>
+      <Controller
+        control={control}
+        name={`lines.${index}.unitsPerPackage`}
+        render={({ field, fieldState }) => (
+          <Input
+            {...field}
+            type="number"
+            min={0}
+            step="0.0001"
+            disabled={disabled}
+            aria-invalid={fieldState.invalid}
+            placeholder={purchaseUnitAbbreviation === "ea" ? "1" : "e.g. 12"}
+            style={{ height: 36, borderRadius: 7, fontSize: 13 }}
+          />
+        )}
+      />
+      <div style={{ fontSize: 10, color: T.mutedSoft, marginTop: 4 }}>
+        Pack size from the product&apos;s default — override if this
+        shipment came in a different pack.
       </div>
     </div>
   );

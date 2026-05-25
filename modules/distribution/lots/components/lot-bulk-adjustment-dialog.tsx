@@ -63,6 +63,8 @@ export function LotBulkAdjustmentDialog({
 
   useEffect(() => {
     if (open) {
+      // Reset form when dialog opens for a different lot.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTargetStatus(defaultTargetStatus);
       setReason(defaultTargetStatus === "expired" ? "expired" : "damaged");
       setNotes("");

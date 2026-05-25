@@ -13,6 +13,7 @@ export const FEATURES = {
   DISTRIBUTION_CATEGORIES: "distribution.categories",
   DISTRIBUTION_PRICE_CHART: "distribution.priceChart",
   DISTRIBUTION_CONFIGURATION: "distribution.configuration",
+  DISTRIBUTION_INBOX: "distribution.inbox",
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];

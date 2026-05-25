@@ -67,6 +67,18 @@ export function buildSalesOrderObjectKey(args: {
   return `tenants/${args.tenantId}/sales-orders/${args.salesOrderId}/${args.fileId}${suffix}`;
 }
 
+export function buildExpenseAttachmentObjectKey(args: {
+  tenantId: string;
+  expenseId: string;
+  fileId: string;
+  extension?: string | null;
+}): string {
+  const ext =
+    args.extension?.trim().replace(/^\.+/, "").toLowerCase() ?? "";
+  const suffix = ext ? `.${ext}` : "";
+  return `tenants/${args.tenantId}/expenses/${args.expenseId}/${args.fileId}${suffix}`;
+}
+
 export function buildSupportTicketObjectKey(args: {
   tenantId: string;
   ticketId: string;
@@ -77,6 +89,20 @@ export function buildSupportTicketObjectKey(args: {
     args.extension?.trim().replace(/^\.+/, "").toLowerCase() ?? "";
   const suffix = ext ? `.${ext}` : "";
   return `tenants/${args.tenantId}/support-tickets/${args.ticketId}/${args.fileId}${suffix}`;
+}
+
+export function buildBulkImportObjectKey(args: {
+  tenantId: string;
+  batchId: string;
+  fileId: string;
+  extension?: string | null;
+}): string {
+  // Co-located under the batch so a future R2 lifecycle policy (or a manual
+  // sweep) can prefix-delete all PDFs from a single bulk import.
+  const ext =
+    args.extension?.trim().replace(/^\.+/, "").toLowerCase() ?? "";
+  const suffix = ext ? `.${ext}` : "";
+  return `tenants/${args.tenantId}/bulk-imports/${args.batchId}/${args.fileId}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------

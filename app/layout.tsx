@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { QueryProvider } from "@/components/query-provider";
@@ -7,14 +7,17 @@ import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-sans",
+const sans = Archivo({
   subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const mono = Geist_Mono({
   subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -31,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full bg-background antialiased`}
+      className={`${sans.variable} ${mono.variable} h-full bg-background antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppErrorBoundary>

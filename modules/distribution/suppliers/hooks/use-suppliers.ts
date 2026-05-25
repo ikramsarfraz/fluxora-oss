@@ -86,6 +86,12 @@ export function useUpdateSupplier() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.detail(variables.id),
       });
+      // The detail page renders supplier name, payment terms, and the new
+      // contact/address fields via the portfolio query — invalidating only
+      // `detail` left the detail page showing stale values after redirect.
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.suppliers.portfolio(variables.id),
+      });
       // AP aging depends on supplier payment terms.
       queryClient.invalidateQueries({
         queryKey: queryKeys.dashboard.apAging,

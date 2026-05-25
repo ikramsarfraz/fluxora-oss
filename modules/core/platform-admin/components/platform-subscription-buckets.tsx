@@ -46,8 +46,8 @@ export function PlatformSubscriptionBuckets(props: {
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <div className="rounded-xl border bg-slate-50 p-4 text-sm dark:bg-slate-950/40">
-        <p className="font-medium text-slate-900 dark:text-slate-100">By status</p>
+      <div className="rounded-xl border bg-surface p-4 text-sm dark:bg-ink-warm/40">
+        <p className="font-medium text-ink dark:text-card-warm">By status</p>
         <ul className="mt-2 space-y-1 text-muted-foreground">
           {STATUS_ORDER.map(key => (
             <li key={key}>
@@ -56,8 +56,8 @@ export function PlatformSubscriptionBuckets(props: {
           ))}
         </ul>
       </div>
-      <div className="rounded-xl border bg-slate-50 p-4 text-sm dark:bg-slate-950/40">
-        <p className="font-medium text-slate-900 dark:text-slate-100">By plan</p>
+      <div className="rounded-xl border bg-surface p-4 text-sm dark:bg-ink-warm/40">
+        <p className="font-medium text-ink dark:text-card-warm">By plan</p>
         <ul className="mt-2 space-y-1 text-muted-foreground">
           {PLAN_ORDER.map(key => (
             <li key={key}>

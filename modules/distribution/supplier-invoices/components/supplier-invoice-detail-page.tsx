@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useTransition } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -42,6 +42,9 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
+import { TablePagination } from "@/components/table-pagination";
+import { useClientPagination } from "@/hooks/use-client-pagination";
+import { TablePager } from "@/components/table-pager";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import {
   useCompleteSupplierInvoice,
@@ -58,31 +61,152 @@ import {
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { computePaymentSummary } from "@/modules/distribution/supplier-invoices/utils/payment-summary";
+import { getSupplierInvoiceStatusInfo } from "@/modules/distribution/supplier-invoices/utils/status";
 
 import { SupplierInvoiceAttachmentsCard } from "./supplier-invoice-attachments-card";
-import { SupplierInvoiceActivityTimeline } from "./supplier-invoice-activity-timeline";
+import { SupplierInvoicePdfPreviewCard } from "./supplier-invoice-pdf-preview-card";
+import { SupplierInvoiceActivityCard } from "./supplier-invoice-activity-card";
 import { SupplierInvoicePaymentEntryDialog } from "./supplier-invoice-payment-entry-dialog";
+import { ForwardBillModal } from "./forward-bill-modal";
+import { PaymentEvidenceCard } from "./payment-evidence-card";
+import { ForwardHistoryCard } from "./forward-history-card";
+import { fireSandboxTransactionAction } from "@/modules/distribution/plaid/actions";
 import { SupplierInvoiceReversalDialog } from "./supplier-invoice-reversal-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
 } as const;
+
+// ── Lifecycle stepper ─────────────────────────────────────────────────────
+
+type LifecycleStatus = "draft" | "posted" | "receiving" | "reconciled" | "completed" | "paid";
+
+const LIFECYCLE_STEPS: { key: LifecycleStatus; label: string }[] = [
+  { key: "draft", label: "Draft" },
+  { key: "posted", label: "Posted" },
+  { key: "receiving", label: "Receiving" },
+  { key: "reconciled", label: "Reconciled" },
+  { key: "completed", label: "Received" },
+  { key: "paid", label: "Paid" },
+];
+
+function LifecycleStepper({ status }: { status: string }) {
+  const currentIdx = LIFECYCLE_STEPS.findIndex(s => s.key === status);
+  const effectiveIdx = currentIdx === -1 ? 0 : currentIdx;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        marginBottom: "24px",
+        padding: "12px 20px",
+        background: C.surface,
+        border: `1px solid ${C.line}`,
+        borderRadius: "10px",
+        overflowX: "auto",
+      }}
+    >
+      {LIFECYCLE_STEPS.map((step, i) => {
+        const isDone = i < effectiveIdx;
+        const isActive = i === effectiveIdx;
+        const isPending = i > effectiveIdx;
+
+        return (
+          <Fragment key={step.key}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                position: "relative",
+                flex: "0 0 auto",
+              }}
+            >
+              {/* Circle */}
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  background: isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.line2,
+                  border: `2px solid ${isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.line}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: isActive && step.key === "paid"
+                    ? `0 0 0 3px ${C.good}44`
+                    : isActive
+                      ? `0 0 0 3px ${C.ink}22`
+                      : "none",
+                  transition: "all 0.15s",
+                }}
+              >
+                {isDone ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="var(--color-card)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <div
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: isActive ? "var(--color-card)" : C.line,
+                    }}
+                  />
+                )}
+              </div>
+              {/* Label */}
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isDone ? C.good : isActive && step.key === "paid" ? C.good : isActive ? C.ink : C.muted,
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.01em",
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+            {/* Connector */}
+            {i < LIFECYCLE_STEPS.length - 1 && (
+              <div
+                style={{
+                  flex: "1 1 40px",
+                  height: 2,
+                  background: isDone ? C.good : C.line,
+                  minWidth: 24,
+                  marginBottom: 18,
+                  transition: "background 0.15s",
+                }}
+              />
+            )}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -94,8 +218,13 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   credit_card: "Credit card",
 };
 
-function unitTypeLabel(type: "catch_weight" | "fixed_case") {
-  return type === "catch_weight" ? "Catch weight" : "Fixed case";
+function unitTypeLabel(
+  type: "catch_weight" | "fixed_case" | "per_each" | "per_unit",
+) {
+  if (type === "catch_weight") return "Catch weight";
+  if (type === "fixed_case") return "Fixed case";
+  if (type === "per_each") return "Per each";
+  return "Per unit";
 }
 
 function renderCaseWeightSummary(caseWeightsLbs: string | null): string | null {
@@ -130,11 +259,26 @@ export function SupplierInvoiceDetailPage({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reverseOpen, setReverseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [isSandboxFiring, startSandboxFire] = useTransition();
   const [expandedCaseWeightLines, setExpandedCaseWeightLines] = useState<Set<string>>(
     new Set(),
   );
+  // Receiving-summary client-side pagination — see receivingRows below.
+  // 1-indexed page to match the shared TablePager component used across
+  // the app's listing tables.
+  const [receivingPage, setReceivingPage] = useState(1);
+  const [receivingPerPage, setReceivingPerPage] = useState(25);
 
-  useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.invoiceNumber);
+  useSetBreadcrumbLabel(`/supplier-invoices/${invoiceId}`, invoice?.referenceNumber);
+
+  // Pagination for the two non-receiving tables on this page (the
+  // receiving table at the bottom has its own state above — left
+  // unchanged to avoid touching the case-weight expand UI that's
+  // wired to it). Empty-array fallbacks keep the hook order stable
+  // across the loading/error early returns below.
+  const linesPagination = useClientPagination(invoice?.lines ?? [], 10);
+  const paymentsPagination = useClientPagination(invoice?.payments ?? [], 10);
 
   if (isLoading) return <DetailPageSkeleton includeTable />;
   if (error || !invoice) {
@@ -154,11 +298,43 @@ export function SupplierInvoiceDetailPage({
   );
   const allItems = allLots.flatMap(lot => lot?.inventoryItems ?? []);
   const totalCases = allItems.reduce((acc, i) => acc + (i.cases ?? 0), 0);
-  const totalWeight = allItems.reduce(
-    (acc, i) => acc + Number(i.exactWeightLbs ?? 0),
-    0,
-  );
+  // Split totals by line-unit family. A mixed bill (meat + beverages
+  // can't happen today but supported by schema) would otherwise sum
+  // weight-mode + non-weight-mode quantities into nonsense numbers.
+  let totalWeight = 0;
+  let totalUnits = 0;
+  for (const item of allItems) {
+    const isWeightMode =
+      item.costUnitTypeSnapshot === "catch_weight" ||
+      item.costUnitTypeSnapshot === "fixed_case" ||
+      item.costUnitTypeSnapshot == null; // legacy default → weight
+    if (isWeightMode) {
+      totalWeight += Number(item.exactWeightLbs ?? 0);
+    } else {
+      totalUnits += Number(item.cases ?? 0);
+    }
+  }
+  // Bill-level family — true when every line is non-weight. Used by the
+  // line-items table to hide the "Weight (lb)" column entirely when no
+  // line carries a meaningful weight, instead of showing "0.00" for every
+  // row (the misleading state visible on per_each-only bills today).
+  const billIsAllNonWeight =
+    invoice.lines.length > 0 &&
+    invoice.lines.every(
+      l => l.unitType === "per_each" || l.unitType === "per_unit",
+    );
   const blockedItems = allItems.filter(i => i.status !== "in_stock");
+
+  // Receiving-summary rows pre-flattened so we can paginate. Bills with
+  // hundreds of cases would otherwise render every inventory item in
+  // one giant DOM block — painful to load and to scroll past on a phone.
+  const receivingRows = invoice.lines.flatMap(line =>
+    line.lotReceipts.flatMap(receipt => {
+      const lot = receipt.lot;
+      if (!lot) return [];
+      return lot.inventoryItems.map(item => ({ lot, item }));
+    }),
+  );
 
   const workflowAllowsReverse =
     invoice.status === "completed" && blockedItems.length === 0;
@@ -202,10 +378,27 @@ export function SupplierInvoiceDetailPage({
     : undefined;
 
   // ── Status pill ──────────────────────────────────────────────────────────
+  // Driven by the shared utils/status.ts mapping so the listing column,
+  // detail header pill, and lifecycle stepper all read from one source.
 
-  const statusPill = isDraft
-    ? { label: "Draft", bg: C.line2, color: C.muted }
-    : { label: "Received", bg: C.goodSoft, color: C.good };
+  const statusInfo = getSupplierInvoiceStatusInfo(invoice.status);
+  const statusPill = (() => {
+    switch (statusInfo.tone) {
+      case "neutral":
+        return { label: statusInfo.label, bg: C.line2, color: C.muted };
+      case "info":
+        return {
+          label: statusInfo.label,
+          bg: "var(--color-info-bg)",
+          color: "var(--color-info-fg)",
+        };
+      case "success":
+        return { label: statusInfo.label, bg: C.goodSoft, color: C.good };
+      case "default":
+      default:
+        return { label: statusInfo.label, bg: C.goodSoft, color: C.good };
+    }
+  })();
 
   const paymentStatusPill: Record<
     typeof paymentSummary.paymentStatus,
@@ -257,7 +450,7 @@ export function SupplierInvoiceDetailPage({
                 margin: 0,
               }}
             >
-              {invoice.invoiceNumber}
+              {invoice.referenceNumber}
             </h1>
             <StatusPill
               label={statusPill.label}
@@ -265,6 +458,18 @@ export function SupplierInvoiceDetailPage({
               color={statusPill.color}
             />
           </div>
+          {invoice.invoiceNumber ? (
+            <div
+              style={{
+                fontFamily: C.mono,
+                fontSize: "13px",
+                color: C.muted,
+                marginTop: "4px",
+              }}
+            >
+              Supplier inv: {invoice.invoiceNumber}
+            </div>
+          ) : null}
 
           {invoice.supplier && (
             <div style={{ fontSize: "16px", color: C.ink2, marginTop: "4px" }}>
@@ -310,16 +515,28 @@ export function SupplierInvoiceDetailPage({
                 </svg>
                 Edit
               </SecondaryBtn>
+              <SecondaryBtn
+                onClick={() => router.push(`/supplier-invoices/${invoiceId}/receive`)}
+                disabled={!canCompleteByRole}
+                title={completeDisabledReason}
+              >
+                Receive goods
+              </SecondaryBtn>
               <PrimaryBtn
                 onClick={() => setCompleteOpen(true)}
                 disabled={!canCompleteByRole}
                 title={completeDisabledReason}
               >
-                Complete &amp; receive
+                Quick receive
               </PrimaryBtn>
             </>
           ) : (
             <>
+              <SecondaryBtn
+                onClick={() => setForwardOpen(true)}
+              >
+                Forward
+              </SecondaryBtn>
               <SecondaryBtn
                 onClick={() => setReverseOpen(true)}
                 disabled={!canReverse}
@@ -327,13 +544,32 @@ export function SupplierInvoiceDetailPage({
               >
                 Reverse receipt
               </SecondaryBtn>
-              <PrimaryBtn
-                onClick={() => setPaymentOpen(true)}
-                disabled={!canRecordPayment}
-                title={recordPaymentDisabledReason}
-              >
-                Record payment
-              </PrimaryBtn>
+              {invoice.status !== "paid" && (
+                <PrimaryBtn
+                  onClick={() => setPaymentOpen(true)}
+                  disabled={!canRecordPayment}
+                  title={recordPaymentDisabledReason}
+                >
+                  Record payment
+                </PrimaryBtn>
+              )}
+              {process.env.NEXT_PUBLIC_PLAID_ENV === "sandbox" && invoice.status !== "paid" && (
+                <SecondaryBtn
+                  onClick={() => {
+                    startSandboxFire(async () => {
+                      const result = await fireSandboxTransactionAction(invoice.id);
+                      if (result.fired) {
+                        toast.info(`[Sandbox] Transaction synced — refresh to see the match.`);
+                      } else {
+                        toast.warning(`[Sandbox] Auto-fire skipped: ${result.reason}`);
+                      }
+                    });
+                  }}
+                  disabled={isSandboxFiring}
+                >
+                  {isSandboxFiring ? "Firing…" : "Simulate payment [Sandbox]"}
+                </SecondaryBtn>
+              )}
             </>
           )}
 
@@ -345,7 +581,7 @@ export function SupplierInvoiceDetailPage({
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  className="size-[30px] border-stone-line bg-stone-surface text-stone-ink2 shadow-none hover:bg-stone-line2"
+                  className="size-[30px] border-border-default bg-card text-ink-warm shadow-none hover:bg-divider"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -366,6 +602,17 @@ export function SupplierInvoiceDetailPage({
         </div>
       </div>
 
+      {/* ── LIFECYCLE STEPPER ── */}
+      <LifecycleStepper status={invoice.status} />
+
+      {/* ── PAYMENT EVIDENCE ── */}
+      {invoice.status === "paid" && (
+        <PaymentEvidenceCard
+          match={invoice.paymentMatches?.[0] ?? null}
+          payment={invoice.payments?.[0] ?? null}
+        />
+      )}
+
       {/* ── BODY GRID ── */}
       <div
         style={{
@@ -383,31 +630,38 @@ export function SupplierInvoiceDetailPage({
             title="Line items"
             description="Products on this bill. Each line produced one lot when received."
           >
-            <div style={{ overflowX: "auto" }}>
-              <Table>
-                <TableHeader className="bg-muted">
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Unit type</TableHead>
-                    <TableHead className="text-right">Cases</TableHead>
-                    <TableHead className="text-right">Weight lbs</TableHead>
-                    <TableHead className="text-right">Unit price</TableHead>
-                    <TableHead className="text-right">Line total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoice.lines.length === 0 ? (
+            <div className="overflow-hidden rounded-md border">
+              <div style={{ overflowX: "auto" }}>
+                <Table>
+                  <TableHeader className="bg-divider">
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-muted-foreground h-20 text-center"
-                      >
-                        No lines on this invoice.
-                      </TableCell>
+                      <TableHead>Product</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Unit type</TableHead>
+                      <TableHead className="text-right">Cases / Units</TableHead>
+                      {/* The weight column is meaningful only on a bill
+                          that has at least one weight-priced line. For
+                          per-each / per-unit bills, hide it entirely
+                          instead of showing "0.00" for every row. */}
+                      {billIsAllNonWeight ? null : (
+                        <TableHead className="text-right">Weight</TableHead>
+                      )}
+                      <TableHead className="text-right">Unit price</TableHead>
+                      <TableHead className="text-right">Line total</TableHead>
                     </TableRow>
-                  ) : (
-                    invoice.lines.map(line => {
+                  </TableHeader>
+                  <TableBody>
+                    {invoice.lines.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={billIsAllNonWeight ? 6 : 7}
+                          className="text-muted-foreground h-20 text-center"
+                        >
+                          No lines on this invoice.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      linesPagination.rows.map(line => {
                       const caseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
                       const hasDetailedCaseWeights =
                         line.unitType === "catch_weight" && caseWeights.length > 0;
@@ -431,7 +685,7 @@ export function SupplierInvoiceDetailPage({
                                     }
                                     variant="ghost"
                                     size="icon-xs"
-                                    className="size-6 shrink-0 text-stone-muted hover:bg-stone-line2 hover:text-stone-ink"
+                                    className="size-6 shrink-0 text-subtle hover:bg-divider hover:text-ink"
                                   >
                                     {isExpanded ? (
                                       <ChevronDown className="size-3.5" />
@@ -469,18 +723,70 @@ export function SupplierInvoiceDetailPage({
                               </div>
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {line.quantityCases.toLocaleString()}
+                              {/* Cases / Units cell — shows count + UOM abbreviation
+                                  so per-each / per-unit lines read "48 ea" or
+                                  "5 case" instead of a bare number. When the
+                                  line carries a pack-size snapshot > 1 (e.g.
+                                  12-pack case), append "× 12 ea" so the
+                                  underlying base-unit count is visible at a
+                                  glance. */}
+                              {(() => {
+                                const isUnitMode =
+                                  line.unitType === "per_each" ||
+                                  line.unitType === "per_unit";
+                                const purchaseAbbr =
+                                  line.purchaseUnitAbbreviationSnapshot ??
+                                  line.product?.baseUnit?.abbreviation ??
+                                  "ea";
+                                const baseAbbr =
+                                  line.product?.baseUnit?.abbreviation ?? "ea";
+                                const packSize = Number(
+                                  line.conversionToBaseSnapshot ?? "1",
+                                );
+                                const showPackSize =
+                                  isUnitMode &&
+                                  Number.isFinite(packSize) &&
+                                  packSize > 1 &&
+                                  purchaseAbbr.toLowerCase() !==
+                                    baseAbbr.toLowerCase();
+                                return (
+                                  <div className="flex flex-col items-end">
+                                    <span>
+                                      {line.quantityCases.toLocaleString()}
+                                      {isUnitMode ? ` ${purchaseAbbr}` : ""}
+                                    </span>
+                                    {showPackSize ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        × {packSize} {baseAbbr}/{purchaseAbbr}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
                             </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              <div className="flex flex-col items-end">
-                                <span>{formatWeightLbs(line.weightLbs)}</span>
-                                {summary ? (
-                                  <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
-                                    {summary}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </TableCell>
+                            {billIsAllNonWeight ? null : (
+                              <TableCell className="text-right tabular-nums">
+                                {/* Weight cell — only meaningful for catch_weight
+                                    and fixed_case. Non-weight lines on a mixed
+                                    bill show "—" instead of "0.00 lb". */}
+                                {line.unitType === "catch_weight" ||
+                                line.unitType === "fixed_case" ? (
+                                  <div className="flex flex-col items-end">
+                                    <span>
+                                      {formatWeightLbs(line.weightLbs)}{" "}
+                                      {line.product?.baseUnit?.abbreviation ?? "lb"}
+                                    </span>
+                                    {summary ? (
+                                      <span className="max-w-[14rem] text-right text-xs text-muted-foreground">
+                                        {summary}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                            )}
                             <TableCell className="text-right tabular-nums">
                               {formatMoney(line.unitPrice)}
                             </TableCell>
@@ -524,8 +830,10 @@ export function SupplierInvoiceDetailPage({
                       );
                     })
                   )}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination state={linesPagination} />
             </div>
           </Section>
 
@@ -562,10 +870,18 @@ export function SupplierInvoiceDetailPage({
                     { label: "Lots created", value: allLots.length },
                     { label: "Inventory items", value: allItems.length },
                     { label: "Total cases", value: totalCases.toLocaleString() },
-                    {
-                      label: "Total weight",
-                      value: `${formatWeightLbs(totalWeight)} lbs`,
-                    },
+                    billIsAllNonWeight
+                      ? {
+                          // Bills with only per_each / per_unit lines don't have
+                          // a meaningful aggregate weight — surface the unit
+                          // count instead so the KPI carries real information.
+                          label: "Total units",
+                          value: totalUnits.toLocaleString(),
+                        }
+                      : {
+                          label: "Total weight",
+                          value: `${formatWeightLbs(totalWeight)} lbs`,
+                        },
                   ].map(({ label, value }) => (
                     <div
                       key={label}
@@ -586,62 +902,100 @@ export function SupplierInvoiceDetailPage({
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <Table>
-                    <TableHeader className="bg-muted">
+                    <TableHeader className="bg-divider">
                       <TableRow>
                         <TableHead>Lot #</TableHead>
                         <TableHead>Expires</TableHead>
                         <TableHead>Barcode</TableHead>
                         <TableHead className="text-right">Cases</TableHead>
-                        <TableHead className="text-right">Weight lbs</TableHead>
+                        {/* Same hide-when-no-weight rule as the line items
+                            table above: a beverages-only bill shows no
+                            weight column instead of "0.00" rows. */}
+                        {billIsAllNonWeight ? null : (
+                          <TableHead className="text-right">Weight</TableHead>
+                        )}
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invoice.lines.flatMap(line =>
-                        line.lotReceipts.flatMap(receipt => {
-                          const lot = receipt.lot;
-                          if (!lot) return [];
-                          return lot.inventoryItems.map(item => (
-                            <TableRow key={item.id}>
-                              <TableCell>
-                                <Link
-                                  href={`/lots/${lot.id}`}
-                                  style={{
-                                    fontFamily: C.mono,
-                                    fontSize: "13px",
-                                    color: C.accent,
-                                    textDecoration: "none",
-                                  }}
-                                  className="hover:underline"
-                                >
-                                  {lot.lotNumber}
-                                </Link>
-                              </TableCell>
-                              <TableCell>
-                                {formatDisplayDate(lot.expirationDate)}
-                              </TableCell>
-                              <TableCell>
-                                <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
-                                  {item.barcodeId}
-                                </span>
-                              </TableCell>
+                      {(() => {
+                        const pageCount = Math.max(
+                          1,
+                          Math.ceil(receivingRows.length / receivingPerPage),
+                        );
+                        const safePage = Math.min(receivingPage, pageCount);
+                        const slice = receivingRows.slice(
+                          (safePage - 1) * receivingPerPage,
+                          safePage * receivingPerPage,
+                        );
+                        return slice.map(({ lot, item }) => (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              <Link
+                                href={`/inventory/lots/${lot.id}`}
+                                style={{
+                                  fontFamily: C.mono,
+                                  fontSize: "13px",
+                                  color: C.accent,
+                                  textDecoration: "none",
+                                }}
+                                className="hover:underline"
+                              >
+                                {lot.lotNumber}
+                              </Link>
+                            </TableCell>
+                            <TableCell>
+                              {formatDisplayDate(lot.expirationDate)}
+                            </TableCell>
+                            <TableCell>
+                              <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                                {item.barcodeId}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {item.cases.toLocaleString()}
+                            </TableCell>
+                            {billIsAllNonWeight ? null : (
                               <TableCell className="text-right tabular-nums">
-                                {item.cases.toLocaleString()}
+                                {/* Per-item weight: only render for
+                                    weight-mode rows on a mixed bill;
+                                    non-weight rows show "—". Pure
+                                    beverages bills don't reach here
+                                    because the column is hidden above. */}
+                                {item.costUnitTypeSnapshot === "catch_weight" ||
+                                item.costUnitTypeSnapshot === "fixed_case" ||
+                                item.costUnitTypeSnapshot == null
+                                  ? formatWeightLbs(item.exactWeightLbs)
+                                  : "—"}
                               </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {formatWeightLbs(item.exactWeightLbs)}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="capitalize">
-                                  {item.status.replace("_", " ")}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          ));
-                        }),
-                      )}
+                            )}
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">
+                                {item.status.replace("_", " ")}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      })()}
                     </TableBody>
                   </Table>
+                  <TablePager
+                    total={receivingRows.length}
+                    perPage={receivingPerPage}
+                    page={Math.min(
+                      receivingPage,
+                      Math.max(
+                        1,
+                        Math.ceil(receivingRows.length / receivingPerPage),
+                      ),
+                    )}
+                    onPageChange={setReceivingPage}
+                    onPerPageChange={value => {
+                      setReceivingPerPage(value);
+                      setReceivingPage(1);
+                    }}
+                    perPageOptions={[25, 50, 100]}
+                  />
                 </div>
               </div>
             )}
@@ -653,19 +1007,20 @@ export function SupplierInvoiceDetailPage({
               title="Payment history"
               description="Payments applied to this bill."
             >
-              <div style={{ overflowX: "auto" }}>
-                <Table>
-                  <TableHeader className="bg-muted">
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Recorded by</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoice.payments.map(payment => (
+              <div className="overflow-hidden rounded-md border">
+                <div style={{ overflowX: "auto" }}>
+                  <Table>
+                    <TableHeader className="bg-divider">
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Method</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Recorded by</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentsPagination.rows.map(payment => (
                       <TableRow key={payment.id}>
                         <TableCell>
                           {formatDisplayDate(payment.paymentDate)}
@@ -675,13 +1030,22 @@ export function SupplierInvoiceDetailPage({
                             payment.paymentMethod}
                         </TableCell>
                         <TableCell>
-                          {payment.reference ? (
-                            <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
-                              {payment.reference}
-                            </span>
-                          ) : (
-                            <span style={{ color: C.muted }}>—</span>
-                          )}
+                          {(() => {
+                            const ref =
+                              payment.paymentMethod === "check" && payment.checkNumber
+                                ? `Check #${payment.checkNumber}`
+                                : payment.referenceNumber ||
+                                  (payment.checkNumber
+                                    ? `Check #${payment.checkNumber}`
+                                    : null);
+                            return ref ? (
+                              <span style={{ fontFamily: C.mono, fontSize: "12px" }}>
+                                {ref}
+                              </span>
+                            ) : (
+                              <span style={{ color: C.muted }}>—</span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <span style={{ fontSize: "12px", color: C.muted }}>
@@ -694,12 +1058,18 @@ export function SupplierInvoiceDetailPage({
                           {formatMoney(payment.amount)}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <TablePagination state={paymentsPagination} />
               </div>
             </Section>
           )}
+
+          {/* Source PDF(s) — the card loads its own list of attachments
+              (manual + bulk-import) and renders a picker if multiple. */}
+          <SupplierInvoicePdfPreviewCard supplierInvoiceId={invoiceId} />
 
           {/* Attachments */}
           <SupplierInvoiceAttachmentsCard
@@ -711,10 +1081,14 @@ export function SupplierInvoiceDetailPage({
             removeDisabledReason={editDisabledReason}
           />
 
-          {/* Activity */}
-          <Section title="Activity" description="Who touched this bill and when.">
-            <SupplierInvoiceActivityTimeline supplierInvoiceId={invoiceId} />
-          </Section>
+          {/* Forward history */}
+          {invoice.billForwards && invoice.billForwards.length > 0 && (
+            <ForwardHistoryCard forwards={invoice.billForwards} />
+          )}
+
+          {/* Activity — same compact card as the order detail page so
+              the two surfaces feel consistent. */}
+          <SupplierInvoiceActivityCard supplierInvoiceId={invoiceId} />
         </div>
 
         {/* ── RIGHT SIDEBAR ── */}
@@ -754,9 +1128,9 @@ export function SupplierInvoiceDetailPage({
                 )}
               </dd>
 
-              <dt style={{ color: C.muted }}>Invoice #</dt>
+              <dt style={{ color: C.muted }}>Supplier invoice #</dt>
               <dd style={{ margin: 0, fontFamily: C.mono, fontWeight: 500 }}>
-                {invoice.invoiceNumber}
+                {invoice.invoiceNumber ?? <span style={{ color: C.muted }}>—</span>}
               </dd>
 
               <dt style={{ color: C.muted }}>Invoice date</dt>
@@ -874,11 +1248,11 @@ export function SupplierInvoiceDetailPage({
           <AlertDialogHeader>
             <AlertDialogTitle>Receive this bill?</AlertDialogTitle>
             <AlertDialogDescription>
-              Receiving <strong>{invoice.invoiceNumber}</strong> will
+              Receiving <strong>{invoice.referenceNumber}</strong> will
               automatically create one lot and one inventory item per line. Lot
               numbers and expirations will use any overrides you entered,
               otherwise they default to{" "}
-              <code>LOT-{invoice.invoiceNumber}-XX</code> and receive date + 7
+              <code>LOT-{invoice.referenceNumber}-XX</code> and receive date + 7
               days. Received bills can no longer be edited.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -894,7 +1268,7 @@ export function SupplierInvoiceDetailPage({
                   { id: invoiceId },
                   {
                     onSuccess: () => {
-                      toast.success(`Bill "${invoice.invoiceNumber}" received. Lots and inventory created.`);
+                      toast.success(`Bill ${invoice.referenceNumber} received. Lots and inventory created.`);
                       setCompleteOpen(false);
                     },
                     onError: err =>
@@ -919,7 +1293,7 @@ export function SupplierInvoiceDetailPage({
             <AlertDialogTitle>Delete draft bill?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete draft{" "}
-              <strong>{invoice.invoiceNumber}</strong>. No inventory has been
+              <strong>{invoice.referenceNumber}</strong>. No inventory has been
               created yet, so nothing in stock changes. This action cannot be
               undone.
             </AlertDialogDescription>
@@ -935,7 +1309,7 @@ export function SupplierInvoiceDetailPage({
                 event.preventDefault();
                 deleteMutation.mutate(invoiceId, {
                   onSuccess: () => {
-                    toast.success(`Draft bill "${invoice.invoiceNumber}" deleted.`);
+                    toast.success(`Draft bill ${invoice.referenceNumber} deleted.`);
                     router.push("/supplier-invoices");
                   },
                   onError: err =>
@@ -957,7 +1331,7 @@ export function SupplierInvoiceDetailPage({
         open={reverseOpen}
         onOpenChange={setReverseOpen}
         invoiceId={invoiceId}
-        invoiceNumber={invoice.invoiceNumber}
+        invoiceNumber={invoice.referenceNumber}
         canReverse={canReverse}
       />
 
@@ -965,9 +1339,23 @@ export function SupplierInvoiceDetailPage({
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         supplierInvoiceId={invoice.id}
-        invoiceNumber={invoice.invoiceNumber}
+        invoiceNumber={invoice.referenceNumber}
         balanceDue={paymentSummary.balanceDue}
         defaultPaymentMethod={invoice.paymentMethod ?? undefined}
+      />
+
+      <ForwardBillModal
+        open={forwardOpen}
+        onOpenChange={setForwardOpen}
+        invoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.referenceNumber,
+          invoiceDate: invoice.invoiceDate,
+          totalAmount: invoice.totalAmount,
+          supplierName: invoice.supplier?.name ?? null,
+          status: invoice.status,
+          paidAt: invoice.paymentMatches?.[0]?.bankTransaction?.date ?? null,
+        }}
       />
     </div>
   );
@@ -985,7 +1373,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="gap-0 overflow-hidden rounded-[10px] border-stone-line bg-stone-surface py-0 shadow-none ring-0">
+    <Card className="gap-0 overflow-hidden rounded-[10px] border-border-default bg-card py-0 shadow-none ring-0">
       <div
         style={{
           padding: "16px 20px",
@@ -1008,7 +1396,7 @@ function Section({
 
 function SideCard({ children }: { children: React.ReactNode }) {
   return (
-    <Card className="rounded-[10px] border-stone-line bg-stone-surface px-[18px] py-4 shadow-none ring-0">
+    <Card className="rounded-[10px] border-border-default bg-card px-[18px] py-4 shadow-none ring-0">
       {children}
     </Card>
   );
@@ -1050,7 +1438,7 @@ function PrimaryBtn({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="h-8 border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90 disabled:opacity-50"
+      className="h-8 border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest disabled:opacity-50"
     >
       {children}
     </Button>
@@ -1075,7 +1463,7 @@ function SecondaryBtn({
       disabled={disabled}
       title={title}
       variant="outline"
-      className="h-8 border-stone-line bg-stone-surface px-3.5 text-[13px] text-stone-ink shadow-none hover:bg-stone-line2 disabled:opacity-50"
+      className="h-8 border-border-default bg-card px-3.5 text-[13px] text-ink shadow-none hover:bg-divider disabled:opacity-50"
     >
       {children}
     </Button>

@@ -1,19 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
+  Archive,
+  ArchiveRestore,
   ChevronDown,
   DollarSign,
   Pencil,
   Phone,
   Plus,
+  Receipt,
   ShoppingCart,
+  Trash2,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { queryKeys } from "@/lib/query/keys";
+import {
+  archiveCustomerAction,
+  permanentlyDeleteCustomerAction,
+  restoreCustomerAction,
+} from "@/modules/distribution/customers/actions";
 
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/utils/currency";
@@ -43,22 +66,25 @@ import {
   useCustomerOrdersPage,
   useCustomerPortfolio,
 } from "../hooks/use-customers";
+import { BulkPaymentEntryDialog } from "@/modules/distribution/invoices/components/bulk-payment-entry-dialog";
+import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { can } from "@/lib/auth/permissions";
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
 const ORDER_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  sales_order: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  confirmed: { label: "Confirmed", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  fulfilled: { label: "Fulfilled", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  cancelled: { label: "Cancelled", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  sales_order: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  confirmed: { label: "Confirmed", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  fulfilled: { label: "Fulfilled", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  cancelled: { label: "Cancelled", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 const INVOICE_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  sent: { label: "Sent", bg: "oklch(96% 0.03 240)", color: "oklch(60% 0.15 240)" },
-  partially_paid: { label: "Partially paid", bg: "oklch(97% 0.04 70)", color: "oklch(60% 0.14 70)" },
-  paid: { label: "Paid", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  void: { label: "Void", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  draft: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  sent: { label: "Sent", bg: "var(--color-info-bg)", color: "var(--color-info-fg)" },
+  partially_paid: { label: "Partially paid", bg: "var(--color-warning-bg)", color: "var(--color-warning-fg)" },
+  paid: { label: "Paid", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  void: { label: "Void", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,8 +115,8 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-status-warn"
-        : "text-stone-muted";
+        ? "text-warning-fg"
+        : "text-subtle";
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -98,10 +124,10 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
           <Icon className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
+        <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight">
           {value}
         </CardTitle>
-        {helper ? <p className="mt-1 text-[11px] text-stone-muted">{helper}</p> : null}
+        {helper ? <p className="mt-1 text-[11px] text-subtle">{helper}</p> : null}
       </CardHeader>
     </Card>
   );
@@ -121,12 +147,20 @@ export default function CustomerPortfolioPage() {
   const invoicesPage = Math.max(1, Number(searchParams.get("invoicesPage") ?? 1));
   const invoicesPer = Number(searchParams.get("invoicesPer") ?? 10) || 10;
 
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  useEffect(() => {
-    if (sessionStorage.getItem(`cust-details-${customerId}`) === "open") {
-      setDetailsOpen(true);
-    }
-  }, [customerId]);
+  // Default open — the panel is the first place users land for any
+  // single-customer question (phone, EIN, payment terms…). Collapse
+  // is a session-only convenience; we don't persist the closed state
+  // because old "closed" entries would override the new default and
+  // make the panel snap shut a frame after mount.
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [bulkPaymentOpen, setBulkPaymentOpen] = useState(false);
+  const [lifecycleAction, setLifecycleAction] = useState<
+    "archive" | "restore" | "permanent-delete" | null
+  >(null);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentPortalUser();
+  const canRecordPayment = can(currentUser?.role, "record_payment");
 
   const { data: portfolio, isLoading, error } = useCustomerPortfolio(customerId);
   const { data: ordersData, isLoading: ordersLoading } = useCustomerOrdersPage(customerId, {
@@ -155,11 +189,41 @@ export default function CustomerPortfolioPage() {
   }
 
   function toggleDetails() {
-    setDetailsOpen(prev => {
-      const next = !prev;
-      sessionStorage.setItem(`cust-details-${customerId}`, next ? "open" : "closed");
-      return next;
-    });
+    setDetailsOpen(prev => !prev);
+  }
+
+  const isArchived = !!customer.archivedAt;
+  // Capture narrowed values into locals so the async closure sees
+  // non-nullable types — function-declaration closures don't always
+  // inherit the narrowing from the outer `if (!customer) return`.
+  const customerIdForActions = customer.id;
+
+  async function handleLifecycleConfirm() {
+    if (!lifecycleAction) return;
+    setLifecyclePending(true);
+    try {
+      if (lifecycleAction === "archive") {
+        await archiveCustomerAction(customerIdForActions);
+        toast.success("Customer archived.");
+      } else if (lifecycleAction === "restore") {
+        await restoreCustomerAction(customerIdForActions);
+        toast.success("Customer restored.");
+      } else {
+        await permanentlyDeleteCustomerAction(customerIdForActions);
+        toast.success("Customer deleted.");
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
+      setLifecycleAction(null);
+      if (lifecycleAction === "permanent-delete") {
+        router.push("/customers");
+      } else {
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed.");
+    } finally {
+      setLifecyclePending(false);
+    }
   }
 
   const primaryAddress =
@@ -168,7 +232,25 @@ export default function CustomerPortfolioPage() {
     ? [primaryAddress.city, primaryAddress.state].filter(Boolean).join(", ")
     : null;
 
-  const balanceTone = parseFloat(metrics.balanceDue) > 0 ? "danger" : "default";
+  const balanceDueNum = parseFloat(metrics.balanceDue);
+  const creditLimitNum = customer.creditLimit
+    ? parseFloat(customer.creditLimit)
+    : null;
+  const overLimit =
+    creditLimitNum != null && balanceDueNum > creditLimitNum;
+  const balanceTone =
+    overLimit
+      ? "danger"
+      : balanceDueNum > 0
+        ? creditLimitNum != null && balanceDueNum > creditLimitNum * 0.8
+          ? "warning"
+          : "danger"
+        : "default";
+  const balanceHelper = overLimit
+    ? `Over limit by ${formatMoney(String(balanceDueNum - creditLimitNum!))}.`
+    : creditLimitNum != null
+      ? `of ${formatMoney(customer.creditLimit!)} credit limit.`
+      : "Open balance on non-void invoices.";
   const openOrdersTone = metrics.openOrdersCount > 0 ? "warning" : "default";
 
   const TABS = [
@@ -185,37 +267,171 @@ export default function CustomerPortfolioPage() {
           {initials(customer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold leading-tight text-stone-ink">
-            {customer.name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-2xl font-medium leading-tight text-ink">
+              {customer.name}
+            </h1>
+            {isArchived ? (
+              <Badge
+                variant="secondary"
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+              >
+                Archived
+              </Badge>
+            ) : null}
+          </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             {customer.phoneNumber && (
-              <span className="flex items-center gap-1 text-sm text-stone-muted">
+              <span className="flex items-center gap-1 text-sm text-subtle">
                 <Phone className="size-3.5 shrink-0" />
                 {formatPhone(customer.phoneNumber)}
               </span>
             )}
-            {city && <span className="text-sm text-stone-muted">{city}</span>}
-            <span className="text-sm text-stone-muted">
+            {city && <span className="text-sm text-subtle">{city}</span>}
+            <span className="text-sm text-subtle">
               Customer since {formatMonthYear(customer.createdAt)}
             </span>
+            {isArchived && customer.archivedAt ? (
+              <span className="text-sm text-subtle">
+                Archived {formatDisplayDate(customer.archivedAt)}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" asChild>
-            <Link href={`/orders/new?customerId=${customer.id}`}>
-              <Plus className="size-4" />
-              New order
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/customers/${customer.id}/edit`}>
-              <Pencil className="size-4" />
-              Edit
-            </Link>
-          </Button>
+          {isArchived ? (
+            <>
+              <Button
+                size="sm"
+                onClick={() => setLifecycleAction("restore")}
+              >
+                <ArchiveRestore className="size-4" />
+                Restore
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLifecycleAction("permanent-delete")}
+              >
+                <Trash2 className="size-4" />
+                Delete permanently
+              </Button>
+            </>
+          ) : (
+            <>
+              {canRecordPayment && parseFloat(metrics.balanceDue) > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBulkPaymentOpen(true)}
+                >
+                  <Receipt className="size-4" />
+                  Record payment
+                </Button>
+              ) : null}
+              <Button size="sm" asChild>
+                <Link href={`/orders/new?customerId=${customer.id}`}>
+                  <Plus className="size-4" />
+                  New order
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/customers/${customer.id}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLifecycleAction("archive")}
+              >
+                <Archive className="size-4" />
+                Archive
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      <BulkPaymentEntryDialog
+        open={bulkPaymentOpen}
+        onOpenChange={setBulkPaymentOpen}
+        customerId={customer.id}
+        customerName={customer.name}
+      />
+
+      <AlertDialog
+        open={!!lifecycleAction}
+        onOpenChange={open => {
+          if (!open && !lifecyclePending) setLifecycleAction(null);
+        }}
+      >
+        <AlertDialogContent>
+          {lifecycleAction === "archive" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Archive customer</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Archive <strong>{customer.name}</strong>? They&apos;ll be hidden from
+                  order and invoice lookups, but past orders, invoices, and payments
+                  stay intact. You can restore them later from the Archived tab.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Archive
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : lifecycleAction === "restore" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Restore customer</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Restore <strong>{customer.name}</strong>? They&apos;ll be visible
+                  again everywhere customers appear.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Restore
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : lifecycleAction === "permanent-delete" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete permanently</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Delete <strong>{customer.name}</strong> permanently? This can&apos;t
+                  be undone. If the customer has any orders or invoices, the delete
+                  will fail — archive them instead.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={lifecyclePending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={handleLifecycleConfirm}
+                  disabled={lifecyclePending}
+                >
+                  Delete permanently
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : null}
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -223,7 +439,7 @@ export default function CustomerPortfolioPage() {
           icon={Wallet}
           label="Balance due"
           value={formatMoney(metrics.balanceDue)}
-          helper="Open balance on non-void invoices."
+          helper={balanceHelper}
           tone={balanceTone}
         />
         <MetricCard
@@ -248,39 +464,77 @@ export default function CustomerPortfolioPage() {
           onClick={toggleDetails}
           className="flex w-full items-center justify-between px-6 py-4 text-left"
         >
-          <span className="text-sm font-semibold text-stone-ink">Account details</span>
+          <span className="text-sm font-semibold text-ink">Account details</span>
           <ChevronDown
             className={cn(
-              "size-4 text-stone-muted transition-transform duration-200",
+              "size-4 text-subtle transition-transform duration-200",
               detailsOpen && "rotate-180",
             )}
           />
         </button>
         {detailsOpen && (
-          <div className="border-t border-stone-line px-6 py-5">
+          <div className="border-t border-border-default px-6 py-5">
             <div className="grid grid-cols-3 gap-x-6 gap-y-4">
               <div>
-                <p className="text-xs text-stone-muted">Abbreviation</p>
+                <p className="text-xs text-subtle">Invoice prefix</p>
                 <p className="mt-0.5 text-sm font-medium">{customer.abbreviation ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs text-stone-muted">Phone</p>
+                <p className="text-xs text-subtle">Email</p>
+                <p className="mt-0.5 text-sm font-medium break-all">
+                  {customer.email ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Phone</p>
                 <p className="mt-0.5 text-sm font-medium">
                   {customer.phoneNumber ? formatPhone(customer.phoneNumber) : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-stone-muted">Fuel surcharge</p>
+                <p className="text-xs text-subtle">Tax ID</p>
+                <p className="mt-0.5 text-sm font-medium font-mono tabular-nums">
+                  {customer.taxId ?? "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Payment terms</p>
+                <p className="mt-0.5 text-sm font-medium">
+                  {customer.netDays == null
+                    ? "—"
+                    : customer.netDays === 0
+                      ? "Due on receipt"
+                      : `Net ${customer.netDays}`}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Fuel surcharge</p>
                 <p className="mt-0.5 text-sm font-medium">
                   {customer.fuelSurchargeAmount != null
                     ? formatMoney(customer.fuelSurchargeAmount)
                     : "—"}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-subtle">Credit limit</p>
+                <p className="mt-0.5 text-sm font-medium">
+                  {customer.creditLimit != null
+                    ? formatMoney(customer.creditLimit)
+                    : "No limit"}
+                </p>
+              </div>
             </div>
+            {customer.notes ? (
+              <div className="mt-5 border-t border-border-default pt-5">
+                <p className="mb-2 text-xs font-medium text-subtle">Notes</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                  {customer.notes}
+                </p>
+              </div>
+            ) : null}
             {customer.addresses.length > 0 && (
-              <div className="mt-5 border-t border-stone-line pt-5">
-                <p className="mb-3 text-xs font-medium text-stone-muted">Addresses</p>
+              <div className="mt-5 border-t border-border-default pt-5">
+                <p className="mb-3 text-xs font-medium text-subtle">Addresses</p>
                 <div className="space-y-3">
                   {customer.addresses.map(addr => {
                     const line2 = [addr.city, addr.state, addr.zip].filter(Boolean).join(", ");
@@ -288,7 +542,7 @@ export default function CustomerPortfolioPage() {
                       <div key={addr.id} className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{addr.street}</p>
-                          {line2 && <p className="text-xs text-stone-muted">{line2}</p>}
+                          {line2 && <p className="text-xs text-subtle">{line2}</p>}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <Badge variant="outline" className="text-xs capitalize">
@@ -311,7 +565,7 @@ export default function CustomerPortfolioPage() {
       </Card>
 
       {/* Tab bar — sticky below topbar */}
-      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-white px-4">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">
         <div className="flex">
           {TABS.map(t => (
             <button
@@ -320,8 +574,8 @@ export default function CustomerPortfolioPage() {
               className={cn(
                 "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                 tab === t.id
-                  ? "border-primary text-stone-ink"
-                  : "border-transparent text-stone-muted hover:text-stone-ink",
+                  ? "border-primary text-ink"
+                  : "border-transparent text-subtle hover:text-ink",
               )}
             >
               {t.label}
@@ -331,8 +585,8 @@ export default function CustomerPortfolioPage() {
                   className={cn(
                     "h-5 rounded-full px-1.5 text-[11px]",
                     tab === t.id
-                      ? "bg-stone-ink text-stone-surface"
-                      : "bg-stone-line text-stone-muted",
+                      ? "bg-forest-mid text-card-warm"
+                      : "bg-surface-deep text-subtle",
                   )}
                 >
                   {t.count}
@@ -351,54 +605,54 @@ export default function CustomerPortfolioPage() {
           {ordersLoading ? (
             <PageLoading message="Loading orders..." />
           ) : !ordersData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No orders on record.</p>
+            <p className="text-sm text-subtle">No orders on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Order #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Due
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Items
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {ordersData.data.map(order => {
                     const s = ORDER_STATUS[order.status] ?? {
                       label: order.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     return (
                       <TableRow
                         key={order.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {order.orderNumber ?? "—"}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(order.orderDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(order.dueDate) ?? "—"}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 text-right align-middle">
@@ -418,7 +672,7 @@ export default function CustomerPortfolioPage() {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link href={`/orders/${order.id}`} onClick={e => e.stopPropagation()}>
                                 View
@@ -448,55 +702,55 @@ export default function CustomerPortfolioPage() {
           {invoicesLoading ? (
             <PageLoading message="Loading invoices..." />
           ) : !invoicesData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No invoices on record.</p>
+            <p className="text-sm text-subtle">No invoices on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Due
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Balance
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoicesData.data.map(inv => {
                     const s = INVOICE_STATUS[inv.status] ?? {
                       label: inv.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     const hasBalance = parseFloat(inv.balanceDue) > 0;
                     return (
                       <TableRow
                         key={inv.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {inv.invoiceNumber}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.invoiceDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.dueDate) ?? "—"}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 align-middle">
@@ -523,7 +777,7 @@ export default function CustomerPortfolioPage() {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link
                                 href={`/invoices/${inv.id}`}

@@ -4,54 +4,52 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Inline-theme bridge — exposes the shadcn semantic variables (defined in
+   :root below) as Tailwind utility classes: border-border, bg-background,
+   text-foreground, ring, sidebar-N, chart-N, plus the legacy stone-N and
+   status-N aliases. Keys that collide with Fluxora's first-class @theme
+   tokens (e.g. --color-card, --color-muted, --color-border) are intentionally
+   omitted so Fluxora's literal values win — the bridge only fills in
+   names Fluxora does not already own. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
-
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
+  /* --color-background, --color-foreground, --color-border, --color-ring
+     are declared as literals in the @theme block below — kept out of the
+     inline bridge to avoid Tailwind-v4 resolution quirks with `@apply`. */
   --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
 
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.2);
-  --radius-2xl: calc(var(--radius) * 1.5);
-  --radius-3xl: calc(var(--radius) * 1.8);
-  --radius-4xl: calc(var(--radius) * 2.2);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
 
-  /* Stone design system tokens → bg-stone-bg, text-stone-ink, border-stone-line, etc. */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-input: var(--input);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
   --color-stone-bg: var(--stone-bg);
   --color-stone-surface: var(--stone-surface);
   --color-stone-ink: var(--stone-ink);
@@ -60,7 +58,6 @@
   --color-stone-line: var(--stone-line);
   --color-stone-line2: var(--stone-line2);
 
-  /* Status colors → bg-status-good-soft, text-status-warn, etc. */
   --color-status-good: var(--status-good);
   --color-status-good-soft: var(--status-good-soft);
   --color-status-warn: var(--status-warn);
@@ -69,131 +66,204 @@
   --color-status-info-soft: var(--status-info-soft);
 }
 
-:root {
-  /* Warm-stone background / surface */
-  --background: #fafaf9;
-  --foreground: #0c0a09;
+@theme {
+  /* ---------- Surfaces — cream-tinted neutrals ---------- */
+  --color-page: #F5EFE0;
+  --color-surface: #EDE5D2;
+  --color-surface-deep: #E5DCC4;
+  --color-border-default: #DDD3B8;
+  --color-border-soft: #E5DCC4;
+  --color-divider: #F0EBDC;
+  /* Card was #FFFFFF pre-2026-05; pure white read too sharp against the
+     cream page (#F5EFE0). Softened to a warm off-white in the same hue
+     family so cards lift gently from the page without floating. */
+  --color-card: #FBF7EC;
+  --color-card-warm: #FDF9F0;
 
-  --card: #ffffff;
-  --card-foreground: #0c0a09;
+  /* Aliases required by the @apply line in @layer base and a few shadcn
+     utilities that hard-code the unprefixed name. Kept as literals to avoid
+     the @theme inline → :root → @theme chain that Turbopack/Tailwind v4 sometimes
+     fails to resolve at compile time. */
+  --color-border: #DDD3B8;
+  --color-background: #F5EFE0;
+  --color-foreground: #1A1A14;
 
-  --popover: #ffffff;
-  --popover-foreground: #0c0a09;
+  /* ---------- Brand — forest ---------- */
+  --color-forest: #1F3A2E;
+  --color-forest-mid: #2D5040;
+  --color-forest-bright: #4A7A5E;
+  /* Bumped from #DCE5DD (G-R=9, G-B=8) to #CCE0D0 (G-R=20, G-B=16) on
+     2026-05. The previous near-achromatic green read as gray-blue
+     against the warm cream sidebar (#EDE5D2) via simultaneous-contrast
+     — perceptual hue shift away from the adjacent warm. The bumped
+     saturation asserts the green hue without making the tint heavier:
+     still ~84% lightness, still safely in the brand forest family. */
+  --color-forest-tint: #CCE0D0;
+  --color-forest-tint-deep: #B8CDBE;
 
-  /* Navy-blue primary */
-  --primary: oklch(48% 0.16 265);
-  --primary-foreground: #ffffff;
+  /* Ring alias for @apply outline-ring (literal, see comment above). */
+  --color-ring: #1F3A2E;
 
-  /* Subtle stone fills */
-  --secondary: #f5f5f4;
-  --secondary-foreground: #44403c;
+  /* ---------- Accent — gold (logomark + avatar only) ---------- */
+  --color-gold: #C9A961;
+  --color-gold-deep: #8B7332;
 
-  --muted: #f5f5f4;
-  --muted-foreground: #78716c;
+  /* ---------- Ink — warm text ---------- */
+  --color-ink: #1A1A14;
+  --color-ink-warm: #3A3528;
+  --color-subtle: #6B6451;
+  --color-muted: #A89F86;
 
-  --accent: #f5f5f4;
-  --accent-foreground: #44403c;
+  /* ---------- Semantic — retuned for cream ---------- */
+  --color-success-bg: #E0E8D5;
+  --color-success-border: #B8C99E;
+  --color-success-fg: #4A6B2F;
 
-  --destructive: oklch(0.55 0.22 25);
+  --color-warning-bg: #F4E6C2;
+  --color-warning-border: #D9B872;
+  --color-warning-fg: #6B4A0E;
 
-  --border: #e7e5e4;
-  --input: #e7e5e4;
-  --ring: oklch(48% 0.16 265);
+  --color-danger-bg: #EDD4C9;
+  --color-danger-border: #D49074;
+  --color-danger-fg: #8B3415;
 
-  --chart-1: oklch(0.50 0.12 240);
-  --chart-2: oklch(0.58 0.10 200);
-  --chart-3: oklch(0.65 0.12 160);
-  --chart-4: oklch(0.70 0.14 90);
-  --chart-5: oklch(0.60 0.16 30);
+  --color-info-bg: #CCE0D0;
+  --color-info-border: #B8CDBE;
+  --color-info-fg: #1F3A2E;
 
-  --radius: 0.625rem;
+  /* ---------- Type — all sans, no serif ---------- */
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  /* Transitional bridge: `font-serif` and `font-heading` utility classes still
+     exist in marketing/reel pages. Map both to the sans stack so any leftover
+     class renders Archivo instead of falling through to the system serif. */
+  --font-serif: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  --sidebar: #ffffff;
-  --sidebar-foreground: #44403c;
-  --sidebar-primary: oklch(48% 0.16 265);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f5f5f4;
-  --sidebar-accent-foreground: #44403c;
-  --sidebar-border: #e7e5e4;
-  --sidebar-ring: oklch(48% 0.16 265);
-
-  /* Stone design system palette */
-  --stone-bg: #fafaf9;
-  --stone-surface: #ffffff;
-  --stone-ink: #0c0a09;
-  --stone-ink2: #44403c;
-  --stone-muted: #78716c;
-  --stone-line: #e7e5e4;
-  --stone-line2: #f5f5f4;
-
-  /* Status semantic colors */
-  --status-good: oklch(58% 0.13 155);
-  --status-good-soft: oklch(96% 0.04 155);
-  --status-warn: oklch(70% 0.13 70);
-  --status-warn-soft: oklch(97% 0.04 70);
-  --status-info: oklch(60% 0.15 240);
-  --status-info-soft: oklch(96% 0.03 240);
+  /* ---------- Radius ---------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
 }
 
+/* shadcn variable bridge — feeds the @theme inline mappings above. */
+:root {
+  --background: var(--color-page);
+  --foreground: var(--color-ink);
+
+  --card: var(--color-card);
+  --card-foreground: var(--color-ink);
+
+  --popover: var(--color-card);
+  --popover-foreground: var(--color-ink);
+
+  /* Primary intentionally uses forest-mid (#2D5040) not the darker forest
+     (#1F3A2E) so action chrome (buttons, progress, checkboxes, settings
+     nav) reads as a visible green rather than near-black. Forest stays
+     reserved for borders, deep headings, and the logomark. */
+  --primary: var(--color-forest-mid);
+  --primary-foreground: var(--color-card-warm);
+
+  --secondary: var(--color-surface);
+  --secondary-foreground: var(--color-ink-warm);
+
+  --muted: var(--color-surface);
+  --muted-foreground: var(--color-subtle);
+
+  --accent: var(--color-forest-tint);
+  --accent-foreground: var(--color-forest);
+
+  --destructive: var(--color-danger-fg);
+  --destructive-foreground: var(--color-card-warm);
+
+  --border: var(--color-border-default);
+  --input: var(--color-border-default);
+  --ring: var(--color-forest);
+
+  --radius: var(--radius-lg);
+
+  /* Charts — forest/gold-leaning palette tuned for cream */
+  --chart-1: #1F3A2E;
+  --chart-2: #4A7A5E;
+  --chart-3: #C9A961;
+  --chart-4: #8B7332;
+  --chart-5: #6B6451;
+
+  /* Sidebar tokens used by shadcn sidebar component */
+  --sidebar: var(--color-surface);
+  --sidebar-background: var(--color-surface);
+  --sidebar-foreground: var(--color-ink-warm);
+  --sidebar-primary: var(--color-forest);
+  --sidebar-primary-foreground: var(--color-card-warm);
+  --sidebar-accent: var(--color-forest-tint);
+  --sidebar-accent-foreground: var(--color-forest);
+  --sidebar-border: var(--color-border-default);
+  --sidebar-ring: var(--color-forest);
+
+  /* Stone-design-system aliases retained for legacy callers */
+  --stone-bg: var(--color-page);
+  --stone-surface: var(--color-surface);
+  --stone-ink: var(--color-ink);
+  --stone-ink2: var(--color-ink-warm);
+  --stone-muted: var(--color-subtle);
+  --stone-line: var(--color-border-default);
+  --stone-line2: var(--color-divider);
+
+  /* Status aliases retained for legacy callers */
+  --status-good: var(--color-success-fg);
+  --status-good-soft: var(--color-success-bg);
+  --status-warn: var(--color-warning-fg);
+  --status-warn-soft: var(--color-warning-bg);
+  --status-info: var(--color-info-fg);
+  --status-info-soft: var(--color-info-bg);
+}
+
+/* Global type defaults */
+body {
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerics in tables and metric values */
+table td,
+table th,
+.tabular,
+[data-numeric] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "lnum" 1;
+}
+
+/* Mono treatment for identifier columns and code-like cells */
+.identifier,
+[data-id],
+[data-mono],
+code,
+kbd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Financial values — sans, tabular, tight tracking. NO serif. */
+.financial,
+[data-financial],
+[data-amount] {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "lnum" 1;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+/* Disable dark mode for v1 — Fluxora is light-only */
 .dark {
-  --background: oklch(0.16 0.015 240);
-  --foreground: oklch(0.96 0.006 240);
-
-  --card: oklch(0.20 0.018 240);
-  --card-foreground: oklch(0.96 0.006 240);
-
-  --popover: oklch(0.20 0.018 240);
-  --popover-foreground: oklch(0.96 0.006 240);
-
-  --primary: oklch(0.65 0.12 240);
-  --primary-foreground: oklch(0.16 0.015 240);
-
-  --secondary: oklch(0.26 0.015 240);
-  --secondary-foreground: oklch(0.96 0.006 240);
-
-  --muted: oklch(0.25 0.015 240);
-  --muted-foreground: oklch(0.70 0.015 240);
-
-  --accent: oklch(0.28 0.02 240);
-  --accent-foreground: oklch(0.96 0.006 240);
-
-  --destructive: oklch(0.65 0.20 25);
-
-  --border: oklch(0.30 0.015 240);
-  --input: oklch(0.30 0.015 240);
-  --ring: oklch(0.60 0.10 240);
-
-  --chart-1: oklch(0.65 0.12 240);
-  --chart-2: oklch(0.68 0.10 200);
-  --chart-3: oklch(0.70 0.12 160);
-  --chart-4: oklch(0.72 0.14 90);
-  --chart-5: oklch(0.65 0.16 30);
-
-  --sidebar: oklch(0.18 0.018 240);
-  --sidebar-foreground: oklch(0.96 0.006 240);
-  --sidebar-primary: oklch(0.65 0.12 240);
-  --sidebar-primary-foreground: oklch(0.16 0.015 240);
-  --sidebar-accent: oklch(0.26 0.018 240);
-  --sidebar-accent-foreground: oklch(0.96 0.006 240);
-  --sidebar-border: oklch(0.30 0.015 240);
-  --sidebar-ring: oklch(0.60 0.10 240);
-
-  /* Stone tokens adapted for dark mode */
-  --stone-bg: oklch(0.16 0.015 240);
-  --stone-surface: oklch(0.20 0.018 240);
-  --stone-ink: oklch(0.96 0.006 240);
-  --stone-ink2: oklch(0.80 0.01 240);
-  --stone-muted: oklch(0.60 0.015 240);
-  --stone-line: oklch(0.30 0.015 240);
-  --stone-line2: oklch(0.25 0.015 240);
-
-  /* Status colors shifted for dark surfaces */
-  --status-good: oklch(65% 0.13 155);
-  --status-good-soft: oklch(25% 0.06 155);
-  --status-warn: oklch(75% 0.13 70);
-  --status-warn-soft: oklch(25% 0.06 70);
-  --status-info: oklch(65% 0.15 240);
-  --status-info-soft: oklch(25% 0.06 240);
+  color-scheme: light;
 }
 
 @layer base {
@@ -220,6 +290,47 @@
   }
 }
 
+/* ── Review queue carousel animations ───────────────────────────────────── */
+
+/* Queue card collapses out when the user posts an invoice. Reaches scale 0.7
+   + opacity 0 + max-width 0 so the remaining cards slide left to close the
+   gap in one continuous motion. */
+@keyframes review-complete-out {
+  0%   { transform: scale(1) translateY(0); opacity: 1; }
+  35%  { transform: scale(0.96) translateY(-2px); opacity: 1; }
+  100% { transform: scale(0.7) translateY(-10px); opacity: 0; max-width: 0; padding-left: 0; padding-right: 0; margin-right: -8px; }
+}
+.review-queue-card-completing {
+  animation: review-complete-out 550ms cubic-bezier(0.6, 0, 0.2, 1) forwards;
+}
+
+/* PDF + form panes slide in from the right when the user moves to a later
+   invoice. The from-prev modifier mirrors the direction for leftward nav. */
+@keyframes review-pane-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes review-pane-in-left {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.review-pane-enter {
+  animation: review-pane-in 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.review-pane-enter.review-pane-enter-from-prev {
+  animation-name: review-pane-in-left;
+}
+
+/* All-caught-up empty state entrance — a single 800ms burst on mount. */
+@keyframes review-done-burst {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.review-done-burst {
+  animation: review-done-burst 800ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 /* ── Loading UX animations ──────────────────────────────────────────────── */
 
 @keyframes loading-shimmer {
@@ -237,15 +348,15 @@
 }
 
 @keyframes loading-pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(31, 58, 46, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(31, 58, 46, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 58, 46, 0); }
 }
 
 @keyframes loading-pulse-dot {
-  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
-  70% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(139, 52, 21, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(139, 52, 21, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 52, 21, 0); }
 }
 
 @keyframes loading-fade-up {
@@ -278,3 +389,85 @@
   .loading-caret,
   .loading-dot { animation: none !important; }
 }
+
+/* ── PDF-import parse loaders ────────────────────────────────────────────
+   Vocabulary used by the StageDot / StageList / ProgressBar / StreamingLineItem
+   / SkeletonField / RescanBanner primitives. Class names match the design
+   handoff (`.shimmer-bg`, `.live-dot`, `.ring-spin`, `.bar-glide`,
+   `.line-appear`, `.banner-in`) so component code reads like the spec. */
+
+.parse-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 0%,
+    var(--color-page) 50%,
+    var(--color-surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes parse-livepulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.7); }
+}
+.parse-live-dot { animation: parse-livepulse 1.4s ease-in-out infinite; }
+
+.parse-ring-spin {
+  animation: loading-spin 1.1s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes parse-barglide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.parse-bar-glide { position: relative; overflow: hidden; }
+.parse-bar-glide::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  animation: parse-barglide 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes parse-lineappear {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.parse-line-appear {
+  animation: parse-lineappear 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes parse-bannerin {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.parse-banner-in {
+  animation: parse-bannerin 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .parse-shimmer,
+  .parse-live-dot,
+  .parse-ring-spin,
+  .parse-bar-glide::after,
+  .parse-line-appear,
+  .parse-banner-in { animation: none !important; }
+}
+
+/* ── Supplier-invoice review: PDF-line bidirectional highlight ──────────
+   Applied to clickable line rows in the PDF preview pane. The active row
+   gets a warn-tinted background + outline; matched-AND-active gets the
+   good-tinted variant. Used by the rasterized-PDF bbox overlay in phase 4
+   too. */
+.pdf-line { cursor: pointer; transition: background .12s, outline-color .12s; }
+.pdf-line:hover { background: var(--color-warning-bg); }
+.pdf-line.active { background: var(--color-warning-bg) !important; outline: 1.5px solid var(--color-warning-border); }
+.pdf-line.matched.active { background: var(--color-success-bg) !important; outline-color: var(--color-success-border); }

@@ -21,7 +21,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   billing: "Billing",
   customers: "Customers",
   users: "Users",
-  "price-chart": "Price list",
+  prices: "Prices",
+  // Legacy /price-chart URL redirects to /prices; the segment is still
+  // referenced from old links / external sources in the wild.
+  "price-chart": "Prices",
   expenses: "Expenses",
   suppliers: "Suppliers",
   orders: "Sales orders",

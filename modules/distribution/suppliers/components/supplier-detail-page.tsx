@@ -7,7 +7,10 @@ import {
   Boxes,
   DollarSign,
   FileText,
+  Globe,
+  Mail,
   Pencil,
+  Phone,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -25,7 +28,10 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageError } from "@/components/page-error";
-import { PageLoading } from "@/components/page-loading";
+import {
+  DetailPageSkeleton,
+  TableSkeleton,
+} from "@/components/loading-skeletons";
 import { StatusPill } from "@/components/listing-page";
 import { TablePager } from "@/components/table-pager";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +54,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-dialog";
@@ -56,9 +61,9 @@ import { SupplierEditPaymentTermsDialog } from "./supplier-edit-payment-terms-di
 // ── Status / helpers ──────────────────────────────────────────────────────────
 
 const INVOICE_STATUS: Record<string, { label: string; bg: string; color: string }> = {
-  draft: { label: "Draft", bg: "#f5f5f4", color: "#78716c" },
-  completed: { label: "Completed", bg: "oklch(96% 0.04 155)", color: "oklch(58% 0.13 155)" },
-  void: { label: "Void", bg: "oklch(97% 0.04 25)", color: "oklch(55% 0.22 25)" },
+  draft: { label: "Draft", bg: "var(--color-divider)", color: "var(--color-subtle)" },
+  completed: { label: "Completed", bg: "var(--color-success-bg)", color: "var(--color-success-fg)" },
+  void: { label: "Void", bg: "var(--color-danger-bg)", color: "var(--color-danger-fg)" },
 };
 
 function initials(name: string): string {
@@ -94,8 +99,8 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
     tone === "danger"
       ? "text-destructive"
       : tone === "warning"
-        ? "text-status-warn"
-        : "text-stone-muted";
+        ? "text-warning-fg"
+        : "text-subtle";
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -103,11 +108,323 @@ function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: Metr
           <Icon className="size-3.5" />
           {label}
         </CardDescription>
-        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight">
+        <CardTitle className="font-mono text-2xl font-medium tabular-nums tracking-tight">
           {value}
         </CardTitle>
-        {helper ? <p className="mt-1 text-[11px] text-stone-muted">{helper}</p> : null}
+        {helper ? <p className="mt-1 text-[11px] text-subtle">{helper}</p> : null}
       </CardHeader>
+    </Card>
+  );
+}
+
+// ── Contact / address card ───────────────────────────────────────────────────
+
+type SupplierContactSlice = {
+  netDays: number | null;
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  primaryContactPhone: string | null;
+  taxId: string | null;
+  accountNumber: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressRegion: string | null;
+  addressPostalCode: string | null;
+  websiteUrl: string | null;
+  notes: string | null;
+};
+
+function formatUsAddress(s: SupplierContactSlice): string | null {
+  const cityRegionZip = [
+    s.addressCity,
+    [s.addressRegion, s.addressPostalCode].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const lines = [s.addressLine1, s.addressLine2, cityRegionZip || null].filter(
+    (l): l is string => Boolean(l && l.trim()),
+  );
+  return lines.length ? lines.join("\n") : null;
+}
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode | null;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-subtle">
+        {label}
+      </dt>
+      <dd className="text-sm text-ink">{value ?? <span className="text-subtle">—</span>}</dd>
+    </div>
+  );
+}
+
+function SupplierContactCard({
+  supplier,
+  supplierId,
+  archived,
+  onEditTerms,
+  onDelete,
+}: {
+  supplier: SupplierContactSlice;
+  supplierId: string;
+  archived: boolean;
+  onEditTerms: () => void;
+  onDelete: () => void;
+}) {
+  const hasContact =
+    supplier.primaryContactName ||
+    supplier.primaryContactEmail ||
+    supplier.primaryContactPhone;
+  const address = formatUsAddress(supplier);
+  const hasAccounting = supplier.accountNumber || supplier.taxId || supplier.websiteUrl;
+  const hasNotes = Boolean(supplier.notes);
+  const hasPaymentTerms = supplier.netDays !== null;
+
+  if (!hasContact && !address && !hasAccounting && !hasNotes && !hasPaymentTerms) {
+    return <SupplierContactCardEmpty supplierId={supplierId} archived={archived} />;
+  }
+
+  const hasGridContent = Boolean(hasContact || address || hasAccounting);
+
+  return (
+    <Card className="overflow-hidden rounded-xl p-6 shadow-none">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
+        {!archived ? (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/suppliers/${supplierId}/edit`}>
+                <Pencil className="h-3.5 w-3.5" />
+                Edit details
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDelete}
+              className="text-destructive hover:text-destructive"
+            >
+              Delete
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {hasContact ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Primary contact
+            </h4>
+            <DetailItem label="Name" value={supplier.primaryContactName} />
+            <DetailItem
+              label="Email"
+              value={
+                supplier.primaryContactEmail ? (
+                  <a
+                    href={`mailto:${supplier.primaryContactEmail}`}
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.primaryContactEmail}
+                  </a>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Phone"
+              value={
+                supplier.primaryContactPhone ? (
+                  <a
+                    href={`tel:${supplier.primaryContactPhone}`}
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.primaryContactPhone}
+                  </a>
+                ) : null
+              }
+            />
+          </dl>
+        ) : null}
+
+        {address ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Remit-to address
+            </h4>
+            <DetailItem
+              label="Mailing address"
+              value={<span className="whitespace-pre-line">{address}</span>}
+            />
+          </dl>
+        ) : null}
+
+        {hasAccounting ? (
+          <dl className="flex flex-col gap-3">
+            <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+              Accounting
+            </h4>
+            <DetailItem
+              label="Account number"
+              value={
+                supplier.accountNumber ? (
+                  <span className="font-mono tabular-nums">
+                    {supplier.accountNumber}
+                  </span>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Tax ID (EIN)"
+              value={
+                supplier.taxId ? (
+                  <span className="font-mono tabular-nums">{supplier.taxId}</span>
+                ) : null
+              }
+            />
+            <DetailItem
+              label="Website"
+              value={
+                supplier.websiteUrl ? (
+                  <a
+                    href={supplier.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-ink underline-offset-4 hover:underline"
+                  >
+                    {supplier.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </a>
+                ) : null
+              }
+            />
+          </dl>
+        ) : null}
+      </div>
+
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          hasGridContent && "mt-6 border-t border-border-default pt-4",
+        )}
+      >
+        <div>
+          <h4 className="text-xs font-medium uppercase tracking-wide text-subtle">
+            Payment terms
+          </h4>
+          <p className="mt-0.5 text-sm font-medium tabular-nums text-ink">
+            {formatPaymentTerms(supplier.netDays)}
+          </p>
+        </div>
+        {!archived ? (
+          <Button type="button" variant="outline" size="sm" onClick={onEditTerms}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit terms
+          </Button>
+        ) : null}
+      </div>
+
+      {hasNotes ? (
+        <div className="mt-6 border-t border-border-default pt-4">
+          <h4 className="mb-1 text-xs font-medium uppercase tracking-wide text-subtle">
+            Notes
+          </h4>
+          <p className="whitespace-pre-line text-sm text-ink-warm">{supplier.notes}</p>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function SupplierQuickContactActions({
+  supplier,
+}: {
+  supplier: {
+    primaryContactEmail: string | null;
+    primaryContactPhone: string | null;
+    websiteUrl: string | null;
+  };
+}) {
+  const items: Array<{ href: string; label: string; icon: LucideIcon; external?: boolean }> = [];
+  if (supplier.primaryContactEmail) {
+    items.push({
+      href: `mailto:${supplier.primaryContactEmail}`,
+      label: `Email ${supplier.primaryContactEmail}`,
+      icon: Mail,
+    });
+  }
+  if (supplier.primaryContactPhone) {
+    items.push({
+      href: `tel:${supplier.primaryContactPhone}`,
+      label: `Call ${supplier.primaryContactPhone}`,
+      icon: Phone,
+    });
+  }
+  if (supplier.websiteUrl) {
+    items.push({
+      href: supplier.websiteUrl,
+      label: `Open ${supplier.websiteUrl}`,
+      icon: Globe,
+      external: true,
+    });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mr-1 flex items-center gap-1 border-r border-border-default pr-2">
+      {items.map(({ href, label, icon: Icon, external }) => (
+        <Button
+          key={label}
+          variant="ghost"
+          size="icon-sm"
+          asChild
+          title={label}
+          aria-label={label}
+        >
+          <a
+            href={href}
+            {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          >
+            <Icon className="size-4" />
+          </a>
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function SupplierContactCardEmpty({
+  supplierId,
+  archived,
+}: {
+  supplierId: string;
+  archived: boolean;
+}) {
+  return (
+    <Card className="overflow-hidden rounded-xl border-dashed p-6 shadow-none">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-ink">Supplier details</h3>
+          <p className="mt-0.5 text-xs leading-relaxed text-subtle">
+            Add a primary contact, remit-to address, and tax ID to unlock
+            AP-chase emails, check printing, and 1099-NEC reporting.
+          </p>
+        </div>
+        {!archived ? (
+          <Button variant="outline" size="sm" asChild className="shrink-0">
+            <Link href={`/suppliers/${supplierId}/edit`}>
+              <Pencil className="h-3.5 w-3.5" />
+              Complete profile
+            </Link>
+          </Button>
+        ) : null}
+      </div>
     </Card>
   );
 }
@@ -118,6 +435,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [editTermsOpen, setEditTermsOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const tab = (searchParams.get("tab") ?? "invoices") as "invoices" | "lots";
   const invoicesPage = Math.max(1, Number(searchParams.get("invoicesPage") ?? 1));
@@ -141,7 +459,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
   const deleteSupplier = useDeleteSupplier();
 
   if (!isUuid(supplierId)) return <PageError message="Invalid supplier ID." />;
-  if (isLoading) return <PageLoading message="Loading supplier..." />;
+  if (isLoading) return <DetailPageSkeleton sections={4} />;
   if (error) return <PageError message={(error as Error).message} />;
   if (!portfolio || !supplier) return <PageError message="Supplier not found." />;
 
@@ -167,24 +485,25 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
           {initials(supplier.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold leading-tight text-stone-ink">
+          <h1 className="truncate text-2xl font-medium leading-tight text-ink">
             {supplier.name}
           </h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <Badge variant="outline" className="text-xs tabular-nums">
               {formatPaymentTerms(supplier.netDays)}
             </Badge>
-            <span className="text-sm text-stone-muted">
+            <span className="text-sm text-subtle">
               Supplier since {formatMonthYear(supplier.createdAt)}
             </span>
             {metrics.lastInvoiceDate ? (
-              <span className="text-sm text-stone-muted">
+              <span className="text-sm text-subtle">
                 Last invoice {formatDisplayDate(metrics.lastInvoiceDate)}
               </span>
             ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <SupplierQuickContactActions supplier={supplier} />
           {!supplier.archivedAt ? (
             <>
               <Button size="sm" asChild>
@@ -232,65 +551,39 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
         />
       </div>
 
-      {/* Payment terms editor + delete (compact, below KPIs) */}
-      <Card className="overflow-hidden rounded-xl p-0 shadow-none">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-stone-muted">Payment terms</p>
-            <p className="mt-0.5 text-sm font-medium tabular-nums">
-              {formatPaymentTerms(supplier.netDays)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!supplier.archivedAt ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setEditTermsOpen(true)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit terms
-              </Button>
-            ) : null}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                >
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete <strong>{supplier.name}</strong> and all associated
-                    data. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    disabled={deleteSupplier.isPending}
-                    onClick={() => {
-                      deleteSupplier.mutate(supplierId, {
-                        onSuccess: () => router.push("/suppliers"),
-                      });
-                    }}
-                  >
-                    {deleteSupplier.isPending ? "Deleting…" : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </div>
-      </Card>
+      <SupplierContactCard
+        supplier={supplier}
+        supplierId={supplierId}
+        archived={Boolean(supplier.archivedAt)}
+        onEditTerms={() => setEditTermsOpen(true)}
+        onDelete={() => setDeleteOpen(true)}
+      />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{supplier.name}</strong> and all associated
+              data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteSupplier.isPending}
+              onClick={() => {
+                deleteSupplier.mutate(supplierId, {
+                  onSuccess: () => router.push("/suppliers"),
+                });
+              }}
+            >
+              {deleteSupplier.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <SupplierEditPaymentTermsDialog
         supplierId={supplierId}
@@ -301,7 +594,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       />
 
       {/* Tab bar */}
-      <div className="sticky top-16 z-20 -mx-4 border-b border-stone-line bg-white px-4">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-border-default bg-card px-4">
         <div className="flex">
           {TABS.map(t => (
             <button
@@ -310,8 +603,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
               className={cn(
                 "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
                 tab === t.id
-                  ? "border-primary text-stone-ink"
-                  : "border-transparent text-stone-muted hover:text-stone-ink",
+                  ? "border-primary text-ink"
+                  : "border-transparent text-subtle hover:text-ink",
               )}
             >
               {t.label}
@@ -321,8 +614,8 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                   className={cn(
                     "h-5 rounded-full px-1.5 text-[11px]",
                     tab === t.id
-                      ? "bg-stone-ink text-stone-surface"
-                      : "bg-stone-line text-stone-muted",
+                      ? "bg-forest-mid text-card-warm"
+                      : "bg-surface-deep text-subtle",
                   )}
                 >
                   {t.count}
@@ -337,41 +630,41 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       {tab === "invoices" && (
         <>
           {invoicesLoading ? (
-            <PageLoading message="Loading invoices..." />
+            <TableSkeleton rows={5} columns={6} />
           ) : !invoicesData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No invoices on record.</p>
+            <p className="text-sm text-subtle">No invoices on record.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Invoice date
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Received
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Status
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Total
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-right text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-right text-xs font-medium text-subtle">
                       Balance
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoicesData.data.map(inv => {
                     const s = INVOICE_STATUS[inv.status] ?? {
                       label: inv.status,
-                      bg: "#f5f5f4",
-                      color: "#78716c",
+                      bg: "var(--color-divider)",
+                      color: "var(--color-subtle)",
                     };
                     const balance =
                       parseFloat(inv.totalAmount) - parseFloat(inv.amountPaid);
@@ -379,17 +672,17 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                     return (
                       <TableRow
                         key={inv.id}
-                        className="group/row border-stone-line2 hover:bg-stone-line2"
+                        className="group/row border-divider hover:bg-divider"
                       >
                         <TableCell className="px-4 py-2.5 align-middle">
                           <span className="font-mono text-xs tabular-nums">
                             {inv.invoiceNumber}
                           </span>
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.invoiceDate)}
                         </TableCell>
-                        <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                        <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                           {formatDisplayDate(inv.receiveDate)}
                         </TableCell>
                         <TableCell className="px-4 py-2.5 align-middle">
@@ -416,7 +709,7 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                               asChild
                               variant="outline"
                               size="xs"
-                              className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                              className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                             >
                               <Link
                                 href={`/supplier-invoices/${inv.id}`}
@@ -447,39 +740,39 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
       {tab === "lots" && (
         <>
           {lotsLoading ? (
-            <PageLoading message="Loading lots..." />
+            <TableSkeleton rows={5} columns={3} />
           ) : !lotsData?.data?.length ? (
-            <p className="text-sm text-stone-muted">No lots received from this supplier.</p>
+            <p className="text-sm text-subtle">No lots received from this supplier.</p>
           ) : (
-            <Card className="gap-0 overflow-hidden rounded-[10px] border border-stone-line bg-stone-surface py-0 text-stone-ink shadow-none ring-0">
-              <Table className="text-[13px] text-stone-ink2">
+            <Card className="gap-0 overflow-hidden rounded-[10px] border border-border-default bg-card py-0 text-ink shadow-none ring-0">
+              <Table className="text-[13px] text-ink-warm">
                 <TableHeader>
-                  <TableRow className="border-stone-line2 hover:bg-transparent">
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                  <TableRow className="border-divider hover:bg-transparent">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Lot #
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Received
                     </TableHead>
-                    <TableHead className="h-auto select-none bg-stone-line2 px-4 py-2.5 text-xs font-medium text-stone-muted">
+                    <TableHead className="h-auto select-none bg-divider px-4 py-2.5 text-xs font-medium text-subtle">
                       Expires
                     </TableHead>
-                    <TableHead className="h-auto w-px bg-stone-line2 px-4 py-2.5" />
+                    <TableHead className="h-auto w-px bg-divider px-4 py-2.5" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {lotsData.data.map(lot => (
                     <TableRow
                       key={lot.id}
-                      className="group/row border-stone-line2 hover:bg-stone-line2"
+                      className="group/row border-divider hover:bg-divider"
                     >
                       <TableCell className="px-4 py-2.5 align-middle">
                         <span className="font-mono text-xs tabular-nums">{lot.lotNumber}</span>
                       </TableCell>
-                      <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                      <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                         {formatDisplayDate(lot.receiveDate)}
                       </TableCell>
-                      <TableCell className="px-4 py-2.5 align-middle text-xs text-stone-muted">
+                      <TableCell className="px-4 py-2.5 align-middle text-xs text-subtle">
                         {formatDisplayDate(lot.expirationDate)}
                       </TableCell>
                       <TableCell className="px-4 py-2.5 whitespace-nowrap opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100">
@@ -488,9 +781,9 @@ export function SupplierDetailPage({ supplierId }: { supplierId: string }) {
                             asChild
                             variant="outline"
                             size="xs"
-                            className="border-stone-line bg-stone-surface text-xs text-stone-ink2 hover:bg-stone-line2"
+                            className="border-border-default bg-card text-xs text-ink-warm hover:bg-divider"
                           >
-                            <Link href={`/lots/${lot.id}`} onClick={e => e.stopPropagation()}>
+                            <Link href={`/inventory/lots/${lot.id}`} onClick={e => e.stopPropagation()}>
                               View
                             </Link>
                           </Button>

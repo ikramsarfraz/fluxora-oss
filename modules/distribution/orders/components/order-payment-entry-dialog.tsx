@@ -33,8 +33,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared/utils/payment-methods";
 
 import type { SalesOrderDetail } from "../services/orders";
 
@@ -48,22 +53,11 @@ interface PaymentFormValues {
   salesInvoiceId: string;
   paymentDate: string;
   amount: string;
-  paymentMethod: "cash" | "zelle" | "check" | "credit_card" | "ach";
+  paymentMethod: PaymentMethod;
   referenceNumber: string;
   checkNumber: string;
   notes: string;
 }
-
-const PAYMENT_METHOD_OPTIONS: Array<{
-  value: PaymentFormValues["paymentMethod"];
-  label: string;
-}> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);
@@ -138,6 +132,9 @@ function PaymentBody({
     ? null
     : getPermissionDeniedReason("record_payment");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // One key per dialog mount — survives submit retries so a request
+  // that succeeded server-side but lost its response is recognized.
+  const idempotencyKey = useMemo(() => randomId(), []);
 
   const openInvoices = useMemo(() => getOpenInvoices(order), [order]);
   const invoiceLookup = useMemo(
@@ -176,6 +173,7 @@ function PaymentBody({
         checkNumber: values.checkNumber.trim() || undefined,
         referenceNumber: values.referenceNumber.trim() || undefined,
         notes: values.notes.trim() || undefined,
+        idempotencyKey,
       });
       toast.success("Payment recorded.");
       onClose();
@@ -324,29 +322,28 @@ function PaymentBody({
               <FieldError errors={[errors.paymentMethod]} />
             </Field>
 
-            <Field>
-              <FieldLabel htmlFor="payment-reference">
-                {paymentMethod === "check" ? "Reference number" : "Reference number"}
-              </FieldLabel>
-              <Input
-                id="payment-reference"
-                placeholder="Optional reference"
-                {...register("referenceNumber")}
-              />
-            </Field>
+            {paymentMethod === "check" ? (
+              <Field>
+                <FieldLabel htmlFor="payment-check-number">Check number</FieldLabel>
+                <Input
+                  id="payment-check-number"
+                  placeholder="e.g. 1042"
+                  {...register("checkNumber")}
+                />
+              </Field>
+            ) : (
+              <Field>
+                <FieldLabel htmlFor="payment-reference">
+                  Reference number
+                </FieldLabel>
+                <Input
+                  id="payment-reference"
+                  placeholder="Optional confirmation / memo"
+                  {...register("referenceNumber")}
+                />
+              </Field>
+            )}
           </div>
-
-          <Field>
-            <FieldLabel htmlFor="payment-check-number">Check number</FieldLabel>
-            <Input
-              id="payment-check-number"
-              placeholder="Optional check number"
-              {...register("checkNumber")}
-            />
-            <FieldDescription>
-              Useful for check or bank-referenced payments.
-            </FieldDescription>
-          </Field>
 
           <Field>
             <FieldLabel htmlFor="payment-notes">Notes</FieldLabel>

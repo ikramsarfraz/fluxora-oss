@@ -2,22 +2,32 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { captureClientEvent } from "@/lib/posthog-client";
+
 import {
   completeSupplierInvoiceAction,
   createSupplierInvoiceAction,
+  createImportProfileAction,
   deleteSupplierInvoiceAction,
-  getNextSupplierInvoiceNumberAction,
   getReversalPreviewAction,
   getSupplierInvoiceByIdAction,
   getSupplierInvoiceCostDiffContextAction,
   getSupplierInvoicesAction,
   getSupplierInvoicesPageAction,
+  bulkImportSupplierInvoicesAction,
   parseSupplierInvoicePdfAction,
+  bulkReconcileSupplierInvoicePaymentsAction,
+  bulkUnreconcileSupplierInvoicePaymentsAction,
   recordSupplierInvoicePaymentAction,
+  recordManualProductSelectionAction,
   removeSupplierInvoiceAttachmentAction,
+  rescanBulkImportFileAction,
   reverseSupplierInvoiceAction,
+  saveConfirmedAiAliasAction,
   updateSupplierInvoiceAction,
+  updateSupplierInvoicePaymentAction,
   uploadSupplierInvoiceAttachmentAction,
+  voidSupplierInvoicePaymentAction,
 } from "@/modules/distribution/supplier-invoices/actions";
 import { invalidateSetupChecklistQuery } from "@/lib/query/invalidate-setup-checklist";
 import { queryKeys } from "@/lib/query/keys";
@@ -55,6 +65,47 @@ function invalidateAll(queryClient: ReturnType<typeof useQueryClient>) {
   // Side effects of completion touch lots + inventory caches.
   queryClient.invalidateQueries({ queryKey: queryKeys.lots.all });
   queryClient.invalidateQueries({ queryKey: ["inventory"] });
+}
+
+/**
+ * Mutation hook for the bulk-import flow. The action now only parses PDFs;
+ * actual drafts are written when the user reviews each item via the
+ * single-import flow, so listing caches don't need invalidation here.
+ */
+export function useBulkImportSupplierInvoices() {
+  return useMutation({
+    mutationFn: bulkImportSupplierInvoicesAction,
+    onSuccess: result => {
+      captureClientEvent("bulk_import.completed", {
+        parsed: result.summary.parsed,
+        errored: result.summary.errored,
+      });
+    },
+  });
+}
+
+/**
+ * Re-run the AI parse pipeline against a previously-uploaded bulk-
+ * import row's PDF, replacing its pipeline result. Used from the
+ * review queue's per-row Re-scan button and the bulk-landing footer
+ * "Re-scan all" affordance. Invalidates both the pending-files query
+ * (so the queue carousel picks up the new pipelineResult / status)
+ * and the cost-diff query (re-resolved cost may shift if line ids
+ * change).
+ */
+export function useRescanBulkImportFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: rescanBulkImportFileAction,
+    onSuccess: (_row, id) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-import-files", "pending"] as const,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["bulk-import-pdf-blob", id],
+      });
+    },
+  });
 }
 
 export function useCreateSupplierInvoice() {
@@ -123,16 +174,6 @@ export function useSupplierCostDiffContext(
   });
 }
 
-export function useNextSupplierInvoiceNumber(opts?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: ["supplier-invoices", "next-number"] as const,
-    queryFn: () => getNextSupplierInvoiceNumberAction(),
-    enabled: opts?.enabled ?? true,
-    staleTime: 0,
-    gcTime: 0,
-  });
-}
-
 export function useReversalPreview(invoiceId: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.supplierInvoices.reversalPreview(invoiceId),
@@ -158,19 +199,116 @@ export function useReverseSupplierInvoice() {
   });
 }
 
+/**
+ * Invalidate every cache touched when a supplier-invoice payment row
+ * mutates. Mirrors the AR invalidatePaymentCaches helper — keeps the
+ * dashboard AP aging, supplier portfolio, and any future bill-payment
+ * listing in sync.
+ */
+function invalidateSupplierPaymentCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  supplierInvoiceId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.supplierInvoices.all });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.supplierInvoices.detail(supplierInvoiceId),
+  });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
+  });
+  // Bill-payments listing + KPI strip (new in the AP parity pass).
+  queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+  // AP aging + dashboard summary depend on bill paid-totals.
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.apAging });
+  queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary });
+}
+
 export function useRecordSupplierInvoicePayment() {
   const queryClient = useQueryClient();
+
+  // Structural shape of the cached supplier-invoice fields we mutate
+  // optimistically. The full type lives in the receiving service; copying
+  // just these four fields keeps the patch noise small.
+  type SupplierInvoiceBalanceFields = {
+    amountPaid: string;
+    balanceDue: string;
+    totalAmount: string;
+    status: string;
+  };
+
   return useMutation({
     mutationFn: recordSupplierInvoicePaymentAction,
+    onMutate: async variables => {
+      const invoiceKey = queryKeys.supplierInvoices.detail(
+        variables.supplierInvoiceId,
+      );
+      await queryClient.cancelQueries({ queryKey: invoiceKey });
+
+      const previousInvoice =
+        queryClient.getQueryData<SupplierInvoiceBalanceFields>(invoiceKey);
+      if (!previousInvoice) return { invoiceKey, previousInvoice: null };
+
+      const paymentAmount = Number(variables.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        return { invoiceKey, previousInvoice: null };
+      }
+
+      const newAmountPaid =
+        Number(previousInvoice.amountPaid) + paymentAmount;
+      const totalAmount = Number(previousInvoice.totalAmount);
+      const newBalanceDue = Math.max(totalAmount - newAmountPaid, 0);
+      const newStatus =
+        newAmountPaid >= totalAmount
+          ? "paid"
+          : newAmountPaid > 0
+            ? "partially_paid"
+            : previousInvoice.status;
+
+      queryClient.setQueryData<SupplierInvoiceBalanceFields>(invoiceKey, prev =>
+        prev
+          ? {
+              ...prev,
+              amountPaid: newAmountPaid.toFixed(2),
+              balanceDue: newBalanceDue.toFixed(2),
+              status: newStatus,
+            }
+          : prev,
+      );
+
+      return { invoiceKey, previousInvoice };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.invoiceKey && context.previousInvoice) {
+        queryClient.setQueryData(context.invoiceKey, context.previousInvoice);
+      }
+    },
     onSuccess: (_data, variables) => {
+      invalidateSupplierPaymentCaches(queryClient, variables.supplierInvoiceId);
+    },
+  });
+}
+
+export function useVoidSupplierInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: voidSupplierInvoicePaymentAction,
+    onSuccess: result => {
+      invalidateSupplierPaymentCaches(queryClient, result.supplierInvoiceId);
+      // The voided payment row's detail key should drop too — listings will
+      // refetch via the umbrella billPayments.all invalidation.
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+    },
+  });
+}
+
+export function useUpdateSupplierInvoicePayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateSupplierInvoicePaymentAction,
+    onSuccess: (result, variables) => {
+      invalidateSupplierPaymentCaches(queryClient, result.supplierInvoiceId);
       queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.all,
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.detail(variables.supplierInvoiceId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.supplierInvoices.activity(variables.supplierInvoiceId),
+        queryKey: queryKeys.billPayments.detail(variables.id),
       });
     },
   });
@@ -189,6 +327,9 @@ export function useDeleteSupplierInvoice() {
 export function useParseSupplierInvoicePdf() {
   return useMutation({
     mutationFn: async (file: File) => {
+      captureClientEvent("pdf.uploaded", {
+        file_size_kb: Math.round(file.size / 1024),
+      });
       const formData = new FormData();
       formData.set("file", file);
       return await parseSupplierInvoicePdfAction(formData);
@@ -242,6 +383,24 @@ export function useUploadSupplierInvoiceAttachmentToInvoice() {
   });
 }
 
+export function useSaveConfirmedAiAlias() {
+  return useMutation({
+    mutationFn: saveConfirmedAiAliasAction,
+  });
+}
+
+export function useRecordManualProductSelection() {
+  return useMutation({
+    mutationFn: recordManualProductSelectionAction,
+  });
+}
+
+export function useCreateImportProfile() {
+  return useMutation({
+    mutationFn: createImportProfileAction,
+  });
+}
+
 export function useRemoveSupplierInvoiceAttachment(supplierInvoiceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -257,6 +416,28 @@ export function useRemoveSupplierInvoiceAttachment(supplierInvoiceId: string) {
       queryClient.invalidateQueries({
         queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
       });
+    },
+  });
+}
+
+export function useBulkReconcileSupplierInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, reference }: { ids: string[]; reference: string | null }) =>
+      bulkReconcileSupplierInvoicePaymentsAction(ids, reference),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
+    },
+  });
+}
+
+export function useBulkUnreconcileSupplierInvoicePayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      bulkUnreconcileSupplierInvoicePaymentsAction(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.billPayments.all });
     },
   });
 }

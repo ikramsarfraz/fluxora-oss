@@ -23,7 +23,7 @@ export default async function AccountPage() {
   if (!portalUser) {
     return (
       <div className="flex max-w-lg flex-col gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Account</h1>
         <p className="text-muted-foreground text-sm">
           No portal profile is linked to this sign-in yet. Ask an administrator
           to invite you or complete onboarding.

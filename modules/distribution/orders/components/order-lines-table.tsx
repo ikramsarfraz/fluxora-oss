@@ -42,6 +42,8 @@ type Line = SalesOrderDetail["lines"][number];
 const UNIT_TYPE_LABELS: Record<string, string> = {
   catch_weight: "Catch weight",
   fixed_case: "Fixed case",
+  per_each: "Per each",
+  per_unit: "Per unit",
 };
 
 function formatPersistedSalesUnit(
@@ -160,6 +162,14 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
     return <p className="text-sm text-muted-foreground">No line items yet.</p>;
   }
 
+  // Hide the "Weight (lbs)" column when every line on the order is
+  // non-weight (catalog of beverages). Mixed orders keep the column
+  // but show "—" for individual non-weight rows so the table doesn't
+  // misleadingly display "0.00" for every can-of-soda line.
+  const anyWeightLine = lines.some(
+    l => l.unitType === "catch_weight" || l.unitType === "fixed_case",
+  );
+
   const toggleRow = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -199,7 +209,9 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
             <TableHead>Product</TableHead>
             <TableHead>Sales unit</TableHead>
             <TableHead className="text-right">Cases</TableHead>
-            <TableHead className="text-right">Weight (lbs)</TableHead>
+            {anyWeightLine ? (
+              <TableHead className="text-right">Weight</TableHead>
+            ) : null}
             <TableHead className="text-right">Price basis</TableHead>
             <TableHead className="text-right">Line total</TableHead>
           </TableRow>
@@ -225,11 +237,11 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
               expected === 0
                 ? "text-muted-foreground"
                 : lineStatus === "fulfilled"
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-success-fg dark:text-success-fg"
                   : lineStatus === "short_shipped"
-                    ? "text-slate-700 dark:text-slate-300"
+                    ? "text-ink-warm dark:text-card-warm"
                     : fulfilled > 0
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-warning-fg dark:text-warning-fg"
                     : "text-muted-foreground";
 
             return (
@@ -245,6 +257,7 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
                 canExpand={canExpand}
                 isOpen={isOpen}
                 fulfilledClass={fulfilledClass}
+                anyWeightLine={anyWeightLine}
                 onToggle={() => toggleRow(line.id)}
               />
             );
@@ -255,7 +268,10 @@ export function OrderLinesTable({ lines }: OrderLinesTableProps) {
             <tr className="border-t">
               <td />
               <td
-                colSpan={5}
+                // Subtotal spans every column except the trailing line
+                // total. Column count drops by 1 when the weight column
+                // is hidden on a pure non-weight order.
+                colSpan={anyWeightLine ? 5 : 4}
                 className="px-2 py-2 text-right text-sm text-muted-foreground"
               >
                 Subtotal
@@ -282,6 +298,12 @@ interface LineRowGroupProps {
   canExpand: boolean;
   isOpen: boolean;
   fulfilledClass: string;
+  /**
+   * Whether the parent order has at least one weight-priced line.
+   * When false the Weight column is hidden, so the row + the expanded
+   * breakdown drop their corresponding cells/colSpan by one.
+   */
+  anyWeightLine: boolean;
   onToggle: () => void;
 }
 
@@ -296,6 +318,7 @@ function LineRowGroup({
   canExpand,
   isOpen,
   fulfilledClass,
+  anyWeightLine,
   onToggle,
 }: LineRowGroupProps) {
   return (
@@ -360,14 +383,26 @@ function LineRowGroup({
         <TableCell className={cn("text-right tabular-nums", fulfilledClass)}>
           {getLineFulfilledQuantity(line)} / {line.expectedCases}
         </TableCell>
-        <TableCell className="text-right tabular-nums">
-          {getLineFulfilledWeight(line).toFixed(2)}
-        </TableCell>
+        {anyWeightLine ? (
+          <TableCell className="text-right tabular-nums">
+            {/* Per-line weight cell — only weight-priced rows render a
+                number. Non-weight rows on a mixed order show "—" so
+                "0.00" doesn't read as a real value. */}
+            {line.unitType === "catch_weight" ||
+            line.unitType === "fixed_case" ? (
+              getLineFulfilledWeight(line).toFixed(2)
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </TableCell>
+        ) : null}
         <TableCell className="text-right tabular-nums">
           {Number.isFinite(price) ? (
-            pricingUnitType === "per_lb"
-              ? `${formatMoney(price)}/lb`
-              : `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
+            // The snapshot abbreviation is the truth — per_lb lines store
+            // "lb" (or whatever the base UOM is) and per_case lines store
+            // "cs". Either way, render from the snapshot so the suffix
+            // always matches the unit the price was recorded in.
+            `${formatMoney(price)}/${formatPersistedSalesUnit(line)}`
           ) : (
             <span className="text-muted-foreground">—</span>
           )}
@@ -383,7 +418,7 @@ function LineRowGroup({
       {canExpand && isOpen && (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
           <TableCell />
-          <TableCell colSpan={6} className="py-4">
+          <TableCell colSpan={anyWeightLine ? 6 : 5} className="py-4">
             <LineBreakdown
               line={line}
               caseWeights={caseWeights}
@@ -456,7 +491,7 @@ function LineBreakdown({
           </div>
         ) : null}
         {!reconciliation.reconciled ? (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="mb-3 rounded-md border border-warning-border bg-warning-bg/60 px-3 py-2 text-xs text-warning-fg dark:border-amber-900/40 dark:bg-warning-fg/20 dark:text-warning-fg">
             {reconciliation.warnings.map(warning => (
               <div key={warning}>{warning}</div>
             ))}
@@ -501,7 +536,7 @@ function LineBreakdown({
             </div>
           ) : null}
           {traceability.warnings.length > 0 ? (
-            <div className="mt-2 space-y-1 text-xs text-amber-700 dark:text-amber-300">
+            <div className="mt-2 space-y-1 text-xs text-warning-fg dark:text-warning-fg">
               {traceability.warnings.map(warning => (
                 <div key={warning}>{warning}</div>
               ))}
@@ -743,7 +778,7 @@ function LotBadge({
         "text-[10px] font-mono",
         status === "expired" && "border-destructive/40 text-destructive",
         status === "warning" &&
-          "border-amber-400/40 text-amber-700 dark:text-amber-300",
+          "border-amber-400/40 text-warning-fg dark:text-warning-fg",
       )}
     >
       {label}

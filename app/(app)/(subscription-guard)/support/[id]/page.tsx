@@ -51,11 +51,11 @@ export default async function TenantSupportTicketDetailPage({
       <div className="space-y-2">
         <Link
           href="/support"
-          className="text-sm font-medium text-blue-700 hover:underline"
+          className="text-sm font-medium text-forest hover:underline"
         >
           Back to support
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">
+        <h1 className="text-3xl font-medium tracking-tight">
           {ticket.subject}
         </h1>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -138,7 +138,7 @@ export default async function TenantSupportTicketDetailPage({
             {ticket.pageUrl ? (
               <Link
                 href={ticket.pageUrl}
-                className="break-all font-medium text-blue-700 hover:underline"
+                className="break-all font-medium text-forest hover:underline"
               >
                 {ticket.pageUrl}
               </Link>

@@ -16,6 +16,7 @@ import {
 
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
+import { money, nonNegative } from "@/lib/utils/money";
 import type { SalesInvoiceDetail } from "@/modules/distribution/invoices/services/invoicing";
 
 export type InvoicePricingType = "per_lb" | "per_case" | "per_unit";
@@ -30,6 +31,13 @@ export type InvoicePdfLineItem = {
   totalWeight: number | null;
   unitPrice: number;
   pricingType: InvoicePricingType;
+  /**
+   * Optional explicit abbreviation for the unit-price suffix. When set,
+   * overrides the per_lb/per_case/per_unit default mapping — e.g. a
+   * milk product priced per gallon snapshots "gal" here so the PDF
+   * prints "$ 4.50 / gal" instead of "$ 4.50 / lb".
+   */
+  pricingUnitAbbreviation?: string | null;
   lineTotal: number;
 };
 
@@ -157,9 +165,20 @@ function formatPercent(value: number) {
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(2)}%`;
 }
 
-function formatUnitPrice(value: number, pricingType: InvoicePricingType) {
-  const suffix =
-    pricingType === "per_lb"
+function formatUnitPrice(
+  value: number,
+  pricingType: InvoicePricingType,
+  pricingUnitAbbreviation?: string | null,
+) {
+  // Explicit snapshot abbreviation wins so beverage / non-lb products
+  // render with their actual UOM ("/ gal", "/ ea", "/ case of 12"). When
+  // no snapshot is available, fall back to the pricing-type defaults
+  // (per_lb / per_case / per_unit) so historical invoices keep printing
+  // the same suffixes.
+  const explicit = pricingUnitAbbreviation?.trim();
+  const suffix = explicit
+    ? ` / ${explicit}`
+    : pricingType === "per_lb"
       ? " / lb"
       : pricingType === "per_case"
         ? " / case"
@@ -356,7 +375,17 @@ function getIndividualWeights({
 
 function getPricingType(orderLine: SalesOrderLine | null): InvoicePricingType {
   if (orderLine?.pricingUnitTypeSnapshot === "per_case") return "per_case";
-  if (orderLine?.unitType === "fixed_case") return "per_case";
+  // Map all non-weight intrinsic types onto per_case so the PDF math
+  // (cases × price) kicks in for beverages and dry goods. The snapshot
+  // abbreviation propagated alongside still renders "/ ea" / "/ case"
+  // correctly in the suffix.
+  if (
+    orderLine?.unitType === "fixed_case" ||
+    orderLine?.unitType === "per_each" ||
+    orderLine?.unitType === "per_unit"
+  ) {
+    return "per_case";
+  }
   return "per_lb";
 }
 
@@ -409,9 +438,23 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
         ? roundMoney(weightFromCases > 0 ? weightFromCases : invoiceWeight)
         : null;
 
+    const productName = line.product?.name?.trim();
+    if (!productName) {
+      console.warn(
+        "[sales-invoice-pdf] missing product name; falling back to product id",
+        { invoiceLineId: line.id, productId: line.productId },
+      );
+    }
+
+    // Carry the snapshot abbreviation forward so the PDF renders the
+    // suffix the order was actually priced in (e.g. "/ gal" for milk,
+    // "/ case" for soda) rather than the pricing-type default.
+    const pricingUnitAbbreviation =
+      orderLine?.salesUnitAbbreviationSnapshot ?? null;
+
     return {
       id: line.id,
-      description: line.product?.name ?? "Product",
+      description: productName ?? line.productId ?? "Unnamed product",
       quantity: toNumber(line.quantityCases),
       unitType: getUnitType(orderLine, pricingType),
       caseWeights,
@@ -419,32 +462,40 @@ function buildInvoiceLineItems(invoice: SalesInvoiceDetail) {
       totalWeight,
       unitPrice: toNumber(line.unitPrice),
       pricingType,
+      pricingUnitAbbreviation,
       lineTotal: toNumber(line.lineTotal),
     } satisfies InvoicePdfLineItem;
   });
 }
 
 function buildInvoiceTotals(invoice: SalesInvoiceDetail, lines: InvoicePdfLineItem[]) {
-  const subtotal = toNumber(invoice.subtotal);
-  const discount = toNumber(invoice.discountAmount) + toNumber(invoice.creditAmount);
-  const fuelSurcharge = toNumber(invoice.fuelSurchargeAmount);
-  const grandTotal = toNumber(invoice.totalAmount);
-  const preTaxTotal = subtotal - discount + fuelSurcharge;
-  const taxAmount = roundMoney(Math.max(0, grandTotal - preTaxTotal));
-  const taxRate =
-    taxAmount > 0 && preTaxTotal > 0
-      ? roundMoney(taxAmount / preTaxTotal)
-      : 0;
+  // Tax is derived rather than stored: grandTotal − (subtotal − discount +
+  // fuelSurcharge). With Number arithmetic this subtraction can leak a
+  // phantom 0.01 onto a clean no-tax invoice (subtotal sums of fractional
+  // weights drift, then grandTotal − preTaxTotal ≠ 0). Decimal makes
+  // the subtraction exact so no-tax stays no-tax.
+  const subtotalD = money(invoice.subtotal);
+  const discountD = money(invoice.discountAmount).plus(
+    money(invoice.creditAmount),
+  );
+  const fuelSurchargeD = money(invoice.fuelSurchargeAmount);
+  const grandTotalD = money(invoice.totalAmount);
+  const preTaxTotalD = subtotalD.minus(discountD).plus(fuelSurchargeD);
+  const taxAmountD = nonNegative(grandTotalD.minus(preTaxTotalD));
+  const taxRateD =
+    taxAmountD.gt(0) && preTaxTotalD.gt(0)
+      ? taxAmountD.div(preTaxTotalD)
+      : money(0);
 
   return {
     totalItems: lines.reduce((sum, line) => sum + line.quantity, 0),
     totalWeight: lines.reduce((sum, line) => sum + (line.totalWeight ?? 0), 0),
-    subtotal,
-    discount,
-    fuelSurcharge,
-    taxRate,
-    taxAmount,
-    grandTotal,
+    subtotal: subtotalD.toNumber(),
+    discount: discountD.toNumber(),
+    fuelSurcharge: fuelSurchargeD.toNumber(),
+    taxRate: Number(taxRateD.toFixed(4)),
+    taxAmount: Number(taxAmountD.toFixed(2)),
+    grandTotal: grandTotalD.toNumber(),
   };
 }
 
@@ -1117,7 +1168,7 @@ function InvoiceLineRow({ line }: { line: InvoicePdfLineItem }) {
           {line.totalWeight == null ? "-" : formatWeight(line.totalWeight)}
         </Text>
         <Text style={[styles.cell, styles.unitPriceCol, styles.numericText]}>
-          {formatUnitPrice(line.unitPrice, line.pricingType)}
+          {formatUnitPrice(line.unitPrice, line.pricingType, line.pricingUnitAbbreviation)}
         </Text>
         <Text style={[styles.cell, styles.totalCol, styles.cellLast, styles.totalText]}>
           {formatMoney(line.lineTotal)}

@@ -146,3 +146,55 @@ export function sumNumericStrings(values: Array<string | null | undefined>) {
 export function formatWeightLbs(value: string | number | null | undefined) {
   return (Number(value) || 0).toFixed(2);
 }
+
+/**
+ * Family-aware quantity renderer for an inventory-items row. Replaces
+ * the old "Weight (lb)" column which only made sense for catch-weight
+ * meat. Now:
+ *   - Catch-weight & fixed-case items: render "{weight} {baseAbbr}" so
+ *     mixed-UOM catalogs (lb meat + kg seafood) display each row in its
+ *     own unit.
+ *   - Per-each / per-unit items: weight is meaningless — render
+ *     "{cases} {baseAbbr}" (one row = one unit/case in the base UOM).
+ * Falls back to "{weight} lb" for legacy rows that don't carry a
+ * cost-unit-type snapshot.
+ */
+export function formatInventoryQuantity(args: {
+  costUnitTypeSnapshot:
+    | "catch_weight"
+    | "fixed_case"
+    | "per_each"
+    | "per_unit"
+    | null;
+  exactWeightLbs: string | number | null | undefined;
+  cases: number | null | undefined;
+  /**
+   * Pack size — how many base units inside one case/box. Null/missing
+   * defaults to 1 (a per-each row where one inventory row IS one base
+   * unit). For per_unit rows this is the conversion snapshot captured
+   * at receive time (e.g. 24 for a 24-pack case).
+   */
+  unitsPerPackageSnapshot?: string | number | null | undefined;
+  baseUnitAbbreviation: string | null | undefined;
+}): string {
+  const baseAbbr = args.baseUnitAbbreviation?.trim() || null;
+  const isWeightMode =
+    args.costUnitTypeSnapshot === "catch_weight" ||
+    args.costUnitTypeSnapshot === "fixed_case" ||
+    args.costUnitTypeSnapshot == null; // legacy default → assume weight
+
+  if (isWeightMode) {
+    const weight = Number(args.exactWeightLbs) || 0;
+    return `${weight.toFixed(2)} ${baseAbbr ?? "lb"}`;
+  }
+  const cases = Number(args.cases) || 0;
+  const pack = Number(args.unitsPerPackageSnapshot ?? 1) || 1;
+  const totalBaseUnits = cases * pack;
+  // For pack-of-1 (per_each), display "1 ea". For multi-pack (24-pack
+  // case of a per_unit line), display "24 ea (1 cs)" so the user sees
+  // both the base-unit count and the physical case count at a glance.
+  if (pack > 1) {
+    return `${totalBaseUnits} ${baseAbbr ?? "ea"} (${cases} cs)`;
+  }
+  return `${totalBaseUnits} ${baseAbbr ?? "ea"}`;
+}

@@ -150,7 +150,7 @@ export function OrderHeader({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">
+          <h1 className="font-mono text-2xl font-medium tracking-tight">
             {title}
           </h1>
           <Badge variant={STATUS_VARIANT[order.status] ?? "outline"}>

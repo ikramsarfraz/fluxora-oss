@@ -196,7 +196,7 @@ export function PaginatedDataTable<TData, TValue>({
           </div>
         ) : null}
         <Table>
-          <TableHeader className="bg-muted">
+          <TableHeader className="bg-divider">
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map(header => {

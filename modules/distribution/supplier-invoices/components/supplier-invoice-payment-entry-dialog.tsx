@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { AlertCircle, Receipt } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,9 +31,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useRecordSupplierInvoicePayment } from "../hooks/use-supplier-invoices";
+import { randomId } from "@/lib/random-id";
 import { formatMoney } from "@/lib/utils/currency";
-
-type PaymentMethod = "cash" | "check" | "ach" | "zelle" | "credit_card";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  type PaymentMethod,
+} from "@/modules/shared/utils/payment-methods";
 
 interface SupplierInvoicePaymentEntryDialogProps {
   open: boolean;
@@ -48,17 +51,10 @@ interface PaymentFormValues {
   paymentDate: string;
   amount: string;
   paymentMethod: PaymentMethod;
-  reference: string;
+  checkNumber: string;
+  referenceNumber: string;
   notes: string;
 }
-
-const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
-  { value: "cash", label: "Cash" },
-  { value: "check", label: "Check" },
-  { value: "ach", label: "ACH" },
-  { value: "zelle", label: "Zelle" },
-  { value: "credit_card", label: "Credit card" },
-];
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);
@@ -74,7 +70,8 @@ function makeDefaults(
     amount:
       Number.isFinite(suggested) && suggested > 0 ? suggested.toFixed(2) : "",
     paymentMethod: defaultPaymentMethod ?? "ach",
-    reference: "",
+    checkNumber: "",
+    referenceNumber: "",
     notes: "",
   };
 }
@@ -129,6 +126,9 @@ function PaymentForm({
 }) {
   const recordPayment = useRecordSupplierInvoicePayment();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // One key per dialog mount — survives submit retries so a request
+  // that succeeded server-side but lost its response is recognized.
+  const idempotencyKey = useMemo(() => randomId(), []);
 
   const {
     control,
@@ -139,6 +139,7 @@ function PaymentForm({
     defaultValues: makeDefaults(balanceDue, defaultPaymentMethod),
   });
 
+  const selectedMethod = useWatch({ control, name: "paymentMethod" });
   const numericBalanceDue = Number(balanceDue) || 0;
 
   async function onSubmit(values: PaymentFormValues) {
@@ -149,8 +150,10 @@ function PaymentForm({
         paymentDate: values.paymentDate,
         amount: values.amount,
         paymentMethod: values.paymentMethod,
-        reference: values.reference.trim() || null,
+        checkNumber: values.checkNumber.trim() || null,
+        referenceNumber: values.referenceNumber.trim() || null,
         notes: values.notes.trim() || null,
+        idempotencyKey,
       });
       toast.success(`Payment recorded on ${invoiceNumber}.`);
       onClose();
@@ -242,14 +245,25 @@ function PaymentForm({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="si-payment-reference">Reference</FieldLabel>
+            <FieldLabel htmlFor="si-payment-reference">Reference number</FieldLabel>
             <Input
               id="si-payment-reference"
-              placeholder="Check #, ACH id, etc."
-              {...register("reference")}
+              placeholder="Bank ref / transaction ID"
+              {...register("referenceNumber")}
             />
           </Field>
         </div>
+
+        {selectedMethod === "check" ? (
+          <Field>
+            <FieldLabel htmlFor="si-payment-check-number">Check number</FieldLabel>
+            <Input
+              id="si-payment-check-number"
+              placeholder="Check #"
+              {...register("checkNumber")}
+            />
+          </Field>
+        ) : null}
 
         <Field>
           <FieldLabel htmlFor="si-payment-notes">Notes</FieldLabel>

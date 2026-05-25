@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { useUpdateSupplier } from "../hooks/use-suppliers";
+import { NetTermsLegend } from "@/modules/shared/components/net-terms-legend";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -142,9 +143,10 @@ function EditForm({
             />
             <FieldDescription>
               Days from invoice date until payment is due. Leave blank for
-              Net-0 (due on invoice date). Common values: 0, 7, 15, 30.
+              Net-0 (due on invoice date).
             </FieldDescription>
             {error ? <FieldError errors={[{ message: error }]} /> : null}
+            <NetTermsLegend />
           </Field>
         </FieldGroup>
       </form>

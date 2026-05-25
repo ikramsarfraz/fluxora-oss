@@ -10,6 +10,18 @@ export async function getLotById(lotId: string) {
     where: and(eq(lots.id, lotId), eq(lots.tenantId, tenant.id)),
     with: {
       supplier: true,
+      markdownHistories: {
+        columns: {
+          id: true,
+          discountPercent: true,
+          quantityOfferedLbs: true,
+          actualSellThroughPct: true,
+          expectedNet: true,
+          actualNet: true,
+          completedAt: true,
+        },
+        orderBy: (mh, { desc }) => [desc(mh.completedAt)],
+      },
       lotReceipts: {
         with: {
           supplierInvoiceLine: {
@@ -19,6 +31,15 @@ export async function getLotById(lotId: string) {
                   id: true,
                   sku: true,
                   name: true,
+                },
+                with: {
+                  baseUnit: {
+                    columns: {
+                      id: true,
+                      abbreviation: true,
+                      family: true,
+                    },
+                  },
                 },
               },
               supplierInvoice: {
@@ -49,6 +70,9 @@ export async function getLotById(lotId: string) {
           barcodeId: true,
           exactWeightLbs: true,
           cases: true,
+          // Pack size snapshot — drives the per-row "24 ea (1 cs)"
+          // display + the lot's Total Units aggregate.
+          unitsPerPackageSnapshot: true,
           costPerUnitSnapshot: true,
           costUnitTypeSnapshot: true,
           status: true,
@@ -61,6 +85,15 @@ export async function getLotById(lotId: string) {
               id: true,
               sku: true,
               name: true,
+            },
+            with: {
+              baseUnit: {
+                columns: {
+                  id: true,
+                  abbreviation: true,
+                  family: true,
+                },
+              },
             },
           },
           allocations: {
@@ -173,6 +206,18 @@ export async function getLots() {
                   sku: true,
                   name: true,
                 },
+                // Eager-load base UOM so the lots list can render
+                // "/lb" vs "/ea" vs "/gal" per row without an extra
+                // join on the client.
+                with: {
+                  baseUnit: {
+                    columns: {
+                      id: true,
+                      abbreviation: true,
+                      family: true,
+                    },
+                  },
+                },
               },
               supplierInvoice: {
                 columns: {
@@ -194,6 +239,11 @@ export async function getLots() {
           cases: true,
           exactWeightLbs: true,
           status: true,
+          costUnitTypeSnapshot: true,
+          // Pack size snapshot — needed by `getLotTotals` to compute
+          // base-unit totals (cases × pack) instead of just summing
+          // case counts.
+          unitsPerPackageSnapshot: true,
         },
         with: {
           product: {
@@ -201,6 +251,15 @@ export async function getLots() {
               id: true,
               sku: true,
               name: true,
+            },
+            with: {
+              baseUnit: {
+                columns: {
+                  id: true,
+                  abbreviation: true,
+                  family: true,
+                },
+              },
             },
           },
         },

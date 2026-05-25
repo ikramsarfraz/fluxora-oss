@@ -1,1 +1,5 @@
-export { default } from "@/modules/distribution/lots/routes/list-page";
+import { permanentRedirect } from "next/navigation";
+
+export default function LegacyLotsListRedirect() {
+  permanentRedirect("/inventory/lots");
+}

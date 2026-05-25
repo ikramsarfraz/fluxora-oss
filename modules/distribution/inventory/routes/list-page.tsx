@@ -1,28 +1,18 @@
 import { Suspense } from "react";
-import {
-  HydrationBoundary,
-  QueryClient,
-  dehydrate,
-} from "@tanstack/react-query";
-
-import { queryKeys } from "@/lib/query/keys";
-import { getInventoryItems } from "../services/inventory";
 
 import { InventoryPage } from "../components/inventory-page";
 
-export default async function InventoryListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.inventory.all,
-    queryFn: getInventoryItems,
-  });
-
+// The client component drives its own paginated/filtered query via
+// `useInventoryItemsPage` — prefetching here would require knowing the
+// page/sort/filter URL params, which only the client resolves. The
+// previous prefetch ran an unbounded `getInventoryItems()` into a query
+// key the client never reads (waste of a DB round-trip on every page
+// navigation, also a visible "loading" flash because every nav blocked
+// on a DB call before hydrating). Closes the inventory side of #205.
+export default function InventoryListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <InventoryPage />
-      </Suspense>
-    </HydrationBoundary>
+    <Suspense>
+      <InventoryPage />
+    </Suspense>
   );
 }

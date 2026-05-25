@@ -26,7 +26,18 @@ export function DetailSection({
   return (
     <Card className={cn("", className)}>
       <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
+        {/*
+          Section headers used to inherit CardTitle's default
+          `font-serif text-[17px]` (overridden to text-lg). On a page with
+          several stacked DetailSection cards (inventory item detail has
+          six) those serif 18px headings made the page feel editorial /
+          heavy. Sans + one size down + neutral tracking reads more like
+          "operational" UI chrome and lets the H1 carry the only serif
+          beat on the page.
+        */}
+        <CardTitle className="font-sans text-base font-medium tracking-normal">
+          {title}
+        </CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent>{children}</CardContent>

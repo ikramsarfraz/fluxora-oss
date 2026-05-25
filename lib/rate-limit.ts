@@ -30,6 +30,10 @@ function makeLimiter(
  * and `applyRateLimit` short-circuits to success — dev/CI continues to work.
  */
 export const rateLimiters = {
+  pdfParse: makeLimiter(10, "1 h", "rl:pdf-parse"),
+  pdfParseTenant: makeLimiter(30, "1 h", "rl:pdf-parse-tenant"),
+  plaidSync: makeLimiter(6, "1 h", "rl:plaid-sync"),
+  emailForward: makeLimiter(50, "1 d", "rl:email-forward"),
   magicLink: makeLimiter(5, "1 h", "rl:magic-link"),
   genericApi: makeLimiter(100, "1 m", "rl:api"),
 };

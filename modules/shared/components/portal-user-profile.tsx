@@ -15,19 +15,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatDisplayDateTime } from "@/lib/utils/date";
 
 function roleLabel(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
-}
-
-function formatDateTime(value: string | Date | null | undefined): string {
-  if (value == null || value === "") return "—";
-  const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
 }
 
 export type PortalUserProfileProps = {
@@ -61,7 +52,7 @@ export function PortalUserProfile({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-medium tracking-tight">
           {user.fullName}
         </h1>
         <p className="text-muted-foreground text-sm">
@@ -94,12 +85,12 @@ export function PortalUserProfile({
             <div className="mt-0.5 flex items-center gap-1.5">
               {user.isActive ? (
                 <>
-                  <Check className="h-4 w-4 text-green-700" aria-hidden />
+                  <Check className="h-4 w-4 text-success-fg" aria-hidden />
                   <span>Yes</span>
                 </>
               ) : (
                 <>
-                  <X className="h-4 w-4 text-red-700" aria-hidden />
+                  <X className="h-4 w-4 text-danger-fg" aria-hidden />
                   <span>No</span>
                 </>
               )}
@@ -111,12 +102,12 @@ export function PortalUserProfile({
               <div className="mt-0.5 flex items-center gap-1.5">
                 {auth.emailVerified ? (
                   <>
-                    <Check className="h-4 w-4 text-green-700" aria-hidden />
+                    <Check className="h-4 w-4 text-success-fg" aria-hidden />
                     <span>Yes</span>
                   </>
                 ) : (
                   <>
-                    <X className="h-4 w-4 text-amber-700" aria-hidden />
+                    <X className="h-4 w-4 text-warning-fg" aria-hidden />
                     <span>No</span>
                   </>
                 )}
@@ -125,11 +116,11 @@ export function PortalUserProfile({
           ) : null}
           <div>
             <p className="text-muted-foreground text-sm">Created</p>
-            <p>{formatDateTime(user.createdAt)}</p>
+            <p>{formatDisplayDateTime(user.createdAt)}</p>
           </div>
           <div>
             <p className="text-muted-foreground text-sm">Updated</p>
-            <p>{formatDateTime(user.updatedAt)}</p>
+            <p>{formatDisplayDateTime(user.updatedAt)}</p>
           </div>
         </CardContent>
         {variant === "self" && selfActions ? (

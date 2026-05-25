@@ -7,20 +7,28 @@ export type SupplierInvoicePdfPaymentMethod =
 
 export type SupplierInvoicePdfPrefillLine = {
   productId: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   weightEntryMode: "total_weight" | "default_case_weight" | "manual_case_weights";
   quantityCases: string;
   weightLbs: string;
   defaultCaseWeightLbs: string;
   caseWeightEntries: string[];
   unitPrice: string;
+  /** Snapshot abbreviation (e.g. "ea", "gal") — empty for weight modes. */
+  purchaseUnitAbbreviation: string;
+  /**
+   * Pack size — how many base units in one purchase unit (e.g. 12 for a
+   * 12-pack case). Defaults to "1" so weight-mode prefills don't need
+   * to set it; the form schema requires a positive decimal string.
+   */
+  unitsPerPackage: string;
   lotNumberOverride: string;
   expirationDateOverride: string;
 };
 
 export type SupplierInvoicePdfPrefillValues = {
   supplierId: string;
-  invoiceNumber: string;
+  supplierInvoiceNumber: string;
   invoiceDate: string;
   receiveDate: string;
   paymentMethod: SupplierInvoicePdfPaymentMethod | null;
@@ -81,6 +89,8 @@ function emptyPrefillLine(): SupplierInvoicePdfPrefillLine {
     defaultCaseWeightLbs: "",
     caseWeightEntries: [""],
     unitPrice: "0",
+    purchaseUnitAbbreviation: "",
+    unitsPerPackage: "1",
     lotNumberOverride: "",
     expirationDateOverride: "",
   };
@@ -146,7 +156,7 @@ function parseUsDate(value: string | null | undefined): string | null {
 }
 
 function extractInvoiceHeader(lines: string[], sourceFilename: string) {
-  let invoiceNumber = "";
+  let supplierInvoiceNumber = "";
   let invoiceDate: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -155,9 +165,9 @@ function extractInvoiceHeader(lines: string[], sourceFilename: string) {
     if (!invoiceDate && /^date$/i.test(line)) {
       invoiceDate = parseUsDate(nextLine);
     }
-    if (!invoiceNumber && /^invoice\s*#$/i.test(line)) {
+    if (!supplierInvoiceNumber && /^invoice\s*#$/i.test(line)) {
       const match = nextLine.match(/\d{3,}/);
-      invoiceNumber = match?.[0] ?? "";
+      supplierInvoiceNumber = match?.[0] ?? "";
     }
   }
 
@@ -165,15 +175,15 @@ function extractInvoiceHeader(lines: string[], sourceFilename: string) {
     const compact = line.replace(/\s+/g, "");
     const match = compact.match(/(\d{3,}?)(\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2}))/);
     if (!match) continue;
-    invoiceNumber ||= match[1];
+    supplierInvoiceNumber ||= match[1];
     invoiceDate ||= parseUsDate(match[2]);
   }
 
   const filenameInvoiceNumber = sourceFilename.match(/\bInv[_ -]?(\d{3,})\b/i)?.[1];
-  invoiceNumber ||= filenameInvoiceNumber ?? "";
+  supplierInvoiceNumber ||= filenameInvoiceNumber ?? "";
 
   return {
-    invoiceNumber,
+    supplierInvoiceNumber,
     invoiceDate,
   };
 }
@@ -321,6 +331,8 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
     const amount = parseMoney(amountText);
     if (amount == null) continue;
     const beforeAmount = compact.slice(0, amountStart).trim();
+    // 0.5% of amount, minimum $0.02 — handles catch-weight rounding on large lines
+    const tolerance = Math.max(0.02, amount * 0.005);
 
     for (const rateCandidate of numericSuffixCandidates(beforeAmount)) {
       const rate = rateCandidate.value;
@@ -332,7 +344,10 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
         if (!quantity) continue;
         const catchDelta = Math.abs(weightCandidate.value * rate - amount);
         const fixedDelta = Math.abs(quantity.quantityCases * rate - amount);
-        if (catchDelta <= 0.02 && fixedDelta <= 0.02) {
+        if (catchDelta <= tolerance && fixedDelta <= tolerance) {
+          // Both interpretations fit the math (weight ≈ qty numerically).
+          // Fixed-case wins: when weight equals the case count the product
+          // is almost certainly sold per case, not by catch-weight.
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -344,7 +359,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
             },
             score: 120,
           });
-        } else if (catchDelta <= 0.02) {
+        } else if (catchDelta <= tolerance) {
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -356,7 +371,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
             },
             score: 110,
           });
-        } else if (fixedDelta <= 0.02) {
+        } else if (fixedDelta <= tolerance) {
           parsedCandidates.push({
             line: {
               description: quantity.description,
@@ -372,7 +387,7 @@ function parsePackedWeightedRow(line: string): ParsedPdfLine | null {
       }
 
       const fixedQuantity = parseQuantityFromEnd(beforeRate);
-      if (fixedQuantity && Math.abs(fixedQuantity.quantityCases * rate - amount) <= 0.02) {
+      if (fixedQuantity && Math.abs(fixedQuantity.quantityCases * rate - amount) <= tolerance) {
         parsedCandidates.push({
           line: {
             description: fixedQuantity.description,
@@ -434,25 +449,90 @@ function extractBoxInvoiceLines(lines: string[]): ParsedPdfLine[] {
   return parsedLines;
 }
 
-function extractPackedInvoiceLines(lines: string[]): ExtractedPdfLines {
-  const parsedLines: ParsedPdfLine[] = [];
-  const skippedChargeDescriptions: string[] = [];
-  const tableStart = lines.findIndex(line =>
+// Column keyword groups for generic header detection (need 3+ groups to match)
+const TABLE_HEADER_COLUMN_PATTERNS: RegExp[] = [
+  /\b(DESCRIPTION|ITEM|PRODUCT|DETAIL)\b/i,
+  /\b(QTY|QUANTITY|CASES?|NO\.?|COUNT|PCS|BOXES?)\b/i,
+  /\b(WEIGHT|LBS?|WT)\b/i,
+  /\b(RATE|PRICE|UNIT[\s-]?PRICE|PER[\s]?LB|COST)\b/i,
+  /\b(AMOUNT|TOTAL|SUBTOTAL|EXTENDED)\b/i,
+];
+
+function detectTableHeaderLine(lines: string[]): number {
+  // Strategy 1: exact known compact formats (fastest path)
+  const exactIndex = lines.findIndex(line =>
     /(?:DESCRIPTIONQUANTITYWEIGHTPRICEAMOUNT|ITEMDESCRIPTIONQTYQTY\/WEIGHTRATEAMOUNT)/i.test(
       line.replace(/\s+/g, ""),
     ),
   );
+  if (exactIndex >= 0) return exactIndex;
+
+  // Strategy 2: generic — any line matching 3+ column keyword groups
+  return lines.findIndex(line => {
+    // Skip lines that contain monetary amounts — those are data rows, not headers
+    if (/\d+\.\d{2}/.test(line)) return false;
+    return TABLE_HEADER_COLUMN_PATTERNS.filter(p => p.test(line)).length >= 3;
+  });
+}
+
+function tryParseWithJoin(
+  lines: string[],
+  i: number,
+): { parsed: ParsedPdfLine; consumed: number } | null {
+  const parsed = parsePackedWeightedRow(lines[i]);
+  if (parsed) return { parsed, consumed: 1 };
+
+  // Two-line joining: description on one line, numbers on the next
+  if (i + 1 < lines.length && !isStopAfterPackedTable(lines[i + 1])) {
+    const joined = lines[i] + " " + lines[i + 1];
+    const joinedParsed = parsePackedWeightedRow(joined);
+    if (joinedParsed) return { parsed: joinedParsed, consumed: 2 };
+  }
+
+  return null;
+}
+
+function extractPackedInvoiceLines(lines: string[]): ExtractedPdfLines {
+  const parsedLines: ParsedPdfLine[] = [];
+  const skippedChargeDescriptions: string[] = [];
+  const tableStart = detectTableHeaderLine(lines);
   if (tableStart < 0) return { lines: parsedLines, skippedChargeDescriptions };
 
-  for (const line of lines.slice(tableStart + 1)) {
-    if (isStopAfterPackedTable(line)) break;
-    const parsed = parsePackedWeightedRow(line);
-    if (!parsed) continue;
-    if (isNonInventoryCharge(parsed.description)) {
-      skippedChargeDescriptions.push(parsed.description);
+  const tableLines = lines.slice(tableStart + 1);
+  for (let i = 0; i < tableLines.length; i++) {
+    if (isStopAfterPackedTable(tableLines[i])) break;
+    const result = tryParseWithJoin(tableLines, i);
+    if (!result) continue;
+    i += result.consumed - 1;
+    if (isNonInventoryCharge(result.parsed.description)) {
+      skippedChargeDescriptions.push(result.parsed.description);
       continue;
     }
-    parsedLines.push(parsed);
+    parsedLines.push(result.parsed);
+  }
+
+  return {
+    lines: parsedLines,
+    skippedChargeDescriptions: uniqueStrings(skippedChargeDescriptions),
+  };
+}
+
+// Generic fallback — scans all lines without requiring a header row.
+// Used when neither box format nor any recognizable table header is found.
+function extractGenericNumericLines(lines: string[]): ExtractedPdfLines {
+  const parsedLines: ParsedPdfLine[] = [];
+  const skippedChargeDescriptions: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    if (isStopAfterPackedTable(lines[i])) break;
+    const result = tryParseWithJoin(lines, i);
+    if (!result) continue;
+    i += result.consumed - 1;
+    if (isNonInventoryCharge(result.parsed.description)) {
+      skippedChargeDescriptions.push(result.parsed.description);
+      continue;
+    }
+    parsedLines.push(result.parsed);
   }
 
   return {
@@ -464,12 +544,12 @@ function extractPackedInvoiceLines(lines: string[]): ExtractedPdfLines {
 function extractInvoiceLines(lines: string[]): ExtractedPdfLines {
   const boxLines = extractBoxInvoiceLines(lines);
   if (boxLines.length > 0) {
-    return {
-      lines: boxLines,
-      skippedChargeDescriptions: [],
-    };
+    return { lines: boxLines, skippedChargeDescriptions: [] };
   }
-  return extractPackedInvoiceLines(lines);
+  const packedResult = extractPackedInvoiceLines(lines);
+  if (packedResult.lines.length > 0) return packedResult;
+  // Generic fallback: no header required — pure numeric pattern matching
+  return extractGenericNumericLines(lines);
 }
 
 function parseRateAndAmount(
@@ -611,7 +691,10 @@ export function parseSupplierInvoicePdfText(args: {
   const lines = normalizePdfLines(args.text);
   const supplierCandidates = extractSupplierCandidates(lines, args.sourceFilename);
   const header = extractInvoiceHeader(lines, args.sourceFilename);
-  const invoiceDate = header.invoiceDate ?? new Date().toISOString().slice(0, 10);
+  // Leave invoiceDate empty when not found so downstream callers can tell the
+  // difference between "extracted" and "missing"; pipeline backfills today's
+  // date as a final fallback via buildFormStateWarnings.
+  const invoiceDate = header.invoiceDate ?? "";
   const extractedInvoiceLines = extractInvoiceLines(lines);
   const parsedInvoiceLines = extractedInvoiceLines.lines;
   const supplierId = matchSupplierId(supplierCandidates, args.suppliers);
@@ -633,23 +716,9 @@ export function parseSupplierInvoicePdfText(args: {
     };
   });
 
-  if (!supplierId) {
-    warnings.push("Supplier was not matched. Choose a supplier before saving.");
-  }
-  if (!header.invoiceNumber) {
-    warnings.push("Invoice number was not found. Enter it before saving.");
-  }
-  if (!header.invoiceDate) {
-    warnings.push("Invoice date was not found. Today was used as a placeholder.");
-  } else {
-    warnings.push("Receive date defaulted to the invoice date. Adjust it if the shipment arrived later.");
-  }
-  if (unmatchedLineDescriptions.length > 0) {
-    warnings.push("Some product lines were not matched. Choose products before saving.");
-  }
-  if (prefillLines.length === 0) {
-    warnings.push("No invoice line items could be read from this PDF.");
-  }
+  // State warnings (supplier/invoice#/date/products/lines/totals) are now
+  // emitted by buildFormStateWarnings against the FINAL pipeline result, so
+  // AI/alias resolution can resolve fields before warnings are evaluated.
   if (extractedInvoiceLines.skippedChargeDescriptions.length > 0) {
     warnings.push(
       `Non-inventory charges were not imported: ${extractedInvoiceLines.skippedChargeDescriptions.join(", ")}.`,
@@ -666,14 +735,10 @@ export function parseSupplierInvoicePdfText(args: {
   const totalMatches =
     extractedTotal == null ? null : Math.abs((variance ?? 0)) <= 0.01;
 
-  if (totalMatches === false) {
-    warnings.push("Parsed line totals do not match the PDF balance due. Review amounts before saving.");
-  }
-
   return {
     values: {
       supplierId,
-      invoiceNumber: header.invoiceNumber,
+      supplierInvoiceNumber: header.supplierInvoiceNumber,
       invoiceDate,
       receiveDate: invoiceDate,
       paymentMethod: parsePaymentMethod(args.text),

@@ -37,6 +37,8 @@ import {
 } from "@/modules/distribution/services/inventory-state";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { requireTenantForMutation } from "@/lib/subscription-guard";
+import { assertCustomerWithinCreditLimit } from "@/modules/distribution/customers/services/customers";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   buildTextSearchCondition,
@@ -46,10 +48,64 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import {
+  money,
+  to4DecimalString,
+  toMoneyString,
+} from "@/lib/utils/money";
 
 function makeOrderNumber(id: string, prefix: string | null | undefined) {
   const base = `SO-${id.slice(0, 8).toUpperCase()}`;
   return prefix ? `${prefix}-${base}` : base;
+}
+
+/**
+ * Normalize a user-provided discount string to the `numeric(12,2)` shape
+ * the column expects. Empty / null / negative / non-finite → "0.00".
+ */
+function normalizeDiscountAmount(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "0.00";
+  try {
+    const d = money(value);
+    if (!d.isFinite() || d.lt(0)) return "0.00";
+    return toMoneyString(d);
+  } catch {
+    return "0.00";
+  }
+}
+
+/**
+ * Confirming an order is what consumes a monthly-orders quota slot. Drafts
+ * don't count (otherwise the autosave path would burn quota on every
+ * abandoned form), and cancelled orders don't count (they don't represent
+ * fulfilled work). The check fires from both `createSalesOrder` (when the
+ * UI submits directly as "confirmed") and `updateSalesOrderStatus` (when a
+ * draft is promoted to confirmed).
+ */
+async function assertMonthlyOrdersWithinLimit(
+  tenant: Awaited<ReturnType<typeof getCurrentTenant>>,
+): Promise<void> {
+  const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
+  if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
+    logSubscriptionEnforcementBlock({
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        subscriptionPlan: tenant.subscriptionPlan,
+        subscriptionStatus: tenant.subscriptionStatus,
+      },
+      reason: "limit_reached",
+      key: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+    });
+    throw createPlanLimitReachedError({
+      tenant,
+      limitKey: "maxMonthlyOrders",
+      limit: maxMonthlyOrders,
+      resourceLabel: "orders per month",
+      actionLabel: "confirm another sales order",
+    });
+  }
 }
 
 function isLineClosed(line: {
@@ -116,18 +172,20 @@ function compareInventoryByOldestLot(
   return a.barcodeId.localeCompare(b.barcodeId);
 }
 
-function toFixedCostAmount(value: number) {
-  return value.toFixed(4);
-}
-
 function calculateFulfillmentCostSnapshot(input: {
   costPerUnitSnapshot: string;
-  costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+  // Underlying enum widened — per_each / per_unit treated like fixed_case
+  // for cost math (count * unit cost), with no weight requirement.
+  costUnitTypeSnapshot:
+    | "catch_weight"
+    | "fixed_case"
+    | "per_each"
+    | "per_unit";
   quantityFulfilled: number;
   weightLbs: number | null;
 }) {
-  const costPerUnit = Number(input.costPerUnitSnapshot ?? "0");
-  if (!Number.isFinite(costPerUnit) || costPerUnit < 0) {
+  const costPerUnit = money(input.costPerUnitSnapshot ?? "0");
+  if (!costPerUnit.isFinite() || costPerUnit.lt(0)) {
     throw new Error("Invalid inventory cost snapshot on the selected fulfillment.");
   }
 
@@ -137,15 +195,18 @@ function calculateFulfillmentCostSnapshot(input: {
     );
   }
 
+  // Catch-weight uses billed weight × cost-per-lb; everything else multiplies
+  // count × per-unit cost. Decimal math keeps the line total exact across
+  // per-pound rates (where Number-based summation drifts a cent per few lines).
   const costAmount =
-    input.costUnitTypeSnapshot === "fixed_case"
-      ? input.quantityFulfilled * costPerUnit
-      : (input.weightLbs ?? 0) * costPerUnit;
+    input.costUnitTypeSnapshot === "catch_weight"
+      ? money(input.weightLbs ?? 0).times(costPerUnit)
+      : money(input.quantityFulfilled).times(costPerUnit);
 
   return {
     costPerUnitSnapshot: input.costPerUnitSnapshot,
     costUnitTypeSnapshot: input.costUnitTypeSnapshot,
-    costAmountSnapshot: toFixedCostAmount(costAmount),
+    costAmountSnapshot: to4DecimalString(costAmount),
   };
 }
 
@@ -178,26 +239,33 @@ function distributeFulfillmentWeight(
   if (totalWeightLbs == null) return selections.map(() => null);
   if (selections.length === 1) return [totalWeightLbs];
 
+  // Decimal math throughout: with Number, the proportional split + scale-4
+  // truncation would leave a drift of up to N × 0.00005 lb on the
+  // remainder, which then gets absorbed by the final selection. Exact
+  // arithmetic means the final selection's residual is just genuine
+  // rounding (one half-cent of a pound), not accumulated FP error.
+  const total = money(totalWeightLbs);
   const basis = selections.map(selection =>
     selection.allocatedWeightLbs > 0
-      ? selection.allocatedWeightLbs
-      : selection.quantityFulfilled,
+      ? money(selection.allocatedWeightLbs)
+      : money(selection.quantityFulfilled),
   );
-  const totalBasis = basis.reduce((sum, value) => sum + value, 0);
-  if (totalBasis <= 0) return selections.map(() => null);
+  const totalBasis = basis.reduce((sum, value) => sum.plus(value), money(0));
+  if (totalBasis.lte(0)) return selections.map(() => null);
 
   const weights: Array<number | null> = [];
-  let assignedWeight = 0;
+  let assignedWeight = money(0);
 
   for (let index = 0; index < selections.length; index += 1) {
     if (index === selections.length - 1) {
-      weights.push(Number((totalWeightLbs - assignedWeight).toFixed(4)));
+      weights.push(Number(to4DecimalString(total.minus(assignedWeight))));
       break;
     }
 
-    const nextWeight = Number(((totalWeightLbs * basis[index]) / totalBasis).toFixed(4));
-    weights.push(nextWeight);
-    assignedWeight += nextWeight;
+    const nextWeight = total.times(basis[index]).div(totalBasis);
+    const rounded = Number(to4DecimalString(nextWeight));
+    weights.push(rounded);
+    assignedWeight = assignedWeight.plus(money(rounded));
   }
 
   return weights;
@@ -466,7 +534,11 @@ type SalesOrderLineSnapshot = {
 type ExistingSnapshotLine = {
   productId: string;
   salesUnitId: string | null;
-  unitType: "catch_weight" | "fixed_case";
+  // The underlying enum has widened to include per_each / per_unit (used by
+  // supplier invoices). Sales orders treat those identically to fixed_case
+  // for snapshot purposes — accept the wider union so reads from the DB
+  // line out of the box.
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   pricePerLbOverride: string | null;
   conversionToBaseSnapshot: string | null;
   baseUnitIdSnapshot: string | null;
@@ -576,7 +648,7 @@ async function resolveLineSupplierContext(input: {
 }
 
 function computePricingSnapshot(
-  unitType: "catch_weight" | "fixed_case",
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit",
   resolvedPricePerLb: string | null,
   conversionToBase: string,
 ): {
@@ -584,8 +656,13 @@ function computePricingSnapshot(
   pricePerUnitSnapshot: string | null;
   pricingConversionSnapshot: string | null;
 } {
+  // Map the line's intrinsic unit type onto the binary
+  // pricing_unit_type enum (per_lb / per_case). Non-weight modes
+  // (per_each, per_unit) follow the per_case path — pricing is per
+  // packaged unit, with the conversion-to-base snapshot carrying the
+  // pack size for downstream math.
   const pricingUnitType: PricingUnitType =
-    unitType === "fixed_case" ? "per_case" : "per_lb";
+    unitType === "catch_weight" ? "per_lb" : "per_case";
 
   if (resolvedPricePerLb == null || resolvedPricePerLb === "") {
     return {
@@ -596,8 +673,8 @@ function computePricingSnapshot(
     };
   }
 
-  const priceNum = parseFloat(resolvedPricePerLb);
-  if (!Number.isFinite(priceNum)) {
+  const priceNum = money(resolvedPricePerLb);
+  if (!priceNum.isFinite()) {
     return {
       pricingUnitTypeSnapshot: pricingUnitType,
       pricePerUnitSnapshot: null,
@@ -607,19 +684,19 @@ function computePricingSnapshot(
   }
 
   if (pricingUnitType === "per_case") {
-    const conv = parseFloat(conversionToBase);
+    const conv = money(conversionToBase);
     const pricePerCase =
-      Number.isFinite(conv) && conv > 0 ? priceNum * conv : priceNum;
+      conv.isFinite() && conv.gt(0) ? priceNum.times(conv) : priceNum;
     return {
       pricingUnitTypeSnapshot: pricingUnitType,
-      pricePerUnitSnapshot: pricePerCase.toFixed(4),
+      pricePerUnitSnapshot: to4DecimalString(pricePerCase),
       pricingConversionSnapshot: conversionToBase,
     };
   }
 
   return {
     pricingUnitTypeSnapshot: pricingUnitType,
-    pricePerUnitSnapshot: priceNum.toFixed(4),
+    pricePerUnitSnapshot: to4DecimalString(priceNum),
     pricingConversionSnapshot: null,
   };
 }
@@ -628,7 +705,7 @@ function buildSalesOrderLineSnapshot(
   line: {
     productId: string;
     salesUnitId: string;
-    unitType: "catch_weight" | "fixed_case";
+    unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     resolvedPricePerLb: string | null;
   },
   validProducts: ValidSalesOrderProduct[],
@@ -972,15 +1049,25 @@ async function autoAllocateOldestInventoryToSalesOrderLine(input: {
 
   if (selected.length === 0) return;
 
-  await db.insert(salesOrderLineAllocations).values(
-    selected.map(item => ({
-      salesOrderLineId: input.salesOrderLineId,
-      inventoryItemId: item.id,
-      allocatedWeightLbs: item.exactWeightLbs,
-    })),
-  );
-
-  await markInventoryItemsAllocated(selected.map(item => item.id));
+  // Atomic insert + status flip so a concurrent allocator can't see
+  // the row marked `allocated` before the link row exists (or worse,
+  // pick the same item between our insert and the mark). The reconcile
+  // pass runs after — it's idempotent and reads the now-consistent
+  // state.
+  const selectedIds = selected.map(item => item.id);
+  await db.transaction(async tx => {
+    await tx.insert(salesOrderLineAllocations).values(
+      selected.map(item => ({
+        salesOrderLineId: input.salesOrderLineId,
+        inventoryItemId: item.id,
+        allocatedWeightLbs: item.exactWeightLbs,
+      })),
+    );
+    await tx
+      .update(inventoryItems)
+      .set({ status: "allocated", updatedAt: new Date() })
+      .where(inArray(inventoryItems.id, selectedIds));
+  });
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
@@ -1029,32 +1116,24 @@ async function allocateSelectedInventoryToSalesOrderLine(input: {
     }
   }
 
-  await db.insert(salesOrderLineAllocations).values(
-    selected.map(item => ({
-      salesOrderLineId: input.salesOrderLineId,
-      inventoryItemId: item.id,
-      allocatedWeightLbs: item.exactWeightLbs,
-    })),
-  );
-
-  await markInventoryItemsAllocated(selected.map(item => item.id));
-  await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
-}
-
-export async function getSalesOrders() {
-  const tenant = await getCurrentTenant();
-  return await db.query.salesOrders.findMany({
-    where: eq(salesOrders.tenantId, tenant.id),
-    with: {
-      customer: true,
-      lines: {
-        with: {
-          salesUnit: true,
-        },
-      },
-    },
-    orderBy: [desc(salesOrders.orderDate), desc(salesOrders.createdAt)],
+  // Same atomic insert + status flip as the FIFO path above — without
+  // this a parallel allocation could see the inventory item still
+  // `in_stock` between our insert and the mark and double-allocate.
+  const manualSelectedIds = selected.map(item => item.id);
+  await db.transaction(async tx => {
+    await tx.insert(salesOrderLineAllocations).values(
+      selected.map(item => ({
+        salesOrderLineId: input.salesOrderLineId,
+        inventoryItemId: item.id,
+        allocatedWeightLbs: item.exactWeightLbs,
+      })),
+    );
+    await tx
+      .update(inventoryItems)
+      .set({ status: "allocated", updatedAt: new Date() })
+      .where(inArray(inventoryItems.id, manualSelectedIds));
   });
+  await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
 }
 
 export type SalesOrderListSort =
@@ -1063,17 +1142,36 @@ export type SalesOrderListSort =
   | "status"
   | "createdAt";
 
-export type SalesOrderListParams = PaginatedQueryInput<SalesOrderListSort>;
+export type SalesOrderListStatusFilter =
+  | "all"
+  | "sales_order"
+  | "confirmed"
+  | "fulfilled"
+  | "cancelled";
+
+export type SalesOrderListFilters = {
+  status?: SalesOrderListStatusFilter;
+};
+
+export type SalesOrderListParams = PaginatedQueryInput<
+  SalesOrderListSort,
+  SalesOrderListFilters
+>;
 
 export async function getSalesOrdersPage(input?: SalesOrderListParams) {
   const tenant = await getCurrentTenant();
   const query = normalizePaginatedQuery(input, {
     defaultSort: "orderDate",
     defaultDirection: "desc",
-    defaultFilters: {},
+    defaultFilters: { status: "all" as SalesOrderListStatusFilter },
   });
+  const statusFilter =
+    query.filters.status && query.filters.status !== "all"
+      ? eq(salesOrders.status, query.filters.status)
+      : undefined;
   const where = and(
     eq(salesOrders.tenantId, tenant.id),
+    statusFilter,
     buildTextSearchCondition(query.search, [
       salesOrders.orderNumber,
       customers.name,
@@ -1143,11 +1241,6 @@ export async function getSalesOrdersPage(input?: SalesOrderListParams) {
     total: count ?? 0,
   });
 }
-
-/** Row shape returned by `getSalesOrders()` (for client `import type` only). */
-export type SalesOrderListItem = Awaited<
-  ReturnType<typeof getSalesOrders>
->[number];
 
 export async function getSalesOrderById(id: string) {
   const tenant = await getCurrentTenant();
@@ -1221,6 +1314,33 @@ export type SalesOrderDetail = NonNullable<
   Awaited<ReturnType<typeof getSalesOrderById>>
 >;
 
+/**
+ * Cheapest possible "does this customer already have an unconfirmed
+ * draft" lookup. The new-order form's autosave creates a draft on the
+ * first ready line; when a user returns to /orders/new for a customer
+ * that already has one, we surface it so they can resume instead of
+ * accidentally creating a second.
+ */
+export async function findOpenDraftForCustomer(customerId: string) {
+  const tenant = await getCurrentTenant();
+  return (
+    (await db.query.salesOrders.findFirst({
+      where: and(
+        eq(salesOrders.tenantId, tenant.id),
+        eq(salesOrders.customerId, customerId),
+        eq(salesOrders.status, "sales_order"),
+      ),
+      columns: {
+        id: true,
+        orderNumber: true,
+        orderDate: true,
+        updatedAt: true,
+      },
+      orderBy: [desc(salesOrders.updatedAt)],
+    })) ?? null
+  );
+}
+
 export async function deleteSalesOrder(id: string) {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
@@ -1233,6 +1353,11 @@ export async function deleteSalesOrder(id: string) {
 
   const order = await db.query.salesOrders.findFirst({
     where: and(eq(salesOrders.id, id), eq(salesOrders.tenantId, tenant.id)),
+    columns: {
+      id: true,
+      orderNumber: true,
+      status: true,
+    },
     with: {
       invoices: {
         columns: {
@@ -1301,6 +1426,22 @@ export async function deleteSalesOrder(id: string) {
       .where(inArray(salesOrderLineAllocations.id, allocationIdsToRelease));
     await restoreInventoryItemsToStock(inventoryItemIdsToRelease);
   }
+
+  // Record the delete BEFORE the row goes away — once it's gone, the
+  // audit row carrying its order number is the only trace left.
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "delete",
+    entityTable: "sales_orders",
+    entityId: id,
+    entityLabel: order.orderNumber ?? null,
+    changedFieldsJson: null,
+    beforeJson: JSON.stringify({ status: order.status }),
+    afterJson: null,
+    contextJson: JSON.stringify({ action: "delete_order" }),
+  });
 
   await db
     .delete(salesOrders)
@@ -1383,6 +1524,10 @@ export async function updateSalesOrderStatus(input: {
   }
 
   if (input.status === "confirmed" && order.status !== "confirmed") {
+    // Promoting a draft into the confirmed/billable pool — same quota
+    // gate that `createSalesOrder` runs on direct-confirm submits.
+    await assertMonthlyOrdersWithinLimit(tenant);
+    const previousStatus = order.status;
     await db
       .update(salesOrders)
       .set({
@@ -1393,6 +1538,23 @@ export async function updateSalesOrderStatus(input: {
       .where(
         and(eq(salesOrders.id, input.id), eq(salesOrders.tenantId, tenant.id)),
       );
+
+    // Mirror the cancel-order audit pattern so support / compliance can
+    // tell who confirmed the order — the activity timeline rebuilds
+    // status transitions from these rows.
+    await db.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "update",
+      entityTable: "sales_orders",
+      entityId: input.id,
+      entityLabel: null,
+      changedFieldsJson: JSON.stringify(["status"]),
+      beforeJson: JSON.stringify({ status: previousStatus }),
+      afterJson: JSON.stringify({ status: "confirmed" }),
+      contextJson: JSON.stringify({ action: "confirm_order" }),
+    });
   }
 
   return getSalesOrderById(input.id);
@@ -1515,6 +1677,7 @@ export async function updateSalesOrder(input: {
   orderDate: string;
   dueDate?: string | null;
   addFuelSurcharge?: boolean;
+  discountAmount?: string | null;
   customerNotes?: string | null;
   internalNotes?: string | null;
   lines: Array<{
@@ -1522,12 +1685,12 @@ export async function updateSalesOrder(input: {
     productId: string;
     salesUnitId: string;
     expectedCases: number;
-    unitType?: "catch_weight" | "fixed_case";
+    unitType?: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     inventoryItemIds?: string[];
     pricePerLbOverride?: string | null;
   }>;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
 
   if (currentUser.tenantId !== tenant.id) {
@@ -1618,6 +1781,11 @@ export async function updateSalesOrder(input: {
     throw new Error("Customer not found.");
   }
 
+  // Same soft AR cap we run on create — once an order is editable
+  // (no fulfillment, no invoice, not cancelled), bumping quantities up
+  // should be subject to the same credit-limit gate.
+  await assertCustomerWithinCreditLimit(input.customerId, tenant.id);
+
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
     customerId: input.customerId,
@@ -1637,6 +1805,7 @@ export async function updateSalesOrder(input: {
       orderDate: input.orderDate,
       dueDate: input.dueDate ?? null,
       addFuelSurcharge: input.addFuelSurcharge ?? true,
+      discountAmount: normalizeDiscountAmount(input.discountAmount),
       customerNotes: input.customerNotes ?? null,
       internalNotes: input.internalNotes ?? null,
       updatedByUserId: currentUser.id,
@@ -1660,21 +1829,29 @@ export async function updateSalesOrder(input: {
 
   await db.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, input.id));
 
-  for (const line of input.lines) {
-    const supplierId = await resolveLineSupplierContext({
-      tenantId: tenant.id,
-      productId: line.productId,
-      manualInventoryItemIds: line.inventoryItemIds,
-    });
+  // Resolve each line's supplier + per-lb price in parallel — both
+  // are pure reads keyed on the line's own product/customer. Inserts +
+  // allocations remain sequential downstream because allocation
+  // contention against the same lot must be serialized.
+  const lineContexts = await Promise.all(
+    input.lines.map(async line => {
+      const supplierId = await resolveLineSupplierContext({
+        tenantId: tenant.id,
+        productId: line.productId,
+        manualInventoryItemIds: line.inventoryItemIds,
+      });
+      const resolvedPricePerLb = await resolveLinePricePerLb({
+        customerId: input.customerId,
+        productId: line.productId,
+        supplierId,
+        providedOverride: line.pricePerLbOverride,
+        validProducts,
+      });
+      return { line, supplierId, resolvedPricePerLb };
+    }),
+  );
 
-    const resolvedPricePerLb = await resolveLinePricePerLb({
-      customerId: input.customerId,
-      productId: line.productId,
-      supplierId,
-      providedOverride: line.pricePerLbOverride,
-      validProducts,
-    });
-
+  for (const { line, resolvedPricePerLb } of lineContexts) {
     const unitType = line.unitType ?? "catch_weight";
     const snapshot = buildSalesOrderLineSnapshot(
       { ...line, unitType, resolvedPricePerLb },
@@ -1722,6 +1899,7 @@ export async function createSalesOrder(input: {
   orderDate: string;
   dueDate?: string;
   addFuelSurcharge?: boolean;
+  discountAmount?: string | null;
   status?: "sales_order" | "confirmed";
   customerNotes?: string;
   internalNotes?: string;
@@ -1729,12 +1907,12 @@ export async function createSalesOrder(input: {
     productId: string;
     salesUnitId: string;
     expectedCases: number;
-    unitType?: "catch_weight" | "fixed_case";
+    unitType?: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
     inventoryItemIds?: string[];
     pricePerLbOverride?: string;
   }>;
 }) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
 
   if (currentUser.tenantId !== tenant.id) {
@@ -1743,31 +1921,21 @@ export async function createSalesOrder(input: {
 
   requirePermission(currentUser.role, "edit_order");
 
-  const maxMonthlyOrders = getPlanLimit(tenant, "maxMonthlyOrders");
-  if ((await countCurrentMonthSalesOrdersForTenant(tenant.id)) + 1 > maxMonthlyOrders) {
-    logSubscriptionEnforcementBlock({
-      tenant: {
-        id: tenant.id,
-        slug: tenant.slug,
-        subscriptionPlan: tenant.subscriptionPlan,
-        subscriptionStatus: tenant.subscriptionStatus,
-      },
-      reason: "limit_reached",
-      key: "maxMonthlyOrders",
-      limit: maxMonthlyOrders,
-    });
-    throw createPlanLimitReachedError({
-      tenant,
-      limitKey: "maxMonthlyOrders",
-      limit: maxMonthlyOrders,
-      resourceLabel: "orders per month",
-      actionLabel: "create another sales order",
-    });
+  // Quota only fires when the order is being created directly as
+  // "confirmed". Draft saves (status: "sales_order") are free — they
+  // become billable when the user later confirms via
+  // `updateSalesOrderStatus`, which runs the same check.
+  if ((input.status ?? "sales_order") === "confirmed") {
+    await assertMonthlyOrdersWithinLimit(tenant);
   }
 
   if (input.lines.length === 0) {
     throw new Error("Add at least one line item before saving.");
   }
+
+  // Soft AR cap: block new orders when the customer is already over
+  // their credit limit. No-op when the column is null (no limit set).
+  await assertCustomerWithinCreditLimit(input.customerId, tenant.id);
 
   const { validProducts, validSalesUnits } = await validateSalesOrderLineSelections({
     tenantId: tenant.id,
@@ -1788,6 +1956,7 @@ export async function createSalesOrder(input: {
       orderDate: input.orderDate,
       dueDate: input.dueDate,
       addFuelSurcharge: input.addFuelSurcharge ?? true,
+      discountAmount: normalizeDiscountAmount(input.discountAmount),
       customerNotes: input.customerNotes,
       internalNotes: input.internalNotes,
       createdByUserId: currentUser.id,
@@ -1807,21 +1976,30 @@ export async function createSalesOrder(input: {
     .set({ orderNumber })
     .where(eq(salesOrders.id, order.id));
 
-  for (const line of input.lines) {
-    const supplierId = await resolveLineSupplierContext({
-      tenantId: tenant.id,
-      productId: line.productId,
-      manualInventoryItemIds: line.inventoryItemIds,
-    });
+  // Resolve each line's supplier + per-lb price in parallel — both
+  // are pure reads keyed on the line's own product/customer, so there's
+  // no cross-line dependency. The inserts and allocations remain
+  // sequential because allocation contention against the same lot must
+  // be serialized.
+  const lineContexts = await Promise.all(
+    input.lines.map(async line => {
+      const supplierId = await resolveLineSupplierContext({
+        tenantId: tenant.id,
+        productId: line.productId,
+        manualInventoryItemIds: line.inventoryItemIds,
+      });
+      const resolvedPricePerLb = await resolveLinePricePerLb({
+        customerId: input.customerId,
+        productId: line.productId,
+        supplierId,
+        providedOverride: line.pricePerLbOverride,
+        validProducts,
+      });
+      return { line, supplierId, resolvedPricePerLb };
+    }),
+  );
 
-    const resolvedPricePerLb = await resolveLinePricePerLb({
-      customerId: input.customerId,
-      productId: line.productId,
-      supplierId,
-      providedOverride: line.pricePerLbOverride,
-      validProducts,
-    });
-
+  for (const { line, resolvedPricePerLb } of lineContexts) {
     const unitType = line.unitType ?? "catch_weight";
     const snapshot = buildSalesOrderLineSnapshot(
       { ...line, unitType, resolvedPricePerLb },
@@ -1931,6 +2109,17 @@ async function selectAutoFulfillmentInventory(input: {
   salesOrderLineId: string;
   productId: string;
   quantityFulfilled: number;
+  /**
+   * When provided, only allocated inventory items belonging to this lot
+   * are eligible — the warehouse user picked this specific lot in the
+   * fulfillment UI and we honor it instead of FIFO-ing across lots.
+   */
+  preferredLotId?: string | null;
+  /**
+   * When provided, only this exact allocated inventory item is eligible.
+   * Most restrictive; supersedes `preferredLotId` when both are set.
+   */
+  preferredInventoryItemId?: string | null;
 }) {
   const allocations = await db.query.salesOrderLineAllocations.findMany({
     where: eq(salesOrderLineAllocations.salesOrderLineId, input.salesOrderLineId),
@@ -1958,19 +2147,39 @@ async function selectAutoFulfillmentInventory(input: {
     originalExactWeightLbs: string;
     allocatedWeightLbs: number;
     costPerUnitSnapshot: string;
-    costUnitTypeSnapshot: "catch_weight" | "fixed_case";
+    // Underlying enum was widened to include per_each / per_unit (supplier-
+    // invoice beverages). Fulfillment carries the snapshot verbatim — only
+    // catch_weight needs special-case weight math, the others all behave
+    // like fixed_case for cost-loss calculation.
+    costUnitTypeSnapshot:
+      | "catch_weight"
+      | "fixed_case"
+      | "per_each"
+      | "per_unit";
   }> = [];
   let selectedQuantity = 0;
 
   const candidates = allocations
     .filter(allocation => {
       const item = allocation.inventoryItem;
-      return (
-        item != null &&
-        item.productId === input.productId &&
-        item.lot?.tenantId === input.tenantId &&
-        item.status === "allocated"
-      );
+      if (
+        item == null ||
+        item.productId !== input.productId ||
+        item.lot?.tenantId !== input.tenantId ||
+        item.status !== "allocated"
+      ) {
+        return false;
+      }
+      if (
+        input.preferredInventoryItemId &&
+        item.id !== input.preferredInventoryItemId
+      ) {
+        return false;
+      }
+      if (input.preferredLotId && item.lotId !== input.preferredLotId) {
+        return false;
+      }
+      return true;
     })
     .sort((a, b) => {
       if (!a.inventoryItem || !b.inventoryItem) return 0;
@@ -2045,8 +2254,14 @@ async function selectAutoFulfillmentInventory(input: {
       0,
     );
 
+    const scope = input.preferredInventoryItemId
+      ? "selected inventory item"
+      : input.preferredLotId
+        ? "selected lot"
+        : "product";
+
     throw new Error(
-      `Could not automatically match ${input.quantityFulfilled} fulfilled case${input.quantityFulfilled === 1 ? "" : "s"} to allocated inventory. Only ${allocatedQuantity} allocated case${allocatedQuantity === 1 ? "" : "s"} are available for this product.`,
+      `Could not match ${input.quantityFulfilled} fulfilled case${input.quantityFulfilled === 1 ? "" : "s"} to allocated inventory. Only ${allocatedQuantity} allocated case${allocatedQuantity === 1 ? "" : "s"} ${allocatedQuantity === 1 ? "is" : "are"} available for this ${scope}.`,
     );
   }
 
@@ -2067,16 +2282,25 @@ async function splitInventoryItemIfPartial(input: {
   if (!original) return;
 
   const remainderCases = input.originalCases - input.quantityConsumed;
-  const totalWeight = parseFloat(input.originalExactWeightLbs) || 0;
-  const consumedWeight =
-    totalWeight > 0 ? (totalWeight * input.quantityConsumed) / input.originalCases : 0;
-  const remainderWeight = totalWeight > 0 ? totalWeight - consumedWeight : 0;
+  // Decimal split + complement: the proportional cut (total * consumed /
+  // originalCases) then remainder = total - cut, all in exact arithmetic.
+  // With Number these two values could drift by a millionth of a pound;
+  // the residual then sticks around forever on the surviving inventory_item.
+  const totalWeight = money(input.originalExactWeightLbs);
+  const consumedWeight = totalWeight.gt(0)
+    ? totalWeight
+        .times(money(input.quantityConsumed))
+        .div(money(input.originalCases))
+    : money(0);
+  const remainderWeight = totalWeight.gt(0)
+    ? totalWeight.minus(consumedWeight)
+    : money(0);
 
   await db
     .update(inventoryItems)
     .set({
       cases: input.quantityConsumed,
-      exactWeightLbs: consumedWeight.toFixed(4),
+      exactWeightLbs: to4DecimalString(consumedWeight),
       updatedAt: new Date(),
     })
     .where(eq(inventoryItems.id, input.inventoryItemId));
@@ -2085,7 +2309,7 @@ async function splitInventoryItemIfPartial(input: {
     productId: original.productId,
     lotId: original.lotId,
     barcodeId: crypto.randomUUID(),
-    exactWeightLbs: remainderWeight.toFixed(4),
+    exactWeightLbs: to4DecimalString(remainderWeight),
     cases: remainderCases,
     costPerUnitSnapshot: original.costPerUnitSnapshot,
     costUnitTypeSnapshot: original.costUnitTypeSnapshot,
@@ -2104,6 +2328,8 @@ async function recordAutoAllocatedFulfillments(input: {
   weightLbs: number | null;
   fulfilledAt: Date;
   notes?: string | null;
+  preferredLotId?: string | null;
+  preferredInventoryItemId?: string | null;
 }) {
   await autoAllocateOldestInventoryToSalesOrderLine({
     tenantId: input.tenantId,
@@ -2117,6 +2343,8 @@ async function recordAutoAllocatedFulfillments(input: {
     salesOrderLineId: input.salesOrderLineId,
     productId: input.productId,
     quantityFulfilled: input.quantityFulfilled,
+    preferredLotId: input.preferredLotId,
+    preferredInventoryItemId: input.preferredInventoryItemId,
   });
   const weights = distributeFulfillmentWeight(input.weightLbs, selections);
   const insertedIds: string[] = [];
@@ -2202,6 +2430,9 @@ export async function recordSalesOrderFulfillment(input: {
           expectedCases: true,
           fulfilledCases: true,
           shortShippedAt: true,
+          salesUnitAbbreviationSnapshot: true,
+          salesUnitNameSnapshot: true,
+          totalBilledWeightLbs: true,
         },
       },
     },
@@ -2260,6 +2491,50 @@ export async function recordSalesOrderFulfillment(input: {
     throw new Error("Weight must be a non-negative number.");
   }
 
+  // For weight-priced lines (sales unit = lb/pound), expectedCases is
+  // the ordered lbs and `weight` is the billed lbs for this fulfillment
+  // — neither can exceed the order. Cap both per-fulfillment and
+  // cumulatively across earlier fulfillments so a sequence of partials
+  // can't over-ship in aggregate.
+  // Expanded weight-token detection so non-US weight catalogs (kg/oz)
+  // also engage the over-ship cap. The set mirrors WEIGHT_UNIT_NAMES
+  // in new-order-line-utils.ts; eventually both should consult the
+  // UoM table's `family` column directly.
+  const lineSalesUnitTokens = [
+    matchingLine.salesUnitAbbreviationSnapshot,
+    matchingLine.salesUnitNameSnapshot,
+  ];
+  const WEIGHT_TOKENS = new Set([
+    "lb",
+    "lbs",
+    "pound",
+    "pounds",
+    "kg",
+    "kilogram",
+    "kilograms",
+    "oz",
+    "ounce",
+    "ounces",
+    "g",
+    "gram",
+    "grams",
+  ]);
+  const lineIsWeightUnit = lineSalesUnitTokens.some(token =>
+    WEIGHT_TOKENS.has((token ?? "").trim().toLowerCase()),
+  );
+
+  if (lineIsWeightUnit && weight != null) {
+    const orderedLbs = matchingLine.expectedCases;
+    const alreadyBilledLbs = parseFloat(matchingLine.totalBilledWeightLbs ?? "0") || 0;
+    const remainingLbs = Math.max(0, orderedLbs - alreadyBilledLbs);
+    // Tiny tolerance for scale rounding (1 g ≈ 0.0022 lb).
+    if (weight - remainingLbs > 0.0025) {
+      throw new Error(
+        `Fulfilled weight ${weight.toFixed(2)} lb exceeds the ${remainingLbs.toFixed(2)} lb remaining on this order.`,
+      );
+    }
+  }
+
   const firstFulfillmentId = await recordAutoAllocatedFulfillments({
     tenantId: tenant.id,
     currentUserId: currentUser.id,
@@ -2271,6 +2546,8 @@ export async function recordSalesOrderFulfillment(input: {
     weightLbs: weight,
     fulfilledAt,
     notes: input.notes ?? null,
+    preferredLotId: input.lotId ?? null,
+    preferredInventoryItemId: input.inventoryItemId ?? null,
   });
 
   await syncSalesOrderLineFulfillment(input.salesOrderLineId);
@@ -2345,15 +2622,35 @@ export async function markSalesOrderLineShortShipped(input: {
     throw new Error("A fully fulfilled line cannot be marked short shipped.");
   }
 
+  const shortShippedAt = new Date();
+  const shortShipNotes = input.notes?.trim() || null;
   await db
     .update(salesOrderLines)
     .set({
-      shortShippedAt: new Date(),
+      shortShippedAt,
       shortShippedByUserId: currentUser.id,
-      shortShipNotes: input.notes?.trim() || null,
-      updatedAt: new Date(),
+      shortShipNotes,
+      updatedAt: shortShippedAt,
     })
     .where(eq(salesOrderLines.id, input.salesOrderLineId));
+
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "update",
+    entityTable: "sales_order_lines",
+    entityId: input.salesOrderLineId,
+    entityLabel: null,
+    changedFieldsJson: JSON.stringify(["shortShippedAt"]),
+    beforeJson: JSON.stringify({ shortShippedAt: null }),
+    afterJson: JSON.stringify({ shortShippedAt: shortShippedAt.toISOString() }),
+    contextJson: JSON.stringify({
+      action: "short_ship_line",
+      salesOrderId: input.salesOrderId,
+      notes: shortShipNotes,
+    }),
+  });
 
   await reconcileSalesOrderLineAllocations(input.salesOrderLineId);
   await syncSalesOrderLineFulfillment(input.salesOrderLineId);
@@ -2460,15 +2757,36 @@ export async function reverseSalesOrderFulfillment(input: {
     throw new Error("This fulfillment entry has already been reversed.");
   }
 
+  const reversedAt = new Date();
+  const reversalReason = input.reversalReason?.trim() || null;
   await db
     .update(salesOrderFulfillments)
     .set({
-      reversedAt: new Date(),
+      reversedAt,
       reversedByUserId: currentUser.id,
-      reversalReason: input.reversalReason?.trim() || null,
-      updatedAt: new Date(),
+      reversalReason,
+      updatedAt: reversedAt,
     })
     .where(eq(salesOrderFulfillments.id, input.fulfillmentId));
+
+  await db.insert(auditLogs).values({
+    tenantId: tenant.id,
+    actorType: "portal_user",
+    actorPortalUserId: currentUser.id,
+    action: "update",
+    entityTable: "sales_order_fulfillments",
+    entityId: input.fulfillmentId,
+    entityLabel: null,
+    changedFieldsJson: JSON.stringify(["reversedAt"]),
+    beforeJson: JSON.stringify({ reversedAt: null }),
+    afterJson: JSON.stringify({ reversedAt: reversedAt.toISOString() }),
+    contextJson: JSON.stringify({
+      action: "reverse_fulfillment",
+      salesOrderId: input.salesOrderId,
+      salesOrderLineId: fulfillment.salesOrderLineId,
+      reversalReason,
+    }),
+  });
 
   await syncSalesOrderLineFulfillment(fulfillment.salesOrderLineId);
 

@@ -7,6 +7,25 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
+/**
+ * Returns true when an event target lives inside a base-ui portal-rendered
+ * popup (Combobox content, Select listbox, Popover, etc). Used by
+ * DialogContent so Radix's outside-pointer detector doesn't eat the click
+ * when the user picks an item from a popup that opened on top of the dialog.
+ */
+function isInsidePortalPopup(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  // Our shadcn-on-base-ui wrappers stamp a `data-slot="combobox-content"`
+  // (see components/ui/combobox.tsx). Base-ui's primitives also expose
+  // `data-popup-open` on the popup positioner. Either is enough to identify
+  // a popup that should be considered part of the modal interaction surface.
+  return Boolean(
+    target.closest('[data-slot="combobox-content"]') ||
+    target.closest('[data-popup-open]') ||
+    target.closest('[data-base-ui-popup]'),
+  );
+}
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -39,7 +58,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-ink/40 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -51,6 +70,8 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -61,9 +82,31 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-xl border border-border-soft bg-card p-6 text-sm text-ink duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        // Radix Dialog's outside-pointer handler closes the dialog AND in some
+        // versions preventDefaults the underlying click. When the dialog
+        // contains a base-ui Combobox / Popover / Select, its popup renders in
+        // a sibling portal — Radix treats clicks there as "outside", so item
+        // clicks silently fail (the dropdown opens but selecting an item
+        // doesn't register). We ignore both events when they originate inside
+        // a base-ui popup or our Combobox content. Callers can still pass
+        // their own handlers; we forward after our guard.
+        onPointerDownOutside={(event) => {
+          if (isInsidePortalPopup(event.target)) {
+            event.preventDefault();
+            return;
+          }
+          onPointerDownOutside?.(event);
+        }}
+        onInteractOutside={(event) => {
+          if (isInsidePortalPopup(event.target)) {
+            event.preventDefault();
+            return;
+          }
+          onInteractOutside?.(event);
+        }}
         {...props}
       >
         {children}
@@ -129,7 +172,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading leading-none font-medium", className)}
+      className={cn("text-[20px] font-semibold tracking-[-0.025em] leading-tight", className)}
       {...props}
     />
   )
@@ -143,7 +186,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        "text-sm text-subtle *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-ink",
         className
       )}
       {...props}

@@ -16,6 +16,11 @@ import type { CustomerProductsParams } from "@/modules/distribution/price-chart/
 
 function invalidatePriceChart(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.priceChart.all });
+  // Customer-side caches embed productPrices (used by the new-order form
+  // to back-fill line prices), so any price-chart write needs to bust
+  // the customer caches too. Broad invalidate by prefix covers detail,
+  // portfolio, and credit-snapshot keys.
+  queryClient.invalidateQueries({ queryKey: queryKeys.customers.all });
 }
 
 export function usePriceChart() {
@@ -35,12 +40,19 @@ export function useSetCustomerPrice() {
       pricePerLb: string;
       /** Optional: scope the price to a specific supplier (overrides the default for that supplier). */
       supplierId?: string | null;
+      /**
+       * Version the client read before editing. When provided the server
+       * rejects the write if the row has moved on, surfacing a
+       * "refresh and retry" prompt instead of last-write-wins.
+       */
+      expectedVersion?: number;
     }) =>
       setCustomerProductPriceAction(
         input.customerId,
         input.productId,
         input.pricePerLb,
         input.supplierId ?? null,
+        input.expectedVersion,
       ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });
@@ -53,11 +65,14 @@ export function useDeleteCustomerPrice() {
       customerId: string;
       productId: string;
       supplierId?: string | null;
+      /** Optional concurrency token — see useSetCustomerPrice. */
+      expectedVersion?: number;
     }) =>
       deleteCustomerProductPriceAction(
         input.customerId,
         input.productId,
         input.supplierId ?? null,
+        input.expectedVersion,
       ),
     onSuccess: () => invalidatePriceChart(queryClient),
   });

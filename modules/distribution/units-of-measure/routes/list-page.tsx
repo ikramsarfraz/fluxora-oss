@@ -1,25 +1,12 @@
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { queryKeys } from "@/lib/query/keys";
-import { getUnitsOfMeasure } from "../services/units-of-measure";
+import { Suspense } from "react";
 
 import UnitsOfMeasure from "../components/units-of-measure-page";
 
-export default async function UnitsOfMeasureListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.unitsOfMeasure.all,
-    queryFn: () => getUnitsOfMeasure(),
-  });
-
+// See orders/routes/list-page.tsx for the prefetch rationale.
+export default function UnitsOfMeasureListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
+    <Suspense>
       <UnitsOfMeasure />
-    </HydrationBoundary>
+    </Suspense>
   );
 }

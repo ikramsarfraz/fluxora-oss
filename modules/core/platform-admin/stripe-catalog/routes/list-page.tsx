@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { stripePrices } from "@/db/schema";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
+import { captureException } from "@/lib/sentry-scope";
 import { STRIPE_SAAS_PAID_PLAN_KEYS } from "@/lib/stripe/plan-metadata";
 import {
   getPlatformAdminStripeCatalogPagePayload,
@@ -35,7 +36,11 @@ function formatMoneyAdmin(currency: string, cents: number | null): string {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(cents / 100);
-  } catch {
+  } catch (err) {
+    captureException(err, {
+      stage: "stripe_catalog_format_money",
+      currency,
+    });
     return `${(cents / 100).toFixed(2)} ${currency.toUpperCase()}`;
   }
 }
@@ -141,7 +146,7 @@ function ProductBlock(props: { row: PlatformAdminGroupedStripeCatalog }) {
   const { product, prices } = props.row;
 
   return (
-    <Card className="overflow-hidden border-slate-200">
+    <Card className="overflow-hidden border-border-default">
       <CardHeader className="border-b border-border bg-muted/40 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -323,7 +328,7 @@ export default async function PlatformAdminStripeCatalogListPage() {
       </Card>
 
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold tracking-tight">Cached Stripe objects</h2>
+        <h2 className="text-lg font-medium tracking-tight">Cached Stripe objects</h2>
         {grouped.length === 0 ? (
           <Card>
             <CardContent className="space-y-3 py-12 px-6 text-center">

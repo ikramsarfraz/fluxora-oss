@@ -1,9 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { toast } from "sonner";
+import {
+  CsvImportModal,
+  useCsvImportModal,
+  type CsvApplyResult,
+} from "@/modules/distribution/onboarding/components/csv-import-modal";
+
+import { bulkCreateSuppliersAction } from "@/modules/distribution/suppliers/actions";
+import { queryKeys } from "@/lib/query/keys";
+import type { CreateSupplierInput } from "../services/suppliers";
 
 import {
   AlertDialog,
@@ -15,7 +25,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import {
+  ListingAction,
+  ListingErrorState,
+  ListingPage,
+  ListingSecondaryAction,
+  MonoText,
+  type ListingColumn,
+} from "@/components/listing-page";
 import { useDeleteSupplier, useSuppliersPage } from "../hooks/use-suppliers";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import { formatDisplayDate } from "@/lib/utils/date";
@@ -39,7 +56,7 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
     render: row => ({
       primary: row.netDays !== null && row.netDays !== undefined
         ? `Net ${row.netDays}`
-        : <span style={{ color: "#78716c" }}>—</span>,
+        : <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
   {
@@ -47,7 +64,7 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
     header: "Products",
     align: "right",
     render: row => ({
-      primary: <span style={{ color: "#78716c" }}>{row.productCosts?.length ?? 0}</span>,
+      primary: <span style={{ color: "var(--color-subtle)" }}>{row.productCosts?.length ?? 0}</span>,
     }),
   },
   {
@@ -58,9 +75,41 @@ const COLUMNS: ListingColumn<SupplierRow>[] = [
   },
 ];
 
-export default function Suppliers() {
+function csvRowToSupplierInput(row: Record<string, string>): CreateSupplierInput {
+  return {
+    name: row.name ?? "",
+    netDays:
+      row.net_days && row.net_days.trim() !== "" ? Number(row.net_days) : null,
+    primaryContactName: row.primary_contact_name || null,
+    primaryContactEmail: row.primary_contact_email || null,
+    primaryContactPhone: row.primary_contact_phone || null,
+    taxId: row.tax_id || null,
+    accountNumber: row.account_number || null,
+    addressLine1: row.address_line1 || null,
+    addressLine2: row.address_line2 || null,
+    addressCity: row.address_city || null,
+    addressRegion: row.address_region || null,
+    addressPostalCode: row.address_postal_code || null,
+    websiteUrl: row.website_url || null,
+    notes: row.notes || null,
+  };
+}
+
+export default function Suppliers({ belowHeader }: { belowHeader?: ReactNode }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [deletingSupplier, setDeletingSupplier] = useState<SupplierRow | null>(null);
+  const { open: importOpen, openModal: openImport, closeModal: closeImport } = useCsvImportModal("suppliers");
+
+  async function handleBulkImport(rows: Record<string, string>[]): Promise<CsvApplyResult> {
+    const inputs = rows.map(csvRowToSupplierInput);
+    const result = await bulkCreateSuppliersAction(inputs);
+    if (result.created > 0) {
+      // refresh the listing without waiting for a route revalidation roundtrip
+      queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.all });
+    }
+    return { created: result.created, failed: result.failed };
+  }
 
   const pagination = useUrlPaginationState<SupplierListSort>({
     defaultSort: "createdAt",
@@ -79,20 +128,31 @@ export default function Suppliers() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
   return (
     <>
+      <CsvImportModal
+        importType="suppliers"
+        open={importOpen}
+        onClose={closeImport}
+        onApply={handleBulkImport}
+      />
       <ListingPage
         title="Suppliers"
         subtitle="Manage your supplier accounts."
+        belowHeader={belowHeader}
+        secondaryActions={
+          <ListingSecondaryAction onClick={openImport}>
+            <Upload className="size-3.5" />
+            Import CSV
+          </ListingSecondaryAction>
+        }
         primaryAction={
           <ListingAction href="/suppliers/new">
             <Plus className="size-3.5" />

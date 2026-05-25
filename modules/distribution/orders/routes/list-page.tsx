@@ -1,30 +1,16 @@
 import { Suspense } from "react";
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { getSalesOrders } from "../services/orders";
-import { queryKeys } from "@/lib/query/keys";
 
 import Orders from "../components/orders-page";
 
-export default async function OrdersListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient
-    .prefetchQuery({
-      queryKey: queryKeys.salesOrders.all,
-      queryFn: getSalesOrders,
-    })
-    .catch(() => {});
-
+// The client component drives its own paginated/filtered query via
+// `useSalesOrdersPage` — prefetching here would require knowing the
+// page/sort/filter URL params, which only the client resolves. The
+// previous prefetch ran an unbounded `getSalesOrders()` into a query
+// key the client never reads (waste of a DB round-trip).
+export default function OrdersListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <Orders />
-      </Suspense>
-    </HydrationBoundary>
+    <Suspense>
+      <Orders />
+    </Suspense>
   );
 }

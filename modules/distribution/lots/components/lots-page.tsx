@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingErrorState, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
 import { ExpirationStateBadge, LotOperationalStatusBadge } from "@/modules/distribution/components/warehouse/warehouse-badges";
 import { useLots } from "../hooks/use-lots";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatWeightLbs, getExpirationState, getLotOperationalStatus } from "@/lib/warehouse/insights";
 
-import { getLotPrimaryProduct, getLotSourceInvoices, getLotTotals } from "./lot-view-helpers";
+import {
+  getLotPrimaryProduct,
+  getLotSourceInvoices,
+  getLotTotals,
+  isLotNonWeight,
+} from "./lot-view-helpers";
 
 type LotRow = NonNullable<ReturnType<typeof useLots>["data"]>[number];
 
@@ -23,7 +28,7 @@ const COLUMNS: ListingColumn<LotRow>[] = [
     width: "120px",
     render: row => ({
       primary: (
-        <Link href={`/lots/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
+        <Link href={`/inventory/lots/${row.id}`} style={{ textDecoration: "none", color: "inherit" }} onClick={e => e.stopPropagation()}>
           <MonoText>{row.lotNumber}</MonoText>
         </Link>
       ),
@@ -40,7 +45,7 @@ const COLUMNS: ListingColumn<LotRow>[] = [
       return {
         primary: product
           ? <span style={{ fontWeight: 500 }}>{product.name}</span>
-          : <span style={{ color: "#78716c" }}>—</span>,
+          : <span style={{ color: "var(--color-subtle)" }}>—</span>,
         secondary: sourceInvoices[0]?.invoiceNumber,
       };
     },
@@ -70,17 +75,44 @@ const COLUMNS: ListingColumn<LotRow>[] = [
     align: "right",
     render: row => {
       const totals = getLotTotals(row);
-      return { primary: <span style={{ color: "#44403c" }}>{totals.inventoryItemCount}</span> };
+      return { primary: <span style={{ color: "var(--color-ink-warm)" }}>{totals.inventoryItemCount}</span> };
     },
   },
   {
     key: "weight",
-    header: "Weight",
+    // Renamed from "Weight" — non-weight lots (beverages, cans) show
+    // their unit count in the product's base UOM. Each lot maps to a
+    // single product so the family is well-defined per row.
+    header: "Quantity",
     sortKey: "weight",
     align: "right",
     render: row => {
       const totals = getLotTotals(row);
-      return { primary: <MonoText>{formatWeightLbs(totals.totalWeight)}</MonoText> };
+      const product = getLotPrimaryProduct(row);
+      const baseAbbr = product?.baseUnit?.abbreviation ?? "lb";
+      // Non-weight: show base units + case count when the pack expands
+      // multiple base units per case ("120 ea" with "5 cs" secondary).
+      // Weight + per_each: single value.
+      if (isLotNonWeight(row)) {
+        const showCasesSecondary = totals.totalCases !== totals.totalUnits;
+        return {
+          primary: (
+            <MonoText>
+              {totals.totalUnits} {baseAbbr}
+            </MonoText>
+          ),
+          secondary: showCasesSecondary
+            ? `${totals.totalCases} cs`
+            : undefined,
+        };
+      }
+      return {
+        primary: (
+          <MonoText>
+            {formatWeightLbs(totals.totalWeight)} {baseAbbr}
+          </MonoText>
+        ),
+      };
     },
   },
   {
@@ -147,12 +179,10 @@ export default function Lots() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 

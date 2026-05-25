@@ -2,19 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 
+import { logAuditEvent } from "@/lib/audit-log";
+import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
+
 import {
+  archiveCustomer,
+  bulkCreateCustomers,
   createCustomer,
-  deleteCustomer,
   deleteCustomerPrice,
+  exportCustomersCsv,
+  findCustomerImportConflicts,
   getCustomerById,
+  getCustomerCreditSnapshot,
   getCustomerInvoicesPage,
   getCustomerOrdersPage,
   getCustomerPortfolio,
   getCustomerPrices,
   getCustomers,
   getCustomersPage,
+  permanentlyDeleteCustomer,
+  restoreCustomer,
+  searchCustomers,
   setCustomerPrice,
+  suggestInvoicePrefix,
   updateCustomer,
+  type BulkCreateCustomerInput,
+  type BulkCreateCustomersResult,
+  type CustomerArchivedFilter,
+  type CustomerCreditSnapshot,
+  type CustomerImportConflict,
   type CustomerInvoicesParams,
   type CustomerListParams,
   type CustomerOrdersParams,
@@ -37,6 +53,29 @@ export async function getCustomersPageAction(input?: CustomerListParams) {
   return await getCustomersPage(input);
 }
 
+export async function searchCustomersAction(query?: string, limit?: number) {
+  return await searchCustomers(query ?? "", limit);
+}
+
+export async function suggestInvoicePrefixAction(
+  fromName: string,
+  excludeCustomerId?: string,
+): Promise<string> {
+  return await suggestInvoicePrefix(fromName, excludeCustomerId);
+}
+
+export async function exportCustomersCsvAction(
+  archived: CustomerArchivedFilter = "all",
+): Promise<{ filename: string; csv: string }> {
+  return await exportCustomersCsv(archived);
+}
+
+export async function getCustomerCreditSnapshotAction(
+  customerId: string,
+): Promise<CustomerCreditSnapshot | null> {
+  return await getCustomerCreditSnapshot(customerId);
+}
+
 export async function getCustomerAction(customerId: string) {
   return await getCustomerById(customerId);
 }
@@ -48,6 +87,23 @@ export async function createCustomerAction(input: CreateCustomerInput) {
     phoneNumber: emptyToNull(parsed.phoneNumber),
     fuelSurchargeAmount: emptyToNull(parsed.fuelSurchargeAmount),
   });
+}
+
+export async function bulkCreateCustomersAction(
+  rows: BulkCreateCustomerInput[],
+): Promise<BulkCreateCustomersResult> {
+  const result = await bulkCreateCustomers(rows);
+  if (result.created > 0) {
+    revalidatePath("/customers");
+    revalidatePath("/dashboard");
+  }
+  return result;
+}
+
+export async function findCustomerImportConflictsAction(
+  rows: ReadonlyArray<{ name?: string; email?: string }>,
+): Promise<CustomerImportConflict[]> {
+  return await findCustomerImportConflicts(rows);
 }
 
 export async function updateCustomerAction(
@@ -67,8 +123,63 @@ export async function updateCustomerAction(
   return customer;
 }
 
-export async function deleteCustomerAction(customerId: string) {
-  return await deleteCustomer(customerId);
+export async function archiveCustomerAction(customerId: string) {
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await archiveCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.archive",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  return result;
+}
+
+export async function restoreCustomerAction(customerId: string) {
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await restoreCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.restore",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  revalidatePath("/customers");
+  revalidatePath(`/customers/${customerId}`);
+  return result;
+}
+
+export async function permanentlyDeleteCustomerAction(customerId: string) {
+  const [user, customer] = await Promise.all([
+    getCurrentPortalUser(),
+    getCustomerById(customerId),
+  ]);
+  const result = await permanentlyDeleteCustomer(customerId);
+  await logAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: user.id,
+    actorEmail: user.email,
+    action: "customer.delete",
+    resourceType: "customer",
+    resourceId: customerId,
+    metadata: customer ? { name: customer.name } : {},
+  });
+  revalidatePath("/customers");
+  return result;
 }
 
 export async function getCustomerPortfolioAction(customerId: string) {

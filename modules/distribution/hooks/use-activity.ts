@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  getActivityForInventoryItemAction,
   getActivityForSalesOrderAction,
   getActivityForSupplierInvoiceAction,
 } from "@/modules/distribution/actions";
@@ -23,6 +24,15 @@ export function useSupplierInvoiceActivity(supplierInvoiceId: string) {
     queryKey: queryKeys.supplierInvoices.activity(supplierInvoiceId),
     queryFn: () => getActivityForSupplierInvoiceAction(supplierInvoiceId),
     enabled: !!supplierInvoiceId && isUuid(supplierInvoiceId),
+    staleTime: 1000 * 30,
+  });
+}
+
+export function useInventoryItemActivity(inventoryItemId: string) {
+  return useQuery({
+    queryKey: queryKeys.inventory.activity(inventoryItemId),
+    queryFn: () => getActivityForInventoryItemAction(inventoryItemId),
+    enabled: !!inventoryItemId && isUuid(inventoryItemId),
     staleTime: 1000 * 30,
   });
 }

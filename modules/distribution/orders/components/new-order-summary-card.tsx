@@ -7,22 +7,22 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useCustomers } from "@/modules/distribution/customers/hooks/use-customers";
+import { useCustomer } from "@/modules/distribution/customers/hooks/use-customers";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { formatMoney } from "@/lib/utils/currency";
 import type { ProductListItem } from "@/modules/distribution/products/services/products";
 
-import { calculateLineTotal } from "./new-order-line-utils";
 import type { NewOrderFormValues } from "./new-order-form.schema";
+import { useLinesSubtotal } from "./use-lines-subtotal";
 
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -30,16 +30,11 @@ const C = {
 
 interface NewOrderSummaryCardProps {
   control: Control<NewOrderFormValues>;
-  showDiscountInput?: boolean;
 }
 
-export function NewOrderSummaryCard({
-  control,
-  showDiscountInput = true,
-}: NewOrderSummaryCardProps) {
+export function NewOrderSummaryCard({ control }: NewOrderSummaryCardProps) {
   const [discountOpen, setDiscountOpen] = useState(false);
 
-  const { data: customers } = useCustomers();
   const { data: products } = useProducts();
 
   const customerId = useWatch({ control, name: "customerId" });
@@ -47,10 +42,7 @@ export function NewOrderSummaryCard({
   const addFuelSurcharge = useWatch({ control, name: "addFuelSurcharge" });
   const discountInput = useWatch({ control, name: "discountAmount" });
 
-  const customer = useMemo(
-    () => customers?.find(c => c.id === customerId) ?? null,
-    [customers, customerId],
-  );
+  const { data: customer } = useCustomer(customerId);
 
   const productsById = useMemo(() => {
     const map = new Map<string, ProductListItem>();
@@ -58,13 +50,11 @@ export function NewOrderSummaryCard({
     return map;
   }, [products]);
 
-  const subtotal = useMemo(() => {
-    let total = 0;
-    for (const line of lines ?? []) {
-      total += calculateLineTotal(line, productsById.get(line.productId)) ?? 0;
-    }
-    return total;
-  }, [lines, productsById]);
+  // Shared with the form's sticky bottom bar — both surfaces respect
+  // real allocated weight on catch-weight lines instead of the product's
+  // stated avg-case-weight estimate, so the totals agree with the per-
+  // row line totals inside NewOrderLinesTable.
+  const { subtotal } = useLinesSubtotal(lines, productsById);
 
   const fuelSurchargeAmt = useMemo(() => {
     if (!addFuelSurcharge) return 0;
@@ -88,7 +78,7 @@ export function NewOrderSummaryCard({
   const total = Math.max(0, subtotal + fuelSurchargeAmt - discount);
 
   return (
-    <Card className="gap-0 rounded-[10px] border-stone-line bg-stone-surface px-5 py-[18px] shadow-none ring-0">
+    <Card className="gap-0 rounded-[10px] border-border-default bg-card px-5 py-[18px] shadow-none ring-0">
       <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "4px", color: C.ink }}>
         Estimate
       </div>
@@ -159,12 +149,12 @@ export function NewOrderSummaryCard({
               variant="ghost"
               className={`relative h-5 w-[34px] shrink-0 rounded-full p-0 ${
                 field.value
-                  ? "bg-stone-ink hover:bg-stone-ink/90"
-                  : "bg-stone-line hover:bg-stone-line"
+                  ? "bg-forest-mid hover:bg-forest"
+                  : "bg-surface-deep hover:bg-surface-deep"
               }`}
             >
               <span
-                className={`absolute top-0.5 size-4 rounded-full bg-white transition-[left] ${
+                className={`absolute top-0.5 size-4 rounded-full bg-card transition-[left] ${
                   field.value ? "left-4" : "left-0.5"
                 }`}
               />
@@ -174,7 +164,7 @@ export function NewOrderSummaryCard({
       />
 
       {/* Discount toggle/input */}
-      {showDiscountInput && <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: "10px" }}>
+      <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: "10px" }}>
         {!discountOpen ? (
           <Button
             type="button"
@@ -200,7 +190,7 @@ export function NewOrderSummaryCard({
                   step="0.01"
                   inputMode="decimal"
                   placeholder="0.00"
-                  className="border-stone-line bg-stone-surface font-mono text-[13px] text-stone-ink shadow-none"
+                  className="border-border-default bg-card font-mono text-[13px] text-ink shadow-none"
                   aria-invalid={fieldState.invalid}
                 />
                 {fieldState.invalid && (
@@ -210,7 +200,7 @@ export function NewOrderSummaryCard({
             )}
           />
         )}
-      </div>}
+      </div>
     </Card>
   );
 }

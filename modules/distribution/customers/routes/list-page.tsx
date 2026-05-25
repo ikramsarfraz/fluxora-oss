@@ -1,27 +1,14 @@
 import { Suspense } from "react";
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { getCustomers } from "../services/customers";
 
 import Customers from "../components/customers-page";
 
-export default async function CustomersListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: ["customers"],
-    queryFn: () => getCustomers(),
-  });
-
+// The client component drives its own paginated/filtered query; prefetching
+// here just delayed every navigation by a DB call for an unbounded key the
+// client doesn't read. Matches the orders pattern.
+export default function CustomersListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <Customers />
-      </Suspense>
-    </HydrationBoundary>
+    <Suspense>
+      <Customers />
+    </Suspense>
   );
 }

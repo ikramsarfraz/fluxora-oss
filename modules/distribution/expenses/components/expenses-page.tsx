@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -16,19 +16,39 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ListingAction, ListingPage, MonoText, type ListingColumn } from "@/components/listing-page";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ListingAction, ListingErrorState, ListingPage, ListingSecondaryAction, MonoText, StatusPill, type ListingColumn } from "@/components/listing-page";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
+import { exportExpensesCsvAction } from "../actions";
 import { useDeleteExpense, useExpensesPage } from "../hooks/use-expenses";
 import { useUrlPaginationState } from "@/hooks/use-url-pagination";
 import {
+  EXPENSE_PAYMENT_METHODS,
   canManageExpenses,
   expenseCategoryLabel,
   expensePaymentMethodLabel,
   expenseRecurrenceLabel,
 } from "@/lib/expenses/metadata";
+import {
+  EXPENSE_STATUSES,
+  expenseStatusLabel,
+  expenseStatusPill,
+} from "../utils/expense-status";
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
-import type { ExpenseListItem, ExpenseListSort } from "../services/expenses";
+import type {
+  ExpenseListFilters,
+  ExpenseListItem,
+  ExpenseListSort,
+} from "../services/expenses";
 
 type ExpenseRow = ExpenseListItem;
 
@@ -55,7 +75,7 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
       return {
         primary: (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-            {row.note ? row.note : <span style={{ color: "#78716c" }}>—</span>}
+            {row.note ? row.note : <span style={{ color: "var(--color-subtle)" }}>—</span>}
             {isSchedule ? (
               <span
                 style={{
@@ -79,8 +99,8 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
                   fontSize: 10,
                   padding: "1px 6px",
                   borderRadius: 100,
-                  background: "#f5f5f4",
-                  color: "#78716c",
+                  background: "var(--color-divider)",
+                  color: "var(--color-subtle)",
                   fontWeight: 500,
                   textTransform: "uppercase",
                   letterSpacing: "0.04em",
@@ -113,8 +133,8 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
             fontSize: 11,
             padding: "2px 8px",
             borderRadius: 100,
-            background: "#f5f5f4",
-            color: "#44403c",
+            background: "var(--color-divider)",
+            color: "var(--color-ink-warm)",
             fontWeight: 500,
           }}
         >
@@ -124,10 +144,20 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
     }),
   },
   {
+    key: "status",
+    header: "Status",
+    render: row => {
+      const pill = expenseStatusPill(row.status);
+      return {
+        primary: <StatusPill label={pill.label} bg={pill.bg} color={pill.color} />,
+      };
+    },
+  },
+  {
     key: "recordedBy",
     header: "Recorded by",
     render: row => ({
-      primary: row.createdBy?.fullName ?? <span style={{ color: "#78716c" }}>—</span>,
+      primary: row.createdBy?.fullName ?? <span style={{ color: "var(--color-subtle)" }}>—</span>,
     }),
   },
 ];
@@ -135,14 +165,28 @@ const COLUMNS: ListingColumn<ExpenseRow>[] = [
 export function ExpensesPage() {
   const router = useRouter();
   const [deletingExpense, setDeletingExpense] = useState<ExpenseRow | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const { data: currentUser } = useCurrentPortalUser();
   const canManage = canManageExpenses(currentUser?.role);
 
-  const pagination = useUrlPaginationState<ExpenseListSort>({
+  const pagination = useUrlPaginationState<ExpenseListSort, ExpenseListFilters>({
     defaultSort: "expenseDate",
     defaultDirection: "desc",
+    defaultFilters: {
+      dateFrom: "",
+      dateTo: "",
+      amountMin: "",
+      amountMax: "",
+      paymentMethod: "",
+      recurrence: "",
+      status: "",
+    },
   });
+  const f = pagination.filters;
+  const hasActiveFilter = Boolean(
+    f.dateFrom || f.dateTo || f.amountMin || f.amountMax || f.paymentMethod || f.recurrence || f.status,
+  );
 
   const { data, isLoading, isFetching, error, refetch } = useExpensesPage({
     page: pagination.page,
@@ -150,26 +194,75 @@ export function ExpensesPage() {
     search: pagination.search,
     sort: pagination.sort,
     direction: pagination.direction,
+    filters: f,
   });
 
   const deleteExpense = useDeleteExpense();
 
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const result = await exportExpensesCsvAction({
+        search: pagination.search,
+        sort: pagination.sort,
+        direction: pagination.direction,
+        filters: f,
+      });
+      const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(
+        result.count === 0
+          ? "Exported 0 expenses."
+          : `Exported ${result.count} expense${result.count === 1 ? "" : "s"}.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
   return (
     <>
+      <FilterBar
+        filters={f}
+        onChange={(key, value) => pagination.setFilter(key, value)}
+        onClear={() =>
+          pagination.setFilters({
+            dateFrom: "",
+            dateTo: "",
+            amountMin: "",
+            amountMax: "",
+            paymentMethod: "",
+            recurrence: "",
+            status: "",
+          })
+        }
+        hasActiveFilter={hasActiveFilter}
+      />
       <ListingPage
         title="Expenses"
         subtitle="Track operational costs and business expenditures."
+        secondaryActions={
+          <ListingSecondaryAction onClick={handleExportCsv} disabled={exporting}>
+            <Download className="size-3.5" />
+            {exporting ? "Exporting…" : "Export CSV"}
+          </ListingSecondaryAction>
+        }
         primaryAction={
           canManage
             ? (
@@ -186,7 +279,7 @@ export function ExpensesPage() {
         rowActions={[
           { label: "View", href: row => `/expenses/${row.id}` },
           ...(canManage
-            ? [{ label: "Delete", variant: "destructive" as const, onClick: (row: ExpenseRow) => setDeletingExpense(row) }]
+            ? [{ label: "Void", variant: "destructive" as const, onClick: (row: ExpenseRow) => setDeletingExpense(row) }]
             : []),
         ]}
         rows={data?.data ?? []}
@@ -221,9 +314,12 @@ export function ExpensesPage() {
       <AlertDialog open={!!deletingExpense} onOpenChange={open => { if (!open) setDeletingExpense(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete expense</AlertDialogTitle>
+            <AlertDialogTitle>Void expense</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete this expense? This action cannot be undone.
+              Void this expense? It will be hidden from the listing and any
+              recurring schedule stops materializing future instances. The row
+              is kept for audit and can be restored from the voided-expenses
+              view.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -233,17 +329,173 @@ export function ExpensesPage() {
               onClick={() => {
                 if (!deletingExpense) return;
                 deleteExpense.mutate(deletingExpense.id, {
-                  onSuccess: () => toast.success("Expense deleted."),
+                  onSuccess: () => toast.success("Expense voided."),
                   onError: (e: Error) => toast.error(e.message),
                 });
                 setDeletingExpense(null);
               }}
             >
-              Delete
+              Void
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+// shadcn Select disallows value="" (collides with the placeholder slot),
+// so the "All" / "Any" entry rides a sentinel and we map at the boundary.
+const ALL_SENTINEL = "__all__";
+
+function FilterBar({
+  filters,
+  onChange,
+  onClear,
+  hasActiveFilter,
+}: {
+  filters: ExpenseListFilters;
+  onChange: <K extends keyof ExpenseListFilters>(
+    key: K,
+    value: ExpenseListFilters[K],
+  ) => void;
+  onClear: () => void;
+  hasActiveFilter: boolean;
+}) {
+  const triggerClass = "h-8 w-[150px] border-border-default bg-card text-[13px] text-ink shadow-none";
+  const inputClass = "h-8 border-border-default bg-card text-[13px] shadow-none";
+  return (
+    <div className="mb-4 flex flex-wrap items-end gap-2.5">
+      <Field label="Date from">
+        <Input
+          type="date"
+          value={filters.dateFrom ?? ""}
+          onChange={e => onChange("dateFrom", e.target.value)}
+          aria-label="Filter by start date"
+          className={`${inputClass} w-[150px]`}
+        />
+      </Field>
+      <Field label="Date to">
+        <Input
+          type="date"
+          value={filters.dateTo ?? ""}
+          onChange={e => onChange("dateTo", e.target.value)}
+          aria-label="Filter by end date"
+          className={`${inputClass} w-[150px]`}
+        />
+      </Field>
+      <Field label="Min amount">
+        <Input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="0.00"
+          value={filters.amountMin ?? ""}
+          onChange={e => onChange("amountMin", e.target.value)}
+          aria-label="Filter by minimum amount"
+          className={`${inputClass} w-[110px]`}
+        />
+      </Field>
+      <Field label="Max amount">
+        <Input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.01}
+          placeholder="0.00"
+          value={filters.amountMax ?? ""}
+          onChange={e => onChange("amountMax", e.target.value)}
+          aria-label="Filter by maximum amount"
+          className={`${inputClass} w-[110px]`}
+        />
+      </Field>
+      <Field label="Method">
+        <Select
+          value={filters.paymentMethod ? filters.paymentMethod : ALL_SENTINEL}
+          onValueChange={v => onChange("paymentMethod", v === ALL_SENTINEL ? "" : v)}
+        >
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by payment method"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>Any</SelectItem>
+            {EXPENSE_PAYMENT_METHODS.map(m => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Type">
+        <Select
+          value={filters.recurrence ? filters.recurrence : ALL_SENTINEL}
+          onValueChange={v => onChange("recurrence", v === ALL_SENTINEL ? "" : v)}
+        >
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by recurrence type"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>All</SelectItem>
+            <SelectItem value="oneoff">One-off</SelectItem>
+            <SelectItem value="schedules">Schedules</SelectItem>
+            <SelectItem value="instances">Auto-generated</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Status">
+        <Select
+          value={filters.status ? filters.status : ALL_SENTINEL}
+          onValueChange={v => onChange("status", v === ALL_SENTINEL ? "" : v)}
+        >
+          <SelectTrigger
+            size="sm"
+            aria-label="Filter by approval status"
+            className={triggerClass}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_SENTINEL}>All</SelectItem>
+            {EXPENSE_STATUSES.map(s => (
+              <SelectItem key={s} value={s}>
+                {expenseStatusLabel(s)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {hasActiveFilter && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onClear}
+          className="h-8 px-3 text-xs"
+        >
+          Clear filters
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-subtle">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }

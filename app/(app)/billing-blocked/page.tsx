@@ -37,7 +37,7 @@ export default async function BillingBlockedPage() {
   if (!portalUser) {
     return (
       <div className="flex max-w-lg flex-col gap-4">
-        <h2 className="text-lg font-semibold tracking-tight">Billing access</h2>
+        <h2 className="text-lg font-medium tracking-tight">Billing access</h2>
         <p className="text-muted-foreground text-sm">
           No portal profile is linked to this sign-in yet.
         </p>

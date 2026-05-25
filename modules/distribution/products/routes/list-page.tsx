@@ -1,36 +1,18 @@
 import { Suspense } from "react";
-import {
-  QueryClient,
-  dehydrate,
-  HydrationBoundary,
-} from "@tanstack/react-query";
-
-import { getProductsPage, type ProductListParams } from "../services/products";
-import { queryKeys } from "@/lib/query/keys";
 
 import Products from "../components/products-page";
 
-const defaultParams: ProductListParams = {
-  page: 1,
-  pageSize: 10,
-  search: "",
-  sort: "createdAt",
-  direction: "desc",
-};
-
-export default async function ProductsListPage() {
-  const queryClient = new QueryClient();
-
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.products.list(defaultParams),
-    queryFn: () => getProductsPage(defaultParams),
-  });
-
+// Previously this route SSR-prefetched the first page of products keyed
+// off the incoming searchParams. The cache-warm benefit was real but came
+// at the cost of running a DB call on every navigation and forcing the
+// Suspense fallback (loading.tsx / parent loading.tsx) to flash on every
+// click. Operators perceived that flash as the page "loading every time".
+// The client's `useProductsPage(params)` hook + 60s default staleTime
+// (set in QueryProvider) keeps revisits instant from the client cache.
+export default function ProductsListPage() {
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <Products />
-      </Suspense>
-    </HydrationBoundary>
+    <Suspense>
+      <Products />
+    </Suspense>
   );
 }

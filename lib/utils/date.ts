@@ -21,3 +21,19 @@ export function formatDisplayDate(
   const dd = String(d).padStart(2, "0");
   return `${mm}/${dd}/${y}`;
 }
+
+/**
+ * Format a timestamp (ISO string or `Date`) as a medium date + short time
+ * using the user's locale (e.g. "May 22, 2026, 3:04 PM").
+ */
+export function formatDisplayDateTime(
+  value: string | Date | null | undefined
+): string {
+  if (value == null || value === "") return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}

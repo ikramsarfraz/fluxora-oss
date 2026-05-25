@@ -8,7 +8,9 @@ export type SupplierInvoiceWeightEntryMode =
   (typeof supplierInvoiceWeightEntryModes)[number];
 
 type CaseWeightDraftLike = {
-  unitType?: "catch_weight" | "fixed_case" | null;
+  // Accepts all four line unit types; weight math only runs for catch_weight,
+  // the rest short-circuit out of the helpers.
+  unitType?: "catch_weight" | "fixed_case" | "per_each" | "per_unit" | null;
   quantityCases?: string | number | null;
   weightLbs?: string | number | null;
   weightEntryMode?: SupplierInvoiceWeightEntryMode | null;
@@ -110,7 +112,7 @@ export function serializeDraftCaseWeights(
 }
 
 export function inferWeightDraftState(args: {
-  unitType: "catch_weight" | "fixed_case";
+  unitType: "catch_weight" | "fixed_case" | "per_each" | "per_unit";
   quantityCases: number;
   weightLbs: string | null;
   caseWeightsLbs: string | null;

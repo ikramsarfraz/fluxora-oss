@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { logAuditEvent } from "@/lib/audit-log";
+
 import {
   createTenantJoinRequest,
   listPendingTenantJoinRequestsForAdmin,
@@ -95,11 +97,44 @@ export async function getPendingInvitationsAction() {
 }
 
 export async function setUserActiveAction(id: string, isActive: boolean) {
-  return await setPortalUserActiveByAdmin(id, isActive);
+  const actor = await getCurrentPortalUser();
+  const targetBefore = await getUserById(id);
+  const result = await setPortalUserActiveByAdmin(id, isActive);
+  // Only log deactivations — re-activation is informational, not destructive.
+  if (!isActive) {
+    await logAuditEvent({
+      tenantId: actor.tenantId,
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      action: "tenant.member_removed",
+      resourceType: "portal_user",
+      resourceId: id,
+      metadata: targetBefore
+        ? { targetEmail: targetBefore.email, targetRole: targetBefore.role }
+        : {},
+    });
+  }
+  return result;
 }
 
 export async function setUserRoleAction(id: string, role: PortalUserRole) {
-  return await setPortalUserRoleByAdmin(id, role);
+  const actor = await getCurrentPortalUser();
+  const targetBefore = await getUserById(id);
+  const result = await setPortalUserRoleByAdmin(id, role);
+  await logAuditEvent({
+    tenantId: actor.tenantId,
+    actorUserId: actor.id,
+    actorEmail: actor.email,
+    action: "tenant.member_role_changed",
+    resourceType: "portal_user",
+    resourceId: id,
+    metadata: {
+      targetEmail: targetBefore?.email ?? null,
+      from: targetBefore?.role ?? null,
+      to: role,
+    },
+  });
+  return result;
 }
 
 export async function sendUserPasswordResetAction(id: string) {
@@ -111,7 +146,20 @@ export async function inviteUserAction(input: {
   fullName: string;
   role?: Exclude<PortalUserRole, "owner">;
 }) {
-  return await inviteUserByAdmin(input);
+  const actor = await getCurrentPortalUser();
+  const result = await inviteUserByAdmin(input);
+  await logAuditEvent({
+    tenantId: actor.tenantId,
+    actorUserId: actor.id,
+    actorEmail: actor.email,
+    action: "tenant.member_added",
+    resourceType: "user_invitation",
+    metadata: {
+      invitedEmail: input.email,
+      invitedRole: input.role ?? "sales",
+    },
+  });
+  return result;
 }
 
 export async function resendUserInvitationAction(invitationId: string) {

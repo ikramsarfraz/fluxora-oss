@@ -45,7 +45,9 @@ export function BillingCheckoutFeedback(props: {
     clearUrlParams();
   }, [clearUrlParams]);
 
-  dismissRef.current = dismiss;
+  useEffect(() => {
+    dismissRef.current = dismiss;
+  }, [dismiss]);
 
   const [confirmState, setConfirmState] = useState<"loading" | "verified" | "unverified">(() => {
     if (props.kind !== "success") {
@@ -112,18 +114,18 @@ export function BillingCheckoutFeedback(props: {
       description: "Validating your return from Stripe...",
     },
     unverified: {
-      bg: "bg-amber-500/10",
+      bg: "bg-warning-fg/10",
       border: "border-amber-500/30",
       icon: AlertCircle,
-      iconClass: "text-amber-500",
+      iconClass: "text-warning-fg",
       title: "Could not confirm checkout",
       description: "This session could not be matched to your workspace. Check your subscription status below.",
     },
     success: {
-      bg: "bg-emerald-500/10",
+      bg: "bg-success-fg/10",
       border: "border-emerald-500/30",
       icon: CheckCircle2,
-      iconClass: "text-emerald-500",
+      iconClass: "text-success-fg",
       title: "Subscription updated",
       description: "Your subscription has been updated. Changes will sync shortly.",
     },

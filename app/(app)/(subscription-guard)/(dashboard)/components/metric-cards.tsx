@@ -11,12 +11,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { PortalUserRole } from "@/lib/auth/permissions";
 import {
   isMetricVisible,
@@ -34,27 +30,44 @@ type MetricCardProps = {
 };
 
 function MetricCard({ icon: Icon, label, value, helper, tone = "default" }: MetricCardProps) {
-  const toneClass =
-    tone === "danger"
-      ? "text-destructive"
-      : tone === "warning"
-        ? "text-status-warn"
-        : "text-stone-muted";
+  const isDanger = tone === "danger";
+  const isWarning = tone === "warning";
 
   return (
-    <Card className="@container/card shadow-none">
-      <CardHeader>
-        <CardDescription className={`flex items-center gap-1.5 text-xs font-medium ${toneClass}`}>
-          <Icon className="size-3.5" />
-          {label}
-        </CardDescription>
-        <CardTitle className="font-mono text-2xl font-semibold tabular-nums tracking-tight @[250px]/card:text-3xl">
-          {value}
-        </CardTitle>
-        {helper ? (
-          <p className="mt-1 text-[11px] text-stone-muted">{helper}</p>
-        ) : null}
-      </CardHeader>
+    <Card
+      className={cn(
+        "@container/card flex-col gap-0 p-4 shadow-none",
+        isDanger && "bg-danger-bg border-danger-border",
+        isWarning && "bg-warning-bg border-warning-border",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.06em]",
+          isDanger ? "text-danger-fg" : isWarning ? "text-warning-fg" : "text-subtle",
+        )}
+      >
+        <Icon className="size-3" />
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-2 font-serif text-[26px] font-medium tracking-[-0.02em] leading-none tabular-nums",
+          isDanger ? "text-danger-fg" : isWarning ? "text-warning-fg" : "text-ink",
+        )}
+      >
+        {value}
+      </div>
+      {helper ? (
+        <p
+          className={cn(
+            "mt-2 text-[11px]",
+            isDanger ? "text-danger-fg/80" : isWarning ? "text-warning-fg/80" : "text-muted",
+          )}
+        >
+          {helper}
+        </p>
+      ) : null}
     </Card>
   );
 }

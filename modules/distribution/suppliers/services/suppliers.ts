@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   lots,
@@ -17,11 +17,23 @@ import {
 
 export async function getSupplierById(supplierId: string) {
   const tenant = await getCurrentTenant();
-  const result = await db.query.suppliers.findFirst({
-    where: and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenant.id)),
-  });
+  const [result, [invoiceCountRow]] = await Promise.all([
+    db.query.suppliers.findFirst({
+      where: and(eq(suppliers.id, supplierId), eq(suppliers.tenantId, tenant.id)),
+    }),
+    db
+      .select({ count: count() })
+      .from(supplierInvoices)
+      .where(
+        and(
+          eq(supplierInvoices.supplierId, supplierId),
+          eq(supplierInvoices.tenantId, tenant.id),
+        ),
+      ),
+  ]);
 
-  return result ?? null;
+  if (!result) return null;
+  return { ...result, _invoiceCount: invoiceCountRow?.count ?? 0 };
 }
 
 export type SupplierDetail = NonNullable<
@@ -95,13 +107,28 @@ export async function deleteSupplier(id: string) {
 /* Mutations                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export type CreateSupplierInput = {
+export type SupplierContactFields = {
+  primaryContactName?: string | null;
+  primaryContactEmail?: string | null;
+  primaryContactPhone?: string | null;
+  taxId?: string | null;
+  accountNumber?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  addressCity?: string | null;
+  addressRegion?: string | null;
+  addressPostalCode?: string | null;
+  websiteUrl?: string | null;
+  notes?: string | null;
+};
+
+export type CreateSupplierInput = SupplierContactFields & {
   name: string;
   /** Payment terms in days (net N). Must be a non-negative integer when set. */
   netDays?: number | null;
 };
 
-export type UpdateSupplierInput = {
+export type UpdateSupplierInput = SupplierContactFields & {
   id: string;
   name?: string;
   netDays?: number | null;
@@ -122,25 +149,214 @@ function normalizeNetDays(value: number | null | undefined): number | null {
   return n;
 }
 
-export async function createSupplier(input: CreateSupplierInput) {
-  const tenant = await getCurrentTenant();
+function normalizeOptionalString(
+  value: string | null | undefined,
+  maxLength: number,
+  label: string,
+): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (trimmed.length > maxLength) {
+    throw new Error(`${label} cannot exceed ${maxLength} characters.`);
+  }
+  return trimmed;
+}
+
+function normalizeEmail(value: string | null | undefined): string | null {
+  const trimmed = normalizeOptionalString(value, 320, "Email");
+  if (trimmed === null) return null;
+  const lower = trimmed.toLowerCase();
+  // Light shape check — strict RFC validation lives client-side via zod.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower)) {
+    throw new Error("Email must be a valid email address.");
+  }
+  return lower;
+}
+
+// US-only EIN. Accepts "123456789" or "12-3456789"; normalized to "##-#######".
+function normalizeTaxId(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const match = /^(\d{2})-?(\d{7})$/.exec(trimmed);
+  if (!match) {
+    throw new Error("Tax ID must be a 9-digit US EIN (e.g. 12-3456789).");
+  }
+  return `${match[1]}-${match[2]}`;
+}
+
+function normalizeWebsiteUrl(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let url: URL;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    throw new Error("Website must be a valid URL.");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Website must be an http(s) URL.");
+  }
+  const serialized = url.toString();
+  if (serialized.length > 512) {
+    throw new Error("Website cannot exceed 512 characters.");
+  }
+  return serialized;
+}
+
+function applyContactPatch(
+  patch: Partial<typeof suppliers.$inferInsert>,
+  input: SupplierContactFields,
+  options: { onCreate: boolean },
+) {
+  // On create we always write (even null); on update we only write fields
+  // the caller explicitly passed so partial edits don't clobber unrelated columns.
+  const include = <K extends keyof SupplierContactFields>(key: K) =>
+    options.onCreate || input[key] !== undefined;
+
+  if (include("primaryContactName")) {
+    patch.primaryContactName = normalizeOptionalString(
+      input.primaryContactName,
+      255,
+      "Contact name",
+    );
+  }
+  if (include("primaryContactEmail")) {
+    patch.primaryContactEmail = normalizeEmail(input.primaryContactEmail);
+  }
+  if (include("primaryContactPhone")) {
+    patch.primaryContactPhone = normalizeOptionalString(
+      input.primaryContactPhone,
+      32,
+      "Phone",
+    );
+  }
+  if (include("taxId")) {
+    patch.taxId = normalizeTaxId(input.taxId);
+  }
+  if (include("accountNumber")) {
+    patch.accountNumber = normalizeOptionalString(
+      input.accountNumber,
+      64,
+      "Account number",
+    );
+  }
+  if (include("addressLine1")) {
+    patch.addressLine1 = normalizeOptionalString(
+      input.addressLine1,
+      255,
+      "Address line 1",
+    );
+  }
+  if (include("addressLine2")) {
+    patch.addressLine2 = normalizeOptionalString(
+      input.addressLine2,
+      255,
+      "Address line 2",
+    );
+  }
+  if (include("addressCity")) {
+    patch.addressCity = normalizeOptionalString(input.addressCity, 128, "City");
+  }
+  if (include("addressRegion")) {
+    patch.addressRegion = normalizeOptionalString(
+      input.addressRegion,
+      128,
+      "State",
+    );
+  }
+  if (include("addressPostalCode")) {
+    patch.addressPostalCode = normalizeOptionalString(
+      input.addressPostalCode,
+      32,
+      "Postal code",
+    );
+  }
+  if (include("websiteUrl")) {
+    patch.websiteUrl = normalizeWebsiteUrl(input.websiteUrl);
+  }
+  if (include("notes")) {
+    patch.notes = normalizeOptionalString(input.notes, 4000, "Notes");
+  }
+}
+
+async function createSupplierForTenant(
+  tenantId: string,
+  input: CreateSupplierInput,
+) {
   const name = input.name?.trim();
   if (!name) {
     throw new Error("Supplier name is required.");
   }
   const netDays = normalizeNetDays(input.netDays ?? null);
 
-  const [row] = await db
-    .insert(suppliers)
-    .values({
-      tenantId: tenant.id,
-      name,
-      netDays,
-    })
-    .returning();
+  const values: typeof suppliers.$inferInsert = {
+    tenantId,
+    name,
+    netDays,
+  };
+  applyContactPatch(values, input, { onCreate: true });
+
+  const [row] = await db.insert(suppliers).values(values).returning();
 
   if (!row) throw new Error("Failed to create supplier.");
   return row;
+}
+
+export async function createSupplier(input: CreateSupplierInput) {
+  const tenant = await getCurrentTenant();
+  return createSupplierForTenant(tenant.id, input);
+}
+
+export type BulkCreateSuppliersResult = {
+  total: number;
+  created: number;
+  failed: Array<{ row: number; name: string; message: string }>;
+};
+
+function formatBulkRowError(error: unknown): string {
+  if (error instanceof Error) {
+    // Postgres unique violation on the (tenant_id, name) index — surface a
+    // friendlier message than the raw constraint text.
+    if (/duplicate key.*suppliers_tenant_name_unique/i.test(error.message)) {
+      return "A supplier with this name already exists.";
+    }
+    return error.message;
+  }
+  return "Unknown error.";
+}
+
+/**
+ * Insert N suppliers in one call. Per-row failures are caught and returned in
+ * `failed`; successful rows are committed. Partial success is intentional —
+ * the CSV import flow lets the user re-upload after fixing the bad rows
+ * without having to re-add the rows that succeeded.
+ */
+export async function bulkCreateSuppliers(
+  rows: CreateSupplierInput[],
+): Promise<BulkCreateSuppliersResult> {
+  const tenant = await getCurrentTenant();
+  let created = 0;
+  const failed: BulkCreateSuppliersResult["failed"] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    try {
+      await createSupplierForTenant(tenant.id, row);
+      created++;
+    } catch (error) {
+      failed.push({
+        row: i,
+        name: typeof row.name === "string" ? row.name : "",
+        message: formatBulkRowError(error),
+      });
+    }
+  }
+
+  return { total: rows.length, created, failed };
 }
 
 export async function updateSupplier(input: UpdateSupplierInput) {
@@ -158,6 +374,8 @@ export async function updateSupplier(input: UpdateSupplierInput) {
   if (input.netDays !== undefined) {
     patch.netDays = normalizeNetDays(input.netDays);
   }
+
+  applyContactPatch(patch, input, { onCreate: false });
 
   if (Object.keys(patch).length === 0) {
     throw new Error("Nothing to update.");

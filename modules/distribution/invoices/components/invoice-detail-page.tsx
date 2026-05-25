@@ -2,34 +2,36 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Receipt, Send } from "lucide-react";
 
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { DetailPageSkeleton } from "@/components/loading-skeletons";
 import { PageError } from "@/components/page-error";
-import { useSalesInvoice } from "../hooks/use-invoices";
+import { useSalesInvoice, useSalesInvoicePayments } from "../hooks/use-invoices";
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { can } from "@/lib/auth/permissions";
+import { InvoicePaymentEntryDialog } from "./invoice-payment-entry-dialog";
+import { SendInvoiceModal } from "./send-invoice-modal";
 import { formatMoney, formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  good: "oklch(58% 0.13 155)",
-  goodSoft: "oklch(96% 0.04 155)",
-  warn: "oklch(70% 0.13 70)",
-  warnSoft: "oklch(97% 0.04 70)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
-  bad: "oklch(58% 0.18 25)",
-  badSoft: "oklch(97% 0.04 25)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  good: "var(--color-success-fg)",
+  goodSoft: "var(--color-success-bg)",
+  warn: "var(--color-warning-fg)",
+  warnSoft: "var(--color-warning-bg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
+  bad: "var(--color-danger-fg)",
+  badSoft: "var(--color-danger-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -47,6 +49,18 @@ export type TenantBranding = {
 type PillConfig = { label: string; bg: string; color: string };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  check: "Check",
+  ach: "ACH",
+  zelle: "Zelle",
+  credit_card: "Credit card",
+};
+
+function paymentMethodLabel(method: string): string {
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
 
 function getStatusPill(
   status: string,
@@ -116,10 +130,18 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
   const { data: currentUser } = useCurrentPortalUser();
 
   const [profitExpanded, setProfitExpanded] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const [sendInvoiceOpen, setSendInvoiceOpen] = useState(false);
+  const [showAllPayments, setShowAllPayments] = useState(false);
+  const allPaymentsQuery = useSalesInvoicePayments(invoiceId, {
+    enabled: showAllPayments,
+  });
 
   useSetBreadcrumbLabel(`/invoices/${invoiceId}`, invoice?.invoiceNumber);
 
   useEffect(() => {
+    // Hydrate from localStorage post-mount to avoid SSR hydration mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfitExpanded(localStorage.getItem("invoice-profit-expanded") === "true");
   }, []);
 
@@ -156,6 +178,18 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
 
   const pdfUrl = `/api/invoices/${invoiceId}/pdf`;
   const balancePaid = balanceDue <= 0;
+  const canRecordPayment = can(currentUser?.role, "record_payment");
+  const showRecordPaymentCta =
+    !balancePaid && invoice.status !== "void" && canRecordPayment;
+  // "Send" is shown for any non-void invoice. Same audience as
+  // generate_invoice (owner/admin/accounting) — the AR send is a
+  // follow-on action to invoice generation.
+  const canSendInvoice = can(currentUser?.role, "generate_invoice");
+  const showSendInvoiceCta = invoice.status !== "void" && canSendInvoice;
+  // Send becomes the primary CTA when the invoice is still draft
+  // (haven't billed the customer yet); for sent/partially_paid it sits
+  // as a secondary action next to Download.
+  const sendIsPrimary = invoice.status === "draft";
 
   function toggleProfit() {
     const next = !profitExpanded;
@@ -210,12 +244,63 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {showRecordPaymentCta ? (
+            <button
+              type="button"
+              onClick={() => setRecordPaymentOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 14px", background: C.ink, color: "var(--color-page)",
+                borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500,
+                border: "none", cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Receipt style={{ width: 14, height: 14 }} />
+              Record payment
+            </button>
+          ) : null}
+          {showSendInvoiceCta ? (
+            <button
+              type="button"
+              onClick={() => setSendInvoiceOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 14px",
+                // Primary (filled) when draft AND no other primary CTA
+                // has claimed the slot. If Record Payment is showing,
+                // Send drops to secondary so we never have two filled
+                // buttons competing for attention.
+                background: sendIsPrimary && !showRecordPaymentCta ? C.ink : C.surface,
+                color: sendIsPrimary && !showRecordPaymentCta ? "var(--color-page)" : C.ink2,
+                border: sendIsPrimary && !showRecordPaymentCta ? "none" : `1px solid ${C.line}`,
+                borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <Send style={{ width: 14, height: 14 }} />
+              {invoice.sendCount && invoice.sendCount > 0 ? "Resend" : "Send to customer"}
+            </button>
+          ) : null}
           <a
             href={pdfUrl}
             download
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", background: C.ink, color: "#fafaf9",
+              padding: "8px 14px",
+              // Filled only when nothing else is taking the primary slot.
+              // Record Payment is primary > Send is primary (draft) > Download.
+              background:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? C.surface
+                  : C.ink,
+              color:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? C.ink2
+                  : "var(--color-page)",
+              border:
+                showRecordPaymentCta || (showSendInvoiceCta && sendIsPrimary)
+                  ? `1px solid ${C.line}`
+                  : "none",
               borderRadius: C.radiusSm, fontSize: 13, fontWeight: 500, textDecoration: "none",
             }}
           >
@@ -316,42 +401,129 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
             </div>
           </div>
 
-          {/* Line items table */}
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 24 }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Item</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Qty (cs)</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Weight (lb)</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Unit price</th>
-                <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(invoice.lines ?? []).map((line, i) => (
-                <tr key={line.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
-                  <td style={{ padding: "10px 0", fontSize: 13 }}>
-                    <div style={{ fontWeight: 500, color: C.ink }}>{line.product?.name ?? "—"}</div>
-                    {line.product?.sku ? (
-                      <div style={{ fontSize: 11, fontFamily: C.mono, color: C.muted }}>{line.product.sku}</div>
+          {/* Line items table — family-aware: when no line on the invoice
+              carries a weight (i.e. a pure beverages / dry-goods order),
+              the Weight column is hidden so the row doesn't show "0.00"
+              for every line. Mixed invoices keep the column and show
+              "—" on non-weight rows. */}
+          {(() => {
+            const lines = invoice.lines ?? [];
+            const anyHasWeight = lines.some(
+              line => Number(line.billedWeightLbs ?? 0) > 0,
+            );
+            return (
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  marginBottom: 24,
+                }}
+              >
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Item</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Qty</th>
+                    {anyHasWeight ? (
+                      <th style={{ ...thStyle, textAlign: "right" }}>
+                        Weight
+                      </th>
                     ) : null}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {line.quantityCases.toLocaleString()}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {formatWeightLbs(line.billedWeightLbs)}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", color: C.ink2, fontFamily: C.mono }}>
-                    {formatMoney(line.unitPrice)}
-                  </td>
-                  <td style={{ padding: "10px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, fontWeight: 500, color: C.ink }}>
-                    {formatMoney(line.lineTotal)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <th style={{ ...thStyle, textAlign: "right" }}>
+                      Unit price
+                    </th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line, i) => {
+                    const baseAbbr =
+                      line.product?.baseUnit?.abbreviation ?? "lb";
+                    const lineHasWeight =
+                      Number(line.billedWeightLbs ?? 0) > 0;
+                    return (
+                      <tr
+                        key={line.id}
+                        style={{
+                          background: i % 2 === 1 ? C.line2 : "transparent",
+                        }}
+                      >
+                        <td style={{ padding: "10px 0", fontSize: 13 }}>
+                          <div style={{ fontWeight: 500, color: C.ink }}>
+                            {line.product?.name ?? "—"}
+                          </div>
+                          {line.product?.sku ? (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontFamily: C.mono,
+                                color: C.muted,
+                              }}
+                            >
+                              {line.product.sku}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            color: C.ink2,
+                            fontFamily: C.mono,
+                          }}
+                        >
+                          {line.quantityCases.toLocaleString()}
+                        </td>
+                        {anyHasWeight ? (
+                          <td
+                            style={{
+                              padding: "10px 0",
+                              fontSize: 13,
+                              textAlign: "right",
+                              color: C.ink2,
+                              fontFamily: C.mono,
+                            }}
+                          >
+                            {lineHasWeight ? (
+                              <>
+                                {formatWeightLbs(line.billedWeightLbs)}{" "}
+                                {baseAbbr}
+                              </>
+                            ) : (
+                              <span style={{ color: C.muted }}>—</span>
+                            )}
+                          </td>
+                        ) : null}
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            color: C.ink2,
+                            fontFamily: C.mono,
+                          }}
+                        >
+                          {formatMoney(line.unitPrice)}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 0",
+                            fontSize: 13,
+                            textAlign: "right",
+                            fontFamily: C.mono,
+                            fontWeight: 500,
+                            color: C.ink,
+                          }}
+                        >
+                          {formatMoney(line.lineTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
 
           {/* Totals block */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 32 : 0 }}>
@@ -367,6 +539,94 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
               <TotalsRow label="Balance due" value={formatMoney(balanceDue)} bold accent={balanceDue > 0} />
             </div>
           </div>
+
+          {/* Payment history — visible once any payment has been recorded.
+              Initial render uses the most-recent 10 embedded in the invoice
+              payload; clicking "View all" expands to the full list. */}
+          {(invoice.payments?.length ?? 0) > 0 ? (() => {
+            const embeddedPayments = invoice.payments ?? [];
+            const totalCount =
+              invoice.paymentCount ?? embeddedPayments.length;
+            const hasMore = totalCount > embeddedPayments.length;
+            // Use the full list once it's loaded; otherwise show the embedded preview.
+            const displayedPayments =
+              showAllPayments && allPaymentsQuery.data
+                ? allPaymentsQuery.data
+                : embeddedPayments;
+            return (
+              <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 20, marginBottom: tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault ? 28 : 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: C.muted, marginBottom: 10, display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span>Payment history</span>
+                  {totalCount > embeddedPayments.length && !showAllPayments ? (
+                    <span style={{ fontSize: 11, color: C.muted, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                      Showing {embeddedPayments.length} of {totalCount}
+                    </span>
+                  ) : null}
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Date</th>
+                      <th style={thStyle}>Method</th>
+                      <th style={thStyle}>Reference</th>
+                      <th style={thStyle}>Recorded by</th>
+                      <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedPayments.map((payment, i) => {
+                      const ref = payment.referenceNumber ?? payment.checkNumber ?? null;
+                      return (
+                        <tr key={payment.id} style={{ background: i % 2 === 1 ? C.line2 : "transparent" }}>
+                          <td style={{ padding: "8px 0", fontSize: 13, fontFamily: C.mono, color: C.ink2 }}>
+                            <Link
+                              href={`/payments/${payment.id}`}
+                              style={{ color: "inherit", textDecoration: "none", borderBottom: `1px dashed ${C.line}` }}
+                            >
+                              {formatDisplayDate(payment.paymentDate)}
+                            </Link>
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                            {paymentMethodLabel(payment.paymentMethod)}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2, fontFamily: ref ? C.mono : "inherit" }}>
+                            {ref ?? <span style={{ color: C.muted }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, color: C.ink2 }}>
+                            {payment.createdBy?.fullName ?? <span style={{ color: C.muted }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 0", fontSize: 13, textAlign: "right", fontFamily: C.mono, color: C.ink, fontWeight: 500 }}>
+                            {formatMoney(payment.amount)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {hasMore && !showAllPayments ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllPayments(true)}
+                    disabled={allPaymentsQuery.isFetching}
+                    style={{
+                      marginTop: 12,
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      fontSize: 12,
+                      color: C.info,
+                      cursor: allPaymentsQuery.isFetching ? "default" : "pointer",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    {allPaymentsQuery.isFetching
+                      ? "Loading…"
+                      : `View all ${totalCount} payments`}
+                  </button>
+                ) : null}
+              </div>
+            );
+          })() : null}
 
           {/* Footer */}
           {(tenantBranding.invoiceFooterText || tenantBranding.invoiceNotesDefault) ? (
@@ -471,6 +731,34 @@ export function InvoiceDetailPage({ invoiceId, tenantBranding }: Props) {
           ) : null}
         </div>
       </div>
+
+      <InvoicePaymentEntryDialog
+        open={recordPaymentOpen}
+        onOpenChange={setRecordPaymentOpen}
+        invoice={{
+          id: invoice.id,
+          salesOrderId: invoice.salesOrderId,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate ?? null,
+          status: invoice.status,
+          balanceDue: invoice.balanceDue ?? "0",
+        }}
+      />
+
+      <SendInvoiceModal
+        open={sendInvoiceOpen}
+        onOpenChange={setSendInvoiceOpen}
+        invoice={{
+          id: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceDate: invoice.invoiceDate ?? "",
+          dueDate: invoice.dueDate ?? null,
+          totalAmount: invoice.totalAmount ?? "0",
+          balanceDue: invoice.balanceDue ?? "0",
+          customerName: invoice.customer?.name ?? null,
+          status: invoice.status,
+        }}
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import { ListingAction, ListingPage, StatusPill, type ListingColumn } from "@/components/listing-page";
+import { ListingAction, ListingErrorState, ListingPage, StatusPill, type ListingColumn } from "@/components/listing-page";
 import {
   useResendUserInvitation,
   useRevokeUserInvitation,
@@ -25,8 +25,8 @@ function RoleChip({ role }: { role: string }) {
         fontSize: 11,
         padding: "2px 8px",
         borderRadius: 100,
-        background: "oklch(96% 0.03 240)",
-        color: "oklch(60% 0.15 240)",
+        background: "var(--color-info-bg)",
+        color: "var(--color-info-fg)",
         fontWeight: 500,
       }}
     >
@@ -62,18 +62,18 @@ function buildColumns(handlers: {
         if (row.kind === "invitation") {
           const inv = row.row;
           if (inv.inviteIsExpired) {
-            return { primary: <StatusPill label="Expired" bg="#f5f5f4" color="#78716c" /> };
+            return { primary: <StatusPill label="Expired" bg="var(--color-divider)" color="var(--color-subtle)" /> };
           }
-          return { primary: <StatusPill label="Invited" bg="oklch(97% 0.04 70)" color="oklch(60% 0.14 70)" /> };
+          return { primary: <StatusPill label="Invited" bg="var(--color-warning-bg)" color="var(--color-warning-fg)" /> };
         }
         const user = row.row;
         if (!user.isActive) {
-          return { primary: <StatusPill label="Inactive" bg="#f5f5f4" color="#78716c" /> };
+          return { primary: <StatusPill label="Inactive" bg="var(--color-divider)" color="var(--color-subtle)" /> };
         }
         if (!user.authUser?.emailVerified) {
-          return { primary: <StatusPill label="Unverified" bg="oklch(97% 0.04 70)" color="oklch(60% 0.14 70)" /> };
+          return { primary: <StatusPill label="Unverified" bg="var(--color-warning-bg)" color="var(--color-warning-fg)" /> };
         }
-        return { primary: <StatusPill label="Active" bg="oklch(96% 0.04 155)" color="oklch(58% 0.13 155)" /> };
+        return { primary: <StatusPill label="Active" bg="var(--color-success-bg)" color="var(--color-success-fg)" /> };
       },
     },
     {
@@ -85,7 +85,13 @@ function buildColumns(handlers: {
   ];
 }
 
-export default function Users() {
+export default function Users({
+  title = "Users",
+  subtitle = "Manage team members and invitations.",
+}: {
+  title?: string;
+  subtitle?: string;
+} = {}) {
   const [resendInvitationId, setResendInvitationId] = useState<string | null>(null);
 
   const pagination = useUrlPaginationState<UsersDirectoryListSort>({
@@ -152,19 +158,17 @@ export default function Users() {
 
   if (error) {
     return (
-      <div style={{ padding: 24, color: "oklch(0.55 0.22 25)", fontSize: 14 }}>
-        {(error as Error).message}{" "}
-        <button type="button" onClick={() => refetch()} style={{ textDecoration: "underline", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit" }}>
-          Retry
-        </button>
-      </div>
+      <ListingErrorState
+        message={(error as Error).message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
   return (
     <ListingPage
-      title="Users"
-      subtitle="Manage team members and invitations."
+      title={title}
+      subtitle={subtitle}
       primaryAction={
         <ListingAction href="/users/new">
           <Plus className="size-3.5" />

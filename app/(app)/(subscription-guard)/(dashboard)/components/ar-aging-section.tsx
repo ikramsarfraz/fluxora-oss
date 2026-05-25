@@ -37,11 +37,11 @@ export function ArAgingSection() {
   return (
     <section className="flex flex-col gap-4">
       <div className="px-4 lg:px-6">
-        <div className="border-b border-stone-line pb-3">
-          <h2 className="text-sm font-semibold text-stone-ink">
+        <div className="border-b border-border-default pb-3">
+          <h2 className="text-sm font-medium text-ink">
             Accounts receivable aging
           </h2>
-          <p className="mt-0.5 text-xs text-stone-muted">
+          <p className="mt-0.5 text-xs text-subtle">
             Open customer invoices bucketed by days past their due date.
             Invoices without a due date are treated as current.
           </p>
@@ -83,23 +83,23 @@ function ArAgingContent({ data }: { data: ArAging }) {
   return (
     <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @3xl/main:grid-cols-3">
       <Card className="shadow-none">
-        <CardHeader className="border-b border-stone-line pb-3">
-          <CardTitle className="text-sm font-semibold text-stone-ink">Open balance</CardTitle>
-          <CardDescription className="text-xs text-stone-muted">
+        <CardHeader className="border-b border-border-default pb-3">
+          <CardTitle className="text-sm font-medium text-ink">Open balance</CardTitle>
+          <CardDescription className="text-xs text-subtle">
             Non-void invoices with balance remaining.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col rounded-lg border border-stone-line p-3">
-              <span className="text-xs text-stone-muted">Total open</span>
-              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
+            <div className="flex flex-col rounded-lg border border-border-default p-3">
+              <span className="text-xs text-subtle">Total open</span>
+              <span className="font-mono text-xl font-semibold tabular-nums text-ink">
                 {formatMoney(data.totalOpen)}
               </span>
             </div>
-            <div className="flex flex-col rounded-lg border border-stone-line p-3">
+            <div className="flex flex-col rounded-lg border border-border-default p-3">
               <span className="text-xs text-destructive">Overdue</span>
-              <span className="font-mono text-xl font-semibold tabular-nums text-stone-ink">
+              <span className="font-mono text-xl font-semibold tabular-nums text-ink">
                 {formatMoney(data.totalOverdue)}
               </span>
             </div>
@@ -117,9 +117,9 @@ function ArAgingContent({ data }: { data: ArAging }) {
 function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Top overdue customers</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Top overdue customers</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           By overdue balance across open invoices.
         </CardDescription>
       </CardHeader>
@@ -146,7 +146,7 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
                     >
                       {row.name}
                     </Link>
-                    <div className="text-xs text-stone-muted">
+                    <div className="text-xs text-subtle">
                       {row.invoiceCount} invoice
                       {row.invoiceCount === 1 ? "" : "s"}
                     </div>
@@ -154,7 +154,7 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatMoney(row.totalOverdue)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-stone-muted">
+                  <TableCell className="text-right tabular-nums text-subtle">
                     {formatMoney(row.totalBalance)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -175,9 +175,9 @@ function TopCustomersCard({ rows }: { rows: ArAgingCustomerRow[] }) {
 function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
   return (
     <Card className="shadow-none overflow-hidden">
-      <CardHeader className="border-b border-stone-line pb-3">
-        <CardTitle className="text-sm font-semibold text-stone-ink">Recent overdue invoices</CardTitle>
-        <CardDescription className="text-xs text-stone-muted">
+      <CardHeader className="border-b border-border-default pb-3">
+        <CardTitle className="text-sm font-medium text-ink">Recent overdue invoices</CardTitle>
+        <CardDescription className="text-xs text-subtle">
           Oldest past-due invoices, top 8.
         </CardDescription>
       </CardHeader>
@@ -223,7 +223,7 @@ function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
                   <TableCell className="text-right">
                     <div className="flex flex-col items-end gap-1">
                       <BucketBadge bucket={row.bucket} />
-                      <span className="text-xs text-stone-muted tabular-nums">
+                      <span className="text-xs text-subtle tabular-nums">
                         {row.daysOverdue}d
                       </span>
                     </div>
@@ -240,7 +240,7 @@ function RecentOverdueCard({ rows }: { rows: ArAgingInvoiceRow[] }) {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-6 py-6 text-center text-xs text-stone-muted">
+    <p className="px-6 py-6 text-center text-xs text-subtle">
       {children}
     </p>
   );

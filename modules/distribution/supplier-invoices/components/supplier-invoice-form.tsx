@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { AlertTriangle } from "lucide-react";
-
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useProducts } from "@/modules/distribution/products/hooks/use-products";
 import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-suppliers";
+import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   computeDraftLineWeight,
@@ -20,9 +19,12 @@ import {
   useCreateSupplierInvoice,
   useUpdateSupplierInvoice,
   useCompleteSupplierInvoice,
-  useNextSupplierInvoiceNumber,
+  useParseSupplierInvoicePdf,
+  useUploadSupplierInvoiceAttachmentToInvoice,
   useSupplierCostDiffContext,
 } from "../hooks/use-supplier-invoices";
+import { saveImportAliasesBatchAction } from "../actions";
+import { mintBulkImportKey, storePendingPdf } from "../utils/bulk-import-storage";
 import {
   createSupplierInvoiceAction,
   updateSupplierInvoiceAction,
@@ -45,8 +47,11 @@ import { can, getPermissionDeniedReason } from "@/lib/auth/permissions";
 
 import { SupplierInvoiceAttachmentsPlaceholder } from "./supplier-invoice-attachments-placeholder";
 import {
+  emptyCharge,
   emptyLine,
+  supplierInvoiceChargeTypes,
   supplierInvoiceFormSchema,
+  type SupplierInvoiceChargeValues,
   type SupplierInvoiceFormValues,
 } from "./supplier-invoice-form.schema";
 import {
@@ -55,22 +60,30 @@ import {
   SupplierInvoiceLinesEditor,
   type LineCostAckKey,
 } from "./supplier-invoice-lines-editor";
+import { AlertTriangle, FileText, Plus, Trash2 } from "lucide-react";
+import type { PipelineResult } from "@/modules/distribution/supplier-invoices/services/parsing-pipeline";
+import { FirstBillPanel } from "./first-bill-panel";
+import { IngestionPanel } from "./ingestion-panel";
+import { CreateSupplierDialog } from "./create-supplier-dialog";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  bg: "#fafaf9",
-  surface: "#ffffff",
-  surfaceAlt: "#f5f5f4",
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  mutedSoft: "#a8a29e",
-  line: "#e7e5e4",
-  lineStrong: "#d4d1c7",
-  good: "oklch(58% 0.13 155)",
-  warn: "oklch(70% 0.13 70)",
+  bg: "var(--color-page)",
+  surface: "var(--color-card)",
+  surfaceAlt: "var(--color-divider)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  mutedSoft: "var(--color-muted)",
+  line: "var(--color-border-default)",
+  lineStrong: "var(--color-border-default)",
+  good: "var(--color-success-fg)",
+  warn: "var(--color-warning-fg)",
+  accent: "var(--color-forest-mid)",
   mono: "var(--font-mono)",
 } as const;
+
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Mode = "create" | "edit";
@@ -79,6 +92,20 @@ type Props = {
   mode: Mode;
   invoiceId?: string;
   initialValues?: SupplierInvoiceFormValues;
+  /**
+   * Pre-parsed pipeline result handed down by the bulk-import review flow.
+   * When set in create mode, the form seeds its state from this result on
+   * mount — the same code path the file-upload handler uses — so the user
+   * lands on a fully populated review screen without re-uploading the PDF.
+   */
+  prefilledPipelineResult?: PipelineResult;
+  /**
+   * Original PDF file that produced `prefilledPipelineResult`, pulled from
+   * IndexedDB by the bulk-import handoff. When present, the review screen
+   * shows the PDF preview pane next to the form and the file is uploaded
+   * as an attachment once the draft is saved — matching single-import.
+   */
+  prefilledPdfFile?: File | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -86,16 +113,283 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ── ChargeRow ──────────────────────────────────────────────────────────────
+
+const CHARGE_TYPE_LABELS: Record<string, string> = {
+  freight: "Freight",
+  fuel: "Fuel",
+  tax: "Tax",
+  discount: "Discount",
+  processing: "Processing",
+  inspection: "Inspection",
+  cod: "COD",
+  refrigeration: "Refrigeration",
+  other: "Other",
+};
+
+function ChargeRow({
+  index,
+  register,
+  control,
+  errors,
+  onRemove,
+  disabled,
+}: {
+  index: number;
+  register: ReturnType<typeof useForm<SupplierInvoiceFormValues>>["register"];
+  control: ReturnType<typeof useForm<SupplierInvoiceFormValues>>["control"];
+  errors?: {
+    description?: { message?: string };
+    amount?: { message?: string };
+    rate?: { message?: string };
+  };
+  onRemove: () => void;
+  disabled: boolean;
+}) {
+  const chargeType = useWatch({ control, name: `charges.${index}.chargeType` });
+  const includeInCost = useWatch({ control, name: `charges.${index}.includeInInventoryCost` });
+  const isDiscount = chargeType === "discount";
+  const isTax = chargeType === "tax";
+
+  const inputBase: React.CSSProperties = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "7px 10px",
+    fontSize: 13,
+    borderRadius: 6,
+    background: C.surface,
+    color: C.ink,
+    fontFamily: "inherit",
+    outline: "none",
+  };
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 110px 80px 110px 76px 28px",
+        gap: 6,
+        alignItems: "start",
+      }}
+    >
+      {/* Description */}
+      <div>
+        <input
+          {...register(`charges.${index}.description`)}
+          placeholder="Description"
+          disabled={disabled}
+          style={{
+            ...inputBase,
+            border: `1px solid ${errors?.description ? "oklch(55% 0.18 27)" : C.line}`,
+          }}
+        />
+        {errors?.description?.message && (
+          <div style={{ fontSize: 11, color: "oklch(55% 0.18 27)", marginTop: 2 }}>
+            {errors.description.message}
+          </div>
+        )}
+      </div>
+
+      {/* Type */}
+      <Controller
+        control={control}
+        name={`charges.${index}.chargeType`}
+        render={({ field }) => (
+          <select
+            value={field.value}
+            onChange={field.onChange}
+            disabled={disabled}
+            style={{
+              ...inputBase,
+              border: `1px solid ${C.line}`,
+              cursor: disabled ? "not-allowed" : "pointer",
+              appearance: "auto",
+            }}
+          >
+            {supplierInvoiceChargeTypes.map(t => (
+              <option key={t} value={t}>{CHARGE_TYPE_LABELS[t]}</option>
+            ))}
+          </select>
+        )}
+      />
+
+      {/* Rate (% — only active for tax) */}
+      <div style={{ position: "relative" }}>
+        <input
+          {...register(`charges.${index}.rate`)}
+          placeholder={isTax ? "0.00" : "—"}
+          disabled={disabled || !isTax}
+          style={{
+            ...inputBase,
+            border: `1px solid ${errors?.rate ? "oklch(55% 0.18 27)" : C.line}`,
+            opacity: isTax ? 1 : 0.4,
+            paddingRight: isTax ? 22 : 10,
+            fontFamily: C.mono,
+            textAlign: "right",
+          }}
+        />
+        {isTax && (
+          <span
+            style={{
+              position: "absolute",
+              right: 8,
+              top: "50%",
+              transform: "translateY(-50%)",
+              fontSize: 11,
+              color: C.mutedSoft,
+              pointerEvents: "none",
+            }}
+          >
+            %
+          </span>
+        )}
+      </div>
+
+      {/* Amount */}
+      <div>
+        <input
+          {...register(`charges.${index}.amount`)}
+          placeholder="0.00"
+          disabled={disabled}
+          style={{
+            ...inputBase,
+            border: `1px solid ${errors?.amount ? "oklch(55% 0.18 27)" : C.line}`,
+            fontFamily: C.mono,
+            fontVariantNumeric: "tabular-nums",
+            textAlign: "right",
+            color: isDiscount ? "oklch(50% 0.15 155)" : C.ink,
+          }}
+        />
+        {errors?.amount?.message && (
+          <div style={{ fontSize: 11, color: "oklch(55% 0.18 27)", marginTop: 2 }}>
+            {errors.amount.message}
+          </div>
+        )}
+      </div>
+
+      {/* In-cost toggle */}
+      <Controller
+        control={control}
+        name={`charges.${index}.includeInInventoryCost`}
+        render={({ field }) => (
+          <button
+            type="button"
+            onClick={() => field.onChange(!field.value)}
+            disabled={disabled}
+            title={field.value ? "Included in inventory cost" : "Excluded from inventory cost"}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+              background: "transparent",
+              border: "none",
+              cursor: disabled ? "not-allowed" : "pointer",
+              padding: "4px 0",
+              fontFamily: "inherit",
+            }}
+          >
+            <div
+              style={{
+                width: 30,
+                height: 17,
+                borderRadius: 99,
+                background: field.value ? "var(--color-success-fg)" : C.lineStrong,
+                position: "relative",
+                transition: "background 0.15s",
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: field.value ? 15 : 2,
+                  width: 13,
+                  height: 13,
+                  borderRadius: "50%",
+                  background: "var(--color-card)",
+                  transition: "left 0.15s",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                }}
+              />
+            </div>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: field.value ? "var(--color-success-fg)" : C.mutedSoft,
+              }}
+            >
+              In cost
+            </span>
+          </button>
+        )}
+      />
+
+      {/* Remove */}
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 28,
+          height: 34,
+          borderRadius: 6,
+          border: `1px solid ${C.line}`,
+          background: "transparent",
+          color: C.muted,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.6 : 1,
+          flexShrink: 0,
+        }}
+      >
+        <Trash2 style={{ width: 12, height: 12 }} />
+      </button>
+    </div>
+  );
+}
+
+// ── ChargesSubtotal ────────────────────────────────────────────────────────
+function ChargesSubtotal({ control }: { control: ReturnType<typeof useForm<SupplierInvoiceFormValues>>["control"] }) {
+  const charges = useWatch({ control, name: "charges" }) as SupplierInvoiceChargeValues[];
+  const total = (charges ?? []).reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+  const inCostTotal = (charges ?? []).reduce(
+    (sum, c) => sum + (c.includeInInventoryCost ? Number(c.amount) || 0 : 0),
+    0,
+  );
+  const fmt = (v: number) =>
+    `$${v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+      <span style={{ fontFamily: C.mono, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: C.ink }}>
+        {fmt(total)}
+      </span>
+      {inCostTotal > 0 && (
+        <span style={{ fontSize: 11, color: "var(--color-success-fg)", fontFamily: C.mono }}>
+          {fmt(inCostTotal)} capitalized
+        </span>
+      )}
+    </div>
+  );
+}
+
 function defaultCreateValues(): SupplierInvoiceFormValues {
   const t = today();
   return {
     supplierId: "",
-    invoiceNumber: "",
+    supplierInvoiceNumber: "",
     invoiceDate: t,
     receiveDate: t,
     paymentMethod: null,
     notes: "",
     lines: [emptyLine()],
+    charges: [],
   };
 }
 
@@ -187,11 +481,17 @@ const lblStyle: React.CSSProperties = {
 };
 
 const inputCls =
-  "border-stone-line bg-stone-surface text-sm text-stone-ink shadow-none";
+  "border-border-default bg-card text-sm text-ink shadow-none";
 
 
 // ── Component ──────────────────────────────────────────────────────────────
-export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
+export function SupplierInvoiceForm({
+  mode,
+  invoiceId,
+  initialValues,
+  prefilledPipelineResult,
+  prefilledPdfFile,
+}: Props) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
   const { data: suppliers, isLoading: suppliersLoading } = useSuppliers();
@@ -200,6 +500,8 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
   const createMutation = useCreateSupplierInvoice();
   const updateMutation = useUpdateSupplierInvoice();
   const completeMutation = useCompleteSupplierInvoice();
+  const parsePdfMutation = useParseSupplierInvoicePdf();
+  const uploadParsedPdfMutation = useUploadSupplierInvoiceAttachmentToInvoice();
   const { data: currentUser } = useCurrentPortalUser();
   const role = currentUser?.role ?? null;
   const canEdit = can(role, "edit_supplier_invoice");
@@ -216,36 +518,33 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     defaultValues: initialValues ?? defaultCreateValues(),
   });
 
-  // Auto-suggest a fresh `INV-YYYYMMDD-NN` for new bills. Only runs in create
-  // mode, and only fills the field if the user hasn't already typed anything
-  // (e.g. PDF-prefill or supplier's real invoice number takes precedence).
-  const shouldSuggestInvoiceNumber =
-    mode === "create" && !initialValues?.invoiceNumber;
-  const nextNumberQuery = useNextSupplierInvoiceNumber({
-    enabled: shouldSuggestInvoiceNumber,
-  });
-  const invoiceNumberPrefilledRef = useRef(false);
-  useEffect(() => {
-    if (!shouldSuggestInvoiceNumber) return;
-    if (invoiceNumberPrefilledRef.current) return;
-    const suggested = nextNumberQuery.data;
-    if (!suggested) return;
-    const current = form.getValues("invoiceNumber");
-    if (current && current.trim()) {
-      invoiceNumberPrefilledRef.current = true;
-      return;
-    }
-    form.setValue("invoiceNumber", suggested, { shouldDirty: false });
-    invoiceNumberPrefilledRef.current = true;
-  }, [shouldSuggestInvoiceNumber, nextNumberQuery.data, form]);
+  const { fields: chargeFields, append: appendCharge, remove: removeCharge, replace: replaceCharges } =
+    useFieldArray({ control: form.control, name: "charges" });
+
+  // The system now mints `referenceNumber` server-side at insert time, so
+  // there's no longer a need to auto-suggest an "INV-YYYYMMDD-NN" placeholder
+  // into supplierInvoiceNumber. That field stays blank until the user enters
+  // the supplier's printed invoice number (now optional).
 
   const isPending =
     createMutation.isPending ||
     updateMutation.isPending ||
-    completeMutation.isPending;
+    completeMutation.isPending ||
+    parsePdfMutation.isPending ||
+    uploadParsedPdfMutation.isPending;
+
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
+  const [pdfPrefill, setPdfPrefill] = useState<PipelineResult | null>(null);
+  const [createSupplierOpen, setCreateSupplierOpen] = useState(false);
+  const [pdfUnresolvedCount, setPdfUnresolvedCount] = useState(0);
+  // Per-form-line vendor product names (from PDF import), indexed to match the lines array.
+  const [lineVendorNames, setLineVendorNames] = useState<(string | null)[]>([]);
+  // Vendor names whose aliases were already saved via the review panel — skip on submit.
+  const savedAliasNamesRef = useRef<Set<string>>(new Set());
+  const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" }) ?? "";
 
   // ── Live cost-diff context (drives the per-line callout + Complete gate) ──
-  const watchedSupplierId = useWatch({ control: form.control, name: "supplierId" }) ?? "";
   const watchedLinesRaw = useWatch({ control: form.control, name: "lines" });
   const watchedLines = useMemo(() => watchedLinesRaw ?? [], [watchedLinesRaw]);
   const productIdsOnForm = useMemo(
@@ -335,7 +634,6 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
         const v = form.getValues();
         const ready =
           !!v.supplierId &&
-          !!v.invoiceNumber &&
           !!v.invoiceDate &&
           !!v.receiveDate &&
           (v.lines ?? []).some((l) => !!l?.productId);
@@ -355,13 +653,20 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           unitType: line.unitType,
           unitPrice: line.unitPrice || "0",
           caseWeightsLbs: serializeDraftCaseWeights(line),
+          // Carry unit-aware fields through to the server. The receiving
+          // service snapshots both onto supplier_invoice_lines so the
+          // bill detail page and any future inventory-explosion feature
+          // can recover the "12 ea per case" pack size at read time.
+          purchaseUnitAbbreviation:
+            line.purchaseUnitAbbreviation?.trim() || null,
+          unitsPerPackage: line.unitsPerPackage?.trim() || null,
           lotNumberOverride: line.lotNumberOverride?.trim() || null,
           expirationDateOverride: line.expirationDateOverride?.trim() || null,
         }));
 
         const payload = {
           supplierId: v.supplierId,
-          invoiceNumber: v.invoiceNumber,
+          invoiceNumber: v.supplierInvoiceNumber || null,
           invoiceDate: v.invoiceDate,
           receiveDate: v.receiveDate,
           paymentMethod: v.paymentMethod ?? null,
@@ -406,6 +711,154 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
     ? `/supplier-invoices/${invoiceId}`
     : "/supplier-invoices";
 
+  function handleReadPdfClick() {
+    pdfInputRef.current?.click();
+  }
+
+  // Apply a parsed PipelineResult to the form state. Used by both the
+  // file-upload handler (which produces the result via parsePdfMutation) and
+  // the bulk-import review flow (which hands the result over via the
+  // `prefilledPipelineResult` prop after parsing on a separate request).
+  const seedFromPipelineResult = useCallback(
+    (result: PipelineResult, options: { pdfFile: File | null } = { pdfFile: null }) => {
+      form.reset(result.prefillResult.values);
+      setPendingPdfFile(options.pdfFile);
+      setPdfPrefill(result);
+      savedAliasNamesRef.current = new Set();
+
+      // Only count lines where no product was auto-filled (confidence < 60 or
+      // no suggestion). AI suggestions with confidence ≥ 60 are pre-selected
+      // in the form already. The count drives the footer warning; the user
+      // resolves each unresolved line via the line editor's product picker.
+      const trulyUnresolvedCount = result.unresolvedLines.filter(
+        l => !l.suggestedProductId || l.confidence < 60,
+      ).length;
+      setPdfUnresolvedCount(trulyUnresolvedCount);
+      setAutoSaveStatus("idle");
+
+      // Build per-line vendor name array for the line editor display. We pair
+      // unmatchedLineDescriptions with the form lines that came in without a
+      // productId: unmatchedNames[k] aligns with the (k+1)-th empty-product
+      // form line. The editor surfaces this raw OCR text alongside the picker
+      // so the user knows what to match against.
+      const vendorNames: (string | null)[] = Array(
+        result.prefillResult.values.lines.length,
+      ).fill(null);
+      const unmatchedNames = result.prefillResult.unmatchedLineDescriptions;
+      let unmatchedIdx = 0;
+      for (let i = 0; i < result.prefillResult.values.lines.length; i++) {
+        if (
+          !result.prefillResult.values.lines[i].productId &&
+          unmatchedIdx < unmatchedNames.length
+        ) {
+          vendorNames[i] = unmatchedNames[unmatchedIdx];
+          unmatchedIdx++;
+        }
+      }
+      setLineVendorNames(vendorNames);
+
+      if (result.detectedFees.length > 0) {
+        replaceCharges(
+          result.detectedFees.map(f => ({
+            description: f.description,
+            chargeType: "other" as const,
+            rate: "",
+            includeInInventoryCost: false,
+            amount: f.amount > 0 ? f.amount.toFixed(4) : "",
+          })),
+        );
+      }
+    },
+    [
+      form,
+      replaceCharges,
+      setAutoSaveStatus,
+      setLineVendorNames,
+      setPdfPrefill,
+      setPdfUnresolvedCount,
+      setPendingPdfFile,
+    ],
+  );
+
+  // Seed once from the bulk-import handoff. Effect runs only on mount in
+  // create mode — edit mode already populates initialValues from the DB.
+  const hasSeededFromPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (mode !== "create") return;
+    if (!prefilledPipelineResult) return;
+    if (hasSeededFromPrefilledRef.current) return;
+    hasSeededFromPrefilledRef.current = true;
+    // Carry the prefilled PDF through so the review pane appears and the
+    // file uploads as an attachment when the draft is saved.
+    seedFromPipelineResult(prefilledPipelineResult, {
+      pdfFile: prefilledPdfFile ?? null,
+    });
+    toast.success(
+      "Loaded scanned PDF. Review every field before saving the draft.",
+    );
+  }, [
+    mode,
+    prefilledPipelineResult,
+    prefilledPdfFile,
+    seedFromPipelineResult,
+  ]);
+
+  async function handlePdfFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_PDF_BYTES) {
+      toast.error(`PDF is too large. Max ${MAX_PDF_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+
+    // Create-mode: route through the redesigned parsing screen so the user
+    // gets the new in-flight UI + lands on the new Review screen on success.
+    // Edit-mode keeps the inline `parsePdfMutation` path: editing a draft is
+    // an "augment existing fields with this PDF" affordance, not a fresh
+    // import — there's no draft to seed from scratch.
+    if (mode === "create") {
+      const key = mintBulkImportKey();
+      try {
+        await storePendingPdf(key, file);
+      } catch {
+        toast.error("Couldn't stash the PDF locally — try again.");
+        return;
+      }
+      router.push(`/supplier-invoices/parsing/${encodeURIComponent(key)}`);
+      return;
+    }
+
+    try {
+      const result = await parsePdfMutation.mutateAsync(file);
+      seedFromPipelineResult(result, { pdfFile: file });
+      toast.success(`Read ${file.name}. Review the imported fields before saving.`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not read this PDF.",
+      );
+    }
+  }
+
+  async function attachPendingPdf(targetInvoiceId: string) {
+    if (!pendingPdfFile) return;
+    try {
+      await uploadParsedPdfMutation.mutateAsync({
+        supplierInvoiceId: targetInvoiceId,
+        file: pendingPdfFile,
+      });
+      toast.success(`Attached ${pendingPdfFile.name}.`);
+      setPendingPdfFile(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Bill saved, but PDF attachment failed: ${err.message}`
+          : "Bill saved, but PDF attachment failed.",
+      );
+    }
+  }
 
   async function submit(
     values: SupplierInvoiceFormValues,
@@ -422,23 +875,36 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
       unitType: line.unitType,
       unitPrice: line.unitPrice || "0",
       caseWeightsLbs: serializeDraftCaseWeights(line),
+      // Same as the autosave path above — propagate the UOM + pack
+      // size so the server snapshots the conversion for inventory math.
+      purchaseUnitAbbreviation: line.purchaseUnitAbbreviation?.trim() || null,
+      unitsPerPackage: line.unitsPerPackage?.trim() || null,
       lotNumberOverride: line.lotNumberOverride?.trim() || null,
       expirationDateOverride: line.expirationDateOverride?.trim() || null,
     }));
 
     const payload = {
       supplierId: values.supplierId,
-      invoiceNumber: values.invoiceNumber,
+      invoiceNumber: values.supplierInvoiceNumber || null,
       invoiceDate: values.invoiceDate,
       receiveDate: values.receiveDate,
       paymentMethod: values.paymentMethod ?? null,
       notes: values.notes || null,
       lines: normalizedLines,
+      charges: values.charges.map(c => ({
+        description: c.description,
+        chargeType: c.chargeType,
+        rate: c.rate || null,
+        includeInInventoryCost: c.includeInInventoryCost,
+        amount: c.amount || "0",
+      })),
     };
 
     const existingDraftId = draftIdRef.current;
 
     try {
+      let targetId: string;
+
       if (mode === "create" && !existingDraftId) {
         // No auto-save draft yet — create fresh
         const result = await createMutation.mutateAsync({
@@ -446,15 +912,15 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           complete,
         });
         draftIdRef.current = result.id;
+        targetId = result.id;
         toast.success(
           complete
-            ? `Bill "${values.invoiceNumber}" received. Lots and inventory created.`
-            : `Draft bill "${values.invoiceNumber}" saved.`,
+            ? `Bill received. Lots and inventory created.`
+            : `Draft bill saved.`,
         );
-        router.push(`/supplier-invoices/${result.id}`);
       } else {
         // Auto-save already created a draft (or we're in edit mode) — update
-        const targetId = existingDraftId ?? invoiceId!;
+        targetId = existingDraftId ?? invoiceId!;
         await updateMutation.mutateAsync({ id: targetId, ...payload });
         if (complete) {
           await completeMutation.mutateAsync({
@@ -462,17 +928,40 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             lineOverrides: [],
           });
           toast.success(
-            `Bill "${values.invoiceNumber}" received. Lots and inventory created.`,
+            `Bill received. Lots and inventory created.`,
           );
         } else {
           toast.success(
             mode === "create"
-              ? `Draft bill "${values.invoiceNumber}" saved.`
-              : `Draft bill "${values.invoiceNumber}" updated.`,
+              ? `Draft bill saved.`
+              : `Draft bill updated.`,
           );
         }
-        router.push(`/supplier-invoices/${targetId}`);
       }
+
+      // Save aliases for any auto-filled lines not already confirmed via the review panel.
+      if (pdfPrefill && values.supplierId && lineVendorNames.length > 0) {
+        const aliasesToSave = lineVendorNames.flatMap((vendorName, i) => {
+          if (!vendorName) return [];
+          if (savedAliasNamesRef.current.has(vendorName)) return [];
+          const productId = values.lines[i]?.productId;
+          if (!productId) return [];
+          return [{ supplierId: values.supplierId, vendorProductName: vendorName, internalProductId: productId }];
+        });
+        if (aliasesToSave.length > 0) {
+          try {
+            await saveImportAliasesBatchAction(aliasesToSave);
+            const total = aliasesToSave.length + savedAliasNamesRef.current.size;
+            toast.success(
+              `${total} product alias${total !== 1 ? "es" : ""} saved — future invoices from this supplier will match automatically.`,
+            );
+          } catch {
+            // Non-critical — bill is already saved
+          }
+        }
+      }
+
+      router.push(`/supplier-invoices/${targetId}`);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Could not save invoice.",
@@ -525,6 +1014,40 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               justifyContent: "flex-end",
             }}
           >
+            {mode === "create" && (
+              <>
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  style={{ display: "none" }}
+                  onChange={handlePdfFileChange}
+                />
+                <button
+                  type="button"
+                  onClick={handleReadPdfClick}
+                  disabled={isPending}
+                  style={{
+                    background: C.surface,
+                    color: C.ink2,
+                    border: `1px solid ${C.line}`,
+                    padding: "9px 18px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: isPending ? "not-allowed" : "pointer",
+                    opacity: isPending ? 0.6 : 1,
+                    fontFamily: "inherit",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                  }}
+                >
+                  <FileText style={{ width: 14, height: 14 }} />
+                  Scan PDF
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() => router.push(cancelPath)}
@@ -546,6 +1069,33 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             </button>
           </div>
         </div>
+
+        {/* ── Ingestion progress panel (replaces spinner during PDF parse) ── */}
+        {(parsePdfMutation.isPending || !!parsePdfMutation.error) && (
+          <div style={{ marginBottom: 16 }}>
+            <IngestionPanel
+              fileName={pendingPdfFile?.name ?? "invoice.pdf"}
+              fileBytes={pendingPdfFile?.size ?? 0}
+              isParsing={parsePdfMutation.isPending}
+              parseError={parsePdfMutation.error as Error | null}
+              pipelineResult={null}
+              onCancel={() => {
+                parsePdfMutation.reset();
+                setPendingPdfFile(null);
+              }}
+              onContinuePartial={() => parsePdfMutation.reset()}
+              onRetryWithVision={() => {
+                parsePdfMutation.reset();
+                setPendingPdfFile(null);
+                setTimeout(() => pdfInputRef.current?.click(), 100);
+              }}
+              onDiscard={() => {
+                parsePdfMutation.reset();
+                setPendingPdfFile(null);
+              }}
+            />
+          </div>
+        )}
 
         {/* ── Bill details card ──────────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
@@ -569,58 +1119,102 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               <Controller
                 name="supplierId"
                 control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <label style={lblStyle}>
-                      Supplier{" "}
-                      <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
-                    </label>
-                    <Select
-                      value={field.value || undefined}
-                      onValueChange={field.onChange}
-                      disabled={suppliersLoading || isPending}
-                    >
-                      <SelectTrigger
-                        id="si-supplier"
-                        aria-invalid={fieldState.invalid}
-                        className={inputCls}
+                render={({ field, fieldState }) => {
+                  const candidate =
+                    pdfPrefill?.prefillResult.unmatchedSupplierCandidates[0] ??
+                    null;
+                  const showCreateHint = !field.value && !!candidate;
+                  return (
+                    <Field data-invalid={fieldState.invalid}>
+                      <label style={lblStyle}>
+                        Supplier{" "}
+                        <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
+                      </label>
+                      <Select
+                        value={field.value || undefined}
+                        onValueChange={field.onChange}
+                        disabled={suppliersLoading || isPending}
                       >
-                        <SelectValue
-                          placeholder={
-                            suppliersLoading
-                              ? "Loading…"
-                              : "Select supplier…"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(suppliers ?? []).map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FieldError>{fieldState.error?.message}</FieldError>
-                  </Field>
-                )}
+                        <SelectTrigger
+                          id="si-supplier"
+                          aria-invalid={fieldState.invalid}
+                          className={inputCls}
+                        >
+                          <SelectValue
+                            placeholder={
+                              suppliersLoading
+                                ? "Loading…"
+                                : "Select supplier…"
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(suppliers ?? []).map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {showCreateHint && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 11.5,
+                            color: C.muted,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          <span>
+                            Read from bill:{" "}
+                            <strong style={{ color: C.ink }}>
+                              {candidate}
+                            </strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCreateSupplierOpen(true)}
+                            disabled={isPending}
+                            style={{
+                              fontSize: 11.5,
+                              color: C.accent,
+                              background: "none",
+                              border: "none",
+                              cursor: isPending ? "not-allowed" : "pointer",
+                              padding: 0,
+                              fontFamily: "inherit",
+                              fontWeight: 500,
+                            }}
+                          >
+                            + Create supplier
+                          </button>
+                        </div>
+                      )}
+                      <FieldError>{fieldState.error?.message}</FieldError>
+                    </Field>
+                  );
+                }}
               />
 
-              {/* Invoice number */}
+              {/* Supplier's printed invoice number (optional) */}
               <Controller
-                name="invoiceNumber"
+                name="supplierInvoiceNumber"
                 control={form.control}
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <label style={lblStyle}>
-                      Invoice number{" "}
-                      <span style={{ color: C.warn, fontWeight: 400 }}>*</span>
+                      Supplier invoice #{" "}
+                      <span style={{ color: C.muted, fontWeight: 400 }}>
+                        (optional)
+                      </span>
                     </label>
                     <Input
                       {...field}
                       id="si-number"
                       disabled={isPending}
-                      placeholder="e.g. INV-24501"
+                      placeholder="As printed on the bill"
                       aria-invalid={fieldState.invalid}
                       className={`${inputCls} font-mono`}
                     />
@@ -736,6 +1330,45 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           </SectionCard>
         </div>
 
+        {pdfPrefill && (
+          <div style={{ marginBottom: 16 }}>
+            {pdfPrefill.requiresOcr && (
+              <div
+                style={{
+                  padding: "7px 14px",
+                  background: C.surfaceAlt,
+                  border: `1px solid ${C.line}`,
+                  borderRadius: "10px",
+                  fontSize: 12,
+                  color: C.muted,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <AlertTriangle style={{ width: 13, height: 13, flexShrink: 0, color: C.warn }} />
+                <span>Scanned PDF — OCR not yet supported. Results may be incomplete.</span>
+              </div>
+            )}
+            {/*
+              First-bill mode (tenant catalog empty) still needs the dedicated
+              setup panel; FirstBillPanel creates products + supplier + invoice
+              atomically and isn't replaceable by the line editor below.
+
+              Everything else used to render ImportReviewView here as a
+              secondary "match unresolved products" surface. That UI is now
+              retired — the unresolved warning in the footer ("N unresolved
+              products — review before posting") plus the line editor's own
+              per-row product picker covers the same job.
+            */}
+            {pdfPrefill.firstBillLines && (
+              <FirstBillPanel
+                pipelineResult={pdfPrefill}
+                pendingPdfFile={pendingPdfFile}
+              />
+            )}
+          </div>
+        )}
 
         {/* ── Line items card ────────────────────────────────────────────── */}
         <div style={{ marginBottom: 16 }}>
@@ -818,6 +1451,7 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               products={products ?? []}
               productsLoading={productsLoading}
               disabled={isPending}
+              vendorProductNames={lineVendorNames.length > 0 ? lineVendorNames : undefined}
               supplierId={watchedSupplierId}
               costDiffByProductId={costDiffByProductId}
               acknowledgedKeys={acknowledgedKeys}
@@ -832,6 +1466,111 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── Non-inventory charges ─────────────────────────────────────── */}
+        {/* Wrapped in marginBottom: 16 to match the Bill details + Line
+            items spacing — without this the Supporting documents card
+            sits flush against this section. */}
+        <div style={{ marginBottom: 16 }}>
+        <SectionCard
+          header={
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+              <span>Non-inventory charges</span>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() => appendCharge(emptyCharge())}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                  cursor: isPending ? "not-allowed" : "pointer",
+                  opacity: isPending ? 0.6 : 1,
+                  background: "transparent",
+                  color: C.muted,
+                  border: `1px solid ${C.line}`,
+                }}
+              >
+                <Plus style={{ width: 11, height: 11 }} />
+                Add charge
+              </button>
+            </div>
+          }
+        >
+          <div style={{ padding: "0 28px 20px" }}>
+            {chargeFields.length === 0 ? (
+              <div style={{ fontSize: 13, color: C.mutedSoft, padding: "12px 0" }}>
+                No charges — freight, fuel surcharges, taxes, and cut fees go here.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                {/* Column headers */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 110px 80px 110px 76px 28px",
+                    gap: 6,
+                    paddingBottom: 5,
+                    marginBottom: 5,
+                    borderBottom: `1px solid ${C.line}`,
+                  }}
+                >
+                  {["Description", "Type", "Rate", "Amount", "In cost", ""].map((h, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: C.mutedSoft,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        textAlign: i >= 2 ? "center" : "left",
+                      }}
+                    >
+                      {h}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {chargeFields.map((field, index) => (
+                    <ChargeRow
+                      key={field.id}
+                      index={index}
+                      register={form.register}
+                      control={form.control}
+                      errors={form.formState.errors.charges?.[index]}
+                      onRemove={() => removeCharge(index)}
+                      disabled={isPending}
+                    />
+                  ))}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    paddingTop: 10,
+                    marginTop: 6,
+                    borderTop: `1px solid ${C.line}`,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: C.ink,
+                    gap: 12,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <span style={{ color: C.muted, paddingTop: 2 }}>Charges subtotal</span>
+                  <ChargesSubtotal control={form.control} />
+                </div>
+              </div>
+            )}
+          </div>
+        </SectionCard>
         </div>
 
         {/* ── Supporting documents ───────────────────────────────────────── */}
@@ -888,8 +1627,23 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
             gap: 12,
           }}
         >
-        {/* Auto-save indicator */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center" }}>
+        {/* Auto-save indicator + unresolved PDF warning */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 16 }}>
+          {pdfPrefill && pdfUnresolvedCount > 0 && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                fontWeight: 500,
+                color: C.warn,
+              }}
+            >
+              <AlertTriangle style={{ width: 13, height: 13, flexShrink: 0 }} />
+              {pdfUnresolvedCount} unresolved product{pdfUnresolvedCount !== 1 ? "s" : ""} — review before posting
+            </span>
+          )}
           {autoSaveStatus === "saving" && (
             <span style={{ fontSize: 12, color: C.muted }}>Saving…</span>
           )}
@@ -939,25 +1693,27 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
           )}
         </div>
 
-        {/* Actions */}
-        <button
+        {/* Actions — design-system Button primitives so the forest-mid
+            primary CTA, secondary outline, and ghost cancel all match
+            every other action footer in the app. */}
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => router.push(cancelPath)}
           disabled={isPending}
-          style={ghostBtn(isPending)}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
           onClick={form.handleSubmit((values) => submit(values, false))}
           disabled={isPending || !canEdit}
           title={editDeniedReason}
-          style={secondaryBtn(isPending || !canEdit)}
         >
           {isPending ? "Saving…" : "Save draft"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={form.handleSubmit((values) => submit(values, true))}
           disabled={
@@ -968,60 +1724,32 @@ export function SupplierInvoiceForm({ mode, invoiceId, initialValues }: Props) {
               ? `Acknowledge ${blockingChangesCount} line${blockingChangesCount === 1 ? "" : "s"} with changed supplier cost first.`
               : (editDeniedReason ?? completeDeniedReason)
           }
-          style={primaryBtn(
-            isPending || !canEdit || !canComplete || blockingChangesCount > 0,
-          )}
         >
           {isPending ? "Posting…" : "Complete & receive"}
-        </button>
+        </Button>
         </div>
       </div>
+
+      {/* Create supplier from invoice header — opened when the user clicks
+          the "+ Create supplier" hint under the supplier picker. Pre-fills
+          the parsed supplier name and assigns it to this bill on save. */}
+      <CreateSupplierDialog
+        open={createSupplierOpen}
+        onOpenChange={setCreateSupplierOpen}
+        initialName={
+          pdfPrefill?.prefillResult.unmatchedSupplierCandidates[0] ?? ""
+        }
+        onCreated={supplier => {
+          form.setValue("supplierId", supplier.id, { shouldValidate: true });
+        }}
+      />
     </>
   );
 }
 
 // ── Button style helpers ───────────────────────────────────────────────────
-function ghostBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: "transparent",
-    color: C.ink,
-    border: `1px solid ${C.line}`,
-    padding: "9px 18px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
-
-function secondaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: C.surface,
-    color: C.ink,
-    border: `1px solid ${C.lineStrong}`,
-    padding: "9px 18px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
-
-function primaryBtn(disabled: boolean): React.CSSProperties {
-  return {
-    background: C.ink,
-    color: "#ffffff",
-    border: "none",
-    padding: "10px 20px",
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: disabled ? "not-allowed" : "pointer",
-    opacity: disabled ? 0.6 : 1,
-    fontFamily: "inherit",
-  };
-}
+// Hand-rolled ghostBtn / secondaryBtn / primaryBtn style helpers were
+// removed when the action footer migrated to the design-system <Button>
+// primitive. The Button variants ("ghost", "secondary", default) cover
+// the same three roles with consistent forest-mid CTA color, hover
+// states, and focus rings that match every other footer in the app.

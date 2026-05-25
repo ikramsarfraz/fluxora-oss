@@ -28,6 +28,7 @@ import {
 import { formatMoney } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import type { SupplierInvoiceListItem } from "../services/receiving";
+import { getSupplierInvoiceStatusInfo } from "../utils/status";
 
 type ColumnActions = {
   onDelete: (invoice: SupplierInvoiceListItem) => void;
@@ -35,17 +36,41 @@ type ColumnActions = {
   deleteDisabledReason?: string;
 };
 
-function StatusBadge({ status }: { status: "draft" | "completed" }) {
-  if (status === "completed") {
+function StatusBadge({ status }: { status: string }) {
+  const info = getSupplierInvoiceStatusInfo(status);
+  // Map our tone vocabulary onto the shadcn Badge variants. "success"
+  // tone gets the success-bg helper since Badge variant="default" reads
+  // as informational primary, not finance-positive.
+  if (info.tone === "success") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-transparent bg-success-bg font-normal text-success-fg"
+      >
+        {info.label}
+      </Badge>
+    );
+  }
+  if (info.tone === "default") {
     return (
       <Badge variant="default" className="font-normal">
-        Completed
+        {info.label}
+      </Badge>
+    );
+  }
+  if (info.tone === "info") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-transparent bg-info-bg font-normal text-info-fg"
+      >
+        {info.label}
       </Badge>
     );
   }
   return (
     <Badge variant="secondary" className="font-normal">
-      Draft
+      {info.label}
     </Badge>
   );
 }
@@ -140,13 +165,13 @@ export function createColumns(
 ): ColumnDef<SupplierInvoiceListItem>[] {
   return [
     {
-      accessorKey: "invoiceNumber",
+      accessorKey: "referenceNumber",
       header: ({ column }) => (
         <Button
           variant="ghost"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
         >
-          Invoice #
+          Reference
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -155,8 +180,25 @@ export function createColumns(
           href={`/supplier-invoices/${row.original.id}`}
           className="font-medium hover:underline"
         >
-          {row.getValue("invoiceNumber")}
+          {row.original.referenceNumber}
         </Link>
+      ),
+    },
+    {
+      accessorKey: "invoiceNumber",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Supplier inv #
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.getValue("invoiceNumber") || "—"}
+        </span>
       ),
     },
     {
@@ -220,7 +262,7 @@ export function createColumns(
       header: "Status",
       cell: ({ row }) => (
         <StatusBadge
-          status={row.getValue("status") as "draft" | "completed"}
+          status={row.getValue("status") as string}
         />
       ),
     },

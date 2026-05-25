@@ -2,12 +2,13 @@
   "name": "fluxora",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "node --import tsx --test lib/client-ip.test.ts lib/file-validation.test.ts lib/tenant-host.test.ts lib/user-display-name.test.ts lib/invoices/sales-invoice-pdf.test.ts lib/supplier-invoices/pdf-prefill.test.ts modules/distribution/expenses/utils/metadata.test.ts",
+    "test:unit": "node --conditions=react-server --import tsx --test lib/client-ip.test.ts lib/file-validation.test.ts lib/tenant-host.test.ts modules/distribution/plaid/services/webhook-verification.test.ts modules/distribution/plaid/utils/transfer-pairing.test.ts lib/user-display-name.test.ts lib/invoices/sales-invoice-pdf.test.ts modules/distribution/expenses/utils/metadata.test.ts modules/distribution/expenses/utils/plan-recurring-instances.test.ts modules/distribution/expenses/utils/expense-status.test.ts modules/distribution/supplier-invoices/utils/pdf-prefill.test.ts modules/distribution/supplier-invoices/utils/normalization.test.ts modules/distribution/supplier-invoices/utils/pipeline-scoring.test.ts modules/distribution/supplier-invoices/utils/ai-validation.test.ts modules/distribution/supplier-invoices/utils/ai-line-conversion.test.ts modules/distribution/supplier-invoices/utils/cost.test.ts modules/distribution/supplier-invoices/utils/product-purchase-defaults.test.ts modules/distribution/supplier-invoices/utils/ai-merge.test.ts modules/distribution/supplier-invoices/utils/form-state-warnings.test.ts modules/distribution/supplier-invoices/utils/invoice-date-parsing.test.ts modules/distribution/supplier-invoices/utils/reference-number.test.ts modules/distribution/supplier-invoices/utils/meat-signals.test.ts modules/distribution/supplier-invoices/utils/vision-scoring.test.ts modules/distribution/supplier-invoices/utils/form-mapping.test.ts modules/distribution/supplier-invoices/utils/vision-correction.test.ts modules/distribution/supplier-invoices/utils/vision-dispatch.test.ts modules/distribution/supplier-invoices/utils/parsing-pipeline.test.ts modules/distribution/supplier-invoices/utils/vision-provider.test.ts modules/distribution/supplier-invoices/utils/match-line-to-pdf-row.test.ts modules/distribution/supplier-invoices/utils/openai-error-classification.test.ts modules/distribution/supplier-invoices/utils/pdf-content-hash.test.ts modules/distribution/supplier-invoices/services/ai-provider-openai.test.ts modules/distribution/supplier-invoices/services/supplier-invoice-input.schema.test.ts modules/distribution/supplier-invoices/utils/parse-validation-error.test.ts modules/distribution/supplier-invoices/utils/review-overrides-storage.test.ts modules/distribution/supplier-invoices/hooks/bulk-import-file-lock-state.test.ts lib/ai-cost.test.ts lib/csv/parse.test.ts lib/csv/serialize.test.ts lib/utils/phone.test.ts lib/utils/tax-id.test.ts lib/utils/money.test.ts modules/distribution/customers/validators/customer.schemas.test.ts modules/distribution/customers/utils/csv-row-mapping.test.ts modules/distribution/products/utils/product-uom.test.ts modules/distribution/products/utils/sku.test.ts modules/distribution/products/utils/csv-row-mapping.test.ts modules/distribution/products/components/add-product-form.schema.test.ts modules/distribution/inventory/utils/insights.test.ts modules/distribution/supplier-invoices/utils/product-match-family-veto.test.ts modules/distribution/supplier-invoices/utils/pack-size.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset-db.ts",
@@ -15,8 +16,19 @@
     "db:split-multicases": "tsx db/split-multicases.ts",
     "check:boundaries": "node scripts/check-module-boundaries.mjs"
   },
-  "overrides": {
-    "lightningcss": "1.32.0"
+  "pnpm": {
+    "overrides": {
+      "lightningcss": "1.32.0"
+    },
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "core-js",
+      "esbuild",
+      "msw",
+      "protobufjs",
+      "sharp",
+      "unrs-resolver"
+    ]
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1035.0",
@@ -31,6 +43,7 @@
     "@sentry/nextjs": "^10.53.1",
     "@tanstack/react-query": "^5.96.2",
     "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.24",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
     "better-auth": "^1.6.0",
@@ -38,12 +51,18 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "decimal.js": "^10.6.0",
     "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.3",
     "lucide-react": "^1.7.0",
+    "motion": "^12.39.0",
     "next": "16.2.2",
     "next-themes": "^0.4.6",
-    "pg": "^8.20.0",
+    "openai": "^6.37.0",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.7.284",
+    "pg": "^8.20.0",
+    "plaid": "^42.2.0",
     "posthog-js": "^1.373.4",
     "posthog-node": "^5.34.1",
     "radix-ui": "^1.4.3",
@@ -51,6 +70,7 @@
     "react-dom": "19.2.4",
     "react-email": "^5.2.10",
     "react-hook-form": "^7.72.1",
+    "react-plaid-link": "^4.1.1",
     "recharts": "^3.8.0",
     "resend": "^6.11.0",
     "shadcn": "^4.2.0",
@@ -71,6 +91,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "lightningcss": "1.32.0",
+    "server-only": "^0.0.1",
     "tailwindcss": "4.2.4",
     "tsx": "^4.21.0",
     "typescript": "^5"

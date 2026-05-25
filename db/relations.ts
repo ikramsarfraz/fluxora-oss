@@ -2,23 +2,34 @@ import { relations } from "drizzle-orm";
 import { user } from "./auth-schema";
 import {
   auditLogs,
+  bankAccountBalanceSnapshots,
+  bankAccounts,
+  bankTransactions,
+  billForwards,
   categories,
   customerAddresses,
   customerProductPrices,
   customers,
+  dispositionDecisions,
+  expenseAttachments,
   expenses,
   files,
   inventoryAdjustments,
   inventoryItems,
   lotReceipts,
   lots,
+  markdownHistories,
+  payeeAliases,
   payments,
+  paymentMatches,
+  plaidConnections,
   platformUsers,
   portalUsers,
   productCategories,
   products,
   productSupplierCosts,
   productUnits,
+  salesInvoiceEmails,
   salesInvoiceFiles,
   salesInvoiceLines,
   salesInvoices,
@@ -33,6 +44,7 @@ import {
   supportTicketUpdates,
   supportTickets,
   supplierInvoiceAttachments,
+  supplierInvoiceCharges,
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
@@ -85,6 +97,12 @@ export const tenantsRelations = relations(tenants, ({ many, one }) => ({
     references: [tenantBranding.tenantId],
   }),
   auditLogs: many(auditLogs),
+  plaidConnections: many(plaidConnections),
+  bankAccounts: many(bankAccounts),
+  bankTransactions: many(bankTransactions),
+  paymentMatches: many(paymentMatches),
+  payeeAliases: many(payeeAliases),
+  billForwards: many(billForwards),
 }));
 
 export const tenantFeaturesRelations = relations(tenantFeatures, ({ one }) => ({
@@ -369,6 +387,7 @@ export const suppliersRelations = relations(suppliers, ({ many, one }) => ({
   productCosts: many(productSupplierCosts),
   supplierInvoices: many(supplierInvoices),
   lots: many(lots),
+  payeeAliases: many(payeeAliases),
   tenant: one(tenants, {
     fields: [suppliers.tenantId],
     references: [tenants.id],
@@ -427,12 +446,29 @@ export const supplierInvoicesRelations = relations(
       relationName: "supplier_invoices_completed_by",
     }),
     lines: many(supplierInvoiceLines),
+    charges: many(supplierInvoiceCharges),
     tenant: one(tenants, {
       fields: [supplierInvoices.tenantId],
       references: [tenants.id],
     }),
     attachments: many(supplierInvoiceAttachments),
     payments: many(supplierInvoicePayments),
+    paymentMatches: many(paymentMatches),
+    billForwards: many(billForwards),
+  }),
+);
+
+export const supplierInvoiceChargesRelations = relations(
+  supplierInvoiceCharges,
+  ({ one }) => ({
+    supplierInvoice: one(supplierInvoices, {
+      fields: [supplierInvoiceCharges.supplierInvoiceId],
+      references: [supplierInvoices.id],
+    }),
+    tenant: one(tenants, {
+      fields: [supplierInvoiceCharges.tenantId],
+      references: [tenants.id],
+    }),
   }),
 );
 
@@ -466,6 +502,10 @@ export const supplierInvoiceLinesRelations = relations(
       fields: [supplierInvoiceLines.productId],
       references: [products.id],
     }),
+    purchaseUnit: one(unitsOfMeasure, {
+      fields: [supplierInvoiceLines.purchaseUnitId],
+      references: [unitsOfMeasure.id],
+    }),
     lotReceipts: many(lotReceipts),
   }),
 );
@@ -478,6 +518,8 @@ export const lotsRelations = relations(lots, ({ one, many }) => ({
   lotReceipts: many(lotReceipts),
   inventoryItems: many(inventoryItems),
   salesOrderFulfillments: many(salesOrderFulfillments),
+  dispositionDecisions: many(dispositionDecisions),
+  markdownHistories: many(markdownHistories),
   tenant: one(tenants, {
     fields: [lots.tenantId],
     references: [tenants.id],
@@ -663,6 +705,7 @@ export const salesInvoicesRelations = relations(
       references: [tenants.id],
     }),
     files: many(salesInvoiceFiles),
+    emails: many(salesInvoiceEmails),
   }),
 );
 
@@ -695,16 +738,57 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
-export const expensesRelations = relations(expenses, ({ one }) => ({
+export const expensesRelations = relations(expenses, ({ one, many }) => ({
   createdBy: one(portalUsers, {
     fields: [expenses.createdByUserId],
     references: [portalUsers.id],
+    relationName: "expense_created_by",
+  }),
+  submittedBy: one(portalUsers, {
+    fields: [expenses.submittedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_submitted_by",
+  }),
+  approvedBy: one(portalUsers, {
+    fields: [expenses.approvedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_approved_by",
+  }),
+  rejectedBy: one(portalUsers, {
+    fields: [expenses.rejectedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_rejected_by",
+  }),
+  paidBy: one(portalUsers, {
+    fields: [expenses.paidByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_paid_by",
+  }),
+  deletedBy: one(portalUsers, {
+    fields: [expenses.deletedByUserId],
+    references: [portalUsers.id],
+    relationName: "expense_deleted_by",
   }),
   tenant: one(tenants, {
     fields: [expenses.tenantId],
     references: [tenants.id],
   }),
+  attachments: many(expenseAttachments),
 }));
+
+export const expenseAttachmentsRelations = relations(
+  expenseAttachments,
+  ({ one }) => ({
+    expense: one(expenses, {
+      fields: [expenseAttachments.expenseId],
+      references: [expenses.id],
+    }),
+    file: one(files, {
+      fields: [expenseAttachments.fileId],
+      references: [files.id],
+    }),
+  }),
+);
 
 export const supportTicketsRelations = relations(
   supportTickets,
@@ -872,3 +956,158 @@ export const stripePricesRelations = relations(stripePrices, ({ one }) => ({
     references: [stripeProducts.stripeProductId],
   }),
 }));
+
+export const dispositionDecisionsRelations = relations(
+  dispositionDecisions,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [dispositionDecisions.tenantId],
+      references: [tenants.id],
+    }),
+    lot: one(lots, {
+      fields: [dispositionDecisions.lotId],
+      references: [lots.id],
+    }),
+    decidedBy: one(portalUsers, {
+      fields: [dispositionDecisions.decidedByUserId],
+      references: [portalUsers.id],
+    }),
+    markdownHistories: many(markdownHistories),
+  }),
+);
+
+export const markdownHistoriesRelations = relations(
+  markdownHistories,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [markdownHistories.tenantId],
+      references: [tenants.id],
+    }),
+    lot: one(lots, {
+      fields: [markdownHistories.lotId],
+      references: [lots.id],
+    }),
+    dispositionDecision: one(dispositionDecisions, {
+      fields: [markdownHistories.dispositionDecisionId],
+      references: [dispositionDecisions.id],
+    }),
+  }),
+);
+
+export const plaidConnectionsRelations = relations(plaidConnections, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [plaidConnections.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccounts: many(bankAccounts),
+}));
+
+export const bankAccountsRelations = relations(bankAccounts, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [bankAccounts.tenantId],
+    references: [tenants.id],
+  }),
+  plaidConnection: one(plaidConnections, {
+    fields: [bankAccounts.plaidConnectionId],
+    references: [plaidConnections.id],
+  }),
+  bankTransactions: many(bankTransactions),
+  balanceSnapshots: many(bankAccountBalanceSnapshots),
+}));
+
+export const bankAccountBalanceSnapshotsRelations = relations(bankAccountBalanceSnapshots, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [bankAccountBalanceSnapshots.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccount: one(bankAccounts, {
+    fields: [bankAccountBalanceSnapshots.bankAccountId],
+    references: [bankAccounts.id],
+  }),
+}));
+
+export const bankTransactionsRelations = relations(bankTransactions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [bankTransactions.tenantId],
+    references: [tenants.id],
+  }),
+  bankAccount: one(bankAccounts, {
+    fields: [bankTransactions.bankAccountId],
+    references: [bankAccounts.id],
+  }),
+  paymentMatches: many(paymentMatches),
+}));
+
+export const paymentMatchesRelations = relations(paymentMatches, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [paymentMatches.tenantId],
+    references: [tenants.id],
+  }),
+  bankTransaction: one(bankTransactions, {
+    fields: [paymentMatches.bankTransactionId],
+    references: [bankTransactions.id],
+  }),
+  supplierInvoice: one(supplierInvoices, {
+    fields: [paymentMatches.supplierInvoiceId],
+    references: [supplierInvoices.id],
+  }),
+  // AR-side relation added in migration 0049. Nullable FK; exactly one
+  // of supplierInvoice / salesInvoice / expense is non-null per the
+  // table's CHECK (extended to three targets in migration 0067).
+  salesInvoice: one(salesInvoices, {
+    fields: [paymentMatches.salesInvoiceId],
+    references: [salesInvoices.id],
+  }),
+  expense: one(expenses, {
+    fields: [paymentMatches.expenseId],
+    references: [expenses.id],
+  }),
+  confirmedBy: one(portalUsers, {
+    fields: [paymentMatches.confirmedByUserId],
+    references: [portalUsers.id],
+  }),
+}));
+
+export const payeeAliasesRelations = relations(payeeAliases, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [payeeAliases.tenantId],
+    references: [tenants.id],
+  }),
+  supplier: one(suppliers, {
+    fields: [payeeAliases.supplierId],
+    references: [suppliers.id],
+  }),
+}));
+
+export const billForwardsRelations = relations(billForwards, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [billForwards.tenantId],
+    references: [tenants.id],
+  }),
+  supplierInvoice: one(supplierInvoices, {
+    fields: [billForwards.supplierInvoiceId],
+    references: [supplierInvoices.id],
+  }),
+  sentBy: one(portalUsers, {
+    fields: [billForwards.sentByUserId],
+    references: [portalUsers.id],
+  }),
+}));
+
+export const salesInvoiceEmailsRelations = relations(
+  salesInvoiceEmails,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [salesInvoiceEmails.tenantId],
+      references: [tenants.id],
+    }),
+    salesInvoice: one(salesInvoices, {
+      fields: [salesInvoiceEmails.salesInvoiceId],
+      references: [salesInvoices.id],
+    }),
+    sentBy: one(portalUsers, {
+      fields: [salesInvoiceEmails.sentByUserId],
+      references: [portalUsers.id],
+    }),
+  }),
+);

@@ -10,6 +10,7 @@ import {
   products,
   supplierInvoiceLines,
   suppliers,
+  unitsOfMeasure,
 } from "@/db/schema";
 import type { PortalUserRole } from "@/modules/shared/services/portal-users";
 
@@ -31,6 +32,7 @@ import {
   resolveOrderBy,
   type PaginatedQueryInput,
 } from "@/lib/pagination";
+import { serializeCsv } from "@/lib/csv/serialize";
 
 function canAdjustInventory(role: PortalUserRole | null | undefined) {
   return role === "owner" || role === "admin" || role === "warehouse";
@@ -137,6 +139,16 @@ export async function getInventoryItems() {
           sku: true,
           name: true,
         },
+        // Eager-load the product's base UOM so the inventory grid can
+        // render "/lb" vs "/ea" vs "/gal" per row without an extra
+        // roundtrip. The `cost_unit_type_snapshot` column already tells
+        // us catch-weight vs not — but the literal abbreviation is what
+        // we need to display.
+        with: {
+          baseUnit: {
+            columns: { id: true, abbreviation: true, family: true },
+          },
+        },
       },
       lot: {
         columns: {
@@ -197,7 +209,11 @@ export type InventoryListSort =
 export type InventoryListFilters = {
   productId?: string;
   status?: InventoryLifecycleState | "all";
+  supplierId?: string;
+  // `lotId` is for programmatic deep-linking (uuid). `lotNumber` is the
+  // human-typed filter that the UI exposes — partial, case-insensitive.
   lotId?: string;
+  lotNumber?: string;
   expiration?: "all" | "fresh" | "expiring_soon" | "expired";
 };
 
@@ -248,6 +264,14 @@ function buildInventoryWhere(args: {
     args.filters.lotId && args.filters.lotId !== "all"
       ? eq(inventoryItems.lotId, args.filters.lotId)
       : undefined,
+    // Partial, case-insensitive lot-number search (warehouse staff don't
+    // remember UUIDs). Trims to avoid surprises from trailing whitespace.
+    args.filters.lotNumber && args.filters.lotNumber.trim().length > 0
+      ? sql`${lots.lotNumber} ilike ${"%" + args.filters.lotNumber.trim() + "%"}`
+      : undefined,
+    args.filters.supplierId && args.filters.supplierId !== "all"
+      ? eq(lots.supplierId, args.filters.supplierId)
+      : undefined,
     getInventoryExpirationFilterSql(args.filters.expiration),
   );
 }
@@ -260,7 +284,9 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     defaultFilters: {
       productId: "all",
       status: "all",
+      supplierId: "all",
       lotId: "all",
+      lotNumber: undefined,
       expiration: "all",
     },
   });
@@ -282,7 +308,17 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     .select({
       totalItems: sql<number>`count(distinct ${inventoryItems.id})::int`,
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
-      totalWeight: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      // Sum weight only across weight-priced inventory rows. Mixed
+      // catalogs would otherwise hide weight items inside an aggregate
+      // that includes "0.00 lb" beverage rows — the count is correct
+      // but the label would mislead. Per_each / per_unit rows feed the
+      // separate totalUnits aggregate below.
+      totalWeight: sql<string>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('catch_weight','fixed_case') or ${inventoryItems.costUnitTypeSnapshot} is null then ${inventoryItems.exactWeightLbs}::numeric else 0 end), 0)::text`,
+      // Total base-units (eaches) across non-weight rows. Multiply
+      // cases × pack size so 5 cases of a 24-pack contribute 120, not
+      // 5. Pack size defaults to 1 when the snapshot is null (legacy
+      // rows or per_each lines where one row = one base unit).
+      totalUnits: sql<number>`coalesce(sum(case when ${inventoryItems.costUnitTypeSnapshot} in ('per_each','per_unit') then ${inventoryItems.cases}::numeric * coalesce(${inventoryItems.unitsPerPackageSnapshot}::numeric, 1) else 0 end), 0)::int`,
       expiringCount: sql<number>`coalesce(sum(case when ${lots.expirationDate} >= current_date and ${lots.expirationDate} <= current_date + interval '1 day' then 1 else 0 end), 0)::int`,
     })
     .from(inventoryItems)
@@ -331,6 +367,13 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
                 id: true,
                 sku: true,
                 name: true,
+              },
+              // Same eager-load as the unpaginated path — needed by
+              // formatInventoryQuantity to render mixed-UOM rows.
+              with: {
+                baseUnit: {
+                  columns: { id: true, abbreviation: true, family: true },
+                },
               },
             },
             lot: {
@@ -396,6 +439,18 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
     .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
     .where(eq(lots.tenantId, tenant.id))
     .orderBy(lots.lotNumber);
+  // Only suppliers that currently have inventory — keeps the dropdown short
+  // and prevents stale options for suppliers we no longer buy from.
+  const supplierOptions = await db
+    .selectDistinct({
+      id: suppliers.id,
+      name: suppliers.name,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(eq(lots.tenantId, tenant.id))
+    .orderBy(suppliers.name);
 
   return {
     ...createPaginatedResult({
@@ -410,13 +465,170 @@ export async function getInventoryItemsPage(input?: InventoryListParams) {
       totalItems: summaryRow?.totalItems ?? 0,
       totalCases: summaryRow?.totalCases ?? 0,
       totalWeight: summaryRow?.totalWeight ?? "0",
+      totalUnits: summaryRow?.totalUnits ?? 0,
       expiringCount: summaryRow?.expiringCount ?? 0,
     },
     filterOptions: {
       products: productOptions,
       lots: lotOptions,
+      suppliers: supplierOptions,
     },
   };
+}
+
+/**
+ * Export inventory rows matching the same search + filter shape as the list
+ * page. Returns the file body and a stamped filename. The result is in-memory
+ * (matches the pattern in customers / orders) — fine up to ~50k rows. If a
+ * tenant outgrows that, switch to streaming or chunked pagination later.
+ */
+export async function exportInventoryCsv(input?: {
+  search?: string;
+  filters?: InventoryListFilters;
+}): Promise<{ filename: string; csv: string }> {
+  const tenant = await getCurrentTenant();
+  const search = input?.search ?? "";
+  const filters: InventoryListFilters = {
+    productId: input?.filters?.productId ?? "all",
+    status: input?.filters?.status ?? "all",
+    supplierId: input?.filters?.supplierId ?? "all",
+    lotId: input?.filters?.lotId ?? "all",
+    lotNumber: input?.filters?.lotNumber,
+    expiration: input?.filters?.expiration ?? "all",
+  };
+  const where = buildInventoryWhere({
+    tenantId: tenant.id,
+    search,
+    filters,
+  });
+
+  const rows = await db
+    .select({
+      id: inventoryItems.id,
+      lotId: inventoryItems.lotId,
+      barcodeId: inventoryItems.barcodeId,
+      productName: products.name,
+      productSku: products.sku,
+      lotNumber: lots.lotNumber,
+      cases: inventoryItems.cases,
+      exactWeightLbs: inventoryItems.exactWeightLbs,
+      unitsPerPackageSnapshot: inventoryItems.unitsPerPackageSnapshot,
+      costPerUnitSnapshot: inventoryItems.costPerUnitSnapshot,
+      costUnitTypeSnapshot: inventoryItems.costUnitTypeSnapshot,
+      status: inventoryItems.status,
+      expirationDate: lots.expirationDate,
+      receiveDate: lots.receiveDate,
+      supplierName: suppliers.name,
+      createdAt: inventoryItems.createdAt,
+    })
+    .from(inventoryItems)
+    .innerJoin(lots, eq(lots.id, inventoryItems.lotId))
+    .innerJoin(products, eq(products.id, inventoryItems.productId))
+    .leftJoin(suppliers, eq(suppliers.id, lots.supplierId))
+    .where(where)
+    .orderBy(desc(inventoryItems.createdAt));
+
+  // Resolve the supplier-invoice number per lot in a second pass instead of
+  // a correlated subquery. The previous subquery referenced a column that
+  // doesn't exist on supplier_invoices (the TS field is `invoiceNumber` but
+  // the DB column is `supplier_invoice_number`) and Drizzle / pg surfaced
+  // it as a generic "Failed query". The fetch+stitch pattern matches what
+  // getInventoryItemById already does (services/inventory.ts ~line 824).
+  const lotIds = Array.from(new Set(rows.map(r => r.lotId)));
+  const invoiceByLotId = new Map<string, string | null>();
+  if (lotIds.length > 0) {
+    const receipts = await db.query.lotReceipts.findMany({
+      where: (lr, { inArray }) => inArray(lr.lotId, lotIds),
+      columns: { lotId: true },
+      with: {
+        supplierInvoiceLine: {
+          columns: { id: true },
+          with: {
+            supplierInvoice: {
+              columns: { invoiceNumber: true, invoiceDate: true },
+            },
+          },
+        },
+      },
+    });
+    // Group by lotId, keep the most-recent invoice (by invoiceDate desc,
+    // nulls last) per lot — same ordering the original subquery used.
+    type ReceiptRow = (typeof receipts)[number];
+    const byLot = new Map<string, ReceiptRow[]>();
+    for (const r of receipts) {
+      const list = byLot.get(r.lotId) ?? [];
+      list.push(r);
+      byLot.set(r.lotId, list);
+    }
+    for (const [lotId, list] of byLot) {
+      const sorted = [...list].sort((a, b) => {
+        const aDate = a.supplierInvoiceLine?.supplierInvoice?.invoiceDate ?? null;
+        const bDate = b.supplierInvoiceLine?.supplierInvoice?.invoiceDate ?? null;
+        if (aDate === bDate) return 0;
+        if (aDate == null) return 1; // nulls last
+        if (bDate == null) return -1;
+        return aDate < bDate ? 1 : -1; // desc
+      });
+      invoiceByLotId.set(
+        lotId,
+        sorted[0]?.supplierInvoiceLine?.supplierInvoice?.invoiceNumber ?? null,
+      );
+    }
+  }
+
+  const headers = [
+    { key: "barcode_id", label: "barcode_id" },
+    { key: "product_name", label: "product_name" },
+    { key: "product_sku", label: "product_sku" },
+    { key: "lot_number", label: "lot_number" },
+    { key: "status", label: "status" },
+    { key: "cases", label: "cases" },
+    { key: "weight_lbs", label: "weight_lbs" },
+    { key: "units_per_package", label: "units_per_package" },
+    { key: "cost_unit_type", label: "cost_unit_type" },
+    { key: "cost_per_unit", label: "cost_per_unit" },
+    { key: "total_cost", label: "total_cost" },
+    { key: "expiration_date", label: "expiration_date" },
+    { key: "receive_date", label: "receive_date" },
+    { key: "supplier", label: "supplier" },
+    { key: "supplier_invoice_number", label: "supplier_invoice_number" },
+    { key: "created_at", label: "created_at" },
+  ] as const;
+
+  const csvRows = rows.map(row => {
+    const cost = Number(row.costPerUnitSnapshot ?? 0);
+    const weight = Number(row.exactWeightLbs ?? 0);
+    // Same total-cost math as the detail page: catch-weight uses
+    // cost × weight; everything else (fixed_case, per_each, per_unit)
+    // uses cost × cases. Snapshotted values mean later product edits
+    // don't retroactively change historical exports.
+    const totalCost =
+      row.costUnitTypeSnapshot === "catch_weight"
+        ? cost * weight
+        : cost * row.cases;
+    return {
+      barcode_id: row.barcodeId,
+      product_name: row.productName,
+      product_sku: row.productSku ?? "",
+      lot_number: row.lotNumber,
+      status: row.status,
+      cases: String(row.cases),
+      weight_lbs: weight.toFixed(4),
+      units_per_package: row.unitsPerPackageSnapshot ?? "",
+      cost_unit_type: row.costUnitTypeSnapshot ?? "",
+      cost_per_unit: cost.toFixed(6),
+      total_cost: totalCost.toFixed(2),
+      expiration_date: row.expirationDate ?? "",
+      receive_date: row.receiveDate ?? "",
+      supplier: row.supplierName ?? "",
+      supplier_invoice_number: invoiceByLotId.get(row.lotId) ?? "",
+      created_at: row.createdAt.toISOString(),
+    };
+  });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const filename = `inventory-${tenant.slug}-${stamp}.csv`;
+  return { filename, csv: serializeCsv(headers, csvRows) };
 }
 
 export async function getInventoryItemById(inventoryItemId: string) {
@@ -452,6 +664,13 @@ export async function getInventoryItemById(inventoryItemId: string) {
           sku: true,
           name: true,
         },
+        // Eager-load the product's base UOM so the detail page can
+        // render "X.XX lb" vs "N ea" without an extra roundtrip.
+        with: {
+          baseUnit: {
+            columns: { id: true, abbreviation: true, family: true },
+          },
+        },
       },
       lot: {
         columns: {
@@ -478,6 +697,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
                   quantityCases: true,
                   weightLbs: true,
                   unitType: true,
+                  purchaseUnitAbbreviationSnapshot: true,
                 },
                 with: {
                   product: {
@@ -485,6 +705,11 @@ export async function getInventoryItemById(inventoryItemId: string) {
                       id: true,
                       sku: true,
                       name: true,
+                    },
+                    with: {
+                      baseUnit: {
+                        columns: { id: true, abbreviation: true, family: true },
+                      },
                     },
                   },
                 },
@@ -637,7 +862,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
     .map(r => r.supplierInvoiceLine?.id)
     .filter((id): id is string => id != null);
 
-  const invoiceByLineId = new Map<string, { id: string; invoiceNumber: string; invoiceDate: string | null; receiveDate: string | null; status: string } | null>();
+  const invoiceByLineId = new Map<string, { id: string; referenceNumber: string; invoiceNumber: string | null; invoiceDate: string | null; receiveDate: string | null; status: string } | null>();
 
   if (lineIds.length > 0) {
     const lines = await db.query.supplierInvoiceLines.findMany({
@@ -647,6 +872,7 @@ export async function getInventoryItemById(inventoryItemId: string) {
         supplierInvoice: {
           columns: {
             id: true,
+            referenceNumber: true,
             invoiceNumber: true,
             invoiceDate: true,
             receiveDate: true,
@@ -726,7 +952,14 @@ async function loadInventoryItemForAdjustment(inventoryItemId: string) {
 
 function calculateWriteOffLoss(args: {
   costPerUnitSnapshot: string | null;
-  costUnitTypeSnapshot: "catch_weight" | "fixed_case" | null;
+  // Accepts the full lineUnitType enum — per_each / per_unit lines
+  // contribute a flat per-unit loss (treated the same as fixed_case).
+  costUnitTypeSnapshot:
+    | "catch_weight"
+    | "fixed_case"
+    | "per_each"
+    | "per_unit"
+    | null;
   statusBefore: InventoryLifecycleState;
   statusAfter: InventoryLifecycleState;
   weightBefore: number;
@@ -1102,7 +1335,34 @@ export type InventoryProductSummaryRow = {
   name: string;
   totalCases: number;
   totalWeightLbs: string;
+  /**
+   * Total base units (eaches) on hand for this product — computed as
+   * SUM(cases × units_per_package_snapshot). For a non-weight product
+   * with 5 cases of a 24-pack, this is 120. Falls back to summing cases
+   * (= pack of 1) when no snapshot exists. Mirrors the row-level
+   * "55 cs × 24 ea/cs = 1320 ea" display in the inventory list.
+   */
+  totalUnits: number;
   itemCount: number;
+  /**
+   * Abbreviation of the product's base UOM ("lb", "ea", "gal", …). Used
+   * by the rollup display to render the right suffix per row — weight
+   * products show "X.XX lb", non-weight products show "N ea/case/etc".
+   * Null only for legacy products that never had a base unit set.
+   */
+  baseUnitAbbreviation: string | null;
+  /**
+   * UoM family ("weight" | "count" | "volume" | "length" | "other" | null).
+   * Drives which column ("Weight" vs "Units") the display reads from for
+   * this row; a single non-weight catalog still aggregates correctly.
+   */
+  baseUnitFamily:
+    | "weight"
+    | "count"
+    | "volume"
+    | "length"
+    | "other"
+    | null;
 };
 
 export async function getInventoryProductSummary(): Promise<InventoryProductSummaryRow[]> {
@@ -1114,17 +1374,33 @@ export async function getInventoryProductSummary(): Promise<InventoryProductSumm
       name: products.name,
       totalCases: sql<number>`coalesce(sum(${inventoryItems.cases}), 0)::int`,
       totalWeightLbs: sql<string>`coalesce(sum(${inventoryItems.exactWeightLbs}::numeric), 0)::text`,
+      // Base-unit total: cases × pack size, summed across all rows.
+      // For non-weight products this is the "real" on-hand count
+      // (5 cases of 24 = 120 ea). For weight / per_each products
+      // pack size defaults to 1 and the value equals totalCases.
+      totalUnits: sql<number>`coalesce(sum(${inventoryItems.cases}::numeric * coalesce(${inventoryItems.unitsPerPackageSnapshot}::numeric, 1)), 0)::int`,
       itemCount: sql<number>`count(distinct ${inventoryItems.id})::int`,
+      baseUnitAbbreviation: unitsOfMeasure.abbreviation,
+      baseUnitFamily: unitsOfMeasure.family,
     })
     .from(inventoryItems)
     .innerJoin(products, eq(products.id, inventoryItems.productId))
+    // Left join: legacy products without a base UOM still appear in the
+    // rollup (their row just has null/null for the new fields).
+    .leftJoin(unitsOfMeasure, eq(unitsOfMeasure.id, products.baseUnitId))
     .where(
       and(
         eq(products.tenantId, tenant.id),
         inArray(inventoryItems.status, ["in_stock", "allocated", "picked", "packed"]),
       ),
     )
-    .groupBy(products.id, products.sku, products.name)
+    .groupBy(
+      products.id,
+      products.sku,
+      products.name,
+      unitsOfMeasure.abbreviation,
+      unitsOfMeasure.family,
+    )
     .orderBy(products.name);
   return rows;
 }

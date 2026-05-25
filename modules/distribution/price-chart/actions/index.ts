@@ -21,16 +21,29 @@ export async function setCustomerProductPriceAction(
   productId: string,
   pricePerLb: string,
   supplierId: string | null = null,
+  expectedVersion?: number,
 ) {
-  return await setCustomerProductPrice(customerId, productId, pricePerLb, supplierId);
+  return await setCustomerProductPrice(
+    customerId,
+    productId,
+    pricePerLb,
+    supplierId,
+    expectedVersion,
+  );
 }
 
 export async function deleteCustomerProductPriceAction(
   customerId: string,
   productId: string,
   supplierId: string | null = null,
+  expectedVersion?: number,
 ) {
-  return await deleteCustomerProductPrice(customerId, productId, supplierId);
+  return await deleteCustomerProductPrice(
+    customerId,
+    productId,
+    supplierId,
+    expectedVersion,
+  );
 }
 
 export async function applyMarkupToCustomerAction(customerId: string, markupPercent?: number) {

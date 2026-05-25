@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -13,9 +13,11 @@ import {
   productSupplierCosts,
   suppliers,
   supplierInvoiceAttachments,
+  supplierInvoiceCharges,
   supplierInvoiceLines,
   supplierInvoicePayments,
   supplierInvoices,
+  tenants,
 } from "@/db/schema";
 
 import { requirePermission } from "@/lib/auth/permissions";
@@ -28,6 +30,13 @@ import {
   type PaginatedQueryInput,
 } from "@/lib/pagination";
 import {
+  exceedsByCent,
+  isPositiveMoney,
+  money,
+  to4DecimalString,
+  toMoneyString,
+} from "@/lib/utils/money";
+import {
   buildSupplierInvoiceObjectKey,
   deleteFile,
   downloadFile,
@@ -35,10 +44,14 @@ import {
 } from "@/lib/uploads/r2";
 import { parsePersistedCaseWeights } from "../utils/case-weights";
 import { computePaymentSummary } from "../utils/payment-summary";
-import { supplierInvoiceLineCostPerLb } from "../utils/cost";
+import {
+  supplierInvoiceLineCostPerLb,
+  supplierInvoiceLineCostPerUnit,
+} from "../utils/cost";
 
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { requireTenantForMutation } from "@/lib/subscription-guard";
 
 /**
  * Transaction handle inferred from the active driver. Use this in any helper
@@ -47,9 +60,47 @@ import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
  */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/**
+ * Mint the next per-tenant supplier-invoice reference number. The counter on
+ * `tenants` is incremented atomically inside the caller's transaction, so two
+ * concurrent inserts can never receive the same number. Format is
+ * `IB-NNNNNN` (zero-padded to 6 digits, grows naturally past 1 million).
+ */
+export async function generateSupplierInvoiceReferenceNumber(
+  tx: Tx,
+  tenantId: string,
+): Promise<string> {
+  const [row] = await tx
+    .update(tenants)
+    .set({
+      supplierInvoiceCounter: sql`${tenants.supplierInvoiceCounter} + 1`,
+    })
+    .where(eq(tenants.id, tenantId))
+    .returning({ counter: tenants.supplierInvoiceCounter });
+
+  if (!row) {
+    throw new Error(
+      "Tenant not found while generating supplier invoice reference number.",
+    );
+  }
+
+  return formatSupplierInvoiceReferenceNumber(row.counter);
+}
+
+export function formatSupplierInvoiceReferenceNumber(counter: number): string {
+  const padded = String(counter).padStart(6, "0");
+  return `IB-${padded}`;
+}
+
 // -------------------- Types --------------------
 
 export type SupplierInvoiceStatus = "draft" | "completed";
+
+export type SupplierInvoiceLineUnitType =
+  | "catch_weight"
+  | "fixed_case"
+  | "per_each"
+  | "per_unit";
 
 export type SupplierInvoiceLineInput = {
   /** Existing line id when editing; omit to insert a new line. */
@@ -57,7 +108,7 @@ export type SupplierInvoiceLineInput = {
   productId: string;
   quantityCases: number;
   weightLbs: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: SupplierInvoiceLineUnitType;
   unitPrice: string;
   /** Persisted JSON array of per-case weights when detailed mode is used. */
   caseWeightsLbs?: string | null;
@@ -65,19 +116,40 @@ export type SupplierInvoiceLineInput = {
   lotNumberOverride?: string | null;
   /** Override for the default expiration (receiveDate + 7 days). */
   expirationDateOverride?: string | null;
+  /** UOM FK for per_each / per_unit lines; null/undefined for weight modes. */
+  purchaseUnitId?: string | null;
+  /** Snapshot abbreviation persisted for display (e.g. "ea", "gal", "cs"). */
+  purchaseUnitAbbreviation?: string | null;
+  /**
+   * How many base units (each, lb, gal) per purchase unit. e.g. 12 for
+   * a 12-pack case, 24 for a 24-pack. Persisted on the line so reports
+   * + future inventory-explosion features can split a case into eaches.
+   * Defaults to the product's purchase-unit conversion when omitted.
+   */
+  unitsPerPackage?: string | null;
 };
 
 export type SupplierInvoiceHeaderInput = {
   supplierId: string;
-  invoiceNumber: string;
+  /** Supplier's printed invoice number — optional. */
+  invoiceNumber: string | null;
   invoiceDate: string;
   receiveDate: string;
   paymentMethod?: "cash" | "check" | "ach" | "zelle" | "credit_card" | null;
   notes?: string | null;
 };
 
+export type SupplierInvoiceChargeInput = {
+  description: string;
+  chargeType?: string;
+  rate?: string | null;
+  includeInInventoryCost?: boolean;
+  amount: string;
+};
+
 export type CreateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
   lines: SupplierInvoiceLineInput[];
+  charges?: SupplierInvoiceChargeInput[];
   /** When true, immediately post the invoice and create lots + inventory. */
   complete?: boolean;
 };
@@ -85,27 +157,72 @@ export type CreateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
 export type UpdateSupplierInvoiceInput = SupplierInvoiceHeaderInput & {
   id: string;
   lines: SupplierInvoiceLineInput[];
+  charges?: SupplierInvoiceChargeInput[];
 };
 
 // -------------------- Helpers --------------------
 
-function roundTo(value: number, digits: number): string {
-  return value.toFixed(digits);
-}
-
 function computeLineTotal(line: {
   quantityCases: number;
   weightLbs: string;
-  unitType: "catch_weight" | "fixed_case";
+  unitType: SupplierInvoiceLineUnitType;
   unitPrice: string;
 }): string {
-  const unitPrice = Number(line.unitPrice) || 0;
+  // Catch-weight uses billed weight × $/lb; everything else multiplies
+  // count × per-unit price. Decimal keeps a 50-line bill totaling
+  // exactly — Number summation drifts a cent per few lines on per-
+  // pound rates with fractional weights (the common meat case).
+  const unitPrice = money(line.unitPrice);
   if (line.unitType === "catch_weight") {
-    const weight = Number(line.weightLbs) || 0;
-    return roundTo(weight * unitPrice, 4);
+    return to4DecimalString(money(line.weightLbs).times(unitPrice));
   }
-  const cases = Number(line.quantityCases) || 0;
-  return roundTo(cases * unitPrice, 4);
+  // fixed_case, per_each, per_unit all use the count * price math.
+  return to4DecimalString(money(line.quantityCases).times(unitPrice));
+}
+
+/** Pricing direction snapshot mirrors the sales-side `pricing_unit_type` enum. */
+function pricingUnitTypeSnapshotFor(
+  unitType: SupplierInvoiceLineUnitType,
+): "per_lb" | "per_case" | null {
+  if (unitType === "catch_weight") return "per_lb";
+  if (unitType === "fixed_case") return "per_case";
+  return null;
+}
+
+/**
+ * Conversion-factor snapshot. For unit-priced lines (per_each / per_unit)
+ * the user enters how many base units are in one purchase unit (e.g. 12
+ * for a 12-pack case); we store that on `conversion_to_base_snapshot`.
+ * For weight-priced lines the column stays null — case-of-meat weight
+ * lives in `weight_lbs` already.
+ *
+ * Falls back to "1" for unit-priced lines when the user leaves the
+ * field empty, so the column is never NULL on a row that actually
+ * needs a conversion (loose cans, single bottles).
+ */
+function normalizeUnitsPerPackage(
+  raw: string | null | undefined,
+  unitType: SupplierInvoiceLineUnitType,
+): string | null {
+  if (unitType !== "per_each" && unitType !== "per_unit") return null;
+  const trimmed = raw?.toString().trim();
+  if (!trimmed) return "1";
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return "1";
+  return trimmed;
+}
+
+/** Default abbreviation displayed when the user hasn't picked an explicit UOM. */
+function defaultPurchaseUnitAbbreviation(
+  unitType: SupplierInvoiceLineUnitType,
+  explicit: string | null | undefined,
+): string | null {
+  const trimmed = explicit?.trim();
+  if (trimmed) return trimmed;
+  if (unitType === "catch_weight") return "lb";
+  if (unitType === "fixed_case") return "cs";
+  if (unitType === "per_each") return "ea";
+  return null;
 }
 
 function normalizeSupplierInvoiceLine(
@@ -114,7 +231,15 @@ function normalizeSupplierInvoiceLine(
   if (line.unitType !== "catch_weight") {
     return {
       ...line,
+      // Non-catch-weight modes carry no per-case weight array.
       caseWeightsLbs: null,
+      // Non-weight modes ignore the weight column — clear it to zero so
+      // downstream readers (e.g. cost_per_lb math) don't accidentally
+      // pick up stale values.
+      weightLbs:
+        line.unitType === "per_each" || line.unitType === "per_unit"
+          ? "0"
+          : line.weightLbs,
     };
   }
 
@@ -123,17 +248,22 @@ function normalizeSupplierInvoiceLine(
     return line;
   }
 
-  const totalWeight = parsedCaseWeights.reduce((sum, weight) => sum + weight, 0);
+  // Sum per-case weights in Decimal — a 24-case bill with sub-pound
+  // case weights would drift on Number summation.
+  const totalWeight = parsedCaseWeights.reduce(
+    (sum, weight) => sum.plus(money(weight)),
+    money(0),
+  );
   return {
     ...line,
-    weightLbs: roundTo(totalWeight, 4),
+    weightLbs: to4DecimalString(totalWeight),
     caseWeightsLbs: JSON.stringify(parsedCaseWeights),
   };
 }
 
 function sumTotals(values: string[]): string {
-  const total = values.reduce((acc, v) => acc + (Number(v) || 0), 0);
-  return roundTo(total, 4);
+  const total = values.reduce((acc, v) => acc.plus(money(v)), money(0));
+  return to4DecimalString(total);
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -146,9 +276,9 @@ function safeLotSuffix(): string {
   return Math.random().toString(36).slice(2, 6).toUpperCase();
 }
 
-function defaultLotNumber(invoiceNumber: string, lineIndex: number): string {
-  const safeInvoice = invoiceNumber.trim().replace(/\s+/g, "-");
-  return `LOT-${safeInvoice}-${String(lineIndex + 1).padStart(2, "0")}`;
+function defaultLotNumber(referenceNumber: string, lineIndex: number): string {
+  const safeReference = referenceNumber.trim().replace(/\s+/g, "-");
+  return `LOT-${safeReference}-${String(lineIndex + 1).padStart(2, "0")}`;
 }
 
 function generateBarcode(): string {
@@ -172,7 +302,7 @@ function receiptTimestamp(receiveDate: string): Date {
 async function reserveLotNumber(args: {
   tx: Tx;
   tenantId: string;
-  invoiceNumber: string;
+  referenceNumber: string;
   lineIndex: number;
   override?: string | null;
 }): Promise<string> {
@@ -181,13 +311,47 @@ async function reserveLotNumber(args: {
     return trimmedOverride;
   }
 
-  const base = defaultLotNumber(args.invoiceNumber, args.lineIndex);
+  const base = defaultLotNumber(args.referenceNumber, args.lineIndex);
   const existing = await args.tx.query.lots.findFirst({
     where: and(eq(lots.tenantId, args.tenantId), eq(lots.lotNumber, base)),
     columns: { id: true },
   });
   if (!existing) return base;
   return `${base}-${safeLotSuffix()}`;
+}
+
+/**
+ * Resolve the "$/base-unit" cost for a line in any unit mode. Used by
+ * both the forward-sync (`syncSupplierInvoiceLineCost`) and the rollback
+ * (`rollbackSupplierInvoiceLineCosts` / `getReversalCostChanges`) paths
+ * so beverages and per-each goods get a recorded supplier cost — not
+ * just meat. Returns null when the line lacks enough info (e.g. zero
+ * weight on a fixed_case line, zero price).
+ */
+function resolveLineCostPerBaseUnit(line: {
+  quantityCases: number;
+  weightLbs: string;
+  unitType: SupplierInvoiceLineUnitType;
+  unitPrice: string;
+  conversionToBaseSnapshot?: string | null;
+}): string | null {
+  if (line.unitType === "catch_weight" || line.unitType === "fixed_case") {
+    return supplierInvoiceLineCostPerLb(line);
+  }
+  // per_each: unitPrice IS already per-base-unit ($/each).
+  // per_unit: unitPrice is per purchase unit ($/case); divide by pack
+  //   size so the stored cost stays comparable across suppliers and
+  //   downstream sales-side margin math works without conditions.
+  const conv =
+    line.unitType === "per_unit"
+      ? Number(line.conversionToBaseSnapshot ?? "1")
+      : 1;
+  const perUnit = supplierInvoiceLineCostPerUnit({
+    unitType: line.unitType,
+    unitPrice: line.unitPrice,
+    conversionToBase: conv > 0 ? conv : 1,
+  });
+  return perUnit?.perBase ?? perUnit?.perUnit ?? null;
 }
 
 async function syncSupplierInvoiceLineCost(args: {
@@ -198,12 +362,17 @@ async function syncSupplierInvoiceLineCost(args: {
     productId: string;
     quantityCases: number;
     weightLbs: string;
-    unitType: "catch_weight" | "fixed_case";
+    unitType: SupplierInvoiceLineUnitType;
     unitPrice: string;
+    /** Pack size (e.g. 12 ea per case). Used to normalize per_unit prices
+     *  back to per-base-unit before snapshotting. */
+    conversionToBaseSnapshot?: string | null;
   };
 }) {
-  const costPerLb = supplierInvoiceLineCostPerLb(args.line);
-  if (costPerLb == null) return;
+  // `product_supplier_costs.cost_per_lb` is semantically "$/base-unit" —
+  // the column name is legacy. The helper handles all four unit types.
+  const costPerBaseUnit = resolveLineCostPerBaseUnit(args.line);
+  if (costPerBaseUnit == null) return;
 
   const existing = await args.tx.query.productSupplierCosts.findFirst({
     where: and(
@@ -219,7 +388,7 @@ async function syncSupplierInvoiceLineCost(args: {
     await args.tx
       .update(productSupplierCosts)
       .set({
-        costPerLb,
+        costPerLb: costPerBaseUnit,
         lastReceivedAt: receivedAt,
         updatedAt: new Date(),
       })
@@ -228,7 +397,7 @@ async function syncSupplierInvoiceLineCost(args: {
     await args.tx.insert(productSupplierCosts).values({
       productId: args.line.productId,
       supplierId: args.supplierId,
-      costPerLb,
+      costPerLb: costPerBaseUnit,
       lastReceivedAt: receivedAt,
     });
   }
@@ -258,6 +427,10 @@ async function findPriorSupplierInvoiceLine(args: {
       weightLbs: supplierInvoiceLines.weightLbs,
       unitType: supplierInvoiceLines.unitType,
       unitPrice: supplierInvoiceLines.unitPrice,
+      // Pack size — needed so `syncSupplierInvoiceLineCost` can
+      // normalize per_unit prices back to per-base-unit when rolling
+      // the cost forward from a prior invoice.
+      conversionToBaseSnapshot: supplierInvoiceLines.conversionToBaseSnapshot,
     })
     .from(supplierInvoiceLines)
     .innerJoin(
@@ -303,7 +476,12 @@ async function rollbackSupplierInvoiceLineCosts(args: {
       excludeInvoiceId: args.invoiceId,
     });
 
-    const restoredCost = priorLine ? supplierInvoiceLineCostPerLb(priorLine) : null;
+    // Restore the cost from the most-recent OTHER completed invoice for
+    // this (supplier, product). Family-aware so a reversed beverage bill
+    // restores the prior per-each cost instead of going to null.
+    const restoredCost = priorLine
+      ? resolveLineCostPerBaseUnit(priorLine)
+      : null;
 
     if (priorLine && restoredCost != null) {
       await args.tx
@@ -333,48 +511,11 @@ async function rollbackSupplierInvoiceLineCosts(args: {
 }
 
 // -------------------- Reads --------------------
-
-/**
- * Generate the next `INV-YYYYMMDD-NN` invoice number for the current tenant.
- * Scans existing invoice numbers matching today's prefix and returns the
- * lowest unused suffix. Padding grows past two digits if needed. The result
- * is a *suggestion* — the bill form pre-fills it but the user can overwrite
- * with the supplier's real invoice number before saving.
- */
-export async function getNextSupplierInvoiceNumber(): Promise<string> {
-  const tenant = await getCurrentTenant();
-  const currentUser = await getCurrentPortalUser();
-  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
-  requirePermission(currentUser.role, "edit_supplier_invoice");
-
-  const today = new Date();
-  const yyyymmdd =
-    `${today.getFullYear()}` +
-    `${String(today.getMonth() + 1).padStart(2, "0")}` +
-    `${String(today.getDate()).padStart(2, "0")}`;
-  const prefix = `INV-${yyyymmdd}-`;
-
-  const existing = await db
-    .select({ invoiceNumber: supplierInvoices.invoiceNumber })
-    .from(supplierInvoices)
-    .where(
-      and(
-        eq(supplierInvoices.tenantId, tenant.id),
-        like(supplierInvoices.invoiceNumber, `${prefix}%`),
-      ),
-    );
-
-  const usedSuffixes = new Set<number>();
-  for (const row of existing) {
-    const suffix = row.invoiceNumber.slice(prefix.length);
-    const n = Number(suffix);
-    if (Number.isInteger(n) && n > 0) usedSuffixes.add(n);
-  }
-  let next = 1;
-  while (usedSuffixes.has(next)) next++;
-  const padding = Math.max(2, String(next).length);
-  return `${prefix}${String(next).padStart(padding, "0")}`;
-}
+//
+// The legacy `getNextSupplierInvoiceNumber()` auto-suggester was removed when
+// `referenceNumber` became the canonical system identity and
+// `invoiceNumber` (the supplier's printed number) became optional. Callers
+// should rely on `generateSupplierInvoiceReferenceNumber` above.
 
 export async function getSupplierInvoices() {
   const tenant = await getCurrentTenant();
@@ -396,6 +537,7 @@ export async function getSupplierInvoices() {
 }
 
 export type SupplierInvoiceListSort =
+  | "referenceNumber"
   | "invoiceNumber"
   | "invoiceDate"
   | "receiveDate"
@@ -423,6 +565,7 @@ export async function getSupplierInvoicesPage(
   const where = and(
     eq(supplierInvoices.tenantId, tenant.id),
     buildTextSearchCondition(query.search, [
+      supplierInvoices.referenceNumber,
       supplierInvoices.invoiceNumber,
       supplierInvoices.status,
       suppliers.name,
@@ -445,6 +588,7 @@ export async function getSupplierInvoicesPage(
         sort: query.sort,
         direction: query.direction,
         expressions: {
+          referenceNumber: supplierInvoices.referenceNumber,
           invoiceNumber: supplierInvoices.invoiceNumber,
           invoiceDate: supplierInvoices.invoiceDate,
           receiveDate: supplierInvoices.receiveDate,
@@ -504,9 +648,22 @@ export async function getSupplierInvoiceById(id: string) {
       createdBy: true,
       updatedBy: true,
       completedBy: true,
+      charges: {
+        columns: { id: true, description: true, chargeType: true, rate: true, includeInInventoryCost: true, amount: true },
+        orderBy: (t, { asc }) => [asc(t.createdAt)],
+      },
       lines: {
         with: {
-          product: true,
+          product: {
+            // `product: true` brings the columns; we also need baseUnit so
+            // the bill detail page can render mixed-UOM weight/quantity
+            // columns correctly.
+            with: {
+              baseUnit: {
+                columns: { id: true, abbreviation: true, family: true },
+              },
+            },
+          },
           lotReceipts: {
             with: {
               lot: {
@@ -529,6 +686,22 @@ export async function getSupplierInvoiceById(id: string) {
       payments: {
         with: { createdBy: true },
         orderBy: [desc(supplierInvoicePayments.paymentDate)],
+      },
+      paymentMatches: {
+        where: (pm, { or, eq }) =>
+          or(eq(pm.status, "auto_applied"), eq(pm.status, "confirmed")),
+        with: {
+          bankTransaction: {
+            with: { bankAccount: { with: { plaidConnection: true } } },
+          },
+          confirmedBy: true,
+        },
+        orderBy: (pm, { desc }) => [desc(pm.confirmedAt)],
+        limit: 1,
+      },
+      billForwards: {
+        with: { sentBy: true },
+        orderBy: (bf, { desc }) => [desc(bf.sentAt)],
       },
     },
   });
@@ -649,7 +822,7 @@ export type ReversalCostChange = {
         kind: "restored";
         costPerLb: string;
         sourceInvoiceId: string;
-        sourceInvoiceNumber: string;
+        sourceInvoiceNumber: string | null;
         receiveDate: string;
       }
     | { kind: "unchanged"; costPerLb: string };
@@ -659,7 +832,8 @@ export type ReversalCostChange = {
 export type ReversalPreview = {
   invoice: {
     id: string;
-    invoiceNumber: string;
+    referenceNumber: string;
+    invoiceNumber: string | null;
     supplierId: string;
     supplierName: string;
   };
@@ -678,7 +852,11 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
-  requirePermission(currentUser.role, "view_supplier_invoice");
+  // Defense-in-depth: the action layer guards this, but mirroring the
+  // reversal permission at the service level means a forged call path
+  // can't leak "what would change" data to users who couldn't execute
+  // the underlying reverse.
+  requirePermission(currentUser.role, "reverse_supplier_receipt");
 
   const invoice = await db.query.supplierInvoices.findFirst({
     where: and(
@@ -722,7 +900,13 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   const productIds = Array.from(new Set(invoice.lines.map(l => l.productId)));
   if (productIds.length === 0) {
     return {
-      invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+      invoice: {
+        id: invoice.id,
+        referenceNumber: invoice.referenceNumber,
+        invoiceNumber: invoice.invoiceNumber,
+        supplierId,
+        supplierName,
+      },
       lotsToDelete: lotIds.size,
       inventoryItemsToDelete,
       blockedItems,
@@ -788,7 +972,9 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
       productId,
       excludeInvoiceId: invoice.id,
     });
-    const restoredCost = prior ? supplierInvoiceLineCostPerLb(prior) : null;
+    // Same family-aware resolver as the rollback path so the reversal
+    // preview matches what would actually be written.
+    const restoredCost = prior ? resolveLineCostPerBaseUnit(prior) : null;
 
     let after: ReversalCostChange["afterReversal"];
     if (prior && restoredCost != null) {
@@ -817,7 +1003,13 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
   }
 
   return {
-    invoice: { id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierId, supplierName },
+    invoice: {
+      id: invoice.id,
+      referenceNumber: invoice.referenceNumber,
+      invoiceNumber: invoice.invoiceNumber,
+      supplierId,
+      supplierName,
+    },
     lotsToDelete: lotIds.size,
     inventoryItemsToDelete,
     blockedItems,
@@ -828,7 +1020,7 @@ export async function getReversalPreview(invoiceId: string): Promise<ReversalPre
 // -------------------- Mutations --------------------
 
 export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
@@ -849,15 +1041,21 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       lineTotal: computeLineTotal(normalizedLine),
     };
   });
-  const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
+  const charges = (input.charges ?? []).filter(c => c.description.trim() && Number(c.amount) > 0);
+  const totalAmount = sumTotals([
+    ...normalizedLines.map(l => l.lineTotal),
+    ...charges.map(c => c.amount),
+  ]);
 
   const invoiceId = await db.transaction(async tx => {
+    const referenceNumber = await generateSupplierInvoiceReferenceNumber(tx, tenant.id);
     const [invoice] = await tx
       .insert(supplierInvoices)
       .values({
         tenantId: tenant.id,
         supplierId: input.supplierId,
-        invoiceNumber: input.invoiceNumber.trim(),
+        referenceNumber,
+        invoiceNumber: input.invoiceNumber?.trim() || null,
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,
         status: "draft",
@@ -876,7 +1074,7 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       action: "insert",
       entityTable: "supplier_invoices",
       entityId: invoice.id,
-      entityLabel: invoice.invoiceNumber,
+      entityLabel: invoice.referenceNumber,
       afterJson: JSON.stringify({
         status: "draft",
         totalAmount,
@@ -884,6 +1082,7 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
       contextJson: JSON.stringify({
         supplierId: input.supplierId,
         lines: normalizedLines.length,
+        charges: charges.length,
         createdAsComplete: Boolean(input.complete),
       }),
     });
@@ -900,9 +1099,40 @@ export async function createSupplierInvoice(input: CreateSupplierInvoiceInput) {
           unitPrice: line.unitPrice,
           lineTotal: line.lineTotal,
           caseWeightsLbs: line.caseWeightsLbs ?? null,
+          // Unit-aware columns: `quantity` carries the count in the line's
+          // purchase UOM (mirrors quantityCases for legacy weight modes);
+          // snapshot fields preserve the rendered UOM at moment of record.
+          quantity: String(line.quantityCases),
+          purchaseUnitId: line.purchaseUnitId ?? null,
+          purchaseUnitAbbreviationSnapshot: defaultPurchaseUnitAbbreviation(
+            line.unitType,
+            line.purchaseUnitAbbreviation,
+          ),
+          // Conversion factor snapshot — e.g. "12" for a 12-pack case so
+          // a future "split case into eaches" feature can expand the lot
+          // into individual units without re-deriving from the product.
+          conversionToBaseSnapshot: normalizeUnitsPerPackage(
+            line.unitsPerPackage,
+            line.unitType,
+          ),
+          pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
         })),
       )
       .returning();
+
+    if (charges.length > 0) {
+      await tx.insert(supplierInvoiceCharges).values(
+        charges.map(c => ({
+          tenantId: tenant.id,
+          supplierInvoiceId: invoice.id,
+          description: c.description.trim(),
+          chargeType: c.chargeType ?? "other",
+          rate: c.rate ? c.rate : null,
+          includeInInventoryCost: c.includeInInventoryCost ?? false,
+          amount: c.amount,
+        })),
+      );
+    }
 
     if (input.complete) {
       await postSupplierInvoiceInternal({
@@ -954,14 +1184,18 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       lineTotal: computeLineTotal(normalizedLine),
     };
   });
-  const totalAmount = sumTotals(normalizedLines.map(l => l.lineTotal));
+  const charges = (input.charges ?? []).filter(c => c.description.trim() && Number(c.amount) > 0);
+  const totalAmount = sumTotals([
+    ...normalizedLines.map(l => l.lineTotal),
+    ...charges.map(c => c.amount),
+  ]);
 
   await db.transaction(async tx => {
     await tx
       .update(supplierInvoices)
       .set({
         supplierId: input.supplierId,
-        invoiceNumber: input.invoiceNumber.trim(),
+        invoiceNumber: input.invoiceNumber?.trim() || null,
         invoiceDate: input.invoiceDate,
         receiveDate: input.receiveDate,
         paymentMethod: input.paymentMethod ?? null,
@@ -971,7 +1205,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       })
       .where(eq(supplierInvoices.id, input.id));
 
-    // Simple reconciliation strategy: delete all existing lines then re-insert.
+    // Simple reconciliation strategy: delete all existing lines/charges then re-insert.
     // Draft invoices have no lot_receipts or inventory_items yet, so cascade
     // delete is safe. This keeps the v1 write path simple.
     await tx
@@ -988,8 +1222,37 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
         unitPrice: line.unitPrice,
         lineTotal: line.lineTotal,
         caseWeightsLbs: line.caseWeightsLbs ?? null,
+        quantity: String(line.quantityCases),
+        purchaseUnitId: line.purchaseUnitId ?? null,
+        purchaseUnitAbbreviationSnapshot: defaultPurchaseUnitAbbreviation(
+          line.unitType,
+          line.purchaseUnitAbbreviation,
+        ),
+        conversionToBaseSnapshot: normalizeUnitsPerPackage(
+          line.unitsPerPackage,
+          line.unitType,
+        ),
+        pricingUnitTypeSnapshot: pricingUnitTypeSnapshotFor(line.unitType),
       })),
     );
+
+    await tx
+      .delete(supplierInvoiceCharges)
+      .where(eq(supplierInvoiceCharges.supplierInvoiceId, input.id));
+
+    if (charges.length > 0) {
+      await tx.insert(supplierInvoiceCharges).values(
+        charges.map(c => ({
+          tenantId: tenant.id,
+          supplierInvoiceId: input.id,
+          description: c.description.trim(),
+          chargeType: c.chargeType ?? "other",
+          rate: c.rate ? c.rate : null,
+          includeInInventoryCost: c.includeInInventoryCost ?? false,
+          amount: c.amount,
+        })),
+      );
+    }
 
     await tx.insert(auditLogs).values({
       tenantId: tenant.id,
@@ -998,7 +1261,7 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
       action: "update",
       entityTable: "supplier_invoices",
       entityId: input.id,
-      entityLabel: input.invoiceNumber.trim(),
+      entityLabel: input.invoiceNumber?.trim() || null,
       changedFieldsJson: JSON.stringify([
         "supplierId",
         "invoiceNumber",
@@ -1007,10 +1270,12 @@ export async function updateSupplierInvoice(input: UpdateSupplierInvoiceInput) {
         "paymentMethod",
         "notes",
         "lines",
+        "charges",
         "totalAmount",
       ]),
       contextJson: JSON.stringify({
         lines: normalizedLines.length,
+        charges: charges.length,
         totalAmount,
       }),
     });
@@ -1149,7 +1414,7 @@ async function postSupplierInvoiceInternal(args: {
     const lotNumber = await reserveLotNumber({
       tx,
       tenantId: args.tenantId,
-      invoiceNumber: invoice.invoiceNumber,
+      referenceNumber: invoice.referenceNumber,
       lineIndex: i,
       override: override?.lotNumberOverride,
     });
@@ -1177,17 +1442,46 @@ async function postSupplierInvoiceInternal(args: {
     const perCaseWeights = parsePersistedCaseWeights(line.caseWeightsLbs);
     const totalWeight = Number(line.weightLbs ?? 0);
     const fallbackWeight = caseCount > 0 ? totalWeight / caseCount : totalWeight;
+    // For non-weight modes (per_each / per_unit) the line has no
+    // meaningful weight per case — store 0 so the NOT NULL column is
+    // happy and downstream readers can detect the sentinel via the
+    // line's unit_type.
+    const isWeightMode =
+      line.unitType === "catch_weight" || line.unitType === "fixed_case";
+
+    // Normalize the snapshot cost so downstream COGS math is consistent
+    // across unit types. The `cost_per_unit_snapshot` column stores
+    // either $/lb (catch_weight) or $/case (fixed_case / per_unit) or
+    // $/each (per_each) — i.e. cost per ONE unit of the line's pricing
+    // basis. For per_unit lines that means we leave unitPrice as-is
+    // because each inventory_items row represents one purchase unit
+    // (one case). For weight modes, unitPrice is $/lb so it stays too.
+    // The intent is captured in `cost_unit_type_snapshot`.
+    // Carry the pack size snapshot forward so the inventory rollup can
+    // multiply N cases × Y eaches-per-case to show the real base-unit
+    // count. Weight modes use 1 (one base unit per row); per_each is
+    // also 1 (each row is one unit); per_unit gets the actual pack size.
+    const unitsPerPackageSnapshot =
+      line.unitType === "per_unit"
+        ? line.conversionToBaseSnapshot &&
+          Number(line.conversionToBaseSnapshot) > 0
+          ? String(line.conversionToBaseSnapshot)
+          : "1"
+        : null;
 
     const itemRows = Array.from({ length: caseCount }, (_, i) => {
-      const caseWeightLbs = perCaseWeights[i] != null
-        ? String(perCaseWeights[i])
-        : String(fallbackWeight);
+      const caseWeightLbs = !isWeightMode
+        ? "0"
+        : perCaseWeights[i] != null
+          ? String(perCaseWeights[i])
+          : String(fallbackWeight);
       return {
         productId: line.productId,
         lotId: lot.id,
         barcodeId: generateBarcode(),
         exactWeightLbs: caseWeightLbs,
         cases: 1,
+        unitsPerPackageSnapshot,
         costPerUnitSnapshot: line.unitPrice,
         costUnitTypeSnapshot: line.unitType,
         status: "in_stock" as const,
@@ -1256,6 +1550,15 @@ async function postSupplierInvoiceInternal(args: {
 export async function reverseSupplierInvoice(input: {
   id: string;
   reason?: string | null;
+  /**
+   * Client-generated UUID per reverse-submit attempt. Stored on
+   * supplier_invoices.reverse_idempotency_key; the partial unique index
+   * ensures a second submit with the same key (double-click, retried
+   * fetch) cannot re-execute the destructive cascade. On 23505 the
+   * service returns the already-reversed invoice state instead of
+   * throwing.
+   */
+  idempotencyKey?: string | null;
 }) {
   const tenant = await getCurrentTenant();
   const currentUser = await getCurrentPortalUser();
@@ -1264,6 +1567,23 @@ export async function reverseSupplierInvoice(input: {
   }
   requirePermission(currentUser.role, "reverse_supplier_receipt");
 
+  // Idempotency happy-path — if this key already produced a reversal,
+  // return the (already-draft) invoice without re-running the cascade.
+  if (input.idempotencyKey) {
+    const existing = await db.query.supplierInvoices.findFirst({
+      where: and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        eq(supplierInvoices.id, input.id),
+        eq(supplierInvoices.reverseIdempotencyKey, input.idempotencyKey),
+      ),
+      columns: { id: true },
+    });
+    if (existing) {
+      return (await getSupplierInvoiceById(input.id))!;
+    }
+  }
+
+  try {
   await db.transaction(async tx => {
     // Load the invoice + all downstream rows inside the tx so the safety
     // check and subsequent deletes observe a consistent snapshot.
@@ -1359,6 +1679,10 @@ export async function reverseSupplierInvoice(input: {
     });
 
     const now = new Date();
+    // Set the idempotency key as part of the same UPDATE that flips
+    // status. The (tenant_id, reverse_idempotency_key) partial unique
+    // index is what guarantees a concurrent second submit hits 23505
+    // and bounces out to the catch below.
     await tx
       .update(supplierInvoices)
       .set({
@@ -1367,6 +1691,7 @@ export async function reverseSupplierInvoice(input: {
         completedByUserId: null,
         updatedByUserId: currentUser.id,
         updatedAt: now,
+        reverseIdempotencyKey: input.idempotencyKey ?? null,
       })
       .where(eq(supplierInvoices.id, input.id));
 
@@ -1390,6 +1715,16 @@ export async function reverseSupplierInvoice(input: {
       }),
     });
   });
+  } catch (err) {
+    // Race-safety net: a concurrent reverse-submit with the same key
+    // may have committed between our pre-check and the UPDATE — the
+    // partial unique index raises 23505. Treat it the same as the
+    // happy-path: return the already-reversed invoice.
+    if (input.idempotencyKey && isUniqueViolationErr(err)) {
+      return (await getSupplierInvoiceById(input.id))!;
+    }
+    throw err;
+  }
 
   return (await getSupplierInvoiceById(input.id))!;
 }
@@ -1401,9 +1736,27 @@ export type RecordSupplierInvoicePaymentInput = {
   amount: string;
   paymentDate: string;
   paymentMethod: "cash" | "check" | "ach" | "zelle" | "credit_card";
-  reference?: string | null;
+  checkNumber?: string | null;
+  referenceNumber?: string | null;
   notes?: string | null;
+  /**
+   * Client-generated UUID per payment-submit attempt. Used by the
+   * (tenant_id, idempotency_key) partial unique index on
+   * `supplier_invoice_payments` to dedupe double-submits. See the AR
+   * `recordPayment` docstring for the contract.
+   */
+  idempotencyKey?: string | null;
 };
+
+/** See AR `invoicing.ts` for the canonical version of this guard. */
+function isUniqueViolationErr(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
 
 /**
  * Apply a payment to a supplier invoice. Runs inside a single transaction so
@@ -1421,19 +1774,36 @@ export type RecordSupplierInvoicePaymentInput = {
 export async function recordSupplierInvoicePayment(
   input: RecordSupplierInvoicePaymentInput,
 ) {
-  const tenant = await getCurrentTenant();
+  const tenant = await requireTenantForMutation();
   const currentUser = await getCurrentPortalUser();
   if (currentUser.tenantId !== tenant.id) {
     throw new Error("Forbidden");
   }
   requirePermission(currentUser.role, "record_supplier_payment");
 
-  const amount = Number(input.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("Payment amount must be greater than 0.");
+  // Idempotency happy-path — if this key already produced a payment,
+  // return the current supplier-invoice state without re-entering the
+  // balance-check transaction. The unique index below is what
+  // guarantees correctness; this lookup skips the 23505 round-trip.
+  if (input.idempotencyKey) {
+    const existing = await db.query.supplierInvoicePayments.findFirst({
+      where: and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        eq(supplierInvoicePayments.idempotencyKey, input.idempotencyKey),
+      ),
+    });
+    if (existing) {
+      return (await getSupplierInvoiceById(existing.supplierInvoiceId))!;
+    }
   }
 
-  await db.transaction(async tx => {
+  if (!isPositiveMoney(input.amount)) {
+    throw new Error("Payment amount must be greater than 0.");
+  }
+  const amount = money(input.amount);
+
+  try {
+    await db.transaction(async tx => {
     const invoice = await tx.query.supplierInvoices.findFirst({
       where: and(
         eq(supplierInvoices.id, input.supplierInvoiceId),
@@ -1453,25 +1823,53 @@ export async function recordSupplierInvoicePayment(
     }
 
     const summary = computePaymentSummary(invoice);
-    const balanceDue = Number(summary.balanceDue);
-    // Allow a 1¢ tolerance so exact-match payments don't trip FP equality.
-    if (amount - balanceDue > 0.01) {
+    const balanceDue = money(summary.balanceDue);
+    // 1¢ tolerance preserved (matches the AR `recordPayment` contract);
+    // exceedsByCent is Decimal-aware so exact-match payments don't trip
+    // the residual-FP edge case that bit the Number version.
+    if (exceedsByCent(amount, balanceDue)) {
       throw new Error(
         `Payment exceeds balance due. Balance due is $${summary.balanceDue}.`,
       );
     }
 
-    const trimmedReference = input.reference?.trim() || null;
+    const trimmedCheckNumber = input.checkNumber?.trim() || null;
+    const trimmedReferenceNumber = input.referenceNumber?.trim() || null;
     const [payment] = await tx.insert(supplierInvoicePayments).values({
       tenantId: tenant.id,
       supplierInvoiceId: input.supplierInvoiceId,
       paymentDate: input.paymentDate,
-      amount: amount.toFixed(2),
+      amount: toMoneyString(amount),
       paymentMethod: input.paymentMethod,
-      reference: trimmedReference,
+      checkNumber: trimmedCheckNumber,
+      referenceNumber: trimmedReferenceNumber,
       notes: input.notes?.trim() || null,
+      idempotencyKey: input.idempotencyKey ?? null,
       createdByUserId: currentUser.id,
     }).returning({ id: supplierInvoicePayments.id });
+
+    // Flip the bill from "completed" → "paid" when this payment fully
+    // covers the remaining balance. The detail page UI gates the
+    // "Download PDF as paid", Plaid-match, and fully-paid banner on the
+    // status column — without this flip those surfaces stay stale even
+    // after the balance is zero.
+    //
+    // The Number version used `+0.005` as a fuzz to absorb FP drift on
+    // partial-payment sums. With Decimal the sum is exact, so a clean
+    // `gte` is correct — no tolerance needed.
+    const newPaidTotal = money(summary.totalPaid).plus(amount);
+    const totalAmount = money(invoice.totalAmount);
+    if (newPaidTotal.gte(totalAmount) && invoice.status === "completed") {
+      await tx
+        .update(supplierInvoices)
+        .set({ status: "paid", updatedAt: new Date() })
+        .where(
+          and(
+            eq(supplierInvoices.id, input.supplierInvoiceId),
+            eq(supplierInvoices.tenantId, tenant.id),
+          ),
+        );
+    }
 
     const paymentSummaryMethod = input.paymentMethod.replace(/_/g, " ");
     await tx.insert(auditLogs).values({
@@ -1483,14 +1881,341 @@ export async function recordSupplierInvoicePayment(
       entityId: payment.id,
       entityLabel: invoice.invoiceNumber,
       contextJson: JSON.stringify({
-        amount: amount.toFixed(2),
+        amount: toMoneyString(amount),
         paymentMethod: paymentSummaryMethod,
-        reference: trimmedReference,
+        checkNumber: trimmedCheckNumber,
+        referenceNumber: trimmedReferenceNumber,
+      }),
+    });
+    });
+  } catch (err) {
+    // Race-safety: a concurrent submit with the same key committed
+    // first; the partial unique index fires 23505 and the
+    // transaction rolls back. Return the supplier-invoice state
+    // reflecting the original successful submit.
+    if (input.idempotencyKey && isUniqueViolationErr(err)) {
+      return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
+    }
+    throw err;
+  }
+
+  return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
+}
+
+/**
+ * Hard-delete a supplier-invoice payment. The parent bill's paid total is
+ * derived (computePaymentSummary scans payments[] on read) so there's no
+ * denormalized counter to maintain — the next read recomputes from the
+ * remaining rows. Action is captured in the audit log; the void itself
+ * is permanent.
+ */
+export async function voidSupplierInvoicePayment(id: string) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const existing = await db.query.supplierInvoicePayments.findFirst({
+    where: and(
+      eq(supplierInvoicePayments.id, id),
+      eq(supplierInvoicePayments.tenantId, tenant.id),
+    ),
+    with: {
+      supplierInvoice: {
+        columns: { id: true, invoiceNumber: true },
+      },
+    },
+  });
+  if (!existing) {
+    throw new Error("Supplier payment not found.");
+  }
+
+  await db.transaction(async tx => {
+    await tx
+      .delete(supplierInvoicePayments)
+      .where(
+        and(
+          eq(supplierInvoicePayments.id, id),
+          eq(supplierInvoicePayments.tenantId, tenant.id),
+        ),
+      );
+
+    // If voiding this payment drops the bill below fully-paid, revert
+    // "paid" → "completed" so the UI gates (PDF download, fully-paid
+    // banner) flip back accordingly.
+    const remaining = await tx.query.supplierInvoices.findFirst({
+      where: eq(supplierInvoices.id, existing.supplierInvoiceId),
+      columns: { id: true, status: true, totalAmount: true },
+      with: { payments: { columns: { amount: true } } },
+    });
+    if (remaining && remaining.status === "paid") {
+      const summary = computePaymentSummary(remaining);
+      if (summary.paymentStatus !== "paid") {
+        await tx
+          .update(supplierInvoices)
+          .set({ status: "completed", updatedAt: new Date() })
+          .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+      }
+    }
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "delete",
+      entityTable: "supplier_invoice_payments",
+      entityId: id,
+      entityLabel: existing.supplierInvoice?.invoiceNumber ?? null,
+      contextJson: JSON.stringify({
+        amount: existing.amount,
+        paymentMethod: existing.paymentMethod,
+        checkNumber: existing.checkNumber,
+        referenceNumber: existing.referenceNumber,
+        paymentDate: existing.paymentDate,
       }),
     });
   });
 
-  return (await getSupplierInvoiceById(input.supplierInvoiceId))!;
+  return { supplierInvoiceId: existing.supplierInvoiceId };
+}
+
+export type UpdateSupplierInvoicePaymentInput = {
+  id: string;
+  paymentDate?: string;
+  amount?: string;
+  paymentMethod?: "cash" | "check" | "ach" | "zelle" | "credit_card";
+  checkNumber?: string | null;
+  referenceNumber?: string | null;
+  notes?: string | null;
+};
+
+/**
+ * Edit an AP payment in place. Only the supplied fields are written.
+ * Amount changes are server-side-bounded: newAmount + sum of *other*
+ * payments on the same bill must not exceed the bill's totalAmount.
+ */
+export async function updateSupplierInvoicePayment(
+  input: UpdateSupplierInvoicePaymentInput,
+) {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const existing = await db.query.supplierInvoicePayments.findFirst({
+    where: and(
+      eq(supplierInvoicePayments.id, input.id),
+      eq(supplierInvoicePayments.tenantId, tenant.id),
+    ),
+    with: {
+      supplierInvoice: {
+        columns: { id: true, invoiceNumber: true, totalAmount: true },
+        with: { payments: { columns: { id: true, amount: true } } },
+      },
+    },
+  });
+  if (!existing) {
+    throw new Error("Supplier payment not found.");
+  }
+
+  const patch: Partial<typeof supplierInvoicePayments.$inferInsert> = {};
+
+  if (input.paymentDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paymentDate)) {
+      throw new Error("Payment date must be a valid YYYY-MM-DD value.");
+    }
+    patch.paymentDate = input.paymentDate;
+  }
+
+  if (input.amount !== undefined) {
+    if (!isPositiveMoney(input.amount)) {
+      throw new Error("Payment amount must be greater than 0.");
+    }
+    const amount = money(input.amount);
+    // Decimal accumulation across N sibling payments — Number-summed
+    // siblings could drift enough on a heavily partial-paid bill to
+    // either flag a legitimate edit as over-bill, or let an over-edit
+    // slip past the 1¢ tolerance check.
+    const otherSum = (existing.supplierInvoice?.payments ?? [])
+      .filter(p => p.id !== input.id)
+      .reduce((sum, p) => sum.plus(money(p.amount ?? "0")), money(0));
+    const totalAmount = money(existing.supplierInvoice?.totalAmount ?? 0);
+    if (exceedsByCent(otherSum.plus(amount), totalAmount)) {
+      throw new Error(
+        "Amount would push paid total over the bill's grand total.",
+      );
+    }
+    patch.amount = toMoneyString(amount);
+  }
+
+  if (input.paymentMethod !== undefined) {
+    patch.paymentMethod = input.paymentMethod;
+  }
+
+  if (input.checkNumber !== undefined) {
+    patch.checkNumber = input.checkNumber?.trim() || null;
+  }
+  if (input.referenceNumber !== undefined) {
+    patch.referenceNumber = input.referenceNumber?.trim() || null;
+  }
+  if (input.notes !== undefined) {
+    patch.notes = input.notes?.trim() || null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return { supplierInvoiceId: existing.supplierInvoiceId };
+  }
+
+  await db.transaction(async tx => {
+    await tx
+      .update(supplierInvoicePayments)
+      .set(patch)
+      .where(
+        and(
+          eq(supplierInvoicePayments.id, input.id),
+          eq(supplierInvoicePayments.tenantId, tenant.id),
+        ),
+      );
+
+    // Edits that change amount can flip the bill's status in either
+    // direction: a raise can push completed → paid; a reduction can
+    // drop paid → completed. Recompute against the post-update payments
+    // set so both transitions are covered.
+    if (input.amount !== undefined) {
+      const refreshed = await tx.query.supplierInvoices.findFirst({
+        where: eq(supplierInvoices.id, existing.supplierInvoiceId),
+        columns: { id: true, status: true, totalAmount: true },
+        with: { payments: { columns: { amount: true } } },
+      });
+      if (refreshed) {
+        const summary = computePaymentSummary(refreshed);
+        if (
+          summary.paymentStatus === "paid" &&
+          refreshed.status === "completed"
+        ) {
+          await tx
+            .update(supplierInvoices)
+            .set({ status: "paid", updatedAt: new Date() })
+            .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+        } else if (
+          summary.paymentStatus !== "paid" &&
+          refreshed.status === "paid"
+        ) {
+          await tx
+            .update(supplierInvoices)
+            .set({ status: "completed", updatedAt: new Date() })
+            .where(eq(supplierInvoices.id, existing.supplierInvoiceId));
+        }
+      }
+    }
+
+    await tx.insert(auditLogs).values({
+      tenantId: tenant.id,
+      actorType: "portal_user",
+      actorPortalUserId: currentUser.id,
+      action: "update",
+      entityTable: "supplier_invoice_payments",
+      entityId: input.id,
+      entityLabel: existing.supplierInvoice?.invoiceNumber ?? null,
+      contextJson: JSON.stringify({
+        changes: Object.fromEntries(
+          (
+            [
+              "paymentDate",
+              "amount",
+              "paymentMethod",
+              "checkNumber",
+              "referenceNumber",
+              "notes",
+            ] as const
+          )
+            .filter(
+              key => input[key] !== undefined && input[key] !== existing[key],
+            )
+            .map(key => [key, { from: existing[key], to: input[key] }]),
+        ),
+      }),
+    });
+  });
+
+  return { supplierInvoiceId: existing.supplierInvoiceId };
+}
+
+/* -------------------------------------------------------------------------- */
+/* AP bulk reconciliation                                                     */
+/* -------------------------------------------------------------------------- */
+
+export type BulkReconcileSupplierPaymentsResult = {
+  updated: number;
+};
+
+/**
+ * Mark N AP payments as reconciled against a bank statement line.
+ * Tenant-scoped, skips already-reconciled rows. Mirrors
+ * bulkReconcilePayments on the AR side.
+ */
+export async function bulkReconcileSupplierInvoicePayments(
+  ids: string[],
+  reference: string | null,
+): Promise<BulkReconcileSupplierPaymentsResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const trimmedRef = reference?.trim() || null;
+
+  const result = await db
+    .update(supplierInvoicePayments)
+    .set({
+      reconciledAt: new Date(),
+      reconciledByUserId: currentUser.id,
+      reconciliationReference: trimmedRef,
+    })
+    .where(
+      and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        inArray(supplierInvoicePayments.id, ids),
+        sql`${supplierInvoicePayments.reconciledAt} IS NULL`,
+      ),
+    )
+    .returning({ id: supplierInvoicePayments.id });
+
+  return { updated: result.length };
+}
+
+/** Reverse of bulkReconcileSupplierInvoicePayments. */
+export async function bulkUnreconcileSupplierInvoicePayments(
+  ids: string[],
+): Promise<BulkReconcileSupplierPaymentsResult> {
+  if (ids.length === 0) return { updated: 0 };
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) throw new Error("Forbidden");
+  requirePermission(currentUser.role, "record_supplier_payment");
+
+  const result = await db
+    .update(supplierInvoicePayments)
+    .set({
+      reconciledAt: null,
+      reconciledByUserId: null,
+      reconciliationReference: null,
+    })
+    .where(
+      and(
+        eq(supplierInvoicePayments.tenantId, tenant.id),
+        inArray(supplierInvoicePayments.id, ids),
+        sql`${supplierInvoicePayments.reconciledAt} IS NOT NULL`,
+      ),
+    )
+    .returning({ id: supplierInvoicePayments.id });
+
+  return { updated: result.length };
 }
 
 // -------------------- Attachments --------------------
@@ -1755,3 +2480,117 @@ export type SupplierInvoiceDetail = NonNullable<
 >;
 export type SupplierInvoiceAttachment =
   SupplierInvoiceDetail["attachments"][number];
+
+// ---------------------------------------------------------------------------
+// Duplicate-invoice lookup. Vendors occasionally resend the same invoice;
+// receivers can also accidentally re-import a PDF that's already been posted.
+// The Review screen calls this to warn before the user re-posts a duplicate.
+//
+// Two match modes:
+//   `invoice_number` — strict: same (tenant, supplier, supplier-printed
+//      invoice number). High confidence — vendors don't typically issue two
+//      different bills with the same number.
+//   `date_and_total`  — softer: same (tenant, supplier, invoice date, total
+//      amount), but only used when the new invoice number is missing or
+//      doesn't match anything stored. This catches re-uploads where the AI
+//      didn't read the invoice number reliably.
+//
+// Returns up to 5 matches with enough info for a humane warning ("Already
+// posted on 2026-04-22 as bill #INV-014, $1,234.56"). Returns [] when there's
+// no match — the typical case.
+// ---------------------------------------------------------------------------
+
+export type ExistingSupplierInvoiceMatch = {
+  id: string;
+  referenceNumber: string;
+  invoiceNumber: string | null;
+  invoiceDate: string;
+  totalAmount: string;
+  status: string;
+  /**
+   * How we determined this is a duplicate. `invoice_number` is the strong
+   * signal — vendors don't reuse invoice numbers. `date_and_total` is a
+   * fallback for parses that didn't capture an invoice number; treat with
+   * a softer banner.
+   */
+  matchedBy: "invoice_number" | "date_and_total";
+};
+
+export async function findExistingSupplierInvoices(args: {
+  supplierId: string;
+  supplierInvoiceNumber: string;
+  /** Optional softer-match signals. When both are present and the strict
+   *  invoice-number lookup turns up empty, we fall back to (date, total). */
+  invoiceDate?: string | null;
+  totalAmount?: string | number | null;
+}): Promise<ExistingSupplierInvoiceMatch[]> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "view_supplier_invoice");
+
+  const trimmed = args.supplierInvoiceNumber.trim();
+
+  // Strict pass first — invoice-number duplicates are the high-signal case.
+  const strictMatches: ExistingSupplierInvoiceMatch[] = trimmed
+    ? (
+        await db
+          .select({
+            id: supplierInvoices.id,
+            referenceNumber: supplierInvoices.referenceNumber,
+            invoiceNumber: supplierInvoices.invoiceNumber,
+            invoiceDate: supplierInvoices.invoiceDate,
+            totalAmount: supplierInvoices.totalAmount,
+            status: supplierInvoices.status,
+          })
+          .from(supplierInvoices)
+          .where(
+            and(
+              eq(supplierInvoices.tenantId, tenant.id),
+              eq(supplierInvoices.supplierId, args.supplierId),
+              eq(supplierInvoices.invoiceNumber, trimmed),
+            ),
+          )
+          .orderBy(desc(supplierInvoices.invoiceDate))
+          .limit(5)
+      ).map(row => ({ ...row, matchedBy: "invoice_number" as const }))
+    : [];
+
+  if (strictMatches.length > 0) return strictMatches;
+
+  // Soft pass — only when no invoice number matched. Requires both date and
+  // total: matching on just one is too noisy (many bills share a date).
+  const dateStr = args.invoiceDate?.trim() || null;
+  const totalStr =
+    args.totalAmount == null ? null : String(args.totalAmount).trim() || null;
+  if (!dateStr || !totalStr) return [];
+
+  // totalAmount is stored as numeric — compare as numeric to avoid string-
+  // format mismatches ("100.00" vs "100"). Drizzle preserves the column type;
+  // an explicit cast on the bound parameter keeps Postgres from rejecting a
+  // text value.
+  const softRows = await db
+    .select({
+      id: supplierInvoices.id,
+      referenceNumber: supplierInvoices.referenceNumber,
+      invoiceNumber: supplierInvoices.invoiceNumber,
+      invoiceDate: supplierInvoices.invoiceDate,
+      totalAmount: supplierInvoices.totalAmount,
+      status: supplierInvoices.status,
+    })
+    .from(supplierInvoices)
+    .where(
+      and(
+        eq(supplierInvoices.tenantId, tenant.id),
+        eq(supplierInvoices.supplierId, args.supplierId),
+        eq(supplierInvoices.invoiceDate, dateStr),
+        sql`${supplierInvoices.totalAmount} = ${totalStr}::numeric`,
+      ),
+    )
+    .orderBy(desc(supplierInvoices.invoiceDate))
+    .limit(5);
+
+  return softRows.map(row => ({ ...row, matchedBy: "date_and_total" as const }));
+}

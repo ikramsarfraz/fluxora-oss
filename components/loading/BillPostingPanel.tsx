@@ -33,7 +33,7 @@ export function BillPostingPanel({
   return (
     <div
       style={{
-        background: "#fff",
+        background: "var(--color-card)",
         border: "1px solid #e7e7ea",
         borderRadius: 12,
         padding: "18px 20px",
@@ -46,8 +46,8 @@ export function BillPostingPanel({
           style={{
             width: 36, height: 36,
             borderRadius: 10,
-            background: "#18181b",
-            color: "#fff",
+            background: "var(--color-ink)",
+            color: "var(--color-card)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
@@ -57,7 +57,7 @@ export function BillPostingPanel({
         </div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, color: "#52525b", marginTop: 1 }}>{subtitle}</div>}
+          {subtitle && <div style={{ fontSize: 12, color: "var(--color-subtle)", marginTop: 1 }}>{subtitle}</div>}
         </div>
       </div>
 
@@ -74,7 +74,7 @@ export function BillPostingPanel({
               borderRadius: 7,
               fontSize: 12.5,
               background: step.status === "active" ? "#eff6ff" : "transparent",
-              color: step.status === "active" ? "#2563eb" : step.status === "queued" ? "#a1a1aa" : "#52525b",
+              color: step.status === "active" ? "var(--color-forest-mid)" : step.status === "queued" ? "var(--color-muted)" : "var(--color-subtle)",
               fontWeight: step.status === "active" ? 600 : 400,
             }}
           >
@@ -86,11 +86,11 @@ export function BillPostingPanel({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,
                 background:
-                  step.status === "done" ? "#16a34a" :
-                  step.status === "active" ? "#2563eb" :
-                  step.status === "error" ? "#dc2626" :
-                  "#e7e7ea",
-                color: step.status === "queued" ? undefined : "#fff",
+                  step.status === "done" ? "var(--color-success-fg)" :
+                  step.status === "active" ? "var(--color-forest-mid)" :
+                  step.status === "error" ? "var(--color-danger-fg)" :
+                  "var(--color-border-default)",
+                color: step.status === "queued" ? undefined : "var(--color-card)",
               }}
             >
               {step.status === "done" && CHECK}
@@ -108,7 +108,7 @@ export function BillPostingPanel({
               <span
                 style={{
                   fontSize: 11,
-                  color: step.status === "active" ? "#2563eb" : "#a1a1aa",
+                  color: step.status === "active" ? "var(--color-forest-mid)" : "var(--color-muted)",
                   fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
                 }}
               >
@@ -123,7 +123,7 @@ export function BillPostingPanel({
       <div
         style={{
           fontSize: 11.5,
-          color: "#52525b",
+          color: "var(--color-subtle)",
           paddingTop: 4,
           borderTop: "1px dashed #e7e7ea",
         }}

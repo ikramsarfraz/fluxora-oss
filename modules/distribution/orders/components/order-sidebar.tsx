@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { formatWeightLbs } from "@/lib/utils/currency";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { formatPhone } from "@/lib/utils/phone";
 
@@ -13,17 +14,17 @@ import { getLineFulfilledQuantity, getLineFulfilledWeight, getLineRemainingQuant
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
-  ink: "#0c0a09",
-  ink2: "#44403c",
-  muted: "#78716c",
-  surface: "#ffffff",
-  line: "#e7e5e4",
-  line2: "#f5f5f4",
-  accent: "oklch(48% 0.16 265)",
+  ink: "var(--color-ink)",
+  ink2: "var(--color-ink-warm)",
+  muted: "var(--color-subtle)",
+  surface: "var(--color-card)",
+  line: "var(--color-border-default)",
+  line2: "var(--color-divider)",
+  accent: "var(--color-forest-mid)",
   accentSoft: "oklch(96% 0.02 265)",
-  good: "oklch(58% 0.13 155)",
-  info: "oklch(60% 0.15 240)",
-  infoSoft: "oklch(96% 0.03 240)",
+  good: "var(--color-success-fg)",
+  info: "var(--color-info-fg)",
+  infoSoft: "var(--color-info-bg)",
   radius: "10px",
   radiusSm: "6px",
   mono: "'Geist Mono', ui-monospace, monospace" as const,
@@ -224,7 +225,7 @@ export function OrderSidebar({
           <Button
             type="button"
             onClick={onOpenFulfillDrawer}
-            className="h-9 w-full border-stone-ink bg-stone-ink px-3.5 text-[13px] text-stone-surface hover:bg-stone-ink/90"
+            className="h-9 w-full border-forest-mid bg-forest-mid px-3.5 text-[13px] text-card-warm hover:bg-forest"
           >
             Record fulfillment
           </Button>
@@ -300,7 +301,7 @@ export function OrderSidebar({
             >
               {firstFulfillDate && <>Fulfilled {formatDisplayDate(firstFulfillDate)}</>}
               {totalWeight > 0 && (
-                <>{firstFulfillDate ? " · " : ""}{totalWeight.toLocaleString(undefined, { maximumFractionDigits: 0 })} lbs captured</>
+                <>{firstFulfillDate ? " · " : ""}{formatWeightLbs(totalWeight)} lbs captured</>
               )}
               {shortShippedCount > 0 && <> · {shortShippedCount} short-shipped</>}
               {!firstFulfillDate && totalWeight === 0 && shortShippedCount === 0 && "No fulfillment recorded"}

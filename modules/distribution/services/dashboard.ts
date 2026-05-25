@@ -251,7 +251,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     db
       .select({
         id: supplierInvoices.id,
-        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceNumber: supplierInvoices.referenceNumber,
         supplierId: supplierInvoices.supplierId,
         supplierName: suppliers.name,
         receiveDate: supplierInvoices.receiveDate,
@@ -273,7 +273,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       )
       .groupBy(
         supplierInvoices.id,
-        supplierInvoices.invoiceNumber,
+        supplierInvoices.referenceNumber,
         supplierInvoices.supplierId,
         suppliers.name,
         supplierInvoices.receiveDate,
@@ -286,7 +286,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     db
       .select({
         id: supplierInvoices.id,
-        invoiceNumber: supplierInvoices.invoiceNumber,
+        invoiceNumber: supplierInvoices.referenceNumber,
         supplierId: supplierInvoices.supplierId,
         supplierName: suppliers.name,
         receiveDate: supplierInvoices.receiveDate,
@@ -303,7 +303,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       .where(eq(supplierInvoices.tenantId, tenantId))
       .groupBy(
         supplierInvoices.id,
-        supplierInvoices.invoiceNumber,
+        supplierInvoices.referenceNumber,
         supplierInvoices.supplierId,
         suppliers.name,
         supplierInvoices.receiveDate,
@@ -537,10 +537,18 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     // 16. Inventory value from receipt-time cost snapshots stored on each
     // inventory item. This keeps historical value stable even if supplier
     // invoice pricing or product cost config changes later.
+    // Inventory value math is family-aware:
+    //   - catch_weight → cost_per_lb × exact_weight_lbs
+    //   - fixed_case / per_each / per_unit → cost_per_unit × cases
+    //     (each inventory row carries cases=1 today, so this collapses
+    //     to "1 × per-unit cost" per row — but writing it general keeps
+    //     the math correct if cases ever stops being 1).
+    // The previous ELSE branch silently zeroed beverages / dry goods
+    // because their exact_weight_lbs is "0".
     db.execute<{ value: string | null }>(sql`
       SELECT COALESCE(SUM(
         CASE
-          WHEN ii.cost_unit_type_snapshot = 'fixed_case'
+          WHEN ii.cost_unit_type_snapshot IN ('fixed_case', 'per_each', 'per_unit')
             THEN ii.cases::numeric * ii.cost_per_unit_snapshot::numeric
           ELSE ii.exact_weight_lbs::numeric * ii.cost_per_unit_snapshot::numeric
         END

@@ -2,12 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { isUuid } from "@/lib/utils/uuid";
 import { getSupplierById } from "../services/suppliers";
 
 import { EditSupplierForm } from "../components/edit-supplier-form";
+import { SupplierFormSidePanel } from "../components/supplier-form-side-panel";
 
 export default async function SuppliersEditPage({
   params,
@@ -23,6 +25,7 @@ export default async function SuppliersEditPage({
 
   return (
     <section className="flex flex-col gap-6">
+      <BreadcrumbLabel href={`/suppliers/${supplier.id}`} label={supplier.name} />
       <PageHeader
         title="Edit supplier"
         description="Update supplier details and payment terms."
@@ -34,7 +37,10 @@ export default async function SuppliersEditPage({
           </Link>
         </Button>
       </PageHeader>
-      <EditSupplierForm supplier={supplier} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <EditSupplierForm supplier={supplier} />
+        <SupplierFormSidePanel />
+      </div>
     </section>
   );
 }

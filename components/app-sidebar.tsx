@@ -20,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
   ChevronsUpDown,
+  Inbox,
   LayoutDashboard,
   Users,
   Package,
@@ -27,21 +28,24 @@ import {
   Truck,
   type LucideIcon,
   ShoppingCart,
-  Layers,
   Receipt,
   Wallet,
   CreditCard,
   Shield,
   BadgeCheck,
   CircleDollarSign,
+  LifeBuoy,
   LogOut,
-  UserCog,
-  SlidersHorizontal,
+  MoreVertical,
+  Sparkles,
   TableProperties,
+  Activity,
+  Settings,
 } from "lucide-react";
 
 import { useCurrentPortalUser } from "@/modules/shared/hooks/use-current-portal-user";
 import { useTenantLogoUrl } from "@/modules/core/workspace-settings/hooks/use-tenant-branding";
+import { Logomark } from "@/components/brand/logomark";
 import { can, type Permission } from "@/lib/auth/permissions";
 import type { AccessibleDestination } from "@/modules/shared/services/auth";
 import {
@@ -65,6 +69,8 @@ type NavItem = {
   url: string;
   icon: LucideIcon;
   permission?: Permission;
+  /** When set, the item is hidden unless the named flag is enabled. */
+  requiresInbox?: boolean;
 };
 
 type NavGroup = {
@@ -78,6 +84,12 @@ const navMain: NavGroup[] = [
     title: "Overview",
     hideLabel: true,
     items: [
+      {
+        title: "Inbox",
+        url: "/inbox",
+        icon: Inbox,
+        requiresInbox: true,
+      },
       {
         title: "Dashboard",
         url: "/",
@@ -104,8 +116,8 @@ const navMain: NavGroup[] = [
         icon: Receipt,
       },
       {
-        title: "Price Chart",
-        url: "/price-chart",
+        title: "Prices",
+        url: "/prices",
         icon: TableProperties,
       },
     ],
@@ -114,19 +126,14 @@ const navMain: NavGroup[] = [
     title: "Catalog",
     items: [
       {
-        title: "Inventory",
-        url: "/inventory",
-        icon: Boxes,
-      },
-      {
         title: "Products",
         url: "/products",
         icon: Package,
       },
       {
-        title: "Lots",
-        url: "/lots",
-        icon: Layers,
+        title: "Inventory",
+        url: "/inventory",
+        icon: Boxes,
       },
     ],
   },
@@ -159,30 +166,33 @@ const navMain: NavGroup[] = [
         url: "/expenses",
         icon: CreditCard,
       },
-    ],
-  },
-  {
-    title: "Settings",
-    items: [
       {
-        title: "User Management",
-        url: "/user-management",
-        icon: UserCog,
-      },
-      {
-        title: "Configuration",
-        url: "/configuration",
-        icon: SlidersHorizontal,
+        title: "Bank feed",
+        url: "/bank-activity",
+        icon: Activity,
       },
     ],
   },
 ];
+
+const navFooter: NavGroup = {
+  title: "Settings",
+  hideLabel: true,
+  items: [
+    {
+      title: "Settings",
+      url: "/settings",
+      icon: Settings,
+    },
+  ],
+};
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   tenantName?: string;
   tenantSlug?: string;
   destinations?: AccessibleDestination[];
   user?: User;
+  inboxEnabled?: boolean;
 };
 
 export function AppSidebar({
@@ -190,6 +200,7 @@ export function AppSidebar({
   tenantSlug,
   destinations = [],
   user,
+  inboxEnabled = false,
   ...props
 }: AppSidebarProps) {
   const pathname = usePathname() ?? "";
@@ -204,9 +215,11 @@ export function AppSidebar({
   const visibleGroups = navMain
     .map(group => ({
       ...group,
-      items: group.items.filter(
-        item => !item.permission || can(role, item.permission),
-      ),
+      items: group.items.filter(item => {
+        if (item.permission && !can(role, item.permission)) return false;
+        if (item.requiresInbox && !inboxEnabled) return false;
+        return true;
+      }),
     }))
     .filter(group => group.items.length > 0);
 
@@ -229,7 +242,7 @@ export function AppSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg">
-                  <div className="flex size-8 items-center justify-center rounded-lg border bg-background">
+                  <div className="flex size-8 items-center justify-center overflow-hidden">
                     {tenantLogoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -238,14 +251,14 @@ export function AppSidebar({
                         className="max-h-7 max-w-7 object-contain"
                       />
                     ) : (
-                      <Building2 className="size-4" />
+                      <Logomark size={32} />
                     )}
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
+                    <span className="truncate font-serif text-[15px] font-medium tracking-[-0.01em] text-ink">
                       {tenantName ?? "Workspace"}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-[11px] text-subtle">
                       {tenantSlug ? `${tenantSlug} workspace` : "Company workspace"}
                     </span>
                   </div>
@@ -305,9 +318,9 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {visibleGroups.map(group => (
-          <SidebarGroup key={group.title} className="py-1">
+          <SidebarGroup key={group.title} className="py-0">
             {!group.hideLabel && (
-              <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              <SidebarGroupLabel className="px-2.5 mt-1.5 mb-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-subtle">
                 {group.title}
               </SidebarGroupLabel>
             )}
@@ -335,16 +348,38 @@ export function AppSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
+
+        {/* Standalone Settings entry, pinned just above the user card. */}
+        <SidebarGroup className="mt-auto py-0">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {navFooter.items.map(item => {
+                const Icon = item.icon;
+                const active = isActive(item.url);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton isActive={active} asChild tooltip={item.title}>
+                      <Link href={item.url}>
+                        <Icon className="size-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       {user && (
         <SidebarFooter>
           <SidebarMenu>
-            <SidebarMenuItem>
+            <SidebarMenuItem className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton
                     size="lg"
-                    className="data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
+                    className="flex-1 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
                       <AvatarImage src={user.image ?? ""} alt={userDisplayName} />
@@ -355,19 +390,19 @@ export function AppSidebar({
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{userDisplayName}</span>
-                      <span className="truncate text-xs text-muted-foreground">
+                      <span className="truncate font-medium text-ink">{userDisplayName}</span>
+                      <span className="truncate text-[11px] text-subtle">
                         {user.email}
                       </span>
                     </div>
-                    <ChevronsUpDown className="ml-auto size-4" />
+                    <MoreVertical className="ml-auto size-4" />
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                  side="top"
-                  align="start"
-                  sideOffset={4}
+                  className="min-w-56 rounded-lg"
+                  side="right"
+                  align="end"
+                  sideOffset={8}
                 >
                   <DropdownMenuLabel className="p-0 font-normal">
                     <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
@@ -403,49 +438,29 @@ export function AppSidebar({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem asChild>
+                      <Link href="/support">
+                        <LifeBuoy className="size-4" />
+                        Help &amp; support
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/changelog">
+                        <Sparkles className="size-4" />
+                        What&apos;s new
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
                     <LogOut className="size-4" />
-                    Sign Out
+                    Sign out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
-          <div className="flex flex-wrap justify-center gap-x-2 gap-y-1 px-2 pb-1">
-            <Link
-              href="/support"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Support
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/changelog"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Changelog
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/privacy"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Privacy
-            </Link>
-            <span className="text-[10px] text-muted-foreground/80" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/terms"
-              className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-            >
-              Terms
-            </Link>
-          </div>
         </SidebarFooter>
       )}
       <SidebarRail />

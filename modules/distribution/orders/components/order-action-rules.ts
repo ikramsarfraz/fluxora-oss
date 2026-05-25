@@ -47,6 +47,12 @@ export interface OrderActionAvailability {
  * Layer a role permission on top of a workflow-state reason. Workflow state
  * takes precedence in the message — if the state already blocks, we surface
  * that reason first; otherwise fall back to the role reason when denied.
+ *
+ * `role === undefined` means "the caller hasn't resolved the user yet"
+ * (e.g. `useCurrentPortalUser` is still loading). We deny actions in that
+ * window so buttons don't flash enabled and then snap disabled when the
+ * role resolves. Callers that genuinely want workflow-only checks (no
+ * user context at all) should pass `null` explicitly.
  */
 function layerPermission(
   workflowReason: string | null,
@@ -54,7 +60,8 @@ function layerPermission(
   permission: OrderPermission,
 ): string | null {
   if (workflowReason) return workflowReason;
-  if (role === undefined) return null;
+  if (role === undefined) return "Loading user permissions…";
+  if (role === null) return null;
   if (!can(role, permission)) return getPermissionDeniedReason(permission);
   return null;
 }
@@ -64,8 +71,9 @@ function layerPermission(
  *
  * When `role` is provided, role-based permissions are layered on top of the
  * existing workflow rules — an action is allowed only when both the workflow
- * state and the role allow it. When `role` is omitted (`undefined`), only
- * workflow rules apply (useful for read-only previews / legacy callers).
+ * state and the role allow it. Pass `undefined` while the role is still
+ * loading (everything reports unavailable) or `null` to skip role layering
+ * entirely (workflow-only, for previews / non-user callers).
  */
 export function getOrderActionAvailability(
   order: SalesOrderDetail,

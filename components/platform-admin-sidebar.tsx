@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   Building2,
   ChevronsUpDown,
   CreditCard,
@@ -82,6 +83,11 @@ const navItems: NavItem[] = [
     url: "/admin/subscriptions",
     icon: CreditCard,
   },
+  {
+    title: "AI usage",
+    url: "/admin/ai-usage",
+    icon: BarChart3,
+  },
 ];
 
 export function PlatformAdminSidebar({
@@ -117,7 +123,7 @@ export function PlatformAdminSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton size="lg">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-ink-warm text-white">
                     <ShieldCheck className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
@@ -173,7 +179,9 @@ export function PlatformAdminSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Platform</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2.5 mt-1.5 mb-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-subtle">
+            Platform
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map(item => {
