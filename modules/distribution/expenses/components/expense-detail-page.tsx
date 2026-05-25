@@ -47,6 +47,7 @@ import {
 } from "../hooks/use-expense-attachments";
 import { ActivityCard } from "@/modules/distribution/components/activity-card";
 import { buildExpenseActivityItems } from "../utils/expense-activity";
+import { useExpenseBankLink } from "../hooks/use-expense-bank-link";
 import {
   useApproveExpense,
   useMarkExpensePaid,
@@ -221,6 +222,8 @@ export function ExpenseDetailPage({ expenseId }: { expenseId: string }) {
       ) : null}
 
       <AttachmentsSection expenseId={expense.id} canManage={canManage} />
+
+      <LinkedBankTransactionSection expenseId={expense.id} />
 
       <ExpenseActivitySection expense={expense} />
 
@@ -471,6 +474,57 @@ function formatBytes(bytes: number | null | undefined): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function LinkedBankTransactionSection({ expenseId }: { expenseId: string }) {
+  const { data: link, isLoading } = useExpenseBankLink(expenseId);
+
+  // Hide the section entirely while loading or when there's nothing to
+  // show. We don't render "No bank transaction linked" — initiate-link
+  // lives on the bank-activity side (issue #258), so an empty state
+  // here would just be noise.
+  if (isLoading || !link) return null;
+
+  const isOutflow = link.amount > 0;
+  const amountStr = `${isOutflow ? "−" : "+"}$${Math.abs(link.amount).toLocaleString(
+    "en-US",
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+  )}`;
+
+  return (
+    <DetailSection title="Linked bank transaction">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-ink">
+            {link.merchantName ?? link.rawDescription.slice(0, 40)}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="font-mono uppercase tracking-wide">{link.paymentMethod}</span>
+            {link.accountName ? (
+              <>
+                <span>·</span>
+                <span>
+                  {link.accountName}
+                  {link.accountMask ? ` ···${link.accountMask}` : ""}
+                </span>
+              </>
+            ) : null}
+            <span>·</span>
+            <span>{formatDisplayDate(link.date)}</span>
+            {link.confirmedAt ? (
+              <>
+                <span>·</span>
+                <span>linked {formatDisplayDateTime(link.confirmedAt)}</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+        <div className="font-mono text-base font-semibold tabular-nums text-ink">
+          {amountStr}
+        </div>
+      </div>
+    </DetailSection>
+  );
 }
 
 function ExpenseActivitySection({ expense }: { expense: ExpenseDetail }) {

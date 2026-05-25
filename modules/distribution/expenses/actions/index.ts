@@ -26,6 +26,10 @@ import {
 } from "./attachments";
 
 import {
+  getLinkedBankTransactionForExpenseAction as _getLinkedBankTransactionForExpenseAction,
+} from "./bank-link";
+
+import {
   approveExpenseAction as _approveExpenseAction,
   markExpensePaidAction as _markExpensePaidAction,
   rejectExpenseAction as _rejectExpenseAction,
@@ -135,4 +139,10 @@ export async function updateExpenseAction(input: UpdateExpenseInput) {
 
 export async function deleteExpenseAction(id: string) {
   return await deleteExpense(id);
+}
+
+export async function getLinkedBankTransactionForExpenseAction(
+  ...args: Parameters<typeof _getLinkedBankTransactionForExpenseAction>
+) {
+  return _getLinkedBankTransactionForExpenseAction(...args);
 }

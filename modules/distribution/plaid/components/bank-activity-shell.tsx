@@ -28,6 +28,7 @@ import {
   syncAllConnectionsAction,
 } from "../actions";
 import { LinkToBillSheet } from "./link-to-bill-sheet";
+import { LinkToExpenseDialog } from "./link-to-expense-dialog";
 import type { getBankActivity } from "../services/bank-activity";
 
 type Data = Awaited<ReturnType<typeof getBankActivity>>;
@@ -689,6 +690,7 @@ function TransactionRow({
   const [confirming, startConfirm] = useTransition();
   const [rejecting, startReject] = useTransition();
   const [linkSheetOpen, setLinkSheetOpen] = useState(false);
+  const [linkExpenseOpen, setLinkExpenseOpen] = useState(false);
   const router = useRouter();
 
   const isOutflow = txn.amount > 0;
@@ -868,14 +870,23 @@ function TransactionRow({
               </span>
             </Link>
           ) : isUnmatched ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setLinkSheetOpen(true)}
-              className="h-7 px-3 text-xs"
-            >
-              Link to bill
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setLinkSheetOpen(true)}
+                className="h-7 px-3 text-xs"
+              >
+                Link to bill
+              </Button>
+              <button
+                type="button"
+                onClick={() => setLinkExpenseOpen(true)}
+                className="text-[11px] text-subtle underline-offset-2 hover:underline"
+              >
+                or link to expense
+              </button>
+            </div>
           ) : (
             <span style={{ fontSize: 12, color: C.muted }}>—</span>
           )}
@@ -898,6 +909,13 @@ function TransactionRow({
         txn={txn}
         open={linkSheetOpen}
         onClose={() => setLinkSheetOpen(false)}
+      />
+
+      {/* Link-to-expense dialog (issue #258) */}
+      <LinkToExpenseDialog
+        txn={txn}
+        open={linkExpenseOpen}
+        onClose={() => setLinkExpenseOpen(false)}
       />
     </>
   );
