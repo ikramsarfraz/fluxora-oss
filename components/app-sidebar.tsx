@@ -116,11 +116,6 @@ const navMain: NavGroup[] = [
         icon: Receipt,
       },
       {
-        title: "Payments",
-        url: "/payments",
-        icon: Wallet,
-      },
-      {
         title: "Prices",
         url: "/prices",
         icon: TableProperties,
@@ -156,16 +151,16 @@ const navMain: NavGroup[] = [
         url: "/suppliers",
         icon: Truck,
       },
-      {
-        title: "Bill payments",
-        url: "/bill-payments",
-        icon: Wallet,
-      },
     ],
   },
   {
     title: "Finance",
     items: [
+      {
+        title: "Payments",
+        url: "/payments",
+        icon: Wallet,
+      },
       {
         title: "Bank feed",
         url: "/bank-activity",

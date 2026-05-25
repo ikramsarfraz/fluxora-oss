@@ -100,7 +100,7 @@ export function BillPaymentDetailPage({ paymentId }: { paymentId: string }) {
       >
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/bill-payments">
+            <Link href="/payments?tab=bill">
               <ArrowLeft className="size-4" />
               Back to bill payments
             </Link>

@@ -204,7 +204,16 @@ function buildColumns(
   ];
 }
 
-export function PaymentsPage() {
+type PaymentsPageProps = {
+  /**
+   * Render without the title + subtitle + "Record payment" row. Used when
+   * embedded under a shared header (e.g. the /payments tabbed hub) which
+   * owns the title and the record action.
+   */
+  hideHeader?: boolean;
+};
+
+export function PaymentsPage({ hideHeader = false }: PaymentsPageProps = {}) {
   const router = useRouter();
   const { data: currentUser } = useCurrentPortalUser();
   const canRecordPayment = can(currentUser?.role, "record_payment");
@@ -377,8 +386,9 @@ export function PaymentsPage() {
       <ListingPage
         title="Payments"
         subtitle="Customer payments recorded against sales invoices."
+        hideHeader={hideHeader}
         primaryAction={
-          canRecordPayment ? (
+          !hideHeader && canRecordPayment ? (
             <Button onClick={() => setRecordOpen(true)} size="sm">
               <Receipt className="h-4 w-4" />
               Record payment
@@ -412,7 +422,9 @@ export function PaymentsPage() {
         onSortChange={(key, dir) => pagination.setSort(key as PaymentListSort, dir)}
       />
 
-      <GlobalPaymentEntryDialog open={recordOpen} onOpenChange={setRecordOpen} />
+      {hideHeader ? null : (
+        <GlobalPaymentEntryDialog open={recordOpen} onOpenChange={setRecordOpen} />
+      )}
 
       {selectedIds.size > 0 && canRecordPayment ? (
         <BulkReconcileBar
