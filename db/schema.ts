@@ -3002,6 +3002,17 @@ export const paymentMatches = pgTable(
     index("payment_matches_invoice_id_idx").on(table.supplierInvoiceId),
     index("payment_matches_sales_invoice_id_idx").on(table.salesInvoiceId),
     index("payment_matches_status_idx").on(table.status),
+    // Partial unique indexes (issue #269) close the check-then-insert
+    // race: sync + a manual confirm firing concurrently used to be able
+    // to land two pending matches for the same pair. Exclude status =
+    // 'rejected' so a rejected match doesn't permanently block a
+    // future re-match of the same pair.
+    uniqueIndex("payment_matches_tenant_txn_supplier_unique")
+      .on(table.tenantId, table.bankTransactionId, table.supplierInvoiceId)
+      .where(sql`${table.supplierInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
+    uniqueIndex("payment_matches_tenant_txn_sales_unique")
+      .on(table.tenantId, table.bankTransactionId, table.salesInvoiceId)
+      .where(sql`${table.salesInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
     // Exactly one of the two FK columns must be set.
     check(
       "payment_matches_one_invoice_only",

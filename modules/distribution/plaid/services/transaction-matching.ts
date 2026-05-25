@@ -85,7 +85,12 @@ async function matchOutflowToBill(txn: BankTransaction): Promise<void> {
     return;
   }
 
-  // Avoid creating duplicate matches
+  // Avoid creating duplicate matches. The partial unique index added in
+  // migration 0066 (issue #269) is the authoritative guard against
+  // concurrent inserts; this check is the fast-path that skips the
+  // INSERT entirely when a match already exists. onConflictDoNothing
+  // is the safety net for the race window between the check and the
+  // INSERT.
   const existing = await db.query.paymentMatches.findFirst({
     where: and(
       eq(paymentMatches.bankTransactionId, txn.id),
@@ -96,17 +101,32 @@ async function matchOutflowToBill(txn: BankTransaction): Promise<void> {
 
   const status = result.autoApply ? "auto_applied" : "pending_review";
 
-  await db.insert(paymentMatches).values({
-    tenantId: txn.tenantId,
-    bankTransactionId: txn.id,
-    supplierInvoiceId: result.invoiceId,
-    status,
-    confidence: result.confidence.toFixed(4),
-    autoApplied: result.autoApply,
-    amountScore: result.factors.amountScore.toFixed(4),
-    payeeScore: result.factors.payeeScore.toFixed(4),
-    timingScore: result.factors.timingScore.toFixed(4),
-  });
+  const inserted = await db
+    .insert(paymentMatches)
+    .values({
+      tenantId: txn.tenantId,
+      bankTransactionId: txn.id,
+      supplierInvoiceId: result.invoiceId,
+      status,
+      confidence: result.confidence.toFixed(4),
+      autoApplied: result.autoApply,
+      amountScore: result.factors.amountScore.toFixed(4),
+      payeeScore: result.factors.payeeScore.toFixed(4),
+      timingScore: result.factors.timingScore.toFixed(4),
+    })
+    .onConflictDoNothing({
+      target: [
+        paymentMatches.tenantId,
+        paymentMatches.bankTransactionId,
+        paymentMatches.supplierInvoiceId,
+      ],
+      where: sql`${paymentMatches.supplierInvoiceId} IS NOT NULL AND ${paymentMatches.status} != 'rejected'`,
+    })
+    .returning({ id: paymentMatches.id });
+
+  // Concurrent inserter beat us — its row is the canonical one; no auto-
+  // apply side effects to run.
+  if (inserted.length === 0) return;
 
   if (result.autoApply) {
     await captureServerEvent({
@@ -188,6 +208,8 @@ async function matchInflowToSalesInvoice(txn: BankTransaction): Promise<void> {
     return;
   }
 
+  // Same race-vs-fast-path pattern as the AP side; see comment above
+  // matchOutflowToBill's insert.
   const existing = await db.query.paymentMatches.findFirst({
     where: and(
       eq(paymentMatches.bankTransactionId, txn.id),
@@ -202,17 +224,27 @@ async function matchInflowToSalesInvoice(txn: BankTransaction): Promise<void> {
   // unpaid while the UI shows "matched." Until a system-user sentinel exists,
   // every AR match goes to pending_review so the confirm step records the
   // payment atomically.
-  await db.insert(paymentMatches).values({
-    tenantId: txn.tenantId,
-    bankTransactionId: txn.id,
-    salesInvoiceId: best.invoiceId,
-    status: "pending_review",
-    confidence: best.confidence.toFixed(4),
-    autoApplied: false,
-    amountScore: best.factors.amountScore.toFixed(4),
-    payeeScore: best.factors.payeeScore.toFixed(4),
-    timingScore: best.factors.timingScore.toFixed(4),
-  });
+  await db
+    .insert(paymentMatches)
+    .values({
+      tenantId: txn.tenantId,
+      bankTransactionId: txn.id,
+      salesInvoiceId: best.invoiceId,
+      status: "pending_review",
+      confidence: best.confidence.toFixed(4),
+      autoApplied: false,
+      amountScore: best.factors.amountScore.toFixed(4),
+      payeeScore: best.factors.payeeScore.toFixed(4),
+      timingScore: best.factors.timingScore.toFixed(4),
+    })
+    .onConflictDoNothing({
+      target: [
+        paymentMatches.tenantId,
+        paymentMatches.bankTransactionId,
+        paymentMatches.salesInvoiceId,
+      ],
+      where: sql`${paymentMatches.salesInvoiceId} IS NOT NULL AND ${paymentMatches.status} != 'rejected'`,
+    });
 }
 
 /**
