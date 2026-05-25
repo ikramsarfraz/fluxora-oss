@@ -162,14 +162,14 @@ const navMain: NavGroup[] = [
         icon: Wallet,
       },
       {
-        title: "Bank feed",
-        url: "/bank-activity",
-        icon: Activity,
-      },
-      {
         title: "Expenses",
         url: "/expenses",
         icon: CreditCard,
+      },
+      {
+        title: "Bank feed",
+        url: "/bank-activity",
+        icon: Activity,
       },
     ],
   },
