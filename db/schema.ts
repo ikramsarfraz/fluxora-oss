@@ -2980,6 +2980,16 @@ export const paymentMatches = pgTable(
       () => salesInvoices.id,
       { onDelete: "restrict" },
     ),
+    /**
+     * For OUTFLOW txn matches that resolve to an internal expense (e.g. a
+     * subscription, fee, or non-bill spend the user recorded as an
+     * expense). NULL for AP / AR matches. Added in migration 0067 (issue
+     * #258) so the expenses module and the bank-feed stop telling two
+     * different stories about the same money.
+     */
+    expenseId: uuid("expense_id").references(() => expenses.id, {
+      onDelete: "restrict",
+    }),
     status: paymentMatchStatusEnum("status").notNull().default("pending_review"),
     confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
     autoApplied: boolean("auto_applied").notNull().default(false),
@@ -3001,22 +3011,28 @@ export const paymentMatches = pgTable(
     index("payment_matches_txn_id_idx").on(table.bankTransactionId),
     index("payment_matches_invoice_id_idx").on(table.supplierInvoiceId),
     index("payment_matches_sales_invoice_id_idx").on(table.salesInvoiceId),
+    index("payment_matches_expense_id_idx").on(table.expenseId),
     index("payment_matches_status_idx").on(table.status),
-    // Partial unique indexes (issue #269) close the check-then-insert
-    // race: sync + a manual confirm firing concurrently used to be able
-    // to land two pending matches for the same pair. Exclude status =
-    // 'rejected' so a rejected match doesn't permanently block a
-    // future re-match of the same pair.
+    // Partial unique indexes (issue #269 for the AP/AR pair; extended in
+    // issue #258 for the expense pair) close the check-then-insert race.
     uniqueIndex("payment_matches_tenant_txn_supplier_unique")
       .on(table.tenantId, table.bankTransactionId, table.supplierInvoiceId)
       .where(sql`${table.supplierInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
     uniqueIndex("payment_matches_tenant_txn_sales_unique")
       .on(table.tenantId, table.bankTransactionId, table.salesInvoiceId)
       .where(sql`${table.salesInvoiceId} IS NOT NULL AND ${table.status} != 'rejected'`),
-    // Exactly one of the two FK columns must be set.
+    uniqueIndex("payment_matches_tenant_txn_expense_unique")
+      .on(table.tenantId, table.bankTransactionId, table.expenseId)
+      .where(sql`${table.expenseId} IS NOT NULL AND ${table.status} != 'rejected'`),
+    // Exactly one of the three target FKs must be set. The arithmetic
+    // form keeps the constraint readable as we add resolution targets.
     check(
-      "payment_matches_one_invoice_only",
-      sql`(${table.supplierInvoiceId} IS NOT NULL AND ${table.salesInvoiceId} IS NULL) OR (${table.supplierInvoiceId} IS NULL AND ${table.salesInvoiceId} IS NOT NULL)`,
+      "payment_matches_one_target_only",
+      sql`(
+        (CASE WHEN ${table.supplierInvoiceId} IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN ${table.salesInvoiceId} IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN ${table.expenseId} IS NOT NULL THEN 1 ELSE 0 END)
+      ) = 1`,
     ),
   ],
 );
