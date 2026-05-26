@@ -15,8 +15,8 @@ import {
  * message; API route handlers translate it to a 402.
  *
  * Read paths must NOT throw this — only mutation entry points should
- * gate. Otherwise tenants can't reach `/account/billing` to fix the
- * problem.
+ * gate. Otherwise tenants can't reach `/settings/billing/plan-and-usage`
+ * to fix the problem.
  */
 export class SubscriptionBlockedError extends Error {
   /** Hint for `app/api/*` handlers translating to HTTP. */
@@ -26,7 +26,7 @@ export class SubscriptionBlockedError extends Error {
     super(
       message ??
         "Your workspace's subscription is canceled or expired. " +
-          "Reactivate billing from /account/billing to perform this action.",
+          "Reactivate billing from /settings/billing/plan-and-usage to perform this action.",
     );
     this.name = "SubscriptionBlockedError";
   }

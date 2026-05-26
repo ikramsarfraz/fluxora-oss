@@ -49,7 +49,7 @@ export function ReelEmbed({
           <span className="size-2 rounded-full bg-warning-fg/60" />
           <span className="size-2 rounded-full bg-success-fg/60" />
           <div className="ml-3 flex flex-1 items-center gap-1.5 rounded-md bg-card-warm/80 px-2 py-0.5 font-mono text-[10px] text-subtle">
-            <span>pacificwharf.fluxora.app{slug === "stripe-billing" ? "/account/billing" : ""}</span>
+            <span>pacificwharf.fluxora.app{slug === "stripe-billing" ? "/settings/billing/plan-and-usage" : ""}</span>
           </div>
           {showOpen ? (
             <Link

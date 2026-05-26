@@ -1,4 +1,10 @@
-export type SettingsGroupKey = "workspace" | "team" | "integrations" | "security";
+export type SettingsGroupKey =
+  | "account"
+  | "workspace"
+  | "team"
+  | "integrations"
+  | "security"
+  | "billing";
 
 export type SettingsIconKey =
   | "home"
@@ -7,7 +13,9 @@ export type SettingsIconKey =
   | "users"
   | "shield"
   | "landmark"
-  | "scroll-text";
+  | "scroll-text"
+  | "user"
+  | "credit-card";
 
 export type SettingsLeaf = {
   /** Sub-nav label. */
@@ -35,6 +43,15 @@ export function buildSettingsGroups(opts: {
   connectedBankCount?: number;
 }): SettingsGroup[] {
   return [
+    {
+      key: "account",
+      label: "Account",
+      // Every user can manage their own profile; gating is per-page.
+      visible: true,
+      items: [
+        { label: "Profile", href: "/settings/account/profile", icon: "user" },
+      ],
+    },
     {
       key: "workspace",
       label: "Workspace",
@@ -84,6 +101,22 @@ export function buildSettingsGroups(opts: {
       visible: opts.canManageWorkspace,
       items: [
         { label: "Activity log", href: "/settings/security/activity-log", icon: "scroll-text" },
+      ],
+    },
+    {
+      key: "billing",
+      label: "Billing",
+      // Billing pages render for any signed-in user; management actions
+      // (subscribe / customer portal) are gated to owner/admin inside the
+      // page itself. Blocked tenants reach this via the exempt list in
+      // lib/tenant-subscription-health.ts.
+      visible: true,
+      items: [
+        {
+          label: "Plan & usage",
+          href: "/settings/billing/plan-and-usage",
+          icon: "credit-card",
+        },
       ],
     },
   ];

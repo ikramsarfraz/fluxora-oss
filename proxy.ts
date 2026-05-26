@@ -227,7 +227,7 @@ export async function proxy(request: NextRequest) {
     } else if (pathname === "/admin/branding") {
       rewrittenUrl.pathname = "/tenant-admin/branding";
     } else {
-      rewrittenUrl.pathname = "/account/billing";
+      rewrittenUrl.pathname = "/settings/billing/plan-and-usage";
     }
     return NextResponse.rewrite(rewrittenUrl, {
       request: {

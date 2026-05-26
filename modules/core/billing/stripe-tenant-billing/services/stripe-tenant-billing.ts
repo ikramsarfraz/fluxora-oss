@@ -290,7 +290,7 @@ export async function startCheckoutForTenant(input: {
  */
 export async function createTenantStripeCustomerPortalSession(input: {
   tenantId: string;
-  /** Path on this app origin; default `/account/billing` */
+  /** Path on this app origin; default `/settings/billing/plan-and-usage` */
   returnPath?: string;
 }): Promise<{ url: string }> {
   const row = await db.query.tenants.findFirst({
@@ -305,7 +305,7 @@ export async function createTenantStripeCustomerPortalSession(input: {
       "Billing management is unavailable until this workspace completes its first Stripe subscription checkout (no Stripe customer on file).",
     );
   }
-  const raw = input.returnPath?.trim() || "/account/billing";
+  const raw = input.returnPath?.trim() || "/settings/billing/plan-and-usage";
   const path = raw.startsWith("/") ? raw : `/${raw}`;
   const origin = getAppPublicOrigin();
   const returnUrl = `${origin}${path}`;

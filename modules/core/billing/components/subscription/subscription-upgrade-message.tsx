@@ -8,7 +8,7 @@ export function SubscriptionUpgradeMessage(props: {
     <div className="space-y-2">
       <p>{props.message}</p>
       <Link
-        href={props.href ?? "/account/billing#billing-plans"}
+        href={props.href ?? "/settings/billing/plan-and-usage#billing-plans"}
         className="font-medium underline underline-offset-4"
       >
         Upgrade plan

@@ -42,7 +42,7 @@ export default async function BillingBlockedPage() {
           No portal profile is linked to this sign-in yet.
         </p>
         <Button variant="outline" className="w-fit" asChild>
-          <Link href="/account">Back to account</Link>
+          <Link href="/settings/account/profile">Back to account</Link>
         </Button>
       </div>
     );
@@ -95,7 +95,7 @@ export default async function BillingBlockedPage() {
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3">
             <Button asChild>
-              <Link href="/account/billing">Open Billing</Link>
+              <Link href="/settings/billing/plan-and-usage">Open Billing</Link>
             </Button>
             {!canManageBilling ? (
               <p className="w-full text-muted-foreground text-xs">

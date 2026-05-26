@@ -18,14 +18,14 @@ export async function startTenantAdminStripeCheckoutAction(
 ): Promise<{ url: string }> {
   const p = stripeSaasPaidPlanSchema.parse(plan);
   const admin = await requireAdminPortalUser();
-  const billingPath = "/account/billing";
+  const billingPath = "/settings/billing/plan-and-usage";
   const { url } = await startCheckoutForTenant({
     tenantId: admin.tenantId,
     plan: p,
     successPath: billingPath,
     cancelPath: billingPath,
   });
-  revalidatePath("/account");
+  revalidatePath("/settings/account/profile");
   revalidatePath(billingPath);
   revalidatePath("/dashboard");
   return { url };
@@ -35,12 +35,12 @@ export async function startTenantAdminStripeCustomerPortalAction(): Promise<{
   url: string;
 }> {
   const admin = await requireAdminPortalUser();
-  const billingPath = "/account/billing";
+  const billingPath = "/settings/billing/plan-and-usage";
   const { url } = await createTenantStripeCustomerPortalSession({
     tenantId: admin.tenantId,
     returnPath: billingPath,
   });
-  revalidatePath("/account");
+  revalidatePath("/settings/account/profile");
   revalidatePath(billingPath);
   revalidatePath("/dashboard");
   return { url };

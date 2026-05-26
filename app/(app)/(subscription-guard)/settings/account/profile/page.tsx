@@ -2,13 +2,14 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { AccountPortalProfile } from "@/app/(app)/account/account-portal-profile";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
 
-export default async function AccountPage() {
+import { AccountPortalProfile } from "./account-portal-profile";
+
+export default async function SettingsAccountProfilePage() {
   const session = await auth.api.getSession({
     headers: await headers(),
   });

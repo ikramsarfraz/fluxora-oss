@@ -148,7 +148,9 @@ export function isSubscriptionAccessExemptPath(pathname: string): boolean {
   if (p === "/billing-blocked" || p.startsWith("/billing-blocked/")) {
     return true;
   }
-  if (p === "/account/billing" || p.startsWith("/account/billing/")) {
+  // Tenant billing now lives under /settings/billing; keep blocked tenants
+  // able to reach it (and the /admin/billing alias) so they can self-resolve.
+  if (p === "/settings/billing" || p.startsWith("/settings/billing/")) {
     return true;
   }
   if (p === "/admin/billing" || p.startsWith("/admin/billing/")) {

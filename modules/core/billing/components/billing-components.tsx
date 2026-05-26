@@ -311,7 +311,7 @@ export function UsageRow({
             )}
             {showUpgradeLink && (
               <Link
-                href="/account/billing#billing-plans"
+                href="/settings/billing/plan-and-usage#billing-plans"
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
               >
                 Upgrade to increase limit
@@ -361,7 +361,7 @@ export function UsageCard({
               asChild
               className="transition-all hover:bg-muted/80 active:scale-[0.98]"
             >
-              <Link href="/account/billing#billing-plans">
+              <Link href="/settings/billing/plan-and-usage#billing-plans">
                 <Sparkles className="mr-2 h-4 w-4" />
                 Upgrade
               </Link>

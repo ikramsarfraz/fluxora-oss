@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Legacy `/tenant-admin/billing`; tenant UI lives under `/account/billing`. */
+/** Legacy `/tenant-admin/billing`; tenant UI lives under `/settings/billing/plan-and-usage`. */
 export default function LegacyTenantBillingRedirectPage() {
-  redirect("/account/billing");
+  redirect("/settings/billing/plan-and-usage");
 }

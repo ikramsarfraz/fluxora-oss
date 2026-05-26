@@ -33,7 +33,7 @@ import {
   formatTenantPaymentMethodExpiryLine,
 } from "@/lib/subscription-display";
 
-export default async function AccountBillingPage(props: {
+export default async function SettingsBillingPlanAndUsagePage(props: {
   searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
 }) {
   const session = await auth.api.getSession({
@@ -62,7 +62,7 @@ export default async function AccountBillingPage(props: {
           </p>
         </div>
         <Button variant="outline" asChild>
-          <Link href="/account">Back to account</Link>
+          <Link href="/settings/account/profile">Back to account</Link>
         </Button>
       </div>
     );
@@ -193,10 +193,10 @@ export default async function AccountBillingPage(props: {
                 stripeCustomerId={tenant.stripeCustomerId}
               />
               {canManageBilling && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full justify-start text-muted-foreground hover:text-foreground" 
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground"
                   asChild
                 >
                   <Link href="#billing-plans">

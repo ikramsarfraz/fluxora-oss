@@ -65,7 +65,7 @@ export function PlanFeatureGate({
         </div>
         <div className="flex items-center gap-3">
           <Button asChild>
-            <Link href="/account/billing#billing-plans">Upgrade plan</Link>
+            <Link href="/settings/billing/plan-and-usage#billing-plans">Upgrade plan</Link>
           </Button>
         </div>
       </CardContent>

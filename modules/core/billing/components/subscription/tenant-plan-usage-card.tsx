@@ -43,7 +43,7 @@ function UsageMetricCard(props: {
       {showUpgradeLink ? (
         <div className="mt-2">
           <Link
-            href="/account/billing#billing-plans"
+            href="/settings/billing/plan-and-usage#billing-plans"
             className="text-sm font-medium underline underline-offset-4"
           >
             Upgrade plan

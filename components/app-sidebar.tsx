@@ -425,13 +425,13 @@ export function AppSidebar({
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem asChild>
-                      <Link href="/account">
+                      <Link href="/settings/account/profile">
                         <BadgeCheck className="size-4" />
                         Account
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/account/billing">
+                      <Link href="/settings/billing/plan-and-usage">
                         <CircleDollarSign className="size-4" />
                         Billing
                       </Link>

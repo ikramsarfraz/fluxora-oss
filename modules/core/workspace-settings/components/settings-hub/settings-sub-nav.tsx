@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CreditCard,
   Home,
   Landmark,
   LayoutGrid,
   Ruler,
   ScrollText,
   Shield,
+  User,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +27,8 @@ const ICONS: Record<SettingsIconKey, LucideIcon> = {
   shield: Shield,
   landmark: Landmark,
   "scroll-text": ScrollText,
+  user: User,
+  "credit-card": CreditCard,
 };
 
 export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {

@@ -20,7 +20,7 @@ export function TenantSubscriptionHealthBanner(props: {
     return null;
   }
 
-  const billingHref = "/account/billing";
+  const billingHref = "/settings/billing/plan-and-usage";
 
   /** Trial-ending-soon UX (narrow window) replaces generic trialing banner. */
   if (health === "trialing" && !isTrialEndingWithinDays(props.tenantFields)) {
