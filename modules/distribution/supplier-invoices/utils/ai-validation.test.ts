@@ -679,6 +679,23 @@ test("AI extraction output with real lines passes validation even when supplier 
 // Unit-of-measure normalization on per_each / per_unit lines
 // ---------------------------------------------------------------------------
 
+// Permissive line shape used only by the test helpers below. The
+// production validator accepts `unknown`, so tests don't depend on the
+// real Zod type — keeping this loose lets individual tests overwrite
+// fields with widened values (e.g. quantityWeight: number, or attaching
+// vendorProductDescription) without each assignment fighting TS narrowing.
+type TestExtractionLine = {
+  vendorProductName: string;
+  vendorProductDescription?: string | null;
+  quantityCases: number;
+  quantityWeight: number | null;
+  unitPrice: number;
+  lineTotal: number;
+  unitType: string;
+  unitOfMeasure: string;
+  notes: string | null;
+};
+
 function beverageExtractionPayload() {
   return {
     supplierName: "COKE DISTRIBUTOR",
@@ -698,7 +715,7 @@ function beverageExtractionPayload() {
         unitOfMeasure: "case",
         notes: null,
       },
-    ],
+    ] as TestExtractionLine[],
     confidence: 90,
     warnings: [],
     reasoning: "Beverage invoice with per-case pricing.",
