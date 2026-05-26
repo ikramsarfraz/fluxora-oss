@@ -775,13 +775,8 @@ function TenantSignInLayout({
 
           <div className="flex flex-col gap-2 border-t-[0.5px] border-divider bg-card-warm px-9 py-3.5 text-center text-[12.5px] text-subtle">
             <div>
-              Not invited yet? Ask your admin or{" "}
-              <a
-                href={supportHref}
-                className="border-b border-transparent pb-[1px] font-medium text-ink transition-colors hover:border-ink"
-              >
-                request access →
-              </a>
+              Access to {tenant.name} is invite-only. Contact the workspace
+              owner if you need to join.
             </div>
             <div className="font-mono text-[10.5px] tracking-[0.04em] text-muted">
               Need a different workspace?{" "}

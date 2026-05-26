@@ -189,7 +189,7 @@ export function SignUpForm({
             <p className="mt-1 text-[14px] leading-[1.55] text-subtle">
               {requestsBlocked
                 ? `${requestTenant?.name ?? "This workspace"} is currently inactive.`
-                : "Contact your admin for access."}
+                : `${requestTenant?.name ?? "This workspace"} is invite-only. Contact the workspace owner if you need to join.`}
             </p>
           </div>
           {inviteToken ? (
