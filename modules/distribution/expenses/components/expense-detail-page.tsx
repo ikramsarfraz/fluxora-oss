@@ -46,6 +46,7 @@ import {
   useUploadExpenseAttachment,
 } from "../hooks/use-expense-attachments";
 import { ActivityCard } from "@/modules/distribution/components/activity-card";
+import type { ExpenseDetail } from "../types";
 import { buildExpenseActivityItems } from "../utils/expense-activity";
 import { useExpenseBankLink } from "../hooks/use-expense-bank-link";
 import {
