@@ -1,4 +1,4 @@
-export type SettingsGroupKey = "workspace" | "team" | "integrations" | "security" | "billing";
+export type SettingsGroupKey = "workspace" | "team" | "integrations" | "security";
 
 export type SettingsIconKey =
   | "home"
@@ -7,10 +7,7 @@ export type SettingsIconKey =
   | "users"
   | "shield"
   | "landmark"
-  | "key"
-  | "webhook"
-  | "scroll-text"
-  | "credit-card";
+  | "scroll-text";
 
 export type SettingsLeaf = {
   /** Sub-nav label. */
@@ -19,10 +16,8 @@ export type SettingsLeaf = {
   href: string;
   /** Icon identifier — resolved to a component inside the client sub-nav. */
   icon: SettingsIconKey;
-  /** Right-side badge — number (e.g. "1") or the literal "soon". */
+  /** Right-side badge — e.g. a count like "3". */
   badge?: string;
-  /** Reserved/coming-soon items still render as a link but the page itself is a stub. */
-  soon?: boolean;
 };
 
 export type SettingsGroup = {
@@ -81,8 +76,6 @@ export function buildSettingsGroups(opts: {
               ? String(opts.connectedBankCount)
               : undefined,
         },
-        { label: "API keys", href: "/settings/integrations/api-keys", icon: "key", badge: "soon", soon: true },
-        { label: "Webhooks", href: "/settings/integrations/webhooks", icon: "webhook", badge: "soon", soon: true },
       ],
     },
     {
@@ -91,20 +84,6 @@ export function buildSettingsGroups(opts: {
       visible: opts.canManageWorkspace,
       items: [
         { label: "Activity log", href: "/settings/security/activity-log", icon: "scroll-text" },
-      ],
-    },
-    {
-      key: "billing",
-      label: "Billing",
-      visible: opts.canManageWorkspace,
-      items: [
-        {
-          label: "Plan & usage",
-          href: "/settings/billing/plan-and-usage",
-          icon: "credit-card",
-          badge: "soon",
-          soon: true,
-        },
       ],
     },
   ];

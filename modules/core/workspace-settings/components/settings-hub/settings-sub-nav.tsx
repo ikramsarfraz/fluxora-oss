@@ -3,16 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  CreditCard,
   Home,
-  Key,
   Landmark,
   LayoutGrid,
   Ruler,
   ScrollText,
   Shield,
   Users,
-  Webhook,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,10 +24,7 @@ const ICONS: Record<SettingsIconKey, LucideIcon> = {
   users: Users,
   shield: Shield,
   landmark: Landmark,
-  key: Key,
-  webhook: Webhook,
   "scroll-text": ScrollText,
-  "credit-card": CreditCard,
 };
 
 export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
@@ -71,14 +65,7 @@ export function SettingsSubNav({ groups }: { groups: SettingsGroup[] }) {
                     <Icon className="size-[14px] shrink-0" strokeWidth={1.8} />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.badge ? (
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-px text-[10px] font-medium",
-                          item.soon
-                            ? "bg-primary/10 text-primary"
-                            : "bg-divider text-subtle",
-                        )}
-                      >
+                      <span className="rounded-full bg-divider px-1.5 py-px text-[10px] font-medium text-subtle">
                         {item.badge}
                       </span>
                     ) : null}
