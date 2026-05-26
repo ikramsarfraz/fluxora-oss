@@ -487,7 +487,7 @@ function Features() {
           body="Every workflow is lot-aware, role-aware, and tenant-scoped — so traceability isn't a feature you bolt on, it's the spine of the data model."
         />
         <div className="mt-14 flex flex-col gap-20">
-          {FEATURES.map((f, i) => (
+          {FEATURES.map((f) => (
             <div
               key={f.title}
               className={`grid grid-cols-1 gap-10 lg:grid-cols-2 lg:items-center ${f.flip ? "lg:[&>*:first-child]:order-2" : ""}`}
