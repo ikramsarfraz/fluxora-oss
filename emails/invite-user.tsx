@@ -1,56 +1,104 @@
+import { Section, Text } from "@react-email/components";
+
 import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  DetailRow,
+  Display,
+  EmailShell,
+  FallbackUrl,
+  Helper,
+  Lead,
+  PrimaryButton,
+  tokens,
+} from "./_shell";
 
 type InviteUserEmailProps = {
   fullName: string;
   inviteUrl: string;
+  tenantName?: string | null;
+  role?: string | null;
+  invitedByName?: string | null;
 };
 
-export function InviteUserEmail({ fullName, inviteUrl }: InviteUserEmailProps) {
+function prettyRole(role: string | null | undefined) {
+  if (!role) return null;
+  return role
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function InviteUserEmail({
+  fullName,
+  inviteUrl,
+  tenantName,
+  role,
+  invitedByName,
+}: InviteUserEmailProps) {
+  const workspace = tenantName?.trim() || "Fluxora";
+  const roleLabel = prettyRole(role);
   return (
-    <Html>
-      <Head />
-      <Preview>{`You're invited to Fluxora`}</Preview>
-      <Body
-        style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
+    <EmailShell
+      preview={`You're invited to ${workspace} on Fluxora`}
+      eyebrow="✦ You've been invited"
+    >
+      <Display>Join {workspace} on Fluxora.</Display>
+      <Lead>
+        Hi {fullName}, you&apos;ve been added to{" "}
+        <span style={{ fontWeight: 600, color: tokens.ink }}>{workspace}</span>
+        {roleLabel ? (
+          <>
+            {" "}as a{" "}
+            <span style={{ fontWeight: 600, color: tokens.ink }}>
+              {roleLabel}
+            </span>
+          </>
+        ) : null}
+        . Accept the invite below to set up your account and land directly
+        inside the workspace.
+      </Lead>
+
+      <Section style={{ marginTop: 6, marginBottom: 22 }}>
+        <PrimaryButton href={inviteUrl} label="Accept & join workspace →" />
+      </Section>
+
+      <Section
+        style={{
+          padding: "14px 16px",
+          backgroundColor: tokens.cardWarm,
+          border: `1px solid ${tokens.borderSoft}`,
+          borderRadius: 8,
+        }}
       >
-        <Container
+        <Text
           style={{
-            backgroundColor: "#ffffff",
-            margin: "40px auto",
-            padding: "32px",
-            borderRadius: "12px",
-            maxWidth: "560px",
-            border: "1px solid #e2e8f0",
+            margin: 0,
+            marginBottom: 6,
+            fontFamily:
+              '"Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: tokens.subtle,
           }}
         >
-          <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            {`You're invited to Fluxora`}
-          </Heading>
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            Hi {fullName},
-          </Text>
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            Use the link below to accept your invitation and finish joining this
-            workspace in Fluxora.
-          </Text>
-          <Section style={{ margin: "24px 0" }}>
-            <Button href={inviteUrl}>Accept invitation</Button>
-          </Section>
-          <Text style={{ fontSize: "12px", color: "#64748b" }}>
-            This link will expire in 7 days.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+          Invite details
+        </Text>
+        <DetailRow label="Workspace" value={workspace} />
+        {roleLabel ? <DetailRow label="Role" value={roleLabel} /> : null}
+        {invitedByName ? (
+          <DetailRow label="From" value={invitedByName} />
+        ) : null}
+        <DetailRow label="Expires" value="7 days from when this was sent" />
+      </Section>
+
+      <FallbackUrl url={inviteUrl} />
+
+      <Helper>
+        Not expecting this invitation? Ignore the email — the workspace owner
+        will see it stayed unused. No action on your part is needed.
+      </Helper>
+    </EmailShell>
   );
 }
+
+export default InviteUserEmail;

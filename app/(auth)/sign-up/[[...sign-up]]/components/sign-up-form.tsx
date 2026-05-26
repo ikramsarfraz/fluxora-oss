@@ -4,29 +4,19 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { AlertCircle, Building2, CheckCircle2, MailPlus } from "lucide-react";
-import { Google } from "@/components/icons/google";
 
+import { FluxoraMark } from "@/components/brand/fluxora-mark";
+import { Google } from "@/components/icons/google";
+import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 import {
   prepareGoogleAuthStartAction,
   sendRootSignupMagicLinkAction,
 } from "@/modules/shared/actions";
-import { AuthSplitShell } from "@/app/(auth)/components/auth-shell";
 import {
   signUpFormSchema,
   type SignUpFormValues,
 } from "@/app/(auth)/sign-up/[[...sign-up]]/components/sign-up-form.schema";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { authClient } from "@/lib/auth-client";
 
 type SignUpFormProps = {
   tenant: {
@@ -47,46 +37,80 @@ type SignUpFormProps = {
   googleEnabled: boolean;
 };
 
-type SignUpSuccess = {
-  email: string;
-};
-
 function buildSupportHref(rootDomain: string) {
   const emailDomain =
     rootDomain === "localhost" || rootDomain === "127.0.0.1"
       ? "example.com"
       : rootDomain;
-
   return `mailto:support@${emailDomain}`;
 }
 
+type FlowStep = {
+  title: string;
+  meta?: string;
+  caption: string;
+  current?: boolean;
+};
 
+const FLOW_STEPS: FlowStep[] = [
+  {
+    title: "Email",
+    meta: "· this screen",
+    caption: "Submit your work email. We send a magic link, no password.",
+    current: true,
+  },
+  {
+    title: "Confirm",
+    meta: "· /signin/verify",
+    caption: "One click in your inbox verifies your identity.",
+  },
+  {
+    title: "Profile + workspace",
+    meta: "· /onboarding",
+    caption:
+      "First and last name, workspace name, and your subdomain with live preview.",
+  },
+  {
+    title: "Get started",
+    meta: "· /get-started",
+    caption:
+      "Three quick questions inside your workspace — category, team, bill source. Then you're operating.",
+  },
+];
+
+const INCLUDED_ROWS = [
+  "Unlimited users, lots, products, and customers",
+  "Catch-weight, FIFO, expiry alerts — all standard",
+  "Branded PDF invoices with your subdomain",
+  "PDF import (OCR) for supplier bills",
+  "No card, no contract, cancel anytime",
+];
 
 export function SignUpForm({
   tenant,
   inactiveTenant,
   isRootHost,
   rootDomain,
-  tenantLoginUrl,
   rootLoginUrl,
+  tenantLoginUrl,
   inviteToken,
   googleEnabled,
 }: SignUpFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<SignUpSuccess | null>(null);
+  const [sentEmail, setSentEmail] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [agreed, setAgreed] = useState(true);
 
   const form = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpFormSchema),
-    defaultValues: {
-      email: "",
-    },
+    defaultValues: { email: "" },
     mode: "onBlur",
   });
 
   const supportHref = useMemo(() => buildSupportHref(rootDomain), [rootDomain]);
 
   async function handleGoogleSignUp() {
+    if (!googleEnabled) return;
     setSubmitError(null);
     setIsGoogleLoading(true);
     try {
@@ -113,16 +137,11 @@ export function SignUpForm({
   }
 
   async function onSubmit(data: SignUpFormValues) {
+    if (!agreed) return;
     setSubmitError(null);
-
     try {
-      const result = await sendRootSignupMagicLinkAction({
-        email: data.email,
-      });
-
-      setSuccess({
-        email: result.email,
-      });
+      const result = await sendRootSignupMagicLinkAction({ email: data.email });
+      setSentEmail(result.email);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -132,213 +151,458 @@ export function SignUpForm({
     }
   }
 
-  const { isSubmitting } = form.formState;
+  async function handleResend() {
+    if (!sentEmail) return;
+    setSubmitError(null);
+    try {
+      await sendRootSignupMagicLinkAction({ email: sentEmail });
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "Could not resend the link.",
+      );
+    }
+  }
 
+  const { isSubmitting } = form.formState;
+  const loginUrl = isRootHost ? rootLoginUrl : tenantLoginUrl;
+
+  // Tenant-host signup is invite-only
   if (!isRootHost && (tenant || inactiveTenant)) {
     const requestTenant = tenant ?? inactiveTenant;
     const requestsBlocked = Boolean(inactiveTenant && !tenant);
-
     return (
-      <AuthSplitShell
-        topLabel="Already have an account?"
-        topHref={tenantLoginUrl}
-        topAction="Sign in"
+      <ShellLayout
+        rootDomain={rootDomain}
+        loginUrl={loginUrl}
+        supportHref={supportHref}
       >
-        <div className="space-y-6 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-            <Building2 className="size-5" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
+        <div className="flex flex-col gap-6 text-center">
+          <span className="mx-auto grid size-12 place-items-center rounded-full bg-warning-bg text-[18px] text-warning-fg">
+            ⚠
+          </span>
+          <div>
+            <h1 className="text-[28px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink">
               {requestsBlocked ? "Workspace inactive" : "Invite only"}
             </h1>
-            <p className="text-sm text-[oklch(0.50_0.02_230)]">
+            <p className="mt-1 text-[14px] leading-[1.55] text-subtle">
               {requestsBlocked
                 ? `${requestTenant?.name ?? "This workspace"} is currently inactive.`
-                : "Contact your admin for access."}
+                : `${requestTenant?.name ?? "This workspace"} is invite-only. Contact the workspace owner if you need to join.`}
             </p>
           </div>
           {inviteToken ? (
-            <Alert variant="destructive" className="text-left">
-              <AlertCircle className="size-4" />
-              <AlertTitle>Invite link invalid</AlertTitle>
-              <AlertDescription>
-                This invite link is invalid, expired, already used, or does not
-                belong to this tenant.
-              </AlertDescription>
-            </Alert>
+            <div className="rounded-md border-[0.5px] border-danger-border bg-danger-bg px-3 py-2.5 text-left text-[13px] text-danger-fg">
+              This invite link is invalid, expired, already used, or does not
+              belong to this tenant.
+            </div>
           ) : null}
-          <div className="rounded-2xl border border-border bg-muted/50 p-5 text-sm leading-6 text-muted-foreground">
-            Use the invite link from your admin to join this workspace. New
-            self-serve workspace creation happens from the root signup flow.
-          </div>
-          <Button asChild className="h-11 w-full" variant="outline">
-            <Link href={tenantLoginUrl}>Back to tenant sign in</Link>
-          </Button>
+          <Link
+            href={loginUrl}
+            className="w-full rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-3 text-[14px] font-medium text-ink transition-colors hover:bg-card-warm"
+          >
+            Back to tenant sign in
+          </Link>
         </div>
-      </AuthSplitShell>
-    );
-  }
-
-  if (success) {
-    return (
-      <AuthSplitShell
-        topLabel="Already have an account?"
-        topHref={rootLoginUrl}
-        topAction="Sign in"
-      >
-        <div className="space-y-6 text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-            <CheckCircle2 className="size-5" />
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-              Check your email
-            </h1>
-            <p className="text-sm text-[oklch(0.50_0.02_230)]">
-              We emailed a secure sign-in link to{" "}
-              <span className="font-medium text-foreground">{success.email}</span>.
-              Follow it to continue to workspace setup.
-            </p>
-          </div>
-          <Button asChild className="h-10 w-full">
-            <Link href={rootLoginUrl}>Back to sign in</Link>
-          </Button>
-          <p className="text-sm text-[oklch(0.55_0.02_230)]">
-            Didn&apos;t get it?{" "}
-            <a
-              href={supportHref}
-              className="font-medium text-[oklch(0.30_0.03_230)] underline underline-offset-2 transition hover:opacity-70"
-            >
-              Contact support
-            </a>
-          </p>
-        </div>
-      </AuthSplitShell>
+      </ShellLayout>
     );
   }
 
   return (
-    <AuthSplitShell
-      topLabel="Already have an account?"
-      topHref={rootLoginUrl}
-      topAction="Sign in"
+    <ShellLayout
+      rootDomain={rootDomain}
+      loginUrl={loginUrl}
+      supportHref={supportHref}
     >
-      <div className="space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold text-[oklch(0.20_0.03_230)]">
-            Create your account
-          </h1>
-          <p className="text-sm text-[oklch(0.50_0.02_230)]">
-            Enter your work email—we&apos;ll send a secure link.{" "}
-            <span className="font-medium text-foreground">
-              Your name and workspace
-            </span>{" "}
-            are set up after you sign in for the first time.
-          </p>
-        </div>
-
-        {submitError ? (
-          <Alert variant="destructive" className="text-left">
-            <AlertCircle className="size-4" />
-            <AlertTitle>Sign up failed</AlertTitle>
-            <AlertDescription>{submitError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {googleEnabled ? (
-          <div className="space-y-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 w-full justify-center gap-2 text-muted-foreground"
-              disabled={isGoogleLoading}
-              onClick={handleGoogleSignUp}
-            >
-              <Google className="size-4" />
-              {isGoogleLoading ? "Redirecting to Google…" : "Sign up with Google"}
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              After Google sign-in, you&apos;ll create your workspace in onboarding.
+      {sentEmail ? (
+        <SentState
+          email={sentEmail}
+          onUseDifferent={() => {
+            setSentEmail(null);
+            form.reset({ email: sentEmail });
+          }}
+          onResend={handleResend}
+        />
+      ) : (
+        <>
+          <div className="flex flex-col gap-2">
+            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
+              Sign up · 14-day free trial
+            </span>
+            <h1 className="text-[32px] font-semibold leading-[1.05] tracking-[-0.03em] text-ink">
+              Start with your email.
+            </h1>
+            <p className="mt-1 text-[14.5px] leading-[1.55] text-subtle">
+              We&apos;ll send you a sign-in link. After you confirm, you&apos;ll
+              add your name and create your workspace — no password needed.
             </p>
           </div>
-        ) : null}
 
-        {googleEnabled ? (
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              or
-            </span>
-            <Separator className="flex-1" />
+          <div className="flex flex-col gap-2">
+            <ProviderButton
+              icon={<Google className="size-[18px]" />}
+              label={isGoogleLoading ? "Redirecting…" : "Sign up with Google"}
+              disabled={!googleEnabled || isGoogleLoading}
+              onClick={handleGoogleSignUp}
+            />
           </div>
-        ) : null}
 
-        <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-          <FieldGroup>
+          <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.06em] text-muted before:h-[0.5px] before:flex-1 before:bg-border-default before:content-[''] after:h-[0.5px] after:flex-1 after:bg-border-default after:content-['']">
+            or with email
+          </div>
+
+          {submitError ? (
+            <div className="rounded-md border-[0.5px] border-danger-border bg-danger-bg px-3 py-2.5 text-[13px] text-danger-fg">
+              {submitError}
+            </div>
+          ) : null}
+
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            noValidate
+            className="flex flex-col gap-[14px]"
+          >
             <Controller
               name="email"
               control={form.control}
               render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="sign-up-email">Email address</FieldLabel>
-                  <Input
-                    {...field}
-                    id="sign-up-email"
-                    type="email"
-                    placeholder="you@company.com"
-                    autoComplete="email"
-                    aria-invalid={fieldState.invalid}
-                  />
-                  {fieldState.invalid ? (
-                    <FieldError errors={[fieldState.error]} />
-                  ) : null}
-                </Field>
+                <div className="flex flex-col gap-1.5">
+                  <label
+                    htmlFor="sign-up-email"
+                    className="text-[12.5px] font-medium leading-none tracking-[-0.005em] text-ink"
+                  >
+                    Work email
+                  </label>
+                  <div
+                    className={cn(
+                      "flex items-center gap-2 rounded-md border-[0.5px] bg-card transition-colors",
+                      fieldState.invalid ? "border-danger-border" : "border-border-default",
+                      "focus-within:border-forest focus-within:shadow-[0_0_0_3px_rgba(31,58,46,0.18)]",
+                    )}
+                  >
+                    <input
+                      {...field}
+                      id="sign-up-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@acme-foods.com"
+                      aria-invalid={fieldState.invalid}
+                      className="min-w-0 flex-1 border-none bg-transparent px-3 py-[11px] font-sans text-[14px] text-ink outline-none placeholder:text-muted"
+                    />
+                  </div>
+                  <p className="text-[11.5px] leading-[1.4] text-subtle">
+                    {fieldState.invalid && fieldState.error?.message
+                      ? fieldState.error.message
+                      : "We'll only use this to send your sign-in link. No marketing."}
+                  </p>
+                </div>
               )}
             />
 
-            <Button type="submit" className="h-11 w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Sending link…" : "Email sign-in link"}
-            </Button>
-
-            <div className="space-y-2 pt-1 text-center text-sm text-muted-foreground">
-              <p>
-                By creating an account, you agree to our{" "}
-                <Link
-                  href="/terms"
-                  className="font-medium text-foreground underline-offset-2 hover:underline"
-                >
-                  Terms of Service
+            <label className="inline-flex cursor-pointer items-start gap-[9px] text-[13px] leading-[1.45] text-ink-warm">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                className="mt-0.5 size-4 cursor-pointer appearance-none rounded-sm border-[0.5px] border-border-default bg-card transition-colors checked:border-forest checked:bg-forest checked:after:flex checked:after:size-full checked:after:items-center checked:after:justify-center checked:after:text-[11px] checked:after:font-semibold checked:after:text-card-warm checked:after:content-['✓'] focus:outline-none focus:shadow-[0_0_0_3px_rgba(31,58,46,0.18)]"
+              />
+              <span>
+                I agree to the{" "}
+                <Link href="/terms" className="font-medium text-ink underline-offset-2 hover:underline">
+                  Terms
                 </Link>{" "}
                 and{" "}
-                <Link
-                  href="/privacy"
-                  className="font-medium text-foreground underline-offset-2 hover:underline"
-                >
-                  Privacy Policy
+                <Link href="/privacy" className="font-medium text-ink underline-offset-2 hover:underline">
+                  Privacy policy
                 </Link>
                 .
-              </p>
-              <div className="flex items-center justify-center gap-4">
-                <Link
-                  href={rootLoginUrl}
-                  className="transition hover:text-foreground"
-                >
-                  Sign in
-                </Link>
-                <span className="text-border">•</span>
-                <a
-                  href={supportHref}
-                  className="inline-flex items-center gap-1.5 transition hover:text-foreground"
-                >
-                  <MailPlus className="size-4" />
-                  Support
-                </a>
-              </div>
+              </span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !agreed}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-forest px-[14px] py-3 font-sans text-[14px] font-medium leading-none text-card-warm transition-colors hover:bg-forest-mid disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSubmitting ? "Sending link…" : "Email me a sign-in link"}
+              <span aria-hidden>→</span>
+            </button>
+          </form>
+
+          <div className="flex items-start gap-3 rounded-lg border-[0.5px] border-border-soft bg-card-warm p-4">
+            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-forest-tint text-[14px] text-forest">
+              ⌾
+            </span>
+            <div className="min-w-0 flex-1 text-[12.5px] leading-[1.5] text-ink-warm">
+              <div className="text-[13px] font-medium text-ink">Passwordless by default</div>
+              Magic links expire in 15 minutes. You&apos;ll set your name and
+              workspace on the next screen, after you confirm.
             </div>
-          </FieldGroup>
-        </form>
+          </div>
+
+          <div className="border-t-[0.5px] border-divider pt-[18px] text-center text-[13px] text-subtle">
+            Already have a workspace?{" "}
+            <Link
+              href={loginUrl}
+              className="border-b border-transparent pb-[2px] font-medium text-ink transition-colors hover:border-ink"
+            >
+              Sign in instead
+            </Link>
+          </div>
+        </>
+      )}
+    </ShellLayout>
+  );
+}
+
+function ProviderButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex w-full items-center justify-center gap-2.5 rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-[11px] text-[13.5px] font-medium text-ink transition-colors hover:bg-card-warm",
+        disabled && "cursor-not-allowed opacity-60 hover:bg-card",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function SentState({
+  email,
+  onUseDifferent,
+  onResend,
+}: {
+  email: string;
+  onUseDifferent: () => void;
+  onResend: () => void;
+}) {
+  return (
+    <>
+      <span className="grid size-14 place-items-center rounded-full bg-forest-tint text-[22px] text-forest">
+        ✉
+      </span>
+      <div>
+        <h1 className="text-[28px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink">
+          Check your inbox.
+        </h1>
+        <p className="mt-1 text-[14px] leading-[1.55] text-subtle">
+          We just sent a sign-in link to{" "}
+          <span className="font-medium text-ink">{email}</span>. Click it to
+          verify and continue setting up your workspace.
+        </p>
       </div>
-    </AuthSplitShell>
+
+      <ol className="flex flex-col gap-3 rounded-lg border-[0.5px] border-border-soft bg-card-warm p-4 text-[13px] leading-[1.5] text-ink-warm">
+        {[
+          {
+            n: 1,
+            done: true,
+            title: "Email submitted",
+            body: "we created your account.",
+          },
+          {
+            n: 2,
+            done: false,
+            title: "Click the link in your inbox",
+            body: "expires in 15 minutes. Same browser preferred.",
+          },
+          {
+            n: 3,
+            done: false,
+            title: "Add your name & workspace",
+            body: "on the next screen — and you're in.",
+          },
+        ].map((row) => (
+          <li key={row.n} className="flex items-start gap-3">
+            <span
+              className={cn(
+                "grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
+                row.done
+                  ? "bg-forest text-card-warm"
+                  : "border-[0.5px] border-border-default bg-card text-subtle",
+              )}
+            >
+              {row.done ? "✓" : row.n}
+            </span>
+            <span>
+              <span className="font-medium text-ink">{row.title}</span> · {row.body}
+            </span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onUseDifferent}
+          className="rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm"
+        >
+          Use a different email
+        </button>
+        <button
+          type="button"
+          onClick={onResend}
+          className="rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm"
+        >
+          Resend link
+        </button>
+      </div>
+
+      <div className="flex items-start gap-3 rounded-lg border-[0.5px] border-border-soft bg-card-warm p-4">
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-warning-bg text-[14px] font-semibold text-warning-fg">
+          !
+        </span>
+        <div className="min-w-0 flex-1 text-[12.5px] leading-[1.5] text-ink-warm">
+          <div className="text-[13px] font-medium text-ink">Don&apos;t see it?</div>
+          Check spam, or — if your team uses an allowlist — ask IT to permit{" "}
+          <span className="font-mono text-[11.5px] text-ink">no-reply@fluxora.app</span>.
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ShellLayout({
+  rootDomain,
+  loginUrl,
+  supportHref,
+  children,
+}: {
+  rootDomain: string;
+  loginUrl: string;
+  supportHref: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col bg-page text-ink">
+      <header className="flex items-center justify-between border-b-[0.5px] border-border-soft px-8 py-[18px]">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-[9px] font-sans text-[19px] font-semibold leading-none tracking-[-0.03em] text-ink transition-opacity hover:opacity-80"
+        >
+          <FluxoraMark size={28} />
+          Fluxora
+        </Link>
+        <div className="text-[13px] text-subtle">
+          Already a member?{" "}
+          <Link
+            href={loginUrl}
+            className="border-b border-transparent pb-[2px] font-medium text-ink transition-colors hover:border-ink"
+          >
+            Sign in →
+          </Link>
+        </div>
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+        <section className="flex items-center justify-center px-8 py-14">
+          <div className="flex w-full max-w-[420px] flex-col gap-7">{children}</div>
+        </section>
+
+        <aside className="hidden flex-col justify-between gap-12 bg-surface px-12 py-14 lg:flex">
+          <div className="flex flex-col gap-3">
+            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
+              Sign-up to first invoice
+            </span>
+            <h2 className="max-w-[440px] text-[32px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink">
+              Four steps from this screen to your first branded invoice.
+            </h2>
+            <p className="max-w-[380px] text-[14.5px] leading-[1.55] text-subtle">
+              Email only here. Profile, workspace name, and subdomain come right
+              after you confirm — so a typo on this page doesn&apos;t follow you
+              for the next year.
+            </p>
+          </div>
+
+          <ol className="flex flex-col gap-3.5">
+            {FLOW_STEPS.map((step, i) => (
+              <li
+                key={step.title}
+                className={cn(
+                  "flex items-start gap-3.5 rounded-md border-[0.5px] bg-card px-4 py-3 transition-colors",
+                  step.current
+                    ? "border-forest-tint-deep bg-forest-tint/40"
+                    : "border-border-soft",
+                )}
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full font-mono text-[11px] font-medium",
+                    step.current
+                      ? "bg-forest text-card-warm"
+                      : "border-[0.5px] border-border-default bg-card-warm text-subtle",
+                  )}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div className="flex flex-col gap-1">
+                  <div className="text-[13.5px] font-medium text-ink">
+                    {step.title}
+                    {step.meta ? (
+                      <span className="ml-1.5 font-mono text-[11px] font-normal text-subtle">
+                        {step.meta}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-[12.5px] leading-[1.5] text-subtle">
+                    {step.caption}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div className="flex flex-col gap-2 border-t-[0.5px] border-border-soft pt-5">
+            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
+              14 days. Everything unlocked.
+            </span>
+            {INCLUDED_ROWS.map((row) => (
+              <div key={row} className="flex items-start gap-2 text-[12.5px] text-ink-warm">
+                <span className="mt-0.5 grid size-4 place-items-center rounded-full bg-success-bg text-[10px] text-success-fg">
+                  ✓
+                </span>
+                {row}
+              </div>
+            ))}
+          </div>
+        </aside>
+      </div>
+
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t-[0.5px] border-border-soft px-8 py-[18px] text-[12px] text-subtle">
+        <div className="font-mono text-[11px] tracking-[0.04em]">
+          © {new Date().getFullYear()} Fluxora, Inc.
+        </div>
+        <div className="flex gap-[18px]">
+          <Link href="/privacy" className="hover:text-ink">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-ink">
+            Terms
+          </Link>
+          <a href={supportHref} className="hover:text-ink">
+            Help
+          </a>
+          <span className="font-mono text-[11px] tracking-[0.04em] text-muted">
+            {rootDomain}
+          </span>
+        </div>
+      </footer>
+    </div>
   );
 }

@@ -1,14 +1,11 @@
 import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  Display,
+  EmailShell,
+  FallbackUrl,
+  Helper,
+  Lead,
+  PrimaryButton,
+} from "./_shell";
 
 type VerifyEmailProps = {
   name?: string | null;
@@ -17,55 +14,26 @@ type VerifyEmailProps = {
 
 export function VerifyEmail({ name, url }: VerifyEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Verify your email for Fluxora</Preview>
-      <Body
-        style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
-      >
-        <Container
-          style={{
-            backgroundColor: "#ffffff",
-            margin: "40px auto",
-            padding: "32px",
-            borderRadius: "12px",
-            maxWidth: "560px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            Verify your email
-          </Heading>
+    <EmailShell
+      preview="Verify your email for Fluxora"
+      eyebrow="Verify email"
+    >
+      <Display>Confirm your email.</Display>
+      <Lead>
+        {name ? `Hi ${name},` : "Hi,"} we just need to confirm this is your
+        address before your Fluxora account is fully set up.
+      </Lead>
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            {name ? `Hi ${name},` : "Hi,"}
-          </Text>
+      <PrimaryButton href={url} label="Verify email →" />
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            Please confirm your email address to finish setting up your account.
-          </Text>
+      <FallbackUrl url={url} />
 
-          <Section style={{ margin: "24px 0" }}>
-            <Button
-              href={url}
-              style={{
-                backgroundColor: "#1d4ed8",
-                color: "#ffffff",
-                padding: "12px 18px",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontWeight: "600",
-              }}
-            >
-              Verify email
-            </Button>
-          </Section>
-
-          <Text style={{ fontSize: "12px", color: "#64748b" }}>
-            If you did not create this account, you can ignore this email.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <Helper>
+        Didn&apos;t create a Fluxora account? You can safely ignore this
+        email.
+      </Helper>
+    </EmailShell>
   );
 }
+
+export default VerifyEmail;

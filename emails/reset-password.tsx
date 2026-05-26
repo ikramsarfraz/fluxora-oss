@@ -1,14 +1,12 @@
 import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  Display,
+  EmailShell,
+  FallbackUrl,
+  Helper,
+  Lead,
+  NoteCallout,
+  PrimaryButton,
+} from "./_shell";
 
 type ResetPasswordProps = {
   name?: string | null;
@@ -17,55 +15,29 @@ type ResetPasswordProps = {
 
 export function ResetPasswordEmail({ name, url }: ResetPasswordProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Reset your Fluxora password</Preview>
-      <Body
-        style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
-      >
-        <Container
-          style={{
-            backgroundColor: "#ffffff",
-            margin: "40px auto",
-            padding: "32px",
-            borderRadius: "12px",
-            maxWidth: "560px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            Reset your password
-          </Heading>
+    <EmailShell
+      preview="Reset your Fluxora password"
+      eyebrow="Password reset · expires in 1 hr"
+    >
+      <Display>Reset your password.</Display>
+      <Lead>
+        {name ? `Hi ${name},` : "Hi,"} we received a request to reset the
+        password on your Fluxora account. Tap below to choose a new one.
+      </Lead>
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            {name ? `Hi ${name},` : "Hi,"}
-          </Text>
+      <PrimaryButton href={url} label="Reset password →" />
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            We received a request to reset your password.
-          </Text>
+      <FallbackUrl url={url} />
 
-          <Section style={{ margin: "24px 0" }}>
-            <Button
-              href={url}
-              style={{
-                backgroundColor: "#1d4ed8",
-                color: "#ffffff",
-                padding: "12px 18px",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontWeight: "600",
-              }}
-            >
-              Reset password
-            </Button>
-          </Section>
+      <NoteCallout>
+        If you weren&apos;t the one who asked for this, ignore this email —
+        your password stays the same. Consider rotating it anyway if the
+        request looks suspicious.
+      </NoteCallout>
 
-          <Text style={{ fontSize: "12px", color: "#64748b" }}>
-            If you did not request this, you can ignore this email.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <Helper>This link expires in one hour for your security.</Helper>
+    </EmailShell>
   );
 }
+
+export default ResetPasswordEmail;
