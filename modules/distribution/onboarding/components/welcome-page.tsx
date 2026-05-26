@@ -2,103 +2,118 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { completeOnboarding } from "../actions";
-import { captureClientEvent } from "@/lib/posthog-client";
 
-// ── Design tokens ─────────────────────────────────────────────────────────
-const c = {
-  bg: "var(--color-surface)",
-  card: "var(--color-card)",
-  border: "var(--color-border-default)",
-  borderStrong: "var(--color-border-default)",
-  text: "var(--color-ink)",
-  text2: "var(--color-subtle)",
-  text3: "var(--color-muted)",
-  green: "var(--color-success-fg)",
-  greenBg: "var(--color-success-bg)",
-  greenBorder: "var(--color-success-border)",
-  accent: "var(--color-ink)",
-  purple: "#7c3aed",
-  purpleBg: "#f5f3ff",
-  blue: "var(--color-forest-mid)",
-  blueBg: "#eff6ff",
-};
+import { FluxoraMark } from "@/components/brand/fluxora-mark";
+import { captureClientEvent } from "@/lib/posthog-client";
+import { cn } from "@/lib/utils";
+
+import { completeOnboarding } from "../actions";
+
+// ── Types ────────────────────────────────────────────────────────────────
 
 type BusinessCategory = "meat_poultry" | "seafood" | "produce" | "bakery_dry";
 type BillSource = "paper_scanned" | "supplier_emails" | "accounting_tool" | "mix";
+type TeamSize = "1-5" | "6-15" | "16-50" | "50+";
 
 const CATEGORIES: Array<{
   id: BusinessCategory;
-  emoji: string;
+  letter: string;
   label: string;
   hint: string;
   bg: string;
+  fg: string;
 }> = [
-  { id: "meat_poultry", emoji: "🥩", label: "Meat & poultry", hint: "Variable weight, catch-weight, USDA grade tracking", bg: "#fecaca" },
-  { id: "seafood", emoji: "🦞", label: "Seafood", hint: "Variable weight, COA required, 28°F target", bg: "#bfdbfe" },
-  { id: "produce", emoji: "🥦", label: "Produce", hint: "By case or weight, country-of-origin tracking", bg: "var(--color-success-border)" },
-  { id: "bakery_dry", emoji: "🥖", label: "Bakery / dry", hint: "Fixed cases, ambient storage, expiry windows", bg: "#fef3c7" },
+  {
+    id: "meat_poultry",
+    letter: "M",
+    label: "Meat & poultry",
+    hint: "Variable weight, USDA grade tracking, catch-weight invoicing.",
+    bg: "#EDD4C9",
+    fg: "#8B3415",
+  },
+  {
+    id: "seafood",
+    letter: "S",
+    label: "Seafood",
+    hint: "Variable weight, COA required, 28°F target storage.",
+    bg: "#DCE5DD",
+    fg: "#1F3A2E",
+  },
+  {
+    id: "produce",
+    letter: "P",
+    label: "Produce",
+    hint: "By case or weight, country-of-origin tracking.",
+    bg: "#E0E8D5",
+    fg: "#4A6B2F",
+  },
+  {
+    id: "bakery_dry",
+    letter: "B",
+    label: "Bakery / dry",
+    hint: "Fixed cases, ambient storage, expiry windows.",
+    bg: "#F4E6C2",
+    fg: "#6B4A0E",
+  },
 ];
 
-const BILL_SOURCES: Array<{ id: BillSource; emoji: string; label: string }> = [
-  { id: "paper_scanned", emoji: "📄", label: "Paper / scanned PDFs" },
-  { id: "supplier_emails", emoji: "📧", label: "Supplier emails" },
-  { id: "accounting_tool", emoji: "🔗", label: "Accounting tool" },
-  { id: "mix", emoji: "🔀", label: "Mix of all" },
+const BILL_SOURCES: Array<{ id: BillSource; mark: string; label: string; hint: string }> = [
+  {
+    id: "paper_scanned",
+    mark: "▦",
+    label: "Paper / scanned PDFs",
+    hint: "Photos and PDFs from your supplier. We OCR them.",
+  },
+  {
+    id: "supplier_emails",
+    mark: "✉",
+    label: "Supplier emails",
+    hint: "Forward your supplier billing inbox — we parse attachments.",
+  },
+  {
+    id: "accounting_tool",
+    mark: "⛁",
+    label: "Accounting tool",
+    hint: "QuickBooks, Xero, or similar — bills already in a system.",
+  },
+  {
+    id: "mix",
+    mark: "≣",
+    label: "Mix of all",
+    hint: "Bills arrive across channels. We handle all of the above.",
+  },
 ];
 
-// ── Step indicator ────────────────────────────────────────────────────────
+const TEAM_SIZES: TeamSize[] = ["1-5", "6-15", "16-50", "50+"];
 
-function StepNum({ n, status }: { n: number; status: "done" | "active" | "pending" }) {
-  const styles = {
-    done: { bg: c.green, color: "var(--color-card)" },
-    active: { bg: c.accent, color: "var(--color-card)" },
-    pending: { bg: c.border, color: c.text3 },
-  }[status];
-
-  return (
-    <div
-      style={{
-        width: 20,
-        height: 20,
-        borderRadius: "50%",
-        background: styles.bg,
-        color: styles.color,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 11,
-        fontWeight: 700,
-        flexShrink: 0,
-      }}
-    >
-      {status === "done" ? "✓" : n}
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────
+// ── Main component ───────────────────────────────────────────────────────
 
 export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [businessName, setBusinessName] = useState(defaultName);
+  const [location, setLocation] = useState("");
+  const [teamSize, setTeamSize] = useState<TeamSize | null>(null);
+  const [category, setCategory] = useState<BusinessCategory | null>(null);
+  const [billSource, setBillSource] = useState<BillSource | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     captureClientEvent("welcome.started");
   }, []);
-  const [location, setLocation] = useState("");
-  const [employeeRange, setEmployeeRange] = useState("");
-  const [category, setCategory] = useState<BusinessCategory | null>(null);
-  const [billSource, setBillSource] = useState<BillSource | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function canAdvance() {
+    if (step === 1) return businessName.trim().length > 0 && teamSize !== null;
+    if (step === 2) return category !== null;
+    return billSource !== null;
+  }
 
   async function handleFinish() {
     if (!category) return;
     setIsSubmitting(true);
     try {
       await completeOnboarding({
-        businessName: businessName || "My Business",
+        businessName: businessName.trim() || "My Business",
         businessCategory: category,
         billSource: billSource ?? "mix",
       });
@@ -110,475 +125,373 @@ export function WelcomePage({ defaultName = "" }: { defaultName?: string }) {
 
   function handleNext() {
     captureClientEvent("welcome.step_completed", { step });
-    if (step < 3) setStep(s => s + 1);
+    if (step < 3) setStep((s) => (s + 1) as 1 | 2 | 3);
     else handleFinish();
   }
 
-  function canAdvance() {
-    if (step === 1) return businessName.trim().length > 0;
-    if (step === 2) return category !== null;
-    return true;
-  }
-
   const progressPct = (step / 3) * 100;
+  const finalStep = step === 3;
+  const categoryChoice = category ? CATEGORIES.find((c) => c.id === category) : null;
+  const billChoice = billSource ? BILL_SOURCES.find((b) => b.id === billSource) : null;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: c.bg,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "32px 16px",
-      }}
-    >
-      <div
-        style={{
-          background: c.card,
-          border: `1px solid ${c.border}`,
-          borderRadius: 16,
-          overflow: "hidden",
-          display: "grid",
-          gridTemplateColumns: "1.1fr 1fr",
-          width: "100%",
-          maxWidth: 960,
-          minHeight: 560,
-        }}
-      >
-        {/* Left: form */}
-        <div style={{ padding: "36px 40px", display: "flex", flexDirection: "column" }}>
-          {/* Brand + step counter */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 28,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 7,
-                  background: c.accent,
-                  color: "var(--color-card)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  fontSize: 13,
-                }}
-              >
-                P
-              </div>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>Acme Distribution</span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 12,
-                color: c.text2,
-              }}
-            >
-              <span>Step {step} of 3</span>
-              <div
-                style={{
-                  width: 80,
-                  height: 4,
-                  background: "var(--color-divider)",
-                  borderRadius: 2,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${progressPct}%`,
-                    height: "100%",
-                    background: c.accent,
-                    borderRadius: 2,
-                    transition: "width .3s",
-                  }}
-                />
-              </div>
-            </div>
+    <div className="min-h-screen bg-page px-6 py-12 text-ink">
+      <div className="mx-auto flex max-w-[1040px] flex-col gap-8">
+        {/* topbar */}
+        <header className="flex items-center justify-between">
+          <div className="inline-flex items-center gap-[9px] font-sans text-[19px] font-semibold leading-none tracking-[-0.03em] text-ink">
+            <FluxoraMark size={28} />
+            Fluxora
           </div>
+          <div className="font-mono text-[11px] tracking-[0.04em] text-subtle">
+            Step {step} of 3 · {Math.round(progressPct)}%
+          </div>
+        </header>
 
-          <h1
-            style={{
-              fontSize: 28,
-              fontWeight: 600,
-              letterSpacing: "-0.02em",
-              margin: "0 0 8px",
-            }}
-          >
-            {step === 1 ? "Let's get started." : step === 2 ? "What do you sell?" : "How do bills reach you?"}
-          </h1>
-          <p style={{ color: c.text2, fontSize: 14, marginBottom: 28, maxWidth: 420 }}>
-            {step === 1 && "Tell us about your business. We'll set sensible defaults from day one."}
-            {step === 2 && "Pick your primary category. You can add more later — this sets defaults for units, temperature, and grade tracking."}
-            {step === 3 && "Optional — helps us tune the import pipeline. You can skip this."}
-          </p>
+        {/* progress bar */}
+        <div className="h-1 w-full overflow-hidden rounded-full bg-surface-deep">
+          <div
+            className="h-full rounded-full bg-forest transition-[width] duration-[240ms] ease-[cubic-bezier(.2,0,0,1)]"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
 
-          {/* Step 1: Business basics */}
-          {step >= 1 && (
-            <div style={{ marginBottom: 22 }}>
-              <h3
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  margin: "0 0 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  color: step === 1 ? c.text : c.text2,
-                }}
-              >
-                <StepNum n={1} status={step > 1 ? "done" : "active"} />
-                Business basics
-              </h3>
-              {step === 1 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <input
-                    type="text"
-                    placeholder="Business name"
-                    value={businessName}
-                    onChange={e => setBusinessName(e.target.value)}
-                    style={{
-                      padding: "9px 12px",
-                      border: `1px solid ${c.borderStrong}`,
-                      borderRadius: 8,
-                      fontSize: 13.5,
-                      fontFamily: "inherit",
-                      width: "100%",
-                      background: "var(--color-card)",
-                    }}
-                  />
-                  <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 10 }}>
-                    <input
-                      type="text"
-                      placeholder="City, State"
-                      value={location}
-                      onChange={e => setLocation(e.target.value)}
-                      style={{
-                        padding: "9px 12px",
-                        border: `1px solid ${c.borderStrong}`,
-                        borderRadius: 8,
-                        fontSize: 13.5,
-                        fontFamily: "inherit",
-                        background: "var(--color-card)",
-                      }}
-                    />
-                    <select
-                      value={employeeRange}
-                      onChange={e => setEmployeeRange(e.target.value)}
-                      style={{
-                        padding: "9px 12px",
-                        border: `1px solid ${c.borderStrong}`,
-                        borderRadius: 8,
-                        fontSize: 13.5,
-                        fontFamily: "inherit",
-                        background: "var(--color-card)",
-                      }}
-                    >
-                      <option value="">Team size</option>
-                      <option value="1-5">1–5 people</option>
-                      <option value="6-15">6–15 people</option>
-                      <option value="16-50">16–50 people</option>
-                      <option value="50+">50+ people</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-              {step > 1 && (
-                <div style={{ fontSize: 13, color: c.text2 }}>
-                  {businessName || "Your business"} · {location || "—"}
-                </div>
-              )}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.15fr_1fr]">
+          {/* wizard */}
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
+              <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                Workspace setup
+              </span>
+              <h1 className="text-[32px] font-semibold leading-[1.05] tracking-[-0.03em] text-ink">
+                Three quick questions.
+              </h1>
+              <p className="text-[14.5px] leading-[1.55] text-subtle">
+                We&apos;ll use these to seed your catalog defaults. You can
+                change everything later from settings.
+              </p>
             </div>
-          )}
 
-          {/* Step 2: Category */}
-          {step >= 2 && (
-            <div style={{ marginBottom: 22 }}>
-              <h3
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  margin: "0 0 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  color: step === 2 ? c.text : c.text2,
-                }}
-              >
-                <StepNum n={2} status={step > 2 ? "done" : step === 2 ? "active" : "pending"} />
-                What do you sell?
-              </h3>
-              {step === 2 && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 8,
-                  }}
-                >
-                  {CATEGORIES.map(cat => (
+            {/* Step 1 — Business basics */}
+            <StepCard
+              n={1}
+              title="Business basics"
+              status={step === 1 ? "active" : "done"}
+              summary={
+                step !== 1
+                  ? `${businessName} · ${location || "—"} · ${teamSize ?? "—"}`
+                  : undefined
+              }
+              onEdit={() => setStep(1)}
+            >
+              <div className="flex flex-col gap-3">
+                <Field label="Business name">
+                  <input
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Marin Provisions"
+                    autoFocus
+                    className="w-full rounded-md border-[0.5px] border-border-default bg-card px-3 py-[11px] font-sans text-[14px] text-ink outline-none transition-colors placeholder:text-muted focus:border-forest focus:shadow-[0_0_0_3px_rgba(31,58,46,0.18)]"
+                  />
+                </Field>
+                <Field label="City, state">
+                  <input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Sausalito, CA"
+                    className="w-full rounded-md border-[0.5px] border-border-default bg-card px-3 py-[11px] font-sans text-[14px] text-ink outline-none transition-colors placeholder:text-muted focus:border-forest focus:shadow-[0_0_0_3px_rgba(31,58,46,0.18)]"
+                  />
+                </Field>
+                <Field label="Team size">
+                  <div className="grid grid-cols-4 gap-2">
+                    {TEAM_SIZES.map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setTeamSize(size)}
+                        className={cn(
+                          "rounded-md border-[0.5px] bg-card px-3 py-2.5 font-mono text-[12.5px] text-ink transition-colors hover:bg-card-warm",
+                          teamSize === size
+                            ? "border-forest bg-forest-tint text-forest"
+                            : "border-border-default",
+                        )}
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              </div>
+            </StepCard>
+
+            {/* Step 2 — Category */}
+            <StepCard
+              n={2}
+              title="What you sell"
+              status={step === 2 ? "active" : step > 2 ? "done" : "pending"}
+              summary={categoryChoice && step !== 2 ? categoryChoice.label : undefined}
+              onEdit={() => setStep(2)}
+            >
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {CATEGORIES.map((cat) => {
+                  const isActive = category === cat.id;
+                  return (
                     <button
                       key={cat.id}
+                      type="button"
                       onClick={() => setCategory(cat.id)}
-                      style={{
-                        padding: "10px 12px",
-                        border: `1px solid ${category === cat.id ? c.accent : c.border}`,
-                        borderRadius: 8,
-                        background: category === cat.id ? "var(--color-page)" : "var(--color-card)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        textAlign: "left",
-                        boxShadow:
-                          category === cat.id ? "0 0 0 2px rgba(24,24,27,0.06)" : undefined,
-                        transition: "all .12s",
-                      }}
+                      className={cn(
+                        "flex items-start gap-3 rounded-md border-[0.5px] bg-card px-4 py-3 text-left transition-colors hover:bg-card-warm",
+                        isActive ? "border-forest bg-forest-tint/40" : "border-border-default",
+                      )}
                     >
-                      <div
-                        style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 6,
-                          background: cat.bg,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 16,
-                          flexShrink: 0,
-                        }}
+                      <span
+                        className="grid size-10 shrink-0 place-items-center rounded-md font-sans text-[16px] font-semibold leading-none"
+                        style={{ background: cat.bg, color: cat.fg }}
                       >
-                        {cat.emoji}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{cat.label}</div>
-                        <div style={{ fontSize: 11, color: c.text3, marginTop: 1 }}>{cat.hint}</div>
+                        {cat.letter}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-medium text-ink">
+                            {cat.label}
+                          </span>
+                          {isActive && (
+                            <span className="grid size-4 place-items-center rounded-full bg-forest text-[10px] text-card-warm">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[12px] leading-[1.45] text-subtle">
+                          {cat.hint}
+                        </p>
                       </div>
                     </button>
-                  ))}
-                </div>
-              )}
-              {step > 2 && category && (
-                <div style={{ fontSize: 13, color: c.text2 }}>
-                  {CATEGORIES.find(c => c.id === category)?.label}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 3: Bill source */}
-          {step >= 3 && (
-            <div style={{ marginBottom: 22 }}>
-              <h3
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  margin: "0 0 10px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  color: c.text,
-                }}
-              >
-                <StepNum n={3} status="active" />
-                How do bills reach you?
-              </h3>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {BILL_SOURCES.map(src => (
-                  <button
-                    key={src.id}
-                    onClick={() => setBillSource(src.id)}
-                    style={{
-                      padding: "10px 12px",
-                      border: `1px solid ${billSource === src.id ? c.accent : c.border}`,
-                      borderRadius: 8,
-                      background: billSource === src.id ? "var(--color-page)" : "var(--color-card)",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      textAlign: "left",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      transition: "all .12s",
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>{src.emoji}</span>
-                    {src.label}
-                  </button>
-                ))}
+                  );
+                })}
               </div>
-            </div>
-          )}
+            </StepCard>
 
-          {/* Actions */}
-          <div
-            style={{
-              marginTop: "auto",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div />
-            <div style={{ display: "flex", gap: 8 }}>
+            {/* Step 3 — Bill source */}
+            <StepCard
+              n={3}
+              title="Where bills come from"
+              status={step === 3 ? "active" : "pending"}
+              summary={billChoice && step !== 3 ? billChoice.label : undefined}
+              onEdit={() => setStep(3)}
+            >
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                {BILL_SOURCES.map((src) => {
+                  const isActive = billSource === src.id;
+                  return (
+                    <button
+                      key={src.id}
+                      type="button"
+                      onClick={() => setBillSource(src.id)}
+                      className={cn(
+                        "flex items-start gap-3 rounded-md border-[0.5px] bg-card px-4 py-3 text-left transition-colors hover:bg-card-warm",
+                        isActive ? "border-forest bg-forest-tint/40" : "border-border-default",
+                      )}
+                    >
+                      <span className="grid size-10 shrink-0 place-items-center rounded-md bg-surface text-[16px] text-subtle">
+                        {src.mark}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-medium text-ink">
+                            {src.label}
+                          </span>
+                          {isActive && (
+                            <span className="grid size-4 place-items-center rounded-full bg-forest text-[10px] text-card-warm">
+                              ✓
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[12px] leading-[1.45] text-subtle">
+                          {src.hint}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </StepCard>
+
+            {/* Actions */}
+            <div className="mt-3 flex items-center gap-3">
               {step > 1 && (
                 <button
-                  onClick={() => setStep(s => s - 1)}
-                  style={{
-                    padding: "8px 14px",
-                    border: `1px solid ${c.borderStrong}`,
-                    borderRadius: 7,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    background: "var(--color-card)",
-                    color: c.text,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
+                  type="button"
+                  onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3)}
+                  className="rounded-md border-[0.5px] border-border-default bg-card px-4 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm"
                 >
-                  Back
+                  ← Back
                 </button>
               )}
               <button
+                type="button"
                 onClick={handleNext}
                 disabled={!canAdvance() || isSubmitting}
-                style={{
-                  padding: "8px 18px",
-                  border: `1px solid ${canAdvance() ? c.accent : c.border}`,
-                  borderRadius: 7,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  background: canAdvance() ? c.accent : "var(--color-divider)",
-                  color: canAdvance() ? "var(--color-card)" : c.text3,
-                  cursor: canAdvance() && !isSubmitting ? "pointer" : "not-allowed",
-                  fontFamily: "inherit",
-                }}
+                aria-disabled={!canAdvance() || isSubmitting}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-medium transition-colors",
+                  canAdvance() && !isSubmitting
+                    ? "bg-forest text-card-warm hover:bg-forest-mid"
+                    : "cursor-not-allowed bg-surface text-muted",
+                )}
               >
-                {step === 3 ? (isSubmitting ? "Setting up…" : "Finish setup →") : "Continue →"}
+                {isSubmitting
+                  ? "Finishing setup…"
+                  : finalStep
+                    ? "Finish setup"
+                    : "Continue"}
+                <span aria-hidden>→</span>
               </button>
             </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Right: preview panel */}
-        <div
-          style={{
-            background: "linear-gradient(135deg, #6d28d9 0%, #7c3aed 50%, #8b5cf6 100%)",
-            padding: "40px 36px",
-            color: "var(--color-card)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <div>
+          {/* right rail */}
+          <aside className="relative hidden overflow-hidden rounded-xl bg-forest p-8 text-card-warm lg:flex lg:flex-col lg:gap-8">
             <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
               style={{
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.55)",
-                marginBottom: 10,
+                background:
+                  "radial-gradient(ellipse 60% 40% at 80% 10%, rgba(201,169,97,.10) 0%, transparent 60%), radial-gradient(ellipse 50% 50% at 20% 90%, rgba(74,122,94,.25) 0%, transparent 60%)",
               }}
-            >
-              What you&apos;ll get on day 1
+            />
+            <div className="relative z-10 flex flex-col gap-2">
+              <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-forest-tint">
+                On day 1, you&apos;ll have
+              </span>
+              <h2 className="text-[24px] font-semibold leading-[1.15] tracking-[-0.02em] text-card-warm">
+                A workspace ready for your first lot, order, and invoice.
+              </h2>
             </div>
-            <div
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                lineHeight: 1.3,
-                marginBottom: 20,
-              }}
-            >
-              A working bill-entry system before you finish your coffee.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                "PDF parsing with AI-assisted product matching",
-                "Catalog seeded from your first bill",
-                "Lot tracking from day one",
-              ].map(item => (
-                <div key={item} style={{ display: "flex", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-                  <span style={{ color: "#4ade80", flexShrink: 0 }}>✓</span>
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div style={{ marginTop: 32 }}>
-            <div
-              style={{
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.55)",
-                marginBottom: 10,
-              }}
-            >
-              What unlocks over time
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <ul className="relative z-10 flex flex-col gap-2.5">
               {[
-                { badge: "5+", color: "#3b82f6", label: "Auto-matching & reliability scores" },
-                { badge: "~30d", color: "#8b5cf6", label: "Price drift alerts & trends" },
-              ].map(item => (
-                <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "rgba(255,255,255,0.85)" }}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minWidth: 30,
-                      padding: "1px 6px",
-                      borderRadius: 4,
-                      fontSize: 10.5,
-                      fontWeight: 700,
-                      background: item.color,
-                      color: "var(--color-card)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {item.badge}
+                "A catalog seeded with category defaults",
+                "Branded invoice PDF with your subdomain",
+                "Bill inbox tuned for the source you picked",
+                "Role-scoped permissions for picker / dispatcher / finance",
+              ].map((row) => (
+                <li
+                  key={row}
+                  className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-card-warm/85"
+                >
+                  <span className="mt-0.5 grid size-4 place-items-center rounded-full bg-forest-tint text-[10px] font-semibold text-forest">
+                    ✓
                   </span>
-                  {item.label}
-                </div>
+                  {row}
+                </li>
               ))}
-            </div>
-          </div>
+            </ul>
 
-          <div style={{ marginTop: "auto" }}>
-            <div
-              style={{
-                background: "rgba(255,255,255,0.12)",
-                borderRadius: 10,
-                padding: "12px 14px",
-                fontSize: 12.5,
-                color: "rgba(255,255,255,0.8)",
-                lineHeight: 1.5,
-                border: "1px solid rgba(255,255,255,0.15)",
-              }}
-            >
-              No fake data, no demo mode. If we can&apos;t compute something yet, we&apos;ll say so — and tell you how many more invoices it needs.
+            <div className="relative z-10 mt-auto flex flex-col gap-2 border-t-[0.5px] border-card-warm/15 pt-5">
+              <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-forest-tint">
+                Unlocks over the next 30 days
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "PDF import",
+                  "FIFO lots",
+                  "Catch-weight",
+                  "Stripe payments",
+                  "Plaid bank feed",
+                ].map((badge) => (
+                  <span
+                    key={badge}
+                    className="rounded-full border-[0.5px] border-card-warm/15 bg-card-warm/[0.06] px-2.5 py-1 font-mono text-[10.5px] text-card-warm/80"
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
+  );
+}
+
+function StepCard({
+  n,
+  title,
+  status,
+  summary,
+  onEdit,
+  children,
+}: {
+  n: number;
+  title: string;
+  status: "done" | "active" | "pending";
+  summary?: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  const isActive = status === "active";
+  const isDone = status === "done";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border-[0.5px] bg-card transition-colors",
+        isActive ? "border-forest shadow-[0_1px_2px_rgba(26,26,20,0.05),0_8px_24px_rgba(26,26,20,0.06)]" : "border-border-soft",
+        !isActive && "bg-card-warm",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "grid size-6 place-items-center rounded-full font-mono text-[11px] font-semibold",
+              isDone
+                ? "bg-forest text-card-warm"
+                : isActive
+                  ? "bg-forest text-card-warm"
+                  : "border-[0.5px] border-border-default bg-card text-subtle",
+            )}
+          >
+            {isDone ? "✓" : n}
+          </span>
+          <span
+            className={cn(
+              "text-[15px] font-medium",
+              isActive ? "text-ink" : isDone ? "text-ink-warm" : "text-subtle",
+            )}
+          >
+            {title}
+          </span>
+        </div>
+        {summary && !isActive ? (
+          <div className="flex items-center gap-3 text-[12.5px] text-subtle">
+            <span className="hidden sm:inline">{summary}</span>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="font-mono text-[11px] uppercase tracking-[0.08em] text-forest hover:underline"
+            >
+              Edit
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {isActive ? (
+        <div className="border-t-[0.5px] border-divider px-5 py-5">{children}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[12.5px] font-medium leading-none tracking-[-0.005em] text-ink">
+        {label}
+      </span>
+      {children}
+    </label>
   );
 }
