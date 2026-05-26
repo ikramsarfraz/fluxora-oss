@@ -1386,6 +1386,8 @@ export async function sendUserInvitationEmail(input: {
   email: string;
   fullName: string;
   token: string;
+  role?: PortalUserRole | null;
+  invitedByUserId?: string | null;
 }) {
   const requestHeaders = await headers();
   const context = getRequestTenantHostContextFromHeaders(requestHeaders);
@@ -1396,13 +1398,31 @@ export async function sendUserInvitationEmail(input: {
     context,
   });
 
+  // Look up the inviter's display name so the email can credit them by
+  // name ("From Sam Park") rather than leaving the From row blank. We
+  // don't fail the send if the lookup misses — it's a best-effort enrich.
+  let invitedByName: string | null = null;
+  if (input.invitedByUserId) {
+    const inviter = await db.query.portalUsers.findFirst({
+      where: and(
+        eq(portalUsers.authUserId, input.invitedByUserId),
+        eq(portalUsers.tenantId, tenant.id),
+      ),
+      columns: { fullName: true },
+    });
+    invitedByName = inviter?.fullName?.trim() || null;
+  }
+
   await resend.emails.send({
     from: emailFrom,
     to: input.email,
-    subject: "You're invited to Fluxora",
+    subject: `You're invited to ${tenant.name} on Fluxora`,
     react: InviteUserEmail({
       fullName: input.fullName,
       inviteUrl,
+      tenantName: tenant.name,
+      role: input.role ?? null,
+      invitedByName,
     }),
   });
 }
@@ -1431,6 +1451,8 @@ export async function inviteUser(input: {
     email: input.email,
     fullName: input.fullName,
     token,
+    role: input.role,
+    invitedByUserId: input.invitedByUserId,
   });
 
   return { success: true };

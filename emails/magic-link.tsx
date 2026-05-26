@@ -1,14 +1,12 @@
 import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+  Display,
+  EmailShell,
+  FallbackUrl,
+  Helper,
+  Lead,
+  NoteCallout,
+  PrimaryButton,
+} from "./_shell";
 
 type MagicLinkEmailProps = {
   name?: string | null;
@@ -17,56 +15,32 @@ type MagicLinkEmailProps = {
 
 export function MagicLinkEmail({ name, url }: MagicLinkEmailProps) {
   return (
-    <Html>
-      <Head />
-      <Preview>Sign in to Fluxora</Preview>
-      <Body
-        style={{ backgroundColor: "#f8fafc", fontFamily: "Arial, sans-serif" }}
-      >
-        <Container
-          style={{
-            backgroundColor: "#ffffff",
-            margin: "40px auto",
-            padding: "32px",
-            borderRadius: "12px",
-            maxWidth: "560px",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <Heading style={{ fontSize: "24px", marginBottom: "16px" }}>
-            Sign in to Fluxora
-          </Heading>
+    <EmailShell
+      preview="Your Fluxora sign-in link"
+      eyebrow="Sign in · expires in 15 min"
+    >
+      <Display>Sign in to Fluxora.</Display>
+      <Lead>
+        {name ? `Hi ${name},` : "Hi,"} tap the button below to finish signing
+        in. The link is single-use and expires in fifteen minutes — open it in
+        the same browser if you can.
+      </Lead>
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            {name ? `Hi ${name},` : "Hi,"}
-          </Text>
+      <PrimaryButton href={url} label="Continue to sign in →" />
 
-          <Text style={{ fontSize: "14px", color: "#334155" }}>
-            Click the button below to sign in. This link expires soon and can be
-            used securely once.
-          </Text>
+      <FallbackUrl url={url} />
 
-          <Section style={{ margin: "24px 0" }}>
-            <Button
-              href={url}
-              style={{
-                backgroundColor: "#1d4ed8",
-                color: "#ffffff",
-                padding: "12px 18px",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontWeight: "600",
-              }}
-            >
-              Continue to sign in
-            </Button>
-          </Section>
+      <NoteCallout>
+        We&apos;ll never ask for your password by email. Fluxora uses
+        passwordless sign-in by default.
+      </NoteCallout>
 
-          <Text style={{ fontSize: "12px", color: "#64748b" }}>
-            If you didn&apos;t request this email, you can safely ignore it.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+      <Helper>
+        Didn&apos;t request this link? You can safely ignore this email — no
+        account changes were made.
+      </Helper>
+    </EmailShell>
   );
 }
+
+export default MagicLinkEmail;

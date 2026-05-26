@@ -335,6 +335,8 @@ export async function resendUserInvitationByAdmin(input: {
     email: row.email,
     fullName: row.fullName,
     token: newToken,
+    role: row.role,
+    invitedByUserId: row.invitedByUserId,
   });
 
   return { success: true };
