@@ -98,7 +98,7 @@ function Nav() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/signin"
+            href="/login"
             className="hidden rounded-md px-3.5 py-2 text-[13px] font-medium text-ink-warm transition-colors hover:bg-surface hover:text-ink sm:inline-flex"
           >
             Sign in
@@ -1072,7 +1072,7 @@ function SiteFooter() {
           {
             head: "Sign in",
             items: [
-              ["Find your workspace", "/signin"],
+              ["Find your workspace", "/login"],
               ["Create a workspace", "/signup"],
               ["Contact sales", "mailto:sales@fluxora.app"],
             ],

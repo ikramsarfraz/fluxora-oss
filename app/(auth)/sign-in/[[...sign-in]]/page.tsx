@@ -26,6 +26,10 @@ export default async function SignInPage({
     pathname: "/signup",
     context: tenantRequest,
   });
+  const rootSignInUrl = buildRootAppUrl({
+    pathname: "/login",
+    context: tenantRequest,
+  });
   const tenantSignUpUrl =
     tenantRequest.tenant || tenantRequest.inactiveTenant
       ? buildTenantAppUrl({
@@ -64,6 +68,7 @@ export default async function SignInPage({
         protocol={tenantRequest.protocol}
         port={tenantRequest.port}
         rootSignUpUrl={rootSignUpUrl}
+        rootSignInUrl={rootSignInUrl}
         signUpUrl={tenantSignUpUrl}
         googleEnabled={isGoogleAuthEnabled()}
       />

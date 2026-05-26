@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 
-import { Apple } from "@/components/icons/apple";
 import { FluxoraMark } from "@/components/brand/fluxora-mark";
 import { Google } from "@/components/icons/google";
 import { authClient } from "@/lib/auth-client";
@@ -246,11 +245,6 @@ export function SignUpForm({
               label={isGoogleLoading ? "Redirecting…" : "Sign up with Google"}
               disabled={!googleEnabled || isGoogleLoading}
               onClick={handleGoogleSignUp}
-            />
-            <ProviderButton
-              icon={<Apple className="size-[18px] text-ink" />}
-              label="Sign up with Apple"
-              disabled
             />
           </div>
 

@@ -6,7 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Controller, useForm, type UseFormReturn } from "react-hook-form";
 
-import { Apple } from "@/components/icons/apple";
 import { FluxoraMark } from "@/components/brand/fluxora-mark";
 import { Google } from "@/components/icons/google";
 import { authClient } from "@/lib/auth-client";
@@ -35,6 +34,7 @@ type SignInFormProps = {
   protocol: "http" | "https";
   port: string | null;
   rootSignUpUrl: string;
+  rootSignInUrl: string;
   signUpUrl: string;
   googleEnabled: boolean;
 };
@@ -75,6 +75,7 @@ export function SignInForm({
   isRootHost,
   isPlatformAdminHost,
   rootDomain,
+  rootSignInUrl,
   signUpUrl,
   googleEnabled,
 }: SignInFormProps) {
@@ -170,6 +171,7 @@ export function SignInForm({
       <TenantSignInLayout
         tenant={tenant}
         rootDomain={rootDomain}
+        rootSignInUrl={rootSignInUrl}
         submitError={submitError}
         linkSent={linkSent}
         isSubmitting={isSubmitting}
@@ -256,11 +258,6 @@ export function SignInForm({
                     label={isGoogleLoading ? "Redirecting…" : "Continue with Google"}
                     disabled={!googleEnabled || isGoogleLoading}
                     onClick={handleGoogleSignIn}
-                  />
-                  <ProviderButton
-                    icon={<Apple className="size-[18px] text-ink" />}
-                    label="Continue with Apple"
-                    disabled
                   />
                 </div>
 
@@ -580,6 +577,7 @@ function TenantNotFoundCard({
 function TenantSignInLayout({
   tenant,
   rootDomain,
+  rootSignInUrl,
   submitError,
   linkSent,
   isSubmitting,
@@ -593,6 +591,7 @@ function TenantSignInLayout({
 }: {
   tenant: { id: string; name: string; slug: string };
   rootDomain: string;
+  rootSignInUrl: string;
   submitError: string | null;
   linkSent: string | null;
   isSubmitting: boolean;
@@ -605,6 +604,7 @@ function TenantSignInLayout({
   supportHref: string;
 }) {
   const accent = tenantAccent(tenant.slug);
+  const rootHomeUrl = new URL("/", rootSignInUrl).toString();
   return (
     <div className="flex min-h-screen flex-col bg-page text-ink">
       {/* breadcrumb strip */}
@@ -625,7 +625,7 @@ function TenantSignInLayout({
           <span>signin</span>
         </div>
         <Link
-          href={`https://${rootDomain}/signin`}
+          href={rootSignInUrl}
           className="border-b border-transparent pb-[1px] text-ink-warm transition-colors hover:border-ink hover:text-ink"
         >
           Not your workspace? ←
@@ -690,28 +690,18 @@ function TenantSignInLayout({
                 Use the email your admin added to this workspace.
               </p>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={onGoogleSignIn}
-                  disabled={!googleEnabled || isGoogleLoading}
-                  className={cn(
-                    "flex items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm",
-                    (!googleEnabled || isGoogleLoading) && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <Google className="size-4" />
-                  {isGoogleLoading ? "…" : "Google"}
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="flex cursor-not-allowed items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-2.5 text-[13px] font-medium text-ink opacity-60"
-                >
-                  <Apple className="size-4 text-ink" />
-                  Apple
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onGoogleSignIn}
+                disabled={!googleEnabled || isGoogleLoading}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm",
+                  (!googleEnabled || isGoogleLoading) && "cursor-not-allowed opacity-60",
+                )}
+              >
+                <Google className="size-4" />
+                {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
+              </button>
 
               <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.06em] text-muted before:h-[0.5px] before:flex-1 before:bg-border-default before:content-[''] after:h-[0.5px] after:flex-1 after:bg-border-default after:content-['']">
                 or with email
@@ -796,7 +786,7 @@ function TenantSignInLayout({
             <div className="font-mono text-[10.5px] tracking-[0.04em] text-muted">
               Need a different workspace?{" "}
               <Link
-                href={`https://${rootDomain}/signin`}
+                href={rootSignInUrl}
                 className="text-forest hover:underline"
               >
                 Switch ←
@@ -811,7 +801,7 @@ function TenantSignInLayout({
           <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-warm">
             <FluxoraMark size={16} />
             Powered by{" "}
-            <Link href={`https://${rootDomain}/`} className="font-medium text-forest hover:underline">
+            <Link href={rootHomeUrl} className="font-medium text-forest hover:underline">
               Fluxora
             </Link>
           </span>

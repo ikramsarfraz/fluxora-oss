@@ -303,10 +303,15 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
   const sessionReady = Boolean(sessionEmail && sessionEmail === inviteEmail);
   const hostname =
     typeof window !== "undefined" ? window.location.hostname : "";
+  const port = typeof window !== "undefined" ? window.location.port : "";
+  const protocol =
+    typeof window !== "undefined" ? window.location.protocol : "https:";
   const hostParts = hostname.split(".");
   const tenantSlug = hostParts[0] ?? "workspace";
   const rootDomain =
     hostParts.length > 1 ? hostParts.slice(1).join(".") : "fluxora.app";
+  const portSuffix = port ? `:${port}` : "";
+  const rootOrigin = `${protocol}//${rootDomain}${portSuffix}`;
   // Display name fallback: prettify slug ("acme-foods" → "Acme Foods").
   const tenantName = tenantSlug
     .split("-")
@@ -497,7 +502,7 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
                 </button>
               )}
               <Link
-                href={`https://${rootDomain}/signin`}
+                href={`${rootOrigin}/login`}
                 className="text-center text-[12.5px] text-subtle transition-colors hover:text-ink"
               >
                 Decline — not for me
@@ -521,7 +526,7 @@ export function InviteUserForm({ sessionEmail = null }: InviteUserFormProps) {
           <FluxoraMark size={16} />
           Powered by{" "}
           <Link
-            href={`https://${rootDomain}/`}
+            href={`${rootOrigin}/`}
             className="font-medium text-forest hover:underline"
           >
             Fluxora
