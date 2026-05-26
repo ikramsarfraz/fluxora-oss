@@ -131,13 +131,14 @@
   --color-info-border: #B8CDBE;
   --color-info-fg: #1F3A2E;
 
-  /* ---------- Type — all sans, no serif ---------- */
+  /* ---------- Type ---------- */
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
-  /* Transitional bridge: `font-serif` and `font-heading` utility classes still
-     exist in marketing/reel pages. Map both to the sans stack so any leftover
-     class renders Archivo instead of falling through to the system serif. */
-  --font-serif: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Newsreader (variable serif with opsz axis). Used for financial /
+     quantitative values, page heroes, and the editorial card titles in
+     settings/billing + profile. Older marketing/reel surfaces that still
+     reference `font-serif` continue to render Newsreader — that's intended. */
+  --font-serif: var(--font-serif), ui-serif, Georgia, serif;
   --font-heading: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 
   /* ---------- Radius ---------- */

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Archivo, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono, Newsreader } from "next/font/google";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { QueryProvider } from "@/components/query-provider";
@@ -20,6 +20,17 @@ const mono = Geist_Mono({
   display: "swap",
 });
 
+// Newsreader carries the brand's editorial weight on financial / quantitative
+// values (settings/billing usage tiles, billing amounts) and page heroes.
+// Never use sans-serif numerals for money in the product surface.
+const serif = Newsreader({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  weight: ["400", "500"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Fluxora",
   description:
@@ -34,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${mono.variable} h-full bg-background antialiased`}
+      className={`${sans.variable} ${mono.variable} ${serif.variable} h-full bg-background antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppErrorBoundary>

@@ -1,89 +1,160 @@
+import {
+  Check,
+  CreditCard,
+  Download,
+  ExternalLink,
+} from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { CreditCard, Building2, ExternalLink } from "lucide-react";
 
 import { BillingCheckoutFeedback } from "@/modules/core/billing/components/account/billing-checkout-feedback";
 import { BillingSubscriptionRefreshHint } from "@/modules/core/billing/components/account/billing-subscription-refresh-hint";
-import { TenantBillingPortalControls } from "@/modules/core/billing/components/account/tenant-billing-portal-controls";
-import { TenantBillingCatalogSection } from "@/modules/core/billing/components/account/tenant-billing-catalog";
-import { PageHeader } from "@/components/page-header";
-import {
-  PlanOverviewCard,
-  UsageCard,
-  BillingStateBanner,
-} from "@/modules/core/billing/components/billing-components";
-import { deriveBillingBannerState } from "@/lib/billing-utils";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
-import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
-import { getCurrentTenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
-import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
-import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import {
-  formatTenantPaymentMethodSummary,
   formatTenantPaymentMethodExpiryLine,
+  formatTenantPaymentMethodSummary,
 } from "@/lib/subscription-display";
+import { formatUsageLimit } from "@/lib/subscription-usage-metrics";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { getCurrentTenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
+import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
+import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
+import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
+import type { BillingCatalogPlanRow } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
+import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
+
+import { ManageInStripeButton } from "./manage-in-stripe-button";
+import { PlanSwitchButton } from "./plan-switch-button";
+
+const PLAN_LABEL: Record<TenantSubscriptionPlan, string> = {
+  free: "Free",
+  starter: "Starter",
+  growth: "Growth",
+  enterprise: "Enterprise",
+};
+
+const PLAN_ORDER: TenantSubscriptionPlan[] = [
+  "starter",
+  "growth",
+  "enterprise",
+];
+
+const PLAN_FEATURES: Record<string, string[]> = {
+  starter: ["Up to 3 users", "500 orders / mo", "Email support"],
+  growth: ["10 users", "5,000 orders / mo", "Priority support", "API access"],
+  enterprise: [
+    "Unlimited everything",
+    "SSO + SAML",
+    "Dedicated CSM",
+    "99.95% SLA",
+  ],
+};
+
+function formatPriceParts(
+  currency: string,
+  unitAmountCents: number | null,
+): { currency: string | null; amount: string } {
+  if (unitAmountCents == null) return { currency: null, amount: "Custom" };
+  try {
+    const symbol = (0)
+      .toLocaleString(undefined, {
+        style: "currency",
+        currency: currency.toUpperCase(),
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })
+      .replace(/[\d.,\s]/g, "");
+    const amount = new Intl.NumberFormat(undefined, {
+      maximumFractionDigits: 0,
+    }).format(unitAmountCents / 100);
+    return { currency: symbol || "$", amount };
+  } catch {
+    return { currency: "$", amount: String(Math.round(unitAmountCents / 100)) };
+  }
+}
+
+function formatCadence(
+  interval: string | null,
+  count: number | null,
+): string {
+  if (!interval) return "per month";
+  const raw = interval.toLowerCase();
+  const n = count ?? 1;
+  if (n === 1) {
+    if (raw === "month") return "per month";
+    if (raw === "year") return "per year";
+    if (raw === "week") return "per week";
+    return `per ${interval}`;
+  }
+  return `per ${n} ${interval}s`;
+}
+
+function periodLabel(now = new Date()): string {
+  return now.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function periodRange(now = new Date()): string {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return `${start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })} – ${end.toLocaleDateString("en-US", { day: "numeric" })}`;
+}
+
+function formatShortDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default async function SettingsBillingPlanAndUsagePage(props: {
   searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
 }) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session?.user?.id) {
-    redirect("/sign-in");
-  }
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user?.id) redirect("/sign-in");
 
   const portalUser = await getUserByAuthUserId(session.user.id);
-
   if (!portalUser) {
     return (
-      <div className="mx-auto flex max-w-lg flex-col items-center justify-center gap-6 py-16 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <svg className="h-8 w-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-medium tracking-tight">No Profile Linked</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            No portal profile is linked to this sign-in yet. Ask an administrator
-            to invite you or complete onboarding before managing billing.
-          </p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/settings/account/profile">Back to account</Link>
-        </Button>
+      <div className="flex max-w-lg flex-col gap-4 p-8">
+        <h1 className="font-serif text-[26px] font-medium tracking-[-0.02em] text-ink">
+          Billing
+        </h1>
+        <p className="text-[13px] leading-[1.55] text-subtle">
+          No portal profile is linked to this sign-in yet. Ask an administrator
+          to invite you or complete onboarding before managing billing.
+        </p>
+        <Link
+          href="/settings/account/profile"
+          className="inline-flex w-fit items-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-[7px] text-[13px] font-medium text-ink-warm transition-colors hover:bg-surface"
+        >
+          Back to account
+        </Link>
       </div>
     );
   }
 
   const tenant = await getCurrentTenant();
   const params = await props.searchParams;
+
   const checkoutFeedback = (() => {
     const c = params.canceled;
-    if (c === "1" || c === "true") {
-      return { kind: "canceled" as const };
-    }
+    if (c === "1" || c === "true") return { kind: "canceled" as const };
     const sessionId = params.session_id ?? null;
     const s = params.success;
-    if (s === "1" || s === "true" || sessionId) {
+    if (s === "1" || s === "true" || sessionId)
       return { kind: "success" as const, sessionId };
-    }
     return null;
   })();
-
-  const hadCanceledCheckout = params.canceled === "1" || params.canceled === "true";
+  const hadCanceledCheckout =
+    params.canceled === "1" || params.canceled === "true";
   const bootstrapFromCheckoutSuccess =
     !hadCanceledCheckout &&
     (params.success === "1" ||
@@ -98,186 +169,454 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
 
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
+  const hasStripeCustomer = Boolean(tenant.stripeCustomerId?.trim());
+  const isComped = tenant.subscriptionStatus === "comped";
+  const isPastDue = tenant.subscriptionStatus === "past_due";
 
-  const bannerState = deriveBillingBannerState({
-    subscriptionPlan: tenant.subscriptionPlan,
-    subscriptionStatus: tenant.subscriptionStatus,
-    trialEndsAt: tenant.trialEndsAt,
-  });
+  const period = periodLabel();
+  const range = periodRange();
+
+  const amountDueLabel = isComped ? "$0.00" : "$0.00"; // Stripe upcoming invoice not wired yet
+  const amountDueSub = isComped
+    ? "No charge this period"
+    : tenant.subscriptionPlan === "free"
+      ? "Free plan — no recurring charge"
+      : "Estimate — confirm in Stripe";
+  const nextInvoiceLabel = formatShortDate(tenant.currentPeriodEndsAt);
+  const nextInvoiceSub =
+    tenant.subscriptionStatus === "canceled" || isComped
+      ? "No scheduled renewal"
+      : "Approximate";
+
+  const usageRows: Array<{
+    label: string;
+    meta: string;
+    value: number;
+    limit: number;
+    storage?: boolean;
+  }> = [
+    {
+      label: "Portal users",
+      meta: `Members with access to ${tenant.slug} workspace`,
+      value: usage.portalUsers.current,
+      limit: usage.portalUsers.limit,
+    },
+    {
+      label: "Products",
+      meta: "SKUs in catalog · incl. archived",
+      value: usage.products.current,
+      limit: usage.products.limit,
+    },
+    {
+      label: "Customers",
+      meta: "Customer accounts with at least one order",
+      value: usage.customers.current,
+      limit: usage.customers.limit,
+    },
+    {
+      label: "Monthly orders",
+      meta: `Sales orders created ${range}`,
+      value: usage.monthlyOrders.current,
+      limit: usage.monthlyOrders.limit,
+    },
+  ];
+
+  const sortedPlans = [...catalogPlans].sort(
+    (a, b) =>
+      PLAN_ORDER.indexOf(a.planKey as TenantSubscriptionPlan) -
+      PLAN_ORDER.indexOf(b.planKey as TenantSubscriptionPlan),
+  );
 
   return (
-    <div className="@container/main flex flex-1 flex-col gap-8 pb-8">
-      {/* Page Header */}
-      <div className="border-b border-border pb-6">
-        <PageHeader
-          title="Fluxora Billing"
-          description="Manage your subscription, view usage, and update payment details."
+    <div className="flex flex-1 flex-col gap-8 pb-12">
+      {/* Hero */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+            Billing · {period}
+          </div>
+          <h1 className="mt-[6px] font-serif text-[30px] font-medium leading-[1.1] tracking-[-0.02em] text-ink">
+            Statement of usage
+          </h1>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-[14px] py-[7px] text-[13px] font-medium leading-none text-ink-warm opacity-60"
+            title="PDF export coming soon"
+          >
+            <Download size={13} strokeWidth={1.5} />
+            Download PDF
+          </button>
+          <ManageInStripeButton
+            canManage={canManageBilling}
+            hasStripeCustomer={hasStripeCustomer}
+          />
+        </div>
+      </div>
+
+      {checkoutFeedback ? (
+        <BillingCheckoutFeedback
+          kind={checkoutFeedback.kind}
+          sessionId={
+            checkoutFeedback.kind === "success"
+              ? checkoutFeedback.sessionId
+              : null
+          }
+        />
+      ) : null}
+      <BillingSubscriptionRefreshHint
+        snapshotPlan={tenant.subscriptionPlan}
+        snapshotStatus={tenant.subscriptionStatus}
+        bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
+      />
+
+      {/* Definition strip */}
+      <div className="grid grid-cols-2 divide-y-[0.5px] divide-divider border-y-[0.5px] border-border-default sm:grid-cols-3 sm:divide-y-0 sm:divide-x-[0.5px] lg:grid-cols-5">
+        <StripCell
+          label="Plan"
+          value={PLAN_LABEL[tenant.subscriptionPlan]}
+          sub={
+            isComped
+              ? "Comped"
+              : isPastDue
+                ? "Past due"
+                : tenant.subscriptionStatus === "trialing"
+                  ? "Trial"
+                  : tenant.subscriptionStatus === "canceled"
+                    ? "Canceled"
+                    : "Active"
+          }
+        />
+        <StripCell label="Period" value={period} sub={range} />
+        <StripCell
+          label="Amount due"
+          value={amountDueLabel}
+          sub={amountDueSub}
+          numeric
+        />
+        <StripCell
+          label="Next invoice"
+          value={nextInvoiceLabel}
+          sub={nextInvoiceSub}
+        />
+        <StripCell
+          label="Workspace"
+          value={tenant.name}
+          sub={
+            tenant.stripeCustomerId
+              ? `${tenant.slug} · ${tenant.stripeCustomerId}`
+              : tenant.slug
+          }
         />
       </div>
 
-      {/* Main Content */}
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-        {/* Left Column - Main Content */}
+      {/* Two-column body */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* Left column */}
         <div className="flex flex-col gap-6">
-          {/* State Banner (if applicable) */}
-          {bannerState && (
-            <BillingStateBanner
-              state={bannerState}
-              canManageBilling={canManageBilling}
-            />
-          )}
+          {/* Resource usage */}
+          <section>
+            <div className="mb-[10px] flex items-baseline justify-between">
+              <h2 className="font-serif text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-ink">
+                Resource usage
+              </h2>
+              <span className="text-[11px] leading-[1.4] text-subtle">
+                {isComped
+                  ? "All limits suspended under comped plan."
+                  : `Current period · ${range}`}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-lg border-[0.5px] border-border-soft bg-card">
+              <div className="grid grid-cols-[1fr_auto] gap-x-4 bg-surface px-[22px] py-[10px]">
+                <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                  Resource
+                </div>
+                <div className="text-right text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+                  This period
+                </div>
+              </div>
+              {usageRows.map((row, i) => (
+                <div
+                  key={row.label}
+                  className={
+                    "grid grid-cols-[1fr_auto] items-baseline gap-x-4 px-[22px] py-[18px]" +
+                    (i > 0 ? " border-t-[0.5px] border-divider" : "")
+                  }
+                >
+                  <div>
+                    <div className="text-[13px] text-ink-warm">{row.label}</div>
+                    <div className="mt-[4px] text-[11px] leading-[1.4] text-subtle">
+                      {row.meta}
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-3 text-right">
+                    <div className="font-serif text-[22px] font-medium leading-none tracking-[-0.015em] text-ink tabular-nums">
+                      {row.value.toLocaleString()}
+                      <span className="ml-[6px] font-sans text-[11px] font-normal tracking-normal text-muted">
+                        / {formatUsageLimit(row.limit).toLowerCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
 
-          {/* Checkout Feedback */}
-          {checkoutFeedback && (
-            <BillingCheckoutFeedback
-              kind={checkoutFeedback.kind}
-              sessionId={checkoutFeedback.kind === "success" ? checkoutFeedback.sessionId : null}
-            />
-          )}
-
-          {/* Plan Overview Card */}
-          <PlanOverviewCard
-            subscriptionPlan={tenant.subscriptionPlan}
-            subscriptionStatus={tenant.subscriptionStatus}
-            trialEndsAt={tenant.trialEndsAt}
-            currentPeriodEndsAt={tenant.currentPeriodEndsAt}
-            canManageBilling={canManageBilling}
-            stripeCustomerId={tenant.stripeCustomerId ?? null}
-          />
-
-          {/* Usage Card */}
-          <UsageCard usage={usage} showUpgradeCta />
-
-          {/* Refresh Hint */}
-          <BillingSubscriptionRefreshHint
-            snapshotPlan={tenant.subscriptionPlan}
-            snapshotStatus={tenant.subscriptionStatus}
-            bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
-          />
-
-          {/* Plans Section */}
-          <Card id="billing-plans" className="overflow-hidden">
-            <CardHeader className="border-b bg-muted/30">
-              <CardTitle>Available Plans</CardTitle>
-              <CardDescription>
-                {catalogPlans.length > 0
-                  ? "Choose the plan that best fits your needs. Changes take effect immediately."
-                  : canManageBilling
-                    ? "No paid plans are available yet. Contact support or wait for catalog sync."
-                    : "No subscription plans are available at this time."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <TenantBillingCatalogSection
-                catalogPlans={catalogPlans}
-                currentPlan={tenant.subscriptionPlan}
-                canManageBilling={canManageBilling}
-              />
-            </CardContent>
-          </Card>
+          {/* Plans available */}
+          <section>
+            <div className="mb-[10px] flex items-baseline justify-between">
+              <h2 className="font-serif text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-ink">
+                Plans available
+              </h2>
+              {sortedPlans.length === 0 ? (
+                <span className="text-[11px] text-subtle">
+                  Catalog sync pending.
+                </span>
+              ) : null}
+            </div>
+            {sortedPlans.length === 0 ? (
+              <div className="rounded-lg border-[0.5px] border-dashed border-border-default bg-card-warm px-5 py-4 text-[13px] leading-[1.55] text-subtle">
+                Subscription plans appear here once the Stripe catalog has
+                synced. Reach out to support if this doesn&rsquo;t resolve.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border-[0.5px] border-border-soft bg-card">
+                <div className="grid grid-cols-1 divide-y-[0.5px] divide-divider sm:grid-cols-3 sm:divide-x-[0.5px] sm:divide-y-0">
+                  {sortedPlans.map((plan) => (
+                    <PlanColumn
+                      key={plan.planKey}
+                      plan={plan}
+                      isCurrent={plan.planKey === tenant.subscriptionPlan}
+                      canManage={canManageBilling}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         </div>
 
-        {/* Right Column - Sidebar */}
-        <div className="flex flex-col gap-4">
-          {/* Billing Actions Section */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm font-medium">Billing Actions</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <TenantBillingPortalControls
-                canManageBilling={canManageBilling}
-                stripeCustomerId={tenant.stripeCustomerId}
-              />
-              {canManageBilling && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start text-muted-foreground hover:text-foreground"
-                  asChild
-                >
-                  <Link href="#billing-plans">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    View all plans
-                  </Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Payment Method Section */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm font-medium">Payment Method</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
+        {/* Right column */}
+        <div className="flex flex-col gap-6">
+          {/* Payment method */}
+          <div className="rounded-lg border-[0.5px] border-border-soft bg-card px-[22px] py-5">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h3 className="font-serif text-[16px] font-medium text-ink">
+                Payment method
+              </h3>
               {defaultPaymentMethod ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-14 items-center justify-center rounded-md border border-border bg-muted/50">
-                    <svg className="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="truncate text-sm font-medium">
-                      {formatTenantPaymentMethodSummary(defaultPaymentMethod)}
-                    </p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {formatTenantPaymentMethodExpiryLine(defaultPaymentMethod)}
-                    </p>
-                  </div>
-                </div>
+                <span className="inline-flex items-center gap-[6px] rounded-full border-[0.5px] border-success-border bg-success-bg px-[9px] py-[4px] text-[11px] font-medium leading-none text-success-fg">
+                  <span
+                    aria-hidden
+                    className="inline-block size-[5px] rounded-full bg-current"
+                  />
+                  On file
+                </span>
               ) : (
-                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    No payment method on file.<br />Add one during checkout.
-                  </p>
-                </div>
+                <span className="inline-flex items-center gap-[6px] rounded-full border-[0.5px] border-warning-border bg-warning-bg px-[9px] py-[4px] text-[11px] font-medium leading-none text-warning-fg">
+                  <span
+                    aria-hidden
+                    className="inline-block size-[5px] rounded-full bg-current"
+                  />
+                  None on file
+                </span>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Workspace Info Section */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm font-medium">Workspace</CardTitle>
+            </div>
+            {defaultPaymentMethod ? (
+              <div className="space-y-1 text-[13px] leading-[1.55] text-ink-warm">
+                <p>{formatTenantPaymentMethodSummary(defaultPaymentMethod)}</p>
+                <p className="font-mono text-[12px] text-subtle">
+                  {formatTenantPaymentMethodExpiryLine(defaultPaymentMethod)}
+                </p>
               </div>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <dt className="text-muted-foreground">Workspace ID</dt>
-                  <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground">{tenant.slug}</dd>
-                </div>
-                {tenant.stripeCustomerId && (
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-muted-foreground">Stripe Customer</dt>
-                    <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground max-w-[140px]">
-                      {tenant.stripeCustomerId}
-                    </dd>
-                  </div>
-                )}
-                {tenant.stripeSubscriptionId && (
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-muted-foreground">Subscription</dt>
-                    <dd className="truncate rounded bg-muted px-2 py-0.5 font-mono text-xs text-foreground max-w-[140px]">
-                      {tenant.stripeSubscriptionId}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </CardContent>
-          </Card>
+            ) : (
+              <p className="mb-[14px] text-[12px] leading-[1.5] text-subtle">
+                {isComped
+                  ? "No charge will be attempted while your Enterprise plan is comped. Adding a card now keeps service uninterrupted if billing resumes."
+                  : "Add a card during checkout to subscribe to a paid plan."}
+              </p>
+            )}
+            {!defaultPaymentMethod && canManageBilling && hasStripeCustomer ? (
+              <ManageInStripeButton
+                canManage={canManageBilling}
+                hasStripeCustomer={hasStripeCustomer}
+                variant="secondary"
+                className="mt-[14px] text-[12px]"
+              />
+            ) : null}
+            {!defaultPaymentMethod && !hasStripeCustomer && canManageBilling ? (
+              <div className="mt-[14px] inline-flex items-center gap-2 text-[12px] text-subtle">
+                <CreditCard size={12} strokeWidth={1.5} aria-hidden />
+                Available after first checkout.
+              </div>
+            ) : null}
+          </div>
+
+          {/* Billing history — empty until Stripe invoices are wired */}
+          <div className="rounded-lg border-[0.5px] border-border-soft bg-card px-[22px] py-5">
+            <div className="mb-3 font-serif text-[16px] font-medium text-ink">
+              Billing history
+            </div>
+            <p className="text-[12px] leading-[1.5] text-subtle">
+              {hasStripeCustomer
+                ? "Past invoices are available in the Stripe Customer Portal."
+                : "Recent invoices appear here after your first checkout."}
+            </p>
+            {hasStripeCustomer && canManageBilling ? (
+              <ManageInStripeButton
+                canManage={canManageBilling}
+                hasStripeCustomer={hasStripeCustomer}
+                variant="secondary"
+                className="mt-[14px] text-[12px]"
+              />
+            ) : null}
+          </div>
+
+          <p className="px-1 text-[11px] leading-[1.5] text-subtle">
+            Questions about your bill?{" "}
+            <a
+              href="mailto:billing@fluxora.app"
+              className="border-b-[0.5px] border-forest text-forest"
+            >
+              Email billing@fluxora →
+            </a>
+          </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StripCell({
+  label,
+  value,
+  sub,
+  numeric,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  numeric?: boolean;
+}) {
+  return (
+    <div className="px-4 py-[18px] sm:px-[22px]">
+      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted">
+        {label}
+      </div>
+      <div
+        className={
+          numeric
+            ? "font-serif text-[22px] font-medium leading-none tracking-[-0.015em] text-ink tabular-nums"
+            : "text-[14px] font-medium text-ink tabular-nums"
+        }
+      >
+        {value}
+      </div>
+      <div className="mt-[6px] text-[11px] leading-[1.4] text-subtle">{sub}</div>
+    </div>
+  );
+}
+
+function PlanColumn({
+  plan,
+  isCurrent,
+  canManage,
+}: {
+  plan: BillingCatalogPlanRow;
+  isCurrent: boolean;
+  canManage: boolean;
+}) {
+  const { currency: symbol, amount } = formatPriceParts(
+    plan.currency,
+    plan.unitAmountCents,
+  );
+  const bullets =
+    PLAN_FEATURES[plan.planKey] ??
+    (plan.productDescription
+      ? plan.productDescription.split(/\r?\n/).filter(Boolean)
+      : []);
+
+  return (
+    <div
+      data-current={isCurrent ? "true" : undefined}
+      className={
+        "flex flex-col px-[22px] py-5" +
+        (isCurrent ? " bg-card-warm" : "")
+      }
+    >
+      <div className="mb-[14px] flex items-start justify-between">
+        <div className="font-serif text-[17px] font-medium tracking-[-0.005em] text-ink">
+          {plan.productName ||
+            PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}
+        </div>
+        {isCurrent ? (
+          <span className="inline-flex items-center gap-[6px] rounded-full border-[0.5px] border-success-border bg-success-bg px-[9px] py-[3px] text-[10px] font-medium leading-none text-success-fg">
+            <span
+              aria-hidden
+              className="inline-block size-[5px] rounded-full bg-current"
+            />
+            Current
+          </span>
+        ) : null}
+      </div>
+      <div className="flex items-baseline gap-1">
+        {symbol ? (
+          <span className="font-serif text-[14px] text-subtle">{symbol}</span>
+        ) : null}
+        <span className="font-serif text-[36px] font-medium leading-none tracking-[-0.02em] text-ink tabular-nums">
+          {amount}
+        </span>
+      </div>
+      <div className="mt-[6px] text-[11px] text-subtle">
+        {plan.unitAmountCents == null
+          ? "annual contract"
+          : formatCadence(plan.recurringInterval, plan.recurringIntervalCount)}
+      </div>
+
+      <ul className="mt-4 flex flex-col gap-2">
+        {bullets.map((b) => (
+          <li
+            key={b}
+            className="flex items-start gap-2 text-[13px] leading-[1.5] text-ink-warm"
+          >
+            <Check
+              size={12}
+              strokeWidth={1.5}
+              className="mt-[3px] shrink-0 text-forest"
+              aria-hidden
+            />
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+
+      {canManage ? (
+        plan.planKey === "enterprise" && plan.unitAmountCents == null ? (
+          <a
+            href="mailto:sales@fluxora.app?subject=Fluxora%20enterprise%20plan%20inquiry"
+            className="mt-[18px] inline-flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-[7px] text-[12px] font-medium leading-none text-ink-warm transition-colors hover:bg-surface"
+          >
+            <ExternalLink size={12} strokeWidth={1.5} />
+            Contact sales
+          </a>
+        ) : (
+          <PlanSwitchButton
+            plan={plan.planKey}
+            label={
+              isCurrent
+                ? "Active plan"
+                : `Switch to ${plan.productName || PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}`
+            }
+            disabled={isCurrent}
+          />
+        )
+      ) : (
+        <p className="mt-[18px] text-center text-[11px] text-subtle">
+          Owners and admins can change plans.
+        </p>
+      )}
     </div>
   );
 }
