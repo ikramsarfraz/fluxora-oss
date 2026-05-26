@@ -1,5 +1,10 @@
 import "server-only";
 
+// MUST come before the pdfjs-dist import: installs a DOMMatrix stub on
+// globalThis so pdfjs-dist's top-level `new DOMMatrix()` doesn't throw
+// when its own @napi-rs/canvas polyfill can't load (e.g. on Vercel,
+// where the file tracer skips it). See pdfjs-dommatrix-polyfill.ts.
+import "./pdfjs-dommatrix-polyfill";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 
