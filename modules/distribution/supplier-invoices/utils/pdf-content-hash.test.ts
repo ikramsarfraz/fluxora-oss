@@ -37,12 +37,12 @@ test("hashPdfBytes diverges on a one-byte content change", () => {
   assert.notEqual(a, b);
 });
 
-test("hashPdfBytes handles empty input without throwing", () => {
-  const h = hashPdfBytes(Buffer.alloc(0));
-  // SHA-256 of the empty string — a known fixed value. Pinning it here
-  // catches an accidental migration to a different hash algorithm.
-  assert.equal(
-    h,
-    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+test("hashPdfBytes throws on empty input to catch detached ArrayBuffers", () => {
+  // Empty bytes would all collide on the canonical SHA-256-of-empty value
+  // and poison the cache. The throw surfaces the upstream detach bug
+  // instead of silently bucketing every PDF onto one cache row.
+  assert.throws(
+    () => hashPdfBytes(Buffer.alloc(0)),
+    /refusing to hash empty input/,
   );
 });
