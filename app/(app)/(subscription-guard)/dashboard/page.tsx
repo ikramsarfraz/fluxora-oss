@@ -4,6 +4,7 @@ import {
   HydrationBoundary,
 } from "@tanstack/react-query";
 
+import { ColdStartWelcome } from "@/components/dashboard/cold-start-welcome";
 import { TenantSubscriptionHealthBanner } from "@/modules/core/billing/components/subscription/tenant-subscription-health-banner";
 import { PageHeader } from "@/components/page-header";
 import type { PortalUserRole } from "@/lib/auth/permissions";
@@ -33,8 +34,8 @@ export default async function DashboardRoute() {
   const subscriptionHealth = getTenantSubscriptionHealth(tenantBillingSnapshot);
 
   const queryClient = new QueryClient();
-  await Promise.all([
-    queryClient.prefetchQuery({
+  const [summary] = await Promise.all([
+    queryClient.fetchQuery({
       queryKey: queryKeys.dashboard.summary,
       queryFn: () => getDashboardSummary(),
     }),
@@ -43,6 +44,15 @@ export default async function DashboardRoute() {
       queryFn: () => getTenantSetupChecklistViewAction(),
     }),
   ]);
+
+  // Cold-start gate: a brand-new tenant with no supplier bills, no sales,
+  // and no inventory positions yet. The v3 spec shows a welcome banner +
+  // setup checklist above the normal dashboard until those signals flip.
+  const isColdStart =
+    summary.purchasing.recent.length === 0 &&
+    summary.purchasing.unpaid.length === 0 &&
+    summary.sales.overTime.every((p) => Number(p.total) === 0) &&
+    summary.inventory.byStatus.every((row) => row.itemCount === 0);
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4">
@@ -59,6 +69,12 @@ export default async function DashboardRoute() {
           canManageBilling={canManageBilling}
         />
       </div>
+      {isColdStart && (
+        <ColdStartWelcome
+          workspaceName={tenant.name}
+          ownerFirstName={portalUser.fullName?.trim().split(/\s+/)[0]}
+        />
+      )}
       <HydrationBoundary state={dehydrate(queryClient)}>
         <DashboardShell role={role} />
       </HydrationBoundary>
