@@ -14,16 +14,24 @@ export type ChangelogRelease = {
   version: string;
   /** Human-readable date window (e.g. month + year). */
   dateLabel: string;
+  /** ISO date when the release was posted — drives "Apr 25" short labels. */
+  postedAt: string;
   title: string;
   summary: string;
   sections: ChangelogSections;
 };
 
+/** Convert "2026.4.3" → "v2026-4-3" for safe anchor / CSS id use. */
+export function changelogAnchorId(version: string): string {
+  return `v${version.replace(/\./g, "-")}`;
+}
+
 /** Newest-first list of changelog entries. */
 export const changelogReleases: readonly ChangelogRelease[] = [
   {
     version: "2026.4.3",
-    dateLabel: "April 2026",
+    dateLabel: "Apr 2026",
+    postedAt: "2026-04-25",
     title: "Plan limits & usage visibility",
     summary:
       "Surface subscription allowances and workspace usage side by side—so admins can see entitlement at a glance and plan capacity before hitting hard limits.",
@@ -39,7 +47,8 @@ export const changelogReleases: readonly ChangelogRelease[] = [
   },
   {
     version: "2026.4.2",
-    dateLabel: "April 2026",
+    dateLabel: "Apr 2026",
+    postedAt: "2026-04-10",
     title: "Billing UI redesign",
     summary:
       "Refined tenant billing surfaces for Stripe-backed subscriptions: clearer plan context, tighter layout, and a more approachable path to subscription management.",
@@ -55,7 +64,8 @@ export const changelogReleases: readonly ChangelogRelease[] = [
   },
   {
     version: "2026.3.5",
-    dateLabel: "March 2026",
+    dateLabel: "Mar 2026",
+    postedAt: "2026-03-22",
     title: "CRUD & edit workflows",
     summary:
       "Broadened parity across core ERP objects—create, read, update patterns on detail screens with disciplined validation schemas behind the scenes.",
@@ -71,7 +81,8 @@ export const changelogReleases: readonly ChangelogRelease[] = [
   },
   {
     version: "2026.3.1",
-    dateLabel: "March 2026",
+    dateLabel: "Mar 2026",
+    postedAt: "2026-03-05",
     title: "Email-only auth & onboarding",
     summary:
       "Passwordless sign-up and sign-in with magic links, optional Google SSO, and a post-authentication path to collect profile and first workspace details.",
@@ -90,7 +101,8 @@ export const changelogReleases: readonly ChangelogRelease[] = [
   },
   {
     version: "2026.2.2",
-    dateLabel: "February 2026",
+    dateLabel: "Feb 2026",
+    postedAt: "2026-02-14",
     title: "Billing & subscription system",
     summary:
       "Stripe-powered subscriptions for tenant plans: customer records, webhook-driven status, and subscription blocking surfaces when invoices fail.",
@@ -109,7 +121,8 @@ export const changelogReleases: readonly ChangelogRelease[] = [
   },
   {
     version: "2026.1.0",
-    dateLabel: "January 2026",
+    dateLabel: "Jan 2026",
+    postedAt: "2026-01-20",
     title: "V1 launch preparation",
     summary:
       "Foundational Fluxora SaaS scaffolding: tenant routing, ERP modules for distributors, and hardened patterns for CRUD lists, dashboards, and support touchpoints.",

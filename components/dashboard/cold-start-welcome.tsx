@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import {
+  TOUR_COMPLETION_KEY,
+} from "@/lib/tour/cold-start-steps";
 import { cn } from "@/lib/utils";
+
+const FLUXORA_OPEN_TOUR_EVENT = "fluxora:open-tour";
 
 type Step = {
   id: string;
@@ -50,8 +55,20 @@ export function ColdStartWelcome({
 }) {
   const [dismissed, setDismissed] = useState(false);
   const [completed, setCompleted] = useState<Set<string>>(new Set());
+  const [tourCompleted, setTourCompleted] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setTourCompleted(Boolean(window.localStorage.getItem(TOUR_COMPLETION_KEY)));
+  }, []);
 
   if (dismissed) return null;
+
+  function openTour() {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(FLUXORA_OPEN_TOUR_EVENT));
+    }
+  }
 
   const doneCount = completed.size;
   const total = steps.length;
@@ -61,6 +78,7 @@ export function ColdStartWelcome({
     <div className="flex flex-col gap-4 px-4 lg:px-6">
       {/* Welcome banner */}
       <section
+        id="welcomeBanner"
         className="relative overflow-hidden rounded-xl bg-forest p-6 text-card-warm shadow-[0_1px_2px_rgba(26,26,20,0.05),0_8px_24px_rgba(26,26,20,0.06)]"
         aria-label="Welcome"
       >
@@ -93,11 +111,23 @@ export function ColdStartWelcome({
             that doesn&apos;t apply — you can come back to this checklist from
             the sidebar whenever you want.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openTour}
+              className="inline-flex items-center gap-2 rounded-md bg-card-warm px-[14px] py-[9px] text-[13px] font-medium text-ink transition-colors hover:bg-card"
+            >
+              {tourCompleted ? "Replay tour" : "Take 60-sec tour"}
+            </button>
+          </div>
         </div>
       </section>
 
       {/* Checklist */}
-      <section className="rounded-lg border-[0.5px] border-border-soft bg-card p-5">
+      <section
+        id="checklist"
+        className="rounded-lg border-[0.5px] border-border-soft bg-card p-5"
+      >
         <div className="flex items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-subtle">

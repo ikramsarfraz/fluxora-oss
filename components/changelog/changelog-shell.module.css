@@ -1,0 +1,92 @@
+/* Vertical timeline rail behind the release column */
+.releases {
+  position: relative;
+}
+
+.releases::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  bottom: 18px;
+  width: 0.5px;
+  background: var(--color-border-default);
+}
+
+.release {
+  position: relative;
+  padding: 0 0 40px 40px;
+  scroll-margin-top: 96px;
+}
+
+.release::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-card-warm);
+  border: 1.5px solid var(--color-forest);
+}
+
+.release.latest::before {
+  background: var(--color-gold);
+  border-color: var(--color-gold-deep);
+  box-shadow: 0 0 0 5px rgba(201, 169, 97, 0.16);
+}
+
+/* Bullets per kind use ::before glyphs on each li */
+.relSection li {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--color-ink-warm);
+  text-wrap: pretty;
+}
+
+.relSection.added li::before {
+  content: "+";
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-success-fg);
+  margin-top: 1px;
+}
+
+.relSection.improved li::before {
+  content: "~";
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-info-fg);
+  margin-top: 1px;
+}
+
+.relSection.fixed li::before {
+  content: "!";
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-warning-fg);
+  margin-top: 1px;
+}
+
+.relSection.security li::before {
+  content: "\00A7";
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-gold-deep);
+  margin-top: 1px;
+}
+
+.relSection li strong {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+@media (max-width: 760px) {
+  .release {
+    padding-left: 32px;
+  }
+}

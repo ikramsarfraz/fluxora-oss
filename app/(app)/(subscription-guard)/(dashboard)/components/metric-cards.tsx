@@ -157,7 +157,10 @@ export function MetricCards({
   if (visible.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 gap-3 px-4 lg:px-6 @xl/main:grid-cols-2 @3xl/main:grid-cols-3">
+    <div
+      id="kpis"
+      className="grid grid-cols-1 gap-3 px-4 lg:px-6 @xl/main:grid-cols-2 @3xl/main:grid-cols-3"
+    >
       {visible.map(card => (
         <Fragment key={card.key}>{card.node}</Fragment>
       ))}

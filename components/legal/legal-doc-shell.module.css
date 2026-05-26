@@ -1,0 +1,192 @@
+/* TOC list — decimal-leading-zero counter prefix on each link */
+.tocList {
+  list-style: none;
+  counter-reset: toc;
+  display: flex;
+  flex-direction: column;
+}
+
+.tocItem {
+  counter-increment: toc;
+}
+
+.tocLink {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--color-ink-warm);
+  line-height: 1.35;
+  border-bottom: 0.5px solid var(--color-divider);
+  transition: color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tocLink::before {
+  content: counter(toc, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-muted);
+  letter-spacing: 0.04em;
+}
+
+.tocList li:last-child .tocLink {
+  border-bottom: none;
+}
+
+.tocLink:hover {
+  color: var(--color-forest);
+}
+
+.tocLink[aria-current="true"] {
+  color: var(--color-forest);
+  font-weight: 500;
+}
+
+.tocLink[aria-current="true"]::before {
+  color: var(--color-forest);
+}
+
+/* Content column — section anchors are numbered with `§ NN` markers */
+.content {
+  max-width: 680px;
+  counter-reset: sec;
+}
+
+.content section {
+  counter-increment: sec;
+  padding: 48px 0 8px;
+  border-top: 0.5px solid var(--color-border-soft);
+  position: relative;
+  scroll-margin-top: 96px;
+}
+
+.content section:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.content section h2 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  text-wrap: pretty;
+}
+
+.content section h2::before {
+  content: "§ " counter(sec, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--color-gold-deep);
+  flex-shrink: 0;
+}
+
+.content p,
+.content ul,
+.content ol {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-ink-warm);
+  margin-bottom: 14px;
+  text-wrap: pretty;
+}
+
+.content ul,
+.content ol {
+  padding-left: 24px;
+}
+
+.content li {
+  margin-bottom: 6px;
+}
+
+.content li::marker {
+  color: var(--color-gold-deep);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.content strong {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.content a {
+  color: var(--color-forest);
+  border-bottom: 0.5px solid var(--color-forest-tint-deep);
+  transition: border-color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.content a:hover {
+  border-bottom-color: var(--color-forest);
+}
+
+.content :global(.legalese) {
+  background: var(--color-card-warm);
+  border: 0.5px solid var(--color-border-soft);
+  border-left: 2px solid var(--color-gold);
+  padding: 18px 22px;
+  border-radius: 0 var(--radius-sm, 4px) var(--radius-sm, 4px) 0;
+  margin-bottom: 14px;
+}
+
+.content :global(.legalese p) {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.75;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-warm);
+  text-transform: uppercase;
+  margin: 0 0 10px;
+}
+
+.content :global(.legalese p:last-child) {
+  margin: 0;
+}
+
+.content :global(.callout) {
+  margin-top: 8px;
+  margin-bottom: 14px;
+  display: flex;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--color-card);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: 8px;
+  box-shadow: 0 0.5px 0 rgba(26, 26, 20, 0.04), 0 1px 2px rgba(26, 26, 20, 0.04);
+}
+
+.content :global(.callout .ic) {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: var(--color-forest-tint);
+  color: var(--color-forest);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.content :global(.callout .b) {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--color-ink-warm);
+  margin: 0;
+}
+
+.content :global(.callout .b strong) {
+  color: var(--color-ink);
+}

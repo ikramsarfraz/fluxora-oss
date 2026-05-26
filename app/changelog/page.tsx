@@ -1,158 +1,96 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { AuthBrand } from "@/app/(auth)/components/auth-shell";
-import { Badge } from "@/components/ui/badge";
+import { ChangelogShell } from "@/components/changelog/changelog-shell";
 import {
-  type ChangelogRelease,
-  type ChangelogSectionKind,
-  changelogReleases,
-} from "@/lib/changelog";
-import { cn } from "@/lib/utils";
+  MarketingTopNav,
+  Ribbon,
+  SiteFooter,
+} from "@/components/legal/marketing-chrome";
+import { changelogReleases } from "@/lib/changelog";
+import { roadmapItems } from "@/lib/roadmap";
 
 export const metadata: Metadata = {
   title: "Changelog · Fluxora",
   description: "Product updates, improvements, and fixes for the Fluxora ERP platform.",
 };
 
-const gridPattern = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='%23cbd5e1' stroke-width='0.5'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`;
-
-const SECTION_ORDER: ChangelogSectionKind[] = [
-  "added",
-  "improved",
-  "fixed",
-  "security",
-];
-
-const SECTION_LABEL: Record<ChangelogSectionKind, string> = {
-  added: "Added",
-  improved: "Improved",
-  fixed: "Fixed",
-  security: "Security & reliability",
-};
-
-const SECTION_BADGE_CLASS: Record<ChangelogSectionKind, string> = {
-  added:
-    "border-emerald-600/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
-  improved: "border-sky-600/25 bg-sky-500/10 text-sky-900 dark:text-sky-100",
-  fixed: "border-amber-600/30 bg-amber-500/10 text-amber-950 dark:text-amber-50",
-  security:
-    "border-violet-600/25 bg-violet-500/10 text-violet-950 dark:text-violet-50",
-};
-
-function ReleaseCard({ release }: { release: ChangelogRelease }) {
-  const sectionKeys = SECTION_ORDER.filter(k => {
-    const entries = release.sections[k];
-    return entries && entries.length > 0;
-  });
-
-  return (
-    <article
-      className="rounded-2xl border border-border bg-card/80 p-6 shadow-sm backdrop-blur-sm sm:p-8"
-      aria-labelledby={`changelog-${release.version}`}
-    >
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="font-mono text-sm font-medium tabular-nums text-muted-foreground">
-            {release.version}
-          </span>
-          <span className="text-sm text-muted-foreground">{release.dateLabel}</span>
-        </div>
-        <h2
-          id={`changelog-${release.version}`}
-          className="text-xl font-semibold tracking-tight text-[oklch(0.22_0.03_230)] sm:text-2xl"
-        >
-          {release.title}
-        </h2>
-        <p className="max-w-2xl text-[0.9375rem] leading-relaxed text-muted-foreground">
-          {release.summary}
-        </p>
-      </header>
-
-      {sectionKeys.length > 0 ? (
-        <div className="mt-8 space-y-8">
-          {sectionKeys.map(kind => (
-            <section key={kind} aria-labelledby={`${release.version}-${kind}`}>
-              <div className="mb-3 flex items-center gap-2">
-                <Badge
-                  id={`${release.version}-${kind}`}
-                  variant="outline"
-                  className={cn("font-semibold", SECTION_BADGE_CLASS[kind])}
-                >
-                  {SECTION_LABEL[kind]}
-                </Badge>
-              </div>
-              <ul className="list-disc space-y-2 pl-5 text-[0.9375rem] leading-relaxed text-foreground marker:text-muted-foreground">
-                {release.sections[kind]?.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
 export default function ChangelogPage() {
+  const latest = changelogReleases[0];
+  const postedLabel = latest
+    ? new Date(latest.postedAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "";
+
   return (
-    <div className="relative flex min-h-screen flex-col bg-[oklch(0.99_0.003_230)]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{ backgroundImage: gridPattern }}
+    <div className="flex min-h-screen flex-col bg-page text-ink">
+      <Ribbon
+        lead="§ Changelog · ledger of releases"
+        middle="Newest first"
+        trailing={{ label: "Subscribe via RSS", href: "#subscribe" }}
       />
-      <header className="relative z-10 border-b border-[oklch(0.92_0.01_230)] bg-[oklch(0.99_0.003_230)]/90 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-4xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6">
-          <AuthBrand />
-          <nav className="flex items-center gap-4 text-sm text-[oklch(0.50_0.02_230)]">
-            <Link
-              href="/"
-              className="transition-colors hover:text-[oklch(0.30_0.03_230)]"
-            >
-              Home
-            </Link>
-            <Link
-              href="/login"
-              className="font-medium text-[oklch(0.55_0.15_195)] transition-colors hover:text-[oklch(0.45_0.15_195)]"
-            >
-              Sign in
-            </Link>
-          </nav>
+      <MarketingTopNav activeHref="/changelog" />
+
+      <header className="relative overflow-hidden border-b-[0.5px] border-border-default px-8 pb-9 pt-16">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 60% 40% at 14% 0%, rgba(31,58,46,0.06) 0%, transparent 65%)",
+          }}
+        />
+        <div className="relative z-10 mx-auto grid w-full max-w-[1200px] items-end gap-8 sm:grid-cols-[1fr_auto]">
+          <div>
+            <div className="flex items-center gap-[10px] text-[10px] font-semibold uppercase tracking-[0.14em] text-subtle">
+              <span aria-hidden className="inline-block size-[5px] bg-forest" />
+              <span>Product ledger</span>
+              <span aria-hidden className="font-normal opacity-50">
+                ·
+              </span>
+              <span>Folio 03 of 03</span>
+            </div>
+            <h1 className="mt-[14px] text-[42px] font-semibold leading-[1.02] tracking-[-0.035em] text-ink sm:text-[52px] lg:text-[60px]">
+              Changelog
+            </h1>
+            <p className="mt-[18px] max-w-[580px] text-[15.5px] leading-[1.55] text-subtle sm:text-[17.5px]">
+              Every line we shipped, smoothed, or fixed. Bookkeeping for the
+              product itself — kept in a careful hand, posted in arrears, and
+              never quietly rewritten.
+            </p>
+          </div>
+          {latest ? (
+            <div className="flex min-w-[220px] flex-col gap-2 rounded-md border-[0.5px] border-border-default bg-card-warm px-[18px] py-[14px] shadow-[0_0.5px_0_rgba(26,26,20,0.04),0_1px_2px_rgba(26,26,20,0.04)]">
+              <span className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Current release
+              </span>
+              <div className="font-mono text-[18px] font-medium tracking-[-0.005em] text-ink">
+                {latest.version}
+                <small className="ml-[6px] font-normal text-[11px] text-subtle">
+                  · stable
+                </small>
+              </div>
+              <div className="my-[2px] h-[0.5px] bg-border-soft" />
+              <div className="flex items-baseline justify-between gap-[14px] font-mono text-[11px] tracking-[0.04em] text-subtle">
+                <span>Posted</span>
+                <span className="text-ink-warm">{postedLabel}</span>
+              </div>
+              <div className="flex items-baseline justify-between gap-[14px] font-mono text-[11px] tracking-[0.04em] text-subtle">
+                <span>Entries</span>
+                <span className="text-ink-warm">
+                  {changelogReleases.length} releases
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 lg:py-14">
-        <div className="mb-12 space-y-3">
-          <h1 className="text-balance text-3xl font-semibold tracking-tight text-[oklch(0.22_0.03_230)] sm:text-4xl">
-            Changelog
-          </h1>
-          <p className="max-w-xl text-muted-foreground">
-            Highlights from Fluxora releases—features we ship, rough edges we smooth, and
-            operational notes worth knowing about. Newest first.
-          </p>
-        </div>
+      <ChangelogShell releases={changelogReleases} roadmap={roadmapItems} />
 
-        <div className="space-y-12">
-          {changelogReleases.map(release => (
-            <ReleaseCard key={release.version} release={release} />
-          ))}
-        </div>
-
-        <footer className="mt-16 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-8 text-sm text-muted-foreground">
-          <Link href="/" className="hover:text-foreground">
-            ← Back to home
-          </Link>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/privacy" className="hover:text-foreground">
-              Privacy
-            </Link>
-            <Link href="/terms" className="hover:text-foreground">
-              Terms
-            </Link>
-          </div>
-        </footer>
-      </main>
+      <SiteFooter />
     </div>
   );
 }
