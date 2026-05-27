@@ -188,6 +188,22 @@ export type UpdateTenantInput = {
    * `resolveInvitationExpiryDays` at the write site below.
    */
   invitationExpiryDays?: number | null;
+  /**
+   * Base currency for displayed amounts (#232 phase 1). Must be one of
+   * the `tenant_base_currency` enum members; the writer trusts the
+   * Postgres enum to reject anything outside the closed set.
+   */
+  baseCurrency?: "USD" | "EUR" | "GBP" | "CAD";
+  /** Whether line items are priced tax-inclusive. */
+  taxInclusive?: boolean;
+  /**
+   * Default tax rate as a decimal fraction (0.0825 = 8.25%). Null means
+   * "no default" — the UI clears the field rather than typing 0. The
+   * writer accepts numeric strings only; the settings card runs
+   * `parseTaxRatePercent` before posting so this column never sees
+   * percent-form values.
+   */
+  defaultTaxRate?: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -388,6 +404,15 @@ export async function updateCurrentTenant(
       ...(input.slug !== undefined && { slug: input.slug }),
       ...(invitationExpirySet !== undefined && {
         invitationExpiryDays: invitationExpirySet,
+      }),
+      ...(input.baseCurrency !== undefined && {
+        baseCurrency: input.baseCurrency,
+      }),
+      ...(input.taxInclusive !== undefined && {
+        taxInclusive: input.taxInclusive,
+      }),
+      ...(input.defaultTaxRate !== undefined && {
+        defaultTaxRate: input.defaultTaxRate,
       }),
       updatedAt: new Date(),
     })

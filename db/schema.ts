@@ -49,6 +49,20 @@ export const tenantJoinRequestStatusEnum = pgEnum("tenant_join_request_status", 
 
 export const tenantTypeEnum = pgEnum("tenant_type", ["solo", "business"]);
 
+/**
+ * Per-tenant base currency for amounts persisted as cents (#232). The
+ * persisted scale is unaffected — only the display layer renders the
+ * right symbol / locale per tenant. Expanding the set is additive
+ * (extend the enum + the formatter's currency table); contracting it
+ * would orphan existing tenant rows.
+ */
+export const tenantBaseCurrencyEnum = pgEnum("tenant_base_currency", [
+  "USD",
+  "EUR",
+  "GBP",
+  "CAD",
+]);
+
 export const addressTypeEnum = pgEnum("address_type", [
   "billing",
   "shipping",
@@ -430,6 +444,30 @@ export const tenants = pgTable(
      * a smaller live window.
      */
     invitationExpiryDays: integer("invitation_expiry_days"),
+    /**
+     * Base currency for amounts displayed in this tenant's app shell
+     * (#232 phase 1). Persisted scale stays cents; only the display
+     * layer reads this. Default USD keeps every existing tenant
+     * rendering unchanged after the migration.
+     */
+    baseCurrency: tenantBaseCurrencyEnum("base_currency")
+      .notNull()
+      .default("USD"),
+    /**
+     * When true, the tenant prices line items as tax-inclusive (price
+     * already contains the tax component). When false, tax is added on
+     * top at invoice/bill total time. Phase-1 stores the preference;
+     * phase 2 wires it through invoice/bill tax-line modeling.
+     */
+    taxInclusive: boolean("tax_inclusive").notNull().default(false),
+    /**
+     * Default tax rate as a decimal fraction — 0.0825 means 8.25%.
+     * Nullable so "no default" stays expressible (the UI clears the
+     * field rather than typing 0). Range 0–0.9999 enforced by the
+     * settings form; the column is intentionally permissive to allow
+     * unusual jurisdictions without a schema migration.
+     */
+    defaultTaxRate: numeric("default_tax_rate", { precision: 5, scale: 4 }),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),

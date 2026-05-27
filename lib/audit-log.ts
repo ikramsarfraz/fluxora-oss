@@ -59,6 +59,7 @@ export type AuditAction =
   | "tenant.member_removed"
   | "tenant.member_role_changed"
   | "tenant.invitation_expiry_updated"
+  | "tenant.currency_tax_updated"
   | "payment_match.confirmed"
   | "payment_match.unmatched"
   | "payment.void"

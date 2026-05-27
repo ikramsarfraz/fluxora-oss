@@ -126,6 +126,7 @@ export const queryKeys = {
   tenant: {
     branding: ["tenant", "branding"] as const,
     logoUrl: ["tenant", "branding", "logo-url"] as const,
+    settings: ["tenant", "settings"] as const,
   },
   priceChart: {
     all: ["price-chart"] as const,

@@ -505,6 +505,13 @@
       "when": 1779879829582,
       "tag": "0071_tenant_invitation_expiry_days",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1779884809779,
+      "tag": "0072_tenant_currency_tax",
+      "breakpoints": true
     }
   ]
 }
