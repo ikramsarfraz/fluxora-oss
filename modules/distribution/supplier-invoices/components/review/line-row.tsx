@@ -39,7 +39,7 @@ const fmt = (n: number) =>
  *  fields LineCostDiffBanner needs plus the ack key the container uses
  *  to flip the ack state. */
 export type LineCostDiffData = {
-  variant: "changed" | "new";
+  variant: "changed" | "new" | "anomaly";
   recordedCostPerLb: string | null;
   liveCostPerLb: string;
   productName: string;

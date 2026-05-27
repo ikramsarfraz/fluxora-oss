@@ -13,6 +13,7 @@ import { useSuppliers } from "@/modules/distribution/suppliers/hooks/use-supplie
 
 import { useSupplierCostDiffContext } from "../../hooks/use-supplier-invoices";
 import { supplierInvoiceLineCostPerLb } from "../../utils/cost";
+import { classifyCostDelta } from "../../utils/cost-anomaly";
 import {
   clearReviewOverrides,
   readReviewOverrides,
@@ -745,7 +746,7 @@ export function ReviewContainer({
   }, [costDiffQuery.data]);
 
   type LineCostDiffProps = {
-    variant: "changed" | "new";
+    variant: "changed" | "new" | "anomaly";
     recordedCostPerLb: string | null;
     liveCostPerLb: string;
     productName: string;
@@ -791,19 +792,17 @@ export function ReviewContainer({
       }
       const recorded = costDiffByProductId.get(productId);
       const recordedCostPerLb = recorded?.currentCostPerLb ?? null;
-      const variant: "changed" | "new" | null =
-        recordedCostPerLb == null
-          ? "new"
-          : recordedCostPerLb === liveCostPerLb
-            ? null
-            : "changed";
-      if (!variant) {
+      const classification = classifyCostDelta(recordedCostPerLb, liveCostPerLb);
+      // null / unchanged → no banner needed. "new" / "changed" / "anomaly"
+      // all surface the banner; only the anomaly variant uses the yellow
+      // "I verified" treatment.
+      if (!classification || classification.kind === "unchanged") {
         map[line.id] = null;
         continue;
       }
       const key = buildCostAckKey(productId, supplierIdOverride, liveCostPerLb);
       map[line.id] = {
-        variant,
+        variant: classification.kind,
         recordedCostPerLb,
         liveCostPerLb,
         productName:

@@ -23,7 +23,7 @@ export function LineCostDiffBanner({
   acknowledged,
   onToggleAck,
 }: {
-  variant: "changed" | "new";
+  variant: "changed" | "new" | "anomaly";
   recordedCostPerLb: string | null;
   liveCostPerLb: string;
   productName: string;
@@ -37,16 +37,27 @@ export function LineCostDiffBanner({
     recordedNum != null && recordedNum > 0
       ? ((liveNum - recordedNum) / recordedNum) * 100
       : null;
+  // Anomaly uses a saturated yellow to stand out from the muted "changed"
+  // banner — same warning-bg family so the row's visual language stays
+  // consistent, but with full chroma so it reads as a deliberate flag.
   const accent =
-    variant === "new" ? "var(--color-success-fg)" : "oklch(60% 0.16 35)";
+    variant === "new"
+      ? "var(--color-success-fg)"
+      : variant === "anomaly"
+        ? "oklch(58% 0.18 80)"
+        : "oklch(60% 0.16 35)";
   const accentSoft =
     variant === "new"
       ? "color-mix(in oklch, var(--color-success-bg) 90%, transparent)"
-      : "color-mix(in oklch, var(--color-warning-bg) 90%, transparent)";
+      : variant === "anomaly"
+        ? "oklch(94% 0.12 92)"
+        : "color-mix(in oklch, var(--color-warning-bg) 90%, transparent)";
   const accentBorder =
     variant === "new"
       ? "color-mix(in oklch, var(--color-success-fg) 30%, transparent)"
-      : "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)";
+      : variant === "anomaly"
+        ? "oklch(58% 0.18 80 / 0.45)"
+        : "color-mix(in oklch, var(--color-warning-fg) 30%, transparent)";
 
   return (
     <div
@@ -75,7 +86,9 @@ export function LineCostDiffBanner({
         <span>
           {variant === "new"
             ? "New cost for this supplier"
-            : "Cost changed for this supplier"}
+            : variant === "anomaly"
+              ? "Price anomaly vs last invoice"
+              : "Cost changed for this supplier"}
           {productName ? (
             <span className="text-subtle"> · {productName}</span>
           ) : null}
@@ -150,7 +163,13 @@ export function LineCostDiffBanner({
           className="size-[13px] cursor-pointer"
           style={{ accentColor: accent }}
         />
-        {acknowledged ? "Acknowledged" : "Acknowledge"}
+        {variant === "anomaly"
+          ? acknowledged
+            ? "Verified"
+            : "I verified"
+          : acknowledged
+            ? "Acknowledged"
+            : "Acknowledge"}
       </label>
     </div>
   );
