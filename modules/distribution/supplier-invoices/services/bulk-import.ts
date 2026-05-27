@@ -7,8 +7,16 @@ import {
   createBulkImportFile,
   findBulkImportFileByContentHash,
 } from "./bulk-import-history";
-import { parseSupplierInvoicePdf } from "./pdf-prefill";
+import { extractPdfText } from "./extract-pdf-text";
+import {
+  parseSupplierInvoicePdf,
+  parseSupplierInvoiceTextSegment,
+} from "./pdf-prefill";
 import { hashPdfBytes } from "../utils/pdf-content-hash";
+import {
+  detectInvoiceSegments,
+  type InvoiceSegment,
+} from "../utils/invoice-boundary-detector";
 import type { PipelineResult } from "./parsing-pipeline";
 
 // ---------------------------------------------------------------------------
@@ -111,7 +119,7 @@ type ProcessOneFileArgs = {
 async function processOneFile(
   file: BulkImportFileInput,
   args: ProcessOneFileArgs,
-): Promise<BulkImportItemResult> {
+): Promise<BulkImportItemResult[]> {
   // Defensive copy of the source bytes BEFORE the parse pipeline touches
   // them. The pipeline streams the buffer to OpenAI / pdf-parse, and under
   // Node 22+ undici can detach the underlying ArrayBuffer when forwarding
@@ -127,22 +135,69 @@ async function processOneFile(
   // short-circuit BEFORE the parse pipeline + R2 upload — the original
   // row already has its pipelineResult cached and the user is better
   // served by being routed back to it than by an identical second copy
-  // appearing in the queue.
+  // appearing in the queue. The hash threads down through both the
+  // single- and multi-invoice paths so each persisted row carries it for
+  // future dedup checks.
   const pdfContentHash = hashPdfBytes(persistBytes);
   const existing = await findBulkImportFileByContentHash({
     tenantId: args.tenantId,
     pdfContentHash,
   });
   if (existing) {
-    return {
-      filename: file.originalFilename,
-      status: "duplicate",
-      linkedBulkImportFileId: existing.id,
-      linkedFilename: existing.filename,
-      linkedCreatedAt: existing.createdAt,
-    };
+    return [
+      {
+        filename: file.originalFilename,
+        status: "duplicate",
+        linkedBulkImportFileId: existing.id,
+        linkedFilename: existing.filename,
+        linkedCreatedAt: existing.createdAt,
+      },
+    ];
   }
 
+  // Boundary detection (#224). Extract text up-front so we can decide
+  // whether this PDF carries one invoice or several. The single-invoice
+  // path (the common case) still calls the full `parseSupplierInvoicePdf`
+  // with the original bytes so vision stays enabled — splitting kicks in
+  // only when the detector finds 2+ distinct invoice numbers.
+  let segments: InvoiceSegment[] | null = null;
+  try {
+    const detection = await extractPdfText(
+      new Uint8Array(file.bytes.buffer, file.bytes.byteOffset, file.bytes.byteLength),
+    );
+    if (detection.hasUsableText) {
+      const candidate = detectInvoiceSegments(detection.combinedText);
+      if (candidate.length > 1) segments = candidate;
+    }
+  } catch (err) {
+    // Detection is best-effort — a pdfjs-dist failure here mustn't sink
+    // the upload. We just fall through to the single-invoice path,
+    // which has its own pdf-parse fallback chain inside the pipeline.
+    captureException(err, {
+      stage: "detect_invoice_segments",
+      filename: file.originalFilename,
+      mime_type: file.mimeType,
+      size_bytes: file.bytes.byteLength,
+      tenant_id: args.tenantId,
+      batch_id: args.batchId,
+    });
+  }
+
+  if (segments && segments.length > 1) {
+    return processMultiInvoiceFile(file, persistBytes, pdfContentHash, segments, args);
+  }
+
+  // Single-invoice happy path — identical to pre-#224 behaviour. Returns
+  // a one-element array so the caller can flatten without branching.
+  return processSingleInvoiceFile(file, persistBytes, pdfContentHash, args);
+}
+
+async function processSingleInvoiceFile(
+  file: BulkImportFileInput,
+  persistBytes: Buffer,
+  pdfContentHash: string,
+  args: ProcessOneFileArgs,
+): Promise<BulkImportItemResult[]> {
   let pipeline: PipelineResult;
   try {
     pipeline = await parseSupplierInvoicePdf({
@@ -151,10 +206,6 @@ async function processOneFile(
       bytes: file.bytes,
     });
   } catch (err) {
-    // The user-facing summary collapses this into "1 couldn't be read"
-    // — Sentry needs the actual error to triage. Capture with the
-    // filename + tenant context so we can group recurring failures by
-    // supplier or PDF flavor.
     captureException(err, {
       stage: "parse_supplier_invoice_pdf",
       filename: file.originalFilename,
@@ -163,36 +214,126 @@ async function processOneFile(
       tenant_id: args.tenantId,
       batch_id: args.batchId,
     });
-    return {
-      filename: file.originalFilename,
-      status: "error",
-      error: err instanceof Error ? err.message : "Failed to parse PDF.",
-    };
+    return [
+      {
+        filename: file.originalFilename,
+        status: "error",
+        error: err instanceof Error ? err.message : "Failed to parse PDF.",
+      },
+    ];
   }
 
+  return [
+    await persistAndSummarize({
+      file,
+      filename: file.originalFilename,
+      persistBytes,
+      pdfContentHash,
+      pipeline,
+      args,
+    }),
+  ];
+}
+
+/**
+ * Multi-invoice path (#224): one input file → N parse passes, one
+ * `bulk_import_files` row per detected segment. All rows share the
+ * `batchId` so the review queue carousel groups them naturally. Each
+ * segment's R2 object stores the FULL source PDF bytes — the reviewer
+ * still needs to look at the whole document when verifying a line they
+ * suspect spans pages. PDF-byte slicing is a follow-up.
+ */
+async function processMultiInvoiceFile(
+  file: BulkImportFileInput,
+  persistBytes: Buffer,
+  pdfContentHash: string,
+  segments: InvoiceSegment[],
+  args: ProcessOneFileArgs,
+): Promise<BulkImportItemResult[]> {
+  const results: BulkImportItemResult[] = [];
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    // Suffix the filename so the user can distinguish each segment in
+    // the review queue. We deliberately keep the suffix simple: the
+    // detected invoice number when we have one, plus a "(k/N)"
+    // breadcrumb so the user knows where this card sits in the bundle.
+    const breadcrumb = `(${i + 1}/${segments.length})`;
+    const segmentLabel = segment.detectedInvoiceNumber
+      ? `${file.originalFilename} — Invoice ${segment.detectedInvoiceNumber} ${breadcrumb}`
+      : `${file.originalFilename} — pages ${segment.startPage}-${segment.endPage} ${breadcrumb}`;
+
+    let pipeline: PipelineResult;
+    try {
+      pipeline = await parseSupplierInvoiceTextSegment({
+        originalFilename: file.originalFilename,
+        segmentText: segment.text,
+        pageCount: segment.endPage - segment.startPage + 1,
+        textExtractor: "pdfjs-dist",
+        parseMode: "text-first",
+      });
+    } catch (err) {
+      captureException(err, {
+        stage: "parse_supplier_invoice_segment",
+        filename: file.originalFilename,
+        segment_index: i,
+        segment_count: segments.length,
+        mime_type: file.mimeType,
+        size_bytes: file.bytes.byteLength,
+        tenant_id: args.tenantId,
+        batch_id: args.batchId,
+      });
+      results.push({
+        filename: segmentLabel,
+        status: "error",
+        error: err instanceof Error ? err.message : "Failed to parse segment.",
+      });
+      continue;
+    }
+
+    results.push(
+      await persistAndSummarize({
+        file,
+        filename: segmentLabel,
+        persistBytes,
+        pdfContentHash,
+        pipeline,
+        args,
+      }),
+    );
+  }
+  return results;
+}
+
+/**
+ * Write the R2 object + DB row for one parse outcome and shape the
+ * `BulkImportItemResult`. Lifted out of the per-path functions because
+ * single-invoice and multi-invoice paths persist identically — only
+ * the parse step differs.
+ */
+async function persistAndSummarize(args: {
+  file: BulkImportFileInput;
+  /** Display filename for this row (the source filename for the single-
+   *  invoice path; the segment-suffixed label for the multi-invoice path). */
+  filename: string;
+  persistBytes: Buffer;
+  pdfContentHash: string;
+  pipeline: PipelineResult;
+  args: ProcessOneFileArgs;
+}): Promise<BulkImportItemResult> {
+  const { file, filename, persistBytes, pdfContentHash, pipeline } = args;
   const prefill = pipeline.prefillResult;
   const detectedSupplierName =
     prefill.unmatchedSupplierCandidates[0] ?? null;
 
-  // Persist alongside parsing so the row is available to the bulk-landing
-  // screen the moment the action returns. If R2 or DB fails we downgrade
-  // the per-file result to "error" — a single bad row doesn't sink the
-  // batch, and the original PipelineResult is already in hand so callers
-  // can still proceed via the localStorage path until PR A2 lands.
-  //
-  // When the pipeline itself failed (AI connection drop etc.), the row goes
-  // in with status='parse_error' instead of 'parsed'. Keep the PipelineResult
-  // JSON so the user can still see what the deterministic stage produced; UI
-  // surfaces a re-upload callout instead of a normal review card.
   const rowStatus: "parsed" | "parse_error" =
     pipeline.parseStatus === "parse_error" ? "parse_error" : "parsed";
   let bulkImportFileId: string;
   try {
     const created = await createBulkImportFile({
-      tenantId: args.tenantId,
-      uploadedByUserId: args.uploadedByUserId,
-      batchId: args.batchId,
-      filename: file.originalFilename,
+      tenantId: args.args.tenantId,
+      uploadedByUserId: args.args.uploadedByUserId,
+      batchId: args.args.batchId,
+      filename,
       mimeType: file.mimeType,
       bytes: persistBytes,
       pipelineResult: pipeline,
@@ -203,19 +344,16 @@ async function processOneFile(
     });
     bulkImportFileId = created.id;
   } catch (err) {
-    // Same rationale as the parse catch above — without explicit capture,
-    // R2/DB persistence failures collapse into the same generic count
-    // and we lose the underlying cause.
     captureException(err, {
       stage: "create_bulk_import_file",
-      filename: file.originalFilename,
+      filename,
       mime_type: file.mimeType,
       size_bytes: file.bytes.byteLength,
-      tenant_id: args.tenantId,
-      batch_id: args.batchId,
+      tenant_id: args.args.tenantId,
+      batch_id: args.args.batchId,
     });
     return {
-      filename: file.originalFilename,
+      filename,
       status: "error",
       error:
         err instanceof Error
@@ -228,15 +366,15 @@ async function processOneFile(
   // made. Failure here doesn't fail the parse — the user's review flow is
   // unaffected, we just lose a row of telemetry.
   await recordAiUsageEvents({
-    tenantId: args.tenantId,
-    portalUserId: args.uploadedByUserId,
+    tenantId: args.args.tenantId,
+    portalUserId: args.args.uploadedByUserId,
     sourceBulkImportFileId: bulkImportFileId,
-    sourceFilename: file.originalFilename,
+    sourceFilename: filename,
     events: pipeline.usageEvents,
   });
 
   return {
-    filename: file.originalFilename,
+    filename,
     status: "parsed",
     bulkImportFileId,
     pipelineResult: pipeline,
@@ -267,15 +405,18 @@ export async function bulkImportSupplierInvoices(
   // individually but parallel doesn't help much — the OpenAI rate limits
   // would kick in and we'd just end up queueing anyway. Serial keeps the
   // work bounded and the cost predictable.
+  //
+  // `processOneFile` returns an array because a bundle PDF (#224) fans
+  // out to N rows. Flatten so the per-file outcomes still surface
+  // one-result-per-row to the dropzone client.
   const items: BulkImportItemResult[] = [];
   for (const file of files) {
-    items.push(
-      await processOneFile(file, {
-        tenantId: args.tenantId,
-        uploadedByUserId: args.uploadedByUserId,
-        batchId,
-      }),
-    );
+    const fileResults = await processOneFile(file, {
+      tenantId: args.tenantId,
+      uploadedByUserId: args.uploadedByUserId,
+      batchId,
+    });
+    items.push(...fileResults);
   }
 
   return { batchId, items, summary: summarize(items) };

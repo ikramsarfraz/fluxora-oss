@@ -234,6 +234,83 @@ export async function parseSupplierInvoicePdf(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-invoice fan-out entry point (#224)
+//
+// When the bulk-import service splits a bundle PDF into N invoice segments
+// via `detectInvoiceSegments`, each segment runs through this entry point
+// instead of the full `parseSupplierInvoicePdf` path. Two differences from
+// the single-invoice entry:
+//
+//   - Text is provided pre-extracted (the bundle's `combinedText` was sliced
+//     into per-segment chunks; re-extracting from the same PDF bytes per
+//     segment would burn pdfjs-dist work unnecessarily).
+//   - `pdfBytes` is intentionally undefined, which naturally disables vision
+//     in `runParsingPipeline` (both the speculative-dispatch and the late
+//     fallback gates require non-empty bytes). Feeding the full bundle's
+//     bytes to a vision call would re-introduce the "Frankenstein bill"
+//     collapse this feature is trying to prevent. PDF-byte slicing per
+//     segment is tracked as a follow-up (would need pdf-lib).
+// ---------------------------------------------------------------------------
+
+export async function parseSupplierInvoiceTextSegment(input: {
+  originalFilename: string;
+  /** Layout-preserving text for this segment only, complete with the
+   *  `--- Page N ---` markers `extractPdfText` emits. */
+  segmentText: string;
+  /** Page count for the segment — used by the scanned-PDF heuristic. */
+  pageCount: number;
+  /** Which extractor produced the bundle's text. Threaded through to
+   *  telemetry so cost/parse-mode dashboards stay accurate. */
+  textExtractor: PipelineTelemetry["textExtractor"];
+  /** Parse mode at the time the bundle was extracted — propagated to
+   *  telemetry for the same reason. */
+  parseMode: PipelineTelemetry["mode"];
+}): Promise<PipelineResult> {
+  const tenant = await getCurrentTenant();
+  const currentUser = await getCurrentPortalUser();
+  if (currentUser.tenantId !== tenant.id) {
+    throw new Error("Forbidden");
+  }
+  requirePermission(currentUser.role, "edit_supplier_invoice");
+
+  const originalFilename = input.originalFilename.trim();
+  if (!originalFilename) {
+    throw new Error("Segment filename must not be empty.");
+  }
+  if (!input.segmentText || input.segmentText.trim().length === 0) {
+    throw new Error("Segment text must not be empty.");
+  }
+
+  const [productCountRow] = await db
+    .select({ n: count() })
+    .from(products)
+    .where(and(eq(products.tenantId, tenant.id), isNull(products.archivedAt)));
+  const productCount = Number(productCountRow?.n ?? 0);
+
+  const result = await runParsingPipeline({
+    extractedText: input.segmentText,
+    extractedRows: [],
+    sourceFilename: originalFilename,
+    tenantId: tenant.id,
+    pdfPageCount: input.pageCount,
+    // Intentionally undefined — see file-level comment. Vision would
+    // see the full bundle and re-collapse it.
+    pdfBytes: undefined,
+    debug: process.env.NODE_ENV === "development",
+    firstBillMode: productCount === 0,
+  });
+
+  return {
+    ...result,
+    telemetry: {
+      mode: input.parseMode,
+      textExtractor: input.textExtractor,
+      textCharCount: input.segmentText.length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Legacy entry point — returns the same shape as before for backward compat.
 // Callers that haven't migrated to PipelineResult can use this.
 // ---------------------------------------------------------------------------
