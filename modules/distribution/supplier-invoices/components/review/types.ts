@@ -117,6 +117,14 @@ export type ParsedLine = {
     | "refrigeration"
     | "other"
     | null;
+  /**
+   * For lines resolved through a saved supplier alias: how many times the
+   * user has confirmed this mapping. The Review screen renders a small
+   * "confirmed N×" trust chip once count ≥ 3 so reviewers can skip
+   * re-checking auto-matched lines they've validated many times.
+   * Undefined for fresh AI matches or fuzzy-only matches.
+   */
+  aliasConfirmationCount?: number;
 };
 
 /**

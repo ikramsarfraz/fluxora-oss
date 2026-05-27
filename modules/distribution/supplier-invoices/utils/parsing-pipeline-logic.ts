@@ -73,15 +73,20 @@ export type LineMatchEntry = {
 export function applyAliasesToLines(
   lines: SupplierInvoicePdfPrefillLine[],
   unmatchedDescs: string[],
-  aliasMap: ReadonlyMap<string, string>,
+  // Each entry carries the resolved productId plus the alias's confirmation
+  // count. Lines only need the productId here — the count is propagated to
+  // UnresolvedLine elsewhere so the Review screen can render a trust chip.
+  aliasMap: ReadonlyMap<string, { internalProductId: string; confirmationCount: number }>,
 ): SupplierInvoicePdfPrefillLine[] {
   let unmatchedIdx = 0;
   return lines.map(line => {
     if (line.productId) return line;
     const desc = unmatchedDescs[unmatchedIdx++] ?? "";
     const normalized = normalizeProductName(desc);
-    const aliasProductId = normalized ? aliasMap.get(normalized) : undefined;
-    return aliasProductId ? { ...line, productId: aliasProductId } : line;
+    const aliasEntry = normalized ? aliasMap.get(normalized) : undefined;
+    return aliasEntry
+      ? { ...line, productId: aliasEntry.internalProductId }
+      : line;
   });
 }
 

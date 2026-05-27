@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { supplierProductAliases, products } from "@/db/schema";
@@ -28,6 +28,14 @@ export type ProductAlias = {
   internalProductId: string;
   confidence: number;
   source: "manual" | "ai_suggested" | "confirmed" | "parser";
+  /**
+   * How many times this alias has been confirmed (manual pick OR accepted
+   * AI suggestion landing on the same internal product). Drives the
+   * "confirmed N×" chip in the Review screen — once ≥ 3 the alias is
+   * treated as trusted and surfaces without the standard verify nudge.
+   * Reset to 1 when a user corrects the alias to a different product.
+   */
+  confirmationCount: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -57,6 +65,7 @@ function rowToAlias(row: typeof supplierProductAliases.$inferSelect): ProductAli
     internalProductId: row.internalProductId,
     confidence: Number(row.confidence),
     source: row.source,
+    confirmationCount: row.confirmationCount,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -112,6 +121,10 @@ export async function upsertProductAlias(input: CreateAliasInput): Promise<Produ
         internalProductId: input.internalProductId,
         confidence: String(input.confidence ?? 100),
         source: input.source ?? "manual",
+        // Increment when the user re-confirmed the SAME productId. Reset
+        // to 1 when they corrected the alias to a different product — the
+        // new mapping is fresh and shouldn't inherit the old trust score.
+        confirmationCount: sql`CASE WHEN ${supplierProductAliases.internalProductId} = ${input.internalProductId} THEN ${supplierProductAliases.confirmationCount} + 1 ELSE 1 END`,
         updatedAt: new Date(),
       },
     })
@@ -195,6 +208,10 @@ export type ProductMatchResult = {
   aiSuggestionPending: boolean;
   topCandidates?: Array<{ id: string; name: string; score: number }>;
   aiSuggestion?: { productId: string | null; confidence: number } | null;
+  /** Only set when stage is `exact_alias` — how many times the user has
+   *  confirmed this mapping. Threads through to UnresolvedLine so the
+   *  Review screen can render the "confirmed N×" chip. */
+  aliasConfirmationCount?: number;
 };
 
 export async function matchProductsMultiStage(args: {
@@ -440,6 +457,7 @@ function matchProductDeterministic(
       stage: "exact_alias",
       reasoning: `Matched saved alias (${exactAlias.source}).`,
       aiSuggestionPending: false,
+      aliasConfirmationCount: exactAlias.confirmationCount,
     };
   }
 
@@ -543,14 +561,22 @@ function matchProductDeterministic(
 // Internal helper used by parsing pipeline (no auth — pipeline is server-side)
 // ---------------------------------------------------------------------------
 
+export type AliasMapEntry = {
+  internalProductId: string;
+  /** How many times the user has confirmed this alias. Drives the
+   *  "confirmed N×" Review-screen chip — see ProductAlias.confirmationCount. */
+  confirmationCount: number;
+};
+
 export async function resolveAliasesForTenant(args: {
   tenantId: string;
   supplierId: string;
-}): Promise<Map<string, string>> {
+}): Promise<Map<string, AliasMapEntry>> {
   const rows = await db
     .select({
       normalizedVendorProductName: supplierProductAliases.normalizedVendorProductName,
       internalProductId: supplierProductAliases.internalProductId,
+      confirmationCount: supplierProductAliases.confirmationCount,
     })
     .from(supplierProductAliases)
     .where(
@@ -560,7 +586,15 @@ export async function resolveAliasesForTenant(args: {
       ),
     );
 
-  return new Map(rows.map(r => [r.normalizedVendorProductName, r.internalProductId]));
+  return new Map(
+    rows.map(r => [
+      r.normalizedVendorProductName,
+      {
+        internalProductId: r.internalProductId,
+        confirmationCount: r.confirmationCount,
+      },
+    ]),
+  );
 }
 
 // ---------------------------------------------------------------------------

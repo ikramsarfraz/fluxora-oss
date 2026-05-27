@@ -218,7 +218,27 @@ export function LineRow({
             {line.description ? <DescriptionText description={line.description} /> : null}
             {!isFee ? (
               isMatched ? (
-                <MatchedStatus match={match} warn={isWarn} />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <MatchedStatus match={match} warn={isWarn} />
+                  {/* Trust chip — surfaces only for alias-resolved matches
+                      that have been user-confirmed at least 3 times. The
+                      count is per supplier × vendor-name, so a chip
+                      reading "5×" means the reviewer has accepted this
+                      exact alias→product mapping on five prior bills. */}
+                  {typeof line.aliasConfirmationCount === "number" &&
+                    line.aliasConfirmationCount >= 3 && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full border-[0.5px] border-success-border bg-success-bg px-1.5 py-[2px] text-[10.5px] font-medium leading-none text-success-fg"
+                        title={`This vendor name → product alias has been confirmed ${line.aliasConfirmationCount} times`}
+                      >
+                        <span
+                          aria-hidden
+                          className="inline-block size-[5px] rounded-full bg-success-fg"
+                        />
+                        confirmed {line.aliasConfirmationCount}×
+                      </span>
+                    )}
+                </div>
               ) : (
                 <UnmatchedStatus />
               )

@@ -104,6 +104,13 @@ export type UnresolvedLine = {
     width: number;
     height: number;
   };
+  /**
+   * For `normalized_alias` / `exact_alias` stages: how many times the user
+   * has confirmed this alias. Drives the "confirmed N×" trust chip in the
+   * Review screen — surfaced at ≥ 3. Closes #97. Undefined for any other
+   * matching stage.
+   */
+  aliasConfirmationCount?: number;
 };
 
 type LineSnapshot = {
@@ -866,9 +873,12 @@ async function enrichWithAliases(
   }
 
   // Alias lookup (requires a known supplier).
-  const aliasMap: ReadonlyMap<string, string> = supplierId
+  const aliasMap = supplierId
     ? await resolveAliasesForTenant({ tenantId, supplierId })
-    : new Map();
+    : new Map<
+        string,
+        { internalProductId: string; confirmationCount: number }
+      >();
 
   const enrichedByAlias = applyAliasesToLines(
     result.values.lines,
@@ -881,16 +891,23 @@ async function enrichWithAliases(
   });
 
   // Alias-matched lines — build their unresolvedLine entries directly.
+  // Pass through the alias's confirmation count so the Review screen can
+  // render a "confirmed N×" trust chip on rows backed by a heavily-used
+  // alias.
   const aliasResolvedLines: UnresolvedLine[] = result.unmatchedLineDescriptions
     .filter(name => aliasMap.has(normalizeProductName(name)))
-    .map(name => ({
-      vendorProductName: name,
-      suggestedProductId: aliasMap.get(normalizeProductName(name)) ?? null,
-      confidence: 95,
-      stage: "normalized_alias" as const,
-      reasoning: "Matched via saved alias.",
-      aiSuggestionPending: false,
-    }));
+    .map(name => {
+      const entry = aliasMap.get(normalizeProductName(name));
+      return {
+        vendorProductName: name,
+        suggestedProductId: entry?.internalProductId ?? null,
+        confidence: 95,
+        stage: "normalized_alias" as const,
+        reasoning: "Matched via saved alias.",
+        aiSuggestionPending: false,
+        aliasConfirmationCount: entry?.confirmationCount,
+      };
+    });
 
   // Fuzzy-match still-unmatched products against the full catalog.
   // No AI in the deterministic path — keeps the fast path fast.
@@ -929,6 +946,7 @@ async function enrichWithAliases(
       reasoning: m.reasoning,
       aiSuggestionPending: false,
       topCandidates: m.topCandidates,
+      aliasConfirmationCount: m.aliasConfirmationCount,
     }));
   }
 
@@ -986,6 +1004,7 @@ async function enrichWithAliasesAndAiMatching(
     aiSuggestionPending: m.aiSuggestionPending,
     topCandidates: m.topCandidates,
     aiSuggestion: m.aiSuggestion,
+    aliasConfirmationCount: m.aliasConfirmationCount,
   }));
 
   // Patch lines with newly resolved product IDs (only high-confidence non-AI matches).

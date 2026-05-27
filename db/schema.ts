@@ -2600,6 +2600,15 @@ export const supplierProductAliases = pgTable(
       .references(() => products.id, { onDelete: "cascade" }),
     confidence: numeric("confidence", { precision: 5, scale: 2 }).notNull().default("100"),
     source: aliasSourceEnum("source").notNull().default("manual"),
+    /**
+     * Number of times the user has confirmed this alias (either by manually
+     * picking the product on a fresh bill OR by accepting an AI suggestion
+     * that landed on the same internalProductId). Reset to 1 when the
+     * productId changes (user corrected a wrong alias). Closes #97 — the
+     * Review screen surfaces a "confirmed N×" chip once count ≥ 3 so
+     * reviewers can trust auto-matched lines without manually rechecking.
+     */
+    confirmationCount: integer("confirmation_count").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
       onDelete: "set null",
     }),

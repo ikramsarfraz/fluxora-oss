@@ -43,11 +43,25 @@ function makeMatch(productId: string, confidence = 90): LineMatchEntry {
 // C-1: applyAliasesToLines — alias assignment by sequential index
 // ---------------------------------------------------------------------------
 
+// Tests use a tiny helper to keep the alias-map fixtures readable now that
+// the map value is an object (productId + confirmationCount) rather than a
+// bare string. Confirmation count doesn't affect applyAliasesToLines' behaviour
+// — it just threads through to UnresolvedLine elsewhere — so all fixtures
+// here default to `1`.
+function aliases(entries: Array<[string, string]>) {
+  return new Map(
+    entries.map(([k, productId]) => [
+      k,
+      { internalProductId: productId, confirmationCount: 1 },
+    ]),
+  );
+}
+
 test("applyAliasesToLines: aliases for line 1 and line 3 only (not line 2)", () => {
   // 3 unmatched lines; aliases exist for descriptions at index 0 and 2.
   const lines = [makeLine(), makeLine(), makeLine()];
   const descs = ["CHICKEN TENDERS", "BEEF BRISKET", "LAMB RACK"];
-  const aliasMap = new Map([
+  const aliasMap = aliases([
     ["chicken tender", "prod-A"],  // normalised key
     ["lamb rack", "prod-C"],
   ]);
@@ -64,7 +78,7 @@ test("applyAliasesToLines: already-matched lines are skipped, index not consumed
   // unmatchedDescs has 2 entries — one per unmatched line.
   const lines = [makeLine("existing-prod"), makeLine(), makeLine()];
   const descs = ["BEEF BRISKET", "LAMB RACK"];
-  const aliasMap = new Map([
+  const aliasMap = aliases([
     ["beef brisket", "prod-B"],
     ["lamb rack", "prod-C"],
   ]);
@@ -79,7 +93,7 @@ test("applyAliasesToLines: already-matched lines are skipped, index not consumed
 test("applyAliasesToLines: no aliases — all lines stay empty", () => {
   const lines = [makeLine(), makeLine(), makeLine()];
   const descs = ["A", "B", "C"];
-  const aliasMap = new Map<string, string>();
+  const aliasMap = aliases([]);
 
   const result = applyAliasesToLines(lines, descs, aliasMap);
   assert.ok(result.every(l => l.productId === ""), "all lines stay unmatched");
@@ -88,7 +102,7 @@ test("applyAliasesToLines: no aliases — all lines stay empty", () => {
 test("applyAliasesToLines: aliases for all 3 lines", () => {
   const lines = [makeLine(), makeLine(), makeLine()];
   const descs = ["CHICKEN TENDERS", "BEEF BRISKET", "LAMB RACK"];
-  const aliasMap = new Map([
+  const aliasMap = aliases([
     ["chicken tender", "prod-A"],
     ["beef brisket", "prod-B"],
     ["lamb rack", "prod-C"],
@@ -106,7 +120,11 @@ test("applyAliasesToLines: numeric fields are preserved exactly", () => {
   line.unitPrice = "3.25";
   line.quantityCases = "4";
 
-  const result = applyAliasesToLines([line], ["CHICKEN TENDERS"], new Map([["chicken tender", "prod-A"]]));
+  const result = applyAliasesToLines(
+    [line],
+    ["CHICKEN TENDERS"],
+    aliases([["chicken tender", "prod-A"]]),
+  );
 
   assert.equal(result[0].weightLbs, "72.45");
   assert.equal(result[0].unitPrice, "3.25");

@@ -279,6 +279,7 @@ function buildLine({
         ),
         warning,
       },
+      aliasConfirmationCount: unresolved?.aliasConfirmationCount,
     };
   }
 
