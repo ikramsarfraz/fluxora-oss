@@ -6,6 +6,8 @@ import {
 } from "@tanstack/react-query";
 
 import { queryKeys } from "@/lib/query/keys";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
+import { InvitationExpiryCard } from "@/modules/core/workspace-settings/components/invitation-expiry-card";
 import { listPendingInvitationsForAdmin } from "@/modules/core/workspace-settings/services/invitations";
 import {
   getCurrentPortalUser,
@@ -21,7 +23,8 @@ export default async function MembersSettingsPage() {
   }
 
   const queryClient = new QueryClient();
-  await Promise.all([
+  const [tenant] = await Promise.all([
+    getCurrentTenant(),
     queryClient.prefetchQuery({
       queryKey: queryKeys.users.all,
       queryFn: () => getUsers(),
@@ -34,12 +37,17 @@ export default async function MembersSettingsPage() {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense>
-        <Users
-          title="Members"
-          subtitle="People with access to this workspace. Invite teammates and assign roles."
+      <div className="flex flex-col gap-6">
+        <Suspense>
+          <Users
+            title="Members"
+            subtitle="People with access to this workspace. Invite teammates and assign roles."
+          />
+        </Suspense>
+        <InvitationExpiryCard
+          currentValue={tenant.invitationExpiryDays}
         />
-      </Suspense>
+      </div>
     </HydrationBoundary>
   );
 }

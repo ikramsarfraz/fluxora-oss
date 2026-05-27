@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
-import { addDays } from "date-fns";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import { db } from "@/db";
+import { invitationExpiryAt } from "@/lib/invitation-expiry";
 import { session as authSession, user as authUser } from "@/db/auth-schema";
 import { platformUsers, portalUsers, tenants, userInvitations } from "@/db/schema";
 import { resend, emailFrom } from "@/lib/email";
@@ -1435,7 +1435,12 @@ export async function inviteUser(input: {
 }) {
   const tenant = await getCurrentTenant();
   const token = randomUUID();
-  const expiresAt = addDays(new Date(), 7);
+  // Per-tenant configurable window (#236). Null → 7-day codebase
+  // default; helper also clamps to [1, 30] so a direct-DB write can't
+  // bypass the bounds.
+  const expiresAt = invitationExpiryAt({
+    configuredDays: tenant.invitationExpiryDays,
+  });
 
   await db.insert(userInvitations).values({
     tenantId: tenant.id,

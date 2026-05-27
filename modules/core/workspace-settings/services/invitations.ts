@@ -1,14 +1,15 @@
 import { randomUUID } from "crypto";
-import { addDays } from "date-fns";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { portalUsers, userInvitations } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { invitationExpiryAt } from "@/lib/invitation-expiry";
 import {
   buildTenantAppUrl,
   getRequestTenantHostContextFromHeaders,
 } from "@/lib/tenant-host";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import {
   getLatestAuthSessionIdForUser,
   sendUserInvitationEmail,
@@ -320,7 +321,13 @@ export async function resendUserInvitationByAdmin(input: {
   }
 
   const newToken = randomUUID();
-  const expiresAt = addDays(new Date(), 7);
+  // Per-tenant configurable window (#236). Resends inherit the tenant's
+  // current config so a tightened cap takes effect immediately on the
+  // next resend, not only on new invites.
+  const tenant = await getCurrentTenant();
+  const expiresAt = invitationExpiryAt({
+    configuredDays: tenant.invitationExpiryDays,
+  });
 
   await db
     .update(userInvitations)

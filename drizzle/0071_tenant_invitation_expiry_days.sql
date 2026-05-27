@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "invitation_expiry_days" integer;

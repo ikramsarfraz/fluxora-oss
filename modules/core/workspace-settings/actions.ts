@@ -30,6 +30,10 @@ import {
   resendUserInvitationByAdmin,
   revokeUserInvitationByAdmin,
 } from "@/modules/core/workspace-settings/services/invitations";
+import {
+  getCurrentTenant,
+  updateCurrentTenant,
+} from "@/modules/core/tenants/services/tenants";
 
 // --- Join requests ---
 
@@ -168,4 +172,38 @@ export async function resendUserInvitationAction(invitationId: string) {
 
 export async function revokeUserInvitationAction(invitationId: string) {
   return await revokeUserInvitationByAdmin({ invitationId });
+}
+
+/**
+ * Owner+admin gated update for the tenant's invitation-expiry-days
+ * setting (#236). Accepts `null` to clear the override and fall back
+ * to the codebase default. Numbers are clamped to [1, 30] inside
+ * `updateCurrentTenant` so a client that strips the form's `min`/`max`
+ * attributes can't bypass the bounds.
+ */
+export async function updateInvitationExpiryDaysAction(input: {
+  invitationExpiryDays: number | null;
+}) {
+  const actor = await getCurrentPortalUser();
+  // Capture the prior value so the audit log carries the actual
+  // transition. The updateCurrentTenant call below clamps + writes;
+  // re-reading after gives the final stored value.
+  const before = await getCurrentTenant();
+  const result = await updateCurrentTenant({
+    invitationExpiryDays: input.invitationExpiryDays,
+  });
+  await logAuditEvent({
+    tenantId: actor.tenantId,
+    actorUserId: actor.id,
+    actorEmail: actor.email,
+    action: "tenant.invitation_expiry_updated",
+    resourceType: "tenant",
+    resourceId: actor.tenantId,
+    metadata: {
+      previousValue: before.invitationExpiryDays,
+      newValue: result.invitationExpiryDays,
+    },
+  });
+  revalidatePath("/settings/team/members");
+  return result;
 }

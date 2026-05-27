@@ -422,6 +422,14 @@ export const tenants = pgTable(
     onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
     /** Set when the user explicitly skips or finishes the welcome flow; stops the cold-start redirect. */
     welcomeSkippedAt: timestamp("welcome_skipped_at", { withTimezone: true }),
+    /**
+     * Per-tenant override for how long a freshly-created user invitation
+     * stays valid before expiring (#236). Range 1–30 days. Null = use
+     * the codebase default (7). Admins can shorten this for sensitive
+     * tenants from the team-settings page so a leaked invite link has
+     * a smaller live window.
+     */
+    invitationExpiryDays: integer("invitation_expiry_days"),
   },
   table => [
     uniqueIndex("tenants_slug_unique").on(table.slug),

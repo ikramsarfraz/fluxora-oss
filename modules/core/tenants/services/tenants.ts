@@ -8,6 +8,7 @@ import { db } from "@/db";
 import * as authSchema from "@/db/auth-schema";
 import { files, portalUsers, tenantBranding, tenants } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { resolveInvitationExpiryDays } from "@/lib/invitation-expiry";
 import { getRequestTenantHostContext } from "@/lib/tenant-host";
 import {
   buildTenantLogoObjectKey,
@@ -180,6 +181,13 @@ export async function getTenantById(tenantId: string) {
 export type UpdateTenantInput = {
   name?: string;
   slug?: string;
+  /**
+   * Tenant-level override for the user-invitation expiry window (#236).
+   * Days; range [1, 30]. Null clears the override so the codebase
+   * default takes over again. Out-of-range values are clamped via
+   * `resolveInvitationExpiryDays` at the write site below.
+   */
+  invitationExpiryDays?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -360,11 +368,27 @@ export async function updateCurrentTenant(
     }
   }
 
+  // Normalize the invitation expiry input here so the writer never
+  // accepts out-of-range / non-integer values. `null` is a valid
+  // signal that means "clear the override"; only an explicit number
+  // gets clamped via the helper.
+  let invitationExpirySet: number | null | undefined;
+  if (input.invitationExpiryDays === null) {
+    invitationExpirySet = null;
+  } else if (input.invitationExpiryDays !== undefined) {
+    invitationExpirySet = resolveInvitationExpiryDays(
+      input.invitationExpiryDays,
+    );
+  }
+
   await db
     .update(tenants)
     .set({
       ...(input.name !== undefined && { name: input.name }),
       ...(input.slug !== undefined && { slug: input.slug }),
+      ...(invitationExpirySet !== undefined && {
+        invitationExpiryDays: invitationExpirySet,
+      }),
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, current.tenantId));
