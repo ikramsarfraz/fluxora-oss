@@ -195,13 +195,24 @@ export const InlineDropzone = forwardRef<
 
       try {
         const result = await mutation.mutateAsync(formData);
-        const { parsed, errored } = result.summary;
+        const { parsed, errored, duplicate } = result.summary;
         if (parsed > 0) {
           // Happy path — surface as success even when some files errored,
           // so the user knows the parsed ones are queued.
           const parts: string[] = [`${parsed} ready to review`];
+          if (duplicate > 0) parts.push(`${duplicate} already imported`);
           if (errored > 0) parts.push(`${errored} couldn't be read`);
           toast.success(parts.join(" · "));
+        } else if (duplicate > 0 && errored === 0) {
+          // All files were duplicates — not an error, just nothing new to
+          // review. Use the neutral toast so the user understands their
+          // upload was acknowledged.
+          toast.message(
+            duplicate === 1
+              ? "This PDF was already imported."
+              : `${duplicate} PDFs were already imported.`,
+            { description: "Open the existing parse from the row below." },
+          );
         } else if (errored > 0) {
           // All files failed — promote to an error toast and surface the
           // first failure's actual reason (e.g. "Uploaded PDF is empty",
@@ -243,6 +254,14 @@ export const InlineDropzone = forwardRef<
                       ...f,
                       outcome: "parsed",
                       bulkImportFileId: item.bulkImportFileId,
+                    };
+                  }
+                  if (item.status === "duplicate") {
+                    return {
+                      ...f,
+                      outcome: "duplicate",
+                      linkedBulkImportFileId: item.linkedBulkImportFileId,
+                      linkedFilename: item.linkedFilename,
                     };
                   }
                   return {

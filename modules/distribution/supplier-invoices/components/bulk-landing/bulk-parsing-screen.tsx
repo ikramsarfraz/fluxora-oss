@@ -20,12 +20,21 @@ export type BulkParseFile = {
   /**
    * Unset while the batch is running — per-file outcome only resolves once
    * the bulk action settles (the current server flow is synchronous and
-   * doesn't emit per-file events; tracked in #278).
+   * doesn't emit per-file events; tracked in #278). `"duplicate"` means
+   * the upload was content-identical to an existing row for this tenant
+   * (#222); no new row was created and the original's id is in
+   * `linkedBulkImportFileId`.
    */
-  outcome?: "parsed" | "errored";
+  outcome?: "parsed" | "errored" | "duplicate";
   errorMessage?: string;
   /** Set on parsed rows so the Review button can deep-link into that file. */
   bulkImportFileId?: string;
+  /** Set on duplicate rows so the row's "View original" button can deep-
+   *  link to the existing parse. */
+  linkedBulkImportFileId?: string;
+  /** Filename the original row was uploaded as — useful when the
+   *  re-upload was renamed. */
+  linkedFilename?: string;
 };
 
 export type BulkParseState = "running" | "done";
@@ -71,8 +80,15 @@ export function BulkParsingScreen({
     () => files.filter(f => f.outcome === "errored").length,
     [files],
   );
+  // Duplicates are settled (no parse + no DB write) — they shouldn't be
+  // counted against the still-scanning total, otherwise the overlay
+  // shows N "still scanning" rows that are actually done.
+  const duplicate = useMemo(
+    () => files.filter(f => f.outcome === "duplicate").length,
+    [files],
+  );
   const isDone = state === "done";
-  const scanning = isDone ? 0 : total - done - errored;
+  const scanning = isDone ? 0 : total - done - errored - duplicate;
   const queued = 0;
 
   // Portal the overlay into shadcn's SidebarInset (the main-content wrapper)
@@ -324,22 +340,27 @@ function BulkParseRow({
 }) {
   const isParsed = file.outcome === "parsed";
   const isErrored = file.outcome === "errored";
+  const isDuplicate = file.outcome === "duplicate";
   const isRunning = state === "running";
 
   const rowBg = isRunning ? "bg-card-warm" : "bg-card";
   const stripe = isErrored
     ? "border-l-[3px] border-l-danger-fg"
-    : isRunning
-      ? "border-l-[3px] border-l-forest"
-      : "border-l-[3px] border-l-transparent";
+    : isDuplicate
+      ? "border-l-[3px] border-l-[oklch(58%_0.18_80)]"
+      : isRunning
+        ? "border-l-[3px] border-l-forest"
+        : "border-l-[3px] border-l-transparent";
 
   const fileIconColor = isParsed
     ? "text-success-fg"
     : isErrored
       ? "text-danger-fg"
-      : isRunning
-        ? "text-forest"
-        : "text-muted";
+      : isDuplicate
+        ? "text-[color:oklch(58%_0.18_80)]"
+        : isRunning
+          ? "text-forest"
+          : "text-muted";
 
   return (
     <div
@@ -387,6 +408,17 @@ function BulkParseRow({
               Couldn&apos;t read
             </span>
           </>
+        ) : isDuplicate ? (
+          <>
+            <span
+              className="size-4 shrink-0 rounded-full"
+              style={{ background: "oklch(58% 0.18 80)" }}
+              aria-hidden
+            />
+            <span className="text-[12.5px] font-medium text-[color:oklch(58%_0.18_80)]">
+              Already imported
+            </span>
+          </>
         ) : (
           <>
             <Loader2
@@ -400,20 +432,24 @@ function BulkParseRow({
 
       <div className="flex flex-col gap-1.5">
         <ProgressBar
-          value={isParsed || isErrored ? 100 : overallProgress}
+          value={isParsed || isErrored || isDuplicate ? 100 : overallProgress}
           isDone={isParsed}
           height={6}
         />
         <div className="flex items-center justify-between gap-2 font-mono text-[10.5px] tabular-nums text-muted">
           <span>
-            {isParsed || isErrored ? "100%" : `${Math.round(overallProgress)}%`}
+            {isParsed || isErrored || isDuplicate
+              ? "100%"
+              : `${Math.round(overallProgress)}%`}
           </span>
           <span>
             {isParsed
               ? "Ready"
               : isErrored
                 ? "Error"
-                : `${elapsed.toFixed(1)}s`}
+                : isDuplicate
+                  ? "Linked"
+                  : `${elapsed.toFixed(1)}s`}
           </span>
         </div>
       </div>
@@ -427,6 +463,22 @@ function BulkParseRow({
             className="h-8 gap-1 border-forest-mid bg-forest-mid text-[12px] text-card-warm hover:bg-forest"
           >
             Review
+            <ArrowRight className="size-3" strokeWidth={1.8} />
+          </Button>
+        ) : isDuplicate && file.linkedBulkImportFileId && onReview ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onReview(file.linkedBulkImportFileId!)}
+            className="h-8 gap-1 text-[12px]"
+            title={
+              file.linkedFilename && file.linkedFilename !== file.name
+                ? `Originally uploaded as "${file.linkedFilename}"`
+                : undefined
+            }
+          >
+            View original
             <ArrowRight className="size-3" strokeWidth={1.8} />
           </Button>
         ) : isErrored ? (

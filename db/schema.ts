@@ -2403,6 +2403,14 @@ export const bulkImportFiles = pgTable(
       { onDelete: "set null" },
     ),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    /**
+     * SHA-256 of the raw PDF bytes (#222). Set on insert so re-uploads of an
+     * identical file can be detected pre-parse and short-circuited to the
+     * cached extraction. Nullable for backfill compatibility — older rows
+     * predating this column resolve as "no hash recorded" and the dedup
+     * check falls through, which is the safe direction.
+     */
+    pdfContentHash: varchar("pdf_content_hash", { length: 64 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -2426,6 +2434,14 @@ export const bulkImportFiles = pgTable(
     index("bulk_import_files_tenant_deleted_at_idx").on(
       table.tenantId,
       table.deletedAt,
+    ),
+    // Drives the dedup-at-upload lookup (#222). Non-unique on purpose — a
+    // user who deleted a row should be able to re-upload the same PDF
+    // (the read path filters `deleted_at IS NULL` so the live lookup
+    // still finds at most one row per (tenant, hash) in practice).
+    index("bulk_import_files_tenant_hash_idx").on(
+      table.tenantId,
+      table.pdfContentHash,
     ),
   ],
 );

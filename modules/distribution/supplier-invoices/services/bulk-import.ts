@@ -3,8 +3,12 @@ import "server-only";
 import { captureException } from "@/lib/sentry-scope";
 
 import { recordAiUsageEvents } from "./ai-usage-events";
-import { createBulkImportFile } from "./bulk-import-history";
+import {
+  createBulkImportFile,
+  findBulkImportFileByContentHash,
+} from "./bulk-import-history";
 import { parseSupplierInvoicePdf } from "./pdf-prefill";
+import { hashPdfBytes } from "../utils/pdf-content-hash";
 import type { PipelineResult } from "./parsing-pipeline";
 
 // ---------------------------------------------------------------------------
@@ -50,6 +54,23 @@ export type BulkImportItemResult =
     }
   | {
       filename: string;
+      status: "duplicate";
+      /**
+       * The existing (non-deleted) bulk-import row this upload matched
+       * by SHA-256 (#222). The bulk-landing UI links to it via the
+       * /supplier-invoices/bulk?file=... deep link so the reviewer can
+       * open the original instead of re-importing.
+       */
+      linkedBulkImportFileId: string;
+      /** Filename of the original row — useful when the re-upload was
+       *  renamed and the user needs to recognise the prior import. */
+      linkedFilename: string;
+      /** When the original row was created — drives the "linked to
+       *  existing parse from {date}" microcopy. */
+      linkedCreatedAt: Date;
+    }
+  | {
+      filename: string;
       status: "error";
       error: string;
     };
@@ -62,6 +83,10 @@ export type BulkImportResult = {
     total: number;
     parsed: number;
     errored: number;
+    /** Re-uploads of a PDF that's already on file for this tenant (#222).
+     *  No new row is created and no R2 upload runs — the item links back
+     *  to the original. */
+    duplicate: number;
   };
 };
 
@@ -73,6 +98,7 @@ function summarize(items: BulkImportItemResult[]): BulkImportResult["summary"] {
     total: items.length,
     parsed: items.filter(i => i.status === "parsed").length,
     errored: items.filter(i => i.status === "error").length,
+    duplicate: items.filter(i => i.status === "duplicate").length,
   };
 }
 
@@ -95,6 +121,27 @@ async function processOneFile(
   // ArrayBuffer". Holding our own copy here keeps persistence independent
   // of whatever the pipeline does to its argument.
   const persistBytes = Buffer.from(file.bytes);
+
+  // Dedup at upload (#222). Hash the bytes once up-front and look for an
+  // existing live row with the same content for this tenant. When found,
+  // short-circuit BEFORE the parse pipeline + R2 upload — the original
+  // row already has its pipelineResult cached and the user is better
+  // served by being routed back to it than by an identical second copy
+  // appearing in the queue.
+  const pdfContentHash = hashPdfBytes(persistBytes);
+  const existing = await findBulkImportFileByContentHash({
+    tenantId: args.tenantId,
+    pdfContentHash,
+  });
+  if (existing) {
+    return {
+      filename: file.originalFilename,
+      status: "duplicate",
+      linkedBulkImportFileId: existing.id,
+      linkedFilename: existing.filename,
+      linkedCreatedAt: existing.createdAt,
+    };
+  }
 
   let pipeline: PipelineResult;
   try {
@@ -152,6 +199,7 @@ async function processOneFile(
       status: rowStatus,
       parseErrorCodes:
         rowStatus === "parse_error" ? pipeline.parseErrorCodes : undefined,
+      pdfContentHash,
     });
     bulkImportFileId = created.id;
   } catch (err) {

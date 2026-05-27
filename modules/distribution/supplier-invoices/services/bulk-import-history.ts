@@ -86,6 +86,11 @@ export type CreateBulkImportFileInput = {
   /** Propagated to `bulk_import_files.parse_error_codes`; should be set
    *  when `status === "parse_error"`. */
   parseErrorCodes?: AiExtractionErrorCode[];
+  /** SHA-256 of the raw PDF bytes (#222). When provided, future uploads
+   *  with the same hash for this tenant short-circuit to a duplicate
+   *  outcome instead of re-running the pipeline. Pass undefined when
+   *  the caller hasn't computed it (legacy / migration paths). */
+  pdfContentHash?: string | null;
 };
 
 export type CreatedBulkImportFile = {
@@ -129,9 +134,50 @@ export async function createBulkImportFile(
     pipelineResult: input.pipelineResult,
     status: input.status,
     parseErrorCodes: input.parseErrorCodes ?? null,
+    pdfContentHash: input.pdfContentHash ?? null,
   });
 
   return { id, objectKey };
+}
+
+/**
+ * Look up an existing (non-deleted) bulk-import row for the same tenant +
+ * PDF content hash (#222). Returns the row's id, filename, status, and
+ * createdAt — enough to drive the duplicate-detected UI without a
+ * second roundtrip. Callers pass the hash they just computed from the
+ * uploaded bytes. Null when no live match exists; the lookup never
+ * surfaces soft-deleted rows so re-uploading after a delete works.
+ */
+export async function findBulkImportFileByContentHash(args: {
+  tenantId: string;
+  pdfContentHash: string;
+}): Promise<{
+  id: string;
+  filename: string;
+  status: BulkImportFileStatus;
+  createdAt: Date;
+} | null> {
+  const rows = await db
+    .select({
+      id: bulkImportFiles.id,
+      filename: bulkImportFiles.filename,
+      status: bulkImportFiles.status,
+      createdAt: bulkImportFiles.createdAt,
+    })
+    .from(bulkImportFiles)
+    .where(
+      and(
+        eq(bulkImportFiles.tenantId, args.tenantId),
+        eq(bulkImportFiles.pdfContentHash, args.pdfContentHash),
+        isNull(bulkImportFiles.deletedAt),
+      ),
+    )
+    // Most recent live match wins — if a user somehow ends up with two
+    // historical rows for the same hash (e.g. a hash backfill caught up
+    // mid-flight), the freshest one is the most actionable.
+    .orderBy(desc(bulkImportFiles.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 // ---------------------------------------------------------------------------
