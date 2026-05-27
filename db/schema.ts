@@ -2609,6 +2609,19 @@ export const supplierProductAliases = pgTable(
      * reviewers can trust auto-matched lines without manually rechecking.
      */
     confirmationCount: integer("confirmation_count").notNull().default(1),
+    /**
+     * Persisted unit-type correction per (supplier, vendor product name).
+     * Captured at submit time when the user overrode the parser's default in
+     * the weight editor — the next bill that resolves to this alias defaults
+     * to the saved type instead of re-running the AI's guess, which the
+     * weight-editor tray was the de-facto correction surface for. NULL means
+     * the user has never overridden, so the parser's default still wins.
+     * Closes #223. Note this is a varchar (not the enum) because adding the
+     * pgEnum here would lock the schema to one supplier-invoice-specific
+     * enum value and we want this column to be extensible to other unit
+     * types ("per_each", "per_unit") later without another migration.
+     */
+    preferredUnitType: varchar("preferred_unit_type", { length: 32 }),
     createdByUserId: uuid("created_by_user_id").references(() => portalUsers.id, {
       onDelete: "set null",
     }),

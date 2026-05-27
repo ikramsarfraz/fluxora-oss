@@ -19,6 +19,8 @@ import { suggestProductMatches as aiSuggestProductMatches } from "./ai-extractio
 // Alias CRUD
 // ---------------------------------------------------------------------------
 
+export type AliasPreferredUnitType = "catch_weight" | "fixed_case";
+
 export type ProductAlias = {
   id: string;
   tenantId: string;
@@ -36,6 +38,14 @@ export type ProductAlias = {
    * Reset to 1 when a user corrects the alias to a different product.
    */
   confirmationCount: number;
+  /**
+   * Persisted unit-type correction (#223). Set when the user overrode the
+   * parser's guess in the weight editor on a prior bill — the pipeline
+   * applies it on future bills that resolve to the same alias so the
+   * same correction doesn't have to be made twice. Null when the user
+   * has never overridden.
+   */
+  preferredUnitType: AliasPreferredUnitType | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -46,6 +56,14 @@ export type CreateAliasInput = {
   internalProductId: string;
   confidence?: number;
   source?: "manual" | "ai_suggested" | "confirmed" | "parser";
+  /**
+   * Optional unit-type correction to persist alongside the alias. Pass
+   * undefined when the user accepted the parser's default — undefined
+   * leaves any existing preference intact, NULL would clobber it.
+   * Pass a value to overwrite. See `saveImportAliasesBatchAction` for
+   * the only call site that sets this in practice.
+   */
+  preferredUnitType?: AliasPreferredUnitType | null;
 };
 
 export type UpdateAliasInput = {
@@ -54,6 +72,17 @@ export type UpdateAliasInput = {
   confidence?: number;
   source?: "manual" | "ai_suggested" | "confirmed" | "parser";
 };
+
+function normalizePreferredUnitType(
+  raw: string | null,
+): AliasPreferredUnitType | null {
+  // The column is a free-form varchar (so the schema can later carry
+  // per_each / per_unit without another migration). Today only the two
+  // weight modes are persisted — anything else is treated as null so
+  // a future writer can't silently leak garbage into the pipeline.
+  if (raw === "catch_weight" || raw === "fixed_case") return raw;
+  return null;
+}
 
 function rowToAlias(row: typeof supplierProductAliases.$inferSelect): ProductAlias {
   return {
@@ -66,6 +95,7 @@ function rowToAlias(row: typeof supplierProductAliases.$inferSelect): ProductAli
     confidence: Number(row.confidence),
     source: row.source,
     confirmationCount: row.confirmationCount,
+    preferredUnitType: normalizePreferredUnitType(row.preferredUnitType),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -99,6 +129,13 @@ export async function upsertProductAlias(input: CreateAliasInput): Promise<Produ
   const normalized = normalizeProductName(input.vendorProductName);
   if (!normalized) throw new Error("Vendor product name cannot be empty.");
 
+  // `preferredUnitType: undefined` means "leave any existing preference
+  // intact" — the user didn't correct the unit type on this bill, so we
+  // should not clobber a value persisted from a prior correction. Drizzle
+  // distinguishes "key omitted" from "key set to null" in the update set
+  // we build below; encode that with two separate branches.
+  const hasUnitTypeWrite = input.preferredUnitType !== undefined;
+
   const [row] = await db
     .insert(supplierProductAliases)
     .values({
@@ -110,6 +147,7 @@ export async function upsertProductAlias(input: CreateAliasInput): Promise<Produ
       confidence: String(input.confidence ?? 100),
       source: input.source ?? "manual",
       createdByUserId: currentUser.id,
+      preferredUnitType: input.preferredUnitType ?? null,
     })
     .onConflictDoUpdate({
       target: [
@@ -125,6 +163,10 @@ export async function upsertProductAlias(input: CreateAliasInput): Promise<Produ
         // to 1 when they corrected the alias to a different product — the
         // new mapping is fresh and shouldn't inherit the old trust score.
         confirmationCount: sql`CASE WHEN ${supplierProductAliases.internalProductId} = ${input.internalProductId} THEN ${supplierProductAliases.confirmationCount} + 1 ELSE 1 END`,
+        // Only touch preferredUnitType when the caller passed it.
+        ...(hasUnitTypeWrite
+          ? { preferredUnitType: input.preferredUnitType ?? null }
+          : {}),
         updatedAt: new Date(),
       },
     })
@@ -566,6 +608,10 @@ export type AliasMapEntry = {
   /** How many times the user has confirmed this alias. Drives the
    *  "confirmed N×" Review-screen chip — see ProductAlias.confirmationCount. */
   confirmationCount: number;
+  /** Persisted unit-type correction (#223). Null when the user has never
+   *  overridden the parser's guess. The pipeline applies this to the
+   *  alias-resolved line so the same correction isn't needed twice. */
+  preferredUnitType: AliasPreferredUnitType | null;
 };
 
 export async function resolveAliasesForTenant(args: {
@@ -577,6 +623,7 @@ export async function resolveAliasesForTenant(args: {
       normalizedVendorProductName: supplierProductAliases.normalizedVendorProductName,
       internalProductId: supplierProductAliases.internalProductId,
       confirmationCount: supplierProductAliases.confirmationCount,
+      preferredUnitType: supplierProductAliases.preferredUnitType,
     })
     .from(supplierProductAliases)
     .where(
@@ -592,6 +639,7 @@ export async function resolveAliasesForTenant(args: {
       {
         internalProductId: r.internalProductId,
         confirmationCount: r.confirmationCount,
+        preferredUnitType: normalizePreferredUnitType(r.preferredUnitType),
       },
     ]),
   );

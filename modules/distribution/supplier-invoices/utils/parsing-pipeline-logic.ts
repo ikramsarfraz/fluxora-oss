@@ -73,10 +73,18 @@ export type LineMatchEntry = {
 export function applyAliasesToLines(
   lines: SupplierInvoicePdfPrefillLine[],
   unmatchedDescs: string[],
-  // Each entry carries the resolved productId plus the alias's confirmation
-  // count. Lines only need the productId here — the count is propagated to
+  // Each entry carries the resolved productId, the alias's confirmation
+  // count, and an optional persisted unit-type correction (#223). Lines
+  // pick up the productId + unit type here; the count is propagated to
   // UnresolvedLine elsewhere so the Review screen can render a trust chip.
-  aliasMap: ReadonlyMap<string, { internalProductId: string; confirmationCount: number }>,
+  aliasMap: ReadonlyMap<
+    string,
+    {
+      internalProductId: string;
+      confirmationCount: number;
+      preferredUnitType?: "catch_weight" | "fixed_case" | null;
+    }
+  >,
 ): SupplierInvoicePdfPrefillLine[] {
   let unmatchedIdx = 0;
   return lines.map(line => {
@@ -84,9 +92,20 @@ export function applyAliasesToLines(
     const desc = unmatchedDescs[unmatchedIdx++] ?? "";
     const normalized = normalizeProductName(desc);
     const aliasEntry = normalized ? aliasMap.get(normalized) : undefined;
-    return aliasEntry
-      ? { ...line, productId: aliasEntry.internalProductId }
-      : line;
+    if (!aliasEntry) return line;
+    // Apply the persisted unit-type correction whenever the alias carries
+    // one — the user explicitly corrected this on a prior bill, so the
+    // saved preference beats whatever the AI/text path guessed this
+    // time. If the persisted preference happens to match the parser's
+    // current guess, the assignment is a no-op.
+    const preferred = aliasEntry.preferredUnitType;
+    const overrideUnit =
+      preferred === "catch_weight" || preferred === "fixed_case";
+    return {
+      ...line,
+      productId: aliasEntry.internalProductId,
+      ...(overrideUnit ? { unitType: preferred } : {}),
+    };
   });
 }
 

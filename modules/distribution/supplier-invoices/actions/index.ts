@@ -771,6 +771,9 @@ export async function saveImportAliasesBatchAction(
     supplierId: string;
     vendorProductName: string;
     internalProductId: string;
+    /** Optional unit-type correction (#223). Set only when the user
+     *  changed the parser's guess in the weight editor for this line. */
+    preferredUnitType?: "catch_weight" | "fixed_case" | null;
   }>,
 ): Promise<void> {
   if (aliases.length === 0) return;
@@ -782,6 +785,7 @@ export async function saveImportAliasesBatchAction(
         internalProductId: a.internalProductId,
         confidence: 100,
         source: "confirmed",
+        preferredUnitType: a.preferredUnitType,
       }),
     ),
   );

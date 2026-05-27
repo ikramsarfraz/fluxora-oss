@@ -484,6 +484,13 @@
 			"when": 1779200600000,
 			"tag": "0068_alias_confirmation_count",
 			"breakpoints": true
+		},
+		{
+			"idx": 69,
+			"version": "7",
+			"when": 1779200700000,
+			"tag": "0069_alias_preferred_unit_type",
+			"breakpoints": true
 		}
 	]
 }

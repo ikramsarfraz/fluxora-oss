@@ -114,6 +114,87 @@ test("applyAliasesToLines: aliases for all 3 lines", () => {
   assert.equal(result[2].productId, "prod-C");
 });
 
+test("applyAliasesToLines: persisted preferredUnitType overrides the parser's guess", () => {
+  // The parser guessed catch_weight, but a prior bill for this supplier had
+  // the user correct this line to fixed_case. The persisted preference
+  // should win on subsequent parses (#223).
+  const lines = [makeLine()]; // makeLine() defaults to unitType=catch_weight
+  const descs = ["BEEF SHANK 14x3#"];
+  const aliasMap = new Map([
+    [
+      "beef shank 14x3",
+      {
+        internalProductId: "prod-shank",
+        confirmationCount: 5,
+        preferredUnitType: "fixed_case" as const,
+      },
+    ],
+  ]);
+
+  const result = applyAliasesToLines(lines, descs, aliasMap);
+  assert.equal(result[0].productId, "prod-shank");
+  assert.equal(
+    result[0].unitType,
+    "fixed_case",
+    "alias's preferredUnitType should win over parser's catch_weight guess",
+  );
+});
+
+test("applyAliasesToLines: alias with no preferredUnitType leaves parser's guess intact", () => {
+  // Same alias resolution path, but with no persisted correction. The
+  // parser's unitType (catch_weight in our fixture) flows through.
+  const lines = [makeLine()];
+  const descs = ["CHICKEN TENDERS"];
+  const aliasMap = new Map([
+    [
+      "chicken tender",
+      {
+        internalProductId: "prod-A",
+        confirmationCount: 1,
+        preferredUnitType: null,
+      },
+    ],
+  ]);
+
+  const result = applyAliasesToLines(lines, descs, aliasMap);
+  assert.equal(result[0].productId, "prod-A");
+  assert.equal(
+    result[0].unitType,
+    "catch_weight",
+    "no persisted preference → parser's unitType is preserved",
+  );
+});
+
+test("applyAliasesToLines: garbage preferredUnitType is ignored (defensive)", () => {
+  // The column is a varchar so future code paths could write per_each /
+  // per_unit / random junk. Until those modes are part of the
+  // SupplierInvoicePdfPrefillLine union, the reader should ignore them
+  // rather than smuggle invalid values into the form state.
+  const lines = [makeLine()];
+  const descs = ["CHICKEN TENDERS"];
+  const aliasMap = new Map([
+    [
+      "chicken tender",
+      {
+        internalProductId: "prod-A",
+        confirmationCount: 1,
+        preferredUnitType: "per_each" as unknown as
+          | "catch_weight"
+          | "fixed_case"
+          | null,
+      },
+    ],
+  ]);
+
+  const result = applyAliasesToLines(lines, descs, aliasMap);
+  assert.equal(result[0].productId, "prod-A");
+  assert.equal(
+    result[0].unitType,
+    "catch_weight",
+    "unknown preferredUnitType value is ignored, parser default stays",
+  );
+});
+
 test("applyAliasesToLines: numeric fields are preserved exactly", () => {
   const line = makeLine();
   line.weightLbs = "72.45";

@@ -1082,26 +1082,63 @@ export function ReviewContainer({
       // Remember-aliases: persist the user's confirmed line→product matches
       // for this supplier so future imports auto-resolve. Only the *manual*
       // overrides count — lines that came in already matched by the parser
-      // don't need an alias write-through.
-      if (rememberAliases && Object.keys(lineProductOverrides).length > 0) {
-        const aliasEntries = Object.entries(lineProductOverrides).map(
-          ([lineIdStr, override]) => {
-            const lineId = Number(lineIdStr);
-            const prefillLine = prefillLines[lineId - 1];
-            const rawText =
-              baseData.lines.find(l => l.id === lineId)?.raw ?? prefillLine?.productId ?? "";
-            return {
-              supplierId: supplierIdOverride,
-              vendorProductName: rawText,
-              internalProductId: override.productId,
-            };
-          },
-        );
-        // Best-effort — the alias write happens asynchronously after the
-        // bill is committed. A failure shouldn't unwind the bill itself.
-        await saveImportAliasesBatchAction(aliasEntries).catch(err => {
-          console.warn("[review] alias write-through failed", err);
-        });
+      // don't need an alias write-through — except when the user corrected
+      // the parser's unit-type guess (#223), in which case we want to
+      // persist that correction even for lines the parser matched
+      // correctly. Walk every prefill line, capture both kinds of
+      // correction (product + unit type) in a single alias write per
+      // line.
+      if (rememberAliases) {
+        const aliasEntries: Array<{
+          supplierId: string;
+          vendorProductName: string;
+          internalProductId: string;
+          preferredUnitType?: "catch_weight" | "fixed_case";
+        }> = [];
+
+        for (const line of baseData.lines) {
+          const lineId = line.id;
+          const prefillLine = prefillLines[lineId - 1];
+          const override = lineProductOverrides[lineId];
+          // Use whichever productId resolved — manual pick wins over the
+          // parser's match. No matched product means there's nothing to
+          // hang an alias off of.
+          const matchedProductId = override?.productId ?? prefillLine?.productId ?? null;
+          if (!matchedProductId) continue;
+          const rawText = line.raw?.trim();
+          if (!rawText) continue;
+
+          // Did the user override the unit type? Compare the weight
+          // editor's resolved unitType against the parser's default. If
+          // the editor wasn't opened, leave preferredUnitType undefined
+          // so an existing preference on the alias survives.
+          const weightOverride = lineWeightStates[lineId];
+          const overrodeUnitType =
+            weightOverride !== undefined &&
+            prefillLine !== undefined &&
+            weightOverride.unitType !== prefillLine.unitType;
+
+          // Skip lines where the user didn't pick a product AND didn't
+          // override the unit type — nothing to learn from this row.
+          if (!override && !overrodeUnitType) continue;
+
+          aliasEntries.push({
+            supplierId: supplierIdOverride,
+            vendorProductName: rawText,
+            internalProductId: matchedProductId,
+            ...(overrodeUnitType
+              ? { preferredUnitType: weightOverride.unitType }
+              : {}),
+          });
+        }
+
+        if (aliasEntries.length > 0) {
+          // Best-effort — the alias write happens asynchronously after the
+          // bill is committed. A failure shouldn't unwind the bill itself.
+          await saveImportAliasesBatchAction(aliasEntries).catch(err => {
+            console.warn("[review] alias write-through failed", err);
+          });
+        }
       }
 
       // Flip the corresponding bulk-import row to "Reviewed" on the server
