@@ -29,6 +29,8 @@ import {
   getLinkedBankTransactionForExpenseAction as _getLinkedBankTransactionForExpenseAction,
 } from "./bank-link";
 
+import { parseExpenseReceiptAction as _parseExpenseReceiptAction } from "./parse-receipt";
+
 import {
   approveExpenseAction as _approveExpenseAction,
   markExpensePaidAction as _markExpensePaidAction,
@@ -145,4 +147,10 @@ export async function getLinkedBankTransactionForExpenseAction(
   ...args: Parameters<typeof _getLinkedBankTransactionForExpenseAction>
 ) {
   return _getLinkedBankTransactionForExpenseAction(...args);
+}
+
+export async function parseExpenseReceiptAction(
+  ...args: Parameters<typeof _parseExpenseReceiptAction>
+) {
+  return _parseExpenseReceiptAction(...args);
 }
