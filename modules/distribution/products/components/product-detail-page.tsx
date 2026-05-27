@@ -564,7 +564,7 @@ function PriceSparkline({
   series,
 }: {
   series: Array<{
-    invoiceDate: Date;
+    invoiceDate: string;
     unitPrice: string;
     isOutlier: boolean;
   }>;
@@ -601,7 +601,6 @@ function PriceSparkline({
               r={3}
               fill="var(--destructive)"
               stroke="none"
-              isFront
             />
           ))}
         </LineChart>
@@ -627,7 +626,7 @@ function PerSupplierBreakdown({
     count: number;
     averageUnitPrice: string | null;
     mostRecentUnitPrice: string;
-    mostRecentDate: Date;
+    mostRecentDate: string;
     deltaFraction: number | null;
   }>;
   baseUnitAbbreviation: string;

@@ -42,7 +42,10 @@ export type AnalyticsEvent =
   | "markdown.applied"
   | "supplier.switched_primary"
   | "bill.forwarded"
-  | "invoice.sent";
+  | "invoice.sent"
+  | "ai_spend_cap.warn"
+  | "ai_spend_cap.blocked"
+  | "expense_receipt.parsed";
 
 /**
  * Captures an event from a server action / route handler. No-op when

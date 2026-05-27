@@ -22,7 +22,8 @@ export type ClientAnalyticsEvent =
   | "review.cost_diff_acknowledged"
   | "review.cost_diff_unacknowledged"
   | "review.submit_validation_failed"
-  | "review.rescan_triggered";
+  | "review.rescan_triggered"
+  | "expense_receipt.uploaded";
 
 /**
  * Capture a client-side event. No-op when PostHog isn't initialized

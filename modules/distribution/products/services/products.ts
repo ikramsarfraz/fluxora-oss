@@ -1225,7 +1225,7 @@ export async function getProductPurchaseIntelligence(productId: string) {
       supplierName: string;
       count: number;
       pricesForAverage: number[];
-      mostRecent: { unitPrice: string; invoiceDate: Date };
+      mostRecent: { unitPrice: string; invoiceDate: string };
     }
   >();
   for (const row of tagged) {

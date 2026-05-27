@@ -62,6 +62,7 @@ export async function enforceAiSpendCap(args: {
     // shows the warn band visually, so this event mainly drives
     // alerting if we want to email the operator at the soft threshold.
     await captureServerEvent({
+      userId: args.authUserId,
       tenantId: args.tenantId,
       event: "ai_spend_cap.warn",
       properties: {
@@ -76,6 +77,7 @@ export async function enforceAiSpendCap(args: {
 
   if (decision.status === "blocked") {
     await captureServerEvent({
+      userId: args.authUserId,
       tenantId: args.tenantId,
       event: "ai_spend_cap.blocked",
       properties: {
