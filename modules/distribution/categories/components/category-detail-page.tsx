@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { toast } from "sonner";
 
-import { useCategory } from "../hooks/use-categories";
-import { useDeleteCategory } from "../hooks/use-categories";
-import { queryKeys } from "@/lib/query/keys";
+import {
+  useArchiveCategory,
+  useCategory,
+  useDeleteCategory,
+  useUntagAndDeleteCategory,
+} from "../hooks/use-categories";
 import { DetailPageHeader } from "@/components/detail-page-header";
 import {
   DetailSection,
@@ -27,13 +31,24 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
+/**
+ * Local dialog state.
+ *   - "closed"  : no dialog visible
+ *   - "confirm" : "are you sure?" before we hit the delete check
+ *   - "blocked" : product_categories rows exist → show archive /
+ *     untag-and-delete branches
+ */
+type DialogState =
+  | { phase: "closed" }
+  | { phase: "confirm" }
+  | { phase: "blocked"; productCount: number };
+
 export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
   const router = useRouter();
-  const queryClient = useQueryClient();
+  const [dialog, setDialog] = useState<DialogState>({ phase: "closed" });
 
   const {
     data: category,
@@ -45,6 +60,8 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
   useSetBreadcrumbLabel(`/categories/${categoryId}`, category?.name);
 
   const deleteCategory = useDeleteCategory();
+  const archiveCategory = useArchiveCategory();
+  const untagAndDeleteCategory = useUntagAndDeleteCategory();
 
   if (isLoading) return <PageLoading message="Loading category..." />;
   if (isError || !category)
@@ -56,22 +73,48 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
       />
     );
 
+  const isArchived = !!category.archivedAt;
+
+  function handleDelete() {
+    deleteCategory.mutate(categoryId, {
+      onSuccess: result => {
+        if (result.status === "deleted") {
+          toast.success("Category deleted.");
+          setDialog({ phase: "closed" });
+          router.push("/categories");
+          return;
+        }
+        setDialog({
+          phase: "blocked",
+          productCount: result.productCount,
+        });
+      },
+      onError: (e: Error) => {
+        toast.error(e.message);
+        setDialog({ phase: "closed" });
+      },
+    });
+  }
+
+  const pendingAction =
+    archiveCategory.isPending || untagAndDeleteCategory.isPending;
+
   return (
     <div className="flex flex-col gap-6">
       <DetailPageHeader
         title={category.name}
         description="View category details and manage associated products."
         badge={
-          category.isActive ? (
-            <Badge variant="secondary">Active</Badge>
-          ) : (
+          isArchived ? (
             <Badge variant="outline" className="text-muted-foreground">
               Archived
             </Badge>
+          ) : (
+            <Badge variant="secondary">Active</Badge>
           )
         }
       >
-        {category.isActive && !category.archivedAt ? (
+        {!isArchived ? (
           <Button variant="outline" asChild>
             <Link href={`/categories/${category.id}/edit`}>
               <Pencil className="size-4" />
@@ -81,17 +124,14 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
         ) : null}
       </DetailPageHeader>
 
-      <DetailSection
-        title="Details"
-        description="Category information."
-      >
+      <DetailSection title="Details" description="Category information.">
         <DetailGrid>
           <DetailField label="Name">{category.name}</DetailField>
           <DetailField label="Slug">
             <span className="font-mono text-sm">{category.slug}</span>
           </DetailField>
           <DetailField label="Status">
-            {category.isActive ? "Active" : "Archived"}
+            {isArchived ? "Archived" : "Active"}
           </DetailField>
           {category.description && (
             <DetailField label="Description">
@@ -109,44 +149,109 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
         description="Irreversible actions for this category."
         className="border-destructive/50"
       >
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline">
-              Delete category
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete category?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete{" "}
-                <strong>{category.name}</strong>. Products in this category
-                will not be deleted but will lose this category assignment.
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                disabled={deleteCategory.isPending}
-                onClick={() => {
-                  deleteCategory.mutate(categoryId, {
-                    onSuccess: () => {
-                      queryClient.invalidateQueries({
-                        queryKey: queryKeys.categories.all,
-                      });
-                      router.push("/categories");
-                    },
-                  });
-                }}
-              >
-                {deleteCategory.isPending ? "Deleting…" : "Delete"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setDialog({ phase: "confirm" })}
+        >
+          Delete category
+        </Button>
       </DetailSection>
+
+      <AlertDialog
+        open={dialog.phase !== "closed"}
+        onOpenChange={open => {
+          if (!open) setDialog({ phase: "closed" });
+        }}
+      >
+        <AlertDialogContent>
+          {dialog.phase === "blocked" ? (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Can’t delete this category</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <strong>{category.name}</strong> is tagged on{" "}
+                  {dialog.productCount}{" "}
+                  {dialog.productCount === 1 ? "product" : "products"}.
+                  Archive it instead to hide it from pickers while keeping
+                  history, or untag every product and delete it.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={pendingAction}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={pendingAction}
+                  onClick={() => {
+                    archiveCategory.mutate(categoryId, {
+                      onSuccess: () => {
+                        toast.success("Category archived.");
+                        setDialog({ phase: "closed" });
+                        router.push("/categories");
+                      },
+                      onError: (e: Error) => toast.error(e.message),
+                    });
+                  }}
+                >
+                  {archiveCategory.isPending
+                    ? "Archiving…"
+                    : "Archive instead"}
+                </AlertDialogAction>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={pendingAction}
+                  onClick={() => {
+                    untagAndDeleteCategory.mutate(categoryId, {
+                      onSuccess: result => {
+                        toast.success(
+                          `Untagged from ${result.untaggedCount} ${
+                            result.untaggedCount === 1
+                              ? "product"
+                              : "products"
+                          } and deleted.`,
+                        );
+                        setDialog({ phase: "closed" });
+                        router.push("/categories");
+                      },
+                      onError: (e: Error) => toast.error(e.message),
+                    });
+                  }}
+                >
+                  {untagAndDeleteCategory.isPending
+                    ? "Deleting…"
+                    : "Untag and delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          ) : (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete category?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete{" "}
+                  <strong>{category.name}</strong>. If any product is still
+                  tagged with this category, you’ll be given the choice to
+                  archive instead or untag every product first. This action
+                  cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteCategory.isPending}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={deleteCategory.isPending}
+                  onClick={handleDelete}
+                >
+                  {deleteCategory.isPending ? "Deleting…" : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
