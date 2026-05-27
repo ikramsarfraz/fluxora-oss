@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, lte, type SQL } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/db";
@@ -135,4 +135,89 @@ export async function listRecentAuditEventsForTenant(
     .where(eq(auditLog.tenantId, tenantId))
     .orderBy(desc(auditLog.occurredAt))
     .limit(limit);
+}
+
+/**
+ * Filter inputs for the tenant-admin audit page (#234). Every field is
+ * optional — passing none collapses to "most recent N events for this
+ * tenant", which mirrors `listRecentAuditEventsForTenant`. Strings are
+ * trimmed by the caller; this helper treats empty strings as "no
+ * filter" so URL params can be passed through with no extra
+ * preprocessing.
+ *
+ * `since` / `until` are inclusive on the lower bound and exclusive on
+ * the upper bound — matches the calendar-month range used elsewhere in
+ * the codebase. The page surfaces both as date pickers, the helper
+ * accepts either Date instances or ISO strings via the page's date
+ * input parsing.
+ */
+export type AuditEventFilters = {
+  tenantId: string;
+  action?: string | null;
+  resourceType?: string | null;
+  /** Substring-match against `actor_email`. Case-insensitive. */
+  actorEmail?: string | null;
+  since?: Date | null;
+  until?: Date | null;
+};
+
+function buildAuditWhere(filters: AuditEventFilters): SQL | undefined {
+  const conditions: SQL[] = [eq(auditLog.tenantId, filters.tenantId)];
+  if (filters.action && filters.action.trim().length > 0) {
+    conditions.push(eq(auditLog.action, filters.action.trim()));
+  }
+  if (filters.resourceType && filters.resourceType.trim().length > 0) {
+    conditions.push(eq(auditLog.resourceType, filters.resourceType.trim()));
+  }
+  if (filters.actorEmail && filters.actorEmail.trim().length > 0) {
+    // ilike with %…% so a partial domain match works ("@acme.com").
+    // actor_email is nullable on the column — rows without an email
+    // won't match this filter, which is the safe direction.
+    conditions.push(
+      ilike(auditLog.actorEmail, `%${filters.actorEmail.trim()}%`),
+    );
+  }
+  if (filters.since) {
+    conditions.push(gte(auditLog.occurredAt, filters.since));
+  }
+  if (filters.until) {
+    conditions.push(lte(auditLog.occurredAt, filters.until));
+  }
+  return and(...conditions);
+}
+
+/**
+ * Paginated + filtered tenant audit reader (#234). Backs the
+ * `/admin/audit` page. Offset-based on purpose: tenant audit volumes
+ * are small (hundreds to low thousands per month at the current
+ * scale), so the simplicity of `limit/offset` is worth more than the
+ * marginal performance of cursor-based pagination. Switch to cursor
+ * when a single tenant's table grows past ~100k rows.
+ */
+export async function listAuditEventsForTenant(args: {
+  filters: AuditEventFilters;
+  limit: number;
+  offset: number;
+}) {
+  return db
+    .select()
+    .from(auditLog)
+    .where(buildAuditWhere(args.filters))
+    .orderBy(desc(auditLog.occurredAt))
+    .limit(args.limit)
+    .offset(args.offset);
+}
+
+/**
+ * Total matching row count for `listAuditEventsForTenant`. Drives the
+ * "Showing X of N" line + the pagination controls.
+ */
+export async function countAuditEventsForTenant(
+  filters: AuditEventFilters,
+): Promise<number> {
+  const [row] = await db
+    .select({ c: count() })
+    .from(auditLog)
+    .where(buildAuditWhere(filters));
+  return row?.c ?? 0;
 }

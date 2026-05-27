@@ -105,7 +105,8 @@ function isTenantAdminPath(pathname: string) {
     pathname === "/admin" ||
     pathname === "/admin/roles" ||
     pathname === "/admin/branding" ||
-    pathname === "/admin/billing"
+    pathname === "/admin/billing" ||
+    pathname === "/admin/audit"
   );
 }
 
@@ -219,13 +220,16 @@ export async function proxy(request: NextRequest) {
   if (
     pathname === "/admin/roles" ||
     pathname === "/admin/branding" ||
-    pathname === "/admin/billing"
+    pathname === "/admin/billing" ||
+    pathname === "/admin/audit"
   ) {
     const rewrittenUrl = request.nextUrl.clone();
     if (pathname === "/admin/roles") {
       rewrittenUrl.pathname = "/tenant-admin/roles";
     } else if (pathname === "/admin/branding") {
       rewrittenUrl.pathname = "/tenant-admin/branding";
+    } else if (pathname === "/admin/audit") {
+      rewrittenUrl.pathname = "/tenant-admin/audit";
     } else {
       rewrittenUrl.pathname = "/settings/billing/plan-and-usage";
     }
