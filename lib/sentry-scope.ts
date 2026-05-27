@@ -69,3 +69,35 @@ export function addBreadcrumb(args: {
     data: args.data,
   });
 }
+
+/**
+ * Drop a "server action entered" breadcrumb (#239). Call this near the top
+ * of each `"use server"` action — after auth resolves so the tenant id is
+ * known, but before the expensive work. When the action later throws or
+ * a downstream call captures an exception, the breadcrumb ships with it
+ * so a generic 500 in production comes with "here's which action was
+ * running + which tenant + what got passed in" instead of a bare stack.
+ *
+ * `name` is a dotted action identifier like `"supplier_invoice.parse_pdf"`.
+ * `data` is a free-form bag of args metadata — keep it small (filename,
+ * size, count of items, not the raw payload) so the breadcrumb chain
+ * stays readable in Sentry. Both PII (emails, names, addresses) and
+ * full request bodies should be omitted; the goal is enough context to
+ * triage, not full request replay.
+ */
+export function recordActionBreadcrumb(args: {
+  action: string;
+  tenantId?: string | null;
+  data?: Record<string, unknown>;
+}): void {
+  if (!isSentryConfigured()) return;
+  Sentry.addBreadcrumb({
+    category: "server_action",
+    message: args.action,
+    level: "info",
+    data: {
+      ...(args.tenantId ? { tenant_id: args.tenantId } : {}),
+      ...args.data,
+    },
+  });
+}

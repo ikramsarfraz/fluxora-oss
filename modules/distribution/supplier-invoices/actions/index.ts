@@ -13,7 +13,7 @@ import {
 import { requirePermission } from "@/lib/auth/permissions";
 import { logAuditEvent } from "@/lib/audit-log";
 import {
-  addBreadcrumb as addSentryBreadcrumb,
+  recordActionBreadcrumb,
   setSentryUserScope,
 } from "@/lib/sentry-scope";
 import { validatePdfUpload } from "@/lib/file-validation";
@@ -145,6 +145,16 @@ export async function createSupplierInvoiceAction(
     input,
   );
   const user = await getCurrentPortalUser();
+  recordActionBreadcrumb({
+    action: "supplier_invoice.create",
+    tenantId: user.tenantId,
+    data: {
+      complete_on_create: validated.complete === true,
+      line_count: validated.lines.length,
+      charge_count: validated.charges?.length ?? 0,
+      supplier_id: validated.supplierId,
+    },
+  });
   const result = await createSupplierInvoice(validated);
   await captureServerEvent({
     userId: user.id,
@@ -318,6 +328,15 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
     throw new Error(validation.error);
   }
   const user = await getCurrentPortalUser();
+  recordActionBreadcrumb({
+    action: "supplier_invoice.parse_pdf",
+    tenantId: user.tenantId,
+    data: {
+      filename: validation.safeName,
+      size_bytes: file.size,
+      mime_type: file.type || null,
+    },
+  });
   if (!(await isPlatformAdminAuthUser(user.authUserId))) {
     const [userResult, tenantResult] = await Promise.all([
       applyRateLimit(rateLimiters.pdfParse, `user:${user.id}`),
@@ -382,14 +401,6 @@ export async function bulkImportSupplierInvoicesAction(
   for (const f of rawFiles) {
     if (f instanceof File && f.size > 0) files.push(f);
   }
-  addSentryBreadcrumb({
-    category: "supplier-invoices.bulk-import",
-    message: "Action entered",
-    data: {
-      file_count: files.length,
-      total_size_bytes: files.reduce((sum, f) => sum + f.size, 0),
-    },
-  });
   if (files.length === 0) {
     throw new Error("Pick at least one PDF to import.");
   }
@@ -415,6 +426,14 @@ export async function bulkImportSupplierInvoicesAction(
   // Tag the Sentry scope with the actor so any subsequent capture inside
   // this action ships with user + tenant context.
   setSentryUserScope({ userId: user.id, tenantId: user.tenantId });
+  recordActionBreadcrumb({
+    action: "supplier_invoice.bulk_import",
+    tenantId: user.tenantId,
+    data: {
+      file_count: files.length,
+      total_size_bytes: files.reduce((sum, f) => sum + f.size, 0),
+    },
+  });
 
   // Rate-limit each file. Platform admins skip — keeps internal tooling
   // unconstrained. Drawing per-file keeps cost-per-import predictable; if

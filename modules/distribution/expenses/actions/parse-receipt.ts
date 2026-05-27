@@ -4,6 +4,7 @@ import { canManageExpenses } from "@/lib/expenses/metadata";
 import { sanitizeFilename } from "@/lib/file-validation";
 import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
 import { captureServerEvent } from "@/lib/posthog-server";
+import { recordActionBreadcrumb } from "@/lib/sentry-scope";
 import { enforceAiSpendCap } from "@/modules/core/billing/services/enforce-ai-spend-cap";
 import {
   RateLimitError,
@@ -80,6 +81,15 @@ export async function parseExpenseReceiptAction(
   if (!canManageExpenses(user.role as PortalUserRole)) {
     throw new Error("Your role does not allow creating expenses.");
   }
+  recordActionBreadcrumb({
+    action: "expense.parse_receipt",
+    tenantId: user.tenantId,
+    data: {
+      filename: safeName,
+      size_bytes: file.size,
+      mime_type: mimeType,
+    },
+  });
 
   // Reuse the pdf-parse rate limiter — receipts run the same cost surface
   // (OpenAI vision call). Platform admins skip to keep internal tooling
