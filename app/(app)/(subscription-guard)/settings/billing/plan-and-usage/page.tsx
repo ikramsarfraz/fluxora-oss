@@ -114,6 +114,19 @@ function formatShortDate(value: string | Date | null | undefined): string {
   });
 }
 
+function formatMicrosUsd(micros: number): string {
+  // Always show a dollar value; sub-cent rounding is acceptable for a
+  // usage panel that aggregates many small calls.
+  const dollars = Math.max(0, micros) / 1_000_000;
+  return `$${dollars.toFixed(2)}`;
+}
+
+function nextCalendarMonthStart(now = new Date()): Date {
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
 export default async function SettingsBillingPlanAndUsagePage(props: {
   searchParams: Promise<{ session_id?: string; success?: string; canceled?: string }>;
 }) {
@@ -364,6 +377,17 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
             </div>
           </section>
 
+          {/* AI usage (#235) — sits right under Resource usage because
+              the dollar shape doesn't fit the count-based table above,
+              but it conceptually belongs to the same "this period"
+              block. The Resource-usage card stays pure counts to keep
+              its column layout tidy. */}
+          <AiUsageCard
+            currentMicros={usage.aiSpend.currentMicros}
+            limitMicros={usage.aiSpend.limitMicros}
+            isComped={isComped}
+          />
+
           {/* Plans available */}
           <section>
             <div className="mb-[10px] flex items-baseline justify-between">
@@ -486,6 +510,115 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
         </div>
       </div>
     </div>
+  );
+}
+
+function AiUsageCard({
+  currentMicros,
+  limitMicros,
+  isComped,
+}: {
+  currentMicros: number;
+  limitMicros: number;
+  isComped: boolean;
+}) {
+  // Mirror the server-side decideAiSpendStatus thresholds so the panel's
+  // colored bands tell the same story as the action-layer gate. The
+  // constants are intentionally redeclared here as plain numbers because
+  // pulling the helper into this RSC page tree would just import a
+  // server-only file we'd need to add `import "server-only"` guards
+  // around — the warn/block points rarely change and a single-source
+  // refactor can come later if they do.
+  const WARN_RATIO = 0.8;
+  const BLOCK_RATIO = 1.0;
+  const isUnlimited = !Number.isFinite(limitMicros) || limitMicros <= 0;
+  const ratio = isUnlimited
+    ? null
+    : Math.min(2, Math.max(0, currentMicros / limitMicros));
+  const band: "ok" | "warn" | "blocked" = isUnlimited
+    ? "ok"
+    : ratio == null
+      ? "ok"
+      : ratio >= BLOCK_RATIO
+        ? "blocked"
+        : ratio >= WARN_RATIO
+          ? "warn"
+          : "ok";
+  const fillPct = ratio == null ? 0 : Math.min(100, ratio * 100);
+  const resetAt = nextCalendarMonthStart();
+
+  return (
+    <section>
+      <div className="mb-[10px] flex items-baseline justify-between">
+        <h2 className="font-serif text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-ink">
+          AI usage
+        </h2>
+        <span className="text-[11px] leading-[1.4] text-subtle">
+          {isComped
+            ? "Unlimited under comped plan."
+            : `Resets ${formatShortDate(resetAt)}`}
+        </span>
+      </div>
+      <div className="rounded-lg border-[0.5px] border-border-soft bg-card px-[22px] py-5">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="font-serif text-[28px] font-medium leading-none tracking-[-0.015em] text-ink tabular-nums">
+              {formatMicrosUsd(currentMicros)}
+            </div>
+            <div className="mt-[6px] text-[11px] leading-[1.4] text-subtle">
+              {isUnlimited
+                ? "No monthly cap on this plan."
+                : `of ${formatMicrosUsd(limitMicros)} this month`}
+            </div>
+          </div>
+          {band !== "ok" && !isUnlimited ? (
+            <span
+              className={
+                "inline-flex items-center gap-[6px] rounded-full px-[9px] py-[4px] text-[11px] font-medium leading-none " +
+                (band === "blocked"
+                  ? "border-[0.5px] border-destructive/40 bg-destructive/10 text-destructive"
+                  : "border-[0.5px] border-warning-border bg-warning-bg text-warning-fg")
+              }
+            >
+              <span
+                aria-hidden
+                className="inline-block size-[5px] rounded-full bg-current"
+              />
+              {band === "blocked" ? "Limit reached" : "Approaching limit"}
+            </span>
+          ) : null}
+        </div>
+        {!isUnlimited ? (
+          <div
+            className="mt-[14px] h-[6px] w-full overflow-hidden rounded-full bg-surface"
+            role="progressbar"
+            aria-valuenow={Math.round(fillPct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="AI usage this month"
+          >
+            <div
+              className={
+                "h-full rounded-full transition-[width] " +
+                (band === "blocked"
+                  ? "bg-destructive"
+                  : band === "warn"
+                    ? "bg-warning-fg"
+                    : "bg-forest")
+              }
+              style={{ width: `${fillPct}%` }}
+            />
+          </div>
+        ) : null}
+        <p className="mt-[14px] text-[12px] leading-[1.5] text-subtle">
+          {band === "blocked"
+            ? "New supplier-invoice and expense-receipt parses are paused until the cap resets. Existing drafts and manual entry are unaffected."
+            : band === "warn"
+              ? "You're past 80% of this month's AI budget. New parses still go through; the cap kicks in at 100%."
+              : "Each supplier-invoice and expense-receipt scan draws from this monthly budget."}
+        </p>
+      </div>
+    </section>
   );
 }
 

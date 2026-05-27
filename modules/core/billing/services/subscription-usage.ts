@@ -1,7 +1,8 @@
-import { and, count, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lt, sum } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  aiUsageEvents,
   customers,
   portalUsers,
   products,
@@ -30,6 +31,16 @@ export type TenantPlanUsage = {
   monthlyOrders: {
     current: number;
     limit: number;
+  };
+  /**
+   * Month-to-date AI spend (#235) — sum of `ai_usage_events.cost_micros`
+   * for the current calendar month plus the configured ceiling. Both
+   * numbers are micro-USD so the dashboard can format with consistent
+   * precision; the plan-and-usage card divides by 1e6 for display.
+   */
+  aiSpend: {
+    currentMicros: number;
+    limitMicros: number;
   };
 };
 
@@ -125,6 +136,36 @@ export async function countCurrentMonthSalesOrdersForTenant(
   return row?.c ?? 0;
 }
 
+/**
+ * Sum month-to-date AI spend (#235) across every writer that records into
+ * `ai_usage_events`: bill text + vision extraction, expense-receipt
+ * vision, product-match calls. Returns micro-USD so the comparison
+ * against `maxMonthlyAiCostMicros` is a direct integer compare with no
+ * float rounding. Includes failed-call rows because the OpenAI bill
+ * doesn't care whether the response parsed cleanly.
+ */
+export async function getCurrentMonthAiSpendForTenant(
+  tenantId: string,
+): Promise<number> {
+  const { monthStart, nextMonthStart } = getCurrentServerMonthRange();
+  const [row] = await db
+    .select({ total: sum(aiUsageEvents.costMicros) })
+    .from(aiUsageEvents)
+    .where(
+      and(
+        eq(aiUsageEvents.tenantId, tenantId),
+        gte(aiUsageEvents.createdAt, monthStart),
+        lt(aiUsageEvents.createdAt, nextMonthStart),
+      ),
+    );
+  // drizzle's sum() returns a string (Postgres NUMERIC) which is `null`
+  // when there are zero matching rows.
+  const total = row?.total ?? null;
+  if (total == null) return 0;
+  const parsed = Number(total);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
 export async function getCurrentTenantPlanUsage(): Promise<TenantPlanUsage> {
   const tenant = await getCurrentTenant();
   const usage = await getTenantPlanUsageByTenantId(tenant.id);
@@ -152,13 +193,19 @@ export async function getTenantPlanUsageByTenantId(
     return null;
   }
 
-  const [portalUserUsage, activeProducts, activeCustomers, monthlyOrders] =
-    await Promise.all([
-      countPortalUserUsageForTenant(tenantId),
-      countActiveProductsForTenant(tenantId),
-      countActiveCustomersForTenant(tenantId),
-      countCurrentMonthSalesOrdersForTenant(tenantId),
-    ]);
+  const [
+    portalUserUsage,
+    activeProducts,
+    activeCustomers,
+    monthlyOrders,
+    aiSpendMicros,
+  ] = await Promise.all([
+    countPortalUserUsageForTenant(tenantId),
+    countActiveProductsForTenant(tenantId),
+    countActiveCustomersForTenant(tenantId),
+    countCurrentMonthSalesOrdersForTenant(tenantId),
+    getCurrentMonthAiSpendForTenant(tenantId),
+  ]);
 
   return {
     currentPlan: tenant.subscriptionPlan,
@@ -177,6 +224,10 @@ export async function getTenantPlanUsageByTenantId(
     monthlyOrders: {
       current: monthlyOrders,
       limit: getPlanLimit(tenant, "maxMonthlyOrders"),
+    },
+    aiSpend: {
+      currentMicros: aiSpendMicros,
+      limitMicros: getPlanLimit(tenant, "maxMonthlyAiCostMicros"),
     },
   };
 }

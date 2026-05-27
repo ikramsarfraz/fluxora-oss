@@ -4,6 +4,7 @@ import { canManageExpenses } from "@/lib/expenses/metadata";
 import { sanitizeFilename } from "@/lib/file-validation";
 import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
 import { captureServerEvent } from "@/lib/posthog-server";
+import { enforceAiSpendCap } from "@/modules/core/billing/services/enforce-ai-spend-cap";
 import {
   RateLimitError,
   applyRateLimit,
@@ -95,6 +96,14 @@ export async function parseExpenseReceiptAction(
       throw new RateLimitError(tenantResult.retryAfterSeconds);
     }
   }
+  // AI spend cap (#235). Same gate the bill flow uses; receipts pull
+  // from the same monthly budget pool because they share the
+  // ai_usage_events table.
+  await enforceAiSpendCap({
+    tenantId: user.tenantId,
+    authUserId: user.authUserId,
+    source: "expense_receipt.parse",
+  });
 
   const bytes = Buffer.from(await file.arrayBuffer());
   const startedAt = Date.now();

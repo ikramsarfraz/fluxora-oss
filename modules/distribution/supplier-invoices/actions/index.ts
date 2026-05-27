@@ -24,6 +24,7 @@ import {
   RateLimitError,
 } from "@/lib/rate-limit";
 import { isPlatformAdminAuthUser } from "@/lib/platform-admin";
+import { enforceAiSpendCap } from "@/modules/core/billing/services/enforce-ai-spend-cap";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { normalizeProductName } from "../utils/normalization";
@@ -329,6 +330,14 @@ export async function parseSupplierInvoicePdfAction(formData: FormData) {
       throw new RateLimitError(tenantResult.retryAfterSeconds);
     }
   }
+  // AI spend cap (#235). Throws AiSpendCapError when this tenant is past
+  // their monthly limit. Bytes never reach OpenAI on the throw path —
+  // the gate runs before `file.arrayBuffer()` materializes them.
+  await enforceAiSpendCap({
+    tenantId: user.tenantId,
+    authUserId: user.authUserId,
+    source: "supplier_invoice.parse",
+  });
   const bytes = Buffer.from(await file.arrayBuffer());
   const startedAt = Date.now();
   const result = await parseSupplierInvoicePdf({
@@ -424,6 +433,18 @@ export async function bulkImportSupplierInvoicesAction(
       }
     }
   }
+
+  // AI spend cap (#235). Bulk is the highest-risk surface — a single
+  // submit fires up to BULK_IMPORT_MAX_FILES (10) parse passes back to
+  // back. Gate once up front; if blocked we never even materialise the
+  // file bytes below. The cap is monthly, not per-batch, so a tenant
+  // who's close to the limit may still get partway through a batch
+  // before later parses individually re-check via their own writers.
+  await enforceAiSpendCap({
+    tenantId: user.tenantId,
+    authUserId: user.authUserId,
+    source: "supplier_invoice.bulk_parse",
+  });
 
   // Materialise file bytes once so the bulk service can pass them through
   // the parse pipeline without re-reading the FormData stream.

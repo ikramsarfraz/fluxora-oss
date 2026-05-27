@@ -21,6 +21,16 @@ export const SUBSCRIPTION_LIMIT_KEYS = [
   "maxProducts",
   "maxCustomers",
   "maxMonthlyOrders",
+  /**
+   * Per-tenant calendar-month ceiling on AI spend (#235). Stored in
+   * micro-USD (1 = $0.000001) to match `ai_usage_events.cost_micros` and
+   * avoid float-rounding across aggregates. The enforcement helper
+   * surfaces a soft warning at 80% and hard-blocks new AI-driven parse
+   * actions at 100% until the next calendar month rolls. `UNLIMITED`
+   * disables enforcement entirely (used for the enterprise plan + comped
+   * tenants).
+   */
+  "maxMonthlyAiCostMicros",
 ] as const;
 
 export type SubscriptionLimitKey = (typeof SUBSCRIPTION_LIMIT_KEYS)[number];
@@ -64,6 +74,10 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       maxProducts: 25,
       maxCustomers: 25,
       maxMonthlyOrders: 25,
+      // ~$1 ceiling. Most free tenants are exploring the product, not
+      // bulk-importing 50 PDFs a day — enough headroom for a handful of
+      // single-receipt scans without bankrolling someone's whole AP run.
+      maxMonthlyAiCostMicros: 1_000_000,
     },
   },
   starter: {
@@ -81,6 +95,11 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       maxProducts: 250,
       maxCustomers: 250,
       maxMonthlyOrders: 100,
+      // ~$10 ceiling. Starter tenants typically run a few dozen bills per
+      // month — at the current gpt-4o-mini cost (~$0.01-0.02 per bill),
+      // that's well inside the cap with a margin for the occasional
+      // vision-fallback escalation.
+      maxMonthlyAiCostMicros: 10_000_000,
     },
   },
   growth: {
@@ -98,6 +117,10 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       maxProducts: 5_000,
       maxCustomers: 5_000,
       maxMonthlyOrders: 1_000,
+      // ~$50 ceiling. Headroom for the 5-10× volume increase the
+      // growth tier expects vs starter, and absorbs heavier vision
+      // usage on harder PDFs.
+      maxMonthlyAiCostMicros: 50_000_000,
     },
   },
   enterprise: {
@@ -115,6 +138,7 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       maxProducts: UNLIMITED,
       maxCustomers: UNLIMITED,
       maxMonthlyOrders: UNLIMITED,
+      maxMonthlyAiCostMicros: UNLIMITED,
     },
   },
 } as const satisfies Record<TenantSubscriptionPlan, PlanCapabilityMatrix>;
