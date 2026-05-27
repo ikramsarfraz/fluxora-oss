@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/sheet";
 import { changelogAnchorId, changelogReleases } from "@/lib/changelog";
 import { shortcutGroups } from "@/lib/shortcuts";
+import { tourForPathname } from "@/lib/tour/registry";
 import { cn } from "@/lib/utils";
 
 export type HelpSheetTicket = {
@@ -33,7 +34,9 @@ export type HelpSheetTicket = {
 type HelpSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onStartTour: () => void;
+  /** Receives the tour id to launch (cold-start, orders-new, bills-new).
+   *  Omitting the id keeps the legacy "any tour" dispatch path working. */
+  onStartTour: (tourId?: string) => void;
   tenantName: string;
   tenantSlug: string;
   planLabel: string;
@@ -76,7 +79,10 @@ export function HelpSheet({
   tickets,
 }: HelpSheetProps) {
   const pathname = usePathname();
-  const isDashboard = pathname === "/dashboard" || pathname === "/";
+  // Pick the route-specific tour from the registry. Returns null on routes
+  // we don't yet have a tour for — the drawer surfaces a "tour not available
+  // here yet" hint in that case.
+  const contextualTour = tourForPathname(pathname);
   const recentUpdates = changelogReleases.slice(0, 3);
 
   return (
@@ -121,8 +127,10 @@ export function HelpSheet({
         {/* Body */}
         <div className="flex-1 overflow-auto px-[22px] pb-7 pt-[18px]">
           {/* Contextual: take the tour */}
-          <SectionHead label={`Because you’re on ${isDashboard ? "Dashboard" : pathname}`} />
-          {isDashboard ? (
+          <SectionHead
+            label={`Because you’re on ${contextualTour ? contextualTour.label.replace(/\stour$/, "").replace(/ walkthrough$/, "") : (pathname ?? "this page")}`}
+          />
+          {contextualTour ? (
             <div className="flex items-start gap-3 rounded-lg border-[0.5px] border-border-soft bg-card-warm px-4 py-[14px]">
               <span
                 aria-hidden
@@ -132,20 +140,19 @@ export function HelpSheet({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-gold-deep">
-                  Suggested · 60 sec
+                  Suggested · {contextualTour.duration}
                 </div>
                 <div className="mt-[2px] text-[13.5px] font-medium text-ink">
-                  Take the cold-start tour
+                  Take the {contextualTour.label.toLowerCase()}
                 </div>
                 <p className="mt-[3px] text-[12.5px] leading-[1.5] text-subtle">
-                  Walk through the four steps to your first invoice — what each
-                  card on the dashboard means and what fills it in.
+                  {contextualTour.description}
                 </p>
                 <div className="mt-2 flex gap-[6px]">
                   <button
                     type="button"
                     onClick={() => {
-                      onStartTour();
+                      onStartTour(contextualTour.id);
                     }}
                     className="inline-flex items-center gap-[5px] rounded-sm border-[0.5px] border-forest bg-forest px-[11px] py-[6px] text-[12px] font-medium text-card-warm transition-colors hover:bg-forest-mid"
                   >

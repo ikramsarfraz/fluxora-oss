@@ -52,6 +52,7 @@ import type { FifoAllocationResult } from "@/modules/distribution/inventory/serv
 import { TablePager } from "@/components/table-pager";
 
 import type { NewOrderFormValues } from "./new-order-form.schema";
+import type { LineParseHint } from "./ai-parse-textarea";
 import {
   calculateLineTotal,
   calculateLineTotalFromWeight,
@@ -84,6 +85,13 @@ const C = {
 interface NewOrderLinesTableProps {
   control: Control<NewOrderFormValues>;
   setValue: UseFormSetValue<NewOrderFormValues>;
+  /**
+   * AI parse hints keyed by line `key`. Surfaces "AI suggested: <hint>"
+   * helper text under each row's product picker until the user picks a
+   * product. The map is stored in the parent form's state so re-renders
+   * preserve the hint across the row's lifecycle.
+   */
+  aiLineHints?: Map<string, LineParseHint>;
 }
 
 function newLineDefaults(): NewOrderFormValues["lines"][number] {
@@ -103,6 +111,7 @@ function newLineDefaults(): NewOrderFormValues["lines"][number] {
 export function NewOrderLinesTable({
   control,
   setValue,
+  aiLineHints,
 }: NewOrderLinesTableProps) {
   const [notesOpen, setNotesOpen] = useState(false);
 
@@ -356,6 +365,7 @@ export function NewOrderLinesTable({
                       handleProductSelected(index, product)
                     }
                     onRemove={() => remove(index)}
+                    aiLineHint={aiLineHints?.get(field.key) ?? null}
                   />
                 ))}
               </TableBody>
@@ -497,6 +507,10 @@ interface LineRowProps {
   onAutoFocused: () => void;
   onProductSelected: (product: ProductListItem) => void;
   onRemove: () => void;
+  /** AI-suggested product phrase from the paste flow. Rendered below the
+   *  product picker when no product is selected yet — disappears once the
+   *  user picks. Null when this row didn't come from an AI parse. */
+  aiLineHint?: LineParseHint | null;
 }
 
 function LineRow({
@@ -514,6 +528,7 @@ function LineRow({
   onAutoFocused,
   onProductSelected,
   onRemove,
+  aiLineHint,
 }: LineRowProps) {
   const row = useWatch({ control, name: `lines.${index}` });
 
@@ -902,6 +917,22 @@ function LineRow({
                     </ComboboxList>
                   </ComboboxContent>
                 </Combobox>
+                {/* AI hint — surfaces the AI's verbatim product phrase
+                    (e.g. "ribeye", "chicken thigh b/i") under the picker
+                    until the user picks a catalog product. Gone the
+                    instant a product is selected. */}
+                {!row?.productId && aiLineHint?.productHint && (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--color-forest)",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    AI suggested: {aiLineHint.productHint}
+                    {aiLineHint.unit ? ` (${aiLineHint.unit})` : ""}
+                  </span>
+                )}
                 {fieldState.invalid && (
                   <span
                     style={{ fontSize: "11px", color: "var(--color-danger-fg)" }}

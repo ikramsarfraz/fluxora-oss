@@ -93,6 +93,10 @@ export function ReviewScreen({
   duplicateMatches,
   duplicateAcknowledged,
   onDuplicateAcknowledgedChange,
+  onAddLine,
+  userAddedLineIds,
+  userAddedLinePrices,
+  onUserAddedLineUnitPriceChange,
 }: {
   data: ReviewData;
   /** Original PDF bytes. Null while the host is still fetching them. */
@@ -261,6 +265,23 @@ export function ReviewScreen({
    */
   duplicateAcknowledged?: boolean;
   onDuplicateAcknowledgedChange?: (value: boolean) => void;
+  /**
+   * Append a blank line to the review state. Surfaces a "+ Add line"
+   * button below the line list so the user can recover when the AI
+   * parser missed a row entirely (most common on hand-written / heavily
+   * abbreviated bills). Container manages the new line's id + state.
+   */
+  onAddLine?: () => void;
+  /**
+   * Line ids that were inserted manually (vs. parsed from the bill).
+   * Drives the inline unit-price input on user-added rows — parser-
+   * emitted lines keep the display-only price since the parser already
+   * filled it.
+   */
+  userAddedLineIds?: ReadonlySet<number>;
+  /** Per-user-added-line price input string keyed by line id. */
+  userAddedLinePrices?: Record<number, string>;
+  onUserAddedLineUnitPriceChange?: (lineId: number, value: string) => void;
 }) {
   // Read sidebar state so the fixed bottom bar can re-anchor its left edge
   // when the sidebar collapses/expands. The default mode is "offcanvas", so
@@ -674,6 +695,18 @@ export function ReviewScreen({
                               : undefined
                           }
                           submitErrors={lineSubmitErrors?.[line.id] ?? null}
+                          isUserAdded={
+                            userAddedLineIds?.has(line.id) ?? false
+                          }
+                          userAddedUnitPrice={
+                            userAddedLinePrices?.[line.id] ?? ""
+                          }
+                          onUserAddedUnitPriceChange={
+                            onUserAddedLineUnitPriceChange
+                              ? value =>
+                                  onUserAddedLineUnitPriceChange(line.id, value)
+                              : undefined
+                          }
                         />
                       </div>
                     );
@@ -696,6 +729,23 @@ export function ReviewScreen({
                     className="font-medium text-ink underline-offset-2 hover:underline"
                   >
                     Restore all
+                  </button>
+                </div>
+              ) : null}
+
+              {/* "+ Add line" — surfaces when the parser missed a row
+                  entirely (most common on hand-written / heavily abbreviated
+                  bills). The new line lands at the bottom of the list with
+                  an unmatched product so the user picks a catalog product,
+                  sets qty + weight, and types in a unit price. */}
+              {onAddLine ? (
+                <div className="flex justify-start border-t border-border-default bg-page px-[22px] py-2">
+                  <button
+                    type="button"
+                    onClick={onAddLine}
+                    className="text-[12px] font-medium text-ink underline-offset-2 hover:underline"
+                  >
+                    + Add line
                   </button>
                 </div>
               ) : null}

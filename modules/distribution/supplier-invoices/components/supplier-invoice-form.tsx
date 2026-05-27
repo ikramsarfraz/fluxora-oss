@@ -65,6 +65,11 @@ import type { PipelineResult } from "@/modules/distribution/supplier-invoices/se
 import { FirstBillPanel } from "./first-bill-panel";
 import { IngestionPanel } from "./ingestion-panel";
 import { CreateSupplierDialog } from "./create-supplier-dialog";
+import { useAiParseBills } from "./ai-parse-bill-textarea";
+import {
+  AIComposer,
+  PillOrChip,
+} from "@/components/ai-composer/ai-composer";
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const C = {
@@ -106,6 +111,12 @@ type Props = {
    * as an attachment once the draft is saved — matching single-import.
    */
   prefilledPdfFile?: File | null;
+  /**
+   * When true, render the AI paste-text card above the form. Server-rendered
+   * `hasFeature(AI_ASSISTED_ENTRY_FEATURE)` check upstream — defaults false
+   * so existing call sites are unchanged.
+   */
+  aiAssistedEntryEnabled?: boolean;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -491,6 +502,7 @@ export function SupplierInvoiceForm({
   initialValues,
   prefilledPipelineResult,
   prefilledPdfFile,
+  aiAssistedEntryEnabled = false,
 }: Props) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
@@ -780,6 +792,14 @@ export function SupplierInvoiceForm({
     ],
   );
 
+  // AI paste-text composer. Hook owns open/text/applied state; mounts in
+  // two places below: PillOrChip in the header, AIComposer drawer above
+  // the Bill details card. Both feed the same seedFromPipelineResult that
+  // the PDF upload path uses — review surface stays identical.
+  const aiPasteBills = useAiParseBills({
+    onParsed: result => seedFromPipelineResult(result, { pdfFile: null }),
+  });
+
   // Seed once from the bulk-import handoff. Effect runs only on mount in
   // create mode — edit mode already populates initialValues from the DB.
   const hasSeededFromPrefilledRef = useRef(false);
@@ -989,6 +1009,7 @@ export function SupplierInvoiceForm({
         >
           <div>
             <h1
+              data-tour-target="bills-new.page-title"
               style={{
                 fontSize: 26,
                 fontWeight: 600,
@@ -1014,6 +1035,11 @@ export function SupplierInvoiceForm({
               justifyContent: "flex-end",
             }}
           >
+            {mode === "create" && aiAssistedEntryEnabled && (
+              <span data-tour-target="bills-new.ai-pill">
+                <PillOrChip {...aiPasteBills.pillProps} />
+              </span>
+            )}
             {mode === "create" && (
               <>
                 <input
@@ -1027,6 +1053,7 @@ export function SupplierInvoiceForm({
                   type="button"
                   onClick={handleReadPdfClick}
                   disabled={isPending}
+                  data-tour-target="bills-new.scan-pdf"
                   style={{
                     background: C.surface,
                     color: C.ink2,
@@ -1097,8 +1124,16 @@ export function SupplierInvoiceForm({
           </div>
         )}
 
+        {/* AI paste-text drawer — opens via the pill in the header or
+            via ⌘V paste anywhere on the page. Feeds the same
+            seedFromPipelineResult that the PDF upload path uses, so the
+            review surface stays identical. Create mode only. */}
+        {mode === "create" && aiAssistedEntryEnabled && (
+          <AIComposer {...aiPasteBills.composerProps} />
+        )}
+
         {/* ── Bill details card ──────────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
+        <div data-tour-target="bills-new.bill-details" style={{ marginBottom: 16 }}>
           <SectionCard
             header={
               <CardTitle
@@ -1371,7 +1406,7 @@ export function SupplierInvoiceForm({
         )}
 
         {/* ── Line items card ────────────────────────────────────────────── */}
-        <div style={{ marginBottom: 16 }}>
+        <div data-tour-target="bills-new.line-items" style={{ marginBottom: 16 }}>
           <div
             style={{
               background: C.surface,
@@ -1472,7 +1507,7 @@ export function SupplierInvoiceForm({
         {/* Wrapped in marginBottom: 16 to match the Bill details + Line
             items spacing — without this the Supporting documents card
             sits flush against this section. */}
-        <div style={{ marginBottom: 16 }}>
+        <div data-tour-target="bills-new.charges" style={{ marginBottom: 16 }}>
         <SectionCard
           header={
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>

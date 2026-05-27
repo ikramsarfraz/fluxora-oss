@@ -33,6 +33,15 @@ import {
   type NewOrderFormValues,
 } from "./new-order-form.schema";
 import { useLinesSubtotal } from "./use-lines-subtotal";
+import {
+  useAiParseOrders,
+  type AiParseOrdersSummary,
+  type LineParseHint,
+} from "./ai-parse-textarea";
+import {
+  AIComposer,
+  PillOrChip,
+} from "@/components/ai-composer/ai-composer";
 
 const C = {
   ink: "var(--color-ink)",
@@ -73,11 +82,24 @@ function makeDefaultValues(): NewOrderFormValues {
   };
 }
 
-export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: string }) {
+export function NewOrderForm({
+  initialCustomerId = "",
+  aiAssistedEntryEnabled = false,
+}: {
+  initialCustomerId?: string;
+  aiAssistedEntryEnabled?: boolean;
+}) {
   const router = useRouter();
   const { state: sidebarState, isMobile } = useSidebar();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingMode, setPendingMode] = useState<SubmitMode | null>(null);
+  const [aiSummary, setAiSummary] = useState<AiParseOrdersSummary | null>(null);
+  // Per-line hints from the AI parse — keyed by line.key so survivor rows
+  // keep their hint after the user reorders. Not in the form schema because
+  // the form persists what the user *picks*, not what the AI suggested.
+  const [aiLineHints, setAiLineHints] = useState<Map<string, LineParseHint>>(
+    () => new Map(),
+  );
   const [autoSaveStatus, setAutoSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
@@ -112,6 +134,18 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
       [],
     ),
     mode: "onBlur",
+  });
+
+  const { pillProps, composerProps } = useAiParseOrders({
+    form,
+    onParsed: ({ lineHints, summary }) => {
+      setAiSummary(summary);
+      setAiLineHints(new Map(lineHints.map(h => [h.lineKey, h])));
+    },
+    onUndo: () => {
+      setAiSummary(null);
+      setAiLineHints(new Map());
+    },
   });
 
   const lines = useWatch({ control: form.control, name: "lines" });
@@ -338,6 +372,7 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
         >
           <div>
             <div
+              data-tour-target="orders-new.page-title"
               style={{
                 fontSize: "22px",
                 fontWeight: 600,
@@ -351,7 +386,12 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
               Final weights and totals are captured during fulfillment.
             </div>
           </div>
-          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
+            {aiAssistedEntryEnabled && (
+              <span data-tour-target="orders-new.ai-pill">
+                <PillOrChip {...pillProps} />
+              </span>
+            )}
             <Button
               type="button"
               onClick={() => router.push("/orders")}
@@ -372,6 +412,82 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             </Button>
           </div>
         </div>
+
+        {/* AI paste-to-prefill drawer — opens via the pill above, or via
+            ⌘V paste anywhere on the page (handled in useAiParseOrders).
+            After apply, the drawer collapses and the pill in the header
+            becomes the "AI prefilled · ... · Undo · View source" chip. */}
+        {aiAssistedEntryEnabled && <AIComposer {...composerProps} />}
+
+        {/* Soft inline note when the AI couldn't auto-fill the customer.
+            Closest matches are click-to-apply — one tap drops the customer
+            into the form and dismisses the banner. Verbose summary banners
+            were intentionally removed per the v3 design. */}
+        {aiSummary &&
+          !aiSummary.autoFilledCustomerId &&
+          aiSummary.customerHint && (
+            <div
+              style={{
+                padding: "8px 12px",
+                marginBottom: "14px",
+                background: "var(--color-warning-bg)",
+                border: "0.5px solid var(--color-warning-border)",
+                borderRadius: C.radiusSm,
+                fontSize: "12px",
+                color: "var(--color-warning-fg)",
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "6px",
+              }}
+            >
+              <span>
+                AI thought the customer was{" "}
+                <b style={{ fontWeight: 500 }}>{aiSummary.customerHint}</b>
+                {aiSummary.customerCandidates.length > 0 ? " — closest matches:" : "."}
+              </span>
+              {aiSummary.customerCandidates.map(candidate => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => {
+                    form.setValue("customerId", candidate.id, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    setAiSummary(prev =>
+                      prev
+                        ? { ...prev, autoFilledCustomerId: candidate.id }
+                        : prev,
+                    );
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "2px 8px",
+                    borderRadius: "999px",
+                    border: "0.5px solid var(--color-warning-border)",
+                    background: "var(--color-card-warm)",
+                    color: "var(--color-warning-fg)",
+                    fontFamily: "inherit",
+                    fontSize: "11.5px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                  }}
+                  aria-label={`Use ${candidate.name} as the customer`}
+                >
+                  {candidate.name}
+                  <span aria-hidden style={{ color: "var(--color-subtle)" }}>
+                    {candidate.confidence}%
+                  </span>
+                </button>
+              ))}
+              {aiSummary.customerCandidates.length === 0 && (
+                <span>Pick a customer below to confirm.</span>
+              )}
+            </div>
+          )}
 
         {/* Error banner */}
         {submitError && (
@@ -460,8 +576,16 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "18px", minWidth: 0 }}>
-            <NewOrderCustomerCard control={form.control} />
-            <NewOrderLinesTable control={form.control} setValue={form.setValue} />
+            <div data-tour-target="orders-new.customer-card">
+              <NewOrderCustomerCard control={form.control} />
+            </div>
+            <div data-tour-target="orders-new.lines-table">
+              <NewOrderLinesTable
+                control={form.control}
+                setValue={form.setValue}
+                aiLineHints={aiLineHints}
+              />
+            </div>
             {form.formState.errors.lines?.root && (
               <p style={{ fontSize: "13px", color: "var(--color-danger-fg)" }}>
                 {form.formState.errors.lines.root.message}
@@ -469,7 +593,10 @@ export function NewOrderForm({ initialCustomerId = "" }: { initialCustomerId?: s
             )}
           </div>
 
-          <div style={{ position: "sticky", top: "76px" }}>
+          <div
+            data-tour-target="orders-new.estimate-sidebar"
+            style={{ position: "sticky", top: "76px" }}
+          >
             <NewOrderSummaryCard control={form.control} />
           </div>
         </div>

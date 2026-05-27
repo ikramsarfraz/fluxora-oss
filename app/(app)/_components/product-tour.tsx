@@ -12,11 +12,13 @@ import {
 } from "react";
 
 import {
-  coldStartTourSteps,
-  markTourCompleted,
-  type TourLiveStep,
-  type TourStep,
-} from "@/lib/tour/cold-start-steps";
+  markTourComplete,
+  tourById,
+  TOURS,
+  type TourDefinition,
+  type TourId,
+} from "@/lib/tour/registry";
+import type { TourLiveStep, TourStep } from "@/lib/tour/types";
 import { cn } from "@/lib/utils";
 
 import styles from "./product-tour.module.css";
@@ -46,8 +48,13 @@ function isFinishOrCloseable(step: TourStep): step is TourLiveStep {
 export function ProductTour() {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(0);
+  // Which tour is active. Defaults to the cold-start dashboard tour so any
+  // existing CTA that dispatches the event with no detail keeps working.
+  const [activeTour, setActiveTour] = useState<TourDefinition>(
+    TOURS["cold-start"],
+  );
 
-  const steps = useMemo(() => coldStartTourSteps, []);
+  const steps = useMemo(() => activeTour.steps, [activeTour]);
   const liveStepCount = useMemo(
     () => steps.filter((s) => s.kind === "live").length,
     [steps],
@@ -67,9 +74,15 @@ export function ProductTour() {
 
   const coachRef = useRef<HTMLDivElement | null>(null);
 
-  // Listen for tour-open event globally
+  // Listen for tour-open event globally. The event detail can carry a
+  // `tour` id to select a non-default tour ("orders-new", "bills-new"); a
+  // missing detail keeps the cold-start tour as the default so legacy
+  // dispatches still work.
   useEffect(() => {
-    function handler() {
+    function handler(event: Event) {
+      const detail = (event as CustomEvent<{ tour?: TourId }>).detail;
+      const tour = tourById(detail?.tour) ?? TOURS["cold-start"];
+      setActiveTour(tour);
       setCurrent(0);
       setOpen(true);
     }
@@ -146,6 +159,17 @@ export function ProductTour() {
 
   useLayoutEffect(() => {
     if (!open) return;
+    // Intentional: measuring the spotlight target's bounding rect and
+    // positioning the coach card must happen synchronously before paint
+    // to avoid a one-frame flicker where the card lands at (0,0) before
+    // its real position resolves. `computePositions` reads the DOM and
+    // calls setRect + setCoachPos; the eslint rule flags this as a
+    // "cascading render" risk but the cascade is bounded and intentional
+    // (single re-render per step change). Both setters live inside
+    // computePositions; refactoring to derive these via useMemo isn't
+    // possible because the values depend on live DOM measurements that
+    // useMemo can't observe.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     computePositions();
   }, [open, current, computePositions]);
 
@@ -164,10 +188,10 @@ export function ProductTour() {
 
   const close = useCallback(
     (markComplete: boolean) => {
-      if (markComplete) markTourCompleted();
+      if (markComplete) markTourComplete(activeTour.id);
       setOpen(false);
     },
-    [],
+    [activeTour],
   );
 
   const next = useCallback(() => {
@@ -401,7 +425,7 @@ export function ProductTour() {
         />
         <span className="text-forest-tint">
           Product tour ·{" "}
-          <span className="text-card-warm">Cold start</span>
+          <span className="text-card-warm">{activeTour.label}</span>
         </span>
         <span aria-hidden className="opacity-35">
           /

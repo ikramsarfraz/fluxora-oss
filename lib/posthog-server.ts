@@ -35,6 +35,7 @@ export type AnalyticsEvent =
   | "first_bill.saved"
   | "bill.saved"
   | "bill.received"
+  | "bill.paste_parsed"
   | "bank.connect_succeeded"
   | "payment_match.confirmed"
   | "payment_match.auto_applied"

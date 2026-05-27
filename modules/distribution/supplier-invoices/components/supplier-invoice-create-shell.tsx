@@ -19,12 +19,21 @@ import { ReviewQueueShell } from "./review/review-queue-shell";
  * data is written there post-A2. PR A3 will retire the single-PDF flow's
  * localStorage usage too.
  */
-export function SupplierInvoiceCreateShell() {
+export function SupplierInvoiceCreateShell({
+  aiAssistedEntryEnabled = false,
+}: {
+  aiAssistedEntryEnabled?: boolean;
+}) {
   const params = useSearchParams();
   const bulkImportKey = params?.get("bulk-import-key") ?? null;
 
   if (bulkImportKey) {
     return <ReviewQueueShell initialKey={bulkImportKey} />;
   }
-  return <SupplierInvoiceForm mode="create" />;
+  return (
+    <SupplierInvoiceForm
+      mode="create"
+      aiAssistedEntryEnabled={aiAssistedEntryEnabled}
+    />
+  );
 }

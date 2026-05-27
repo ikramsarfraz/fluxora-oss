@@ -296,6 +296,23 @@ export function ReviewContainer({
     Record<number, number>
   >(persistedSnapshot?.lineCasesOverrides ?? {});
 
+  // Lines the user inserts manually because the parser missed them on the
+  // PDF / pasted text. Stored separately from the parser's lines so the
+  // pipeline output stays immutable (matters for re-scan + bbox overlay),
+  // but rendered alongside them and submitted with the same payload shape.
+  // IDs are minted from `userAddedLineCounter` shifted past the prefill
+  // id range so they don't collide with parser-line ids in the per-line
+  // override maps (lineProductOverrides, lineCasesOverrides, lineWeightStates).
+  const [userAddedLines, setUserAddedLines] = useState<ParsedLine[]>([]);
+  const [userAddedLineCounter, setUserAddedLineCounter] = useState(0);
+  // Per-line unit-price input string for user-added lines. Kept as a string
+  // (not a number) so the input can hold "0", "", "10.50" mid-typing without
+  // jumping the cursor. Parsed to Number on submit; invalid values fall
+  // back to 0 with a per-line error in `lineSubmitErrors`.
+  const [userAddedLinePrices, setUserAddedLinePrices] = useState<
+    Record<number, string>
+  >({});
+
   // Editable charges, seeded from the parser's detected fees. Replaces
   // the previous silent-stamp behavior where every detected fee went to
   // the server as `chargeType: "other"`. The user can reclassify, edit
@@ -321,19 +338,39 @@ export function ReviewContainer({
   const [rememberAliases, setRememberAliases] = useState(true);
 
   const enriched = useMemo(() => {
-    return enrichData({
+    const base = enrichData({
       baseData,
       supplierNameOverride,
       lineProductOverrides,
       lineCasesOverrides,
       skippedLines,
     });
+    // Append user-added lines after enrichment, with the same override
+    // resolution applied. They share the override maps' key space (id →
+    // override) so a productId pick / cases bump / weight edit on a user-
+    // added line flows through the same handlers as a parsed one.
+    if (userAddedLines.length === 0) return base;
+    return {
+      ...base,
+      lines: [
+        ...base.lines,
+        ...userAddedLines.map(line =>
+          applyLineOverrides({
+            line,
+            override: lineProductOverrides[line.id],
+            casesOverride: lineCasesOverrides[line.id],
+            skipped: skippedLines.has(line.id),
+          }),
+        ),
+      ],
+    };
   }, [
     baseData,
     supplierNameOverride,
     lineProductOverrides,
     lineCasesOverrides,
     skippedLines,
+    userAddedLines,
   ]);
 
   // Duplicate-invoice lookup. Runs whenever both the selected supplier and
@@ -557,6 +594,46 @@ export function ReviewContainer({
       setLineCasesOverrides(prev => ({ ...prev, [lineId]: clamped }));
     },
     [],
+  );
+
+  // Insert a blank line the user can fill in by hand. Pre-seeds with sane
+  // defaults (1 case, weight 0, price 0, unmatched) so the existing
+  // product-picker / weight-editor / cases-editor UX takes over. The ID is
+  // shifted past the prefill-line range so it never collides with the
+  // override maps' existing keys.
+  const handleAddLine = useCallback(() => {
+    const prefillCount =
+      pipelineResult.prefillResult.values.lines.length;
+    const newId = prefillCount + 1000 + userAddedLineCounter;
+    setUserAddedLineCounter(c => c + 1);
+    setUserAddedLines(prev => [
+      ...prev,
+      {
+        id: newId,
+        raw: "",
+        cases: 1,
+        weight: 0,
+        unitPrice: 0,
+        total: 0,
+        match: { status: "unmatched", candidates: [] },
+      },
+    ]);
+    setUserAddedLinePrices(prev => ({ ...prev, [newId]: "" }));
+  }, [pipelineResult, userAddedLineCounter]);
+
+  const handleUserAddedLineUnitPriceChange = useCallback(
+    (lineId: number, value: string) => {
+      setUserAddedLinePrices(prev => ({ ...prev, [lineId]: value }));
+    },
+    [],
+  );
+
+  // Lookup so the line-row renderer can distinguish user-added lines
+  // (which expose the inline price input) from parser-emitted lines
+  // (which keep the display-only price).
+  const userAddedLineIdSet = useMemo(
+    () => new Set(userAddedLines.map(l => l.id)),
+    [userAddedLines],
   );
 
   /** Direct pick from the line's product autocomplete. */
@@ -807,7 +884,7 @@ export function ReviewContainer({
     // facing line.id in the catch handler below.
     const prefillLines = pipelineResult.prefillResult.values.lines;
     const linePayloadIndexToLineId: Record<number, number> = {};
-    const lines = prefillLines
+    const prefillPayloads = prefillLines
       .map((line, index) => {
         const lineId = index + 1;
         if (skippedLines.has(lineId)) return null;
@@ -853,21 +930,81 @@ export function ReviewContainer({
           },
         };
       })
-      .filter(
-        (entry): entry is NonNullable<typeof entry> => entry !== null,
-      )
-      .map((entry, index) => {
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    // User-added lines flow through the same override resolution as parsed
+    // lines, but their unit price comes from the per-line input state
+    // (userAddedLinePrices) since they have no parser-supplied price.
+    // Weight defaults to "0" when no editor override is present — the
+    // manual form's helper accepts that for catch_weight lines.
+    const userAddedPayloads = userAddedLines
+      .map(addedLine => {
+        const lineId = addedLine.id;
+        if (skippedLines.has(lineId)) return null;
+        if (deletedLineIds.has(lineId)) return null;
+        const override = lineProductOverrides[lineId];
+        const productId = override?.productId ?? null;
+        if (!productId) return null;
+        const casesOverride = lineCasesOverrides[lineId];
+        const quantityCases =
+          casesOverride != null ? casesOverride : addedLine.cases || 0;
+        const weightOverride = lineWeightStates[lineId];
+        const weightPayload = weightOverride
+          ? resolveLineWeightSubmit({
+              quantityCases,
+              state: weightOverride,
+            })
+          : {
+              weightLbs: "0",
+              caseWeightsLbs: null,
+              unitType: "catch_weight" as const,
+            };
+        const lotExpiryOverride = lineLotExpiryStates[lineId];
+        const lotExpiryPayload = lotExpiryOverride
+          ? resolveLineLotExpirySubmit(lotExpiryOverride)
+          : { lotNumberOverride: null, expirationDateOverride: null };
+        const priceRaw = userAddedLinePrices[lineId] ?? "";
+        const priceNum = Number(priceRaw);
+        const unitPrice =
+          priceRaw.trim().length > 0 && Number.isFinite(priceNum) && priceNum >= 0
+            ? priceRaw
+            : "0";
+        return {
+          _lineId: lineId,
+          payload: {
+            productId,
+            quantityCases,
+            weightLbs: weightPayload.weightLbs,
+            caseWeightsLbs: weightPayload.caseWeightsLbs,
+            unitType: weightPayload.unitType,
+            unitPrice,
+            lotNumberOverride: lotExpiryPayload.lotNumberOverride,
+            expirationDateOverride: lotExpiryPayload.expirationDateOverride,
+          },
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    const lines = [...prefillPayloads, ...userAddedPayloads].map(
+      (entry, index) => {
         linePayloadIndexToLineId[index] = entry._lineId;
         return entry.payload;
-      });
+      },
+    );
 
-    const stillUnresolved = prefillLines.some((line, index) => {
-      const lineId = index + 1;
-      if (skippedLines.has(lineId)) return false;
-      if (deletedLineIds.has(lineId)) return false;
-      const override = lineProductOverrides[lineId];
-      return !override && !line.productId;
-    });
+    const stillUnresolved =
+      prefillLines.some((line, index) => {
+        const lineId = index + 1;
+        if (skippedLines.has(lineId)) return false;
+        if (deletedLineIds.has(lineId)) return false;
+        const override = lineProductOverrides[lineId];
+        return !override && !line.productId;
+      }) ||
+      userAddedLines.some(addedLine => {
+        if (skippedLines.has(addedLine.id)) return false;
+        if (deletedLineIds.has(addedLine.id)) return false;
+        return !lineProductOverrides[addedLine.id];
+      });
     if (stillUnresolved) {
       toast.error("Resolve every line or mark it as skipped before saving.");
       return;
@@ -1049,6 +1186,8 @@ export function ReviewContainer({
     lineCasesOverrides,
     lineWeightStates,
     lineLotExpiryStates,
+    userAddedLines,
+    userAddedLinePrices,
     charges,
     blockingCostChanges,
     rememberAliases,
@@ -1224,6 +1363,10 @@ export function ReviewContainer({
         duplicateMatches={duplicateMatches}
         duplicateAcknowledged={duplicateAcknowledged}
         onDuplicateAcknowledgedChange={setDuplicateAcknowledged}
+        onAddLine={handleAddLine}
+        userAddedLineIds={userAddedLineIdSet}
+        userAddedLinePrices={userAddedLinePrices}
+        onUserAddedLineUnitPriceChange={handleUserAddedLineUnitPriceChange}
       />
       <CreateSupplierDialog
         open={createSupplierOpen}

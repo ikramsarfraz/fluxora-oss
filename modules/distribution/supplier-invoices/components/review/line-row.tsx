@@ -71,6 +71,9 @@ export function LineRow({
   onDelete,
   onCasesChange,
   submitErrors,
+  isUserAdded,
+  userAddedUnitPrice,
+  onUserAddedUnitPriceChange,
 }: {
   line: ParsedLine;
   isActive: boolean;
@@ -129,6 +132,16 @@ export function LineRow({
    * Renders a red banner above the row when non-null/non-empty.
    */
   submitErrors?: string[] | null;
+  /**
+   * When true, this line was inserted by the user via "+ Add line" (not
+   * parsed from the bill). Drives the inline unit-price input — the parser
+   * never supplied a price, so it has to be typed in.
+   */
+  isUserAdded?: boolean;
+  /** Current price input value as a string. Empty when the row is fresh. */
+  userAddedUnitPrice?: string;
+  /** Called as the user types into the price input. */
+  onUserAddedUnitPriceChange?: (value: string) => void;
 }) {
   const match = line.match;
   const isFee = match.status === "fee";
@@ -213,7 +226,13 @@ export function LineRow({
               <FeeStatus category={line.feeCategory ?? null} />
             )}
           </div>
-          <NumericSnapshot line={line} onCasesChange={onCasesChange} />
+          <NumericSnapshot
+            line={line}
+            onCasesChange={onCasesChange}
+            isUserAdded={isUserAdded}
+            userAddedUnitPrice={userAddedUnitPrice}
+            onUserAddedUnitPriceChange={onUserAddedUnitPriceChange}
+          />
           {onDelete ? (
             <button
               type="button"
@@ -508,9 +527,15 @@ function FeeStatus({
 function NumericSnapshot({
   line,
   onCasesChange,
+  isUserAdded,
+  userAddedUnitPrice,
+  onUserAddedUnitPriceChange,
 }: {
   line: ParsedLine;
   onCasesChange?: (cases: number) => void;
+  isUserAdded?: boolean;
+  userAddedUnitPrice?: string;
+  onUserAddedUnitPriceChange?: (value: string) => void;
 }) {
   const isFee = line.match.status === "fee";
   // Fees don't have an editable case count (they're flat amounts) — only
@@ -541,7 +566,36 @@ function NumericSnapshot({
               ? "flat"
               : `${line.cases}${line.unitAbbr ?? "cs"}`}
         </span>
-        <span>@ ${line.unitPrice.toFixed(2)}</span>
+        {isUserAdded && onUserAddedUnitPriceChange ? (
+          // User-added rows get an inline price input — the parser never
+          // supplied one, so display-only `@ $0.00` would mislead the user
+          // into thinking we'd already filled it.
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <span>@&nbsp;$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={userAddedUnitPrice ?? ""}
+              onChange={e => onUserAddedUnitPriceChange(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              placeholder="0.00"
+              aria-label="Unit price"
+              style={{
+                width: "64px",
+                padding: "2px 4px",
+                fontSize: "12.5px",
+                fontFamily: "inherit",
+                border: "1px solid var(--color-border-default)",
+                borderRadius: 4,
+                background: "var(--color-card)",
+                color: "var(--color-ink)",
+                outline: "none",
+              }}
+            />
+          </span>
+        ) : (
+          <span>@ ${line.unitPrice.toFixed(2)}</span>
+        )}
         <span>{line.weight > 0 ? "/lb" : `/${line.unitAbbr ?? "cs"}`}</span>
       </div>
     </div>

@@ -57,10 +57,18 @@ export function HelpTrigger({
     return () => window.removeEventListener("keydown", handle);
   }, []);
 
-  const handleStartTour = useCallback(() => {
+  const handleStartTour = useCallback((tourId?: string) => {
     setOpen(false);
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(FLUXORA_OPEN_TOUR_EVENT));
+      // Dispatch with the tour id when provided so the drawer can launch
+      // route-specific tours. Omitting the detail keeps the original
+      // cold-start dispatch path working (ProductTour falls back to the
+      // cold-start tour when no id is present).
+      window.dispatchEvent(
+        new CustomEvent(FLUXORA_OPEN_TOUR_EVENT, {
+          detail: tourId ? { tour: tourId } : undefined,
+        }),
+      );
     }
   }, []);
 

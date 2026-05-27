@@ -12,7 +12,10 @@ import {
 import { getProducts } from "@/modules/distribution/products/services/products";
 import { getProductCasesOnHand } from "@/modules/distribution/inventory/services/inventory";
 import { captureException } from "@/lib/sentry-scope";
+import { hasFeature } from "@/modules/core/feature-flags";
+import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 
+import { AI_ASSISTED_ENTRY_FEATURE } from "../feature";
 import { NewOrderForm } from "../components/new-order-form";
 
 /**
@@ -70,11 +73,23 @@ export default async function OrdersNewPage({
     );
   }
 
+  // Feature-flag check runs in parallel with prefetches so it doesn't add
+  // latency on the page-render path. Tenants without the flag see the
+  // form exactly as before — the textarea isn't rendered.
+  const tenant = await getCurrentTenant();
+  const aiAssistedEntryEnabled = await hasFeature(
+    tenant.id,
+    AI_ASSISTED_ENTRY_FEATURE,
+  );
+
   await Promise.all(prefetches);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <NewOrderForm initialCustomerId={initialCustomerId} />
+      <NewOrderForm
+        initialCustomerId={initialCustomerId}
+        aiAssistedEntryEnabled={aiAssistedEntryEnabled}
+      />
     </HydrationBoundary>
   );
 }

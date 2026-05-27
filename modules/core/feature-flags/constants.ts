@@ -14,6 +14,7 @@ export const FEATURES = {
   DISTRIBUTION_PRICE_CHART: "distribution.priceChart",
   DISTRIBUTION_CONFIGURATION: "distribution.configuration",
   DISTRIBUTION_INBOX: "distribution.inbox",
+  DISTRIBUTION_AI_ASSISTED_ENTRY: "distribution.aiAssistedEntry",
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
