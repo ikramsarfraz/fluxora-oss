@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { AlertTriangle, Pencil } from "lucide-react";
+import { Line, LineChart, ReferenceDot, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
 
 import {
@@ -59,6 +60,10 @@ import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { TablePagination } from "@/components/table-pagination";
 import { useClientPagination } from "@/hooks/use-client-pagination";
 import { SkuIntelligenceEmptyState } from "@/modules/distribution/components/empty-states";
+import {
+  PRICE_DRIFT_ALERT_PCT,
+  classifyDriftBand,
+} from "../utils/price-intelligence-thresholds";
 
 const PURPOSE_LABELS: Record<string, string> = {
   stock: "Stock",
@@ -415,21 +420,38 @@ function ProductPriceIntelligenceSection({
 
   const deltaPct =
     intel.deltaFraction != null ? intel.deltaFraction * 100 : null;
+  const driftBand = classifyDriftBand(intel.deltaFraction);
+  // Headline tone: alert = red, drift = orange/destructive, flat = muted.
+  // The sign still picks positive (= paying less) vs warning (paying more)
+  // when we're past the noise floor; below it everything stays muted.
   const deltaTone =
-    deltaPct == null
+    deltaPct == null || driftBand === "flat"
       ? "muted"
-      : Math.abs(deltaPct) < 2
-        ? "muted" // within 2% — noise, render quiet
-        : deltaPct > 0
-          ? "warning" // paying more than average → flag
-          : "positive"; // paying less → positive
+      : deltaPct > 0
+        ? "warning"
+        : "positive";
   const deltaSign = deltaPct != null && deltaPct >= 0 ? "+" : "";
+  // Any supplier in the alert band lights the banner — the global delta
+  // can dilute supplier-level signal (e.g. Supplier A +20%, B flat → only
+  // ~10% global, but A still needs attention).
+  const supplierAlerts = intel.bySupplier.filter(
+    s => classifyDriftBand(s.deltaFraction) === "alert",
+  );
+  const showAlertBanner = driftBand === "alert" || supplierAlerts.length > 0;
 
   return (
     <DetailSection
       title="Price intelligence"
-      description={`${intel.purchaseCount} purchase${intel.purchaseCount === 1 ? "" : "s"} on record.`}
+      description={`${intel.purchaseCount} purchase${intel.purchaseCount === 1 ? "" : "s"} on record${intel.outlierCount > 0 ? ` · ${intel.outlierCount} excluded as possible outlier${intel.outlierCount === 1 ? "" : "s"}` : ""}.`}
     >
+      {showAlertBanner ? (
+        <PriceDriftAlertBanner
+          globalBand={driftBand}
+          globalDeltaPct={deltaPct}
+          supplierAlerts={supplierAlerts}
+        />
+      ) : null}
+
       <DetailGrid>
         <DetailField label={`Average unit cost / ${baseUnitAbbreviation}`}>
           <span className="font-mono tabular-nums">
@@ -463,7 +485,211 @@ function ProductPriceIntelligenceSection({
           </span>
         </DetailField>
       </DetailGrid>
+
+      {intel.series.length >= 2 ? (
+        <PriceSparkline series={intel.series} />
+      ) : null}
+
+      {intel.bySupplier.length > 1 ? (
+        <PerSupplierBreakdown
+          rows={intel.bySupplier}
+          baseUnitAbbreviation={baseUnitAbbreviation}
+        />
+      ) : null}
     </DetailSection>
+  );
+}
+
+/**
+ * Banner-level callout when a price has moved past the alert threshold
+ * (defined in the threshold util — currently 15%). Surfaces global drift
+ * and any supplier-level alerts so the user can spot which vendor is
+ * driving the movement without scrolling to the per-supplier table.
+ */
+function PriceDriftAlertBanner({
+  globalBand,
+  globalDeltaPct,
+  supplierAlerts,
+}: {
+  globalBand: "flat" | "drift" | "alert";
+  globalDeltaPct: number | null;
+  supplierAlerts: Array<{
+    supplierName: string;
+    deltaFraction: number | null;
+  }>;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="mb-3 flex flex-wrap items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px]"
+      style={{ color: "var(--color-forest-mid)" }}
+    >
+      <AlertTriangle
+        className="mt-[2px] size-3.5 shrink-0 text-destructive"
+        strokeWidth={1.8}
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="font-medium text-ink">
+          {globalBand === "alert" && globalDeltaPct != null
+            ? `Price moved ${globalDeltaPct >= 0 ? "+" : ""}${globalDeltaPct.toFixed(1)}% vs. average — past the ${PRICE_DRIFT_ALERT_PCT}% alert threshold.`
+            : `One or more suppliers moved past the ${PRICE_DRIFT_ALERT_PCT}% alert threshold.`}
+        </div>
+        {supplierAlerts.length > 0 ? (
+          <div className="mt-0.5 text-[12px] text-muted-foreground">
+            {supplierAlerts
+              .map(s => {
+                const pct =
+                  s.deltaFraction != null ? s.deltaFraction * 100 : null;
+                const sign = pct != null && pct >= 0 ? "+" : "";
+                return `${s.supplierName} ${pct != null ? `${sign}${pct.toFixed(1)}%` : "—"}`;
+              })
+              .join(" · ")}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Minimal inline sparkline — last N purchases left-to-right, oldest to
+ * newest. No axes, no grid, no tooltip header — it's a snapshot, not a
+ * chart. Outlier purchases are highlighted with a red dot so the user
+ * can spot a probable bad row without opening the recent-purchases
+ * table below.
+ */
+function PriceSparkline({
+  series,
+}: {
+  series: Array<{
+    invoiceDate: Date;
+    unitPrice: string;
+    isOutlier: boolean;
+  }>;
+}) {
+  const data = series.map((row, idx) => ({
+    idx,
+    price: Number(row.unitPrice),
+    isOutlier: row.isOutlier,
+  }));
+  const outliers = data.filter(d => d.isOutlier);
+  return (
+    <div
+      className="mt-3 h-12 w-full"
+      aria-label={`Unit cost across the last ${series.length} purchases`}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={data}
+          margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+        >
+          <Line
+            type="monotone"
+            dataKey="price"
+            stroke="var(--color-forest-mid)"
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+          {outliers.map(o => (
+            <ReferenceDot
+              key={o.idx}
+              x={o.idx}
+              y={o.price}
+              r={3}
+              fill="var(--destructive)"
+              stroke="none"
+              isFront
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/**
+ * Per-supplier breakdown table — same shape as the headline stats but
+ * one row per supplier. Sorted server-side by |delta| descending so the
+ * loudest movers are on top. Only renders when there's more than one
+ * supplier — a single supplier in the table would just duplicate the
+ * headline numbers above.
+ */
+function PerSupplierBreakdown({
+  rows,
+  baseUnitAbbreviation,
+}: {
+  rows: Array<{
+    supplierId: string;
+    supplierName: string;
+    count: number;
+    averageUnitPrice: string | null;
+    mostRecentUnitPrice: string;
+    mostRecentDate: Date;
+    deltaFraction: number | null;
+  }>;
+  baseUnitAbbreviation: string;
+}) {
+  return (
+    <div className="mt-4 overflow-hidden rounded-md border border-border-default">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Supplier</TableHead>
+            <TableHead className="text-right">Purchases</TableHead>
+            <TableHead className="text-right">
+              Avg / {baseUnitAbbreviation}
+            </TableHead>
+            <TableHead className="text-right">Most recent</TableHead>
+            <TableHead className="text-right">Δ vs. avg</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map(row => {
+            const pct =
+              row.deltaFraction != null ? row.deltaFraction * 100 : null;
+            const band = classifyDriftBand(row.deltaFraction);
+            const sign = pct != null && pct >= 0 ? "+" : "";
+            return (
+              <TableRow key={row.supplierId}>
+                <TableCell className="font-medium">{row.supplierName}</TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {row.count}
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">
+                  {row.averageUnitPrice
+                    ? formatMoney(row.averageUnitPrice)
+                    : "—"}
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="font-mono tabular-nums">
+                    {formatMoney(row.mostRecentUnitPrice)}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {formatDisplayDate(row.mostRecentDate)}
+                  </span>
+                </TableCell>
+                <TableCell
+                  className={cn(
+                    "text-right font-mono tabular-nums",
+                    band === "alert" && "text-destructive",
+                    band === "drift" &&
+                      (pct != null && pct > 0
+                        ? "text-destructive"
+                        : "text-forest-mid"),
+                    band === "flat" && "text-muted-foreground",
+                  )}
+                >
+                  {pct == null ? "—" : `${sign}${pct.toFixed(1)}%`}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 

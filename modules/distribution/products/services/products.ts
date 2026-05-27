@@ -22,6 +22,10 @@ import {
   buildSkuBase,
   nextSkuForBase,
 } from "../utils/sku";
+import {
+  PRICE_INTELLIGENCE_SERIES_LIMIT,
+  flagOutlierPurchases,
+} from "../utils/price-intelligence-thresholds";
 import { getPlanLimit } from "@/lib/subscription-plan-capabilities";
 import {
   createPlanLimitReachedError,
@@ -1149,18 +1153,26 @@ export type ProductCustomerPrice = Awaited<
  */
 export async function getProductPurchaseIntelligence(productId: string) {
   const tenant = await getCurrentTenant();
-  // Aggregate: count, average unit price, most recent unit price + date.
-  // Done as one query with two CTEs so we don't pay two round-trips.
-  const [agg] = await db
+  // Pull every non-draft purchase line for this product with the
+  // surrounding (supplier, date) context. The MVP did this as an
+  // aggregate-only query; the per-supplier breakdown + sparkline +
+  // outlier flagging all need row-level data, so we collapse to a
+  // single round-trip and reduce in memory. The line count is bounded
+  // by the catalog's actual buy history (typically dozens to low
+  // hundreds) — well within reach of a single SELECT.
+  const rows = await db
     .select({
-      purchaseCount: sql<number>`count(*)::int`,
-      averageUnitPrice: sql<string>`coalesce(avg(${supplierInvoiceLines.unitPrice}), 0)::text`,
+      unitPrice: supplierInvoiceLines.unitPrice,
+      invoiceDate: supplierInvoices.invoiceDate,
+      supplierId: supplierInvoices.supplierId,
+      supplierName: suppliers.name,
     })
     .from(supplierInvoiceLines)
     .innerJoin(
       supplierInvoices,
       eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
     )
+    .innerJoin(suppliers, eq(supplierInvoices.supplierId, suppliers.id))
     .where(
       and(
         eq(supplierInvoiceLines.productId, productId),
@@ -1171,44 +1183,122 @@ export async function getProductPurchaseIntelligence(productId: string) {
         // running average.
         sql`${supplierInvoices.status} <> 'draft'`,
       ),
-    );
-
-  if (!agg || agg.purchaseCount === 0) return null;
-
-  // Most recent purchase — separate small query keeps the planner
-  // happy (the agg above doesn't need ordering).
-  const [mostRecent] = await db
-    .select({
-      unitPrice: supplierInvoiceLines.unitPrice,
-      invoiceDate: supplierInvoices.invoiceDate,
-    })
-    .from(supplierInvoiceLines)
-    .innerJoin(
-      supplierInvoices,
-      eq(supplierInvoiceLines.supplierInvoiceId, supplierInvoices.id),
     )
-    .where(
-      and(
-        eq(supplierInvoiceLines.productId, productId),
-        eq(supplierInvoices.tenantId, tenant.id),
-        sql`${supplierInvoices.status} <> 'draft'`,
-      ),
-    )
-    .orderBy(desc(supplierInvoices.invoiceDate))
-    .limit(1);
+    .orderBy(desc(supplierInvoices.invoiceDate));
 
-  const avg = Number(agg.averageUnitPrice);
-  const last = mostRecent ? Number(mostRecent.unitPrice) : null;
-  // Delta as a fraction of the average. NaN-safe when avg is 0.
+  if (rows.length === 0) return null;
+
+  // Parse once, flag outliers against the median of the FULL set, then
+  // exclude outliers from the running-average baseline (issue Q2 — bad
+  // rows shouldn't taint the headline number). Pull in PRICE_OUTLIER_FACTOR
+  // semantics via the shared util so the UI + service agree on what an
+  // outlier is.
+  const parsed = rows.map(r => ({
+    supplierId: r.supplierId,
+    supplierName: r.supplierName,
+    invoiceDate: r.invoiceDate,
+    unitPrice: Number(r.unitPrice),
+    unitPriceString: r.unitPrice,
+  }));
+  const tagged = flagOutlierPurchases(parsed);
+
+  const nonOutlier = tagged.filter(t => !t.isOutlier);
+  const baselineRows = nonOutlier.length > 0 ? nonOutlier : tagged;
+  const baselineAvg =
+    baselineRows.reduce((sum, r) => sum + r.unitPrice, 0) /
+    baselineRows.length;
+
+  // Most recent purchase — row 0 because we ordered desc(invoiceDate).
+  const mostRecent = tagged[0];
   const deltaFraction =
-    last != null && avg > 0 ? (last - avg) / avg : null;
+    baselineAvg > 0 ? (mostRecent.unitPrice - baselineAvg) / baselineAvg : null;
+
+  // Per-supplier breakdown — each supplier gets its own avg + most-recent
+  // + delta-vs-supplier-avg so the user can spot "Supplier A drifted up,
+  // Supplier B is flat". Outliers are excluded from the per-supplier
+  // average for the same reason as the global one. count is the *total*
+  // (including outliers) so the user sees the real purchase volume.
+  const bySupplierMap = new Map<
+    string,
+    {
+      supplierId: string;
+      supplierName: string;
+      count: number;
+      pricesForAverage: number[];
+      mostRecent: { unitPrice: string; invoiceDate: Date };
+    }
+  >();
+  for (const row of tagged) {
+    const key = row.supplierId;
+    const existing = bySupplierMap.get(key);
+    if (existing) {
+      existing.count += 1;
+      if (!row.isOutlier) existing.pricesForAverage.push(row.unitPrice);
+      // tagged is desc-sorted by date so the first sighting for a
+      // supplier is already the most recent — no need to overwrite.
+      continue;
+    }
+    bySupplierMap.set(key, {
+      supplierId: row.supplierId,
+      supplierName: row.supplierName,
+      count: 1,
+      pricesForAverage: row.isOutlier ? [] : [row.unitPrice],
+      mostRecent: { unitPrice: row.unitPriceString, invoiceDate: row.invoiceDate },
+    });
+  }
+  const bySupplier = Array.from(bySupplierMap.values())
+    .map(s => {
+      const avg =
+        s.pricesForAverage.length > 0
+          ? s.pricesForAverage.reduce((sum, n) => sum + n, 0) /
+            s.pricesForAverage.length
+          : null;
+      const mostRecentNum = Number(s.mostRecent.unitPrice);
+      const supplierDelta =
+        avg != null && avg > 0 ? (mostRecentNum - avg) / avg : null;
+      return {
+        supplierId: s.supplierId,
+        supplierName: s.supplierName,
+        count: s.count,
+        averageUnitPrice: avg != null ? avg.toFixed(4) : null,
+        mostRecentUnitPrice: s.mostRecent.unitPrice,
+        mostRecentDate: s.mostRecent.invoiceDate,
+        deltaFraction: supplierDelta,
+      };
+    })
+    // Loudest movers first so the per-supplier table puts the alert
+    // bands at the top without needing client-side sorting.
+    .sort((a, b) => {
+      const ax = a.deltaFraction != null ? Math.abs(a.deltaFraction) : 0;
+      const bx = b.deltaFraction != null ? Math.abs(b.deltaFraction) : 0;
+      return bx - ax;
+    });
+
+  // Sparkline series — last N rows in chronological order so the chart
+  // reads left-to-right oldest→newest. Carries the outlier flag so the
+  // UI can mark suspect points without re-computing.
+  const series = tagged
+    .slice(0, PRICE_INTELLIGENCE_SERIES_LIMIT)
+    .map(r => ({
+      supplierId: r.supplierId,
+      supplierName: r.supplierName,
+      invoiceDate: r.invoiceDate,
+      unitPrice: r.unitPriceString,
+      isOutlier: r.isOutlier,
+    }))
+    .reverse();
+
+  const outlierCount = tagged.filter(t => t.isOutlier).length;
 
   return {
-    purchaseCount: agg.purchaseCount,
-    averageUnitPrice: agg.averageUnitPrice,
-    mostRecentUnitPrice: mostRecent?.unitPrice ?? null,
-    mostRecentDate: mostRecent?.invoiceDate ?? null,
+    purchaseCount: tagged.length,
+    averageUnitPrice: baselineAvg.toFixed(4),
+    mostRecentUnitPrice: mostRecent.unitPriceString,
+    mostRecentDate: mostRecent.invoiceDate,
     deltaFraction,
+    outlierCount,
+    bySupplier,
+    series,
   };
 }
 
