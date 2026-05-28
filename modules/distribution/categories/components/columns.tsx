@@ -52,7 +52,9 @@ function ActionsCell({
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuItem asChild>
-            <Link href={`/categories/${category.id}`}>View category</Link>
+            <Link href={`/settings/workspace/categories/${category.id}`}>
+              View category
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

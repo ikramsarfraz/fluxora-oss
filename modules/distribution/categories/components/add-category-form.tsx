@@ -48,7 +48,7 @@ export default function AddCategoryForm() {
         description: data.description || null,
       });
       toast.success("Category created.");
-      router.push(`/categories/${category.id}`);
+      router.push(`/settings/workspace/categories/${category.id}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create category.",
@@ -117,7 +117,7 @@ export default function AddCategoryForm() {
       <FormActionFooter
         formId="form-add-category"
         isPending={createCategory.isPending}
-        onCancel={() => router.push("/categories")}
+        onCancel={() => router.push("/settings/workspace/categories")}
         pendingLabel="Creating…"
         submitLabel="Create category"
       />

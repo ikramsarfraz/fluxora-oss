@@ -9,6 +9,7 @@ import {
   deleteCategoryAction,
   getCategoriesAction,
   getCategoryByIdAction,
+  getCategoryProductCountAction,
   restoreCategoryAction,
   untagAndDeleteCategoryAction,
 } from "@/modules/distribution/categories/actions";
@@ -28,6 +29,21 @@ export function useCategory(id: string) {
     queryFn: () => getCategoryByIdAction(id),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+/**
+ * Tenant-scoped count of products still tagged with this category.
+ * Loaded alongside `useCategory` on the detail page so the delete
+ * dialog can open already routed to the right phase. Short stale time
+ * — if the user untags a product elsewhere we want the dialog to know.
+ */
+export function useCategoryProductCount(id: string) {
+  return useQuery({
+    queryKey: queryKeys.categories.productCount(id),
+    queryFn: () => getCategoryProductCountAction(id),
+    enabled: !!id && isUuid(id),
+    staleTime: 1000 * 30,
   });
 }
 

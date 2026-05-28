@@ -172,9 +172,25 @@ export async function getProductById(productId: string) {
     (supplierCostCountRow?.count ?? 0);
   return {
     ...result,
+    productCategories: filterArchivedCategoryRelations(result.productCategories),
     _purchaseCount: nonDraftPurchaseCount,
     _dependentRecordCount: dependentRecordCount,
   };
+}
+
+/**
+ * Strip product↔category relation rows whose category has been
+ * archived. The join row itself stays in the DB (so a restored
+ * category re-surfaces all its chips automatically); we just hide
+ * archived chips from every consumer — detail page, list page table,
+ * edit-form selected-tags strip. Drizzle's relation API can't filter
+ * by the joined table's column directly, so we filter the loaded
+ * array here once and let downstream code stay simple.
+ */
+function filterArchivedCategoryRelations<
+  T extends { category: { archivedAt: Date | null } | null },
+>(rows: T[]): T[] {
+  return rows.filter(row => !row.category?.archivedAt);
 }
 
 export type ProductDetail = NonNullable<
@@ -228,7 +244,10 @@ export async function getProducts(
     },
   });
 
-  return result ?? [];
+  return (result ?? []).map(row => ({
+    ...row,
+    productCategories: filterArchivedCategoryRelations(row.productCategories),
+  }));
 }
 
 export async function getProductsPage(input?: ProductListParams) {
@@ -280,7 +299,10 @@ export async function getProductsPage(input?: ProductListParams) {
   });
 
   return createPaginatedResult({
-    data: result ?? [],
+    data: (result ?? []).map(row => ({
+      ...row,
+      productCategories: filterArchivedCategoryRelations(row.productCategories),
+    })),
     page: query.page,
     pageSize: query.pageSize,
     total: count ?? 0,

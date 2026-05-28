@@ -2,6 +2,7 @@ export const queryKeys = {
   categories: {
     all: ["categories"] as const,
     detail: (id: string) => ["categories", id] as const,
+    productCount: (id: string) => ["categories", id, "product-count"] as const,
   },
   auth: {
     me: ["auth", "me"] as const,

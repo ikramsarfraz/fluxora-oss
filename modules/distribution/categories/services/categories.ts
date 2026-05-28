@@ -33,22 +33,84 @@ export type CategoryDetail = NonNullable<
 >;
 
 /**
+ * Count of tenant-scoped products still tagged with this category. The
+ * detail page reads this in parallel with `getCategoryById` so the
+ * Danger Zone dialog can open already routed to the right phase (plain
+ * confirm vs archive-or-untag) — no mid-flow flip on click.
+ */
+export async function getCategoryProductCount(
+  categoryId: string,
+): Promise<number> {
+  const tenant = await getCurrentTenant();
+  const [{ count }] = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(
+      and(
+        eq(productCategories.categoryId, categoryId),
+        eq(products.tenantId, tenant.id),
+      ),
+    );
+  return count;
+}
+
+/**
  * Returns categories visible to selectors (product form, etc.). Archived
  * categories are excluded — they shouldn't appear in pickers, but the
  * admin list page reads via `getAllCategories()` so it can still surface
  * archived rows behind a badge.
+ *
+ * Each row carries a `productCount` (tenant-scoped) so the delete
+ * confirmation dialog can route directly to the archive-or-untag branch
+ * without round-tripping a probe call first. Computed via a LEFT JOIN
+ * on `product_categories` (joined to `products` for tenant scoping)
+ * grouped by category id — one query for the full list.
  */
 export async function getCategories() {
   const tenant = await getCurrentTenant();
-  const result = await db.query.categories.findMany({
-    where: and(
-      eq(categories.tenantId, tenant.id),
-      eq(categories.isActive, true),
-      isNull(categories.archivedAt),
-    ),
-  });
 
-  return result ?? [];
+  // The relation API can't compute a count column inline, so drop to
+  // the query builder. The aliased `productCount` column lands on the
+  // returned row alongside every base column of `categories`.
+  const rows = await db
+    .select({
+      id: categories.id,
+      tenantId: categories.tenantId,
+      name: categories.name,
+      slug: categories.slug,
+      description: categories.description,
+      isActive: categories.isActive,
+      createdByUserId: categories.createdByUserId,
+      updatedByUserId: categories.updatedByUserId,
+      archivedByUserId: categories.archivedByUserId,
+      archivedAt: categories.archivedAt,
+      createdAt: categories.createdAt,
+      updatedAt: categories.updatedAt,
+      productCount: sql<number>`cast(count(${products.id}) as int)`,
+    })
+    .from(categories)
+    .leftJoin(
+      productCategories,
+      eq(productCategories.categoryId, categories.id),
+    )
+    .leftJoin(
+      products,
+      and(
+        eq(products.id, productCategories.productId),
+        eq(products.tenantId, tenant.id),
+      ),
+    )
+    .where(
+      and(
+        eq(categories.tenantId, tenant.id),
+        eq(categories.isActive, true),
+        isNull(categories.archivedAt),
+      ),
+    )
+    .groupBy(categories.id);
+
+  return rows;
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   getAllCategories,
   getCategories,
   getCategoryById,
+  getCategoryProductCount,
   restoreCategory,
   untagAndDeleteCategory,
   updateCategory,
@@ -30,6 +31,10 @@ export async function getCategoryByIdAction(id: string) {
   return await getCategoryById(id);
 }
 
+export async function getCategoryProductCountAction(id: string) {
+  return await getCategoryProductCount(id);
+}
+
 export async function createCategoryAction(input: {
   name: string;
   description?: string | null;
@@ -43,9 +48,9 @@ export async function updateCategoryAction(input: {
   description?: string | null;
 }) {
   const category = await updateCategory(input);
-  revalidatePath("/categories");
-  revalidatePath(`/categories/${input.id}`);
-  revalidatePath(`/categories/${input.id}/edit`);
+  revalidatePath("/settings/workspace/categories");
+  revalidatePath(`/settings/workspace/categories/${input.id}`);
+  revalidatePath(`/settings/workspace/categories/${input.id}/edit`);
   return category;
 }
 
@@ -76,7 +81,7 @@ export async function deleteCategoryAction(
       resourceId: id,
       metadata: category ? { name: category.name } : {},
     });
-    revalidatePath("/categories");
+    revalidatePath("/settings/workspace/categories");
   }
   return result;
 }
@@ -96,8 +101,8 @@ export async function archiveCategoryAction(id: string) {
     resourceId: id,
     metadata: category ? { name: category.name } : {},
   });
-  revalidatePath("/categories");
-  revalidatePath(`/categories/${id}`);
+  revalidatePath("/settings/workspace/categories");
+  revalidatePath(`/settings/workspace/categories/${id}`);
   return row;
 }
 
@@ -116,8 +121,8 @@ export async function restoreCategoryAction(id: string) {
     resourceId: id,
     metadata: category ? { name: category.name } : {},
   });
-  revalidatePath("/categories");
-  revalidatePath(`/categories/${id}`);
+  revalidatePath("/settings/workspace/categories");
+  revalidatePath(`/settings/workspace/categories/${id}`);
   return row;
 }
 
@@ -139,6 +144,6 @@ export async function untagAndDeleteCategoryAction(id: string) {
       untagged_count: result.untaggedCount,
     },
   });
-  revalidatePath("/categories");
+  revalidatePath("/settings/workspace/categories");
   return result;
 }

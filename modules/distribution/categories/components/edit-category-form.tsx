@@ -46,7 +46,7 @@ export function EditCategoryForm({ category }: { category: CategoryDetail }) {
         description: data.description || null,
       });
       toast.success("Category updated.");
-      router.push(`/categories/${category.id}`);
+      router.push(`/settings/workspace/categories/${category.id}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to update category.",
@@ -115,7 +115,9 @@ export function EditCategoryForm({ category }: { category: CategoryDetail }) {
       <FormActionFooter
         formId="form-edit-category"
         isPending={form.formState.isSubmitting}
-        onCancel={() => router.push(`/categories/${category.id}`)}
+        onCancel={() =>
+          router.push(`/settings/workspace/categories/${category.id}`)
+        }
         pendingLabel="Saving…"
         submitLabel="Save changes"
       />

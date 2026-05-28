@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   useArchiveCategory,
   useCategory,
+  useCategoryProductCount,
   useDeleteCategory,
   useUntagAndDeleteCategory,
 } from "../hooks/use-categories";
@@ -35,11 +36,12 @@ import {
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
 /**
- * Local dialog state.
- *   - "closed"  : no dialog visible
- *   - "confirm" : "are you sure?" before we hit the delete check
- *   - "blocked" : product_categories rows exist → show archive /
- *     untag-and-delete branches
+ * Local dialog state. Phase is fixed at open time from the parallel
+ * `useCategoryProductCount` query, so the user never sees a mid-flow
+ * flip. If the count is stale (someone tagged a product between the
+ * count refetch and the click) the server's "blocked" response is
+ * surfaced as a toast and the dialog closes; the next click re-opens
+ * in the correct phase.
  */
 type DialogState =
   | { phase: "closed" }
@@ -56,8 +58,13 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
     error: loadError,
     isError,
   } = useCategory(categoryId);
+  const { data: productCount, refetch: refetchProductCount } =
+    useCategoryProductCount(categoryId);
 
-  useSetBreadcrumbLabel(`/categories/${categoryId}`, category?.name);
+  useSetBreadcrumbLabel(
+    `/settings/workspace/categories/${categoryId}`,
+    category?.name,
+  );
 
   const deleteCategory = useDeleteCategory();
   const archiveCategory = useArchiveCategory();
@@ -75,19 +82,35 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
 
   const isArchived = !!category.archivedAt;
 
-  function handleDelete() {
+  function openDelete() {
+    // Default to confirm if the count hasn't loaded yet — the
+    // server-side check still catches the in-use case. Once loaded
+    // we route directly to the correct phase.
+    const phase: DialogState =
+      typeof productCount === "number" && productCount > 0
+        ? { phase: "blocked", productCount }
+        : { phase: "confirm" };
+    setDialog(phase);
+  }
+
+  function handleConfirmDelete() {
     deleteCategory.mutate(categoryId, {
       onSuccess: result => {
         if (result.status === "deleted") {
           toast.success("Category deleted.");
           setDialog({ phase: "closed" });
-          router.push("/categories");
+          router.push("/settings/workspace/categories");
           return;
         }
-        setDialog({
-          phase: "blocked",
-          productCount: result.productCount,
-        });
+        // Stale count — surface as toast + close + refetch so the
+        // next open routes correctly.
+        toast.error(
+          `Can't delete — ${result.productCount} ${
+            result.productCount === 1 ? "product is" : "products are"
+          } now tagged with this category. Refreshing…`,
+        );
+        setDialog({ phase: "closed" });
+        refetchProductCount();
       },
       onError: (e: Error) => {
         toast.error(e.message);
@@ -116,7 +139,9 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
       >
         {!isArchived ? (
           <Button variant="outline" asChild>
-            <Link href={`/categories/${category.id}/edit`}>
+            <Link
+              href={`/settings/workspace/categories/${category.id}/edit`}
+            >
               <Pencil className="size-4" />
               Edit
             </Link>
@@ -149,11 +174,7 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
         description="Irreversible actions for this category."
         className="border-destructive/50"
       >
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setDialog({ phase: "confirm" })}
-        >
+        <Button type="button" variant="outline" onClick={openDelete}>
           Delete category
         </Button>
       </DetailSection>
@@ -188,7 +209,7 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
                       onSuccess: () => {
                         toast.success("Category archived.");
                         setDialog({ phase: "closed" });
-                        router.push("/categories");
+                        router.push("/settings/workspace/categories");
                       },
                       onError: (e: Error) => toast.error(e.message),
                     });
@@ -212,7 +233,7 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
                           } and deleted.`,
                         );
                         setDialog({ phase: "closed" });
-                        router.push("/categories");
+                        router.push("/settings/workspace/categories");
                       },
                       onError: (e: Error) => toast.error(e.message),
                     });
@@ -230,10 +251,8 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
                 <AlertDialogTitle>Delete category?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This will permanently delete{" "}
-                  <strong>{category.name}</strong>. If any product is still
-                  tagged with this category, you’ll be given the choice to
-                  archive instead or untag every product first. This action
-                  cannot be undone.
+                  <strong>{category.name}</strong>. This action cannot be
+                  undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -243,7 +262,7 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
                 <AlertDialogAction
                   variant="destructive"
                   disabled={deleteCategory.isPending}
-                  onClick={handleDelete}
+                  onClick={handleConfirmDelete}
                 >
                   {deleteCategory.isPending ? "Deleting…" : "Delete"}
                 </AlertDialogAction>

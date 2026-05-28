@@ -24,13 +24,16 @@ export default async function EditCategoryPage({
 
   return (
     <section className="flex flex-col gap-6">
-      <BreadcrumbLabel href={`/categories/${category.id}`} label={category.name} />
+      <BreadcrumbLabel
+        href={`/settings/workspace/categories/${category.id}`}
+        label={category.name}
+      />
       <PageHeader
         title="Edit category"
         description="Update category name and description."
       >
         <Button variant="outline" asChild>
-          <Link href={`/categories/${category.id}`}>
+          <Link href={`/settings/workspace/categories/${category.id}`}>
             <ArrowLeft className="size-4" />
             Back to category
           </Link>

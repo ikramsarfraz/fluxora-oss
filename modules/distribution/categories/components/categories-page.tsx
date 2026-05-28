@@ -66,13 +66,21 @@ const COLUMNS: ListingColumn<CategoryRow>[] = [
 ];
 
 /**
- * Local UI state for the delete confirmation dialog. The "blocked"
- * branch flips the dialog into the archive-or-untag choice; the
- * "confirm" branch is the simple "this is safe, are you sure?" copy.
+ * Local UI state for the delete confirmation dialog. The phase is
+ * resolved at open time from the row's productCount (carried in the
+ * list query) so the user never sees a mid-flow flip between phases.
+ * Once open, the dialog stays in its initial phase regardless of what
+ * happens elsewhere.
  */
 type DeleteState =
   | { phase: "confirm"; row: CategoryRow }
   | { phase: "blocked"; row: CategoryRow; productCount: number };
+
+function openDeleteFor(row: CategoryRow): DeleteState {
+  return row.productCount > 0
+    ? { phase: "blocked", row, productCount: row.productCount }
+    : { phase: "confirm", row };
+}
 
 export default function Categories({
   title = "Categories",
@@ -119,11 +127,12 @@ export default function Categories({
 
   const rows = categories ?? [];
 
-  // Centralized so both the confirm-button click and the dialog
-  // open-blocked transition write to the same place. Treating the
-  // "in use" result as "open a different dialog" instead of "show an
-  // error toast" is the whole point of #231 — a blocked delete is a
-  // valid, recoverable user flow.
+  // The list query carries productCount per row so we know up front
+  // whether the action is safe. If the row's count is stale (someone
+  // else tagged a product since the last refetch) the server still
+  // returns `status: "blocked"` — we surface that as a toast instead of
+  // flipping the dialog mid-flow, and refetch so the next click is
+  // routed correctly.
   function handleDelete(row: CategoryRow) {
     deleteCategory.mutate(row.id, {
       onSuccess: result => {
@@ -132,14 +141,13 @@ export default function Categories({
           setDeleteState(null);
           return;
         }
-        // Re-open with the blocked phase so the user sees the archive
-        // / untag-and-delete choice without having to click "Delete"
-        // a second time.
-        setDeleteState({
-          phase: "blocked",
-          row,
-          productCount: result.productCount,
-        });
+        toast.error(
+          `Can't delete — ${result.productCount} ${
+            result.productCount === 1 ? "product is" : "products are"
+          } now tagged with this category. Refreshing…`,
+        );
+        setDeleteState(null);
+        refetch();
       },
       onError: (e: Error) => {
         toast.error(e.message);
@@ -157,20 +165,20 @@ export default function Categories({
         title={title}
         subtitle={subtitle}
         primaryAction={
-          <ListingAction href="/categories/new">
+          <ListingAction href="/settings/workspace/categories/new">
             <Plus className="size-3.5" />
             Add category
           </ListingAction>
         }
         columns={COLUMNS}
         getRowId={row => row.id}
-        onRowClick={row => router.push(`/categories/${row.id}`)}
+        onRowClick={row => router.push(`/settings/workspace/categories/${row.id}`)}
         rowActions={[
-          { label: "View", href: row => `/categories/${row.id}` },
+          { label: "View", href: row => `/settings/workspace/categories/${row.id}` },
           {
             label: "Delete",
             variant: "destructive",
-            onClick: row => setDeleteState({ phase: "confirm", row }),
+            onClick: row => setDeleteState(openDeleteFor(row)),
           },
         ]}
         rows={rows}
@@ -180,7 +188,7 @@ export default function Categories({
         emptyTitle="No categories yet"
         emptyDescription="Get started by adding your first category."
         emptyAction={
-          <ListingAction href="/categories/new">
+          <ListingAction href="/settings/workspace/categories/new">
             <Plus className="size-3.5" />
             Add category
           </ListingAction>

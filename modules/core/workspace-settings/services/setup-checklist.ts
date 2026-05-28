@@ -35,7 +35,7 @@ export const SETUP_CHECKLIST_STATIC: ReadonlyArray<{
 }> = [
   { id: "branding", label: "Add company branding", href: "/tenant-admin/branding" },
   { id: "invite_team", label: "Invite team members", href: "/users/new" },
-  { id: "catalog", label: "Create products or categories", href: "/categories" },
+  { id: "catalog", label: "Create products or categories", href: "/settings/workspace/categories" },
   { id: "suppliers", label: "Add suppliers", href: "/suppliers/new" },
   { id: "customers", label: "Add customers", href: "/customers/new" },
   {
