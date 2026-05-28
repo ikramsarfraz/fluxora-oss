@@ -24,6 +24,22 @@
 .DS_Store
 *.pem
 
+# macOS Finder duplicates — when Finder copies a file into a directory
+# that already has one with the same name it appends ` 2`, ` 3`, etc.
+# before the extension (e.g. `parse-receipt 4.ts`). They show up in
+# this repo most often when grabbing a file out of an iCloud-synced
+# directory. They're never intentional; ignoring the pattern keeps
+# them out of `git status` and prevents accidental commits.
+* [0-9].ts
+* [0-9].tsx
+* [0-9].mjs
+* [0-9].cjs
+* [0-9].js
+* [0-9].jsx
+* [0-9].json
+* [0-9].sql
+* [0-9].md
+
 # debug
 npm-debug.log*
 yarn-debug.log*
