@@ -8,6 +8,7 @@ import {
   STRIPE_SAAS_PAID_PLAN_KEYS,
   type StripeSaasPaidPlanKey,
 } from "@/lib/stripe/plan-metadata";
+import { pickRepresentativePrice } from "@/modules/core/platform-admin/subscriptions/utils/pick-representative-price";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 // ---------------------------------------------------------------------------
@@ -46,57 +47,6 @@ export type PlatformSubscriptionRevenue = {
   byPlan: PlanRevenueBreakdown[];
   warnings: string[];
 };
-
-function pickRepresentativePrice(
-  prices: {
-    stripePriceId: string;
-    billingPlanKey: string | null;
-    currency: string;
-    unitAmount: number | null;
-    recurringInterval: string | null;
-    recurringIntervalCount: number | null;
-    active: boolean;
-  }[],
-  plan: StripeSaasPaidPlanKey,
-): {
-  stripePriceId: string;
-  monthlyUnitAmountCents: number;
-  basisInterval: "month" | "year";
-  currency: string;
-} | null {
-  const eligible = prices.filter(
-    p =>
-      p.active &&
-      p.billingPlanKey === plan &&
-      p.unitAmount != null &&
-      (p.recurringInterval === "month" || p.recurringInterval === "year"),
-  );
-  if (eligible.length === 0) return null;
-
-  // Prefer a monthly price when one exists — it's the most stable
-  // approximation for MRR. Fall back to annual / 12 otherwise.
-  const monthly = eligible.find(p => p.recurringInterval === "month");
-  if (monthly && monthly.unitAmount != null) {
-    const count = monthly.recurringIntervalCount ?? 1;
-    return {
-      stripePriceId: monthly.stripePriceId,
-      monthlyUnitAmountCents: Math.round(monthly.unitAmount / count),
-      basisInterval: "month",
-      currency: monthly.currency,
-    };
-  }
-  const annual = eligible.find(p => p.recurringInterval === "year");
-  if (annual && annual.unitAmount != null) {
-    const count = annual.recurringIntervalCount ?? 1;
-    return {
-      stripePriceId: annual.stripePriceId,
-      monthlyUnitAmountCents: Math.round(annual.unitAmount / (12 * count)),
-      basisInterval: "year",
-      currency: annual.currency,
-    };
-  }
-  return null;
-}
 
 export async function computePlatformAdminSubscriptionRevenue(): Promise<PlatformSubscriptionRevenue> {
   await requirePlatformUser();
