@@ -120,6 +120,18 @@ export default async function PlatformAdminTenantsListPage(props: {
     status: statusRaw || null,
   };
 
+  const exportHref = (() => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(baseParams)) {
+      if (!v) continue;
+      sp.set(k, v);
+    }
+    const qs = sp.toString();
+    return qs
+      ? `/api/admin/export/tenants?${qs}`
+      : "/api/admin/export/tenants";
+  })();
+
   return (
     <Card>
       <CardHeader>
@@ -219,6 +231,13 @@ export default async function PlatformAdminTenantsListPage(props: {
                 <Link href="/admin/tenants">Clear</Link>
               </Button>
             ) : null}
+            <Button asChild variant="outline" size="sm">
+              {/* Plain anchor, not <Link>, so the browser handles the
+                  download response rather than Next.js routing it. */}
+              <a href={exportHref} download>
+                Export CSV
+              </a>
+            </Button>
             <span className="ml-auto text-xs text-muted-foreground">
               {total === 0
                 ? "No tenants match these filters."

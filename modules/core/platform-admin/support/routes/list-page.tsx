@@ -193,6 +193,18 @@ export default async function PlatformAdminSupportListPage(props: {
     issueType: issueType === "all" ? null : issueType,
   };
 
+  const exportHref = (() => {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(baseParams)) {
+      if (!v) continue;
+      sp.set(k, v);
+    }
+    const qs = sp.toString();
+    return qs
+      ? `/api/admin/export/support?${qs}`
+      : "/api/admin/export/support";
+  })();
+
   return (
     <div className="space-y-6">
       <Card>
@@ -242,6 +254,13 @@ export default async function PlatformAdminSupportListPage(props: {
                   <Link href="/admin/support">Clear</Link>
                 </Button>
               ) : null}
+              <Button asChild variant="outline" size="sm">
+                {/* Plain anchor so the browser handles the CSV download
+                    instead of Next.js client-side routing. */}
+                <a href={exportHref} download>
+                  Export CSV
+                </a>
+              </Button>
             </div>
           </form>
 
