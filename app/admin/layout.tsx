@@ -61,7 +61,11 @@ export default async function PlatformAdminLayout({
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <PlatformAdminSidebar destinations={destinations} user={session.user} />
+        <PlatformAdminSidebar
+          destinations={destinations}
+          user={session.user}
+          role={platformUser.role}
+        />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
             <SidebarTrigger className="-ml-1" />

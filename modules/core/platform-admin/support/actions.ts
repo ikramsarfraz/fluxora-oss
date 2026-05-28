@@ -1,12 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import {
   addPlatformSupportTicketUpdate,
   addTenantSupportTicketUpdate,
   assignPlatformSupportTicket,
+  bulkAssignPlatformSupportTickets,
+  bulkUpdatePlatformSupportTicketsStatus,
   createSupportTicket,
+  SUPPORT_TICKET_STATUSES,
   updatePlatformSupportTicketStatus,
   uploadPlatformSupportTicketAttachment,
   uploadTenantSupportTicketAttachment,
@@ -100,6 +104,73 @@ export async function uploadTenantSupportTicketAttachmentAction(
   revalidatePath("/admin/support");
   revalidatePath(`/admin/support/${ticketId}`);
   return attachment;
+}
+
+const supportStatusValues = SUPPORT_TICKET_STATUSES.map(s => s.value) as [
+  string,
+  ...string[],
+];
+
+const bulkUpdateStatusSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(100),
+  status: z.enum(supportStatusValues),
+});
+
+const bulkAssignSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(100),
+  assignedPlatformUserId: z.union([z.uuid(), z.literal(null)]),
+});
+
+export async function bulkUpdateSupportTicketsStatusAction(
+  raw: z.input<typeof bulkUpdateStatusSchema>,
+): Promise<
+  | { ok: true; updatedCount: number; skippedCount: number }
+  | { ok: false; message: string }
+> {
+  try {
+    const input = bulkUpdateStatusSchema.parse(raw);
+    const result = await bulkUpdatePlatformSupportTicketsStatus({
+      ticketIds: input.ticketIds,
+      status: input.status as SupportTicketStatus,
+    });
+    revalidatePath("/admin/support");
+    for (const id of input.ticketIds) {
+      revalidatePath(`/admin/support/${id}`);
+      revalidatePath(`/support/${id}`);
+    }
+    return { ok: true, ...result };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Bulk status update failed.",
+    };
+  }
+}
+
+export async function bulkAssignSupportTicketsAction(
+  raw: z.input<typeof bulkAssignSchema>,
+): Promise<
+  | { ok: true; updatedCount: number; skippedCount: number }
+  | { ok: false; message: string }
+> {
+  try {
+    const input = bulkAssignSchema.parse(raw);
+    const result = await bulkAssignPlatformSupportTickets({
+      ticketIds: input.ticketIds,
+      assignedPlatformUserId: input.assignedPlatformUserId,
+    });
+    revalidatePath("/admin/support");
+    for (const id of input.ticketIds) {
+      revalidatePath(`/admin/support/${id}`);
+      revalidatePath(`/support/${id}`);
+    }
+    return { ok: true, ...result };
+  } catch (e) {
+    return {
+      ok: false,
+      message: e instanceof Error ? e.message : "Bulk assignment failed.",
+    };
+  }
 }
 
 export async function uploadPlatformSupportTicketAttachmentAction(

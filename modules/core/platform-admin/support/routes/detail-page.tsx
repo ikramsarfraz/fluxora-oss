@@ -9,8 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import { PLATFORM_SUPPORT_ROLES } from "@/modules/core/platform-admin/support/permissions";
 import { SupportTicketAttachments } from "@/modules/core/platform-admin/support/components/support-ticket-attachments";
 import { SupportTicketStatusTimeline } from "@/modules/core/platform-admin/support/components/support-ticket-status-timeline";
+import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import {
@@ -44,6 +47,8 @@ export default async function PlatformAdminSupportDetailPage({
     notFound();
   }
 
+  await requirePlatformUserInRoles(PLATFORM_SUPPORT_ROLES);
+
   const [ticket, assignableUsers] = await Promise.all([
     getPlatformSupportTicketById(id),
     listAssignablePlatformUsers(),
@@ -58,37 +63,33 @@ export default async function PlatformAdminSupportDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <Link
-            href="/admin/support"
-            className="text-sm font-medium text-forest hover:underline"
-          >
-            Back to support tickets
-          </Link>
-          <h1 className="text-3xl font-medium tracking-tight text-ink">
-            {ticket.subject}
-          </h1>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <AdminDetailHeader
+        backHref="/admin/support"
+        backLabel="Back to support tickets"
+        title={ticket.subject}
+        subtitle={
+          <>
             <span>{ticket.tenant.name}</span>
             <span>•</span>
             <span>{formatDisplayDate(ticket.createdAt)}</span>
             <span>•</span>
             <span>Updated {formatDisplayDate(ticket.updatedAt)}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">
-            {supportTicketStatusLabel(ticket.status)}
-          </Badge>
-          <TicketStatusForm ticketId={ticket.id} status={ticket.status} />
-          <TicketAssignmentForm
-            ticketId={ticket.id}
-            assignedPlatformUserId={ticket.assignedPlatformUserId}
-            users={assigneeOptions}
-          />
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Badge variant="secondary">
+              {supportTicketStatusLabel(ticket.status)}
+            </Badge>
+            <TicketStatusForm ticketId={ticket.id} status={ticket.status} />
+            <TicketAssignmentForm
+              ticketId={ticket.id}
+              assignedPlatformUserId={ticket.assignedPlatformUserId}
+              users={assigneeOptions}
+            />
+          </>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>

@@ -15,6 +15,8 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { cn } from "@/lib/utils";
 import { captureException } from "@/lib/sentry-scope";
 import { STRIPE_SAAS_PAID_PLAN_KEYS } from "@/lib/stripe/plan-metadata";
+import { PLATFORM_STRIPE_CATALOG_ROLES } from "@/modules/core/platform-admin/stripe-catalog/permissions";
+import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 import {
   getPlatformAdminStripeCatalogPagePayload,
   stripePriceEligibleForSaasBilling,
@@ -254,6 +256,7 @@ function ProductBlock(props: { row: PlatformAdminGroupedStripeCatalog }) {
 }
 
 export default async function PlatformAdminStripeCatalogListPage() {
+  await requirePlatformUserInRoles(PLATFORM_STRIPE_CATALOG_ROLES);
   const { grouped, lastFullSyncAudit } = await getPlatformAdminStripeCatalogPagePayload();
 
   return (

@@ -1,4 +1,4 @@
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -23,7 +23,17 @@ import {
 } from "@/lib/support/metadata";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
-import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
+import {
+  requirePlatformUser,
+  requirePlatformUserInRoles,
+} from "@/modules/core/platform-admin/services/platform-users";
+import { PLATFORM_SUPPORT_ROLES } from "@/modules/core/platform-admin/support/permissions";
+
+// Platform support functions accept admins and support staff. The
+// admin/support permissions list is the single source of truth — when
+// it changes (e.g. opening up to QA), every gated function follows.
+const requirePlatformSupportUser = () =>
+  requirePlatformUserInRoles(PLATFORM_SUPPORT_ROLES);
 import {
   buildSupportTicketObjectKey,
   downloadFile,
@@ -63,6 +73,7 @@ export interface ListSupportTicketsFilters {
   status?: SupportTicketStatus | "all";
   priority?: SupportPriority | "all";
   issueType?: SupportIssueType | "all";
+  search?: string | null;
 }
 
 export interface CreateSupportTicketUpdateInput {
@@ -263,11 +274,9 @@ export async function addTenantSupportTicketUpdate(
   return update;
 }
 
-export async function listPlatformSupportTickets(
-  filters: ListSupportTicketsFilters = {},
-) {
-  await requirePlatformUser();
-
+function buildPlatformSupportTicketWhere(
+  filters: ListSupportTicketsFilters,
+): SQL | undefined {
   const conditions: SQL[] = [];
   if (filters.status && filters.status !== "all") {
     conditions.push(eq(supportTickets.status, filters.status));
@@ -278,9 +287,28 @@ export async function listPlatformSupportTickets(
   if (filters.issueType && filters.issueType !== "all") {
     conditions.push(eq(supportTickets.issueType, filters.issueType));
   }
+  const search = filters.search?.trim();
+  if (search) {
+    const like = `%${search}%`;
+    const match = or(
+      ilike(supportTickets.subject, like),
+      ilike(supportTickets.message, like),
+      ilike(supportTickets.email, like),
+      ilike(supportTickets.name, like),
+    );
+    if (match) conditions.push(match);
+  }
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+export async function listPlatformSupportTickets(
+  filters: ListSupportTicketsFilters = {},
+  pagination?: { limit?: number; offset?: number },
+) {
+  await requirePlatformSupportUser();
 
   return db.query.supportTickets.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
+    where: buildPlatformSupportTicketWhere(filters),
     with: {
       tenant: true,
       portalUser: true,
@@ -295,11 +323,25 @@ export async function listPlatformSupportTickets(
       },
     },
     orderBy: [desc(supportTickets.createdAt)],
+    limit: pagination?.limit,
+    offset: pagination?.offset,
   });
 }
 
+export async function countPlatformSupportTickets(
+  filters: ListSupportTicketsFilters = {},
+): Promise<number> {
+  await requirePlatformSupportUser();
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(supportTickets)
+    .where(buildPlatformSupportTicketWhere(filters));
+  return row?.count ?? 0;
+}
+
 export async function getPlatformSupportTicketById(id: string) {
-  await requirePlatformUser();
+  await requirePlatformSupportUser();
 
   return (
     (await db.query.supportTickets.findFirst({
@@ -337,7 +379,7 @@ export async function getPlatformSupportTicketById(id: string) {
 }
 
 export async function listAssignablePlatformUsers() {
-  await requirePlatformUser();
+  await requirePlatformSupportUser();
 
   return db.query.platformUsers.findMany({
     where: eq(platformUsers.isActive, true),
@@ -352,7 +394,7 @@ export async function assignPlatformSupportTicket(input: {
   id: string;
   assignedPlatformUserId: string | null;
 }) {
-  await requirePlatformUser();
+  await requirePlatformSupportUser();
 
   if (input.assignedPlatformUserId) {
     const assignee = await db.query.platformUsers.findFirst({
@@ -397,7 +439,7 @@ export async function assignPlatformSupportTicket(input: {
 export async function addPlatformSupportTicketUpdate(
   input: CreateSupportTicketUpdateInput,
 ) {
-  const platformUser = await requirePlatformUser();
+  const platformUser = await requirePlatformSupportUser();
   const ticket = await db.query.supportTickets.findFirst({
     where: eq(supportTickets.id, input.ticketId),
   });
@@ -438,7 +480,7 @@ export async function updatePlatformSupportTicketStatus(input: {
   id: string;
   status: SupportTicketStatus;
 }) {
-  await requirePlatformUser();
+  await requirePlatformSupportUser();
 
   const [updated] = await db
     .update(supportTickets)
@@ -462,6 +504,166 @@ export async function updatePlatformSupportTicketStatus(input: {
   return updated;
 }
 
+export type BulkSupportTicketsResult = {
+  updatedCount: number;
+  skippedCount: number;
+};
+
+/**
+ * Multi-ticket status change. Skips tickets that already match the
+ * target status so a re-submit isn't destructive. Tenant-side
+ * notifications are sent best-effort per affected ticket; a failed
+ * email doesn't roll back the status update (matches the single-row
+ * helper's semantics).
+ */
+export async function bulkUpdatePlatformSupportTicketsStatus(args: {
+  ticketIds: string[];
+  status: SupportTicketStatus;
+}): Promise<BulkSupportTicketsResult> {
+  await requirePlatformSupportUser();
+
+  const uniqueIds = Array.from(new Set(args.ticketIds));
+  if (uniqueIds.length === 0) {
+    return { updatedCount: 0, skippedCount: 0 };
+  }
+
+  const existing = await db.query.supportTickets.findMany({
+    where: inArray(supportTickets.id, uniqueIds),
+  });
+  const toUpdate = existing.filter(t => t.status !== args.status);
+  if (toUpdate.length === 0) {
+    return {
+      updatedCount: 0,
+      skippedCount: existing.length,
+    };
+  }
+
+  const now = new Date();
+  await db
+    .update(supportTickets)
+    .set({ status: args.status, updatedAt: now })
+    .where(
+      inArray(
+        supportTickets.id,
+        toUpdate.map(t => t.id),
+      ),
+    );
+
+  // Notify each tenant submitter. Run sequentially to keep the
+  // transport polite + simple — bulk operations are bounded to ~100
+  // tickets by the action-layer schema so this stays well under a
+  // second in practice.
+  for (const ticket of toUpdate) {
+    await notifyTenantSubmitter({
+      email: ticket.email,
+      subject: `Support ticket status updated: ${ticket.subject}`,
+      message: `Your support ticket status is now ${supportTicketStatusLabel(
+        args.status,
+      )}.`,
+    });
+  }
+
+  return {
+    updatedCount: toUpdate.length,
+    skippedCount: existing.length - toUpdate.length,
+  };
+}
+
+/**
+ * Multi-ticket assignment. `assignedPlatformUserId = null` clears the
+ * assignee on every selected ticket; passing a uuid validates the
+ * assignee is an active platform user once, then writes all rows in
+ * one transaction. Tickets already pointing at the same assignee skip.
+ */
+export async function bulkAssignPlatformSupportTickets(args: {
+  ticketIds: string[];
+  assignedPlatformUserId: string | null;
+}): Promise<BulkSupportTicketsResult> {
+  await requirePlatformSupportUser();
+
+  const uniqueIds = Array.from(new Set(args.ticketIds));
+  if (uniqueIds.length === 0) {
+    return { updatedCount: 0, skippedCount: 0 };
+  }
+
+  if (args.assignedPlatformUserId) {
+    const assignee = await db.query.platformUsers.findFirst({
+      where: and(
+        eq(platformUsers.id, args.assignedPlatformUserId),
+        eq(platformUsers.isActive, true),
+      ),
+      with: { authUser: true },
+    });
+    if (!assignee) {
+      throw new Error("Assigned platform user not found.");
+    }
+
+    const existing = await db.query.supportTickets.findMany({
+      where: inArray(supportTickets.id, uniqueIds),
+    });
+    const toUpdate = existing.filter(
+      t => t.assignedPlatformUserId !== args.assignedPlatformUserId,
+    );
+    if (toUpdate.length === 0) {
+      return { updatedCount: 0, skippedCount: existing.length };
+    }
+
+    const now = new Date();
+    await db
+      .update(supportTickets)
+      .set({
+        assignedPlatformUserId: args.assignedPlatformUserId,
+        updatedAt: now,
+      })
+      .where(
+        inArray(
+          supportTickets.id,
+          toUpdate.map(t => t.id),
+        ),
+      );
+
+    // Single notification email per assignee — they don't need one per
+    // ticket. Best-effort, mirrors the single-row helper.
+    await notifyAssignedPlatformUser({
+      email: assignee.authUser.email,
+      ticketId: toUpdate[0]!.id,
+      subject: `${toUpdate.length} support ticket${
+        toUpdate.length === 1 ? "" : "s"
+      } assigned to you`,
+    });
+
+    return {
+      updatedCount: toUpdate.length,
+      skippedCount: existing.length - toUpdate.length,
+    };
+  }
+
+  // Unassign path — no assignee validation, no email.
+  const existing = await db.query.supportTickets.findMany({
+    where: inArray(supportTickets.id, uniqueIds),
+  });
+  const toUpdate = existing.filter(t => t.assignedPlatformUserId !== null);
+  if (toUpdate.length === 0) {
+    return { updatedCount: 0, skippedCount: existing.length };
+  }
+
+  const now = new Date();
+  await db
+    .update(supportTickets)
+    .set({ assignedPlatformUserId: null, updatedAt: now })
+    .where(
+      inArray(
+        supportTickets.id,
+        toUpdate.map(t => t.id),
+      ),
+    );
+
+  return {
+    updatedCount: toUpdate.length,
+    skippedCount: existing.length - toUpdate.length,
+  };
+}
+
 async function loadTenantTicketForAttachment(ticketId: string) {
   const [tenant, portalUser] = await Promise.all([
     getCurrentTenant(),
@@ -475,7 +677,7 @@ async function loadTenantTicketForAttachment(ticketId: string) {
 }
 
 async function loadPlatformTicketForAttachment(ticketId: string) {
-  const platformUser = await requirePlatformUser();
+  const platformUser = await requirePlatformSupportUser();
   const ticket = await db.query.supportTickets.findFirst({
     where: eq(supportTickets.id, ticketId),
   });

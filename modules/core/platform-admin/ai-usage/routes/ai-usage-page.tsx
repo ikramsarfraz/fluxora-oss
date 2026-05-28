@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -7,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,20 +18,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { formatAiUsageCost } from "@/lib/ai-cost";
+import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 
-import { listTenantUsageAggregates } from "../services/ai-usage";
+import { PLATFORM_AI_USAGE_ROLES } from "../permissions";
+import {
+  listDistinctAiModels,
+  listTenantUsageAggregates,
+} from "../services/ai-usage";
 
 /**
  * Platform-admin AI usage page. Shows per-tenant aggregate cost +
- * volume + failure stats over a rolling window. Default window: the
- * current month-to-date, which is the right granularity for "is anyone
- * burning money?" — daily would be too noisy, all-time hides trends.
- *
- * Click into a tenant from `/admin/tenants/[id]` (separate page, future
- * work) for the per-event drilldown. The list view here is the entry
- * point: scan + sort by cost.
+ * volume + failure stats over a chosen window. Defaults to month-to-date
+ * because that's the right granularity for "is anyone burning money?" —
+ * daily would be too noisy, all-time hides trends. Admins can widen or
+ * narrow via the date inputs.
  */
 
 function startOfMonthUtc(now: Date = new Date()): Date {
@@ -39,11 +43,60 @@ function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
-export default async function PlatformAdminAiUsagePage() {
-  const since = startOfMonthUtc();
-  const aggregates = await listTenantUsageAggregates({ since });
+function readString(raw: string | string[] | undefined): string {
+  if (Array.isArray(raw)) return raw[0] ?? "";
+  return raw ?? "";
+}
 
-  // Pre-compute totals row for the table footer.
+/**
+ * Convert a `<input type="date">` value (YYYY-MM-DD) into a `Date` whose
+ * UTC midnight matches the picked day. Using UTC keeps the boundary
+ * stable regardless of the admin's timezone, which is also how
+ * `startOfMonthUtc` chooses its lower bound.
+ */
+function parseDateInputAsUtc(raw: string): Date | null {
+  if (!raw) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toDateInputValue(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+type SearchParams = {
+  since?: string;
+  until?: string;
+  model?: string;
+};
+
+export default async function PlatformAdminAiUsagePage(props: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requirePlatformUserInRoles(PLATFORM_AI_USAGE_ROLES);
+  const params = await props.searchParams;
+  const sinceRaw = readString(params.since);
+  const untilRaw = readString(params.until);
+  const modelRaw = readString(params.model);
+
+  const since = parseDateInputAsUtc(sinceRaw) ?? startOfMonthUtc();
+  // `until` is treated as inclusive end-of-day, so push the date input
+  // to 23:59:59.999 UTC. Without this, picking the same day for since
+  // and until would yield an empty range.
+  const untilDate = parseDateInputAsUtc(untilRaw);
+  const until = untilDate
+    ? new Date(untilDate.getTime() + 24 * 60 * 60 * 1000 - 1)
+    : null;
+
+  const knownModels = await listDistinctAiModels();
+  const model = modelRaw && knownModels.includes(modelRaw) ? modelRaw : null;
+
+  const window = { since, until, model };
+  const aggregates = await listTenantUsageAggregates(window);
+
   const totals = aggregates.reduce(
     (acc, row) => ({
       eventCount: acc.eventCount + row.eventCount,
@@ -63,11 +116,27 @@ export default async function PlatformAdminAiUsagePage() {
     },
   );
 
-  const windowLabel = since.toLocaleString("en-US", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  const windowLabel = until
+    ? `${since.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} – ${until.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+    : sinceRaw
+      ? `Since ${since.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}`
+      : since.toLocaleString("en-US", {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        });
+
+  const hasFilters = Boolean(sinceRaw) || Boolean(untilRaw) || Boolean(model);
+  const drilldownQs = (tenantId: string) => {
+    const sp = new URLSearchParams();
+    if (sinceRaw) sp.set("since", sinceRaw);
+    if (untilRaw) sp.set("until", untilRaw);
+    if (model) sp.set("model", model);
+    const qs = sp.toString();
+    return qs
+      ? `/admin/ai-usage/${tenantId}?${qs}`
+      : `/admin/ai-usage/${tenantId}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -77,15 +146,93 @@ export default async function PlatformAdminAiUsagePage() {
           AI usage
         </h1>
         <p className="text-sm text-muted-foreground">
-          Per-tenant OpenAI cost + token usage for invoice parsing. One row
-          per tenant that made at least one AI call since {windowLabel}.
+          Per-tenant OpenAI cost + token usage for invoice parsing.
+          {model ? (
+            <span> Filtered to <code className="font-mono">{model}</code>.</span>
+          ) : null}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Window</CardTitle>
+          <CardDescription>
+            Inclusive on both ends. Leave blank for month-to-date through now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            method="get"
+            action="/admin/ai-usage"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="ai-usage-since"
+                className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+              >
+                Since
+              </label>
+              <Input
+                id="ai-usage-since"
+                type="date"
+                name="since"
+                defaultValue={sinceRaw || toDateInputValue(startOfMonthUtc())}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="ai-usage-until"
+                className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+              >
+                Until
+              </label>
+              <Input
+                id="ai-usage-until"
+                type="date"
+                name="until"
+                defaultValue={untilRaw}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="ai-usage-model"
+                className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+              >
+                Model
+              </label>
+              <select
+                id="ai-usage-model"
+                name="model"
+                defaultValue={model ?? ""}
+                className="border-input bg-background h-9 rounded-md border px-2 text-sm shadow-xs"
+              >
+                <option value="">All models</option>
+                {knownModels.map(m => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end gap-2">
+              <Button type="submit" size="sm">
+                Apply
+              </Button>
+              {hasFilters ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin/ai-usage">Reset</Link>
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardDescription>Total cost · MTD</CardDescription>
+            <CardDescription>Total cost · {windowLabel}</CardDescription>
             <CardTitle className="text-3xl tabular-nums">
               {formatAiUsageCost(totals.costMicros)}
             </CardTitle>
@@ -93,7 +240,7 @@ export default async function PlatformAdminAiUsagePage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Total calls · MTD</CardDescription>
+            <CardDescription>Total calls · {windowLabel}</CardDescription>
             <CardTitle className="text-3xl tabular-nums">
               {formatNumber(totals.eventCount)}
             </CardTitle>
@@ -130,8 +277,8 @@ export default async function PlatformAdminAiUsagePage() {
         <CardHeader>
           <CardTitle>Cost by tenant · {windowLabel}</CardTitle>
           <CardDescription>
-            Sorted by total cost descending. Tenants with no AI usage this
-            month don&apos;t appear; check /admin/tenants for the full list.
+            Sorted by total cost descending. Tenants with no AI usage in this
+            window don&apos;t appear; check /admin/tenants for the full list.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,7 +301,7 @@ export default async function PlatformAdminAiUsagePage() {
                     colSpan={7}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
-                    No AI usage recorded this month.
+                    No AI usage recorded in this window.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -162,7 +309,7 @@ export default async function PlatformAdminAiUsagePage() {
                   <TableRow key={row.tenantId}>
                     <TableCell className="font-medium">
                       <Link
-                        href={`/admin/tenants/${row.tenantId}`}
+                        href={drilldownQs(row.tenantId)}
                         className="hover:underline"
                       >
                         {row.tenantName ?? row.tenantSlug ?? row.tenantId}

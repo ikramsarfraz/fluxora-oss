@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { TenantPlanUsageCard } from "@/modules/core/billing/components/subscription/tenant-plan-usage-card";
 import { TenantSubscriptionOverview } from "@/modules/core/billing/components/subscription/tenant-subscription-overview";
 import { TenantSubscriptionHealthBadge } from "@/modules/core/billing/components/subscription/tenant-subscription-health-badge";
+import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -21,7 +23,19 @@ import {
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
-import { getPlatformAdminTenantDetail } from "@/modules/core/platform-admin/services/platform-admin";
+import {
+  PLATFORM_TENANTS_EDIT_ROLES,
+  PLATFORM_TENANTS_ROLES,
+} from "@/modules/core/platform-admin/tenants/permissions";
+import {
+  countPlatformAdminTenantActivity,
+  getPlatformAdminTenantDetail,
+  listPlatformAdminTenantActivity,
+} from "@/modules/core/platform-admin/services/platform-admin";
+import {
+  hasPlatformUserRole,
+  requirePlatformUserInRoles,
+} from "@/modules/core/platform-admin/services/platform-users";
 import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
 import { TenantStatusForm } from "@/modules/core/platform-admin/tenants/components/tenant-status-form";
 import { TenantSubscriptionForm } from "@/modules/core/platform-admin/tenants/components/tenant-subscription-form";
@@ -69,10 +83,14 @@ function formatActivitySummary(item: {
   return `${item.action} ${label}`;
 }
 
+const ACTIVITY_PAGE_SIZE = 15;
+
 export default async function PlatformAdminTenantDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ activityPage?: string }>;
 }) {
   const { id } = await params;
 
@@ -80,13 +98,41 @@ export default async function PlatformAdminTenantDetailPage({
     notFound();
   }
 
+  const currentUser = await requirePlatformUserInRoles(PLATFORM_TENANTS_ROLES);
+  const canEdit = hasPlatformUserRole(currentUser, PLATFORM_TENANTS_EDIT_ROLES);
+
   const detail = await getPlatformAdminTenantDetail(id);
 
   if (!detail) {
     notFound();
   }
 
-  const { tenant, users, stats, usage, activity } = detail;
+  const { tenant, users, stats, usage } = detail;
+  const sp = await searchParams;
+
+  const activityTotal = await countPlatformAdminTenantActivity(tenant.id);
+  const activityTotalPages = Math.max(
+    1,
+    Math.ceil(activityTotal / ACTIVITY_PAGE_SIZE),
+  );
+  const rawActivityPage = Number.parseInt(sp.activityPage ?? "1", 10);
+  const activityPage =
+    !Number.isFinite(rawActivityPage) || rawActivityPage < 1
+      ? 1
+      : Math.min(rawActivityPage, activityTotalPages);
+  const activityOffset = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
+  const activity = await listPlatformAdminTenantActivity({
+    tenantId: tenant.id,
+    limit: ACTIVITY_PAGE_SIZE,
+    offset: activityOffset,
+  });
+  const activityFrom = activityTotal === 0 ? 0 : activityOffset + 1;
+  const activityTo = Math.min(activityOffset + activity.length, activityTotal);
+  const activityBuildHref = (page: number | null) => {
+    if (page == null || page === 1) return `/admin/tenants/${tenant.id}`;
+    return `/admin/tenants/${tenant.id}?activityPage=${page}`;
+  };
+
   const defaultPaymentMethod = await getTenantDefaultPaymentMethod(tenant.id);
   const subscriptionHealth = getTenantSubscriptionHealth({
     subscriptionPlan: tenant.subscriptionPlan,
@@ -97,27 +143,30 @@ export default async function PlatformAdminTenantDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <Link href="/admin/tenants" className="text-sm font-medium text-forest hover:underline">
-            Back to tenants
-          </Link>
-          <h1 className="text-3xl font-medium tracking-tight text-ink">{tenant.name}</h1>
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      <AdminDetailHeader
+        backHref="/admin/tenants"
+        backLabel="Back to tenants"
+        title={tenant.name}
+        subtitle={
+          <>
             <span>{tenant.slug}</span>
             <span>•</span>
             <span className="capitalize">{tenant.tenantType}</span>
             <span>•</span>
             <span>Created {formatDisplayDate(tenant.createdAt)}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant={tenant.isActive ? "secondary" : "outline"}>
-            {tenant.isActive ? "Active" : "Inactive"}
-          </Badge>
-          <TenantStatusForm tenantId={tenant.id} isActive={tenant.isActive} />
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Badge variant={tenant.isActive ? "secondary" : "outline"}>
+              {tenant.isActive ? "Active" : "Inactive"}
+            </Badge>
+            {canEdit ? (
+              <TenantStatusForm tenantId={tenant.id} isActive={tenant.isActive} />
+            ) : null}
+          </>
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -143,31 +192,35 @@ export default async function PlatformAdminTenantDetailPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Subscription fields</CardTitle>
-          <CardDescription>
-            Manual corrections for Stripe ids, lifecycle, or billing dates—override behavior is unchanged. Future Stripe webhook deliveries may still overwrite these rows to reconcile with Stripe canonical state.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TenantSubscriptionForm tenant={tenant} />
-        </CardContent>
-      </Card>
+      {canEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Subscription fields</CardTitle>
+            <CardDescription>
+              Manual corrections for Stripe ids, lifecycle, or billing dates—override behavior is unchanged. Future Stripe webhook deliveries may still overwrite these rows to reconcile with Stripe canonical state.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TenantSubscriptionForm tenant={tenant} />
+          </CardContent>
+        </Card>
+      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stripe Checkout</CardTitle>
-          <CardDescription>
-            Opens Stripe Checkout for the selected plan. <code className="text-xs">metadata.tenantId</code> is set on
-            the session and subscription. Webhook endpoint:{" "}
-            <code className="text-xs">/api/stripe/webhook</code>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
-        </CardContent>
-      </Card>
+      {canEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Stripe Checkout</CardTitle>
+            <CardDescription>
+              Opens Stripe Checkout for the selected plan. <code className="text-xs">metadata.tenantId</code> is set on
+              the session and subscription. Webhook endpoint:{" "}
+              <code className="text-xs">/api/stripe/webhook</code>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {usage ? <TenantPlanUsageCard usage={usage} /> : null}
 
@@ -250,12 +303,21 @@ export default async function PlatformAdminTenantDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Activity</CardTitle>
-          <CardDescription>
-            Includes Stripe automation (`stripe_webhook` rows) with event type and Stripe event id. Duplicate webhook deliveries typically show Duplicate / idempotent when no tenant fields changed.
-          </CardDescription>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="space-y-1">
+              <CardTitle>Activity</CardTitle>
+              <CardDescription>
+                Includes Stripe automation (`stripe_webhook` rows) with event type and Stripe event id. Duplicate webhook deliveries typically show Duplicate / idempotent when no tenant fields changed.
+              </CardDescription>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {activityTotal === 0
+                ? "No activity yet."
+                : `Showing ${activityFrom.toLocaleString()}–${activityTo.toLocaleString()} of ${activityTotal.toLocaleString()}`}
+            </span>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -290,6 +352,37 @@ export default async function PlatformAdminTenantDetailPage({
               )}
             </TableBody>
           </Table>
+
+          {activityTotalPages > 1 ? (
+            <nav
+              aria-label="Tenant activity pagination"
+              className="flex items-center justify-between text-sm text-muted-foreground"
+            >
+              <span>
+                Page {activityPage.toLocaleString()} of {activityTotalPages.toLocaleString()}
+              </span>
+              <div className="flex items-center gap-2">
+                {activityPage > 1 ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={activityBuildHref(activityPage - 1)}>← Previous</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    ← Previous
+                  </Button>
+                )}
+                {activityPage < activityTotalPages ? (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={activityBuildHref(activityPage + 1)}>Next →</Link>
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled>
+                    Next →
+                  </Button>
+                )}
+              </div>
+            </nav>
+          ) : null}
         </CardContent>
       </Card>
     </div>
