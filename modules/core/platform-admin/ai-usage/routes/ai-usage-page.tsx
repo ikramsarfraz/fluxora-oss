@@ -138,6 +138,15 @@ export default async function PlatformAdminAiUsagePage(props: {
       : `/admin/ai-usage/${tenantId}`;
   };
 
+  const exportHref = (() => {
+    const sp = new URLSearchParams();
+    if (sinceRaw) sp.set("since", sinceRaw);
+    if (untilRaw) sp.set("until", untilRaw);
+    if (model) sp.set("model", model);
+    const qs = sp.toString();
+    return qs ? `/api/admin/export/ai-usage?${qs}` : "/api/admin/export/ai-usage";
+  })();
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -215,7 +224,7 @@ export default async function PlatformAdminAiUsagePage(props: {
                 ))}
               </select>
             </div>
-            <div className="flex items-end gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <Button type="submit" size="sm">
                 Apply
               </Button>
@@ -224,6 +233,12 @@ export default async function PlatformAdminAiUsagePage(props: {
                   <Link href="/admin/ai-usage">Reset</Link>
                 </Button>
               ) : null}
+              <Button asChild variant="outline" size="sm">
+                {/* Plain anchor so the browser handles the CSV download. */}
+                <a href={exportHref} download>
+                  Export CSV
+                </a>
+              </Button>
             </div>
           </form>
         </CardContent>
