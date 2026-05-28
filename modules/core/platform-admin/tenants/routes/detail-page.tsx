@@ -161,6 +161,9 @@ export default async function PlatformAdminTenantDetailPage({
             <Badge variant={tenant.isActive ? "secondary" : "outline"}>
               {tenant.isActive ? "Active" : "Inactive"}
             </Badge>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/ai-usage/${tenant.id}`}>AI usage</Link>
+            </Button>
             {canEdit ? (
               <TenantStatusForm tenantId={tenant.id} isActive={tenant.isActive} />
             ) : null}

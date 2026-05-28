@@ -90,21 +90,31 @@ function DashboardDelta({
         ? "text-rose-600 dark:text-rose-400"
         : "text-muted-foreground";
 
+  const srLabel =
+    direction === "flat"
+      ? `no change versus the prior period (${label}, ${prior})`
+      : `${diff > 0 ? "up" : "down"} ${Math.abs(diff)}${
+          pct != null
+            ? ` (${pct > 0 ? "+" : ""}${pct}%)`
+            : ""
+        } versus the prior period (${label}, ${prior})`;
+
   return (
     <span
       className={cn("inline-flex items-center gap-1 text-sm", tone)}
       title={`vs ${label} (${prior})`}
     >
       <Icon className="size-3.5" aria-hidden />
-      <span className="tabular-nums">
+      <span className="tabular-nums" aria-hidden>
         {direction === "flat" ? "—" : `${diff > 0 ? "+" : ""}${diff}`}
       </span>
       {pct != null ? (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground" aria-hidden>
           ({pct > 0 ? "+" : ""}
           {pct}%)
         </span>
       ) : null}
+      <span className="sr-only">{srLabel}</span>
     </span>
   );
 }

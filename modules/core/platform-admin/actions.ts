@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { recordActionBreadcrumb } from "@/lib/sentry-scope";
 import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
 import { PLATFORM_STRIPE_CATALOG_ROLES } from "@/modules/core/platform-admin/stripe-catalog/permissions";
 import { PLATFORM_TENANTS_EDIT_ROLES } from "@/modules/core/platform-admin/tenants/permissions";
@@ -25,6 +26,11 @@ export async function setTenantActiveAction(
   reason?: string | null,
 ) {
   await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+  recordActionBreadcrumb({
+    action: "platform_admin.set_tenant_active",
+    tenantId: id,
+    data: { isActive, hasReason: Boolean(reason?.trim()) },
+  });
   const tenant = await setTenantActiveByPlatformAdmin(id, isActive, reason);
 
   revalidatePath("/admin");
@@ -49,6 +55,14 @@ export async function bulkSetTenantActiveAction(
   try {
     await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
     const input = bulkSetTenantActiveSchema.parse(raw);
+    recordActionBreadcrumb({
+      action: "platform_admin.bulk_set_tenant_active",
+      data: {
+        count: input.tenantIds.length,
+        isActive: input.isActive,
+        hasReason: Boolean(input.reason),
+      },
+    });
     const result = await bulkSetTenantsActiveByPlatformAdmin({
       tenantIds: input.tenantIds,
       isActive: input.isActive,
@@ -75,6 +89,16 @@ export async function updateTenantSubscriptionAction(
   await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
   const input = tenantSubscriptionFormSchema.parse(raw);
   const payload = parseTenantSubscriptionFormForService(input);
+  recordActionBreadcrumb({
+    action: "platform_admin.update_tenant_subscription",
+    tenantId,
+    data: {
+      plan: payload.subscriptionPlan,
+      status: payload.subscriptionStatus,
+      hasStripeCustomer: Boolean(payload.stripeCustomerId),
+      hasStripeSubscription: Boolean(payload.stripeSubscriptionId),
+    },
+  });
   const updated = await updateTenantSubscriptionByPlatformAdmin(
     tenantId,
     payload,
@@ -93,6 +117,11 @@ export async function startPlatformAdminStripeCheckoutAction(
   const id = z.uuid().parse(tenantId);
   const p = stripeSaasPaidPlanSchema.parse(plan);
   await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+  recordActionBreadcrumb({
+    action: "platform_admin.start_stripe_checkout",
+    tenantId: id,
+    data: { plan: p },
+  });
   const { url } = await startCheckoutForTenant({
     tenantId: id,
     plan: p,
@@ -112,6 +141,10 @@ export async function syncStripeCatalogAdminAction(): Promise<
 > {
   try {
     const pu = await requirePlatformUserInRoles(PLATFORM_STRIPE_CATALOG_ROLES);
+    recordActionBreadcrumb({
+      action: "platform_admin.sync_stripe_catalog",
+      data: { platformUserId: pu.id },
+    });
     const result = await syncStripeCatalogFullFromStripeApi({
       actorType: "platform_user",
       platformUserId: pu.id,

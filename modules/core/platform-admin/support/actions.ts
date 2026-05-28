@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { recordActionBreadcrumb } from "@/lib/sentry-scope";
 import {
   addPlatformSupportTicketUpdate,
   addTenantSupportTicketUpdate,
@@ -129,6 +130,10 @@ export async function bulkUpdateSupportTicketsStatusAction(
 > {
   try {
     const input = bulkUpdateStatusSchema.parse(raw);
+    recordActionBreadcrumb({
+      action: "platform_admin.bulk_support_status_update",
+      data: { count: input.ticketIds.length, status: input.status },
+    });
     const result = await bulkUpdatePlatformSupportTicketsStatus({
       ticketIds: input.ticketIds,
       status: input.status as SupportTicketStatus,
@@ -155,6 +160,13 @@ export async function bulkAssignSupportTicketsAction(
 > {
   try {
     const input = bulkAssignSchema.parse(raw);
+    recordActionBreadcrumb({
+      action: "platform_admin.bulk_support_assign",
+      data: {
+        count: input.ticketIds.length,
+        assigned: input.assignedPlatformUserId != null,
+      },
+    });
     const result = await bulkAssignPlatformSupportTickets({
       ticketIds: input.ticketIds,
       assignedPlatformUserId: input.assignedPlatformUserId,
