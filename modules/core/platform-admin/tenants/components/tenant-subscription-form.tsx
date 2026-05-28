@@ -15,11 +15,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Tenant } from "@/db/types";
 import {
   TENANT_SUBSCRIPTION_PLAN_VALUES,
   TENANT_SUBSCRIPTION_STATUS_VALUES,
+  type TenantSubscriptionPlan,
+  type TenantSubscriptionStatus,
 } from "@/lib/tenant-subscription";
+
+/**
+ * Narrowed subset of `Tenant` — the only fields this form reads. Lets
+ * callers pass either a full Tenant or a slimmer projection (e.g. the
+ * `PlatformAdminSubscriptionRow` used by the inline edit grid on
+ * /admin/subscriptions).
+ */
+export type TenantSubscriptionFormTenant = {
+  id: string;
+  subscriptionPlan: TenantSubscriptionPlan;
+  subscriptionStatus: TenantSubscriptionStatus;
+  trialEndsAt: Date | null;
+  currentPeriodEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+};
 
 function toDatetimeLocalValue(d: Date | null | undefined): string {
   if (!d) {
@@ -45,7 +62,19 @@ function statusLabel(s: (typeof TENANT_SUBSCRIPTION_STATUS_VALUES)[number]) {
   return map[s];
 }
 
-export function TenantSubscriptionForm({ tenant }: { tenant: Tenant }) {
+export function TenantSubscriptionForm({
+  tenant,
+  onSuccess,
+}: {
+  tenant: TenantSubscriptionFormTenant;
+  /**
+   * Fires after a successful save (after the toast). Used by the
+   * inline-edit dialog on /admin/subscriptions to close itself once
+   * the change lands; the tenant-detail page omits it and keeps the
+   * form open for repeated edits.
+   */
+  onSuccess?: () => void;
+}) {
   const [isPending, startTransition] = useTransition();
   const [subscriptionPlan, setPlan] = useState(tenant.subscriptionPlan);
   const [subscriptionStatus, setStatus] = useState(tenant.subscriptionStatus);
@@ -78,6 +107,7 @@ export function TenantSubscriptionForm({ tenant }: { tenant: Tenant }) {
               stripeSubscriptionId: stripeSubscriptionId || null,
             });
             toast.success("Subscription updated");
+            onSuccess?.();
           } catch (err) {
             toast.error(
               err instanceof Error ? err.message : "Failed to update subscription.",

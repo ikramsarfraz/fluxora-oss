@@ -256,6 +256,77 @@ export async function countPlatformAdminTenants(
   return row?.count ?? 0;
 }
 
+export type PlatformAdminSubscriptionRow = {
+  id: string;
+  name: string;
+  slug: string;
+  subscriptionPlan: TenantSubscriptionPlan;
+  subscriptionStatus: TenantSubscriptionStatus;
+  trialEndsAt: Date | null;
+  currentPeriodEndsAt: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  isActive: boolean;
+  createdAt: Date;
+};
+
+/**
+ * Inline-edit grid on /admin/subscriptions wants every column the
+ * TenantSubscriptionForm reads. `listPlatformAdminTenants` omits the
+ * datetime + Stripe id columns for compactness, so this is a parallel
+ * reader that returns the full subscription footprint. Filters reuse
+ * the same plan + status shape.
+ */
+export async function listPlatformAdminSubscriptions(args?: {
+  filters?: Pick<
+    PlatformAdminTenantFilters,
+    "search" | "subscriptionPlan" | "subscriptionStatus"
+  >;
+  limit?: number;
+  offset?: number;
+}): Promise<PlatformAdminSubscriptionRow[]> {
+  await requirePlatformUser();
+
+  const where = buildPlatformAdminTenantWhere(args?.filters ?? {});
+  const query = db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      subscriptionPlan: tenants.subscriptionPlan,
+      subscriptionStatus: tenants.subscriptionStatus,
+      trialEndsAt: tenants.trialEndsAt,
+      currentPeriodEndsAt: tenants.currentPeriodEndsAt,
+      stripeCustomerId: tenants.stripeCustomerId,
+      stripeSubscriptionId: tenants.stripeSubscriptionId,
+      isActive: tenants.isActive,
+      createdAt: tenants.createdAt,
+    })
+    .from(tenants)
+    .where(where)
+    .orderBy(desc(tenants.createdAt));
+
+  if (args?.limit != null) query.limit(args.limit);
+  if (args?.offset != null) query.offset(args.offset);
+
+  return query;
+}
+
+export async function countPlatformAdminSubscriptions(
+  filters: Pick<
+    PlatformAdminTenantFilters,
+    "search" | "subscriptionPlan" | "subscriptionStatus"
+  > = {},
+): Promise<number> {
+  await requirePlatformUser();
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tenants)
+    .where(buildPlatformAdminTenantWhere(filters));
+  return row?.count ?? 0;
+}
+
 export async function getPlatformAdminTenantDetail(tenantId: string) {
   await requirePlatformUser();
 
