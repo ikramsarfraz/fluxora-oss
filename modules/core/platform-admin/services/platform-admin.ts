@@ -9,6 +9,7 @@ import {
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
 import { getTenantPlanUsageByTenantId } from "@/modules/core/billing/services/subscription-usage";
+import { computePriorWindow } from "@/modules/core/platform-admin/dashboard/utils/compute-prior-window";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
 function countAll(table: typeof tenants | typeof portalUsers) {
@@ -128,11 +129,7 @@ export async function getPlatformAdminDashboardData(
       }
     | null = null;
   if (window) {
-    const windowEnd = window.until ?? new Date();
-    const windowMs = windowEnd.getTime() - window.since.getTime();
-    const priorEnd = new Date(window.since.getTime() - 1);
-    const priorStart = new Date(window.since.getTime() - 1 - windowMs);
-    const priorWindow = { since: priorStart, until: priorEnd };
+    const priorWindow = computePriorWindow(window);
 
     const [newTenants, newPortalUsers, priorNewTenants, priorNewPortalUsers] =
       await Promise.all([
