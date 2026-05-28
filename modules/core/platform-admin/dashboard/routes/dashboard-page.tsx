@@ -21,6 +21,7 @@ import {
 } from "@/modules/core/billing/components/subscription/subscription-badges";
 import { PlatformSubscriptionBuckets } from "@/modules/core/platform-admin/components/platform-subscription-buckets";
 import { PLATFORM_DASHBOARD_ROLES } from "@/modules/core/platform-admin/dashboard/permissions";
+import { computeDelta } from "@/modules/core/platform-admin/dashboard/utils/compute-delta";
 import { getPlatformAdminDashboardData } from "@/modules/core/platform-admin/services/platform-admin";
 import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 
@@ -72,13 +73,7 @@ function DashboardDelta({
   prior: number;
   priorWindow: { since: Date; until: Date };
 }) {
-  const diff = current - prior;
-  // Percentage delta has no meaningful interpretation when the prior
-  // period had zero events ("∞%"), so we just render the absolute
-  // diff. When both are zero we show a neutral "no change" indicator.
-  const direction: "up" | "down" | "flat" =
-    diff > 0 ? "up" : diff < 0 ? "down" : "flat";
-  const pct = prior > 0 ? Math.round((diff / prior) * 100) : null;
+  const { diff, direction, pct } = computeDelta({ current, prior });
   const label = formatPriorWindow(priorWindow);
 
   const Icon =
