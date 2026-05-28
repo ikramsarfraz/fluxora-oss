@@ -594,6 +594,44 @@ export const userInvitations = pgTable(
   ],
 );
 
+/**
+ * Pending invitations for platform-user accounts. Mirrors the shape of
+ * `userInvitations` but binds to a role on the platform side instead of
+ * a tenant. There is no tenant scope: a platform user has access to
+ * the `admin.<host>` host and is independent of any tenant workspace.
+ *
+ * Acceptance writes a `platformUsers` row and stamps `accepted_at` +
+ * `accepted_by_auth_user_id` here so we can audit who claimed each
+ * invite (and so a token can't be reused after acceptance).
+ */
+export const platformUserInvitations = pgTable(
+  "platform_user_invitations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: platformRoleEnum("role").notNull(),
+    token: text("token").notNull().unique(),
+    status: invitationStatusEnum("status").notNull().default("pending"),
+    invitedByPlatformUserId: uuid("invited_by_platform_user_id")
+      .notNull()
+      .references(() => platformUsers.id, { onDelete: "restrict" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    acceptedByAuthUserId: text("accepted_by_auth_user_id").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  table => [
+    index("platform_user_invitations_email_idx").on(table.email),
+    index("platform_user_invitations_token_idx").on(table.token),
+    index("platform_user_invitations_status_idx").on(table.status),
+  ],
+);
+
 export const tenantJoinRequests = pgTable(
   "tenant_join_requests",
   {

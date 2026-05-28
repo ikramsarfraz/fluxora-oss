@@ -22,7 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createPlatformUserAction } from "@/modules/core/platform-admin/platform-users/actions";
+import { cn } from "@/lib/utils";
+import {
+  createPlatformUserAction,
+  invitePlatformUserAction,
+} from "@/modules/core/platform-admin/platform-users/actions";
 
 type Role = "platform_admin" | "support" | "qa";
 
@@ -32,13 +36,17 @@ const ROLE_OPTIONS: ReadonlyArray<{ value: Role; label: string }> = [
   { value: "qa", label: "QA" },
 ];
 
+type Mode = "invite" | "promote";
+
 export function AddPlatformUserDialog() {
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("invite");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("support");
   const [isPending, startTransition] = useTransition();
 
   function reset() {
+    setMode("invite");
     setEmail("");
     setRole("support");
   }
@@ -58,20 +66,42 @@ export function AddPlatformUserDialog() {
         <DialogHeader>
           <DialogTitle>Add platform user</DialogTitle>
           <DialogDescription>
-            Grants an existing account access to the admin host. The person must
-            already have signed up — once they have, enter their email here to
-            grant platform access.
+            {mode === "invite"
+              ? "Send an email invitation that lets the recipient sign in for the first time and claim platform access."
+              : "Grant platform access to someone who has already signed up to Fluxora — no email is sent."}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-1 rounded-md border border-border-default bg-surface p-1 text-sm">
+          <ModeButton
+            current={mode}
+            value="invite"
+            onClick={setMode}
+            label="Invite by email"
+          />
+          <ModeButton
+            current={mode}
+            value="promote"
+            onClick={setMode}
+            label="Promote existing"
+          />
+        </div>
 
         <form
           className="space-y-4"
           onSubmit={e => {
             e.preventDefault();
             startTransition(async () => {
-              const result = await createPlatformUserAction({ email, role });
+              const result =
+                mode === "invite"
+                  ? await invitePlatformUserAction({ email, role })
+                  : await createPlatformUserAction({ email, role });
               if (result.ok) {
-                toast.success("Platform user added");
+                toast.success(
+                  mode === "invite"
+                    ? `Invitation sent to ${email}`
+                    : "Platform user added",
+                );
                 setOpen(false);
                 reset();
               } else {
@@ -91,6 +121,12 @@ export function AddPlatformUserDialog() {
               onChange={e => setEmail(e.target.value)}
               placeholder="name@pelzer.dev"
             />
+            {mode === "promote" ? (
+              <p className="text-xs text-muted-foreground">
+                The person must already have a Fluxora account. If they
+                don&apos;t, use &ldquo;Invite by email&rdquo; instead.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <Label htmlFor="add-platform-user-role">Role</Label>
@@ -118,11 +154,44 @@ export function AddPlatformUserDialog() {
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Adding…" : "Add platform user"}
+              {isPending
+                ? mode === "invite"
+                  ? "Sending…"
+                  : "Adding…"
+                : mode === "invite"
+                  ? "Send invitation"
+                  : "Add platform user"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ModeButton({
+  value,
+  current,
+  onClick,
+  label,
+}: {
+  value: Mode;
+  current: Mode;
+  onClick: (mode: Mode) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(value)}
+      className={cn(
+        "rounded-sm px-3 py-1.5 text-xs font-medium transition-colors",
+        value === current
+          ? "bg-card text-ink shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </button>
   );
 }

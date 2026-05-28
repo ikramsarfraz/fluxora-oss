@@ -22,6 +22,8 @@ import { formatDisplayDate } from "@/lib/utils/date";
 import { PLATFORM_USERS_ROLES } from "@/modules/core/platform-admin/platform-users/permissions";
 import { AddPlatformUserDialog } from "@/modules/core/platform-admin/platform-users/components/add-platform-user-dialog";
 import { EditPlatformUserDialog } from "@/modules/core/platform-admin/platform-users/components/edit-platform-user-dialog";
+import { PendingInvitationsCard } from "@/modules/core/platform-admin/platform-users/components/pending-invitations-card";
+import { listPlatformUserInvitations } from "@/modules/core/platform-admin/platform-users/services/invitations";
 import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 import {
   countPlatformAdminUsers,
@@ -101,11 +103,14 @@ export default async function PlatformAdminUsersListPage(props: {
   const page = parsePage(params.page, totalPages);
   const offset = (page - 1) * PAGE_SIZE;
 
-  const users = await listPlatformAdminUsers({
-    filters,
-    limit: PAGE_SIZE,
-    offset,
-  });
+  const [users, invitations] = await Promise.all([
+    listPlatformAdminUsers({
+      filters,
+      limit: PAGE_SIZE,
+      offset,
+    }),
+    listPlatformUserInvitations(),
+  ]);
 
   const hasFilters = Boolean(q) || Boolean(roleRaw) || Boolean(activeRaw);
   const fromCount = total === 0 ? 0 : offset + 1;
@@ -118,6 +123,7 @@ export default async function PlatformAdminUsersListPage(props: {
   };
 
   return (
+    <div className="space-y-6">
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -300,5 +306,8 @@ export default async function PlatformAdminUsersListPage(props: {
         ) : null}
       </CardContent>
     </Card>
+
+    <PendingInvitationsCard rows={invitations} canManage={canManage} />
+    </div>
   );
 }
