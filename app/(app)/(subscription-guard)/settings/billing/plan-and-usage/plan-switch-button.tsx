@@ -6,23 +6,29 @@ import { toast } from "sonner";
 
 import { startTenantAdminStripeCheckoutAction } from "@/modules/core/billing/actions";
 import type { StripeCheckoutPlan } from "@/modules/core/billing/stripe-tenant-billing";
+import type { StripeBillingInterval } from "@/lib/stripe/checkout-plan-schema";
 import { cn } from "@/lib/utils";
 
 type Props = {
   plan: StripeCheckoutPlan;
   label: string;
+  /** Billing cadence to check out with. Defaults to monthly. */
+  interval?: StripeBillingInterval;
   /** When true the button is the disabled "Active plan" variant. */
   disabled?: boolean;
 };
 
-export function PlanSwitchButton({ plan, label, disabled }: Props) {
+export function PlanSwitchButton({ plan, label, interval, disabled }: Props) {
   const [pending, start] = useTransition();
 
   function go() {
     if (disabled) return;
     start(async () => {
       try {
-        const { url } = await startTenantAdminStripeCheckoutAction(plan);
+        const { url } = await startTenantAdminStripeCheckoutAction(
+          plan,
+          interval,
+        );
         window.location.href = url;
       } catch (e) {
         toast.error(

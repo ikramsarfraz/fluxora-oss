@@ -1,9 +1,4 @@
-import {
-  Check,
-  CreditCard,
-  Download,
-  ExternalLink,
-} from "lucide-react";
+import { CreditCard, Download } from "lucide-react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -21,11 +16,10 @@ import { getCurrentTenantPlanUsage } from "@/modules/core/billing/services/subsc
 import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
 import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
 import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
-import type { BillingCatalogPlanRow } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 import { ManageInStripeButton } from "./manage-in-stripe-button";
-import { PlanSwitchButton } from "./plan-switch-button";
+import { PlansAvailable } from "./plans-available";
 
 const PLAN_LABEL: Record<TenantSubscriptionPlan, string> = {
   free: "Free",
@@ -39,56 +33,6 @@ const PLAN_ORDER: TenantSubscriptionPlan[] = [
   "growth",
   "enterprise",
 ];
-
-const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ["Up to 3 users", "500 orders / mo", "Email support"],
-  growth: ["10 users", "5,000 orders / mo", "Priority support", "API access"],
-  enterprise: [
-    "Unlimited everything",
-    "SSO + SAML",
-    "Dedicated CSM",
-    "99.95% SLA",
-  ],
-};
-
-function formatPriceParts(
-  currency: string,
-  unitAmountCents: number | null,
-): { currency: string | null; amount: string } {
-  if (unitAmountCents == null) return { currency: null, amount: "Custom" };
-  try {
-    const symbol = (0)
-      .toLocaleString(undefined, {
-        style: "currency",
-        currency: currency.toUpperCase(),
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      })
-      .replace(/[\d.,\s]/g, "");
-    const amount = new Intl.NumberFormat(undefined, {
-      maximumFractionDigits: 0,
-    }).format(unitAmountCents / 100);
-    return { currency: symbol || "$", amount };
-  } catch {
-    return { currency: "$", amount: String(Math.round(unitAmountCents / 100)) };
-  }
-}
-
-function formatCadence(
-  interval: string | null,
-  count: number | null,
-): string {
-  if (!interval) return "per month";
-  const raw = interval.toLowerCase();
-  const n = count ?? 1;
-  if (n === 1) {
-    if (raw === "month") return "per month";
-    if (raw === "year") return "per year";
-    if (raw === "week") return "per week";
-    return `per ${interval}`;
-  }
-  return `per ${n} ${interval}s`;
-}
 
 function periodLabel(now = new Date()): string {
   return now.toLocaleDateString("en-US", { month: "short", year: "numeric" });
@@ -389,37 +333,11 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
           />
 
           {/* Plans available */}
-          <section>
-            <div className="mb-[10px] flex items-baseline justify-between">
-              <h2 className="font-serif text-[18px] font-medium leading-[1.2] tracking-[-0.01em] text-ink">
-                Plans available
-              </h2>
-              {sortedPlans.length === 0 ? (
-                <span className="text-[11px] text-subtle">
-                  Catalog sync pending.
-                </span>
-              ) : null}
-            </div>
-            {sortedPlans.length === 0 ? (
-              <div className="rounded-lg border-[0.5px] border-dashed border-border-default bg-card-warm px-5 py-4 text-[13px] leading-[1.55] text-subtle">
-                Subscription plans appear here once the Stripe catalog has
-                synced. Reach out to support if this doesn&rsquo;t resolve.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-lg border-[0.5px] border-border-soft bg-card">
-                <div className="grid grid-cols-1 divide-y-[0.5px] divide-divider sm:grid-cols-3 sm:divide-x-[0.5px] sm:divide-y-0">
-                  {sortedPlans.map((plan) => (
-                    <PlanColumn
-                      key={plan.planKey}
-                      plan={plan}
-                      isCurrent={plan.planKey === tenant.subscriptionPlan}
-                      canManage={canManageBilling}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          <PlansAvailable
+            plans={sortedPlans}
+            currentPlan={tenant.subscriptionPlan}
+            canManage={canManageBilling}
+          />
         </div>
 
         {/* Right column */}
@@ -648,108 +566,6 @@ function StripCell({
         {value}
       </div>
       <div className="mt-[6px] text-[11px] leading-[1.4] text-subtle">{sub}</div>
-    </div>
-  );
-}
-
-function PlanColumn({
-  plan,
-  isCurrent,
-  canManage,
-}: {
-  plan: BillingCatalogPlanRow;
-  isCurrent: boolean;
-  canManage: boolean;
-}) {
-  const { currency: symbol, amount } = formatPriceParts(
-    plan.currency,
-    plan.unitAmountCents,
-  );
-  const bullets =
-    PLAN_FEATURES[plan.planKey] ??
-    (plan.productDescription
-      ? plan.productDescription.split(/\r?\n/).filter(Boolean)
-      : []);
-
-  return (
-    <div
-      data-current={isCurrent ? "true" : undefined}
-      className={
-        "flex flex-col px-[22px] py-5" +
-        (isCurrent ? " bg-card-warm" : "")
-      }
-    >
-      <div className="mb-[14px] flex items-start justify-between">
-        <div className="font-serif text-[17px] font-medium tracking-[-0.005em] text-ink">
-          {plan.productName ||
-            PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}
-        </div>
-        {isCurrent ? (
-          <span className="inline-flex items-center gap-[6px] rounded-full border-[0.5px] border-success-border bg-success-bg px-[9px] py-[3px] text-[10px] font-medium leading-none text-success-fg">
-            <span
-              aria-hidden
-              className="inline-block size-[5px] rounded-full bg-current"
-            />
-            Current
-          </span>
-        ) : null}
-      </div>
-      <div className="flex items-baseline gap-1">
-        {symbol ? (
-          <span className="font-serif text-[14px] text-subtle">{symbol}</span>
-        ) : null}
-        <span className="font-serif text-[36px] font-medium leading-none tracking-[-0.02em] text-ink tabular-nums">
-          {amount}
-        </span>
-      </div>
-      <div className="mt-[6px] text-[11px] text-subtle">
-        {plan.unitAmountCents == null
-          ? "annual contract"
-          : formatCadence(plan.recurringInterval, plan.recurringIntervalCount)}
-      </div>
-
-      <ul className="mt-4 flex flex-col gap-2">
-        {bullets.map((b) => (
-          <li
-            key={b}
-            className="flex items-start gap-2 text-[13px] leading-[1.5] text-ink-warm"
-          >
-            <Check
-              size={12}
-              strokeWidth={1.5}
-              className="mt-[3px] shrink-0 text-forest"
-              aria-hidden
-            />
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
-
-      {canManage ? (
-        plan.planKey === "enterprise" && plan.unitAmountCents == null ? (
-          <a
-            href="mailto:sales@fluxora.app?subject=Fluxora%20enterprise%20plan%20inquiry"
-            className="mt-[18px] inline-flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-[7px] text-[12px] font-medium leading-none text-ink-warm transition-colors hover:bg-surface"
-          >
-            <ExternalLink size={12} strokeWidth={1.5} />
-            Contact sales
-          </a>
-        ) : (
-          <PlanSwitchButton
-            plan={plan.planKey}
-            label={
-              isCurrent
-                ? "Active plan"
-                : `Switch to ${plan.productName || PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}`
-            }
-            disabled={isCurrent}
-          />
-        )
-      ) : (
-        <p className="mt-[18px] text-center text-[11px] text-subtle">
-          Owners and admins can change plans.
-        </p>
-      )}
     </div>
   );
 }

@@ -472,9 +472,12 @@ export function TenantBillingCatalogSection(props: {
   canManageBilling: boolean;
 }) {
   const [pending, startTransition] = useTransition();
-  const [interval, setInterval] = useState<StripeBillingInterval>("month");
 
   const hasAnnualOption = props.catalogPlans.some((p) => p.annual != null);
+  // Default to annual when it's offered — the cheaper, recommended cadence.
+  const [interval, setInterval] = useState<StripeBillingInterval>(
+    hasAnnualOption ? "year" : "month",
+  );
 
   function launch(plan: StripeCheckoutPlan, checkoutInterval: StripeBillingInterval) {
     startTransition(async () => {
