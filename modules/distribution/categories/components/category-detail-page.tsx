@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useSetBreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 
+import { CategoryProductsSection } from "./category-products-section";
+
 /**
  * Local dialog state. Phase is fixed at open time from the parallel
  * `useCategoryProductCount` query, so the user never sees a mid-flow
@@ -168,6 +170,11 @@ export function CategoryDetailPage({ categoryId }: { categoryId: string }) {
           </DetailField>
         </DetailGrid>
       </DetailSection>
+
+      <CategoryProductsSection
+        categoryId={categoryId}
+        totalCount={productCount}
+      />
 
       <DetailSection
         title="Danger Zone"

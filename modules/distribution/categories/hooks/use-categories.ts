@@ -10,9 +10,11 @@ import {
   getCategoriesAction,
   getCategoryByIdAction,
   getCategoryProductCountAction,
+  getCategoryProductsPageAction,
   restoreCategoryAction,
   untagAndDeleteCategoryAction,
 } from "@/modules/distribution/categories/actions";
+import type { CategoryProductsParams } from "../services/categories";
 import { isUuid } from "@/lib/utils/uuid";
 
 export function useCategories() {
@@ -42,6 +44,25 @@ export function useCategoryProductCount(id: string) {
   return useQuery({
     queryKey: queryKeys.categories.productCount(id),
     queryFn: () => getCategoryProductCountAction(id),
+    enabled: !!id && isUuid(id),
+    staleTime: 1000 * 30,
+  });
+}
+
+/**
+ * Paginated products-by-category for the detail-page section. Mirrors
+ * the `useCustomerOrdersPage` / `useCustomerInvoicesPage` shape so
+ * `<TablePager />` slots in directly. The params object is part of the
+ * query key — same `params` reference reuses the cache, distinct
+ * params produce distinct cache entries.
+ */
+export function useCategoryProductsPage(
+  id: string,
+  params?: CategoryProductsParams,
+) {
+  return useQuery({
+    queryKey: queryKeys.categories.productsPage(id, params ?? null),
+    queryFn: () => getCategoryProductsPageAction(id, params),
     enabled: !!id && isUuid(id),
     staleTime: 1000 * 30,
   });

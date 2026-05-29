@@ -3,6 +3,8 @@ export const queryKeys = {
     all: ["categories"] as const,
     detail: (id: string) => ["categories", id] as const,
     productCount: (id: string) => ["categories", id, "product-count"] as const,
+    productsPage: (id: string, params: unknown) =>
+      ["categories", id, "products", params] as const,
   },
   auth: {
     me: ["auth", "me"] as const,

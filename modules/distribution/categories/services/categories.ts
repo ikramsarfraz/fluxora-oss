@@ -1,6 +1,13 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, productCategories, products } from "@/db/schema";
+import {
+  createPaginatedResult,
+  getPaginationOffset,
+  normalizePaginatedQuery,
+  resolveOrderBy,
+  type PaginatedQueryInput,
+} from "@/lib/pagination";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentPortalUser } from "@/modules/shared/services/portal-users";
 
@@ -54,6 +61,95 @@ export async function getCategoryProductCount(
     );
   return count;
 }
+
+export type CategoryProductsSort = "name" | "sku" | "createdAt";
+
+export type CategoryProductsParams = PaginatedQueryInput<
+  CategoryProductsSort,
+  { includeArchived?: "1" }
+>;
+
+/**
+ * Paginated list of products tagged with this category, scoped to the
+ * current tenant. Powers the products section on the category detail
+ * page so users can see exactly which products would lose their tag
+ * before clicking "Untag and delete". Archived products are excluded
+ * by default — toggle by passing `filters.includeArchived = "1"`,
+ * mirroring how products-page handles its own archived filter.
+ *
+ * Returns the same `createPaginatedResult` shape every other detail-
+ * page paginated read uses (customer orders, supplier invoices), so
+ * `<TablePager />` + `useClientPagination`-free wiring just works.
+ */
+export async function getCategoryProductsPage(
+  categoryId: string,
+  input?: CategoryProductsParams,
+) {
+  const tenant = await getCurrentTenant();
+  const query = normalizePaginatedQuery(input, {
+    defaultSort: "name",
+    defaultDirection: "asc",
+    defaultFilters: {},
+  });
+
+  const includeArchived = query.filters.includeArchived === "1";
+  const where = and(
+    eq(productCategories.categoryId, categoryId),
+    eq(products.tenantId, tenant.id),
+    includeArchived ? undefined : isNull(products.archivedAt),
+  );
+
+  // Count first via the same JOIN shape so the "Showing X of N" stays
+  // accurate when archived are filtered out.
+  const [{ count }] = await db
+    .select({ count: sql<number>`cast(count(*) as int)` })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(where);
+
+  // Select only what the table needs — the full product record (with
+  // relations) is one click away on the product detail page.
+  const rows = await db
+    .select({
+      id: products.id,
+      sku: products.sku,
+      name: products.name,
+      defaultPricePerLb: products.defaultPricePerLb,
+      baseUnitId: products.baseUnitId,
+      archivedAt: products.archivedAt,
+      createdAt: products.createdAt,
+    })
+    .from(productCategories)
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .where(where)
+    .orderBy(
+      ...resolveOrderBy({
+        sort: query.sort,
+        direction: query.direction,
+        expressions: {
+          name: products.name,
+          sku: products.sku,
+          createdAt: products.createdAt,
+        },
+      }),
+      // Stable secondary sort so equal-name rows don't flip page to
+      // page; product ids are uuid v4 so this is just a tie-breaker.
+      asc(products.id),
+    )
+    .limit(query.pageSize)
+    .offset(getPaginationOffset(query.page, query.pageSize));
+
+  return createPaginatedResult({
+    data: rows,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: count ?? 0,
+  });
+}
+
+export type CategoryProductRow = Awaited<
+  ReturnType<typeof getCategoryProductsPage>
+>["data"][number];
 
 /**
  * Returns categories visible to selectors (product form, etc.). Archived

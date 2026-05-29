@@ -13,9 +13,11 @@ import {
   getCategories,
   getCategoryById,
   getCategoryProductCount,
+  getCategoryProductsPage,
   restoreCategory,
   untagAndDeleteCategory,
   updateCategory,
+  type CategoryProductsParams,
   type DeleteCategoryResult,
 } from "../services/categories";
 
@@ -33,6 +35,13 @@ export async function getCategoryByIdAction(id: string) {
 
 export async function getCategoryProductCountAction(id: string) {
   return await getCategoryProductCount(id);
+}
+
+export async function getCategoryProductsPageAction(
+  id: string,
+  input?: CategoryProductsParams,
+) {
+  return await getCategoryProductsPage(id, input);
 }
 
 export async function createCategoryAction(input: {
