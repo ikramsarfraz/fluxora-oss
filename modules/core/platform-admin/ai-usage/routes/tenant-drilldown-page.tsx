@@ -22,6 +22,7 @@ import {
 import { formatAiUsageCost } from "@/lib/ai-cost";
 import { isUuid } from "@/lib/utils/uuid";
 import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 import { getTenantById } from "@/modules/core/tenants";
 
@@ -173,6 +174,10 @@ export default async function PlatformAdminAiUsageTenantPage(props: {
 
   return (
     <div className="space-y-6">
+      <BreadcrumbLabel
+        href={`/admin/ai-usage/${tenantId}`}
+        label={tenant.name}
+      />
       <AdminDetailHeader
         backHref="/admin/ai-usage"
         backLabel="Back to AI usage"

@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PLATFORM_SUPPORT_ROLES } from "@/modules/core/platform-admin/support/permissions";
 import { SupportTicketAttachments } from "@/modules/core/platform-admin/support/components/support-ticket-attachments";
 import { SupportTicketStatusTimeline } from "@/modules/core/platform-admin/support/components/support-ticket-status-timeline";
@@ -63,6 +64,10 @@ export default async function PlatformAdminSupportDetailPage({
 
   return (
     <div className="space-y-6">
+      <BreadcrumbLabel
+        href={`/admin/support/${ticket.id}`}
+        label={`TKT-${ticket.id.slice(0, 8).toUpperCase()}`}
+      />
       <AdminDetailHeader
         backHref="/admin/support"
         backLabel="Back to support tickets"

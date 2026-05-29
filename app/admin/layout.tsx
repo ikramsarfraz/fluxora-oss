@@ -1,6 +1,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { AppBreadcrumb } from "@/components/app-breadcrumb";
+import { BreadcrumbLabelProvider } from "@/components/breadcrumb-label-provider";
 import { PlatformAdminSidebar } from "@/components/platform-admin-sidebar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -13,6 +15,17 @@ import { auth } from "@/lib/auth";
 import { buildRootAppUrl, getRequestTenantHostContext } from "@/lib/tenant-host";
 import { getAccessibleDestinationsForAuthUser } from "@/modules/shared/services/auth";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
+
+/** Platform-admin path segments -> readable breadcrumb labels. */
+const ADMIN_SEGMENT_LABELS: Record<string, string> = {
+  admin: "Platform Admin",
+  "ai-usage": "AI usage",
+  "platform-users": "Platform users",
+  "stripe-catalog": "Stripe catalog",
+  subscriptions: "Subscriptions",
+  support: "Support",
+  tenants: "Tenants",
+};
 
 export default async function PlatformAdminLayout({
   children,
@@ -60,27 +73,33 @@ export default async function PlatformAdminLayout({
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <PlatformAdminSidebar
-          destinations={destinations}
-          user={session.user}
-          role={platformUser.role}
-        />
-        <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-            />
-            <div>
-              <p className="text-sm font-medium text-ink">Platform Admin</p>
-              <p className="text-xs text-muted-foreground">{platformUser.role}</p>
+      <BreadcrumbLabelProvider>
+        <SidebarProvider>
+          <PlatformAdminSidebar
+            destinations={destinations}
+            user={session.user}
+            role={platformUser.role}
+          />
+          <SidebarInset className="min-w-0 overflow-x-hidden">
+            <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border-default bg-surface px-4">
+              <SidebarTrigger className="-ml-1" />
+              <Separator
+                orientation="vertical"
+                className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+              />
+              <div className="flex min-w-0 flex-1 items-center">
+                <AppBreadcrumb segmentLabels={ADMIN_SEGMENT_LABELS} />
+              </div>
+              <p className="ml-auto shrink-0 text-xs text-muted-foreground">
+                {platformUser.role}
+              </p>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+              {children}
             </div>
-          </header>
-          <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">{children}</div>
-        </SidebarInset>
-      </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      </BreadcrumbLabelProvider>
     </TooltipProvider>
   );
 }

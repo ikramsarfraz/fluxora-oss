@@ -49,6 +49,7 @@ function humanizeSegment(segment: string): string {
 function labelForSegment(
   segment: string,
   prevSegment: string | undefined,
+  segmentLabels: Record<string, string>,
 ): string {
   if (/^\d+$/.test(segment)) {
     if (prevSegment === "customers") return `Customer ${segment}`;
@@ -65,12 +66,15 @@ function labelForSegment(
     if (prevSegment === "products") return "New product";
     if (prevSegment === "supplier-invoices") return "New invoice";
   }
-  return SEGMENT_LABELS[segment] ?? humanizeSegment(segment);
+  return segmentLabels[segment] ?? humanizeSegment(segment);
 }
 
 type Crumb = { href: string; label: string; isCurrent: boolean };
 
-function buildCrumbs(pathname: string): Crumb[] {
+function buildCrumbs(
+  pathname: string,
+  segmentLabels: Record<string, string>,
+): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length === 0) {
@@ -82,7 +86,7 @@ function buildCrumbs(pathname: string): Crumb[] {
   for (let i = 0; i < segments.length; i++) {
     path += `/${segments[i]}`;
     const prev = segments[i - 1];
-    const label = labelForSegment(segments[i], prev);
+    const label = labelForSegment(segments[i], prev, segmentLabels);
     const isCurrent = i === segments.length - 1;
     crumbs.push({ href: path, label, isCurrent });
   }
@@ -90,9 +94,22 @@ function buildCrumbs(pathname: string): Crumb[] {
   return crumbs;
 }
 
-export function AppBreadcrumb() {
+/**
+ * @param segmentLabels Extra path-segment -> label overrides merged on top of
+ *   the shared defaults. Lets surfaces like the platform-admin shell relabel
+ *   their own segments (e.g. `admin` -> "Platform Admin") without polluting the
+ *   tenant-app label map.
+ */
+export function AppBreadcrumb({
+  segmentLabels,
+}: {
+  segmentLabels?: Record<string, string>;
+} = {}) {
   const pathname = usePathname() ?? "/";
-  const crumbs = buildCrumbs(pathname);
+  const mergedLabels = segmentLabels
+    ? { ...SEGMENT_LABELS, ...segmentLabels }
+    : SEGMENT_LABELS;
+  const crumbs = buildCrumbs(pathname, mergedLabels);
   const { labels } = useBreadcrumbLabels();
 
   /** On small screens, show only the parent + current (last two) when the trail is longer. */

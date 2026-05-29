@@ -5,6 +5,7 @@ import { TenantPlanUsageCard } from "@/modules/core/billing/components/subscript
 import { TenantSubscriptionOverview } from "@/modules/core/billing/components/subscription/tenant-subscription-overview";
 import { TenantSubscriptionHealthBadge } from "@/modules/core/billing/components/subscription/tenant-subscription-health-badge";
 import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,6 +163,7 @@ export default async function PlatformAdminTenantDetailPage({
 
   return (
     <div className="space-y-6">
+      <BreadcrumbLabel href={`/admin/tenants/${tenant.id}`} label={tenant.name} />
       <AdminDetailHeader
         backHref="/admin/tenants"
         backLabel="Back to tenants"
