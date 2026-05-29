@@ -22,6 +22,32 @@
 #  3. We hard refuse to run if a `.env.local.test-backup` already
 #     exists, since that implies a prior run crashed mid-swap and the
 #     real .env.local is still off to the side.
+#
+# Recovery from the historical .env.local pollution (#321)
+# ────────────────────────────────────────────────────────
+# An earlier version of this script (before #321) had an
+# unbound-variable bug in restore_env that crashed the EXIT trap
+# BEFORE the .env.local restore ran. The blast radius was worse than a
+# noisy EXIT log: the script's pre-flight had already appended a
+# trailing block of test overrides to the real .env.local, which
+# dotenv.config({ override: true }) reads sequentially — so the
+# trailing DATABASE_URL=…:5433… wins over the user's real Neon URL
+# above, and the next `pnpm dev` boots pointed at a docker Postgres
+# that no longer exists. Every getSession() returns null and every
+# guarded route throws "Unauthorized" + 307-loops.
+#
+# If you pulled an early-#308-era state and see auth errors, check:
+#
+#   grep -n "5433\|fluxora_test\|injected by scripts/test-integration" .env.local
+#
+# If it matches, the original is still on disk and recovery is one
+# command:
+#
+#   mv .env.local.test-backup .env.local
+#
+# Then restart `pnpm dev`. The crash-mid-swap guard below is what
+# stops a second run from re-appending and hiding the pollution
+# behind a doubled trailing block — don't be tempted to remove it.
 
 set -euo pipefail
 

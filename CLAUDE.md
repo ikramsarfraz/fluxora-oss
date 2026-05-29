@@ -27,6 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Lint | `pnpm lint` |
 | Unit tests (all) | `pnpm test:unit` |
 | Single unit test | `node --conditions=react-server --import tsx --test path/to/file.test.ts` |
+| Integration tests (docker Postgres) | `pnpm test:integration` |
 | Generate Drizzle migration | `pnpm db:generate` |
 | Apply migrations | `pnpm db:migrate` |
 | Reset DB (destructive) | `pnpm db:reset` |
@@ -34,6 +35,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Enforce import boundaries | `pnpm check:boundaries` |
 
 Tests use the **Node built-in test runner** with `tsx` — there is no Vitest/Jest. The list of test files is hard-coded in `package.json` under `test:unit`; **adding a new `*.test.ts` file requires appending it to that script** or it will not run in CI. The `--conditions=react-server` flag is required for any test that pulls in `server-only` or React Server Component code paths — leave it on by default to avoid resolution surprises.
+
+`pnpm test:integration` boots a disposable Postgres via `docker-compose.test.yml`, swaps `.env.local` for a test-only fixture, runs `drizzle-kit push`, then executes the tenant-isolation suite. **If you ever see `Error: Unauthorized` from `getCurrentTenant` / `getCurrentPortalUser` on every dev request right after running this**, your `.env.local` was polluted by the pre-#321 version of the script (the EXIT trap crashed before the restore). Check with `grep -n "5433\|fluxora_test\|injected by scripts/test-integration" .env.local` and recover via `mv .env.local.test-backup .env.local`. The fixed script has a crash-mid-swap guard at the top — never delete it.
 
 The bulk of existing test coverage sits under `modules/distribution/supplier-invoices/` (vision dispatch, OpenAI provider, parsing pipeline, line/PDF matching, etc.) — that's the codebase's most failure-prone surface, so when changing AI / PDF parsing code, run the supplier-invoices tests specifically before the full suite.
 
