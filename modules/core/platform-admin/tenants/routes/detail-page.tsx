@@ -37,8 +37,10 @@ import {
   requirePlatformUserInRoles,
 } from "@/modules/core/platform-admin/services/platform-users";
 import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
+import { getTenantBillingDiscount } from "@/modules/core/billing/stripe-discounts";
 import { TenantStatusForm } from "@/modules/core/platform-admin/tenants/components/tenant-status-form";
 import { TenantSubscriptionForm } from "@/modules/core/platform-admin/tenants/components/tenant-subscription-form";
+import { TenantBillingControls } from "@/modules/core/platform-admin/tenants/components/tenant-billing-controls";
 import { PlatformTenantStripeCheckoutButtons } from "@/modules/core/platform-admin/tenants/components/platform-tenant-stripe-checkout-buttons";
 
 function formatActivitySummary(item: {
@@ -75,6 +77,20 @@ function formatActivitySummary(item: {
 
     if (context.action === "update_tenant_subscription") {
       return "Subscription fields updated";
+    }
+
+    if (context.action === "comp_tenant") {
+      return context.reason?.trim()
+        ? `Comped ${label}: ${context.reason.trim()}`
+        : `Comped ${label} (app free)`;
+    }
+
+    if (context.action === "uncomp_tenant") {
+      return `Ended comp for ${label}`;
+    }
+
+    if (context.action === "update_tenant_billing_discount") {
+      return "Billing discount updated";
     }
   } catch {
     return `${item.action} ${label}`;
@@ -134,6 +150,9 @@ export default async function PlatformAdminTenantDetailPage({
   };
 
   const defaultPaymentMethod = await getTenantDefaultPaymentMethod(tenant.id);
+  const currentDiscount = canEdit
+    ? await getTenantBillingDiscount(tenant.id)
+    : null;
   const subscriptionHealth = getTenantSubscriptionHealth({
     subscriptionPlan: tenant.subscriptionPlan,
     subscriptionStatus: tenant.subscriptionStatus,
@@ -223,6 +242,14 @@ export default async function PlatformAdminTenantDetailPage({
             <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
           </CardContent>
         </Card>
+      ) : null}
+
+      {canEdit ? (
+        <TenantBillingControls
+          tenantId={tenant.id}
+          isComped={tenant.subscriptionStatus === "comped"}
+          currentDiscount={currentDiscount}
+        />
       ) : null}
 
       {usage ? <TenantPlanUsageCard usage={usage} /> : null}

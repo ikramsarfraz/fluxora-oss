@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { recordActionBreadcrumb } from "@/lib/sentry-scope";
-import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
+import {
+  stripeBillingIntervalSchema,
+  stripeSaasPaidPlanSchema,
+} from "@/lib/stripe/checkout-plan-schema";
 import { PLATFORM_STRIPE_CATALOG_ROLES } from "@/modules/core/platform-admin/stripe-catalog/permissions";
 import { PLATFORM_TENANTS_EDIT_ROLES } from "@/modules/core/platform-admin/tenants/permissions";
 import {
@@ -13,12 +16,22 @@ import {
 } from "@/modules/core/platform-admin/tenants/validators/tenant-subscription-form.schema";
 import {
   bulkSetTenantsActiveByPlatformAdmin,
+  compTenantByPlatformAdmin,
   setTenantActiveByPlatformAdmin,
+  uncompTenantByPlatformAdmin,
   updateTenantSubscriptionByPlatformAdmin,
 } from "@/modules/core/platform-admin/services/platform-admin";
 import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 import { startCheckoutForTenant } from "@/modules/core/billing/stripe-tenant-billing";
 import { syncStripeCatalogFullFromStripeApi } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
+import {
+  applyDiscountToTenant,
+  createPromotionCodeForCoupon,
+  createStripeCoupon,
+  listStripeCoupons,
+  removeDiscountFromTenant,
+  type CouponSummary,
+} from "@/modules/core/billing/stripe-discounts";
 
 export async function setTenantActiveAction(
   id: string,
@@ -113,18 +126,21 @@ export async function updateTenantSubscriptionAction(
 export async function startPlatformAdminStripeCheckoutAction(
   tenantId: string,
   plan: unknown,
+  interval?: unknown,
 ): Promise<{ url: string }> {
   const id = z.uuid().parse(tenantId);
   const p = stripeSaasPaidPlanSchema.parse(plan);
+  const i = stripeBillingIntervalSchema.parse(interval);
   await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
   recordActionBreadcrumb({
     action: "platform_admin.start_stripe_checkout",
     tenantId: id,
-    data: { plan: p },
+    data: { plan: p, interval: i },
   });
   const { url } = await startCheckoutForTenant({
     tenantId: id,
     plan: p,
+    interval: i,
     successPath: `/admin/tenants/${id}`,
     cancelPath: `/admin/tenants/${id}`,
   });
@@ -133,6 +149,175 @@ export async function startPlatformAdminStripeCheckoutAction(
   revalidatePath(`/admin/tenants/${id}`);
   revalidatePath("/admin/subscriptions");
   return { url };
+}
+
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : typeof e === "string" ? e : fallback;
+}
+
+export async function listStripeCouponsAction(): Promise<
+  { ok: true; coupons: CouponSummary[] } | { ok: false; message: string }
+> {
+  try {
+    await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    const coupons = await listStripeCoupons();
+    return { ok: true, coupons };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to load coupons.") };
+  }
+}
+
+const createCouponSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    kind: z.enum(["percent", "amount"]),
+    percentOff: z.number().positive().max(100).optional().nullable(),
+    amountOffCents: z.number().int().positive().optional().nullable(),
+    currency: z.string().trim().length(3).optional().nullable(),
+    duration: z.enum(["once", "repeating", "forever"]),
+    durationInMonths: z.number().int().positive().max(120).optional().nullable(),
+  })
+  .strip();
+
+export async function createStripeCouponAction(
+  raw: z.input<typeof createCouponSchema>,
+): Promise<{ ok: true; coupon: CouponSummary } | { ok: false; message: string }> {
+  try {
+    await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    const input = createCouponSchema.parse(raw);
+    recordActionBreadcrumb({
+      action: "platform_admin.create_stripe_coupon",
+      data: { kind: input.kind, duration: input.duration },
+    });
+    const coupon = await createStripeCoupon({
+      name: input.name,
+      percentOff: input.kind === "percent" ? input.percentOff ?? null : null,
+      amountOffCents: input.kind === "amount" ? input.amountOffCents ?? null : null,
+      currency: input.kind === "amount" ? input.currency ?? null : null,
+      duration: input.duration,
+      durationInMonths: input.durationInMonths ?? null,
+    });
+    return { ok: true, coupon };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to create coupon.") };
+  }
+}
+
+const createPromoSchema = z
+  .object({
+    couponId: z.string().trim().min(1),
+    code: z.string().trim().min(1).max(64).optional().nullable(),
+    maxRedemptions: z.number().int().positive().optional().nullable(),
+  })
+  .strip();
+
+export async function createPromotionCodeAction(
+  raw: z.input<typeof createPromoSchema>,
+): Promise<{ ok: true; id: string; code: string } | { ok: false; message: string }> {
+  try {
+    await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    const input = createPromoSchema.parse(raw);
+    recordActionBreadcrumb({
+      action: "platform_admin.create_promotion_code",
+      data: { hasCustomCode: Boolean(input.code) },
+    });
+    const result = await createPromotionCodeForCoupon({
+      couponId: input.couponId,
+      code: input.code ?? null,
+      maxRedemptions: input.maxRedemptions ?? null,
+    });
+    return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to create promotion code.") };
+  }
+}
+
+export async function applyTenantDiscountAction(
+  tenantId: string,
+  couponId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const id = z.uuid().parse(tenantId);
+    const coupon = z.string().trim().min(1).parse(couponId);
+    const pu = await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    recordActionBreadcrumb({
+      action: "platform_admin.apply_tenant_discount",
+      tenantId: id,
+    });
+    await applyDiscountToTenant({ tenantId: id, couponId: coupon, platformUserId: pu.id });
+    revalidatePath("/admin/subscriptions");
+    revalidatePath(`/admin/tenants/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to apply discount.") };
+  }
+}
+
+export async function removeTenantDiscountAction(
+  tenantId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const id = z.uuid().parse(tenantId);
+    const pu = await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    recordActionBreadcrumb({
+      action: "platform_admin.remove_tenant_discount",
+      tenantId: id,
+    });
+    await removeDiscountFromTenant({ tenantId: id, platformUserId: pu.id });
+    revalidatePath("/admin/subscriptions");
+    revalidatePath(`/admin/tenants/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to remove discount.") };
+  }
+}
+
+const compReasonSchema = z.string().trim().max(500).optional().nullable();
+
+export async function compTenantAction(
+  tenantId: string,
+  reason?: string | null,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const id = z.uuid().parse(tenantId);
+    const r = compReasonSchema.parse(reason);
+    await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    recordActionBreadcrumb({
+      action: "platform_admin.comp_tenant",
+      tenantId: id,
+      data: { hasReason: Boolean(r) },
+    });
+    await compTenantByPlatformAdmin({ tenantId: id, reason: r ?? null });
+    revalidatePath("/admin");
+    revalidatePath("/admin/subscriptions");
+    revalidatePath(`/admin/tenants/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to comp tenant.") };
+  }
+}
+
+export async function uncompTenantAction(
+  tenantId: string,
+  reason?: string | null,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const id = z.uuid().parse(tenantId);
+    const r = compReasonSchema.parse(reason);
+    await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+    recordActionBreadcrumb({
+      action: "platform_admin.uncomp_tenant",
+      tenantId: id,
+      data: { hasReason: Boolean(r) },
+    });
+    await uncompTenantByPlatformAdmin({ tenantId: id, reason: r ?? null });
+    revalidatePath("/admin");
+    revalidatePath("/admin/subscriptions");
+    revalidatePath(`/admin/tenants/${id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: errorMessage(e, "Failed to end comp.") };
+  }
 }
 
 export async function syncStripeCatalogAdminAction(): Promise<

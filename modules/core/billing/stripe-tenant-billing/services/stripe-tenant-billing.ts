@@ -7,6 +7,7 @@ import { getPreferredBillingEmailForTenant } from "@/modules/core/billing/servic
 import { getAppPublicOrigin, getStripeClient } from "@/lib/stripe/config";
 import { tenantIdFromCheckoutSession } from "@/modules/core/billing/stripe-tenant-billing/lib/checkout-tenant-resolution";
 import type { StripeSaasPaidPlanKey } from "@/lib/stripe/plan-metadata";
+import type { StripeBillingInterval } from "@/lib/stripe/checkout-plan-schema";
 import {
   resolveStripePriceIdForPaidPlan,
   resolveTenantPlanFromStripePriceId,
@@ -15,6 +16,7 @@ import {
   isStripeCatalogWebhookEvent,
   processStripeCatalogWebhook,
 } from "@/modules/core/billing/stripe-catalog";
+import { resolveCheckoutDiscountParams } from "@/modules/core/billing/stripe-discounts/lib/checkout-discount";
 import { mapStripeSubscriptionStatus } from "@/modules/core/billing/stripe-tenant-billing/lib/subscription-status";
 import {
   diffSubscriptionKeys,
@@ -218,6 +220,8 @@ export async function getTenantDefaultPaymentMethod(
 export async function createTenantStripeCheckoutSession(input: {
   tenantId: string;
   plan: StripeCheckoutPlan;
+  /** Billing cadence; defaults to monthly when omitted. */
+  interval?: StripeBillingInterval;
   /**
    * Path-relative success and cancel URLs appended for tenant UX:
    * — success: `?success=1&session_id={CHECKOUT_SESSION_ID}` (or `&` if the path already has a query string)
@@ -228,7 +232,14 @@ export async function createTenantStripeCheckoutSession(input: {
   cancelPath: string;
 }): Promise<{ url: string }> {
   const customerId = await getOrCreateStripeCustomerForTenant(input.tenantId);
-  const priceId = await resolveStripePriceIdForPaidPlan(input.plan);
+  const priceId = await resolveStripePriceIdForPaidPlan(
+    input.plan,
+    input.interval ?? "month",
+  );
+  const tenantRow = await db.query.tenants.findFirst({
+    where: eq(tenants.id, input.tenantId),
+    columns: { stripeCouponId: true },
+  });
   const origin = getAppPublicOrigin();
   const successPath = input.successPath.startsWith("/")
     ? input.successPath
@@ -254,6 +265,9 @@ export async function createTenantStripeCheckoutSession(input: {
     subscription_data: {
       metadata: { [STRIPE_METADATA_TENANT_ID]: input.tenantId },
     },
+    // Admin-assigned coupon applies automatically; otherwise the tenant may
+    // enter a self-serve promotion code. These two are mutually exclusive.
+    ...resolveCheckoutDiscountParams(tenantRow?.stripeCouponId),
   };
 
   const session = await stripe.checkout.sessions.create(params);
@@ -269,6 +283,7 @@ export async function createTenantStripeCheckoutSession(input: {
 export async function startCheckoutForTenant(input: {
   tenantId: string;
   plan: StripeCheckoutPlan;
+  interval?: StripeBillingInterval;
   successPath: string;
   cancelPath: string;
 }): Promise<{ url: string }> {
@@ -279,6 +294,7 @@ export async function startCheckoutForTenant(input: {
   return createTenantStripeCheckoutSession({
     tenantId: input.tenantId,
     plan: input.plan,
+    interval: input.interval,
     successPath: input.successPath,
     cancelPath: input.cancelPath,
   });
@@ -319,6 +335,49 @@ export async function createTenantStripeCustomerPortalSession(input: {
     throw new Error("Stripe did not return a Customer Portal URL.");
   }
   return { url: session.url };
+}
+
+function isStripeResourceMissing(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { code?: string }).code === "resource_missing"
+  );
+}
+
+/**
+ * Cancel the tenant's live Stripe subscription immediately so billing stops.
+ * Used when a platform admin comps a tenant that is mid-subscription — they get
+ * free app-side access, so they must not keep getting charged. Idempotent: a
+ * subscription that is already canceled or missing on Stripe is a no-op. Throws
+ * on real Stripe errors so the caller can abort before granting the comp.
+ */
+export async function cancelActiveTenantStripeSubscription(
+  tenantId: string,
+): Promise<{ canceled: boolean; subscriptionId: string | null }> {
+  const row = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { stripeSubscriptionId: true },
+  });
+  const subscriptionId = row?.stripeSubscriptionId?.trim() || null;
+  if (!subscriptionId) {
+    return { canceled: false, subscriptionId: null };
+  }
+  const stripe = getStripeClient();
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe.subscriptions.retrieve(subscriptionId);
+  } catch (e) {
+    if (isStripeResourceMissing(e)) {
+      return { canceled: false, subscriptionId };
+    }
+    throw e;
+  }
+  if (sub.status === "canceled") {
+    return { canceled: false, subscriptionId };
+  }
+  await stripe.subscriptions.cancel(subscriptionId);
+  return { canceled: true, subscriptionId };
 }
 
 function priceIdFromSubscriptionItem(
@@ -520,6 +579,43 @@ export async function syncTenantFromSubscription(
     return;
   }
   const tenantId = raw;
+
+  // A platform-admin comp is an app-side override granting free, unlimited
+  // access (and any live Stripe subscription was canceled when the comp was
+  // applied). Never let a Stripe webhook silently un-comp a tenant; the comp
+  // ends only via the explicit "End comp" admin action.
+  const currentTenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+  });
+  if (currentTenant?.subscriptionStatus === "comped") {
+    logStripeBillingEvent("info", "subscription sync skipped: tenant is comped", {
+      stripeEventId: eventId,
+      eventType,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      tenantId,
+    });
+    const snap = subscriptionSnapshotFromRow(currentTenant);
+    await db.insert(auditLogs).values({
+      tenantId: currentTenant.id,
+      actorType: "system",
+      action: "update",
+      entityTable: "tenants",
+      entityId: currentTenant.id,
+      entityLabel: currentTenant.name,
+      changedFieldsJson: JSON.stringify([]),
+      beforeJson: JSON.stringify(snap),
+      afterJson: JSON.stringify(snap),
+      contextJson: JSON.stringify({
+        action: "stripe_webhook",
+        eventType,
+        stripeEventId: eventId,
+        stripeSyncResult: "skipped_comped" as const,
+      }),
+    });
+    return;
+  }
+
   if (isStripeCanceledStatus(sub.status)) {
     await updateTenantFromStripeEvent({
       tenantId,

@@ -427,7 +427,20 @@ export async function syncStripeCatalogFullFromStripeApi(input: {
   return { productsUpserted, pricesUpserted };
 }
 
-/** One selectable paid tier for tenant billing UI (newest active Stripe price per plan key). */
+/** A single selectable price (one billing cadence) for a paid tier. */
+export type BillingCatalogPriceOption = {
+  stripePriceId: string;
+  currency: string;
+  unitAmountCents: number | null;
+  recurringInterval: string | null;
+  recurringIntervalCount: number | null;
+};
+
+/**
+ * One selectable paid tier for tenant billing UI. The flat fields carry the
+ * primary (monthly) price for backward compatibility; `annual` holds the yearly
+ * price when one is synced, so the UI can offer a monthly/annual toggle.
+ */
 export type BillingCatalogPlanRow = {
   planKey: StripeSaasPaidPlanKey;
   stripePriceId: string;
@@ -437,6 +450,7 @@ export type BillingCatalogPlanRow = {
   unitAmountCents: number | null;
   recurringInterval: string | null;
   recurringIntervalCount: number | null;
+  annual: BillingCatalogPriceOption | null;
 };
 
 /** Active paid prices/products only (`active` on both tables). Subscription tiers with `billing_plan_key`; deduped newest per plan. */
@@ -472,38 +486,71 @@ export async function listActivePaidPlansForBillingPage(): Promise<
       )
       .orderBy(desc(stripePrices.stripeCreatedAt));
 
-    const byPlan = new Map<StripeSaasPaidPlanKey, BillingCatalogPlanRow>();
+    // Rows arrive newest-first; keep the newest active price per (plan, cadence).
+    type PlanGroup = {
+      productName: string;
+      productDescription: string | null;
+      monthly: BillingCatalogPriceOption | null;
+      annual: BillingCatalogPriceOption | null;
+    };
+    const byPlan = new Map<StripeSaasPaidPlanKey, PlanGroup>();
 
     for (const row of rows) {
       const k = row.billingPlanKey;
-      if (
-        k !== "starter" &&
-        k !== "growth" &&
-        k !== "enterprise"
-      ) {
+      if (k !== "starter" && k !== "growth" && k !== "enterprise") {
         continue;
       }
-      if (byPlan.has(k)) {
-        continue;
-      }
-      byPlan.set(k, {
-        planKey: k,
+      const group =
+        byPlan.get(k) ??
+        ({
+          productName: row.productName,
+          productDescription: row.productDescription,
+          monthly: null,
+          annual: null,
+        } satisfies PlanGroup);
+      const option: BillingCatalogPriceOption = {
         stripePriceId: row.stripePriceId,
-        productName: row.productName,
-        productDescription: row.productDescription,
         currency: row.currency,
         unitAmountCents: row.unitAmount,
         recurringInterval: row.recurringInterval,
         recurringIntervalCount: row.recurringIntervalCount,
-      });
+      };
+      if (row.recurringInterval === "year") {
+        if (!group.annual) {
+          group.annual = option;
+        }
+      } else if (!group.monthly) {
+        group.monthly = option;
+      }
+      byPlan.set(k, group);
     }
 
     const ordered: BillingCatalogPlanRow[] = [];
     for (const pk of STRIPE_SAAS_PAID_PLAN_KEYS) {
-      const r = byPlan.get(pk);
-      if (r) {
-        ordered.push(r);
+      const group = byPlan.get(pk);
+      if (!group) {
+        continue;
       }
+      // Primary (flat) fields prefer the monthly price; fall back to annual so a
+      // tier that only has an annual price still renders.
+      const primary = group.monthly ?? group.annual;
+      if (!primary) {
+        continue;
+      }
+      ordered.push({
+        planKey: pk,
+        stripePriceId: primary.stripePriceId,
+        productName: group.productName,
+        productDescription: group.productDescription,
+        currency: primary.currency,
+        unitAmountCents: primary.unitAmountCents,
+        recurringInterval: primary.recurringInterval,
+        recurringIntervalCount: primary.recurringIntervalCount,
+        annual:
+          group.annual && group.annual.stripePriceId !== primary.stripePriceId
+            ? group.annual
+            : null,
+      });
     }
     return ordered;
   } catch (err) {

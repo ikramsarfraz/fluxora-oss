@@ -1,1 +1,4 @@
-export type { BillingCatalogPlanRow } from "./services/stripe-catalog";
+export type {
+  BillingCatalogPlanRow,
+  BillingCatalogPriceOption,
+} from "./services/stripe-catalog";

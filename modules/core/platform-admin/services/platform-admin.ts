@@ -9,6 +9,7 @@ import {
   subscriptionSnapshotFromRow,
 } from "@/lib/tenant-subscription-audit";
 import { getTenantPlanUsageByTenantId } from "@/modules/core/billing/services/subscription-usage";
+import { cancelActiveTenantStripeSubscription } from "@/modules/core/billing/stripe-tenant-billing";
 import { computePriorWindow } from "@/modules/core/platform-admin/dashboard/utils/compute-prior-window";
 import { requirePlatformUser } from "@/modules/core/platform-admin/services/platform-users";
 
@@ -881,6 +882,137 @@ export async function updateTenantSubscriptionByPlatformAdmin(
       });
     }
 
+    return [u] as const;
+  });
+
+  return updated;
+}
+
+/**
+ * Comp a tenant: flip subscription status to `comped` (app-side override that
+ * grants enterprise-equivalent, unlimited access with no charge — see
+ * `getEffectiveTenantPlan`). Plan is left untouched; trial/period dates are
+ * cleared because a comp does not expire. Idempotent.
+ */
+export async function compTenantByPlatformAdmin(input: {
+  tenantId: string;
+  reason?: string | null;
+}) {
+  const platformUser = await requirePlatformUser();
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, input.tenantId),
+  });
+  if (!tenant) {
+    throw new Error("Tenant not found");
+  }
+
+  const reason = input.reason?.trim() || null;
+  const beforeSnap = subscriptionSnapshotFromRow(tenant);
+
+  // Stop Stripe billing before granting free access — a comped tenant must not
+  // keep getting charged. Done before the DB write so a Stripe failure aborts
+  // the comp (rather than leaving them comped but still billed). The matching
+  // cancellation webhook is ignored by the comped guard in
+  // syncTenantFromSubscription.
+  const cancellation = await cancelActiveTenantStripeSubscription(input.tenantId);
+
+  const [updated] = await db.transaction(async tx => {
+    const [u] = await tx
+      .update(tenants)
+      .set({
+        subscriptionStatus: "comped",
+        stripeSubscriptionId: null,
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, input.tenantId))
+      .returning();
+    if (!u) {
+      throw new Error("Failed to update tenant");
+    }
+    const afterSnap = subscriptionSnapshotFromRow(u);
+    const changed = diffSubscriptionKeys(beforeSnap, afterSnap);
+    if (changed.length > 0) {
+      await tx.insert(auditLogs).values({
+        tenantId: u.id,
+        actorType: "platform_user",
+        actorPlatformUserId: platformUser.id,
+        action: "update",
+        entityTable: "tenants",
+        entityId: u.id,
+        entityLabel: u.name,
+        changedFieldsJson: JSON.stringify(changed),
+        beforeJson: JSON.stringify(beforeSnap),
+        afterJson: JSON.stringify(afterSnap),
+        contextJson: JSON.stringify({
+          action: "comp_tenant",
+          reason,
+          canceledStripeSubscriptionId: cancellation.canceled
+            ? cancellation.subscriptionId
+            : null,
+        }),
+      });
+    }
+    return [u] as const;
+  });
+
+  return updated;
+}
+
+/**
+ * End a comp: drop the tenant back to the free plan (active). They keep
+ * free-tier access and must subscribe for paid features. Idempotent.
+ */
+export async function uncompTenantByPlatformAdmin(input: {
+  tenantId: string;
+  reason?: string | null;
+}) {
+  const platformUser = await requirePlatformUser();
+
+  const tenant = await db.query.tenants.findFirst({
+    where: eq(tenants.id, input.tenantId),
+  });
+  if (!tenant) {
+    throw new Error("Tenant not found");
+  }
+
+  const reason = input.reason?.trim() || null;
+  const beforeSnap = subscriptionSnapshotFromRow(tenant);
+
+  const [updated] = await db.transaction(async tx => {
+    const [u] = await tx
+      .update(tenants)
+      .set({
+        subscriptionPlan: "free",
+        subscriptionStatus: "active",
+        trialEndsAt: null,
+        currentPeriodEndsAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, input.tenantId))
+      .returning();
+    if (!u) {
+      throw new Error("Failed to update tenant");
+    }
+    const afterSnap = subscriptionSnapshotFromRow(u);
+    const changed = diffSubscriptionKeys(beforeSnap, afterSnap);
+    if (changed.length > 0) {
+      await tx.insert(auditLogs).values({
+        tenantId: u.id,
+        actorType: "platform_user",
+        actorPlatformUserId: platformUser.id,
+        action: "update",
+        entityTable: "tenants",
+        entityId: u.id,
+        entityLabel: u.name,
+        changedFieldsJson: JSON.stringify(changed),
+        beforeJson: JSON.stringify(beforeSnap),
+        afterJson: JSON.stringify(afterSnap),
+        contextJson: JSON.stringify({ action: "uncomp_tenant", reason }),
+      });
+    }
     return [u] as const;
   });
 

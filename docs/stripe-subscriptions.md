@@ -29,9 +29,19 @@ Set in `.env.local` (see `.env.local.example` in the repo root):
 2. Select the event types your app handles. At minimum: `**checkout.session.completed`**, `**customer.subscription.created**`, `**customer.subscription.updated**`, `**customer.subscription.deleted**`, `**invoice.payment_succeeded**`, `**invoice.payment_failed**`, and for catalog sync: `**product.created**`, `**product.updated**`, `**product.deleted**`, `**price.created**`, `**price.updated**`, `**price.deleted**` (see `services/stripe-tenant-billing.ts` and `services/stripe-catalog.ts`).
 3. **Reveal signing secret** for **that endpoint** — it is a `**whsec_...`** tied to **that URL**. Set it as `**STRIPE_WEBHOOK_SECRET`** in deployment env. It is **not** the secret printed by `**stripe listen`** (that is only for local forwarding).
 
+## Seeding the catalog on Stripe
+
+Instead of hand-creating Products/Prices, run the idempotent seed script (uses `STRIPE_SECRET_KEY` from `.env.local`):
+
+```bash
+pnpm stripe:seed
+```
+
+It creates a **Starter / Growth / Enterprise** Product plus **two recurring Prices** for each — a **monthly** Price and an **annual** Price (annual = monthly × 10, i.e. two months free) — tagged with the required `metadata.plan` and stable Price `lookup_key`s (`plan_<tier>_monthly`, `plan_<tier>_yearly`). Re-runs reuse existing prices (matched by `lookup_key`) rather than duplicating them. Override the currency with `STRIPE_SEED_CURRENCY=eur pnpm stripe:seed`. After seeding, run **Sync Stripe catalog** (Admin → Subscriptions) so the local `stripe_products` / `stripe_prices` cache mirrors Stripe — see **Catalog** below.
+
 ## Local development (Stripe CLI)
 
-1. Create three recurring **Prices** (Starter, Growth, Enterprise) in the [Stripe test Dashboard](https://dashboard.stripe.com/test); paste their IDs into the `STRIPE_PRICE_*` env vars.
+1. Create three recurring **Prices** (Starter, Growth, Enterprise) in the [Stripe test Dashboard](https://dashboard.stripe.com/test) — or just run `pnpm stripe:seed` (above); paste their IDs into the `STRIPE_PRICE_*` env vars (optional fallback when the cached catalog is empty).
 2. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli).
 3. Forward events to **this** app (**include port `:3000` and path `/api/stripe/webhook`**):
   ```bash
@@ -65,7 +75,7 @@ The tables `**stripe_products**` and `**stripe_prices**` mirror Stripe’s Produ
 - On each **recurring Price** that backs a tenant tier, set metadata key `**plan`** to one of: `**starter**`, `**growth**`, `**enterprise**`. You may set `**plan**` on the **Product** instead; the sync copies the effective plan into `stripe_prices.billing_plan_key` (Stripe Price metadata wins over Product when merging).
 - Optionally set `**lookup_key`** in Stripe for human-readable keys; we store it but primary plan resolution uses `**plan**`.
 
-**Checkout & subscription resolution:** When creating a Checkout Session, the app selects the **latest active** cached price with matching `billing_plan_key`. If none is found, it falls back to `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, or `STRIPE_PRICE_ENTERPRISE`. Webhook subscription sync maps a subscription’s price id back to a tenant plan via the same cache, then env ids.
+**Checkout & subscription resolution:** When creating a Checkout Session, the app selects the **latest active** cached price matching both `billing_plan_key` **and** the requested billing **interval** (`month` / `year`). The tenant Billing page (`/settings/billing/plan-and-usage`) shows a **Monthly / Annual** toggle when annual prices exist, and passes the chosen interval to `startTenantAdminStripeCheckoutAction(plan, interval)`. If no monthly cached price is found, checkout falls back to `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, or `STRIPE_PRICE_ENTERPRISE`; **there is no annual env fallback** — annual checkout requires a synced annual price (seed + sync), otherwise it throws a clear error. Webhook subscription sync maps a subscription’s price id back to a tenant plan via the same cache, then env ids (both monthly and annual prices carry the same `metadata.plan`, so plan mapping is interval-agnostic).
 
 Stripe `product.deleted` / `price.deleted` events **archive** local rows (`active = false`) instead of deleting them, so a subscription that still references an old Stripe price id continues to match `billing_plan_key` / cached metadata (env remains a fallback if the row was never synced).
 
@@ -77,6 +87,19 @@ Stripe `product.deleted` / `price.deleted` events **archive** local rows (`activ
 The **Stripe catalog** screen (`/admin/stripe-catalog`) is a read-only view of cached Products and grouped Prices plus the last full-sync audit entry.
 
 After schema changes, run `**pnpm db:migrate`**. For a new environment, create Products/Prices in Stripe, set metadata, then run the manual sync or wait for webhooks.
+
+## Discounts and comping (platform admin)
+
+Platform admins manage per-tenant discounts and comps from **Admin → Tenants → [tenant]** (the **Discounts & comp** card). Edit access is gated to `platform_admin` (`PLATFORM_TENANTS_EDIT_ROLES`). Server logic lives in `modules/core/billing/stripe-discounts/` and the comp helpers in `modules/core/platform-admin/services/platform-admin.ts`; actions are in `modules/core/platform-admin/actions.ts`.
+
+**Discounts (Stripe coupons).** An admin picks an existing Stripe coupon (or creates one inline — percent-off or amount-off, with `once` / `repeating` / `forever` duration) and applies it to a tenant. Applying stores the coupon id on `tenants.stripe_coupon_id` and, if the tenant has a live subscription, syncs it onto that subscription immediately. The coupon then flows into the tenant's next Checkout via the session `discounts` param.
+
+- **Self-serve promotion codes.** When a tenant has **no** admin-assigned coupon, Checkout sets `allow_promotion_codes: true`, so tenants can type any active **promotion code** you created in Stripe (codes wrap a coupon). `discounts` and `allow_promotion_codes` are **mutually exclusive** in a Checkout Session — the app picks one based on whether an admin coupon is assigned (see `resolveCheckoutDiscountParams`).
+
+**Comping (make the app free).** "Make free (comp)" sets `subscriptionStatus = comped`, an **app-side** override that grants enterprise-equivalent, unlimited capabilities with no Stripe charge (`getEffectiveTenantPlan` maps `comped → enterprise`). It does not create a Stripe subscription. "End comp" drops the tenant back to the `free` plan (`active`). Both write tenant audit log entries (with an optional reason) visible under the tenant's Activity.
+
+- **Comping a tenant that has a live subscription.** If the tenant is mid-subscription, comping **cancels their Stripe subscription immediately** (`cancelActiveTenantStripeSubscription`) so they stop being charged, then clears `tenants.stripe_subscription_id`. The cancellation happens **before** the DB write — if Stripe errors, the comp is aborted (so a tenant is never left comped-but-still-billed). Already-canceled / missing subscriptions are a no-op. The cancelled-subscription id is recorded in the comp audit entry.
+- **Webhook guard.** `syncTenantFromSubscription` **skips** any tenant whose status is `comped` (logged + audited as `stripeSyncResult: skipped_comped`), so a stray or delayed `customer.subscription.*` webhook can never silently un-comp a tenant. A comp ends **only** via the explicit "End comp" action.
 
 ## Subscription access guard (canceled / expired tenants)
 

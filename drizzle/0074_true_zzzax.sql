@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "stripe_coupon_id" varchar(255);

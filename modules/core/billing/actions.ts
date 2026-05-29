@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { getStripeClient } from "@/lib/stripe/config";
 import { tenantIdFromCheckoutSession } from "@/lib/stripe/checkout-tenant-resolution";
-import { stripeSaasPaidPlanSchema } from "@/lib/stripe/checkout-plan-schema";
+import {
+  stripeBillingIntervalSchema,
+  stripeSaasPaidPlanSchema,
+} from "@/lib/stripe/checkout-plan-schema";
 import {
   getCurrentPortalUser,
   requireAdminPortalUser,
@@ -15,13 +18,16 @@ import {
 
 export async function startTenantAdminStripeCheckoutAction(
   plan: unknown,
+  interval?: unknown,
 ): Promise<{ url: string }> {
   const p = stripeSaasPaidPlanSchema.parse(plan);
+  const i = stripeBillingIntervalSchema.parse(interval);
   const admin = await requireAdminPortalUser();
   const billingPath = "/settings/billing/plan-and-usage";
   const { url } = await startCheckoutForTenant({
     tenantId: admin.tenantId,
     plan: p,
+    interval: i,
     successPath: billingPath,
     cancelPath: billingPath,
   });

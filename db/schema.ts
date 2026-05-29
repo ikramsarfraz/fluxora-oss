@@ -420,6 +420,13 @@ export const tenants = pgTable(
     currentPeriodEndsAt: timestamp("current_period_ends_at", { withTimezone: true }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+    /**
+     * Platform-admin-assigned Stripe Coupon id (`coupon.id`). When set, tenant
+     * Checkout applies it via `discounts` (and self-serve promotion codes are
+     * disabled for that session); apply/remove also syncs the active Stripe
+     * subscription. Null = no admin discount (Checkout allows promo codes).
+     */
+    stripeCouponId: varchar("stripe_coupon_id", { length: 255 }),
     /** Primary business category set during onboarding (drives category-specific defaults). */
     businessCategory: businessCategoryEnum("business_category"),
     /** Running count of supplier invoices posted; drives first-bill-mode and data-readiness gates. */

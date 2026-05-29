@@ -4,6 +4,7 @@ export {
   createTenantStripeCheckoutSession,
   startCheckoutForTenant,
   createTenantStripeCustomerPortalSession,
+  cancelActiveTenantStripeSubscription,
   updateTenantFromStripeEvent,
   syncTenantFromSubscription,
   processStripeWebhookEvent,

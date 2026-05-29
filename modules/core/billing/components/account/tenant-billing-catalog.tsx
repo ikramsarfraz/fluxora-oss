@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import type { BillingCatalogPlanRow } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 import type { StripeCheckoutPlan } from "@/modules/core/billing/stripe-tenant-billing";
+import type { StripeBillingInterval } from "@/lib/stripe/checkout-plan-schema";
 import { buildPublicSupportMailto } from "@/lib/public-contact";
 
 // ============================================================================
@@ -218,6 +219,7 @@ function UsageLimitRow({
 
 function PlanCard({
   plan,
+  interval,
   currentPlan,
   isPopular,
   canManageBilling,
@@ -225,11 +227,12 @@ function PlanCard({
   onSelect,
 }: {
   plan: BillingCatalogPlanRow;
+  interval: StripeBillingInterval;
   currentPlan: TenantSubscriptionPlan;
   isPopular: boolean;
   canManageBilling: boolean;
   pending: boolean;
-  onSelect: () => void;
+  onSelect: (interval: StripeBillingInterval) => void;
 }) {
   const Icon = PLAN_ICONS[plan.planKey] || Sparkles;
   const config = PLAN_CONFIG[plan.planKey] || PLAN_CONFIG.starter;
@@ -238,7 +241,25 @@ function PlanCard({
 
   const isCurrent = currentPlan === plan.planKey;
   const isEnterprise = plan.planKey === "enterprise";
-  const hasNoPrice = plan.unitAmountCents == null;
+
+  // Show annual pricing only when this tier actually has a synced annual price.
+  const showAnnual = interval === "year" && plan.annual != null;
+  const effectiveInterval: StripeBillingInterval = showAnnual ? "year" : "month";
+  const priceCents = showAnnual ? plan.annual!.unitAmountCents : plan.unitAmountCents;
+  const priceCurrency = showAnnual ? plan.annual!.currency : plan.currency;
+  const priceInterval = showAnnual
+    ? plan.annual!.recurringInterval
+    : plan.recurringInterval;
+  const priceIntervalCount = showAnnual
+    ? plan.annual!.recurringIntervalCount
+    : plan.recurringIntervalCount;
+  const hasNoPrice = priceCents == null;
+
+  // Annual savings vs. paying monthly for a year (e.g. "2 months free").
+  const annualSavingsCents =
+    showAnnual && plan.unitAmountCents != null && plan.annual!.unitAmountCents != null
+      ? plan.unitAmountCents * 12 - plan.annual!.unitAmountCents
+      : null;
 
   // Determine CTA state
   const planTier = PLAN_ORDER.indexOf(plan.planKey as TenantSubscriptionPlan);
@@ -310,14 +331,19 @@ function PlanCard({
         {/* Pricing */}
         <div className="flex items-baseline gap-1.5">
           <span className="text-3xl font-bold tracking-tight">
-            {formatMoney(plan.currency, plan.unitAmountCents)}
+            {formatMoney(priceCurrency, priceCents)}
           </span>
           {!hasNoPrice && (
             <span className="text-sm text-muted-foreground">
-              {formatCadence(plan.recurringInterval, plan.recurringIntervalCount)}
+              {formatCadence(priceInterval, priceIntervalCount)}
             </span>
           )}
         </div>
+        {annualSavingsCents != null && annualSavingsCents > 0 && (
+          <p className="text-xs font-medium text-primary">
+            Save {formatMoney(priceCurrency, annualSavingsCents)} a year
+          </p>
+        )}
       </div>
 
       {/* Divider */}
@@ -409,7 +435,7 @@ function PlanCard({
               )}
               size="lg"
               disabled={isCtaDisabled}
-              onClick={onSelect}
+              onClick={() => onSelect(effectiveInterval)}
             >
               {pending ? (
                 <>
@@ -446,11 +472,17 @@ export function TenantBillingCatalogSection(props: {
   canManageBilling: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [interval, setInterval] = useState<StripeBillingInterval>("month");
 
-  function launch(plan: StripeCheckoutPlan) {
+  const hasAnnualOption = props.catalogPlans.some((p) => p.annual != null);
+
+  function launch(plan: StripeCheckoutPlan, checkoutInterval: StripeBillingInterval) {
     startTransition(async () => {
       try {
-        const { url } = await startTenantAdminStripeCheckoutAction(plan);
+        const { url } = await startTenantAdminStripeCheckoutAction(
+          plan,
+          checkoutInterval
+        );
         window.location.href = url;
       } catch (e) {
         toast.error(
@@ -486,6 +518,49 @@ export function TenantBillingCatalogSection(props: {
 
   return (
     <div className="space-y-6">
+      {/* Billing interval toggle */}
+      {hasAnnualOption && (
+        <div className="flex justify-center">
+          <div
+            role="tablist"
+            aria-label="Billing interval"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={interval === "month"}
+              onClick={() => setInterval("month")}
+              className={cn(
+                "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                interval === "month"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={interval === "year"}
+              onClick={() => setInterval("year")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                interval === "year"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Annual
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                2 months free
+              </Badge>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Plan Cards Grid */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {props.catalogPlans.map((plan) => {
@@ -495,11 +570,14 @@ export function TenantBillingCatalogSection(props: {
             <PlanCard
               key={plan.planKey}
               plan={plan}
+              interval={interval}
               currentPlan={props.currentPlan}
               isPopular={isPopular}
               canManageBilling={props.canManageBilling}
               pending={pending}
-              onSelect={() => launch(plan.planKey)}
+              onSelect={(checkoutInterval) =>
+                launch(plan.planKey, checkoutInterval)
+              }
             />
           );
         })}
