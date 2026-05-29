@@ -43,9 +43,10 @@ It creates a **Starter / Growth / Enterprise** Product plus **two recurring Pric
 
 1. Create three recurring **Prices** (Starter, Growth, Enterprise) in the [Stripe test Dashboard](https://dashboard.stripe.com/test) — or just run `pnpm stripe:seed` (above); paste their IDs into the `STRIPE_PRICE_*` env vars (optional fallback when the cached catalog is empty).
 2. Install the [Stripe CLI](https://stripe.com/docs/stripe-cli).
-3. Forward events to **this** app (**include port `:3000` and path `/api/stripe/webhook`**):
+3. Forward events to **this** app (**include port `:3000` and path `/api/stripe/webhook`**). Run this in a **second terminal** alongside `pnpm dev` — it is intentionally **not** part of `pnpm dev` (it requires the Stripe CLI and is only needed while testing billing flows):
   ```bash
-   stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook
+   pnpm stripe:listen
+   # equivalent to: stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook
   ```
    Or with localhost:
 4. Copy the `**whsec_...**` printed by `**stripe listen**` into `**STRIPE_WEBHOOK_SECRET**` in `.env.local`. Restart `pnpm dev` after changing secrets.

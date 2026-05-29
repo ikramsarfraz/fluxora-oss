@@ -16,6 +16,7 @@
     "db:seed": "tsx db/seed.ts",
     "db:split-multicases": "tsx db/split-multicases.ts",
     "stripe:seed": "tsx scripts/stripe-seed-catalog.ts",
+    "stripe:listen": "stripe listen --forward-to http://localtest.me:3000/api/stripe/webhook",
     "check:boundaries": "node scripts/check-module-boundaries.mjs",
     "check:tests": "node scripts/check-test-coverage.mjs"
   },
