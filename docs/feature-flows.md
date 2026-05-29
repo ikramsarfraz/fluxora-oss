@@ -404,9 +404,9 @@ Three modes:
 
 **Flow**:
 1. Validate plan via `checkoutPlanSchema` ([`lib/stripe/checkout-plan-schema.ts:6`](lib/stripe/checkout-plan-schema.ts)).
-2. Resolve `stripePriceId` via `resolveStripePriceIdForPaidPlan()` ([`modules/core/billing/stripe-tenant-billing/lib/plan-resolution.ts:45-60`](modules/core/billing/stripe-tenant-billing/lib/plan-resolution.ts)):
-   - First: `SELECT stripePriceId FROM stripePrices WHERE billingPlanKey = $plan AND active = true ORDER BY createdAt DESC LIMIT 1`
-   - Fallback: env `STRIPE_PRICE_STARTER | STRIPE_PRICE_GROWTH | STRIPE_PRICE_ENTERPRISE`
+2. Resolve `stripePriceId` via `resolveStripePriceIdForPaidPlan(plan, interval)` ([`modules/core/billing/stripe-tenant-billing/lib/plan-resolution.ts`](modules/core/billing/stripe-tenant-billing/lib/plan-resolution.ts)):
+   - `SELECT stripePriceId FROM stripePrices WHERE billingPlanKey = $plan AND active = true AND recurringInterval = $interval ORDER BY stripeCreatedAt DESC LIMIT 1`
+   - The synced catalog is the only source — no env fallback. Throws if no matching price is synced.
 3. `createTenantStripeCheckoutSession()` → `stripe.checkout.sessions.create({ mode: "subscription", customer, line_items, metadata })` with `STRIPE_METADATA_TENANT_ID`.
 4. Redirect user to hosted Checkout.
 5. After payment, Stripe → success URL `{origin}/account/billing?success=1&session_id={id}` (cancel → `?canceled=1`).

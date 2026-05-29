@@ -19,8 +19,9 @@ Set in `.env.local` (see `.env.local.example` in the repo root):
 | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | `STRIPE_SECRET_KEY`                                                      | Server-side Stripe API secret (test key in development)                                         |
 | `STRIPE_WEBHOOK_SECRET`                                                  | Signing secret for verifying `POST /api/stripe/webhook` (see below — **CLI ≠ Dashboard**)       |
-| `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, `STRIPE_PRICE_ENTERPRISE` | Fallback Stripe Price IDs when catalog rows are missing (see **Catalog** below)                 |
 | `NEXT_PUBLIC_APP_URL` (optional)                                         | Public origin for Checkout success/cancel redirects (falls back via `BETTER_AUTH_URL` / Vercel) |
+
+> Prices are resolved **exclusively from the synced catalog** (`stripe_prices`) — there are no `STRIPE_PRICE_*` env fallbacks. You must seed (`pnpm stripe:seed`) and run **Sync Stripe catalog** before checkout works for any plan/interval.
 
 
 ## Production webhooks
@@ -76,7 +77,7 @@ The tables `**stripe_products**` and `**stripe_prices**` mirror Stripe’s Produ
 - On each **recurring Price** that backs a tenant tier, set metadata key `**plan`** to one of: `**starter**`, `**growth**`, `**enterprise**`. You may set `**plan**` on the **Product** instead; the sync copies the effective plan into `stripe_prices.billing_plan_key` (Stripe Price metadata wins over Product when merging).
 - Optionally set `**lookup_key`** in Stripe for human-readable keys; we store it but primary plan resolution uses `**plan**`.
 
-**Checkout & subscription resolution:** When creating a Checkout Session, the app selects the **latest active** cached price matching both `billing_plan_key` **and** the requested billing **interval** (`month` / `year`). The tenant Billing page (`/settings/billing/plan-and-usage`) shows a **Monthly / Annual** toggle when annual prices exist, and passes the chosen interval to `startTenantAdminStripeCheckoutAction(plan, interval)`. If no monthly cached price is found, checkout falls back to `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_GROWTH`, or `STRIPE_PRICE_ENTERPRISE`; **there is no annual env fallback** — annual checkout requires a synced annual price (seed + sync), otherwise it throws a clear error. Webhook subscription sync maps a subscription’s price id back to a tenant plan via the same cache, then env ids (both monthly and annual prices carry the same `metadata.plan`, so plan mapping is interval-agnostic).
+**Checkout & subscription resolution:** When creating a Checkout Session, the app selects the **latest active** cached price matching both `billing_plan_key` **and** the requested billing **interval** (`month` / `year`). The tenant Billing page (`/settings/billing/plan-and-usage`) shows a **Monthly / Annual** toggle when annual prices exist, and passes the chosen interval to `startTenantAdminStripeCheckoutAction(plan, interval)`. The synced catalog is the **single source of truth** — there are no `STRIPE_PRICE_*` env fallbacks. If no active cached price is found for the requested plan + interval, checkout throws a clear error (seed + sync first). Webhook subscription sync maps a subscription’s price id back to a tenant plan via the same cache (both monthly and annual prices carry the same `metadata.plan`, so plan mapping is interval-agnostic).
 
 Stripe `product.deleted` / `price.deleted` events **archive** local rows (`active = false`) instead of deleting them, so a subscription that still references an old Stripe price id continues to match `billing_plan_key` / cached metadata (env remains a fallback if the row was never synced).
 

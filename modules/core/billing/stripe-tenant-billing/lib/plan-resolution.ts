@@ -7,15 +7,13 @@ import {
   type StripeSaasPaidPlanKey,
 } from "@/lib/stripe/plan-metadata";
 import type { StripeBillingInterval } from "@/lib/stripe/checkout-plan-schema";
-import {
-  stripePriceIdForPaidPlanFromEnv,
-  tryTenantPlanFromEnvPriceId,
-} from "./price-to-plan-env";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 /**
- * Map subscription line price id → tenant plan.
- * Order: row `billing_plan_key` → cached Price `metadata_json.plan` → `STRIPE_PRICE_*` env match.
+ * Map subscription line price id → tenant plan, using the synced Stripe catalog.
+ * Order: row `billing_plan_key` → cached Price `metadata_json.plan`. The catalog
+ * is the single source of truth; an uncached price id is an error (re-run
+ * "Sync Stripe catalog").
  */
 export async function resolveTenantPlanFromStripePriceId(
   priceId: string,
@@ -32,19 +30,16 @@ export async function resolveTenantPlanFromStripePriceId(
       return fromMeta;
     }
   }
-  const envPlan = tryTenantPlanFromEnvPriceId(priceId);
-  if (envPlan !== null) {
-    return envPlan;
-  }
-  throw new Error(`Unmapped Stripe price id: ${priceId}`);
+  throw new Error(
+    `Unmapped Stripe price id: ${priceId}. Re-run "Sync Stripe catalog" so the price is cached.`,
+  );
 }
 
 /**
- * Checkout: pick Stripe Price id for a paid plan + billing interval.
- * Order: newest active cached row with matching `billing_plan_key` and
- * `recurring_interval` → env `STRIPE_PRICE_*` (monthly only; the env vars hold
- * monthly price ids). Annual checkout requires a synced annual price — there is
- * no annual env fallback, so an unsynced annual catalog throws a clear error.
+ * Checkout: pick Stripe Price id for a paid plan + billing interval from the
+ * synced catalog — the newest active cached row matching both `billing_plan_key`
+ * and `recurring_interval`. The catalog is the single source of truth; if no
+ * matching price is synced, checkout throws a clear error (seed + sync first).
  */
 export async function resolveStripePriceIdForPaidPlan(
   plan: StripeSaasPaidPlanKey,
@@ -62,10 +57,8 @@ export async function resolveStripePriceIdForPaidPlan(
   if (id) {
     return id;
   }
-  if (interval === "year") {
-    throw new Error(
-      `No active annual Stripe price found for plan "${plan}". Seed annual prices (pnpm stripe:seed) and run "Sync Stripe catalog".`,
-    );
-  }
-  return stripePriceIdForPaidPlanFromEnv(plan);
+  const cadence = interval === "year" ? "annual" : "monthly";
+  throw new Error(
+    `No active ${cadence} Stripe price found for plan "${plan}". Seed prices (pnpm stripe:seed) and run "Sync Stripe catalog".`,
+  );
 }
