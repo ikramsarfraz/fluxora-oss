@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -10,6 +9,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import {
+  DefList,
+  DefRow,
+  DetailGrid,
+  DetailRail,
+  Pill,
+  type PillTone,
+  RailCard,
+} from "@/modules/core/platform-admin/components/admin-ui";
 import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
 import { PLATFORM_SUPPORT_ROLES } from "@/modules/core/platform-admin/support/permissions";
 import { SupportTicketAttachments } from "@/modules/core/platform-admin/support/components/support-ticket-attachments";
@@ -37,6 +45,25 @@ function updateAuthor(update: NonNullable<
   }
   return update.authorPlatformUser?.authUser.name ?? "Platform support";
 }
+
+const PRIORITY_TONE: Record<string, PillTone> = {
+  low: "neutral",
+  medium: "warning",
+  high: "danger",
+  urgent: "danger",
+};
+
+const STATUS_TONE: Record<string, PillTone> = {
+  open: "neutral",
+  in_progress: "info",
+  resolved: "success",
+  closed: "outline",
+};
+
+const VISIBILITY_TONE: Record<string, PillTone> = {
+  internal: "outline",
+  tenant_visible: "info",
+};
 
 export default async function PlatformAdminSupportDetailPage({
   params,
@@ -83,9 +110,9 @@ export default async function PlatformAdminSupportDetailPage({
         }
         actions={
           <>
-            <Badge variant="secondary">
+            <Pill tone={STATUS_TONE[ticket.status] ?? "neutral"}>
               {supportTicketStatusLabel(ticket.status)}
-            </Badge>
+            </Pill>
             <TicketStatusForm ticketId={ticket.id} status={ticket.status} />
             <TicketAssignmentForm
               ticketId={ticket.id}
@@ -96,198 +123,197 @@ export default async function PlatformAdminSupportDetailPage({
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Issue type</CardDescription>
-            <CardTitle className="text-lg">
-              {supportIssueTypeLabel(ticket.issueType)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Priority</CardDescription>
-            <CardTitle className="text-lg">
-              {supportPriorityLabel(ticket.priority)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Status</CardDescription>
-            <CardTitle className="text-lg">
-              {supportTicketStatusLabel(ticket.status)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Assigned to</CardDescription>
-            <CardTitle className="text-lg">
-              {ticket.assignedPlatformUser?.authUser.name ??
-                ticket.assignedPlatformUser?.authUser.email ??
-                "Unassigned"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      <DetailGrid>
+        {/* Main column — the conversation / workflow */}
+        <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>Message</CardTitle>
+              <CardDescription>
+                Full issue details submitted by the tenant user.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm leading-6">{ticket.message}</p>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Message</CardTitle>
-          <CardDescription>
-            Full issue details submitted by the tenant user.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="whitespace-pre-wrap text-sm leading-6">{ticket.message}</p>
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Status timeline</CardTitle>
+              <CardDescription>
+                Current support progress for this ticket.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SupportTicketStatusTimeline status={ticket.status} />
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Status timeline</CardTitle>
-          <CardDescription>
-            Current support progress for this ticket.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SupportTicketStatusTimeline status={ticket.status} />
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Updates and notes</CardTitle>
+              <CardDescription>
+                Internal notes stay on the platform side. Tenant-visible updates
+                appear on the tenant ticket detail page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="border-border-soft bg-card space-y-3 rounded-lg border-[0.5px] p-4">
+                  <div>
+                    <p className="font-medium text-ink">Internal note</p>
+                    <p className="text-[13px] text-subtle">
+                      For platform support context only.
+                    </p>
+                  </div>
+                  <TicketUpdateForm ticketId={ticket.id} visibility="internal" />
+                </div>
+                <div className="border-border-soft bg-card space-y-3 rounded-lg border-[0.5px] p-4">
+                  <div>
+                    <p className="font-medium text-ink">Tenant-visible update</p>
+                    <p className="text-[13px] text-subtle">
+                      This will be shown to the tenant on their ticket page.
+                    </p>
+                  </div>
+                  <TicketUpdateForm
+                    ticketId={ticket.id}
+                    visibility="tenant_visible"
+                  />
+                </div>
+              </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Metadata</CardTitle>
-          <CardDescription>
-            Tenant, submitter, and optional browser context.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 text-sm md:grid-cols-2">
-          <div>
-            <p className="text-muted-foreground">Tenant</p>
-            <p className="font-medium">{ticket.tenant.name}</p>
-            <p className="text-xs text-muted-foreground">{ticket.tenant.slug}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Submitted by</p>
-            <p className="font-medium">{ticket.name}</p>
-            <p className="text-xs text-muted-foreground">{ticket.email}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Portal user</p>
-            <p className="font-medium">
-              {ticket.portalUser?.fullName ?? "Not linked"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {ticket.portalUser?.email ?? ticket.portalUserId ?? "No portal user"}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Assigned platform user</p>
-            <p className="font-medium">
-              {ticket.assignedPlatformUser?.authUser.name ?? "Unassigned"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {ticket.assignedPlatformUser?.authUser.email ?? "No assignee"}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Page URL</p>
-            {ticket.pageUrl ? (
-              <Link
-                href={ticket.pageUrl}
-                className="break-all font-medium text-forest hover:underline"
-              >
-                {ticket.pageUrl}
-              </Link>
-            ) : (
-              <p className="font-medium">Not provided</p>
-            )}
-          </div>
-          <div className="md:col-span-2">
-            <SupportTicketAttachments
-              ticketId={ticket.id}
-              attachments={ticket.attachments}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Updates and notes</CardTitle>
-          <CardDescription>
-            Internal notes stay on the platform side. Tenant-visible updates
-            appear on the tenant ticket detail page.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-3 rounded-lg border p-4">
-              <div>
-                <p className="font-medium">Internal note</p>
+              {ticket.updates.length > 0 ? (
+                <div className="space-y-3">
+                  {ticket.updates.map(update => (
+                    <div
+                      key={update.id}
+                      className="border-border-soft bg-card rounded-lg border-[0.5px] p-4 shadow-sm"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 text-sm">
+                          <span className="font-medium text-ink">
+                            {updateAuthor(update)}
+                          </span>
+                          <span className="font-mono text-xs text-subtle">
+                            {formatDisplayDate(update.createdAt)}
+                          </span>
+                        </div>
+                        <Pill
+                          tone={VISIBILITY_TONE[update.visibility] ?? "outline"}
+                          dot={false}
+                        >
+                          {supportTicketUpdateVisibilityLabel(update.visibility)}
+                        </Pill>
+                      </div>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink-warm">
+                        {update.message}
+                      </p>
+                      <div className="mt-3">
+                        <SupportTicketAttachments
+                          ticketId={ticket.id}
+                          attachments={update.attachments}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
                 <p className="text-sm text-muted-foreground">
-                  For platform support context only.
+                  No updates or internal notes have been added yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Summary rail — ticket facts */}
+        <DetailRail aria-label="Ticket summary">
+          <RailCard title="Ticket">
+            <DefList>
+              <DefRow
+                label="Issue type"
+                value={supportIssueTypeLabel(ticket.issueType)}
+              />
+              <DefRow
+                label="Priority"
+                value={
+                  <Pill tone={PRIORITY_TONE[ticket.priority] ?? "neutral"}>
+                    {supportPriorityLabel(ticket.priority)}
+                  </Pill>
+                }
+              />
+              <DefRow
+                label="Status"
+                value={
+                  <Pill tone={STATUS_TONE[ticket.status] ?? "neutral"}>
+                    {supportTicketStatusLabel(ticket.status)}
+                  </Pill>
+                }
+              />
+              <DefRow
+                label="Assigned"
+                value={
+                  ticket.assignedPlatformUser?.authUser.name ??
+                  ticket.assignedPlatformUser?.authUser.email ??
+                  "Unassigned"
+                }
+              />
+            </DefList>
+          </RailCard>
+
+          <RailCard title="Submitted">
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs text-subtle">Tenant</p>
+                <p className="text-sm text-ink">{ticket.tenant.name}</p>
+                <p className="font-mono text-xs text-subtle">{ticket.tenant.slug}</p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Submitted by</p>
+                <p className="text-sm text-ink">{ticket.name}</p>
+                <p className="font-mono text-xs text-subtle">{ticket.email}</p>
+              </div>
+              <div>
+                <p className="text-xs text-subtle">Portal user</p>
+                <p className="text-sm text-ink">
+                  {ticket.portalUser?.fullName ?? "Not linked"}
+                </p>
+                <p className="font-mono text-xs text-subtle">
+                  {ticket.portalUser?.email ?? ticket.portalUserId ?? "No portal user"}
                 </p>
               </div>
-              <TicketUpdateForm ticketId={ticket.id} visibility="internal" />
+              <DefList>
+                <DefRow label="Created" mono value={formatDisplayDate(ticket.createdAt)} />
+                <DefRow label="Updated" mono value={formatDisplayDate(ticket.updatedAt)} />
+              </DefList>
             </div>
-            <div className="space-y-3 rounded-lg border p-4">
-              <div>
-                <p className="font-medium">Tenant-visible update</p>
-                <p className="text-sm text-muted-foreground">
-                  This will be shown to the tenant on their ticket page.
-                </p>
-              </div>
-              <TicketUpdateForm
+          </RailCard>
+
+          <RailCard title="Context">
+            <div className="mb-4">
+              <p className="mb-1 text-xs text-subtle">Page URL</p>
+              {ticket.pageUrl ? (
+                <Link
+                  href={ticket.pageUrl}
+                  className="font-mono text-xs break-all text-forest hover:underline"
+                >
+                  {ticket.pageUrl}
+                </Link>
+              ) : (
+                <p className="text-sm text-subtle">Not provided</p>
+              )}
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs text-subtle">Attachments</p>
+              <SupportTicketAttachments
                 ticketId={ticket.id}
-                visibility="tenant_visible"
+                attachments={ticket.attachments}
               />
             </div>
-          </div>
-
-          {ticket.updates.length > 0 ? (
-            <div className="space-y-3">
-              {ticket.updates.map(update => (
-                <div key={update.id} className="rounded-lg border p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm">
-                      <span className="font-medium">{updateAuthor(update)}</span>
-                      <span className="ml-2 text-muted-foreground">
-                        {formatDisplayDate(update.createdAt)}
-                      </span>
-                    </div>
-                    <Badge
-                      variant={
-                        update.visibility === "tenant_visible"
-                          ? "secondary"
-                          : "outline"
-                      }
-                    >
-                      {supportTicketUpdateVisibilityLabel(update.visibility)}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                    {update.message}
-                  </p>
-                  <div className="mt-3">
-                    <SupportTicketAttachments
-                      ticketId={ticket.id}
-                      attachments={update.attachments}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No updates or internal notes have been added yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </RailCard>
+        </DetailRail>
+      </DetailGrid>
     </div>
   );
 }

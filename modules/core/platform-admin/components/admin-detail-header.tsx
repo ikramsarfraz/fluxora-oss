@@ -32,9 +32,11 @@ export function AdminDetailHeader({
           ← {backLabel}
         </Link>
         {eyebrow ? (
-          <p className="text-sm font-medium text-forest">{eyebrow}</p>
+          <p className="text-[10px] font-medium tracking-[0.12em] text-muted uppercase">
+            {eyebrow}
+          </p>
         ) : null}
-        <h1 className="text-3xl font-medium tracking-tight text-ink">
+        <h1 className="font-serif text-[32px] leading-[1.1] font-medium tracking-[-0.02em] text-ink">
           {title}
         </h1>
         {subtitle ? (

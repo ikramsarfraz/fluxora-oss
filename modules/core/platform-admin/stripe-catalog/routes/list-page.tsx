@@ -1,7 +1,10 @@
 import type { InferSelectModel } from "drizzle-orm";
 
 import { SyncStripeCatalogButton } from "@/modules/core/platform-admin/components/sync-stripe-catalog-button";
-import { Badge } from "@/components/ui/badge";
+import {
+  BadgeCode,
+  Pill,
+} from "@/modules/core/platform-admin/components/admin-ui";
 import {
   Card,
   CardContent,
@@ -91,7 +94,45 @@ function formatCadenceAdmin(interval: string | null, count: number | null): stri
   return `Every ${n} ${plural}`;
 }
 
-function PriceBadgeRow(props: {
+/** Forest-tint group band spanning the ledger, one per Stripe product. */
+function LedgerGroupRow(props: { row: PlatformAdminGroupedStripeCatalog }) {
+  const { product } = props.row;
+  const description = product.description?.trim();
+  return (
+    <tr>
+      <td
+        colSpan={5}
+        className="bg-forest-tint border-forest-tint-deep border-y-[0.5px] p-0"
+      >
+        <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+          <div className="min-w-0 truncate">
+            <span className="font-serif text-[17px] font-medium tracking-[-0.01em] text-forest">
+              {product.name}
+            </span>
+            <span className="ml-2.5 font-mono text-xs text-forest/70">
+              {product.stripeProductId}
+            </span>
+            <span className="ml-3.5 hidden text-[13px] text-forest/70 sm:inline">
+              {description || "No description cached."}
+            </span>
+          </div>
+          {product.active ? (
+            <Pill tone="success" dot={false}>
+              Product active
+            </Pill>
+          ) : (
+            <Pill tone="danger" dot={false}>
+              Product inactive
+            </Pill>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Single price line beneath its product group. */
+function LedgerPriceRow(props: {
   price: StripePriceRow;
   productActive: boolean;
 }) {
@@ -100,158 +141,57 @@ function PriceBadgeRow(props: {
   const rawPlan = price.billingPlanKey?.trim();
   const unknownPlanKey = !!(rawPlan && !SAAS_PLAN_KEY_SET.has(rawPlan));
 
-  if (eligible) {
-    return (
-      <div className="pt-2">
-        <Badge variant="default" className="text-xs">
-          Tenant billing selectable
-        </Badge>
-      </div>
-    );
-  }
+  const cellBase =
+    "border-border-default border-b-[0.5px] px-4 py-[15px] align-middle text-sm text-ink";
 
   return (
-    <div className="flex flex-wrap gap-1 pt-2">
-      {!productActive ? (
-        <Badge variant="destructive" className="text-xs">
-          Product inactive (Stripe)
-        </Badge>
-      ) : null}
-      {!price.active ? (
-        <Badge variant="destructive" className="text-xs">
-          Price inactive (Stripe)
-        </Badge>
-      ) : null}
-      {!price.recurringInterval?.trim() ? (
-        <Badge variant="outline" className="text-xs">
-          No recurring interval
-        </Badge>
-      ) : null}
-      {!rawPlan ? (
-        <Badge variant="outline" className="text-xs">
-          No billing plan key
-        </Badge>
-      ) : null}
-      {unknownPlanKey ? (
-        <Badge variant="destructive" className="text-xs">
-          Plan metadata not SaaS (starter, growth, enterprise)
-        </Badge>
-      ) : null}
-      <Badge variant="secondary" className="text-xs">
-        Not selectable in tenant billing
-      </Badge>
-    </div>
-  );
-}
-
-function ProductBlock(props: { row: PlatformAdminGroupedStripeCatalog }) {
-  const { product, prices } = props.row;
-
-  return (
-    <Card className="overflow-hidden border-border-default">
-      <CardHeader className="border-b border-border bg-muted/40 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="text-lg">{product.name}</CardTitle>
-            <CardDescription className="font-mono text-xs">
-              Stripe product · {product.stripeProductId}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {product.active ? (
-              <Badge variant="outline" className="text-xs">
-                Product active (Stripe)
-              </Badge>
-            ) : (
-              <Badge variant="destructive" className="text-xs">
-                Product inactive
-              </Badge>
-            )}
-          </div>
+    <tr>
+      <td className={cellBase}>
+        <div className="font-medium text-ink">
+          {formatCadenceAdmin(price.recurringInterval, price.recurringIntervalCount)}
         </div>
-        {product.description?.trim() ? (
-          <p className="text-muted-foreground mt-3 text-sm leading-relaxed">{product.description}</p>
+        <div className="mt-0.5 font-mono text-xs text-subtle">
+          {price.stripePriceId}
+        </div>
+      </td>
+      <td className={cn(cellBase, "font-mono text-xs")}>
+        {rawPlan ? (
+          <span className={unknownPlanKey ? "font-medium text-danger-fg" : "text-ink-warm"}>
+            {price.billingPlanKey}
+          </span>
         ) : (
-          <p className="text-muted-foreground mt-3 text-sm">No description cached.</p>
+          <span className="text-muted">—</span>
         )}
-      </CardHeader>
-      <CardContent className="space-y-4 py-4">
-        {prices.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No Stripe prices cached for this product.</p>
+      </td>
+      <td className={cn(cellBase, "font-mono text-xs")}>
+        {price.lookupKey ? (
+          <span className="text-ink-warm">{price.lookupKey}</span>
         ) : (
-          <div className="overflow-x-auto rounded-lg border bg-background">
-            <table className="w-full caption-bottom text-sm">
-              <thead className="border-b [&_tr]:border-b">
-                <tr className="border-b border-border hover:bg-muted/50">
-                  <th className="h-11 px-3 text-left align-middle font-medium text-foreground">
-                    Price ID
-                  </th>
-                  <th className="h-11 px-3 text-left align-middle font-medium text-foreground">
-                    Plan key
-                  </th>
-                  <th className="h-11 px-3 text-left align-middle font-medium text-foreground">
-                    Lookup key
-                  </th>
-                  <th className="h-11 px-3 text-right align-middle font-medium text-foreground">
-                    Amount
-                  </th>
-                  <th className="h-11 px-3 text-left align-middle font-medium text-foreground">
-                    Interval
-                  </th>
-                  <th className="h-11 px-3 text-left align-middle font-medium text-foreground">
-                    Active (Stripe)
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="[&_tr:last-child]:border-0">
-                {prices.map(price => {
-                  const pk = price.billingPlanKey?.trim();
-                  const invalidPlanHead =
-                    !!(pk && !SAAS_PLAN_KEY_SET.has(pk));
-                  return (
-                  <tr key={price.stripePriceId} className="border-b border-border transition-colors hover:bg-muted/30">
-                    <td className="align-top p-3 font-mono text-xs leading-relaxed">
-                      {price.stripePriceId}
-                      <PriceBadgeRow price={price} productActive={product.active} />
-                    </td>
-                    <td
-                      className={cn(
-                        "align-top p-3 font-mono text-xs",
-                        invalidPlanHead &&
-                          "font-medium text-destructive",
-                      )}
-                    >
-                      {price.billingPlanKey ?? "—"}
-                    </td>
-                    <td className="align-top p-3 font-mono text-xs">
-                      {price.lookupKey ?? "—"}
-                    </td>
-                    <td className="align-top p-3 text-right font-medium tabular-nums">
-                      {formatMoneyAdmin(price.currency, price.unitAmount)}
-                    </td>
-                    <td className="align-top p-3 text-xs">
-                      {formatCadenceAdmin(price.recurringInterval, price.recurringIntervalCount)}
-                    </td>
-                    <td className="align-top p-3">
-                      {price.active ? (
-                        <Badge variant="outline" className="text-xs">
-                          Yes
-                        </Badge>
-                      ) : (
-                        <Badge variant="destructive" className="text-xs">
-                          No
-                        </Badge>
-                      )}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <span className="text-muted">—</span>
         )}
-      </CardContent>
-    </Card>
+      </td>
+      <td className={cn(cellBase, "text-right")}>
+        <span className="font-serif text-[17px] font-medium tracking-[-0.01em] text-ink tabular-nums">
+          {formatMoneyAdmin(price.currency, price.unitAmount)}
+        </span>
+      </td>
+      <td className={cellBase}>
+        <div className="flex items-center gap-2">
+          {price.active ? (
+            <Pill tone="success" dot={false}>
+              Yes
+            </Pill>
+          ) : (
+            <Pill tone="danger" dot={false}>
+              No
+            </Pill>
+          )}
+          <BadgeCode muted={!eligible}>
+            {eligible ? "Selectable" : "Not selectable"}
+          </BadgeCode>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -330,8 +270,10 @@ export default async function PlatformAdminStripeCatalogListPage() {
         </CardHeader>
       </Card>
 
-      <div className="space-y-2">
-        <h2 className="text-lg font-medium tracking-tight">Cached Stripe objects</h2>
+      <div className="space-y-4">
+        <h2 className="font-serif text-[17px] font-medium tracking-[-0.01em] text-ink">
+          Cached Stripe objects
+        </h2>
         {grouped.length === 0 ? (
           <Card>
             <CardContent className="space-y-3 py-12 px-6 text-center">
@@ -346,13 +288,70 @@ export default async function PlatformAdminStripeCatalogListPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6">
-            {grouped.map(row => (
-              <ProductBlock key={row.product.id} row={row} />
-            ))}
-          </div>
+          <Card className="overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr>
+                    {[
+                      { label: "Price · interval", num: false },
+                      { label: "Plan key", num: false },
+                      { label: "Lookup key", num: false },
+                      { label: "Amount", num: true },
+                      { label: "Active (Stripe)", num: false },
+                    ].map(col => (
+                      <th
+                        key={col.label}
+                        scope="col"
+                        className={cn(
+                          "border-border-default bg-surface border-y-[0.5px] px-4 py-[11px] text-[10px] font-medium tracking-[0.12em] whitespace-nowrap text-subtle uppercase",
+                          col.num ? "text-right" : "text-left",
+                          "first:rounded-l-md last:rounded-r-md",
+                        )}
+                      >
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped.map(row => (
+                    <LedgerFragment key={row.product.id} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </div>
     </div>
+  );
+}
+
+/** A product group band plus its price rows (or an empty-state row). */
+function LedgerFragment(props: { row: PlatformAdminGroupedStripeCatalog }) {
+  const { product, prices } = props.row;
+  return (
+    <>
+      <LedgerGroupRow row={props.row} />
+      {prices.length === 0 ? (
+        <tr>
+          <td
+            colSpan={5}
+            className="border-border-default border-b-[0.5px] px-4 py-[15px] text-sm text-subtle"
+          >
+            No Stripe prices cached for this product.
+          </td>
+        </tr>
+      ) : (
+        prices.map(price => (
+          <LedgerPriceRow
+            key={price.stripePriceId}
+            price={price}
+            productActive={product.active}
+          />
+        ))
+      )}
+    </>
   );
 }

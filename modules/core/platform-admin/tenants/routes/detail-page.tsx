@@ -1,12 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { TenantPlanUsageCard } from "@/modules/core/billing/components/subscription/tenant-plan-usage-card";
-import { TenantSubscriptionOverview } from "@/modules/core/billing/components/subscription/tenant-subscription-overview";
+import {
+  SubscriptionPlanBadge,
+  SubscriptionStatusBadge,
+} from "@/modules/core/billing/components/subscription/subscription-badges";
 import { TenantSubscriptionHealthBadge } from "@/modules/core/billing/components/subscription/tenant-subscription-health-badge";
 import { AdminDetailHeader } from "@/modules/core/platform-admin/components/admin-detail-header";
+import {
+  Callout,
+  DefList,
+  DefRow,
+  DetailGrid,
+  DetailRail,
+  Pill,
+  RailCard,
+  RailEyebrow,
+  RailRow,
+  RailRows,
+  UsageLine,
+} from "@/modules/core/platform-admin/components/admin-ui";
 import { BreadcrumbLabel } from "@/components/breadcrumb-label-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,6 +38,15 @@ import {
 import { formatDisplayDate } from "@/lib/utils/date";
 import { isUuid } from "@/lib/utils/uuid";
 import { getTenantSubscriptionHealth } from "@/lib/tenant-subscription-health";
+import {
+  formatSubscriptionCurrentPeriodLine,
+  formatSubscriptionPlanLabel,
+  formatSubscriptionStatusLabel,
+  formatSubscriptionTrialLine,
+  formatTenantPaymentMethodExpiryLine,
+  formatTenantPaymentMethodSummary,
+} from "@/lib/subscription-display";
+import { formatUsageLimit } from "@/lib/subscription-usage-metrics";
 import {
   PLATFORM_TENANTS_EDIT_ROLES,
   PLATFORM_TENANTS_ROLES,
@@ -179,9 +202,9 @@ export default async function PlatformAdminTenantDetailPage({
         }
         actions={
           <>
-            <Badge variant={tenant.isActive ? "secondary" : "outline"}>
+            <Pill tone={tenant.isActive ? "success" : "outline"}>
               {tenant.isActive ? "Active" : "Inactive"}
-            </Badge>
+            </Pill>
             <Button asChild variant="outline" size="sm">
               <Link href={`/admin/ai-usage/${tenant.id}`}>AI usage</Link>
             </Button>
@@ -192,231 +215,293 @@ export default async function PlatformAdminTenantDetailPage({
         }
       />
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle>Subscription overview</CardTitle>
-            <TenantSubscriptionHealthBadge health={subscriptionHealth} />
-          </div>
-          <CardDescription>
-            Values below match the tenant record; Checkout and webhooks keep it aligned with Stripe—see Activity for each applied event id and idempotent replays.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TenantSubscriptionOverview
-            subscriptionPlan={tenant.subscriptionPlan}
-            subscriptionStatus={tenant.subscriptionStatus}
-            trialEndsAt={tenant.trialEndsAt}
-            currentPeriodEndsAt={tenant.currentPeriodEndsAt}
-            stripeCustomerId={tenant.stripeCustomerId}
-            stripeSubscriptionId={tenant.stripeSubscriptionId}
-            defaultPaymentMethod={defaultPaymentMethod}
-            observabilityNote="Same persisted fields as tenant Billing. Webhook-driven sync may change this snapshot without a manual save; Stripe event ids and idempotent outcomes appear in Activity below."
-          />
-        </CardContent>
-      </Card>
-
-      {canEdit ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Subscription fields</CardTitle>
-            <CardDescription>
-              Manual corrections for Stripe ids, lifecycle, or billing dates—override behavior is unchanged. Future Stripe webhook deliveries may still overwrite these rows to reconcile with Stripe canonical state.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TenantSubscriptionForm tenant={tenant} />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {canEdit ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Stripe Checkout</CardTitle>
-            <CardDescription>
-              Opens Stripe Checkout for the selected plan. <code className="text-xs">metadata.tenantId</code> is set on
-              the session and subscription. Webhook endpoint:{" "}
-              <code className="text-xs">/api/stripe/webhook</code>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {canEdit ? (
-        <TenantBillingControls
-          tenantId={tenant.id}
-          isComped={tenant.subscriptionStatus === "comped"}
-          currentDiscount={currentDiscount}
-        />
-      ) : null}
-
-      {usage ? <TenantPlanUsageCard usage={usage} /> : null}
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardDescription>Total users</CardDescription>
-            <CardTitle className="text-3xl">{stats.totalUsers}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Active users</CardDescription>
-            <CardTitle className="text-3xl">{stats.activeUsers}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Inactive users</CardDescription>
-            <CardTitle className="text-3xl">{stats.inactiveUsers}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Status</CardTitle>
-          <CardDescription>
-            Tenant app access is permitted only while this tenant is active.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Current status:{" "}
-            <span className="font-medium text-ink">
-              {tenant.isActive ? "Active" : "Inactive"}
-            </span>
-          </p>
-          <p>
-            Inactive tenants cannot sign in on their tenant host, and existing tenant-app requests
-            fail server-side tenant resolution.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Tenant users</CardTitle>
-          <CardDescription>Read-only tenant membership view. Impersonation is intentionally not included in v1.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map(user => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.fullName}</TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell className="capitalize">{user.role}</TableCell>
-                  <TableCell>
-                    <Badge variant={user.isActive ? "secondary" : "outline"}>
-                      {user.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{formatDisplayDate(user.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="space-y-1">
-              <CardTitle>Activity</CardTitle>
-              <CardDescription>
-                Includes Stripe automation (`stripe_webhook` rows) with event type and Stripe event id. Duplicate webhook deliveries typically show Duplicate / idempotent when no tenant fields changed.
-              </CardDescription>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              {activityTotal === 0
-                ? "No activity yet."
-                : `Showing ${activityFrom.toLocaleString()}–${activityTo.toLocaleString()} of ${activityTotal.toLocaleString()}`}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>When</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activity.length > 0 ? (
-                activity.map(item => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      {formatActivitySummary(item)}
-                    </TableCell>
-                    <TableCell>
-                      {item.actorPlatformUser?.authUser.name ?? "System"}
-                    </TableCell>
-                    <TableCell className="capitalize">
-                      {item.actorPlatformUser?.role?.replaceAll("_", " ") ?? "system"}
-                    </TableCell>
-                    <TableCell>{formatDisplayDate(item.createdAt)}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
-                    No tenant platform-admin activity has been recorded yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-
-          {activityTotalPages > 1 ? (
-            <nav
-              aria-label="Tenant activity pagination"
-              className="flex items-center justify-between text-sm text-muted-foreground"
-            >
-              <span>
-                Page {activityPage.toLocaleString()} of {activityTotalPages.toLocaleString()}
-              </span>
-              <div className="flex items-center gap-2">
-                {activityPage > 1 ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={activityBuildHref(activityPage - 1)}>← Previous</Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" disabled>
-                    ← Previous
-                  </Button>
-                )}
-                {activityPage < activityTotalPages ? (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={activityBuildHref(activityPage + 1)}>Next →</Link>
-                  </Button>
-                ) : (
-                  <Button variant="outline" size="sm" disabled>
-                    Next →
-                  </Button>
-                )}
-              </div>
-            </nav>
+      <DetailGrid>
+        {/* Main column — editable + audit sections */}
+        <div className="flex flex-col gap-5">
+          {canEdit ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription fields</CardTitle>
+                <CardDescription>
+                  Manual corrections for Stripe ids, lifecycle, or billing dates—override behavior is unchanged.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <Callout tone="warning">
+                  <strong>Stripe webhooks may overwrite manual edits.</strong>{" "}
+                  Saving applies to this tenant row right away. Later webhook
+                  deliveries can still replace plan, status, dates, and Stripe
+                  ids to match Stripe canonical billing data.
+                </Callout>
+                <TenantSubscriptionForm tenant={tenant} />
+              </CardContent>
+            </Card>
           ) : null}
-        </CardContent>
-      </Card>
+
+          {canEdit ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Stripe Checkout</CardTitle>
+                <CardDescription>
+                  Opens Stripe Checkout for the selected plan. <code className="text-xs">metadata.tenantId</code> is set on
+                  the session and subscription. Webhook endpoint:{" "}
+                  <code className="text-xs">/api/stripe/webhook</code>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PlatformTenantStripeCheckoutButtons tenantId={tenant.id} />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {canEdit ? (
+            <TenantBillingControls
+              tenantId={tenant.id}
+              isComped={tenant.subscriptionStatus === "comped"}
+              currentDiscount={currentDiscount}
+            />
+          ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Tenant users</CardTitle>
+              <CardDescription>Read-only tenant membership view. Impersonation is intentionally not included in v1.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map(user => (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">{user.fullName}</TableCell>
+                      <TableCell className="font-mono text-xs text-subtle">{user.email}</TableCell>
+                      <TableCell className="capitalize">{user.role}</TableCell>
+                      <TableCell>
+                        <Pill tone={user.isActive ? "success" : "outline"}>
+                          {user.isActive ? "Active" : "Inactive"}
+                        </Pill>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-subtle">{formatDisplayDate(user.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-1">
+                  <CardTitle>Activity</CardTitle>
+                  <CardDescription>
+                    Includes Stripe automation (`stripe_webhook` rows) with event type and Stripe event id. Duplicate webhook deliveries typically show Duplicate / idempotent when no tenant fields changed.
+                  </CardDescription>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {activityTotal === 0
+                    ? "No activity yet."
+                    : `Showing ${activityFrom.toLocaleString()}–${activityTo.toLocaleString()} of ${activityTotal.toLocaleString()}`}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Actor</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activity.length > 0 ? (
+                    activity.map(item => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">
+                          {formatActivitySummary(item)}
+                        </TableCell>
+                        <TableCell>
+                          {item.actorPlatformUser?.authUser.name ?? "System"}
+                        </TableCell>
+                        <TableCell className="capitalize text-subtle">
+                          {item.actorPlatformUser?.role?.replaceAll("_", " ") ?? "system"}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-subtle">{formatDisplayDate(item.createdAt)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-muted-foreground">
+                        No tenant platform-admin activity has been recorded yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              {activityTotalPages > 1 ? (
+                <nav
+                  aria-label="Tenant activity pagination"
+                  className="flex items-center justify-between text-sm text-muted-foreground"
+                >
+                  <span>
+                    Page {activityPage.toLocaleString()} of {activityTotalPages.toLocaleString()}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {activityPage > 1 ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={activityBuildHref(activityPage - 1)}>← Previous</Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        ← Previous
+                      </Button>
+                    )}
+                    {activityPage < activityTotalPages ? (
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={activityBuildHref(activityPage + 1)}>Next →</Link>
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled>
+                        Next →
+                      </Button>
+                    )}
+                  </div>
+                </nav>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Summary rail — at-a-glance facts */}
+        <DetailRail aria-label="Tenant summary">
+          <RailCard
+            title="Subscription"
+            action={<TenantSubscriptionHealthBadge health={subscriptionHealth} />}
+          >
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <SubscriptionPlanBadge plan={tenant.subscriptionPlan} />
+              <SubscriptionStatusBadge status={tenant.subscriptionStatus} />
+            </div>
+            <DefList>
+              <DefRow
+                label="Current plan"
+                value={formatSubscriptionPlanLabel(tenant.subscriptionPlan)}
+              />
+              <DefRow
+                label="Status"
+                value={formatSubscriptionStatusLabel(tenant.subscriptionStatus)}
+              />
+              <DefRow
+                label="Trial"
+                value={formatSubscriptionTrialLine(
+                  tenant.subscriptionStatus,
+                  tenant.trialEndsAt,
+                )}
+              />
+              <DefRow
+                label="Period ends"
+                value={formatSubscriptionCurrentPeriodLine(
+                  tenant.currentPeriodEndsAt,
+                )}
+              />
+            </DefList>
+            <RailEyebrow className="mt-5 mb-2">Stripe linkage</RailEyebrow>
+            <DefList>
+              <DefRow
+                label="Customer"
+                mono
+                value={tenant.stripeCustomerId?.trim() || "—"}
+              />
+              <DefRow
+                label="Subscription"
+                mono
+                value={tenant.stripeSubscriptionId?.trim() || "—"}
+              />
+            </DefList>
+            <RailEyebrow className="mt-5 mb-1.5">Payment method</RailEyebrow>
+            {defaultPaymentMethod ? (
+              <div className="text-[13px]">
+                <p className="font-medium text-ink">
+                  {formatTenantPaymentMethodSummary(defaultPaymentMethod)}
+                </p>
+                <p className="text-subtle tabular-nums">
+                  {formatTenantPaymentMethodExpiryLine(defaultPaymentMethod)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[13px] text-subtle">
+                No card on file in Stripe wallet for this customer.
+              </p>
+            )}
+          </RailCard>
+
+          {usage ? (
+            <RailCard
+              title="Plan usage"
+              action={
+                <span className="text-xs text-subtle">
+                  {formatSubscriptionPlanLabel(usage.currentPlan)} plan
+                </span>
+              }
+            >
+              <UsageLine
+                label="Portal users"
+                value={usage.portalUsers.current}
+                suffix={`/ ${formatUsageLimit(usage.portalUsers.limit)}`}
+              />
+              <UsageLine
+                label="Products"
+                value={usage.products.current}
+                suffix={`/ ${formatUsageLimit(usage.products.limit)}`}
+              />
+              <UsageLine
+                label="Customers"
+                value={usage.customers.current}
+                suffix={`/ ${formatUsageLimit(usage.customers.limit)}`}
+              />
+              <UsageLine
+                label="Monthly orders"
+                value={usage.monthlyOrders.current}
+                suffix={`/ ${formatUsageLimit(usage.monthlyOrders.limit)}`}
+              />
+            </RailCard>
+          ) : null}
+
+          <RailCard title="Users">
+            <RailRows>
+              <RailRow label="Total" value={stats.totalUsers} />
+              <RailRow label="Active" value={stats.activeUsers} />
+              <RailRow label="Inactive" value={stats.inactiveUsers} />
+            </RailRows>
+          </RailCard>
+
+          <RailCard
+            title="Status"
+            action={
+              <Pill tone={tenant.isActive ? "success" : "outline"}>
+                {tenant.isActive ? "Active" : "Inactive"}
+              </Pill>
+            }
+          >
+            <p className="text-[13px] text-subtle">
+              App access is permitted only while active. Inactive tenants can&apos;t
+              sign in, and existing tenant-app requests fail server-side tenant
+              resolution.
+            </p>
+          </RailCard>
+        </DetailRail>
+      </DetailGrid>
     </div>
   );
 }
