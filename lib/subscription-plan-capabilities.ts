@@ -12,6 +12,7 @@ export const SUBSCRIPTION_FEATURE_KEYS = [
   "support_tickets",
   "reports",
   "platform_support",
+  "sso",
 ] as const;
 
 export type SubscriptionFeatureKey = (typeof SUBSCRIPTION_FEATURE_KEYS)[number];
@@ -68,6 +69,7 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       support_tickets: true,
       reports: false,
       platform_support: false,
+      sso: false,
     },
     limits: {
       maxPortalUsers: 1,
@@ -89,6 +91,7 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       support_tickets: true,
       reports: false,
       platform_support: false,
+      sso: false,
     },
     limits: {
       maxPortalUsers: 3,
@@ -111,6 +114,7 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       support_tickets: true,
       reports: true,
       platform_support: false,
+      sso: false,
     },
     limits: {
       maxPortalUsers: 10,
@@ -132,6 +136,7 @@ export const SUBSCRIPTION_PLAN_CAPABILITY_MATRIX = {
       support_tickets: true,
       reports: true,
       platform_support: true,
+      sso: true,
     },
     limits: {
       maxPortalUsers: UNLIMITED,

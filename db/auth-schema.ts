@@ -83,9 +83,46 @@ export const verification = pgTable(
   table => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+/**
+ * Enterprise SSO providers, managed by the `@better-auth/sso` plugin. The
+ * Drizzle adapter matches this table by its export key `ssoProvider`
+ * (= the plugin's `modelName`) and resolves columns by JS property key, so the
+ * keys below must match the plugin's field names exactly; SQL column names stay
+ * snake_case per project convention. `oidcConfig`/`samlConfig` hold the
+ * plugin's JSON-serialized provider config. One provider per tenant, keyed by
+ * `providerId` (= tenant slug); see `tenant_sso_settings` for app-side policy.
+ */
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    providerId: text("provider_id").notNull().unique(),
+    organizationId: text("organization_id"),
+    domain: text("domain").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  table => [index("sso_provider_userId_idx").on(table.userId)],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  ssoProviders: many(ssoProvider),
+}));
+
+export const ssoProviderRelations = relations(ssoProvider, ({ one }) => ({
+  user: one(user, {
+    fields: [ssoProvider.userId],
+    references: [user.id],
+  }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

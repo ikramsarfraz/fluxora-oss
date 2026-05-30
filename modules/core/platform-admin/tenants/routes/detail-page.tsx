@@ -65,7 +65,12 @@ import { getTenantBillingDiscount } from "@/modules/core/billing/stripe-discount
 import { TenantStatusForm } from "@/modules/core/platform-admin/tenants/components/tenant-status-form";
 import { TenantSubscriptionForm } from "@/modules/core/platform-admin/tenants/components/tenant-subscription-form";
 import { TenantBillingControls } from "@/modules/core/platform-admin/tenants/components/tenant-billing-controls";
+import { TenantSsoControls } from "@/modules/core/platform-admin/tenants/components/tenant-sso-controls";
 import { PlatformTenantStripeCheckoutButtons } from "@/modules/core/platform-admin/tenants/components/platform-tenant-stripe-checkout-buttons";
+import { canUseFeature } from "@/lib/subscription-plan-capabilities";
+import { getTenantFeatureEnabled } from "@/modules/core/feature-flags/queries";
+import { FEATURES } from "@/modules/core/feature-flags/constants";
+import { getActiveTenantSsoSettings } from "@/modules/shared/services/sso-jit";
 
 function formatActivitySummary(item: {
   action: string;
@@ -177,6 +182,19 @@ export default async function PlatformAdminTenantDetailPage({
   const currentDiscount = canEdit
     ? await getTenantBillingDiscount(tenant.id)
     : null;
+  const ssoEligible = canUseFeature(
+    {
+      subscriptionPlan: tenant.subscriptionPlan,
+      subscriptionStatus: tenant.subscriptionStatus,
+    },
+    "sso",
+  );
+  const [ssoEnabled, ssoConnection] = canEdit
+    ? await Promise.all([
+        getTenantFeatureEnabled(tenant.id, FEATURES.CORE_SSO),
+        getActiveTenantSsoSettings(tenant.id),
+      ])
+    : [true, null];
   const subscriptionHealth = getTenantSubscriptionHealth({
     subscriptionPlan: tenant.subscriptionPlan,
     subscriptionStatus: tenant.subscriptionStatus,
@@ -259,6 +277,15 @@ export default async function PlatformAdminTenantDetailPage({
               tenantId={tenant.id}
               isComped={tenant.subscriptionStatus === "comped"}
               currentDiscount={currentDiscount}
+            />
+          ) : null}
+
+          {canEdit ? (
+            <TenantSsoControls
+              tenantId={tenant.id}
+              eligible={ssoEligible}
+              enabled={ssoEnabled}
+              configured={ssoConnection != null}
             />
           ) : null}
 

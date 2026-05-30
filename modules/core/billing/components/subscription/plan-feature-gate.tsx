@@ -26,6 +26,7 @@ const FEATURE_LABEL: Record<SubscriptionFeatureKey, string> = {
   support_tickets: "Support tickets",
   reports: "Reports",
   platform_support: "Platform support",
+  sso: "Single sign-on",
 };
 
 export function PlanFeatureGate({

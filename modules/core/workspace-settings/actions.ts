@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { logAuditEvent } from "@/lib/audit-log";
+import { recordActionBreadcrumb } from "@/lib/sentry-scope";
+import {
+  deleteTenantSsoProvider,
+  getTenantSsoConnection,
+  upsertTenantSsoProvider,
+  type TenantSsoConnection,
+} from "@/modules/core/workspace-settings/services/sso-settings";
+export type { TenantSsoConnection } from "@/modules/core/workspace-settings/services/sso-settings";
 
 import {
   createTenantJoinRequest,
@@ -273,4 +281,26 @@ export async function updateInvitationExpiryDaysAction(input: {
   });
   revalidatePath("/settings/team/members");
   return result;
+}
+
+const SSO_SETTINGS_PATH = "/settings/team/sso";
+
+export async function getTenantSsoConnectionAction(): Promise<TenantSsoConnection> {
+  return getTenantSsoConnection();
+}
+
+export async function saveTenantSsoProviderAction(
+  input: unknown,
+): Promise<{ ok: true }> {
+  recordActionBreadcrumb({ action: "sso.save_provider" });
+  await upsertTenantSsoProvider(input);
+  revalidatePath(SSO_SETTINGS_PATH);
+  return { ok: true };
+}
+
+export async function deleteTenantSsoProviderAction(): Promise<{ ok: true }> {
+  recordActionBreadcrumb({ action: "sso.delete_provider" });
+  await deleteTenantSsoProvider();
+  revalidatePath(SSO_SETTINGS_PATH);
+  return { ok: true };
 }

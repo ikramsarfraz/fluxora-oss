@@ -15,6 +15,7 @@ export const FEATURES = {
   DISTRIBUTION_CONFIGURATION: "distribution.configuration",
   DISTRIBUTION_INBOX: "distribution.inbox",
   DISTRIBUTION_AI_ASSISTED_ENTRY: "distribution.aiAssistedEntry",
+  CORE_SSO: "core.sso",
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];

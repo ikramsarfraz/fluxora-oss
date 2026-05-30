@@ -77,6 +77,7 @@ export function buildSettingsGroups(opts: {
               : undefined,
         },
         { label: "Roles & Permissions", href: "/settings/team/roles", icon: "shield" },
+        { label: "Single Sign-On", href: "/settings/team/sso", icon: "shield" },
       ],
     },
     {

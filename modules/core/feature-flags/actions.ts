@@ -4,6 +4,8 @@ import { eq, and } from "drizzle-orm";
 
 import { db } from "@/db";
 import { tenantFeatures } from "@/db/schema";
+import { PLATFORM_TENANTS_EDIT_ROLES } from "@/modules/core/platform-admin/tenants/permissions";
+import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
 
 import type { FeatureKey } from "./constants";
 
@@ -12,6 +14,7 @@ export async function setTenantFeatureAction(
   feature: FeatureKey,
   enabled: boolean,
 ): Promise<void> {
+  await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
   await db
     .insert(tenantFeatures)
     .values({ tenantId, feature, enabled })
@@ -39,6 +42,7 @@ export async function deleteTenantFeatureOverrideAction(
   tenantId: string,
   feature: FeatureKey,
 ): Promise<void> {
+  await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
   await db
     .delete(tenantFeatures)
     .where(

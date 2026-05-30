@@ -22,6 +22,8 @@ import {
   updateTenantSubscriptionByPlatformAdmin,
 } from "@/modules/core/platform-admin/services/platform-admin";
 import { requirePlatformUserInRoles } from "@/modules/core/platform-admin/services/platform-users";
+import { setTenantFeatureAction } from "@/modules/core/feature-flags/actions";
+import { FEATURES } from "@/modules/core/feature-flags/constants";
 import { startCheckoutForTenant } from "@/modules/core/billing/stripe-tenant-billing";
 import { syncStripeCatalogFullFromStripeApi } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import {
@@ -346,4 +348,25 @@ export async function syncStripeCatalogAdminAction(): Promise<
           : "Sync failed.";
     return { ok: false, message: msg };
   }
+}
+
+/**
+ * Platform-admin per-tenant kill switch for enterprise SSO (the `core.sso`
+ * feature flag). Properly gated — unlike the bare `setTenantFeatureAction`.
+ */
+export async function setTenantSsoEnabledAction(
+  tenantId: unknown,
+  enabled: unknown,
+): Promise<{ ok: true }> {
+  const id = z.string().uuid().parse(tenantId);
+  const on = z.boolean().parse(enabled);
+  await requirePlatformUserInRoles(PLATFORM_TENANTS_EDIT_ROLES);
+  recordActionBreadcrumb({
+    action: "platform_admin.set_tenant_sso",
+    tenantId: id,
+    data: { enabled: on },
+  });
+  await setTenantFeatureAction(id, FEATURES.CORE_SSO, on);
+  revalidatePath(`/admin/tenants/${id}`);
+  return { ok: true };
 }

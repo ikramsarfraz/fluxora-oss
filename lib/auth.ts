@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { APIError } from "better-auth";
 import { magicLink } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
@@ -13,7 +14,25 @@ import { emailFrom, resend } from "./email";
 import { captureServerEvent } from "@/lib/posthog-server";
 import { formatAuthUserDisplayName } from "@/lib/user-display-name";
 import { claimApprovedTenantJoinRequestForSession } from "@/modules/core/workspace-settings/services/tenant-join-requests-core";
+import {
+  getActiveTenantSsoSettings,
+  jitProvisionSsoMembership,
+} from "@/modules/shared/services/sso-jit";
 import { bootstrapAuthUserIdentityOnCreate } from "@/modules/shared/services/signup-profile";
+
+/** True when the in-flight request is an enterprise SSO callback (OIDC or SAML). */
+function isSsoCallbackRequest(url: string | null | undefined): boolean {
+  if (!url) return false;
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  return (
+    pathname.includes("/sso/callback") || pathname.includes("/sso/saml2")
+  );
+}
 import {
   getRequestTenantHostContextFromHeaders,
   getRootDomain,
@@ -150,6 +169,10 @@ export const auth = betterAuth({
         });
       },
     }),
+    // Enterprise SSO (SAML 2.0 + OIDC). JIT provisioning is handled in the
+    // session.create.before hook (which runs before this plugin's provisionUser
+    // callback would), so it isn't configured here.
+    sso(),
     nextCookies(),
   ],
 
@@ -263,6 +286,31 @@ export const auth = betterAuth({
                   tenantId: tenant.id,
                 },
               };
+            }
+
+            // Enterprise SSO JIT: if this session is being created by an SSO
+            // callback AND the tenant has an active SSO connection, provision
+            // the IdP-authenticated user as a member with the configured default
+            // role. Gated to the SSO callback path so ordinary magic-link/Google
+            // sign-ins can never auto-join a tenant.
+            const isSsoCallback = isSsoCallbackRequest(ctx.request?.url);
+            if (isSsoCallback && authUserRecord) {
+              const ssoSettings = await getActiveTenantSsoSettings(tenant.id);
+              if (ssoSettings) {
+                await jitProvisionSsoMembership({
+                  tenantId: tenant.id,
+                  authUserId: session.userId,
+                  email: authUserRecord.email,
+                  fullName: formatAuthUserDisplayName(authUserRecord),
+                  role: ssoSettings.defaultRole,
+                });
+                return {
+                  data: {
+                    ...session,
+                    tenantId: tenant.id,
+                  },
+                };
+              }
             }
 
             throw APIError.from("FORBIDDEN", {

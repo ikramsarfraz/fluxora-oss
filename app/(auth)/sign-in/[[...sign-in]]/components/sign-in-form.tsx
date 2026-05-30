@@ -37,6 +37,12 @@ type SignInFormProps = {
   rootSignInUrl: string;
   signUpUrl: string;
   googleEnabled: boolean;
+  /** Present when the current tenant has an active SSO connection. */
+  sso?: {
+    providerId: string;
+    label: string | null;
+    enforceSsoOnly: boolean;
+  } | null;
 };
 
 function buildSupportHref(rootDomain: string) {
@@ -78,6 +84,7 @@ export function SignInForm({
   rootSignInUrl,
   signUpUrl,
   googleEnabled,
+  sso = null,
 }: SignInFormProps) {
   const searchParams = useSearchParams();
 
@@ -98,6 +105,7 @@ export function SignInForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [linkSent, setLinkSent] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isSsoLoading, setIsSsoLoading] = useState(false);
 
   const form = useForm<SignInFormValues>({
     resolver: zodResolver(signInFormSchema),
@@ -163,8 +171,30 @@ export function SignInForm({
     }
   }
 
+  async function handleSsoSignIn() {
+    if (!sso) return;
+    setSubmitError(null);
+    setIsSsoLoading(true);
+    try {
+      const origin =
+        typeof window === "undefined" ? "" : window.location.origin;
+      const dest = callbackUrl.startsWith("/") ? callbackUrl : `/${callbackUrl}`;
+      const { error } = await authClient.signIn.sso({
+        providerId: sso.providerId,
+        callbackURL: `${origin}${dest}`,
+        errorCallbackURL: `${origin}/login?${new URLSearchParams({ error: "sso" })}`,
+      });
+      if (error) setSubmitError(error.message ?? "SSO sign-in failed.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "SSO sign-in failed.");
+    } finally {
+      setIsSsoLoading(false);
+    }
+  }
+
   const showTenantNotFound = !isRootHost && tenantSlug && !tenant;
   const showTenantVariant = Boolean(!isRootHost && tenant);
+  const ssoButtonLabel = sso?.label?.trim() || "Sign in with SSO";
 
   if (showTenantVariant && tenant) {
     return (
@@ -185,6 +215,10 @@ export function SignInForm({
           setSubmitError(null);
         }}
         supportHref={supportHref}
+        sso={sso}
+        onSsoSignIn={handleSsoSignIn}
+        isSsoLoading={isSsoLoading}
+        ssoButtonLabel={ssoButtonLabel}
       />
     );
   }
@@ -588,6 +622,10 @@ function TenantSignInLayout({
   onGoogleSignIn,
   onTryDifferent,
   supportHref,
+  sso,
+  onSsoSignIn,
+  isSsoLoading,
+  ssoButtonLabel,
 }: {
   tenant: { id: string; name: string; slug: string };
   rootDomain: string;
@@ -602,8 +640,13 @@ function TenantSignInLayout({
   onGoogleSignIn: () => void | Promise<void>;
   onTryDifferent: () => void;
   supportHref: string;
+  sso: { providerId: string; label: string | null; enforceSsoOnly: boolean } | null;
+  onSsoSignIn: () => void | Promise<void>;
+  isSsoLoading: boolean;
+  ssoButtonLabel: string;
 }) {
   const accent = tenantAccent(tenant.slug);
+  const ssoOnly = Boolean(sso?.enforceSsoOnly);
   const rootHomeUrl = new URL("/", rootSignInUrl).toString();
   return (
     <div className="flex min-h-screen flex-col bg-page text-ink">
@@ -687,25 +730,45 @@ function TenantSignInLayout({
             <div className="flex flex-col gap-5 px-9 py-7">
               <p className="text-[13.5px] leading-[1.55] text-ink-warm">
                 Sign in to <span className="font-medium text-ink">{tenant.name}</span>.
-                Use the email your admin added to this workspace.
+                {ssoOnly
+                  ? " This workspace uses single sign-on."
+                  : " Use the email your admin added to this workspace."}
               </p>
 
-              <button
-                type="button"
-                onClick={onGoogleSignIn}
-                disabled={!googleEnabled || isGoogleLoading}
-                className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm",
-                  (!googleEnabled || isGoogleLoading) && "cursor-not-allowed opacity-60",
-                )}
-              >
-                <Google className="size-4" />
-                {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
-              </button>
+              {sso ? (
+                <button
+                  type="button"
+                  onClick={onSsoSignIn}
+                  disabled={isSsoLoading}
+                  className={cn(
+                    "flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-forest bg-forest px-3 py-2.5 text-[13px] font-medium text-white transition-opacity hover:opacity-90",
+                    isSsoLoading && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  {isSsoLoading ? "Redirecting…" : ssoButtonLabel}
+                </button>
+              ) : null}
 
-              <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.06em] text-muted before:h-[0.5px] before:flex-1 before:bg-border-default before:content-[''] after:h-[0.5px] after:flex-1 after:bg-border-default after:content-['']">
-                or with email
-              </div>
+              {!ssoOnly ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={onGoogleSignIn}
+                    disabled={!googleEnabled || isGoogleLoading}
+                    className={cn(
+                      "flex w-full items-center justify-center gap-2 rounded-md border-[0.5px] border-border-default bg-card px-3 py-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-card-warm",
+                      (!googleEnabled || isGoogleLoading) && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <Google className="size-4" />
+                    {isGoogleLoading ? "Redirecting…" : "Continue with Google"}
+                  </button>
+
+                  <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.06em] text-muted before:h-[0.5px] before:flex-1 before:bg-border-default before:content-[''] after:h-[0.5px] after:flex-1 after:bg-border-default after:content-['']">
+                    or with email
+                  </div>
+                </>
+              ) : null}
 
               {submitError ? (
                 <div className="rounded-md border-[0.5px] border-danger-border bg-danger-bg px-3 py-2 text-[12.5px] text-danger-fg">
@@ -713,6 +776,7 @@ function TenantSignInLayout({
                 </div>
               ) : null}
 
+              {!ssoOnly ? (
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 noValidate
@@ -770,6 +834,7 @@ function TenantSignInLayout({
                   {isSubmitting ? "Sending…" : `Sign in to ${tenant.name}`}
                 </button>
               </form>
+              ) : null}
             </div>
           )}
 

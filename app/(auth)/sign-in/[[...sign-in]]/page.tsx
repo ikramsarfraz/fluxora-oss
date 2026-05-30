@@ -5,6 +5,7 @@ import { isGoogleAuthEnabled } from "@/lib/google-auth-flow";
 import { buildRootAppUrl, buildTenantAppUrl } from "@/lib/tenant-host";
 import { resolveExistingSessionLoginDestination } from "@/modules/shared/services/auth";
 import { getCurrentRequestTenant } from "@/modules/core/tenants/services/tenants";
+import { getActiveTenantSsoSettings } from "@/modules/shared/services/sso-jit";
 
 export default async function SignInPage({
   searchParams,
@@ -21,6 +22,18 @@ export default async function SignInPage({
   }
 
   const tenantRequest = await getCurrentRequestTenant();
+
+  const ssoSettings = tenantRequest.tenant
+    ? await getActiveTenantSsoSettings(tenantRequest.tenant.id)
+    : null;
+  const sso =
+    ssoSettings && tenantRequest.tenant
+      ? {
+          providerId: tenantRequest.tenant.slug,
+          label: ssoSettings.displayLabel ?? null,
+          enforceSsoOnly: ssoSettings.enforceSsoOnly,
+        }
+      : null;
 
   const rootSignUpUrl = buildRootAppUrl({
     pathname: "/signup",
@@ -71,6 +84,7 @@ export default async function SignInPage({
         rootSignInUrl={rootSignInUrl}
         signUpUrl={tenantSignUpUrl}
         googleEnabled={isGoogleAuthEnabled()}
+        sso={sso}
       />
     </Suspense>
   );

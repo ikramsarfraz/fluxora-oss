@@ -28,6 +28,9 @@ export const userRoleEnum = pgEnum("user_role", [
   "accounting",
 ]);
 
+export const ssoProtocolEnum = pgEnum("sso_protocol", ["oidc", "saml"]);
+export const ssoStatusEnum = pgEnum("sso_status", ["active", "disabled"]);
+
 export const platformRoleEnum = pgEnum("platform_role", [
   "platform_admin",
   "support",
@@ -507,6 +510,42 @@ export const tenantFeatures = pgTable(
       table.feature,
     ),
     index("tenant_features_tenant_idx").on(table.tenantId),
+  ],
+);
+
+/**
+ * App-side policy for a tenant's enterprise SSO connection. The auth-critical
+ * provider config lives in the Better-Auth-owned `sso_provider` table
+ * (`db/auth-schema.ts`); this row holds policy the sign-in page and enforcement
+ * read with one indexed query without parsing the plugin's JSON. One row per
+ * tenant; `providerId` mirrors the `sso_provider.provider_id` (= tenant slug).
+ */
+export const tenantSsoSettings = pgTable(
+  "tenant_sso_settings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    providerId: varchar("provider_id", { length: 128 }).notNull(),
+    protocol: ssoProtocolEnum("protocol").notNull(),
+    /** Role assigned to JIT-provisioned users on first SSO login. */
+    defaultRole: userRoleEnum("default_role").notNull().default("sales"),
+    /** When true, the tenant's sign-in page hides magic-link/Google. */
+    enforceSsoOnly: boolean("enforce_sso_only").notNull().default(false),
+    displayLabel: varchar("display_label", { length: 120 }),
+    status: ssoStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  table => [
+    uniqueIndex("tenant_sso_settings_tenant_unique").on(table.tenantId),
+    uniqueIndex("tenant_sso_settings_provider_unique").on(table.providerId),
   ],
 );
 
