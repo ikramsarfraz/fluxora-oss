@@ -60,6 +60,9 @@ function planBullets(planKey: TenantSubscriptionPlan): string[] {
   if (features.reports) {
     bullets.push("Reports & aging");
   }
+  if (features.sso) {
+    bullets.push("Single sign-on (SAML + OIDC)");
+  }
   bullets.push(
     features.platform_support
       ? "Priority platform support"
