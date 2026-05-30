@@ -10,6 +10,22 @@ In the [Stripe Dashboard → Settings → Billing → Customer portal](https://d
 
 After the workspace has a **Stripe Customer** id (from the first successful Checkout or other flow that persisted `tenants.stripe_customer_id`), **owners and admins** can open the hosted portal to update the default **payment method**, **cancel** the subscription, and **view invoices**. Stripe returns users to **`/account/billing`** on your app origin (`NEXT_PUBLIC_APP_URL` / `BETTER_AUTH_URL` / Vercel URL — see `getAppPublicOrigin()` in `lib/stripe/config.ts`). Webhooks continue to sync subscription changes back to the tenant row.
 
+### Plan / interval switching (no double-billing)
+
+`startCheckoutForTenant` branches on subscription state so an existing subscriber is never charged twice **and downgrades don't take effect early**:
+
+- **No live subscription** (`free` / `canceled` / none) → a fresh subscription **Checkout Session**.
+- **Live subscription + upgrade/lateral** (higher tier, or same tier `month → year`) → `createTenantSubscriptionUpdatePortalSession` deep-links into the Portal's **subscription-update-confirm** flow (`flow_data.type = "subscription_update_confirm"`). Stripe shows the proration preview, collects payment, and fires `customer.subscription.updated`, which the webhook syncs. Applied **immediately**.
+- **Live subscription + downgrade** (lower tier, or same tier `year → month`) → `scheduleTenantSubscriptionDowngrade` builds a two-phase **Stripe subscription schedule**: the current price runs until period end, then the lower price takes over (`proration_behavior: none`, `end_behavior: release`). No immediate charge/credit; the tenant keeps the higher tier until renewal. The action returns a same-origin `?scheduled=1` URL (no Stripe redirect). The plan only flips when the second phase activates — `syncTenantFromSubscription` resolves the plan from the **active** price item, so attaching the schedule does not change the tenant plan early. A `past_due` subscription skips scheduling and uses the Portal (payment must be fixed first).
+
+Direction is decided by the pure helper `classifyPlanChange` in [lib/stripe/plan-change.ts](lib/stripe/plan-change.ts) (used both server-side for routing and client-side to label the button "Schedule downgrade").
+
+**Pending change UI:** the billing page reads `getTenantSubscriptionSummary` (one Stripe call → current cadence + any pending scheduled change, derived from `sub.schedule`; Stripe is the source of truth, no DB column) and renders a banner with a **Keep current plan** button that calls `cancelTenantScheduledChangeAction` → `releaseTenantScheduledSubscriptionChange` (releases the schedule).
+
+**Prerequisite:** the Customer portal configuration must have **"Customers can switch plans"** (subscription update) **enabled** with all catalog products listed, otherwise the upgrade flow errors.
+
+**Known limitations:** coupons/discounts on the current subscription are not re-applied to the post-downgrade phase; re-scheduling a downgrade releases and recreates the schedule.
+
 ## Environment variables
 
 Set in `.env.local` (see `.env.local.example` in the repo root):

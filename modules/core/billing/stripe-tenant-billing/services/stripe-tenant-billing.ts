@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { db } from "@/db";
-import { auditLogs, tenants } from "@/db/schema";
+import { auditLogs, stripePrices, tenants } from "@/db/schema";
 import { getPreferredBillingEmailForTenant } from "@/modules/core/billing/services/billing-contacts";
 import { getAppPublicOrigin, getStripeClient } from "@/lib/stripe/config";
 import { tenantIdFromCheckoutSession } from "@/modules/core/billing/stripe-tenant-billing/lib/checkout-tenant-resolution";
@@ -12,6 +12,7 @@ import {
   resolveStripePriceIdForPaidPlan,
   resolveTenantPlanFromStripePriceId,
 } from "@/modules/core/billing/stripe-tenant-billing/lib/plan-resolution";
+import { classifyPlanChange } from "@/lib/stripe/plan-change";
 import {
   isStripeCatalogWebhookEvent,
   processStripeCatalogWebhook,
@@ -278,7 +279,284 @@ export async function createTenantStripeCheckoutSession(input: {
 }
 
 /**
- * @public Used by server actions; resolves email when omitted.
+ * Statuses that mean the tenant has a billable, live Stripe subscription.
+ * For these, a plan/interval change must MODIFY the existing subscription
+ * (proration) rather than open a second Checkout — Stripe allows multiple
+ * concurrent subscriptions per customer, which would double-bill the tenant.
+ */
+const LIVE_TENANT_SUBSCRIPTION_STATUSES: ReadonlySet<TenantSubscriptionStatus> =
+  new Set<TenantSubscriptionStatus>(["active", "trialing", "past_due"]);
+
+/**
+ * Switch an already-subscribed tenant to a different plan/interval WITHOUT
+ * creating a second subscription. Deep-links into the Stripe Customer Portal's
+ * subscription-update-confirm screen for the tenant's existing subscription, so
+ * Stripe renders the proration preview, collects payment/SCA, and fires
+ * `customer.subscription.updated` (which {@link syncTenantFromSubscription}
+ * mirrors into the DB — no extra sync code here).
+ *
+ * Requires the Portal configuration to have subscription updates enabled with
+ * our catalog products listed (see docs/stripe-subscriptions.md). The hosted
+ * Portal applies the change immediately with the configuration's
+ * `proration_behavior`; per-direction timing (e.g. defer downgrades to period
+ * end) is not expressible through this flow.
+ */
+export async function createTenantSubscriptionUpdatePortalSession(input: {
+  tenantId: string;
+  subscriptionId: string;
+  plan: StripeCheckoutPlan;
+  interval?: StripeBillingInterval;
+  /** Path on this app origin to return to after the Portal flow. */
+  returnPath: string;
+}): Promise<{ url: string }> {
+  const customerId = await getOrCreateStripeCustomerForTenant(input.tenantId);
+  const priceId = await resolveStripePriceIdForPaidPlan(
+    input.plan,
+    input.interval ?? "month",
+  );
+  const stripe = getStripeClient();
+  const sub = await stripe.subscriptions.retrieve(input.subscriptionId);
+  const itemId = sub.items.data[0]?.id;
+  if (!itemId) {
+    throw new Error(
+      "The current subscription has no line item to update; cannot switch plans.",
+    );
+  }
+  const origin = getAppPublicOrigin();
+  const path = input.returnPath.startsWith("/")
+    ? input.returnPath
+    : `/${input.returnPath}`;
+  const returnUrl = `${origin}${path}`;
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+    flow_data: {
+      type: "subscription_update_confirm",
+      subscription_update_confirm: {
+        subscription: input.subscriptionId,
+        items: [{ id: itemId, price: priceId }],
+      },
+    },
+  });
+  if (!session.url) {
+    throw new Error("Stripe did not return a Customer Portal URL.");
+  }
+  return { url: session.url };
+}
+
+/** Read the billing cadence of a live subscription's active price item. */
+function intervalFromSubscription(
+  sub: Stripe.Subscription,
+): StripeBillingInterval | null {
+  const interval = sub.items.data[0]?.price?.recurring?.interval;
+  return interval === "month" || interval === "year" ? interval : null;
+}
+
+/** Resolve a Stripe schedule/subscription `schedule` ref to its id. */
+function scheduleIdFromRef(
+  ref: string | Stripe.SubscriptionSchedule | null | undefined,
+): string | null {
+  if (!ref) return null;
+  return typeof ref === "string" ? ref : ref.id;
+}
+
+/**
+ * Schedule a tenant's subscription to switch to a lower plan/interval at the
+ * end of the current period (a downgrade), via a two-phase Stripe subscription
+ * schedule. No immediate charge or credit: the tenant keeps the higher tier
+ * they already paid for until period end, then drops to the target. The price
+ * only flips when the second phase activates, at which point the
+ * `customer.subscription.updated` webhook syncs the tenant plan.
+ *
+ * Re-scheduling replaces any existing schedule (release-then-recreate). Coupons
+ * on the current subscription are not re-applied to the post-downgrade phase.
+ */
+export async function scheduleTenantSubscriptionDowngrade(input: {
+  tenantId: string;
+  subscriptionId: string;
+  plan: StripeCheckoutPlan;
+  interval: StripeBillingInterval;
+}): Promise<{ effectiveAt: Date | null }> {
+  const targetPriceId = await resolveStripePriceIdForPaidPlan(
+    input.plan,
+    input.interval,
+  );
+  const stripe = getStripeClient();
+
+  let sub = await stripe.subscriptions.retrieve(input.subscriptionId);
+  const existingScheduleId = scheduleIdFromRef(sub.schedule);
+  if (existingScheduleId) {
+    // A clean two-phase schedule requires no pre-existing schedule.
+    await stripe.subscriptionSchedules.release(existingScheduleId);
+    sub = await stripe.subscriptions.retrieve(input.subscriptionId);
+  }
+
+  const schedule = await stripe.subscriptionSchedules.create({
+    from_subscription: input.subscriptionId,
+  });
+  const phase0 = schedule.phases[0];
+  const phase0PriceRef = phase0?.items?.[0]?.price;
+  const phase0PriceId =
+    typeof phase0PriceRef === "string" ? phase0PriceRef : phase0PriceRef?.id;
+  if (!phase0 || !phase0PriceId || phase0.end_date == null) {
+    throw new Error(
+      "Could not read the current subscription phase to schedule a downgrade.",
+    );
+  }
+
+  const updated = await stripe.subscriptionSchedules.update(schedule.id, {
+    end_behavior: "release",
+    proration_behavior: "none",
+    phases: [
+      {
+        items: [{ price: phase0PriceId }],
+        start_date: phase0.start_date,
+        end_date: phase0.end_date,
+      },
+      {
+        // Open-ended: the subscription continues on the lower price after the
+        // current period ends.
+        items: [{ price: targetPriceId }],
+      },
+    ],
+  });
+
+  const nextStart = updated.phases[1]?.start_date ?? phase0.end_date;
+  return { effectiveAt: nextStart ? new Date(nextStart * 1000) : null };
+}
+
+/**
+ * Cancel a tenant's pending scheduled subscription change (downgrade) by
+ * releasing the Stripe subscription schedule — the subscription continues on
+ * its current plan. Idempotent: no schedule attached → no-op.
+ */
+export async function releaseTenantScheduledSubscriptionChange(
+  tenantId: string,
+): Promise<{ released: boolean }> {
+  const row = await db.query.tenants.findFirst({
+    where: eq(tenants.id, tenantId),
+    columns: { stripeSubscriptionId: true },
+  });
+  const subscriptionId = row?.stripeSubscriptionId?.trim() || null;
+  if (!subscriptionId) {
+    return { released: false };
+  }
+  const stripe = getStripeClient();
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe.subscriptions.retrieve(subscriptionId);
+  } catch (e) {
+    if (isStripeResourceMissing(e)) {
+      return { released: false };
+    }
+    throw e;
+  }
+  const scheduleId = scheduleIdFromRef(sub.schedule);
+  if (!scheduleId) {
+    return { released: false };
+  }
+  await stripe.subscriptionSchedules.release(scheduleId);
+  return { released: true };
+}
+
+export type TenantPendingSubscriptionChange = {
+  plan: TenantSubscriptionPlan;
+  interval: StripeBillingInterval | null;
+  effectiveAt: Date | null;
+};
+
+export type TenantSubscriptionSummary = {
+  currentInterval: StripeBillingInterval | null;
+  pendingChange: TenantPendingSubscriptionChange | null;
+};
+
+/**
+ * One-shot read of the tenant's live subscription for the billing UI: its
+ * current cadence and any pending scheduled change (downgrade) derived from the
+ * attached Stripe schedule. Stripe is the source of truth — no DB columns.
+ * Best-effort: any failure degrades to `{ currentInterval: null, pendingChange:
+ * null }` (mirrors {@link getTenantDefaultPaymentMethod}).
+ */
+export async function getTenantSubscriptionSummary(
+  tenantId: string,
+): Promise<TenantSubscriptionSummary> {
+  const empty: TenantSubscriptionSummary = {
+    currentInterval: null,
+    pendingChange: null,
+  };
+  try {
+    const row = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      columns: { stripeSubscriptionId: true, subscriptionStatus: true },
+    });
+    const subscriptionId = row?.stripeSubscriptionId?.trim() || null;
+    if (
+      !subscriptionId ||
+      !row?.subscriptionStatus ||
+      !LIVE_TENANT_SUBSCRIPTION_STATUSES.has(row.subscriptionStatus)
+    ) {
+      return empty;
+    }
+    const stripe = getStripeClient();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ["schedule"],
+    });
+    const currentInterval = intervalFromSubscription(sub);
+
+    let pendingChange: TenantPendingSubscriptionChange | null = null;
+    try {
+      const schedule =
+        typeof sub.schedule === "object" && sub.schedule ? sub.schedule : null;
+      if (schedule && Array.isArray(schedule.phases)) {
+        const nowSec = Date.now() / 1000;
+        const future = schedule.phases.find(
+          p => typeof p.start_date === "number" && p.start_date > nowSec,
+        );
+        const priceRef = future?.items?.[0]?.price;
+        const priceId =
+          typeof priceRef === "string" ? priceRef : priceRef?.id ?? null;
+        if (future && priceId) {
+          const plan = await resolveTenantPlanFromStripePriceId(priceId);
+          const priceRow = await db.query.stripePrices.findFirst({
+            where: eq(stripePrices.stripePriceId, priceId.trim()),
+            columns: { recurringInterval: true },
+          });
+          const interval =
+            priceRow?.recurringInterval === "year"
+              ? "year"
+              : priceRow?.recurringInterval === "month"
+                ? "month"
+                : null;
+          pendingChange = {
+            plan,
+            interval,
+            effectiveAt: new Date(future.start_date * 1000),
+          };
+        }
+      }
+    } catch {
+      pendingChange = null;
+    }
+
+    return { currentInterval, pendingChange };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * @public Used by server actions. Entry point for a tenant selecting a paid
+ * plan/interval. Routes to avoid double-billing and to honor downgrade timing:
+ * - No live subscription → fresh subscription Checkout Session.
+ * - Live subscription + **upgrade/lateral** → Customer Portal subscription-update
+ *   flow (immediate, with proration).
+ * - Live subscription + **downgrade** (lower tier, or same tier `year → month`)
+ *   → in-app subscription schedule applied at period end; returns a same-origin
+ *   URL (`?scheduled=1`) since there's no Stripe redirect.
+ *
+ * `past_due` subscriptions skip scheduling and use the Portal (payment must be
+ * resolved first).
  */
 export async function startCheckoutForTenant(input: {
   tenantId: string;
@@ -291,6 +569,48 @@ export async function startCheckoutForTenant(input: {
   if (!t) {
     throw new Error("Tenant not found.");
   }
+
+  const subscriptionId = t.stripeSubscriptionId?.trim() || null;
+  const hasLiveSubscription =
+    subscriptionId != null &&
+    t.subscriptionStatus != null &&
+    LIVE_TENANT_SUBSCRIPTION_STATUSES.has(t.subscriptionStatus);
+
+  if (subscriptionId && hasLiveSubscription) {
+    const interval = input.interval ?? "month";
+    const stripe = getStripeClient();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    const timing = classifyPlanChange(
+      { currentPlan: t.subscriptionPlan, currentInterval: intervalFromSubscription(sub) },
+      { plan: input.plan, interval },
+    );
+
+    // Downgrades are deferred to period end — but only for healthy subs; a
+    // past_due tenant is sent to the Portal to fix payment first.
+    if (timing === "scheduled" && t.subscriptionStatus !== "past_due") {
+      await scheduleTenantSubscriptionDowngrade({
+        tenantId: input.tenantId,
+        subscriptionId,
+        plan: input.plan,
+        interval,
+      });
+      const path = input.successPath.startsWith("/")
+        ? input.successPath
+        : `/${input.successPath}`;
+      const sep = path.includes("?") ? "&" : "?";
+      // Relative URL keeps the tenant on their current host (no redirect).
+      return { url: `${path}${sep}scheduled=1` };
+    }
+
+    return createTenantSubscriptionUpdatePortalSession({
+      tenantId: input.tenantId,
+      subscriptionId,
+      plan: input.plan,
+      interval: input.interval,
+      returnPath: input.successPath,
+    });
+  }
+
   return createTenantStripeCheckoutSession({
     tenantId: input.tenantId,
     plan: input.plan,

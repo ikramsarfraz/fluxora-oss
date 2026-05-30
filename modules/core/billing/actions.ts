@@ -13,8 +13,12 @@ import {
 } from "@/modules/shared/services/portal-users";
 import {
   createTenantStripeCustomerPortalSession,
+  releaseTenantScheduledSubscriptionChange,
   startCheckoutForTenant,
 } from "@/modules/core/billing/stripe-tenant-billing";
+import { recordActionBreadcrumb } from "@/lib/sentry-scope";
+
+const BILLING_PATH = "/settings/billing/plan-and-usage";
 
 export async function startTenantAdminStripeCheckoutAction(
   plan: unknown,
@@ -23,7 +27,12 @@ export async function startTenantAdminStripeCheckoutAction(
   const p = stripeSaasPaidPlanSchema.parse(plan);
   const i = stripeBillingIntervalSchema.parse(interval);
   const admin = await requireAdminPortalUser();
-  const billingPath = "/settings/billing/plan-and-usage";
+  recordActionBreadcrumb({
+    action: "billing.start_checkout",
+    tenantId: admin.tenantId,
+    data: { plan: p, interval: i },
+  });
+  const billingPath = BILLING_PATH;
   const { url } = await startCheckoutForTenant({
     tenantId: admin.tenantId,
     plan: p,
@@ -35,6 +44,24 @@ export async function startTenantAdminStripeCheckoutAction(
   revalidatePath(billingPath);
   revalidatePath("/dashboard");
   return { url };
+}
+
+/**
+ * Cancel a pending scheduled subscription change (downgrade) so the tenant
+ * stays on its current plan. Releases the Stripe subscription schedule.
+ */
+export async function cancelTenantScheduledChangeAction(): Promise<{
+  ok: boolean;
+}> {
+  const admin = await requireAdminPortalUser();
+  recordActionBreadcrumb({
+    action: "billing.cancel_scheduled_change",
+    tenantId: admin.tenantId,
+  });
+  await releaseTenantScheduledSubscriptionChange(admin.tenantId);
+  revalidatePath(BILLING_PATH);
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 export async function startTenantAdminStripeCustomerPortalAction(): Promise<{

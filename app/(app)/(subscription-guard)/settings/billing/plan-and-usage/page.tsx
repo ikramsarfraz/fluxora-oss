@@ -13,13 +13,17 @@ import {
 import { formatUsageLimit } from "@/lib/subscription-usage-metrics";
 import { getCurrentTenant } from "@/modules/core/tenants/services/tenants";
 import { getCurrentTenantPlanUsage } from "@/modules/core/billing/services/subscription-usage";
-import { getTenantDefaultPaymentMethod } from "@/modules/core/billing/stripe-tenant-billing";
+import {
+  getTenantDefaultPaymentMethod,
+  getTenantSubscriptionSummary,
+} from "@/modules/core/billing/stripe-tenant-billing";
 import { getUserByAuthUserId } from "@/modules/shared/services/portal-users";
 import { listActivePaidPlansForBillingPage } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
 
 import { ManageInStripeButton } from "./manage-in-stripe-button";
 import { PlansAvailable } from "./plans-available";
+import { ScheduledChangeBanner } from "./scheduled-change-banner";
 
 const PLAN_LABEL: Record<TenantSubscriptionPlan, string> = {
   free: "Free",
@@ -118,11 +122,15 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
       params.success === "true" ||
       !!(params.session_id && params.session_id.trim()));
 
-  const [catalogPlans, defaultPaymentMethod, usage] = await Promise.all([
-    listActivePaidPlansForBillingPage(),
-    getTenantDefaultPaymentMethod(tenant.id),
-    getCurrentTenantPlanUsage(),
-  ]);
+  const [catalogPlans, defaultPaymentMethod, usage, subscriptionSummary] =
+    await Promise.all([
+      listActivePaidPlansForBillingPage(),
+      getTenantDefaultPaymentMethod(tenant.id),
+      getCurrentTenantPlanUsage(),
+      getTenantSubscriptionSummary(tenant.id),
+    ]);
+  const currentInterval = subscriptionSummary.currentInterval;
+  const pendingChange = subscriptionSummary.pendingChange;
 
   const canManageBilling =
     portalUser.role === "admin" || portalUser.role === "owner";
@@ -228,6 +236,21 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
         snapshotStatus={tenant.subscriptionStatus}
         bootstrapFromCheckoutSuccess={bootstrapFromCheckoutSuccess}
       />
+
+      {pendingChange ? (
+        <ScheduledChangeBanner
+          planLabel={PLAN_LABEL[pendingChange.plan]}
+          intervalLabel={
+            pendingChange.interval === "year"
+              ? "annual"
+              : pendingChange.interval === "month"
+                ? "monthly"
+                : null
+          }
+          dateLabel={formatShortDate(pendingChange.effectiveAt)}
+          canManage={canManageBilling}
+        />
+      ) : null}
 
       {/* Definition strip */}
       <div className="grid grid-cols-2 divide-y-[0.5px] divide-divider border-y-[0.5px] border-border-default sm:grid-cols-3 sm:divide-y-0 sm:divide-x-[0.5px] lg:grid-cols-5">
@@ -336,6 +359,7 @@ export default async function SettingsBillingPlanAndUsagePage(props: {
           <PlansAvailable
             plans={sortedPlans}
             currentPlan={tenant.subscriptionPlan}
+            currentInterval={currentInterval}
             canManage={canManageBilling}
           />
         </div>

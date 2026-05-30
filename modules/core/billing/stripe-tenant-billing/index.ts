@@ -1,6 +1,9 @@
 export {
   getOrCreateStripeCustomerForTenant,
   getTenantDefaultPaymentMethod,
+  getTenantSubscriptionSummary,
+  scheduleTenantSubscriptionDowngrade,
+  releaseTenantScheduledSubscriptionChange,
   createTenantStripeCheckoutSession,
   startCheckoutForTenant,
   createTenantStripeCustomerPortalSession,
@@ -12,4 +15,6 @@ export {
 export type {
   StripeCheckoutPlan,
   TenantDefaultPaymentMethod,
+  TenantSubscriptionSummary,
+  TenantPendingSubscriptionChange,
 } from "./services/stripe-tenant-billing";

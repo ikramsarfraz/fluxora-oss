@@ -6,6 +6,8 @@ import { useState } from "react";
 import type { BillingCatalogPlanRow } from "@/modules/core/billing/stripe-catalog/services/stripe-catalog";
 import type { StripeBillingInterval } from "@/lib/stripe/checkout-plan-schema";
 import type { TenantSubscriptionPlan } from "@/lib/tenant-subscription";
+import { SUBSCRIPTION_PLAN_CAPABILITY_MATRIX } from "@/lib/subscription-plan-capabilities";
+import { classifyPlanChange } from "@/lib/stripe/plan-change";
 import { cn } from "@/lib/utils";
 
 import { PlanSwitchButton } from "./plan-switch-button";
@@ -17,16 +19,54 @@ const PLAN_LABEL: Record<TenantSubscriptionPlan, string> = {
   enterprise: "Enterprise",
 };
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ["Up to 3 users", "500 orders / mo", "Email support"],
-  growth: ["10 users", "5,000 orders / mo", "Priority support", "API access"],
-  enterprise: [
-    "Unlimited everything",
-    "SSO + SAML",
-    "Dedicated CSM",
-    "99.95% SLA",
-  ],
-};
+function formatLimit(n: number): string {
+  return Number.isFinite(n) ? new Intl.NumberFormat().format(n) : "Unlimited";
+}
+
+/**
+ * Build the plan's feature bullets from the enforced capability matrix
+ * (`lib/subscription-plan-capabilities.ts`) so the marketing copy can never
+ * drift from what the server actually allows. Earlier hardcoded strings
+ * advertised limits and features (500/5,000 orders, API access, SSO, SLA) that
+ * did not match enforcement.
+ */
+function planBullets(planKey: TenantSubscriptionPlan): string[] {
+  const entry = SUBSCRIPTION_PLAN_CAPABILITY_MATRIX[planKey];
+  if (!entry) return [];
+  const { limits, features } = entry;
+  const bullets: string[] = [];
+
+  bullets.push(
+    Number.isFinite(limits.maxPortalUsers)
+      ? `Up to ${formatLimit(limits.maxPortalUsers)} users`
+      : "Unlimited users",
+  );
+  // Products and customers share the same ceiling across every tier.
+  bullets.push(
+    Number.isFinite(limits.maxProducts)
+      ? `${formatLimit(limits.maxProducts)} products & customers`
+      : "Unlimited products & customers",
+  );
+  bullets.push(
+    Number.isFinite(limits.maxMonthlyOrders)
+      ? `${formatLimit(limits.maxMonthlyOrders)} orders / mo`
+      : "Unlimited orders / mo",
+  );
+  if (features.purchasing) {
+    bullets.push("Purchasing & supplier invoices");
+  } else if (features.sales_orders) {
+    bullets.push("Sales orders & inventory");
+  }
+  if (features.reports) {
+    bullets.push("Reports & aging");
+  }
+  bullets.push(
+    features.platform_support
+      ? "Priority platform support"
+      : "Support tickets",
+  );
+  return bullets;
+}
 
 function formatPriceParts(
   currency: string,
@@ -83,10 +123,13 @@ function formatCadence(
 export function PlansAvailable({
   plans,
   currentPlan,
+  currentInterval,
   canManage,
 }: {
   plans: BillingCatalogPlanRow[];
   currentPlan: TenantSubscriptionPlan;
+  /** Cadence of the tenant's live subscription, or null when none. */
+  currentInterval: StripeBillingInterval | null;
   canManage: boolean;
 }) {
   const hasAnnual = plans.some((p) => p.annual != null);
@@ -121,7 +164,9 @@ export function PlansAvailable({
                 key={plan.planKey}
                 plan={plan}
                 interval={interval}
-                isCurrent={plan.planKey === currentPlan}
+                currentPlan={currentPlan}
+                isCurrentPlan={plan.planKey === currentPlan}
+                currentInterval={currentInterval}
                 canManage={canManage}
               />
             ))}
@@ -183,12 +228,16 @@ function IntervalToggle({
 function PlanColumn({
   plan,
   interval,
-  isCurrent,
+  currentPlan,
+  isCurrentPlan,
+  currentInterval,
   canManage,
 }: {
   plan: BillingCatalogPlanRow;
   interval: StripeBillingInterval;
-  isCurrent: boolean;
+  currentPlan: TenantSubscriptionPlan;
+  isCurrentPlan: boolean;
+  currentInterval: StripeBillingInterval | null;
   canManage: boolean;
 }) {
   // Annual pricing only when this tier actually has a synced annual price.
@@ -214,25 +263,54 @@ function PlanColumn({
       ? plan.unitAmountCents * 12 - plan.annual!.unitAmountCents
       : null;
 
-  const bullets =
-    PLAN_FEATURES[plan.planKey] ??
-    (plan.productDescription
-      ? plan.productDescription.split(/\r?\n/).filter(Boolean)
-      : []);
+  const bullets = planBullets(plan.planKey as TenantSubscriptionPlan);
 
   const isContactOnly = plan.planKey === "enterprise" && priceCents == null;
 
+  // The cadence this card would check out with.
+  const effectiveInterval: StripeBillingInterval = showAnnual ? "year" : "month";
+  // Truly the active subscription: same plan AND same cadence (or cadence
+  // unknown, in which case we don't claim it's a switch).
+  const isExactCurrent =
+    isCurrentPlan &&
+    (currentInterval == null || effectiveInterval === currentInterval);
+  // Same plan, different cadence (e.g. monthly → annual) — an allowed switch.
+  const isIntervalSwitch =
+    isCurrentPlan &&
+    currentInterval != null &&
+    effectiveInterval !== currentInterval;
+
+  // Downgrades (lower tier, or same-tier annual → monthly) are applied at
+  // period end rather than immediately — label them so it isn't a surprise.
+  const isScheduledDowngrade =
+    !isExactCurrent &&
+    !isContactOnly &&
+    classifyPlanChange(
+      { currentPlan, currentInterval },
+      { plan: plan.planKey, interval: effectiveInterval },
+    ) === "scheduled";
+
+  const ctaLabel = isExactCurrent
+    ? "Active plan"
+    : isScheduledDowngrade
+      ? "Schedule downgrade"
+      : isIntervalSwitch
+        ? `Switch to ${effectiveInterval === "year" ? "annual" : "monthly"} billing`
+        : `Switch to ${plan.productName || PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}`;
+
   return (
     <div
-      data-current={isCurrent ? "true" : undefined}
-      className={"flex flex-col px-[22px] py-5" + (isCurrent ? " bg-card-warm" : "")}
+      data-current={isCurrentPlan ? "true" : undefined}
+      className={
+        "flex flex-col px-[22px] py-5" + (isCurrentPlan ? " bg-card-warm" : "")
+      }
     >
       <div className="mb-[14px] flex items-start justify-between">
         <div className="font-serif text-[17px] font-medium tracking-[-0.005em] text-ink">
           {plan.productName ||
             PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}
         </div>
-        {isCurrent ? (
+        {isCurrentPlan ? (
           <span className="inline-flex items-center gap-[6px] rounded-full border-[0.5px] border-success-border bg-success-bg px-[9px] py-[3px] text-[10px] font-medium leading-none text-success-fg">
             <span
               aria-hidden
@@ -288,16 +366,19 @@ function PlanColumn({
             Contact sales
           </a>
         ) : (
-          <PlanSwitchButton
-            plan={plan.planKey}
-            interval={showAnnual ? "year" : "month"}
-            label={
-              isCurrent
-                ? "Active plan"
-                : `Switch to ${plan.productName || PLAN_LABEL[plan.planKey as TenantSubscriptionPlan]}`
-            }
-            disabled={isCurrent}
-          />
+          <div className="mt-auto">
+            <PlanSwitchButton
+              plan={plan.planKey}
+              interval={effectiveInterval}
+              label={ctaLabel}
+              disabled={isExactCurrent}
+            />
+            {isScheduledDowngrade ? (
+              <p className="mt-2 text-center text-[11px] text-subtle">
+                Takes effect at the end of your current period.
+              </p>
+            ) : null}
+          </div>
         )
       ) : (
         <p className="mt-[18px] text-center text-[11px] text-subtle">
