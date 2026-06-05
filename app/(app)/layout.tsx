@@ -13,6 +13,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { buildSessionResetPath } from "@/lib/auth-session-reset";
+import { TENANT_ROUTE_PATH_HEADER } from "@/lib/subscription-guard-constants";
 import { changelogReleases } from "@/lib/changelog";
 import { formatRelativeShort } from "@/lib/utils/date";
 import { getCurrentTenantCached } from "@/modules/core/tenants/services/tenants";
@@ -58,8 +60,16 @@ export default async function AppGroupLayout({
     headers: headerList,
   });
 
+  // Where the user was headed — preserved through the reset so they return here
+  // after re-authenticating. Set by `proxy.ts` on every forwarded request.
+  const callbackUrl = headerList.get(TENANT_ROUTE_PATH_HEADER);
+
+  // A session cookie present here but with no valid session means the cookie
+  // has outlived its session row (the proxy let us through on cookie presence
+  // alone). Clear it via the reset route rather than redirecting straight to
+  // `/login`, which the proxy would bounce back into an infinite loop.
   if (!session?.user) {
-    redirect("/login");
+    redirect(buildSessionResetPath(callbackUrl));
   }
 
   let tenant: Awaited<ReturnType<typeof getCurrentTenantCached>>;
@@ -68,7 +78,10 @@ export default async function AppGroupLayout({
     tenant = await getCurrentTenantCached();
     destinations = await getAccessibleDestinationsForAuthUser(session.user.id);
   } catch {
-    redirect("/login");
+    // Tenant resolution failed for this host (missing/inactive tenant, or a
+    // cross-tenant cookie whose session row was just deleted). Same loop risk —
+    // clear the cookie before sending the user to sign in again.
+    redirect(buildSessionResetPath(callbackUrl));
   }
 
   const inboxEnabled = await hasFeature(tenant.id, INBOX_FEATURE);
