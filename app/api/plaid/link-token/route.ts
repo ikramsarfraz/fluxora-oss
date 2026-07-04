@@ -14,7 +14,7 @@ export async function POST() {
     const client = getPlaidClient();
     const response = await client.linkTokenCreate({
       user: { client_user_id: portalUser.id },
-      client_name: tenant.name ?? "Acme Distribution",
+      client_name: tenant.name ?? "Fluxora",
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: "en",

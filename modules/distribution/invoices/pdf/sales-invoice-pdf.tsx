@@ -106,11 +106,13 @@ type SalesOrderFulfillment = NonNullable<
   SalesOrderLine["fulfillments"]
 >[number];
 
-const DEFAULT_PAYMENT_EMAIL = "billing@example.com";
-const DEFAULT_COMPANY_NAME = "Acme Distribution LLC";
-const DEFAULT_COMPANY_PHONE = process.env.PRIME_INVOICE_PHONE?.trim() || null;
+const DEFAULT_PAYMENT_EMAIL =
+  process.env.INVOICE_PAYMENT_EMAIL?.trim() || "billing@example.com";
+const DEFAULT_COMPANY_NAME =
+  process.env.INVOICE_COMPANY_NAME?.trim() || "Acme Distribution LLC";
+const DEFAULT_COMPANY_PHONE = process.env.INVOICE_PHONE?.trim() || null;
 const DEFAULT_COMPANY_ADDRESS_LINES =
-  process.env.PRIME_INVOICE_ADDRESS_LINES?.split("|")
+  process.env.INVOICE_ADDRESS_LINES?.split("|")
     .map(line => line.trim())
     .filter(Boolean) ?? ["Indianapolis, IN"];
 const DEFAULT_PAYMENT_DUE = "upon delivery";
@@ -284,14 +286,6 @@ function supportsPdfImage(logoUrl: string | null | undefined) {
 
 function getBrandLines(displayName: string) {
   const normalized = displayName.trim().replace(/\s+/g, " ");
-  if (/acme distribution/i.test(normalized)) {
-    return {
-      headline: "PRIME",
-      subhead: "DISTRIBUTION LLC",
-      tagline: "Reliable Wholesale Distribution",
-    };
-  }
-
   const withoutLlc = normalized.replace(/\bLLC\b\.?/i, "").trim();
   const words = withoutLlc.split(" ").filter(Boolean);
   return {

@@ -100,3 +100,9 @@ proxy.ts                          # Next.js 16 middleware (host routing, rate li
 ```
 
 Each module's `index.ts` is its only public entry point — external code imports `@/modules/distribution/orders`, never the internals.
+
+## License
+
+Copyright (C) 2026 Ikram Owner.
+
+Fluxora is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0-only). See [LICENSE](LICENSE) for the full text. Notably, if you run a modified version of this software as a network service, the AGPL requires you to make its complete source available to that service's users.

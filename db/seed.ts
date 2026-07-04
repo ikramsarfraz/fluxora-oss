@@ -1200,7 +1200,7 @@ async function seedUoms() {
 }
 
 async function seedAuthAndTenant() {
-  const baseEmail = "admin@example.com";
+  const baseEmail = process.env.SEED_ADMIN_EMAIL?.trim() || "admin@example.com";
 
   await db
     .insert(user)
@@ -1250,7 +1250,7 @@ async function seedAuthAndTenant() {
       authUserId: authUser.id,
       tenantId: tenant.id,
       fullName: "Demo Owner",
-      email: "admin+tenant1@example.com",
+      email: baseEmail.replace("@", "+tenant1@"),
       role: "owner",
       isActive: true,
     })
