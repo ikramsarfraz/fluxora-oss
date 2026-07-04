@@ -9,7 +9,7 @@ ALI TRADERS
 524 Morse Ave
 Schaumburg, IL  60193
 8472204892
-noreply@example.com
+billing@example.com
 Invoice
 BILL TO
 ACME DISTRIBUTION
@@ -30,7 +30,7 @@ Signature
 *Check delivery, NO RETURNS after 24 hours.*
 ZELLE PAYMENT DETAILS:
 847-340-7074
-noreply@example.com
+billing@example.com
 BALANCE DUE
 $1,536.80
 `;
