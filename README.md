@@ -1,5 +1,7 @@
 # Fluxora
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org) [![React 19](https://img.shields.io/badge/React-19-149eca?logo=react)](https://react.dev) [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![Drizzle ORM](https://img.shields.io/badge/Drizzle-ORM-c5f74f?logo=drizzle&logoColor=black)](https://orm.drizzle.team)
+
 Fluxora is a multi-tenant operations platform for food and wholesale distribution teams. It helps tenants manage customers, suppliers, products, lots, inventory, sales orders, invoices, payments, expenses, and user access from one workspace-scoped application. The app supports tenant subdomains, role-aware workflows, warehouse traceability, supplier receiving, sales order fulfillment, invoice generation, tenant branding, and file uploads backed by Cloudflare R2.
 
 ## Documentation
@@ -103,6 +105,6 @@ Each module's `index.ts` is its only public entry point — external code import
 
 ## License
 
-Copyright (C) 2026 Ikram Owner.
+Copyright (C) 2026 Ikram Sarfraz.
 
 Fluxora is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0-only). See [LICENSE](LICENSE) for the full text. Notably, if you run a modified version of this software as a network service, the AGPL requires you to make its complete source available to that service's users.
